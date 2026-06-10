@@ -18,6 +18,9 @@ type AuthContextValue = {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   setUser: (u: User) => void;
+  viewAsMember: boolean;
+  setViewAsMember: (v: boolean) => void;
+  effectiveRole: "admin" | "member";
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -25,6 +28,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewAsMember, setViewAsMember] = useState(false);
 
   const bootstrap = useCallback(async () => {
     try {
@@ -47,11 +51,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password,
     });
     await saveToken(res.access_token);
+    setViewAsMember(false);
     setUser(res.user);
   };
 
   const logout = async () => {
     await clearToken();
+    setViewAsMember(false);
     setUser(null);
   };
 
@@ -62,8 +68,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
   };
 
+  const effectiveRole: "admin" | "member" =
+    user && user.role === "admin" && viewAsMember ? "member" : user?.role ?? "member";
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser, setUser }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, logout, refreshUser, setUser, viewAsMember, setViewAsMember, effectiveRole }}
+    >
       {children}
     </AuthContext.Provider>
   );

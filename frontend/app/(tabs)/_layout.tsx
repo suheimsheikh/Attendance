@@ -6,8 +6,8 @@ import { useAuth } from "@/src/context/AuthContext";
 import { colors } from "@/src/theme";
 
 export default function TabsLayout() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const { effectiveRole } = useAuth();
+  const isAdmin = effectiveRole === "admin";
 
   return (
     <Tabs

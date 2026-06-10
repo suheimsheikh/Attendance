@@ -14,8 +14,8 @@ const BANNER =
   "https://images.unsplash.com/photo-1689846136233-de0717f3675c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwxfHx5YWNodCUyMGNsdWIlMjBidWlsZGluZ3xlbnwwfHx8fDE3ODEwNTgwOTl8MA&ixlib=rb-4.1.0&q=85";
 
 export default function ProfileOrAdmin() {
-  const { user } = useAuth();
-  if (user?.role === "admin") return <AdminDashboard />;
+  const { effectiveRole } = useAuth();
+  if (effectiveRole === "admin") return <AdminDashboard />;
   return <MemberProfile />;
 }
 
@@ -31,7 +31,7 @@ type Stats = {
 
 function MemberProfile() {
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user, logout, setViewAsMember } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState<Stats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -52,23 +52,36 @@ function MemberProfile() {
 
   const status = stats?.checked_in ? "on_campus" : "exited";
   const cfg = statusConfig[status];
+  const isPreview = user?.role === "admin";
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: spacing["3xl"] }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-    >
-      <View style={styles.banner}>
-        <Image source={{ uri: BANNER }} style={StyleSheet.absoluteFill} contentFit="cover" />
-        <LinearGradient
-          colors={["rgba(17,24,39,0.2)", "rgba(17,24,39,0.55)", "#F9F9FB"]}
-          style={StyleSheet.absoluteFill}
-        />
-        <Pressable onPress={logout} style={[styles.logoutBtn, { top: insets.top + spacing.sm }]} testID="logout-button">
-          <Ionicons name="log-out-outline" size={22} color="#fff" />
-        </Pressable>
-      </View>
+    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+      {isPreview && (
+        <View style={[styles.previewBar, { paddingTop: insets.top + spacing.sm }]} testID="preview-banner">
+          <Ionicons name="eye-outline" size={16} color="#fff" />
+          <Text style={styles.previewBarText}>Previewing the Member experience</Text>
+          <Pressable onPress={() => setViewAsMember(false)} style={styles.previewBack} testID="exit-preview-button">
+            <Text style={styles.previewBackText}>Back to Admin</Text>
+          </Pressable>
+        </View>
+      )}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: spacing["3xl"] }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
+      >
+        <View style={styles.banner}>
+          <Image source={{ uri: BANNER }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <LinearGradient
+            colors={["rgba(17,24,39,0.2)", "rgba(17,24,39,0.55)", "#F9F9FB"]}
+            style={StyleSheet.absoluteFill}
+          />
+          {!isPreview && (
+            <Pressable onPress={logout} style={[styles.logoutBtn, { top: insets.top + spacing.sm }]} testID="logout-button">
+              <Ionicons name="log-out-outline" size={22} color="#fff" />
+            </Pressable>
+          )}
+        </View>
 
       <View style={styles.profileHead}>
         <Avatar name={user?.full_name || ""} photo={user?.photo} size={88} ring="#fff" />
@@ -149,7 +162,8 @@ function MemberProfile() {
           ))
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -166,7 +180,7 @@ type Summary = { total_members: number; on_campus: number; pending_leaves: numbe
 
 function AdminDashboard() {
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user, logout, setViewAsMember } = useAuth();
   const router = useRouter();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -204,9 +218,15 @@ function AdminDashboard() {
             <Text style={styles.adminHi}>Admin Console</Text>
             <Text style={styles.adminName}>{user?.full_name}</Text>
           </View>
-          <Pressable onPress={logout} style={styles.adminLogout} testID="logout-button">
-            <Ionicons name="log-out-outline" size={22} color={colors.onSurface} />
-          </Pressable>
+          <View style={styles.headerBtns}>
+            <Pressable onPress={() => setViewAsMember(true)} style={styles.previewPill} testID="preview-member-button">
+              <Ionicons name="eye-outline" size={16} color={colors.onSurfaceTertiary} />
+              <Text style={styles.previewPillText}>Member view</Text>
+            </Pressable>
+            <Pressable onPress={logout} style={styles.adminLogout} testID="logout-button">
+              <Ionicons name="log-out-outline" size={22} color={colors.onSurface} />
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.summaryGrid}>
@@ -271,6 +291,33 @@ const SummaryCard: React.FC<{ label: string; value: number; color: string; icon:
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
+  previewBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.brandPrimary,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  previewBarText: { flex: 1, color: "#fff", fontSize: font.sm, fontWeight: "600" },
+  previewBack: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+  },
+  previewBackText: { color: "#fff", fontSize: font.sm, fontWeight: "700" },
+  headerBtns: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  previewPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: colors.surfaceTertiary,
+    paddingHorizontal: spacing.md,
+    height: 40,
+    borderRadius: radius.pill,
+  },
+  previewPillText: { fontSize: font.sm, fontWeight: "700", color: colors.onSurfaceTertiary },
   banner: { height: 150, backgroundColor: colors.brandPrimary },
   logoutBtn: {
     position: "absolute",
