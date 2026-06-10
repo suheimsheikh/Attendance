@@ -1,0 +1,153 @@
+{
+  "app_name": "Attendance",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A crisp, authoritative, and frictionless daily tracker ensuring campus safety with clarity and precision.",
+  "color": {
+    "surface": "#F9F9FB",
+    "onSurface": "#111827",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#111827",
+    "surfaceTertiary": "#F3F4F6",
+    "onSurfaceTertiary": "#374151",
+    "surfaceInverse": "#1F2937",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#1F2937",
+    "brandPrimary": "#111827",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#374151",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#E5E7EB",
+    "onBrandTertiary": "#111827",
+    "success": "#10B981",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F59E0B",
+    "onWarning": "#FFFFFF",
+    "error": "#EF4444",
+    "onError": "#FFFFFF",
+    "info": "#F97316",
+    "onInfo": "#FFFFFF",
+    "border": "#E5E7EB",
+    "borderStrong": "#D1D5DB",
+    "divider": "#F3F4F6"
+  },
+  "typography": {
+    "displayFontFamily": "Inter",
+    "textFontFamily": "Inter",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous iOS-native padding. Group related elements tightly (xs/sm) and separate distinct sections generously (xl/2xl). Use 'safe-area' for screens without headers.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": "true",
+    "do's": [
+      "Tab bar when content scrolls behind",
+      "Sticky filter rows on presence board",
+      "Check-in floating action button",
+      "Header over the campus/map background on the check-in screen"
+    ],
+    "dont's": [
+      "Cards in list",
+      "Form inputs",
+      "Every single button"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Live Presence Board (Home)",
+      "purpose": "A live directory showing exactly who is on campus, who has exited, who is on tour, and who is on leave.",
+      "states": {
+        "loading": "Skeleton list of avatar cards",
+        "empty": "Empty marina dock illustration 'Campus is empty today'",
+        "error": "Failed to load presence data + Retry button"
+      },
+      "layout": "Sticky header with Segmented Control for filtering (All, On Campus, Exited, Leave/Tour). Scrollable list of Member Cards. Member Card: row direction, Avatar left, Name & Role center, colored presence badge (Green = On Campus, Gray = Exited, Orange = On Tour, Yellow = On Leave) right."
+    },
+    {
+      "name": "Check-In / Out (Scanner)",
+      "purpose": "Camera interface to scan the Office Station QR code, verify GPS within 100m, and capture an entry photo.",
+      "states": {
+        "loading": "Spinner over camera",
+        "empty": "N/A",
+        "error": "Error modal if GPS too far or QR invalid"
+      },
+      "layout": "Full-bleed camera view. Glassmorphism header. Centered scanning frame overlay. Bottom container (glass or solid inverse) with 'Check In' / 'Check Out' large primary CTA and instructional text."
+    },
+    {
+      "name": "Member Profile & Leave",
+      "purpose": "Shows member's logged hours, recent attendance, and a form to apply for leave.",
+      "states": {
+        "loading": "Skeleton metrics",
+        "empty": "No recent attendance logs",
+        "error": "Failed to load profile"
+      },
+      "layout": "Top section: Profile banner (Yacht club background photo with vertical gradient scrim), overlapping avatar, Name, Role. Middle section: Quick stats (Hours on campus this week, attendance %). Bottom section: Recent logs list or Leave Application form toggle."
+    },
+    {
+      "name": "Admin Dashboard & Reports",
+      "purpose": "Admin view to manage members, export weekly/monthly/daily reports, and approve leaves.",
+      "states": {
+        "loading": "Skeleton dashboard",
+        "empty": "No pending leaves or members",
+        "error": "Failed to load reports"
+      },
+      "layout": "Grid of summary cards (Total On Campus, Pending Leaves). List of quick actions (Export Daily Report, Manage Office QR). List rows for pending leave approvals."
+    }
+  ],
+  "images": {
+    "yacht_club_building": {
+      "url": "https://images.unsplash.com/photo-1689846136233-de0717f3675c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwxfHx5YWNodCUyMGNsdWIlMjBidWlsZGluZ3xlbnwwfHx8fDE3ODEwNTgwOTl8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Yacht club building overlooking the sea"
+    },
+    "sailor_avatar": {
+      "url": "https://images.unsplash.com/photo-1686628178413-df8f6be6d3f5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBzYWlsb3IlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODEwNTgwOTR8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Professional sailor in uniform"
+    },
+    "empty_dock": {
+      "url": "https://images.unsplash.com/photo-1774990044517-cff3f41a6ad9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTN8MHwxfHNlYXJjaHwxfHxlbXB0eSUyMG1hcmluYSUyMGRvY2t8ZW58MHx8fHwxNzgxMDU4MDk0fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Empty marina dock on a clear day"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the color palette (No Blues allowed, use Dark Slate/Graphite as brand).",
+    "Implement clear visual hierarchy for the Live Presence Board: use semantic colors for status (Green for On Campus, Gray for Exited, Amber/Orange for On Tour, Yellow for On Leave).",
+    "QR Check-In requires Camera and Location permissions. Mock the GPS (simulate 100m) and QR validation if needed, but build the UI correctly.",
+    "Ensure all backgrounds with images (e.g., Profile cover banner) use the mandatory 3-stop top-to-bottom gradient scrim to preserve readability.",
+    "For the scanner screen, use a full-bleed camera interface with a translucent overlay/frame to guide the user, and a sticky glassmorphic bottom pane for instructions and CTA.",
+    "Ensure all floating components (FABs, sticky action buttons) handle Safe Area properly and don't double-count paddings."
+  ]
+}
