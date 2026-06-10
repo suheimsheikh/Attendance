@@ -22,15 +22,20 @@ Build a mobile "Attendance" app for a sailing academy to track **entry/exit of s
 - JWT auth (admin+member), role-based access, seeded admin + 6 demo members.
 - Office config (lat/lng/radius/QR token), regenerate QR.
 - Check-in/out: QR validation + haversine geofence + base64 photo + hours computation.
-- Presence board with filter chips, summary stats, auto-refresh (15s) + pull-to-refresh.
-- Member management (create/edit/delete), member profile with weekly/monthly hours + recent logs.
+- **Out-of-geofence check-in:** if outside the radius, stores actual GPS location + a mandatory reason; flagged "Off-site" on the board.
+- **Personal QR cards (people without phones):** every member has a unique permanent `personal_qr`; admin can view/print each card; anyone with the app can scan a member's card to check them in/out (proxy), recording who scanned.
+- Presence board with filter chips, summary stats, off-site flag, auto-refresh (15s) + pull-to-refresh.
+- Member management (create/edit/delete + view QR card), member profile with weekly/monthly hours + recent logs.
 - Leave/tour apply, my-applications, admin approvals (pending/approved/rejected).
 - Reports screen: hours (week/month) + daily leave/tour, CSV & PDF export via share sheet.
-- Verified: 39/39 backend pytest pass; all frontend screens render.
+- Verified: 49/49 backend pytest pass; all frontend screens render.
+
+## Compatibility
+- iOS 15.1+ and Android 7.0+ (phones & tablets). Needs camera + location. Web/Expo Go preview can't use real camera/GPS — a "Simulate at office" switch covers preview testing.
 
 ## Backlog / Remaining
-- **P1:** Real GPS testing requires native build (preview uses "Simulate at office" switch). Photo selfie flow (camera) is native-only — not testable in Expo Go web preview.
-- **P2:** Push reminder for early-morning report; member photo set from profile; date-picker UI for leave dates (currently YYYY-MM-DD text + quick presets); 404 on delete-not-found; block re-deciding non-pending leaves; restrict member visibility of other members' emails.
+- **P1:** Real GPS + camera scan/photo require a native build (not testable in Expo Go web).
+- **P2:** Lost-card recovery (regenerate personal QR), member self-photo from profile, calendar history, date-picker for leave dates, restrict member visibility of others' emails, split server.py into routers.
 
 ## Next Tasks
 - Gather feedback; optionally add member self-photo capture and a calendar history view.
