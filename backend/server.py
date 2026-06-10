@@ -145,6 +145,15 @@ class CheckInIn(BaseModel):
     latitude: float
     longitude: float
     photo: Optional[str] = None  # base64
+    reason: Optional[str] = None  # required when outside geofence
+
+
+class ScanCardIn(BaseModel):
+    personal_qr: str
+    latitude: float
+    longitude: float
+    photo: Optional[str] = None
+    reason: Optional[str] = None
 
 
 class LeaveCreate(BaseModel):
@@ -203,6 +212,12 @@ async def seed():
             "qr_token": "OFFICE-" + uuid.uuid4().hex[:12].upper(),
         })
         logger.info("Seeded office config")
+    # Backfill personal QR cards for any user missing one
+    async for u in db.users.find({"personal_qr": {"$exists": False}}, {"_id": 0, "id": 1}):
+        await db.users.update_one(
+            {"id": u["id"]},
+            {"$set": {"personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper()}},
+        )
 
 
 @app.on_event("shutdown")
@@ -268,6 +283,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "category": body.category,
         "rank": body.rank,
         "photo": None,
+        "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
         "hashed_password": hash_password(body.password),
         "created_at": now_utc().isoformat(),
     }
@@ -304,6 +320,21 @@ async def delete_member(member_id: str, admin: dict = Depends(require_admin)):
     return {"ok": True}
 
 
+@api_router.get("/members/{member_id}/card")
+async def member_card(member_id: str, admin: dict = Depends(require_admin)):
+    u = await db.users.find_one({"id": member_id}, {"_id": 0})
+    if not u:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return {
+        "id": u["id"],
+        "full_name": u["full_name"],
+        "rank": u.get("rank"),
+        "category": u["category"],
+        "personal_qr": u.get("personal_qr"),
+        "photo": u.get("photo"),
+    }
+
+
 @api_router.post("/members/me/photo", response_model=UserPublic)
 async def set_my_photo(body: dict, user: dict = Depends(get_current_user)):
     photo = body.get("photo")
@@ -325,6 +356,57 @@ async def my_attendance_status(user: dict = Depends(get_current_user)):
     return {"checked_in": sess is not None, "session": sess}
 
 
+def geo_check(office: dict, lat: float, lng: float, reason: Optional[str]):
+    """Returns (distance_m, out_of_geofence). Raises if out and no reason given."""
+    dist = round(haversine_m(lat, lng, office["latitude"], office["longitude"]), 1)
+    out = dist > office["radius_m"]
+    if out and not (reason and reason.strip()):
+        raise HTTPException(status_code=400, detail=f"OUT_OF_GEOFENCE:{int(dist)}")
+    return dist, out
+
+
+async def perform_toggle(target, office, lat, lng, photo, reason, method, scanned_by):
+    """Check a member in (if no open session) or out (if open). Stores location + reason."""
+    dist, out = geo_check(office, lat, lng, reason)
+    sess = await open_session_for(target["id"])
+    ts = now_utc()
+    if sess:
+        cin = datetime.fromisoformat(sess["check_in_at"])
+        hours = round((ts - cin).total_seconds() / 3600.0, 2)
+        await db.attendance.update_one({"id": sess["id"]}, {"$set": {
+            "check_out_at": ts.isoformat(),
+            "check_out_photo": photo,
+            "hours": hours,
+            "exit_latitude": lat,
+            "exit_longitude": lng,
+            "exit_distance_m": dist,
+            "exit_out_of_geofence": out,
+            "exit_reason": (reason or None),
+            "checked_out_by": scanned_by,
+        }})
+        return {"ok": True, "action": "checkout", "member": target["full_name"],
+                "hours": hours, "out_of_geofence": out}
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": target["id"],
+        "date": ts.date().isoformat(),
+        "check_in_at": ts.isoformat(),
+        "check_out_at": None,
+        "check_in_photo": photo,
+        "check_out_photo": None,
+        "hours": None,
+        "latitude": lat,
+        "longitude": lng,
+        "distance_m": dist,
+        "out_of_geofence": out,
+        "geo_reason": (reason or None),
+        "method": method,
+        "checked_in_by": scanned_by,
+    }
+    await db.attendance.insert_one(doc)
+    return {"ok": True, "action": "checkin", "member": target["full_name"], "out_of_geofence": out}
+
+
 @api_router.post("/attendance/checkin")
 async def check_in(body: CheckInIn, user: dict = Depends(get_current_user)):
     office = await db.config.find_one({"id": "office"})
@@ -332,44 +414,37 @@ async def check_in(body: CheckInIn, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Office not configured")
     if body.qr_token != office["qr_token"]:
         raise HTTPException(status_code=400, detail="Invalid Office QR code")
-    dist = haversine_m(body.latitude, body.longitude, office["latitude"], office["longitude"])
-    if dist > office["radius_m"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"You are {int(dist)}m from campus. Must be within {office['radius_m']}m to check in.",
-        )
     if await open_session_for(user["id"]):
         raise HTTPException(status_code=400, detail="You are already checked in")
-    ts = now_utc()
-    doc = {
-        "id": str(uuid.uuid4()),
-        "user_id": user["id"],
-        "date": ts.date().isoformat(),
-        "check_in_at": ts.isoformat(),
-        "check_out_at": None,
-        "check_in_photo": body.photo,
-        "check_out_photo": None,
-        "hours": None,
-        "distance_m": round(dist, 1),
-    }
-    await db.attendance.insert_one(doc)
-    doc.pop("_id", None)
-    return {"ok": True, "session": doc}
+    return await perform_toggle(user, office, body.latitude, body.longitude,
+                                body.photo, body.reason, "office_qr", None)
 
 
 @api_router.post("/attendance/checkout")
 async def check_out(body: CheckInIn, user: dict = Depends(get_current_user)):
-    sess = await open_session_for(user["id"])
-    if not sess:
+    office = await db.config.find_one({"id": "office"})
+    if not await open_session_for(user["id"]):
         raise HTTPException(status_code=400, detail="You are not checked in")
-    ts = now_utc()
-    cin = datetime.fromisoformat(sess["check_in_at"])
-    hours = round((ts - cin).total_seconds() / 3600.0, 2)
-    await db.attendance.update_one(
-        {"id": sess["id"]},
-        {"$set": {"check_out_at": ts.isoformat(), "check_out_photo": body.photo, "hours": hours}},
-    )
-    return {"ok": True, "hours": hours}
+    if office and body.qr_token != office["qr_token"]:
+        raise HTTPException(status_code=400, detail="Invalid Office QR code")
+    return await perform_toggle(user, office, body.latitude, body.longitude,
+                                body.photo, body.reason, "office_qr", None)
+
+
+@api_router.post("/attendance/scan-card")
+async def scan_card(body: ScanCardIn, user: dict = Depends(get_current_user)):
+    """Proxy check-in/out for a person without a phone, via their personal QR card.
+    Scanned by anyone with the app. Auto-toggles the carded member's session."""
+    office = await db.config.find_one({"id": "office"})
+    if not office:
+        raise HTTPException(status_code=500, detail="Office not configured")
+    target = await db.users.find_one({"personal_qr": body.personal_qr}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Card not recognised — unknown member")
+    res = await perform_toggle(target, office, body.latitude, body.longitude,
+                               body.photo, body.reason, "card", user["id"])
+    res["proxy"] = True
+    return res
 
 
 # ----------------------------------------------------------------------------
@@ -431,6 +506,7 @@ async def presence(user: dict = Depends(get_current_user)):
             "detail": detail,
             "since": since,
             "photo": photo,
+            "flagged": bool(sess and sess.get("out_of_geofence") and status_v == "on_campus"),
         })
     order = {"on_campus": 0, "on_tour": 1, "on_leave": 2, "exited": 3}
     result.sort(key=lambda r: (order.get(r["status"], 9), r["full_name"]))

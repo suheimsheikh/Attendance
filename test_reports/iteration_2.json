@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 2 — Tested new features: (1) Out-of-geofence check-in with mandatory reason, (2) Personal QR cards + scan-card proxy check-in/out. 49/49 backend pytest cases pass (10 new + 39 regression after updating 2 stale assertions in old suite to match the new flat response contract). Frontend Expo web preview renders all new UI elements correctly on 390x844: Check-In screen shows BOTH primary 'Scan to Check In' button (self-checkin-button) and secondary 'Scan a Member Card' (scan-card-button) plus the 'Simulate at office' switch; Manage Members lists 7 rows each with a card-member-{id} QR icon; clicking it navigates to /member-card?id=... which renders the member's avatar, name, rank/category, a real QR SVG, and the CARD-XXXX token. All backend assertions verified: out-of-geofence returns 400 with detail starting 'OUT_OF_GEOFENCE:' and succeeds with reason (out_of_geofence=true, latitude/longitude/geo_reason stored, presence.flagged=true); in-geofence requires no reason and stores out_of_geofence=false; GET /members/{id}/card is admin-only (member -> 403) and every seeded user has a CARD- prefixed personal_qr; scan-card toggles correctly (first call -> 'checkin', second -> 'checkout' with hours), bogus card -> 404, OOG without reason -> 400, with reason -> 200. Camera-based scanning + photo capture cannot be exercised in web preview (native-only) — only RENDER + navigation were checked, per review request. No deprecated Expo packages found; sole non-blocking console warning continues to be 'props.pointerEvents is deprecated' from a third-party lib.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "pointerEvents prop", "issue": "Console warning 'props.pointerEvents is deprecated. Use style.pointerEvents' still appears on screen loads (carried over from iter 1). Likely from a third-party RN library. Non-blocking. Reference: browser console."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/backend/tests/test_attendance_api.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/pytest/pytest_new_features.xml"
+  ],
+  "action_items": [
+    "No bugs to fix. New features (out-of-geofence + personal QR cards/scan-card) are fully working end-to-end at the API level and the frontend renders the new UI elements with correct testIDs.",
+    "Camera QR scan + on-device photo capture remain native-only — verify on a real device build before release.",
+    "Optional: hunt down the pointerEvents deprecation warning source (likely react-native-web or a UI lib)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~760 lines — past the 700-line guideline now; splitting into routers (auth/office/members/attendance/leaves/reports) would help maintainability.",
+    "perform_toggle response shape changed from {ok, session} to {ok, action, member, out_of_geofence} — this is a backwards-incompatible change that broke 2 prior tests. Worth noting in changelog if any external clients exist.",
+    "GET /api/members still exposes emails of all members to every signed-in user (carried over). The new /members/{id}/card additionally exposes personal_qr only to admin — that part is correctly restricted.",
+    "perform_toggle accepts a (reason or None) value but doesn't enforce reason being non-empty on the CHECKOUT side when off-site — that path is reachable via /attendance/checkout and /scan-card too; current code correctly rejects via geo_check before update/insert, so behaviour is consistent.",
+    "scan-card responds with HTTP 200 for both check-in and check-out actions; the frontend toast uses res.action to decide the message — correct.",
+    "Card token format ('CARD-' + 12 hex chars) is non-rotatable; member-card screen says 'stays valid permanently'. If a printed card is lost, there is no API to regenerate a personal_qr today — consider adding POST /members/{id}/card/regenerate."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_new_features.py (new, 10 tests)",
+    "/app/backend/tests/test_attendance_api.py (updated 2 stale assertions to new response contract)",
+    "/app/test_reports/iteration_2.json (new)"
+  ],
+  "success_rate": {"backend": "100% (49/49)", "frontend": "100% (all new UI elements render with correct testIDs and navigation)"},
+  "seed_data_creation": "Tests create TEST_-prefixed members on the fly (scanner + scannee) and clean them up via DELETE /api/members/{id} in fixture teardown. Some check-ins they create are auto-cascaded via delete_member's attendance cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All review-request items verified. Run all backend tests with: EXPO_PUBLIC_BACKEND_URL=https://attendance-app-220.preview.emergentagent.com pytest /app/backend/tests/ -v. New features file is test_new_features.py. Office geofence: 19.0760, 72.8777, 100m. Use lat 19.50 lng 73.50 to test OUT_OF_GEOFENCE. Frontend cannot exercise real camera scanning — only render and navigation.",
+  "rca_of_issue": "No bugs found in the new feature set. The 2 regression failures in the prior test file were stale assertions referencing the OLD response shape; updated to match the new contract specified in the review request."
+}

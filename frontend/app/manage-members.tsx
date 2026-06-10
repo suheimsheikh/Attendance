@@ -80,11 +80,21 @@ export default function ManageMembers() {
               </Text>
               <Text style={styles.email}>{item.email}</Text>
             </View>
-            {item.role !== "admin" && (
-              <Pressable onPress={() => remove(item)} hitSlop={10} testID={`delete-member-${item.id}`}>
-                <Ionicons name="trash-outline" size={20} color={colors.error} />
+            <View style={styles.rowActions}>
+              <Pressable
+                onPress={() => router.push({ pathname: "/member-card", params: { id: item.id } })}
+                hitSlop={8}
+                testID={`card-member-${item.id}`}
+                style={styles.iconBtn}
+              >
+                <Ionicons name="qr-code-outline" size={20} color={colors.brandSecondary} />
               </Pressable>
-            )}
+              {item.role !== "admin" && (
+                <Pressable onPress={() => remove(item)} hitSlop={8} testID={`delete-member-${item.id}`} style={styles.iconBtn}>
+                  <Ionicons name="trash-outline" size={20} color={colors.error} />
+                </Pressable>
+              )}
+            </View>
           </Pressable>
         )}
       />
@@ -122,4 +132,13 @@ const styles = StyleSheet.create({
   adminTagText: { color: "#fff", fontSize: 9, fontWeight: "800" },
   meta: { fontSize: font.sm, color: colors.muted, marginTop: 1 },
   email: { fontSize: font.sm, color: colors.brandSecondary, marginTop: 1 },
+  rowActions: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  iconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceTertiary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

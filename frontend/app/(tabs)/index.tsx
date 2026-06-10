@@ -25,6 +25,7 @@ type PMember = {
   status: string;
   detail: string;
   photo?: string | null;
+  flagged?: boolean;
 };
 type Presence = {
   members: PMember[];
@@ -202,6 +203,12 @@ const MemberRow: React.FC<{ m: PMember }> = ({ m }) => {
           <Text style={styles.rowDetail} numberOfLines={1}>
             {m.detail}
           </Text>
+          {m.flagged && (
+            <View style={styles.offsiteTag}>
+              <Ionicons name="warning" size={10} color="#92400E" />
+              <Text style={styles.offsiteText}>Off-site</Text>
+            </View>
+          )}
         </View>
       </View>
       <StatusBadge status={m.status} />
@@ -306,6 +313,16 @@ const styles = StyleSheet.create({
   detailRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   rowDetail: { fontSize: font.sm, color: colors.onSurfaceTertiary, flex: 1 },
+  offsiteTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  offsiteText: { fontSize: 10, fontWeight: "700", color: "#92400E" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md, padding: spacing.xl },
   empty: { alignItems: "center", paddingTop: spacing["3xl"] },
   emptyImg: { width: 160, height: 120, borderRadius: radius.lg, marginBottom: spacing.lg, opacity: 0.85 },

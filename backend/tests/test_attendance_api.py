@@ -168,7 +168,7 @@ class TestAttendance:
         qr = self._qr(fresh_member)
         r = requests.post(f"{API}/attendance/checkin", headers=H(fresh_member),
                          json={"qr_token": qr, "latitude": FAR_LAT, "longitude": FAR_LNG})
-        assert r.status_code == 400 and "from campus" in r.json()["detail"]
+        assert r.status_code == 400 and r.json()["detail"].startswith("OUT_OF_GEOFENCE:")
 
     def test_checkin_success(self, fresh_member):
         qr = self._qr(fresh_member)
@@ -176,7 +176,8 @@ class TestAttendance:
                          json={"qr_token": qr, "latitude": OFFICE_LAT, "longitude": OFFICE_LNG})
         assert r.status_code == 200, r.text
         d = r.json()
-        assert d["ok"] is True and d["session"]["check_out_at"] is None
+        assert d["ok"] is True and d["action"] == "checkin"
+        assert d["out_of_geofence"] is False
         # verify status
         st = requests.get(f"{API}/attendance/status", headers=H(fresh_member)).json()
         assert st["checked_in"] is True
