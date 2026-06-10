@@ -48,6 +48,19 @@ export default function Login() {
     }
   };
 
+  const quickLogin = async (e: string, p: string) => {
+    setLoading(true);
+    try {
+      await login(e, p);
+      router.replace("/(tabs)");
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Login failed. Check connection.";
+      toast.show(msg, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.hero}>
@@ -109,9 +122,27 @@ export default function Login() {
         <Button title="Sign In" onPress={onSubmit} loading={loading} testID="login-submit-button" icon="log-in-outline" />
 
         <View style={styles.hintBox}>
-          <Text style={styles.hintTitle}>Demo logins</Text>
-          <Text style={styles.hintText}>Admin · admin@attendance.app / Admin@12345</Text>
-          <Text style={styles.hintText}>Member · arjun@attendance.app / pass123</Text>
+          <Text style={styles.hintTitle}>Quick test login — one tap, no typing</Text>
+          <View style={styles.quickRow}>
+            <Pressable
+              testID="quick-login-admin"
+              onPress={() => quickLogin("admin@attendance.app", "Admin@12345")}
+              disabled={loading}
+              style={({ pressed }) => [styles.quickBtn, styles.quickAdmin, pressed && { opacity: 0.85 }]}
+            >
+              <Ionicons name="shield-checkmark" size={18} color="#fff" />
+              <Text style={styles.quickBtnText}>Enter as Admin</Text>
+            </Pressable>
+            <Pressable
+              testID="quick-login-member"
+              onPress={() => quickLogin("arjun@attendance.app", "pass123")}
+              disabled={loading}
+              style={({ pressed }) => [styles.quickBtn, styles.quickMember, pressed && { opacity: 0.85 }]}
+            >
+              <Ionicons name="person" size={18} color={colors.onSurface} />
+              <Text style={[styles.quickBtnText, { color: colors.onSurface }]}>Enter as Member</Text>
+            </Pressable>
+          </View>
         </View>
       </KeyboardAwareScrollView>
     </View>
@@ -162,6 +193,19 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.lg,
   },
-  hintTitle: { fontSize: font.sm, fontWeight: "700", color: colors.onSurfaceTertiary, marginBottom: spacing.xs },
+  hintTitle: { fontSize: font.sm, fontWeight: "700", color: colors.onSurfaceTertiary, marginBottom: spacing.md },
   hintText: { fontSize: font.sm, color: colors.muted, lineHeight: 20 },
+  quickRow: { flexDirection: "row", gap: spacing.sm },
+  quickBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    height: 48,
+    borderRadius: radius.md,
+  },
+  quickAdmin: { backgroundColor: colors.brandPrimary },
+  quickMember: { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.borderStrong },
+  quickBtnText: { fontSize: font.base, fontWeight: "700", color: "#fff" },
 });
