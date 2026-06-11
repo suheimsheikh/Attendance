@@ -34,8 +34,9 @@ Build a mobile "Attendance" app for a sailing academy to track **entry/exit of s
 - iOS 15.1+ and Android 7.0+ (phones & tablets). Needs camera + location. Web/Expo Go preview can't use real camera/GPS — a "Simulate at office" switch covers preview testing.
 
 ## Backlog / Remaining
+- **Deferred (user-requested, revisit later):** WhatsApp companion channel — auto-send the early-morning tour & leave report to a WhatsApp group, notify admins on new leave requests, and allow leave requests via a WhatsApp bot. Requires WhatsApp Business Cloud API setup (Meta verification, registered number, approved templates).
 - **P1:** Real GPS + camera scan/photo require a native build (not testable in Expo Go web).
-- **P2:** Lost-card recovery (regenerate personal QR), member self-photo from profile, calendar history, date-picker for leave dates, restrict member visibility of others' emails, split server.py into routers.
+- **P2:** Lost-card recovery (regenerate personal QR), member self-photo from profile, calendar history, date-picker for leave dates, auto check-out at midnight safeguard, restrict member visibility of others' emails, split server.py into routers.
 
 ## Next Tasks
 - Gather feedback; optionally add member self-photo capture and a calendar history view.
