@@ -26,6 +26,7 @@ type PMember = {
   detail: string;
   photo?: string | null;
   flagged?: boolean;
+  late?: boolean;
 };
 type Presence = {
   members: PMember[];
@@ -209,6 +210,12 @@ const MemberRow: React.FC<{ m: PMember }> = ({ m }) => {
               <Text style={styles.offsiteText}>Off-site</Text>
             </View>
           )}
+          {m.late && (
+            <View style={styles.lateTag}>
+              <Ionicons name="alarm" size={10} color="#9A3412" />
+              <Text style={styles.lateText}>Late</Text>
+            </View>
+          )}
         </View>
       </View>
       <StatusBadge status={m.status} />
@@ -323,6 +330,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   offsiteText: { fontSize: 10, fontWeight: "700", color: "#92400E" },
+  lateTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#FFEDD5",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  lateText: { fontSize: 10, fontWeight: "700", color: "#9A3412" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md, padding: spacing.xl },
   empty: { alignItems: "center", paddingTop: spacing["3xl"] },
   emptyImg: { width: 160, height: 120, borderRadius: radius.lg, marginBottom: spacing.lg, opacity: 0.85 },

@@ -63,6 +63,7 @@ export const Dashboard: React.FC<{ go: (k: string) => void }> = ({ go }) => {
       <SectionTitle title="Dashboard" subtitle="Live overview of campus attendance" />
       <View style={styles.statRow}>
         <StatTile label="On Campus" value={summary?.on_campus ?? 0} icon="people" color={colors.success} />
+        <StatTile label="Late Today" value={summary?.late_today ?? 0} icon="alarm" color="#EA580C" />
         <StatTile label="Pending Leaves" value={summary?.pending_leaves ?? 0} icon="hourglass" color={colors.warning} />
         <StatTile label="On Leave / Tour" value={summary?.on_leave_tour ?? 0} icon="airplane" color={colors.info} />
         <StatTile label="Total Members" value={summary?.total_members ?? 0} icon="id-card" color={colors.brandSecondary} />
@@ -212,6 +213,7 @@ export const PresenceBoard: React.FC = () => {
               <Text style={[T.cell, { flex: 1 }]}>{categoryLabel[m.category] || m.category}</Text>
               <View style={{ flex: 1.4, flexDirection: "row", gap: 6, alignItems: "center" }}>
                 <Pill status={m.status} />
+                {m.late && <Text style={styles.late}>late</Text>}
                 {m.flagged && <Text style={styles.offsite}>off-site</Text>}
               </View>
               <Text style={[T.cell, { flex: 1.4, color: colors.muted }]}>{m.detail}</Text>
@@ -586,6 +588,7 @@ export const ReportsSection: React.FC = () => {
             <Text style={[T.headText, { flex: 1 }]}>Category</Text>
             <Text style={[T.headText, { width: 90, textAlign: "right" }]}>Hours</Text>
             <Text style={[T.headText, { width: 90, textAlign: "right" }]}>Days</Text>
+            <Text style={[T.headText, { width: 90, textAlign: "right" }]}>Late</Text>
             <Text style={[T.headText, { width: 110, textAlign: "right" }]}>Attendance</Text>
           </View>
           {hours.length === 0 ? (
@@ -597,6 +600,7 @@ export const ReportsSection: React.FC = () => {
                 <Text style={[T.cell, { flex: 1, color: colors.muted }]}>{categoryLabel[r.category] || r.category}</Text>
                 <Text style={[T.cell, { width: 90, textAlign: "right" }]}>{r.total_hours}</Text>
                 <Text style={[T.cell, { width: 90, textAlign: "right" }]}>{r.days_present}</Text>
+                <Text style={[T.cell, { width: 90, textAlign: "right", color: r.late_days ? "#9A3412" : colors.muted, fontWeight: r.late_days ? "700" : "400" }]}>{r.late_days ?? 0}</Text>
                 <Text style={[T.cell, { width: 110, textAlign: "right", fontWeight: "700", color: r.attendance_pct >= 60 ? colors.success : colors.muted }]}>
                   {r.attendance_pct}%
                 </Text>
@@ -653,21 +657,29 @@ export const OfficeSettingsSection: React.FC = () => {
     if (isNaN(lng) || lng < -180 || lng > 180) return toast.show("Longitude -180..180", "error");
     if (isNaN(rad) || rad < 10 || rad > 100) return toast.show("Radius 10..100m", "error");
     if (!/^\d{1,2}:\d{2}$/.test(o.default_work_start) || !/^\d{1,2}:\d{2}$/.test(o.default_work_end)) return toast.show("Timings HH:MM", "error");
+    const grace = parseInt(o.late_grace_minutes ?? 0, 10);
+    if (isNaN(grace) || grace < 0 || grace > 240) return toast.show("Grace must be 0–240 minutes", "error");
     setSaving(true);
     try {
       await api.put("/office", {
         name: o.name || "Campus Office", latitude: lat, longitude: lng, radius_m: rad,
         default_work_start: o.default_work_start, default_work_end: o.default_work_end,
+        timezone: o.timezone || "Asia/Kolkata", late_grace_minutes: grace,
       });
       toast.show("Office settings saved", "success");
     } catch (e) { toast.show(e instanceof ApiError ? e.message : "Failed", "error"); }
     finally { setSaving(false); }
   };
 
+  const TIMEZONES = [
+    "Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo",
+    "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "UTC",
+  ];
+
   if (!o) return <Loader />;
   return (
     <View>
-      <SectionTitle title="Office Settings" subtitle="Geofence location and default working hours" />
+      <SectionTitle title="Office Settings" subtitle="Geofence location, timezone and default working hours" />
       <Panel style={{ padding: spacing.xl, maxWidth: 720 }}>
         <Field label="Office Name"><WInput value={o.name} onChangeText={(v) => set("name", v)} testID="office-name" /></Field>
         <View style={{ flexDirection: "row", gap: spacing.md }}>
@@ -675,9 +687,31 @@ export const OfficeSettingsSection: React.FC = () => {
           <Field label="Longitude"><WInput value={String(o.longitude)} onChangeText={(v) => set("longitude", v)} testID="office-lng" /></Field>
           <Field label="Radius (m, ≤100)"><WInput value={String(o.radius_m)} onChangeText={(v) => set("radius_m", v)} testID="office-radius" /></Field>
         </View>
+        <Field label="Timezone">
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+            {TIMEZONES.map((tz) => {
+              const active = (o.timezone || "Asia/Kolkata") === tz;
+              return (
+                <Pressable
+                  key={tz}
+                  testID={`tz-${tz}`}
+                  onPress={() => set("timezone", tz)}
+                  style={[styles.tzChip, active && styles.tzChipActive]}
+                >
+                  <Text style={[styles.tzChipText, active && styles.tzChipTextActive]}>{tz}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Field>
         <View style={{ flexDirection: "row", gap: spacing.md }}>
           <Field label="Default Start (HH:MM)"><WInput value={o.default_work_start} onChangeText={(v) => set("default_work_start", v)} testID="office-start" /></Field>
           <Field label="Default End (HH:MM)"><WInput value={o.default_work_end} onChangeText={(v) => set("default_work_end", v)} testID="office-end" /></Field>
+          <Field label="Late grace (min)"><WInput value={String(o.late_grace_minutes ?? 0)} onChangeText={(v) => set("late_grace_minutes", v)} testID="office-grace" /></Field>
+        </View>
+        <View style={styles.tip}>
+          <Ionicons name="time-outline" size={16} color={colors.muted} />
+          <Text style={styles.tipText}>Anyone checking in after their start time + grace is flagged Late. The timezone decides the day boundary used in reports.</Text>
         </View>
         <View style={styles.tip}>
           <Ionicons name="bulb-outline" size={16} color={colors.muted} />
@@ -1044,6 +1078,11 @@ const styles = StyleSheet.create({
   cellName: { fontSize: font.base, fontWeight: "700", color: colors.onSurface },
   cellSub: { fontSize: font.sm, color: colors.muted, marginTop: 1 },
   offsite: { fontSize: 10, fontWeight: "700", color: "#92400E", backgroundColor: "#FEF3C7", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 },
+  late: { fontSize: 10, fontWeight: "700", color: "#9A3412", backgroundColor: "#FFEDD5", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 },
+  tzChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceTertiary, borderWidth: 1, borderColor: colors.border },
+  tzChipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  tzChipText: { fontSize: font.sm, fontWeight: "600", color: colors.onSurfaceTertiary },
+  tzChipTextActive: { color: "#fff" },
   adminTag: { backgroundColor: colors.brandPrimary, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
   adminTagText: { color: "#fff", fontSize: 9, fontWeight: "800" },
   iconBtn: { width: 36, height: 36, borderRadius: radius.sm, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },

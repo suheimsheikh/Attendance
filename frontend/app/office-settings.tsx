@@ -16,7 +16,14 @@ type Office = {
   radius_m: number;
   default_work_start: string;
   default_work_end: string;
+  timezone: string;
+  late_grace_minutes: number;
 };
+
+const TIMEZONES = [
+  "Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo",
+  "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "UTC",
+];
 
 export default function OfficeSettings() {
   const insets = useSafeAreaInsets();
@@ -28,6 +35,8 @@ export default function OfficeSettings() {
   const [radius, setRadius] = useState("100");
   const [start, setStart] = useState("09:00");
   const [end, setEnd] = useState("17:00");
+  const [tz, setTz] = useState("Asia/Kolkata");
+  const [grace, setGrace] = useState("0");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -40,6 +49,8 @@ export default function OfficeSettings() {
       setRadius(String(o.radius_m));
       setStart(o.default_work_start || "09:00");
       setEnd(o.default_work_end || "17:00");
+      setTz(o.timezone || "Asia/Kolkata");
+      setGrace(String(o.late_grace_minutes ?? 0));
     } catch {}
     setLoading(false);
   }, []);
@@ -56,6 +67,8 @@ export default function OfficeSettings() {
     if (isNaN(lngN) || lngN < -180 || lngN > 180) return toast.show("Longitude must be between -180 and 180", "error");
     if (isNaN(radN) || radN < 10 || radN > 100) return toast.show("Radius must be between 10 and 100 m", "error");
     if (!timeOk(start) || !timeOk(end)) return toast.show("Timings must be HH:MM (24-hour)", "error");
+    const graceN = parseInt(grace, 10);
+    if (isNaN(graceN) || graceN < 0 || graceN > 240) return toast.show("Grace must be 0–240 minutes", "error");
     setSaving(true);
     try {
       await api.put("/office", {
@@ -65,6 +78,8 @@ export default function OfficeSettings() {
         radius_m: radN,
         default_work_start: start,
         default_work_end: end,
+        timezone: tz || "Asia/Kolkata",
+        late_grace_minutes: graceN,
       });
       toast.show("Office settings saved", "success");
       router.back();
@@ -134,6 +149,30 @@ export default function OfficeSettings() {
             </View>
           </View>
 
+          <Text style={[styles.sectionTitle, { marginTop: spacing.xl }]}>Timezone & Late Flagging</Text>
+          <View style={styles.infoCard}>
+            <Ionicons name="globe-outline" size={18} color={colors.brandSecondary} />
+            <Text style={styles.infoText}>
+              The timezone sets the day boundary used in reports. Anyone checking in after their start time plus the grace
+              period is flagged &quot;Late&quot;.
+            </Text>
+          </View>
+          <Text style={styles.label}>Timezone</Text>
+          <View style={styles.tzWrap}>
+            {TIMEZONES.map((z) => (
+              <Pressable
+                key={z}
+                testID={`tz-${z}`}
+                onPress={() => setTz(z)}
+                style={[styles.tzChip, tz === z && styles.tzChipActive]}
+              >
+                <Text style={[styles.tzChipText, tz === z && styles.tzChipTextActive]}>{z}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.label}>Late grace period (minutes)</Text>
+          <TextInput value={grace} onChangeText={setGrace} placeholder="0" placeholderTextColor={colors.muted} keyboardType="number-pad" style={styles.input} testID="late-grace-input" />
+
           <View style={{ height: spacing.xl }} />
           <Button title="Save Settings" onPress={save} loading={saving} icon="save-outline" testID="save-office-button" />
         </KeyboardAwareScrollView>
@@ -175,4 +214,16 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
   },
   row: { flexDirection: "row", gap: spacing.md },
+  tzWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  tzChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceTertiary,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  tzChipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  tzChipText: { fontSize: font.sm, fontWeight: "600", color: colors.onSurfaceTertiary },
+  tzChipTextActive: { color: "#fff" },
 });

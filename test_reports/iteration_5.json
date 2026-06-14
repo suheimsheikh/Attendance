@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 5 — End-to-end verification of the new Timezone + Late-arrival feature on https://attendance-app-220.preview.emergentagent.com. BACKEND: 7 existing pure-unit tests in tests/test_timezone_late.py PASS (local_date_str IST rollover, UTC, default IST, local_hm, compute_late after grace, within grace, member work_start override). Added new tests/test_timezone_late_api.py with 9 integration tests against the live preview backend — ALL 9 PASS: (a) GET /api/office returns timezone + late_grace_minutes, (b) PUT /api/office persists timezone='UTC' & late_grace_minutes=25 and restores Asia/Kolkata/15, (c) admin attendance toggle creates a fresh check-in for a TEST_ member, (d) GET /api/presence returns late=true (current IST time 22:43 >> 08:45 threshold) and detail='Since 22:43' in office-local time + date=2026-06-14 (IST), (e) GET /api/admin/summary returns late_today >= 1, (f) GET /api/reports/hours rows each carry late_days int and the test member's closed session contributes late_days=1, (g) GET /api/reports/hours/export CSV header includes 'Late Days' column, (h) GET /api/me/stats returns late_days_this_week int for admin, (i) GET /api/me/stats returns late_days_this_week>=1 for the late test member. Total 16/16 pytest tests green. FRONTEND (Expo web, 1366x900 admin console): Logged in via quick-login-admin → /console. Dashboard tile 'Late Today' renders with orange alarm icon and shows the count (2 after our checked-in/checked-out sessions). 'Currently on Campus' card shows TEST_LateUI_457232 with detail 'Since 22:43' (IST localised). Presence Board (sidebar Presence Board): the test member row displays green 'On Campus' status badge AND an orange 'late' badge inline next to the status; CATEGORY/DETAIL/ACTION columns render correctly; Search box, All/On Campus/Exited/On Tour/On Leave tab counters all populated. Reports → Hours & Attendance renders a new 'LATE' column between DAYS and ATTENDANCE; Campus Administrator (who completed a late session via our API test) shows LATE=1 highlighted in orange (#9A3412); pulled via this-week range. Office Settings: 9 timezone chips render (Asia/Kolkata, Asia/Dubai, Asia/Singapore, Asia/Tokyo, Europe/London, Europe/Berlin, America/New_York, America/Los_Angeles, UTC) with Asia/Kolkata active; clicking UTC switches the active chip styling instantly; 'Late grace (min)' WInput renders with value 15 (testID office-grace); explanatory tip text present; 'Save Settings' button present; PUT /api/office persistence already verified via API test (round-trip UTC/25 → restore IST/15). Timezone change was non-destructive — office state restored to tz=Asia/Kolkata grace=15 start=08:30 at end of run. Mobile (tabs)/index.tsx code path also displays a 'Late' tag with alarm icon next to detail when m.late is true (verified via code review).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "expo-device version mismatch", "issue": "Expo CLI still warns: 'expo-device@56.0.4 - expected version: ~8.0.10'. Carried over from iter4. Reference: /app/frontend/package.json"},
+      {"component": "FastAPI on_event lifespan deprecation", "issue": "Pytest warns: '@app.on_event(startup/shutdown) is deprecated, use lifespan event handlers instead.' Reference: /app/backend/server.py:306 and :354. Non-blocking but should be migrated to FastAPI lifespan handler."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_timezone_late.py (7 unit tests)",
+    "/app/backend/tests/test_timezone_late_api.py (9 integration tests, new this iteration)",
+    "/app/test_reports/pytest/pytest_iter5_timezone.xml",
+    "/app/test_reports/pytest/pytest_iter5_api.xml",
+    "/app/test_reports/pytest/pytest_iter5_all.xml"
+  ],
+  "action_items": [
+    "No app bugs to fix — Timezone + Late-arrival feature is fully working end-to-end (backend APIs + admin console UI + mobile presence tag).",
+    "Optional: migrate two @app.on_event handlers in /app/backend/server.py (lines ~306 and ~354) to FastAPI lifespan context manager to silence DeprecationWarning. Cosmetic, no behaviour impact.",
+    "Optional: align expo-device package version (CLI warns 56.0.4 vs expected ~8.0.10) — already carried over from iter4."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~1333 lines (was 1120 in iter4) — well past the 700-line guideline. Strongly recommend splitting into routers: auth, devices, office, members, attendance, leaves, reports.",
+    "/api/reports/hours filters to attendance docs that have hours != None (closed sessions). The hours report therefore intentionally only counts late_days for completed (checked-out) sessions on a given day. This is correct, but worth a docstring so reviewers don't mistakenly file 'open late session not reported' as a bug. Today this is the reason an open late check-in shows in /api/admin/summary.late_today (which counts any attendance row with late=true for today) and on /api/presence (live), but only contributes to /api/reports/hours.late_days once the member is checked out.",
+    "compute_late uses default_work_start and member.work_start to compute the threshold, but does NOT consider a per-member work_end nor day-of-week overrides. If a member has a Saturday 12:00 start configured in some future feature, current logic would still use the IST default. Out-of-scope for this iteration, but worth flagging as a forward-compat constraint.",
+    "/api/presence does an O(N) loop over all users and a separate aggregate for last_outs every 15s for every viewer. For ~2000 members and many admins polling, consider adding indexes on db.attendance ({user_id:1, check_out_at:-1}) and caching. Not blocking — current load is tiny.",
+    "Carry-over: PhoneLoginIn has no validator on device_id; /api/members exposes email+mobile to every authenticated user. Both flagged in iter3/iter4, unchanged."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_timezone_late_api.py (NEW, 9 integration tests, all pass)",
+    "/app/test_reports/iteration_5.json (NEW)",
+    "/app/test_reports/pytest/pytest_iter5_timezone.xml (NEW)",
+    "/app/test_reports/pytest/pytest_iter5_api.xml (NEW)",
+    "/app/test_reports/pytest/pytest_iter5_all.xml (NEW)"
+  ],
+  "success_rate": {"backend": "100% (16/16: 7 unit + 9 integration)", "frontend": "100% — Dashboard Late Today tile, Presence Board late badge, Reports Late column, Office Settings timezone chips + grace input all render and behave as expected"},
+  "seed_data_creation": "Created and cleaned up TEST_LateUI_<suffix> and TEST_Late_<suffix> members during testing. Final state verified: office back to timezone=Asia/Kolkata, late_grace_minutes=15, default_work_start=08:30; all TEST_ members deleted. Database has no leftover test artefacts from this iteration.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && EXPO_PUBLIC_BACKEND_URL=https://attendance-app-220.preview.emergentagent.com python -m pytest tests/test_timezone_late.py tests/test_timezone_late_api.py -v. Integration tests are time-sensitive: they assert late=true only when wall-clock IST is past 08:45 (default_work_start 08:30 + grace 15). They self-skip the late=true assertion if run before 08:46 IST. The tests create a TEST_Late_<suffix> member, check them in via /api/admin/attendance/toggle/{id}, validate presence/summary/reports, check the member out, then delete the member. UI testIDs of interest: tz-Asia/Kolkata, tz-UTC, ..., office-grace (input), office-start, office-end, office-name, office-lat, office-lng, office-radius. The Save button text is 'Save Settings' (not just 'Save'). Presence/Dashboard/Reports do not have explicit testIDs on the new late badge/tile/column — they were verified via innerText scraping and screenshots. Adding testIDs (e.g. dashboard-stat-late-today, presence-late-badge-{id}, reports-late-cell-{id}) would harden future regression tests.",
+  "rca_of_issue": "No new bugs encountered. The single intermediate test failure during development (test_reports_hours_includes_late_days) was a test-script issue — the hours report intentionally aggregates only closed (check_out_at not null) sessions, so the test was updated to check the member out before reading the report. After that change all 16 tests pass."
+}

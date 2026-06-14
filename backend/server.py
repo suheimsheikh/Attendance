@@ -19,6 +19,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta, date
+from zoneinfo import ZoneInfo
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -56,6 +57,55 @@ def now_utc() -> datetime:
 
 def iso(dt: Optional[datetime]) -> Optional[str]:
     return dt.isoformat() if dt else None
+
+
+# ----------------------------------------------------------------------------
+# Office timezone + late-arrival helpers
+# ----------------------------------------------------------------------------
+DEFAULT_TZ = "Asia/Kolkata"
+
+
+def office_tz(office: Optional[dict]) -> ZoneInfo:
+    name = (office or {}).get("timezone") or DEFAULT_TZ
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        return ZoneInfo(DEFAULT_TZ)
+
+
+def local_now(office: Optional[dict]) -> datetime:
+    """Current time in the office's local timezone."""
+    return now_utc().astimezone(office_tz(office))
+
+
+def local_date_str(office: Optional[dict], dt: Optional[datetime] = None) -> str:
+    """The calendar date (YYYY-MM-DD) in the office timezone for the given instant."""
+    dt = dt or now_utc()
+    return dt.astimezone(office_tz(office)).date().isoformat()
+
+
+def local_hm(office: Optional[dict], iso_str: Optional[str]) -> str:
+    """Format a stored UTC ISO timestamp as HH:MM in office local time."""
+    if not iso_str:
+        return ""
+    return datetime.fromisoformat(iso_str).astimezone(office_tz(office)).strftime("%H:%M")
+
+
+def compute_late(office: dict, target: dict, ts: datetime) -> tuple[bool, int]:
+    """Returns (is_late, minutes_late) comparing the check-in local time against the
+    member's work_start (or office default) plus the configured grace period."""
+    ws = (target.get("work_start") or office.get("default_work_start") or "09:00")
+    grace = int(office.get("late_grace_minutes") or 0)
+    try:
+        h, m = (int(x) for x in ws.split(":")[:2])
+    except Exception:
+        return False, 0
+    local = ts.astimezone(office_tz(office))
+    threshold = local.replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(minutes=grace)
+    if local > threshold:
+        return True, int((local - threshold).total_seconds() // 60)
+    return False, 0
+
 
 
 # ----------------------------------------------------------------------------
@@ -178,6 +228,8 @@ class OfficeConfig(BaseModel):
     radius_m: int = 100
     default_work_start: str = "09:00"
     default_work_end: str = "17:00"
+    timezone: str = "Asia/Kolkata"
+    late_grace_minutes: int = 0
 
 
 class CheckInIn(BaseModel):
@@ -291,6 +343,11 @@ async def seed():
     await db.config.update_one(
         {"id": "office", "default_work_start": {"$exists": False}},
         {"$set": {"default_work_start": "09:00", "default_work_end": "17:00"}},
+    )
+    # Backfill office timezone + late grace defaults
+    await db.config.update_one(
+        {"id": "office", "timezone": {"$exists": False}},
+        {"$set": {"timezone": DEFAULT_TZ, "late_grace_minutes": 0}},
     )
 
 
@@ -773,10 +830,11 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
         }})
         return {"ok": True, "action": "checkout", "member": target["full_name"],
                 "hours": hours, "out_of_geofence": out}
+    late, late_minutes = compute_late(office, target, ts)
     doc = {
         "id": str(uuid.uuid4()),
         "user_id": target["id"],
-        "date": ts.date().isoformat(),
+        "date": local_date_str(office, ts),
         "check_in_at": ts.isoformat(),
         "check_out_at": None,
         "check_in_photo": photo,
@@ -787,6 +845,8 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
         "distance_m": dist,
         "out_of_geofence": out,
         "geo_reason": (reason or None),
+        "late": late,
+        "late_minutes": late_minutes,
         "method": method,
         "checked_in_by": scanned_by,
     }
@@ -845,10 +905,11 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             status_code=400,
             detail=f"About {int(dist)} m from the office — move within {office['radius_m']} m to check in.",
         )
+    late, late_minutes = compute_late(office, target, ts)
     doc = {
         "id": str(uuid.uuid4()),
         "user_id": target["id"],
-        "date": ts.date().isoformat(),
+        "date": local_date_str(office, ts),
         "check_in_at": ts.isoformat(),
         "check_out_at": None,
         "check_in_photo": None,
@@ -857,6 +918,8 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         "latitude": lat, "longitude": lng,
         "distance_m": dist, "out_of_geofence": False,
         "geo_reason": None,
+        "late": late,
+        "late_minutes": late_minutes,
         "method": "geo",
         "checked_in_by": by,
     }
@@ -932,7 +995,8 @@ async def active_leave_for(user_id: str, on: str) -> Optional[dict]:
 
 @api_router.get("/presence")
 async def presence(user: dict = Depends(get_current_user)):
-    today = now_utc().date().isoformat()
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
     users = await db.users.find(
         {}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1, "photo": 1}
     ).sort("full_name", 1).to_list(2000)
@@ -971,14 +1035,14 @@ async def presence(user: dict = Depends(get_current_user)):
             photo = u.get("photo")
         elif sess:
             status_v = "on_campus"
-            detail = "Since " + datetime.fromisoformat(sess["check_in_at"]).strftime("%H:%M")
+            detail = "Since " + local_hm(office, sess["check_in_at"])
             since = sess["check_in_at"]
             photo = sess.get("check_in_photo") or u.get("photo")
         else:
             last = last_map.get(u["id"])
             status_v = "exited"
             if last:
-                detail = "Left " + datetime.fromisoformat(last["check_out_at"]).strftime("%H:%M")
+                detail = "Left " + local_hm(office, last["check_out_at"])
                 since = last["check_out_at"]
                 photo = last.get("check_out_photo") or u.get("photo")
             else:
@@ -996,6 +1060,7 @@ async def presence(user: dict = Depends(get_current_user)):
             "since": since,
             "photo": photo,
             "flagged": bool(sess and sess.get("out_of_geofence") and status_v == "on_campus"),
+            "late": bool(sess and sess.get("late") and status_v == "on_campus"),
         })
     order = {"on_campus": 0, "on_tour": 1, "on_leave": 2, "exited": 3}
     result.sort(key=lambda r: (order.get(r["status"], 9), r["full_name"]))
@@ -1067,7 +1132,8 @@ async def decide_leave(leave_id: str, body: LeaveDecision, admin: dict = Depends
 # ----------------------------------------------------------------------------
 @api_router.get("/me/stats")
 async def my_stats(user: dict = Depends(get_current_user)):
-    today = now_utc().date()
+    office = await db.config.find_one({"id": "office"})
+    today = local_now(office).date()
     week_start = (today - timedelta(days=today.weekday())).isoformat()
     month_start = today.replace(day=1).isoformat()
     sessions = await db.attendance.find(
@@ -1076,6 +1142,7 @@ async def my_stats(user: dict = Depends(get_current_user)):
     week_hours = round(sum((s["hours"] or 0) for s in sessions if s["date"] >= week_start), 2)
     month_hours = round(sum((s["hours"] or 0) for s in sessions if s["date"] >= month_start), 2)
     days_this_week = len({s["date"] for s in sessions if s["date"] >= week_start})
+    late_days_this_week = len({s["date"] for s in sessions if s.get("late") and s["date"] >= week_start})
     open_sess = await open_session_for(user["id"])
     pending_leaves = await db.leaves.count_documents({"user_id": user["id"], "status": "pending"})
     recent = sessions[:10]
@@ -1083,6 +1150,7 @@ async def my_stats(user: dict = Depends(get_current_user)):
         "week_hours": week_hours,
         "month_hours": month_hours,
         "days_this_week": days_this_week,
+        "late_days_this_week": late_days_this_week,
         "checked_in": open_sess is not None,
         "open_session": open_sess,
         "pending_leaves": pending_leaves,
@@ -1095,7 +1163,8 @@ async def my_stats(user: dict = Depends(get_current_user)):
 # ----------------------------------------------------------------------------
 @api_router.get("/admin/summary")
 async def admin_summary(admin: dict = Depends(require_admin)):
-    today = now_utc().date().isoformat()
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
     total_members = await db.users.count_documents({})
     on_campus = await db.attendance.count_documents({"check_out_at": None})
     pending_leaves = await db.leaves.count_documents({"status": "pending"})
@@ -1104,11 +1173,13 @@ async def admin_summary(admin: dict = Depends(require_admin)):
         "start_date": {"$lte": today},
         "end_date": {"$gte": today},
     })
+    late_today = await db.attendance.count_documents({"date": today, "late": True})
     return {
         "total_members": total_members,
         "on_campus": on_campus,
         "pending_leaves": pending_leaves,
         "on_leave_tour": on_leave_tour,
+        "late_today": late_today,
     }
 
 
@@ -1127,7 +1198,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
     # Batch: all attendance in range with hours, grouped by user_id
     atts = await db.attendance.find(
         {"date": {"$gte": start, "$lte": end}, "hours": {"$ne": None}},
-        {"_id": 0, "user_id": 1, "date": 1, "hours": 1},
+        {"_id": 0, "user_id": 1, "date": 1, "hours": 1, "late": 1},
     ).to_list(100000)
     by_user: dict = {}
     for a in atts:
@@ -1138,6 +1209,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         sessions = by_user.get(u["id"], [])
         total_hours = round(sum(s.get("hours") or 0 for s in sessions), 2)
         days_present = len({s["date"] for s in sessions})
+        late_days = len({s["date"] for s in sessions if s.get("late")})
         attendance_pct = round((days_present / span_days) * 100, 1)
         rows.append({
             "member_id": u["id"],
@@ -1146,6 +1218,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "rank": u.get("rank"),
             "total_hours": total_hours,
             "days_present": days_present,
+            "late_days": late_days,
             "span_days": span_days,
             "attendance_pct": attendance_pct,
         })
@@ -1161,7 +1234,9 @@ async def hours_report(start: str, end: str, admin: dict = Depends(require_admin
 @api_router.get("/reports/daily")
 async def daily_report(on: Optional[str] = None, user: dict = Depends(get_current_user)):
     """Daily leave & tour report for a given date (default today)."""
-    on = on or now_utc().date().isoformat()
+    if not on:
+        office = await db.config.find_one({"id": "office"})
+        on = local_date_str(office)
     leaves = await db.leaves.find({
         "status": "approved",
         "start_date": {"$lte": on},
@@ -1214,9 +1289,9 @@ def _csv_response(headers: List[str], rows: List[List], filename: str) -> Respon
 @api_router.get("/reports/hours/export")
 async def export_hours(start: str, end: str, fmt: str = "csv", admin: dict = Depends(require_admin)):
     rows = await compute_hours_report(start, end)
-    headers = ["Name", "Category", "Rank", "Hours", "Days Present", "Attendance %"]
+    headers = ["Name", "Category", "Rank", "Hours", "Days Present", "Late Days", "Attendance %"]
     table = [[r["member_name"], r["category"], r.get("rank") or "-", r["total_hours"],
-              r["days_present"], f"{r['attendance_pct']}%"] for r in rows]
+              r["days_present"], r.get("late_days", 0), f"{r['attendance_pct']}%"] for r in rows]
     if fmt == "pdf":
         pdf = _pdf_from_table("Attendance & Hours Report", headers, table, f"{start} to {end}")
         return Response(content=pdf, media_type="application/pdf",
@@ -1226,7 +1301,9 @@ async def export_hours(start: str, end: str, fmt: str = "csv", admin: dict = Dep
 
 @api_router.get("/reports/daily/export")
 async def export_daily(on: Optional[str] = None, fmt: str = "csv", user: dict = Depends(get_current_user)):
-    on = on or now_utc().date().isoformat()
+    if not on:
+        office = await db.config.find_one({"id": "office"})
+        on = local_date_str(office)
     leaves = await db.leaves.find({
         "status": "approved",
         "start_date": {"$lte": on},

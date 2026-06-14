@@ -15,6 +15,7 @@ type HoursRow = {
   rank?: string | null;
   total_hours: number;
   days_present: number;
+  late_days?: number;
   attendance_pct: number;
 };
 type Daily = {
@@ -159,6 +160,7 @@ export default function Reports() {
               <Text style={[styles.tName, styles.tHeadText]}>Member</Text>
               <Text style={[styles.tCell, styles.tHeadText]}>Hrs</Text>
               <Text style={[styles.tCell, styles.tHeadText]}>Days</Text>
+              <Text style={[styles.tCell, styles.tHeadText]}>Late</Text>
               <Text style={[styles.tCell, styles.tHeadText]}>%</Text>
             </View>
             {hours.map((r, i) => (
@@ -169,6 +171,7 @@ export default function Reports() {
                 </View>
                 <Text style={styles.tCell}>{r.total_hours}</Text>
                 <Text style={styles.tCell}>{r.days_present}</Text>
+                <Text style={[styles.tCell, (r.late_days ?? 0) > 0 && { color: "#9A3412", fontWeight: "700" }]}>{r.late_days ?? 0}</Text>
                 <Text style={[styles.tCell, { fontWeight: "700", color: r.attendance_pct >= 60 ? colors.success : colors.muted }]}>
                   {r.attendance_pct}
                 </Text>
