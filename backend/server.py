@@ -188,6 +188,13 @@ class CheckInIn(BaseModel):
     reason: Optional[str] = None  # required when outside geofence
 
 
+class RemoteCheckoutIn(BaseModel):
+    latitude: float
+    longitude: float
+    photo: Optional[str] = None
+    reason: Optional[str] = None  # optional — many users can't type
+
+
 class ScanCardIn(BaseModel):
     personal_qr: str
     latitude: float
@@ -797,6 +804,39 @@ async def check_out(body: CheckInIn, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Invalid Office QR code")
     return await perform_toggle(user, office, body.latitude, body.longitude,
                                 body.photo, body.reason, "office_qr", None)
+
+
+@api_router.post("/attendance/remote-checkout")
+async def remote_checkout(body: RemoteCheckoutIn, user: dict = Depends(get_current_user)):
+    """Check out from anywhere (off campus) without the gate QR. Reason optional.
+    Always recorded with the device's GPS; flagged off-site when outside the geofence."""
+    sess = await open_session_for(user["id"])
+    if not sess:
+        raise HTTPException(status_code=400, detail="You are not checked in")
+    office = await db.config.find_one({"id": "office"})
+    lat, lng = body.latitude, body.longitude
+    dist = None
+    out = True
+    if office:
+        dist = round(haversine_m(lat, lng, office["latitude"], office["longitude"]), 1)
+        out = dist > office["radius_m"]
+    ts = now_utc()
+    cin = datetime.fromisoformat(sess["check_in_at"])
+    hours = round((ts - cin).total_seconds() / 3600.0, 2)
+    await db.attendance.update_one({"id": sess["id"]}, {"$set": {
+        "check_out_at": ts.isoformat(),
+        "check_out_photo": body.photo,
+        "hours": hours,
+        "exit_latitude": lat,
+        "exit_longitude": lng,
+        "exit_distance_m": dist,
+        "exit_out_of_geofence": out,
+        "exit_reason": (body.reason or None),
+        "exit_method": "remote",
+        "checked_out_by": None,
+    }})
+    return {"ok": True, "action": "checkout", "member": user["full_name"],
+            "hours": hours, "out_of_geofence": out, "remote": True}
 
 
 @api_router.post("/attendance/scan-card")

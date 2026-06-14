@@ -54,6 +54,9 @@ export default function CheckIn() {
   const [scannedValue, setScannedValue] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [distance, setDistance] = useState(0);
+  const [remoteOpen, setRemoteOpen] = useState(false);
+  const [remoteReason, setRemoteReason] = useState("");
+  const [remoteBusy, setRemoteBusy] = useState(false);
   const lockRef = useRef(false);
   const pendingRef = useRef<{ photo: string | null; lat: number; lng: number } | null>(null);
 
@@ -191,6 +194,26 @@ export default function CheckIn() {
     await submit(p.photo, p.lat, p.lng, reason.trim());
   };
 
+  const doRemoteCheckout = async () => {
+    setRemoteBusy(true);
+    try {
+      const coords = await getCoords();
+      if (!coords) { setRemoteBusy(false); return; }
+      const res = await api.post<{ hours: number; out_of_geofence: boolean }>(
+        "/attendance/remote-checkout",
+        { latitude: coords.latitude, longitude: coords.longitude, reason: remoteReason.trim() || null }
+      );
+      toast.show(`Checked out — ${res.hours}h${res.out_of_geofence ? " · off-site" : ""}`, "success");
+      setRemoteOpen(false);
+      setRemoteReason("");
+      await loadStatus();
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : "Could not check out", "error");
+    } finally {
+      setRemoteBusy(false);
+    }
+  };
+
   const selfMode = mode === "self";
   const camFacing = step === "scan" ? "back" : selfMode ? "front" : "back";
 
@@ -243,6 +266,19 @@ export default function CheckIn() {
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.muted} />
           </Pressable>
+
+          {checkedIn && (
+            <Pressable testID="remote-checkout-button" onPress={() => { setRemoteReason(""); setRemoteOpen(true); }} style={styles.secondaryAction}>
+              <View style={[styles.secondaryIcon, { backgroundColor: "#FEF3C7" }]}>
+                <Ionicons name="exit-outline" size={24} color="#B45309" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.secondaryTitle}>Check out from anywhere</Text>
+                <Text style={styles.secondarySub}>Off campus? End your session without the gate QR</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </Pressable>
+          )}
         </View>
 
         <View style={styles.simRow}>
@@ -258,6 +294,42 @@ export default function CheckIn() {
           />
         </View>
       </View>
+
+      {/* Remote check-out (off campus, no gate QR) */}
+      <Modal visible={remoteOpen} transparent animationType="slide" onRequestClose={() => setRemoteOpen(false)}>
+        <View style={styles.remoteOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <View style={styles.remoteSheet}>
+              <View style={styles.remoteIcon}>
+                <Ionicons name="exit-outline" size={28} color="#B45309" />
+              </View>
+              <Text style={styles.remoteTitle}>Check out from anywhere</Text>
+              <Text style={styles.remoteSub}>
+                You&apos;re away from the office. This ends your session now and records it as an off-site checkout.
+              </Text>
+              <TextInput
+                testID="remote-reason-input"
+                placeholder="Reason (optional)"
+                placeholderTextColor={colors.muted}
+                value={remoteReason}
+                onChangeText={setRemoteReason}
+                style={styles.remoteInput}
+              />
+              <Pressable testID="remote-checkout-confirm" onPress={doRemoteCheckout} disabled={remoteBusy} style={({ pressed }) => [styles.remoteConfirm, pressed && { opacity: 0.9 }]}>
+                {remoteBusy ? <ActivityIndicator color="#fff" /> : (
+                  <>
+                    <Ionicons name="checkmark" size={18} color="#fff" />
+                    <Text style={styles.remoteConfirmText}>Check out now</Text>
+                  </>
+                )}
+              </Pressable>
+              <Pressable onPress={() => setRemoteOpen(false)} disabled={remoteBusy} style={styles.remoteCancel} testID="remote-checkout-cancel">
+                <Text style={styles.remoteCancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       {/* Scanner / Photo / Reason modal */}
       <Modal visible={scanning} animationType="slide" onRequestClose={() => setScanning(false)}>
@@ -402,6 +474,16 @@ const styles = StyleSheet.create({
   },
   simTitle: { fontSize: font.base, fontWeight: "700", color: colors.onSurface },
   simSub: { fontSize: font.sm, color: colors.muted, marginTop: 2 },
+  remoteOverlay: { flex: 1, backgroundColor: "rgba(17,24,39,0.5)", justifyContent: "flex-end" },
+  remoteSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.xl, paddingBottom: spacing["3xl"], alignItems: "center" },
+  remoteIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center", marginBottom: spacing.md },
+  remoteTitle: { fontSize: font.xl, fontWeight: "800", color: colors.onSurface },
+  remoteSub: { fontSize: font.base, color: colors.muted, textAlign: "center", marginTop: spacing.sm, lineHeight: 20, paddingHorizontal: spacing.sm },
+  remoteInput: { width: "100%", backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.lg, height: 52, fontSize: font.base, color: colors.onSurface, marginTop: spacing.lg },
+  remoteConfirm: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, width: "100%", height: 52, borderRadius: radius.md, backgroundColor: "#B45309", marginTop: spacing.lg },
+  remoteConfirmText: { fontSize: font.lg, fontWeight: "700", color: "#fff" },
+  remoteCancel: { paddingVertical: spacing.md, marginTop: spacing.xs },
+  remoteCancelText: { fontSize: font.base, fontWeight: "600", color: colors.muted },
   camContainer: { flex: 1, backgroundColor: "#000" },
   camHeader: {
     flexDirection: "row",
