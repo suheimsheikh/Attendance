@@ -186,10 +186,12 @@ const AdminEmailLogin: React.FC<{ onDone: () => void; login: (e: string, p: stri
       </View>
       <View style={{ height: spacing.sm }} />
       <Button title="Sign In" onPress={() => go(email.trim().toLowerCase(), password)} loading={loading} testID="login-submit-button" icon="log-in-outline" />
-      <Pressable testID="quick-login-admin" onPress={() => go("admin@attendance.app", "Admin@12345")} disabled={loading} style={({ pressed }) => [styles.quickBtn, pressed && { opacity: 0.85 }]}>
-        <Ionicons name="shield-checkmark" size={16} color="#fff" />
-        <Text style={styles.quickBtnText}>Enter as Admin (demo)</Text>
-      </Pressable>
+      {__DEV__ && (
+        <Pressable testID="quick-login-admin" onPress={() => go("admin@attendance.app", "Admin@12345")} disabled={loading} style={({ pressed }) => [styles.quickBtn, pressed && { opacity: 0.85 }]}>
+          <Ionicons name="shield-checkmark" size={16} color="#fff" />
+          <Text style={styles.quickBtnText}>Enter as Admin (demo)</Text>
+        </Pressable>
+      )}
     </View>
   );
 };
