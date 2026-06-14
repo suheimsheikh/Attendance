@@ -9,6 +9,7 @@ import {
   Switch,
   Linking,
   TextInput,
+  ScrollView,
   Platform,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -46,7 +47,7 @@ export default function CheckIn() {
   const [checkedIn, setCheckedIn] = useState<boolean | null>(null);
   const [session, setSession] = useState<{ check_in_at: string } | null>(null);
   const [office, setOffice] = useState<Office | null>(null);
-  const [simulate, setSimulate] = useState(true);
+  const [simulate, setSimulate] = useState(__DEV__);
   const [mode, setMode] = useState<Mode>("self");
 
   const [scanning, setScanning] = useState(false);
@@ -54,9 +55,11 @@ export default function CheckIn() {
   const [scannedValue, setScannedValue] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [distance, setDistance] = useState(0);
-  const [remoteOpen, setRemoteOpen] = useState(false);
-  const [remoteReason, setRemoteReason] = useState("");
-  const [remoteBusy, setRemoteBusy] = useState(false);
+  const [togglingGeo, setTogglingGeo] = useState(false);
+  const [markOpen, setMarkOpen] = useState(false);
+  const [members, setMembers] = useState<{ id: string; full_name: string; category: string; rank?: string | null }[]>([]);
+  const [memberSearch, setMemberSearch] = useState("");
+  const [markBusy, setMarkBusy] = useState<string | null>(null);
   const lockRef = useRef(false);
   const pendingRef = useRef<{ photo: string | null; lat: number; lng: number } | null>(null);
 
@@ -194,23 +197,48 @@ export default function CheckIn() {
     await submit(p.photo, p.lat, p.lng, reason.trim());
   };
 
-  const doRemoteCheckout = async () => {
-    setRemoteBusy(true);
+  const doGeoToggle = async () => {
+    setTogglingGeo(true);
     try {
       const coords = await getCoords();
-      if (!coords) { setRemoteBusy(false); return; }
-      const res = await api.post<{ hours: number; out_of_geofence: boolean }>(
-        "/attendance/remote-checkout",
-        { latitude: coords.latitude, longitude: coords.longitude, reason: remoteReason.trim() || null }
+      if (!coords) { setTogglingGeo(false); return; }
+      const res = await api.post<{ action: string; hours?: number }>(
+        "/attendance/geo-toggle",
+        { latitude: coords.latitude, longitude: coords.longitude }
       );
-      toast.show(`Checked out — ${res.hours}h${res.out_of_geofence ? " · off-site" : ""}`, "success");
-      setRemoteOpen(false);
-      setRemoteReason("");
+      toast.show(res.action === "checkin" ? "Checked in ✓" : `Checked out — ${res.hours}h`, "success");
       await loadStatus();
     } catch (e) {
-      toast.show(e instanceof ApiError ? e.message : "Could not check out", "error");
+      toast.show(e instanceof ApiError ? e.message : "Could not update attendance", "error");
     } finally {
-      setRemoteBusy(false);
+      setTogglingGeo(false);
+    }
+  };
+
+  const openMarkList = async () => {
+    setMemberSearch("");
+    setMarkOpen(true);
+    try {
+      setMembers(await api.get("/members"));
+    } catch {
+      toast.show("Could not load members", "error");
+    }
+  };
+
+  const markMember = async (m: { id: string; full_name: string }) => {
+    setMarkBusy(m.id);
+    try {
+      const coords = await getCoords();
+      if (!coords) { setMarkBusy(null); return; }
+      const res = await api.post<{ member: string; action: string; hours?: number }>(
+        "/attendance/mark-member",
+        { member_id: m.id, latitude: coords.latitude, longitude: coords.longitude }
+      );
+      toast.show(`${res.member}: ${res.action === "checkin" ? "checked in ✓" : `checked out (${res.hours}h)`}`, "success");
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : "Failed", "error");
+    } finally {
+      setMarkBusy(null);
     }
   };
 
@@ -221,7 +249,7 @@ export default function CheckIn() {
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
         <Text style={styles.title}>Check In / Out</Text>
-        <Text style={styles.sub}>Scan the Office QR, or a member&apos;s card</Text>
+        <Text style={styles.sub}>Check in by GPS — or mark someone without a phone</Text>
       </View>
 
       <View style={styles.body}>
@@ -243,91 +271,97 @@ export default function CheckIn() {
         </View>
 
         <View style={styles.actions}>
-          <Pressable testID="self-checkin-button" onPress={() => openScanner("self")} style={styles.primaryAction}>
+          <Pressable testID="geo-checkin-button" onPress={doGeoToggle} disabled={togglingGeo || checkedIn === null} style={styles.primaryAction}>
             <LinearGradient
-              colors={checkedIn ? ["#B45309", "#92400E"] : ["#1F2937", "#111827"]}
+              colors={checkedIn ? ["#B45309", "#92400E"] : ["#16A34A", "#15803D"]}
               style={styles.primaryActionInner}
             >
-              <Ionicons name="qr-code-outline" size={40} color="#fff" />
-              <Text style={styles.primaryActionText}>
-                {checkedIn ? "Scan to Check Out" : "Scan to Check In"}
-              </Text>
-              <Text style={styles.primaryActionSub}>My attendance · Office QR</Text>
+              {togglingGeo ? (
+                <ActivityIndicator color="#fff" size="large" />
+              ) : (
+                <>
+                  <Ionicons name={checkedIn ? "log-out-outline" : "location"} size={40} color="#fff" />
+                  <Text style={styles.primaryActionText}>{checkedIn ? "Check Out" : "Check In"}</Text>
+                  <Text style={styles.primaryActionSub}>Verifies you&apos;re at the office by GPS</Text>
+                </>
+              )}
             </LinearGradient>
           </Pressable>
 
-          <Pressable testID="scan-card-button" onPress={() => openScanner("card")} style={styles.secondaryAction}>
+          <Pressable testID="mark-nophone-button" onPress={openMarkList} style={styles.secondaryAction}>
             <View style={styles.secondaryIcon}>
-              <Ionicons name="id-card-outline" size={24} color={colors.brandPrimary} />
+              <Ionicons name="people-outline" size={24} color={colors.brandPrimary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.secondaryTitle}>Scan a Member Card</Text>
-              <Text style={styles.secondarySub}>For people without a phone — scan their QR card</Text>
+              <Text style={styles.secondaryTitle}>Mark someone without a phone</Text>
+              <Text style={styles.secondarySub}>Pick a person from the list to check them in/out</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.muted} />
           </Pressable>
 
-          {checkedIn && (
-            <Pressable testID="remote-checkout-button" onPress={() => { setRemoteReason(""); setRemoteOpen(true); }} style={styles.secondaryAction}>
-              <View style={[styles.secondaryIcon, { backgroundColor: "#FEF3C7" }]}>
-                <Ionicons name="exit-outline" size={24} color="#B45309" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.secondaryTitle}>Check out from anywhere</Text>
-                <Text style={styles.secondarySub}>Off campus? End your session without the gate QR</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-            </Pressable>
-          )}
+          <Pressable testID="scan-card-button" onPress={() => openScanner("card")} style={styles.secondaryAction}>
+            <View style={[styles.secondaryIcon, { backgroundColor: colors.surfaceTertiary }]}>
+              <Ionicons name="qr-code-outline" size={24} color={colors.onSurfaceTertiary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.secondaryTitle}>Scan a QR card</Text>
+              <Text style={styles.secondarySub}>Faster on the installed app — scan a printed card</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+          </Pressable>
         </View>
 
-        <View style={styles.simRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.simTitle}>Simulate at office (demo)</Text>
-            <Text style={styles.simSub}>Use office GPS so it works in preview</Text>
+        {__DEV__ && (
+          <View style={styles.simRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.simTitle}>Simulate at office (demo)</Text>
+              <Text style={styles.simSub}>Use office GPS so it works in preview</Text>
+            </View>
+            <Switch
+              testID="simulate-switch"
+              value={simulate}
+              onValueChange={setSimulate}
+              trackColor={{ true: colors.brandPrimary, false: colors.borderStrong }}
+            />
           </View>
-          <Switch
-            testID="simulate-switch"
-            value={simulate}
-            onValueChange={setSimulate}
-            trackColor={{ true: colors.brandPrimary, false: colors.borderStrong }}
-          />
-        </View>
+        )}
       </View>
 
-      {/* Remote check-out (off campus, no gate QR) */}
-      <Modal visible={remoteOpen} transparent animationType="slide" onRequestClose={() => setRemoteOpen(false)}>
+      {/* Mark a no-phone member from a list */}
+      <Modal visible={markOpen} transparent animationType="slide" onRequestClose={() => setMarkOpen(false)}>
         <View style={styles.remoteOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <View style={styles.remoteSheet}>
-              <View style={styles.remoteIcon}>
-                <Ionicons name="exit-outline" size={28} color="#B45309" />
-              </View>
-              <Text style={styles.remoteTitle}>Check out from anywhere</Text>
-              <Text style={styles.remoteSub}>
-                You&apos;re away from the office. This ends your session now and records it as an off-site checkout.
-              </Text>
-              <TextInput
-                testID="remote-reason-input"
-                placeholder="Reason (optional)"
-                placeholderTextColor={colors.muted}
-                value={remoteReason}
-                onChangeText={setRemoteReason}
-                style={styles.remoteInput}
-              />
-              <Pressable testID="remote-checkout-confirm" onPress={doRemoteCheckout} disabled={remoteBusy} style={({ pressed }) => [styles.remoteConfirm, pressed && { opacity: 0.9 }]}>
-                {remoteBusy ? <ActivityIndicator color="#fff" /> : (
-                  <>
-                    <Ionicons name="checkmark" size={18} color="#fff" />
-                    <Text style={styles.remoteConfirmText}>Check out now</Text>
-                  </>
-                )}
-              </Pressable>
-              <Pressable onPress={() => setRemoteOpen(false)} disabled={remoteBusy} style={styles.remoteCancel} testID="remote-checkout-cancel">
-                <Text style={styles.remoteCancelText}>Cancel</Text>
-              </Pressable>
-            </View>
-          </KeyboardAvoidingView>
+          <View style={[styles.remoteSheet, { maxHeight: "80%", alignItems: "stretch" }]}>
+            <Text style={[styles.remoteTitle, { textAlign: "center" }]}>Mark someone present</Text>
+            <Text style={[styles.remoteSub, { textAlign: "center" }]}>Tap a person to check them in or out (uses your location)</Text>
+            <TextInput
+              testID="mark-search-input"
+              placeholder="Search by name…"
+              placeholderTextColor={colors.muted}
+              value={memberSearch}
+              onChangeText={setMemberSearch}
+              style={[styles.remoteInput, { marginTop: spacing.md }]}
+            />
+            <ScrollView style={{ marginTop: spacing.md }} keyboardShouldPersistTaps="handled">
+              {members
+                .filter((m) => m.full_name.toLowerCase().includes(memberSearch.trim().toLowerCase()))
+                .map((m) => (
+                  <Pressable key={m.id} testID={`mark-member-${m.id}`} onPress={() => markMember(m)} disabled={markBusy === m.id} style={styles.markRow}>
+                    <View style={styles.markAvatar}>
+                      <Text style={styles.markInitial}>{m.full_name.charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.markName}>{m.full_name}</Text>
+                      <Text style={styles.markSub}>{m.rank ? m.rank + " · " : ""}{m.category}</Text>
+                    </View>
+                    {markBusy === m.id ? <ActivityIndicator color={colors.brandPrimary} /> : <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />}
+                  </Pressable>
+                ))}
+              {members.length === 0 && <Text style={styles.markEmpty}>Loading members…</Text>}
+            </ScrollView>
+            <Pressable onPress={() => setMarkOpen(false)} style={styles.remoteCancel} testID="mark-close">
+              <Text style={styles.remoteCancelText}>Done</Text>
+            </Pressable>
+          </View>
         </View>
       </Modal>
 
@@ -484,6 +518,12 @@ const styles = StyleSheet.create({
   remoteConfirmText: { fontSize: font.lg, fontWeight: "700", color: "#fff" },
   remoteCancel: { paddingVertical: spacing.md, marginTop: spacing.xs },
   remoteCancelText: { fontSize: font.base, fontWeight: "600", color: colors.muted },
+  markRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  markAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
+  markInitial: { fontSize: font.base, fontWeight: "800", color: colors.onSurfaceTertiary },
+  markName: { fontSize: font.base, fontWeight: "700", color: colors.onSurface },
+  markSub: { fontSize: font.sm, color: colors.muted, marginTop: 1, textTransform: "capitalize" },
+  markEmpty: { textAlign: "center", color: colors.muted, paddingVertical: spacing.xl },
   camContainer: { flex: 1, backgroundColor: "#000" },
   camHeader: {
     flexDirection: "row",

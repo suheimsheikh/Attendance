@@ -195,6 +195,19 @@ class RemoteCheckoutIn(BaseModel):
     reason: Optional[str] = None  # optional — many users can't type
 
 
+class GeoToggleIn(BaseModel):
+    latitude: float
+    longitude: float
+    reason: Optional[str] = None
+
+
+class MarkMemberIn(BaseModel):
+    member_id: str
+    latitude: float
+    longitude: float
+    reason: Optional[str] = None
+
+
 class ScanCardIn(BaseModel):
     personal_qr: str
     latitude: float
@@ -843,6 +856,74 @@ async def remote_checkout(body: RemoteCheckoutIn, user: dict = Depends(get_curre
     }})
     return {"ok": True, "action": "checkout", "member": user["full_name"],
             "hours": hours, "out_of_geofence": out, "remote": True}
+
+
+async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
+                      reason: Optional[str], by: Optional[str]) -> dict:
+    """GPS-based check in/out (no QR). Check-in requires being inside the geofence;
+    check-out is allowed from anywhere (flagged off-site when outside)."""
+    dist = round(haversine_m(lat, lng, office["latitude"], office["longitude"]), 1)
+    out = dist > office["radius_m"]
+    sess = await open_session_for(target["id"])
+    ts = now_utc()
+    if sess:
+        cin = datetime.fromisoformat(sess["check_in_at"])
+        hours = round((ts - cin).total_seconds() / 3600.0, 2)
+        await db.attendance.update_one({"id": sess["id"]}, {"$set": {
+            "check_out_at": ts.isoformat(),
+            "hours": hours,
+            "exit_latitude": lat, "exit_longitude": lng,
+            "exit_distance_m": dist, "exit_out_of_geofence": out,
+            "exit_reason": (reason or None),
+            "exit_method": "geo",
+            "checked_out_by": by,
+        }})
+        return {"ok": True, "action": "checkout", "member": target["full_name"],
+                "hours": hours, "out_of_geofence": out}
+    if out:
+        raise HTTPException(
+            status_code=400,
+            detail=f"About {int(dist)} m from the office — move within {office['radius_m']} m to check in.",
+        )
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": target["id"],
+        "date": ts.date().isoformat(),
+        "check_in_at": ts.isoformat(),
+        "check_out_at": None,
+        "check_in_photo": None,
+        "check_out_photo": None,
+        "hours": None,
+        "latitude": lat, "longitude": lng,
+        "distance_m": dist, "out_of_geofence": False,
+        "geo_reason": None,
+        "method": "geo",
+        "checked_in_by": by,
+    }
+    await db.attendance.insert_one(doc)
+    return {"ok": True, "action": "checkin", "member": target["full_name"], "out_of_geofence": False}
+
+
+@api_router.post("/attendance/geo-toggle")
+async def geo_toggle(body: GeoToggleIn, user: dict = Depends(get_current_user)):
+    """Self check in/out by GPS — works in any phone browser (no camera/QR)."""
+    office = await db.config.find_one({"id": "office"})
+    if not office:
+        raise HTTPException(status_code=500, detail="Office not configured")
+    return await _geo_toggle(user, office, body.latitude, body.longitude, body.reason, None)
+
+
+@api_router.post("/attendance/mark-member")
+async def mark_member(body: MarkMemberIn, user: dict = Depends(get_current_user)):
+    """Mark a person WITHOUT a phone present/absent by picking them from a list.
+    Uses the marker's GPS for the geofence; records who did it."""
+    office = await db.config.find_one({"id": "office"})
+    if not office:
+        raise HTTPException(status_code=500, detail="Office not configured")
+    target = await db.users.find_one({"id": body.member_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return await _geo_toggle(target, office, body.latitude, body.longitude, body.reason, user["id"])
 
 
 @api_router.post("/attendance/scan-card")
