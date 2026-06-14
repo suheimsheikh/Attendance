@@ -72,19 +72,39 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def create_token(user_id: str, role: str) -> str:
+def create_token(user_id: str, role: str, device_id: Optional[str] = None,
+                 expires_minutes: Optional[int] = None) -> str:
+    exp_minutes = expires_minutes if expires_minutes is not None else JWT_EXPIRES_MINUTES
     payload = {
         "sub": user_id,
         "role": role,
-        "exp": now_utc() + timedelta(minutes=JWT_EXPIRES_MINUTES),
+        "exp": now_utc() + timedelta(minutes=exp_minutes),
     }
+    if device_id:
+        payload["device_id"] = device_id
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
+
+
+# Long-lived tokens for approved devices (passwordless phone login)
+DEVICE_TOKEN_MINUTES = 60 * 24 * 365 * 2  # ~2 years
+
+
+def normalize_phone(raw: str) -> str:
+    """Keep digits only; drop a leading country code's plus. Used to match mobile numbers."""
+    return re.sub(r"[^0-9]", "", raw or "")
+
+
+def phone_key(raw: str) -> str:
+    """Comparable key: last 10 digits, so +91-99911 10001 == 9991110001."""
+    d = normalize_phone(raw)
+    return d[-10:] if len(d) >= 10 else d
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
         user_id = payload.get("sub")
+        device_id = payload.get("device_id")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.PyJWTError:
@@ -92,6 +112,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    # Device-bound tokens (passwordless phone login) must reference an approved device.
+    if device_id:
+        device = await db.devices.find_one({"device_id": device_id, "user_id": user_id}, {"_id": 0})
+        if not device or device.get("status") != "approved":
+            raise HTTPException(status_code=401, detail="This device is no longer authorised")
     return user
 
 
@@ -183,6 +208,21 @@ class LeaveDecision(BaseModel):
     status: Literal["approved", "rejected"]
 
 
+class PhoneLoginIn(BaseModel):
+    phone: str
+    device_id: str
+    device_name: Optional[str] = None
+    model: Optional[str] = None
+    platform: Optional[str] = None
+
+
+class DeviceApproveIn(BaseModel):
+    full_name: Optional[str] = None
+    role: Literal["admin", "member"] = "member"
+    category: Literal["sailor", "staff", "coach"] = "sailor"
+    rank: Optional[str] = None
+
+
 # ----------------------------------------------------------------------------
 # Geo helpers
 # ----------------------------------------------------------------------------
@@ -202,6 +242,7 @@ def haversine_m(lat1, lon1, lat2, lon2) -> float:
 async def seed():
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
+    await db.devices.create_index("device_id", unique=True)
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({
@@ -264,6 +305,172 @@ async def login(body: LoginIn):
 @api_router.get("/auth/me", response_model=UserPublic)
 async def me(user: dict = Depends(get_current_user)):
     return UserPublic(**{k: user.get(k) for k in UserPublic.model_fields})
+
+
+# ----------------------------------------------------------------------------
+# Passwordless phone login + device registration / admin approval
+# ----------------------------------------------------------------------------
+def _user_public(u: dict) -> UserPublic:
+    return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
+
+
+def _device_token_response(user: dict, device_id: str) -> dict:
+    token = create_token(user["id"], user.get("role", "member"),
+                         device_id=device_id, expires_minutes=DEVICE_TOKEN_MINUTES)
+    return {"status": "approved", "access_token": token, "token_type": "bearer",
+            "user": _user_public(user)}
+
+
+async def _match_user_by_phone(digits: str) -> Optional[dict]:
+    key = phone_key(digits)
+    async for u in db.users.find({"mobile": {"$ne": None}}, {"_id": 0}):
+        if phone_key(u.get("mobile") or "") == key:
+            return u
+    return None
+
+
+@api_router.post("/auth/phone")
+async def phone_login(body: PhoneLoginIn):
+    digits = normalize_phone(body.phone)
+    if len(digits) < 6:
+        raise HTTPException(status_code=400, detail="Enter a valid phone number")
+    now = now_utc().isoformat()
+    matched = await _match_user_by_phone(digits)
+    device = await db.devices.find_one({"device_id": body.device_id}, {"_id": 0})
+    meta = {
+        "phone": digits,
+        "device_name": body.device_name,
+        "model": body.model,
+        "platform": body.platform,
+        "updated_at": now,
+    }
+    if device is None:
+        device = {
+            "id": str(uuid.uuid4()),
+            "device_id": body.device_id,
+            "status": "pending",
+            "user_id": matched["id"] if matched else None,
+            "created_at": now,
+            "approved_by": None,
+            **meta,
+        }
+        await db.devices.insert_one(device)
+    else:
+        upd = dict(meta)
+        if matched and not device.get("user_id"):
+            upd["user_id"] = matched["id"]
+        await db.devices.update_one({"device_id": body.device_id}, {"$set": upd})
+        device = await db.devices.find_one({"device_id": body.device_id}, {"_id": 0})
+
+    if device["status"] == "revoked":
+        raise HTTPException(status_code=403, detail="This device was revoked. Contact your admin.")
+
+    # Already approved & linked -> straight in
+    if device["status"] == "approved" and device.get("user_id"):
+        u = await db.users.find_one({"id": device["user_id"]}, {"_id": 0})
+        if u:
+            await db.devices.update_one({"device_id": body.device_id}, {"$set": {"last_login_at": now}})
+            return _device_token_response(u, body.device_id)
+
+    # Pre-designated admin -> instant approve + login (the "cinch")
+    if matched and matched.get("role") == "admin":
+        await db.devices.update_one({"device_id": body.device_id}, {"$set": {
+            "status": "approved", "user_id": matched["id"],
+            "approved_by": "auto-admin", "approved_at": now, "last_login_at": now,
+        }})
+        return _device_token_response(matched, body.device_id)
+
+    return {"status": "pending", "device_id": body.device_id,
+            "matched_member": matched["full_name"] if matched else None}
+
+
+@api_router.get("/auth/phone/status")
+async def phone_status(device_id: str):
+    device = await db.devices.find_one({"device_id": device_id}, {"_id": 0})
+    if not device:
+        return {"status": "unknown"}
+    if device["status"] == "revoked":
+        return {"status": "revoked"}
+    if device["status"] == "approved" and device.get("user_id"):
+        u = await db.users.find_one({"id": device["user_id"]}, {"_id": 0})
+        if u:
+            await db.devices.update_one({"device_id": device_id},
+                                        {"$set": {"last_login_at": now_utc().isoformat()}})
+            return _device_token_response(u, device_id)
+    return {"status": "pending"}
+
+
+async def _enrich_devices(devices: List[dict]) -> List[dict]:
+    uids = list({d["user_id"] for d in devices if d.get("user_id")})
+    users = await db.users.find({"id": {"$in": uids}}, {"_id": 0}).to_list(2000)
+    umap = {u["id"]: u for u in users}
+    for d in devices:
+        u = umap.get(d.get("user_id"))
+        d["member_name"] = u["full_name"] if u else None
+        d["member_role"] = u["role"] if u else None
+        d["member_category"] = u["category"] if u else None
+    return devices
+
+
+@api_router.get("/admin/devices")
+async def list_devices(status_filter: Optional[str] = None, admin: dict = Depends(require_admin)):
+    q = {}
+    if status_filter:
+        q["status"] = status_filter
+    devices = await db.devices.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return await _enrich_devices(devices)
+
+
+@api_router.post("/admin/devices/{device_pk}/approve")
+async def approve_device(device_pk: str, body: DeviceApproveIn, admin: dict = Depends(require_admin)):
+    device = await db.devices.find_one({"id": device_pk}, {"_id": 0})
+    if not device:
+        raise HTTPException(status_code=404, detail="Device request not found")
+    now = now_utc().isoformat()
+    user_id = device.get("user_id")
+    if not user_id:
+        digits = device.get("phone") or ""
+        email = f"{digits}@attendance.app"
+        if await db.users.find_one({"email": email}):
+            email = f"{digits}-{uuid.uuid4().hex[:4]}@attendance.app"
+        new_user = {
+            "id": str(uuid.uuid4()),
+            "email": email,
+            "full_name": (body.full_name or "New Member").strip(),
+            "role": body.role,
+            "category": body.category,
+            "rank": body.rank,
+            "mobile": digits,
+            "work_start": None,
+            "work_end": None,
+            "photo": None,
+            "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
+            "hashed_password": hash_password(digits or uuid.uuid4().hex[:8]),
+            "created_at": now,
+        }
+        await db.users.insert_one(new_user)
+        user_id = new_user["id"]
+    await db.devices.update_one({"id": device_pk}, {"$set": {
+        "status": "approved", "user_id": user_id,
+        "approved_by": admin["id"], "approved_at": now,
+    }})
+    return {"ok": True}
+
+
+@api_router.post("/admin/devices/{device_pk}/reject")
+async def reject_device(device_pk: str, admin: dict = Depends(require_admin)):
+    res = await db.devices.update_one({"id": device_pk}, {"$set": {"status": "rejected"}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Device request not found")
+    return {"ok": True}
+
+
+@api_router.post("/admin/devices/{device_pk}/revoke")
+async def revoke_device(device_pk: str, admin: dict = Depends(require_admin)):
+    res = await db.devices.update_one({"id": device_pk}, {"$set": {"status": "revoked"}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Device not found")
+    return {"ok": True}
 
 
 # ----------------------------------------------------------------------------

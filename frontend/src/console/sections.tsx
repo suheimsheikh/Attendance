@@ -800,6 +800,190 @@ export const ImportSection: React.FC = () => {
   );
 };
 
+/* ============================== ACCESS REQUESTS (devices) ============================== */
+const DEV_CATS = ["sailor", "staff", "coach"] as const;
+
+export const AccessRequestsSection: React.FC = () => {
+  const toast = useToast();
+  const [tab, setTab] = useState<"pending" | "approved" | "all">("pending");
+  const [devices, setDevices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [approve, setApprove] = useState<any | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const q = tab === "all" ? "" : `?status_filter=${tab}`;
+      setDevices(await api.get<any[]>(`/admin/devices${q}`));
+    } catch {}
+    setLoading(false);
+  }, [tab]);
+  useEffect(() => {
+    setLoading(true);
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  const act = async (d: any, action: "approve" | "reject" | "revoke", body?: any) => {
+    try {
+      await api.post(`/admin/devices/${d.id}/${action}`, body || {});
+      toast.show(
+        action === "approve" ? "Device approved" : action === "reject" ? "Request rejected" : "Access revoked",
+        "success"
+      );
+      load();
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : "Failed", "error");
+    }
+  };
+
+  const TABS = [
+    { k: "pending", label: "Pending" },
+    { k: "approved", label: "Approved" },
+    { k: "all", label: "All" },
+  ];
+
+  return (
+    <View>
+      <SectionTitle title="Access Requests" subtitle="Approve devices so people can log in by phone — no password needed" />
+      <View style={styles.chipRow}>
+        {TABS.map((t) => (
+          <Chip key={t.k} label={t.label} active={tab === t.k} onPress={() => setTab(t.k as never)} testID={`devices-${t.k}`} />
+        ))}
+      </View>
+      <Panel>
+        <View style={T.head}>
+          <Text style={[T.headText, { flex: 1.4 }]}>Device</Text>
+          <Text style={[T.headText, { flex: 1.2 }]}>Phone</Text>
+          <Text style={[T.headText, { flex: 1.4 }]}>Person</Text>
+          <Text style={[T.headText, { width: 110 }]}>Status</Text>
+          <Text style={[T.headText, { width: 230, textAlign: "right" }]}>Action</Text>
+        </View>
+        {loading ? (
+          <Loader />
+        ) : devices.length === 0 ? (
+          <Empty icon="phone-portrait-outline" text="No device requests yet" />
+        ) : (
+          devices.map((d) => (
+            <View key={d.id} style={T.row} testID={`device-row-${d.id}`}>
+              <View style={{ flex: 1.4 }}>
+                <Text style={styles.cellName}>{d.device_name || d.model || "Unknown device"}</Text>
+                <Text style={styles.cellSub}>{[d.model, d.platform].filter(Boolean).join(" · ") || "—"}</Text>
+              </View>
+              <Text style={[T.cell, { flex: 1.2 }]}>{d.phone || "—"}</Text>
+              <View style={{ flex: 1.4 }}>
+                {d.member_name ? (
+                  <>
+                    <Text style={styles.cellName}>{d.member_name}</Text>
+                    <Text style={styles.cellSub}>{d.member_role === "admin" ? "Admin" : categoryLabel[d.member_category] || "Member"}</Text>
+                  </>
+                ) : (
+                  <Text style={[styles.cellSub, { fontStyle: "italic" }]}>New — not in system</Text>
+                )}
+              </View>
+              <View style={{ width: 110 }}>
+                <DeviceStatusPill status={d.status} />
+              </View>
+              <View style={{ width: 230, flexDirection: "row", justifyContent: "flex-end", gap: spacing.xs }}>
+                {d.status === "pending" && d.member_name && (
+                  <WButton small title="Approve" variant="success" icon="checkmark" onPress={() => act(d, "approve", { role: d.member_role || "member", category: d.member_category || "sailor", full_name: d.member_name })} testID={`approve-device-${d.id}`} />
+                )}
+                {d.status === "pending" && !d.member_name && (
+                  <WButton small title="Review & approve" icon="person-add" onPress={() => setApprove(d)} testID={`review-device-${d.id}`} />
+                )}
+                {d.status === "pending" && (
+                  <WButton small title="Reject" variant="ghost" onPress={() => act(d, "reject")} testID={`reject-device-${d.id}`} />
+                )}
+                {d.status === "approved" && (
+                  <WButton small title="Revoke" variant="danger" icon="close" onPress={() => act(d, "revoke")} testID={`revoke-device-${d.id}`} />
+                )}
+              </View>
+            </View>
+          ))
+        )}
+      </Panel>
+
+      {approve && (
+        <ApproveDeviceForm
+          device={approve}
+          onClose={() => setApprove(null)}
+          onDone={() => { setApprove(null); load(); }}
+        />
+      )}
+    </View>
+  );
+};
+
+const DeviceStatusPill: React.FC<{ status: string }> = ({ status }) => {
+  const map: Record<string, { bg: string; fg: string; label: string }> = {
+    pending: { bg: "#FEF3C7", fg: "#92400E", label: "Pending" },
+    approved: { bg: "#DCFCE7", fg: "#166534", label: "Approved" },
+    rejected: { bg: "#F3F4F6", fg: "#6B7280", label: "Rejected" },
+    revoked: { bg: "#FEE2E2", fg: "#991B1B", label: "Revoked" },
+  };
+  const c = map[status] || map.rejected;
+  return (
+    <View style={{ alignSelf: "flex-start", backgroundColor: c.bg, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill }}>
+      <Text style={{ color: c.fg, fontSize: font.sm, fontWeight: "700" }}>{c.label}</Text>
+    </View>
+  );
+};
+
+const ApproveDeviceForm: React.FC<{ device: any; onClose: () => void; onDone: () => void }> = ({ device, onClose, onDone }) => {
+  const toast = useToast();
+  const [fullName, setFullName] = useState("");
+  const [category, setCategory] = useState<(typeof DEV_CATS)[number]>("sailor");
+  const [role, setRole] = useState<"member" | "admin">("member");
+  const [rank, setRank] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!fullName.trim()) return toast.show("Enter the person's name", "error");
+    setSaving(true);
+    try {
+      await api.post(`/admin/devices/${device.id}/approve`, {
+        full_name: fullName.trim(),
+        role,
+        category,
+        rank: rank.trim() || null,
+      });
+      toast.show("Device approved & member created", "success");
+      onDone();
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : "Failed", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <WModal visible onClose={onClose} title="Approve new device">
+      <Text style={styles.cellSub}>
+        {device.device_name || device.model || "Device"} · {device.phone}
+      </Text>
+      <Field label="Full Name"><WInput value={fullName} onChangeText={setFullName} placeholder="e.g. Arjun Nair" testID="approve-name" /></Field>
+      <Field label="Rank / Title"><WInput value={rank} onChangeText={setRank} placeholder="e.g. Coach" testID="approve-rank" /></Field>
+      <Field label="Category">
+        <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs }}>
+          {DEV_CATS.map((c) => (
+            <Chip key={c} label={categoryLabel[c]} active={category === c} onPress={() => setCategory(c)} testID={`approve-cat-${c}`} />
+          ))}
+        </View>
+      </Field>
+      <Field label="Access Level">
+        <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs }}>
+          <Chip label="Member" active={role === "member"} onPress={() => setRole("member")} testID="approve-role-member" />
+          <Chip label="Admin" active={role === "admin"} onPress={() => setRole("admin")} testID="approve-role-admin" />
+        </View>
+      </Field>
+      <View style={{ flexDirection: "row", gap: spacing.md, marginTop: spacing.xl, justifyContent: "flex-end" }}>
+        <WButton title="Cancel" variant="ghost" onPress={onClose} />
+        <WButton title="Approve & Create" icon="checkmark" loading={saving} onPress={save} testID="confirm-approve-device" />
+      </View>
+    </WModal>
+  );
+};
+
 const styles = StyleSheet.create({
   statRow: { flexDirection: "row", gap: spacing.lg, marginBottom: spacing.lg },
   dashRow: { flexDirection: "row", gap: spacing.lg, alignItems: "flex-start" },

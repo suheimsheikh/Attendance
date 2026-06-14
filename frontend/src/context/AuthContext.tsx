@@ -15,6 +15,7 @@ type AuthContextValue = {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithToken: (token: string, u: User) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   setUser: (u: User) => void;
@@ -55,6 +56,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(res.user);
   };
 
+  const loginWithToken = async (token: string, u: User) => {
+    await saveToken(token);
+    setViewAsMember(false);
+    setUser(u);
+  };
+
   const logout = async () => {
     await clearToken();
     setViewAsMember(false);
@@ -73,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, logout, refreshUser, setUser, viewAsMember, setViewAsMember, effectiveRole }}
+      value={{ user, loading, login, loginWithToken, logout, refreshUser, setUser, viewAsMember, setViewAsMember, effectiveRole }}
     >
       {children}
     </AuthContext.Provider>

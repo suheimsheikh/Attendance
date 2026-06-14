@@ -15,6 +15,7 @@ import {
   OfficeSettingsSection,
   OfficeQRSection,
   ImportSection,
+  AccessRequestsSection,
 } from "@/src/console/sections";
 
 export const DESKTOP_MIN_WIDTH = 1000;
@@ -23,6 +24,7 @@ const NAV = [
   { k: "dashboard", label: "Dashboard", icon: "grid-outline" },
   { k: "presence", label: "Presence Board", icon: "people-outline" },
   { k: "members", label: "Members", icon: "id-card-outline" },
+  { k: "access", label: "Access Requests", icon: "phone-portrait-outline" },
   { k: "approvals", label: "Approvals", icon: "checkmark-done-outline" },
   { k: "reports", label: "Reports", icon: "bar-chart-outline" },
   { k: "settings", label: "Office Settings", icon: "settings-outline" },
@@ -51,6 +53,7 @@ export default function Console() {
     switch (section) {
       case "presence": return <PresenceBoard />;
       case "members": return <MembersSection />;
+      case "access": return <AccessRequestsSection />;
       case "approvals": return <ApprovalsSection />;
       case "reports": return <ReportsSection />;
       case "settings": return <OfficeSettingsSection />;

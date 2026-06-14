@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 4 — Tested the new PASSWORDLESS phone-based login + admin device approval flow end-to-end against the deployed preview (https://attendance-app-220.preview.emergentagent.com). Backend: created /app/backend/tests/test_phone_auth.py with 9 pytest cases, ALL 9 PASS in ~5s. Covered: (a) email login bootstrap still works and its token works on /auth/me, (b) pre-designated admin (role=admin + mobile) gets status=approved + access_token instantly when posting '+91 99911-10001' (digit-tolerant: last-10-digits match against stored '9991110001'), (c) unknown phone returns status=pending; GET /api/auth/phone/status?device_id=… stays pending until approved, (d) /api/admin/devices?status_filter=pending lists the request with phone/device_name/model/platform, (e) POST /api/admin/devices/{pk}/approve creates a new user when none was matched (role/category/full_name/rank honoured) and the polling endpoint then returns approved + access_token + user, (f) the issued device token works on /auth/me, (g) revoke -> the same token returns 401 on /auth/me (device-bound enforcement in get_current_user works), (h) reject sets non-approved, (i) /admin/devices requires admin (401 unauthenticated, 403 for member token), (j) known member phone gets matched (user_id auto-linked, returns matched_member name on pending). Frontend (Expo web): Mobile viewport 390x844 — login screen renders login-phone-input + phone-continue-button; entering a clearly-unknown number flips to the pending screen with check-approval-button + cancel-pending-button; toggle-admin-login expands the admin email panel with login-email-input/login-password-input/login-submit-button and the quick-login-admin demo button which signs in. On wide viewport 1366x900 the demo admin login lands on /console, sidebar nav-access opens the Access Requests section with Pending/Approved/All tabs (devices-pending/approved/all); review-device-{id} opens the approve modal (approve-name/rank/cat/role + confirm-approve-device) — completing it moves the request to Approved; revoke-device-{id} and reject-device-{id} also tested OK. Members section Add Member form has form-role-admin and form-role-member chips; created a TEST admin via the form (ADMIN badge appears) and toast 'Member added' fires. Mobile admin tab has the 'Access Requests' quick action (admin-action-access-requests) routing to /access-requests, which renders Pending/Approved/All tabs (tab-pending/…), device-{id} cards and Reject/Review/Approve/Revoke buttons (review-{id}, approve-{id}, reject-{id}, revoke-{id}). All requested testIDs are present. Pre-existing 'props.pointerEvents is deprecated' warning still appears (3rd-party lib).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "pointerEvents prop", "issue": "Console warning 'props.pointerEvents is deprecated. Use style.pointerEvents' — carried over from prior iterations, originates in a 3rd-party RN-web lib. Non-blocking."},
+      {"component": "Animated.useNativeDriver", "issue": "Warning: 'useNativeDriver is not supported because the native animated module is missing. Falling back to JS-based animation.' — emitted by the approve modal animation on web. Cosmetic only on web preview; native build is fine."},
+      {"component": "expo-device version mismatch", "issue": "Expo CLI reports: 'expo-device@56.0.4 - expected version: ~8.0.10'. Won't block web preview, but should be aligned by main agent before producing a native build. Reference: /app/frontend/package.json"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phone_auth.py",
+    "/app/test_reports/pytest/pytest_iter4_phone.xml"
+  ],
+  "action_items": [
+    "No app bugs to fix. The passwordless phone auth + admin device approval flow is fully working end-to-end (backend + Console UI + mobile /access-requests screen).",
+    "Optional: align expo-device package version (CLI warns 56.0.4 vs expected ~8.0.10). Cosmetic for web, important for a native build.",
+    "Optional cleanup: previous iteration tests in /app/backend/tests/test_attendance_api.py and test_new_features.py are still stale (depend on seeded demo members removed earlier / hard-coded old office). Either delete or rewrite to read /api/office and create their own TEST_ members.",
+    "Optional security/UX: GET /api/members exposes email + mobile to every authenticated user. Consider a slimmer DTO for non-admins (already flagged in iter3)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~1120 lines — past the 700 line guideline. Split into routers (auth/devices/office/members/attendance/leaves/reports).",
+    "_match_user_by_phone scans every user with a mobile on every phone-login attempt; for any non-trivial roster this becomes an O(N) scan per login. Add a stored 'phone_key' (last 10 digits) field on the user document and an index on it so matching is a constant-time lookup.",
+    "DEVICE_TOKEN_MINUTES = 2 years (60*24*365*2) — effectively non-expiring. There is no token revocation list; the only revoke path is via devices.status='revoked', which works (verified). Document this clearly so reviewers do not assume JWT expiry is the safety net.",
+    "PhoneLoginIn has no validator on device_id; an empty or whitespace device_id would be accepted and would collide across all such clients. Add min_length=8 + a regex.",
+    "approve_device falls back to hashed password = the raw phone digits — fine as fallback, but worth documenting that a freshly approved member can also use email/password 9991110001 / 9991110001 (same rule as imported members).",
+    "DeviceApproveIn defaults role='member', category='sailor' — silently approving without a category selection is OK, but the API does not surface the device's matched user_id; an admin who edits role/category on a matched member request will create a NEW user instead of updating the existing match. Today the UI sidesteps this with two separate flows (approve vs review&approve); worth a docstring."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phone_auth.py (new, 9 tests, all pass)",
+    "/app/test_reports/iteration_4.json (new)",
+    "/app/test_reports/pytest/pytest_iter4_phone.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9 phone-auth & device-approval tests)", "frontend": "100% — login pending screen, admin demo login, console Access Requests approve/reject/revoke, MemberForm admin role, and mobile /access-requests screen all functional with the expected testIDs"},
+  "seed_data_creation": "Tests created TEST_admin_*, TEST_member_*, TEST_m_* members and several disposable pending devices. Auto-cleanup deletes the members in fixture teardown. UI test additionally created an 'E2E User …' (from approving a pending request) and 'TEST UI Admin …' via the Members form; both deleted at the end of this iteration. Background pending/rejected device docs remain in db.devices (harmless — they are filtered by status_filter and have no impact on app behaviour).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: EXPO_PUBLIC_BACKEND_URL=https://attendance-app-220.preview.emergentagent.com pytest /app/backend/tests/test_phone_auth.py -v. To exercise the full pending->approval->auto-login polling loop in the browser you need two contexts (one to request, one as admin to approve) because device_id is stored in localStorage per browser context. Single-context UI flow used here: seed pending requests via direct POST /api/auth/phone, then drive the admin console UI to approve/reject/revoke them. Mobile /access-requests screen uses simpler testIDs: tab-{pending|approved|all}, device-{id}, approve-{id}, reject-{id}, revoke-{id}, review-{id}, review-name, review-rank, review-cat-{cat}, review-role-{role}, confirm-review. Console section uses devices-{pending|approved|all}, review-device-{id}, approve-device-{id}, reject-device-{id}, revoke-device-{id}, approve-name, approve-rank, approve-cat-{cat}, approve-role-{role}, confirm-approve-device.",
+  "rca_of_issue": "No new bugs."
+}

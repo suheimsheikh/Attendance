@@ -200,6 +200,7 @@ function AdminDashboard() {
   );
 
   const actions = [
+    { icon: "phone-portrait-outline", label: "Access Requests", sub: "Approve devices to log in", route: "/access-requests", color: "#0EA5E9" },
     { icon: "people-outline", label: "Manage Members", sub: "Add, edit, remove", route: "/manage-members", color: "#374151" },
     { icon: "cloud-upload-outline", label: "Bulk Import Members", sub: "Excel upload + template", route: "/import-members", color: "#0F766E" },
     { icon: "checkmark-done-outline", label: "Leave Approvals", sub: "Review requests", route: "/leave-approvals", color: colors.warning, badge: summary?.pending_leaves },
