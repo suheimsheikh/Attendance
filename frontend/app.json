@@ -10,12 +10,14 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.attendance.mobile",
       "infoPlist": {
         "NSCameraUsageDescription": "Scan the office QR and capture your check-in photo",
         "NSLocationWhenInUseUsageDescription": "Verify you are within campus to mark attendance"
       }
     },
     "android": {
+      "package": "com.attendance.mobile",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"
@@ -39,7 +41,19 @@
           "backgroundColor": "#000"
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan the office QR and capture your check-in photo"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Verify you are within campus to mark attendance"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
