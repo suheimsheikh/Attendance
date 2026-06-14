@@ -39,7 +39,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email.trim().toLowerCase(), password);
-      router.replace("/(tabs)");
+      router.replace("/");
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : "Login failed. Check connection.";
       toast.show(msg, "error");
@@ -52,7 +52,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(e, p);
-      router.replace("/(tabs)");
+      router.replace("/");
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Login failed. Check connection.";
       toast.show(msg, "error");

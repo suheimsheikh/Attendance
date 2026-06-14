@@ -64,3 +64,29 @@ export function exportUrl(path: string): string {
 export async function getAuthHeaderForExport(): Promise<Record<string, string>> {
   return authHeader();
 }
+
+// ---- Web-only helpers (used by the desktop console) ----
+export async function downloadFileWeb(path: string, filename: string): Promise<void> {
+  const headers = await authHeader();
+  const res = await fetch(`${BASE}/api${path}`, { headers });
+  if (!res.ok) throw new ApiError(res.status, "Download failed");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function uploadFileWeb<T>(path: string, file: File): Promise<T> {
+  const headers = await authHeader();
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/api${path}`, { method: "POST", headers, body: form });
+  const data = await res.json();
+  if (!res.ok) throw new ApiError(res.status, data.detail || "Upload failed");
+  return data;
+}

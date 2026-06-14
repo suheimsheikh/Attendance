@@ -582,6 +582,22 @@ async def scan_card(body: ScanCardIn, user: dict = Depends(get_current_user)):
     return res
 
 
+@api_router.post("/admin/attendance/toggle/{member_id}")
+async def admin_toggle_attendance(member_id: str, body: dict = None, admin: dict = Depends(require_admin)):
+    """Front-desk override from the console: check a member in/out using office coords."""
+    office = await db.config.find_one({"id": "office"})
+    if not office:
+        raise HTTPException(status_code=500, detail="Office not configured")
+    target = await db.users.find_one({"id": member_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    reason = (body or {}).get("reason")
+    res = await perform_toggle(target, office, office["latitude"], office["longitude"],
+                               None, reason, "admin_console", admin["id"])
+    res["override"] = True
+    return res
+
+
 # ----------------------------------------------------------------------------
 # Presence board
 # ----------------------------------------------------------------------------
