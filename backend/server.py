@@ -330,10 +330,16 @@ def _device_token_response(user: dict, device_id: str) -> dict:
 
 async def _match_user_by_phone(digits: str) -> Optional[dict]:
     key = phone_key(digits)
-    async for u in db.users.find({"mobile": {"$ne": None}}, {"_id": 0}):
+    if not key:
+        return None
+    matched_id = None
+    async for u in db.users.find({"mobile": {"$ne": None}}, {"_id": 0, "id": 1, "mobile": 1}):
         if phone_key(u.get("mobile") or "") == key:
-            return u
-    return None
+            matched_id = u["id"]
+            break
+    if not matched_id:
+        return None
+    return await db.users.find_one({"id": matched_id}, {"_id": 0, "hashed_password": 0})
 
 
 @api_router.post("/auth/phone")
@@ -530,7 +536,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
 
 @api_router.get("/members", response_model=List[UserPublic])
 async def list_members(user: dict = Depends(get_current_user)):
-    users = await db.users.find({}, {"_id": 0}).sort("full_name", 1).to_list(2000)
+    users = await db.users.find({}, {"_id": 0, "hashed_password": 0}).sort("full_name", 1).to_list(2000)
     return [UserPublic(**{k: u.get(k) for k in UserPublic.model_fields}) for u in users]
 
 
@@ -886,11 +892,32 @@ async def active_leave_for(user_id: str, on: str) -> Optional[dict]:
 @api_router.get("/presence")
 async def presence(user: dict = Depends(get_current_user)):
     today = now_utc().date().isoformat()
-    users = await db.users.find({}, {"_id": 0}).sort("full_name", 1).to_list(2000)
+    users = await db.users.find(
+        {}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1, "photo": 1}
+    ).sort("full_name", 1).to_list(2000)
+
+    # Batch: open sessions, active leaves for today, and last checkout per user
+    sessions = await db.attendance.find({"check_out_at": None}, {"_id": 0}).to_list(5000)
+    sess_map = {s["user_id"]: s for s in sessions}
+
+    leaves = await db.leaves.find({
+        "status": "approved", "start_date": {"$lte": today}, "end_date": {"$gte": today},
+    }, {"_id": 0}).to_list(5000)
+    leave_map = {l["user_id"]: l for l in leaves}
+
+    last_outs = await db.attendance.aggregate([
+        {"$match": {"check_out_at": {"$ne": None}}},
+        {"$sort": {"check_out_at": -1}},
+        {"$group": {"_id": "$user_id",
+                    "check_out_at": {"$first": "$check_out_at"},
+                    "check_out_photo": {"$first": "$check_out_photo"}}},
+    ]).to_list(5000)
+    last_map = {d["_id"]: d for d in last_outs}
+
     result = []
     for u in users:
-        sess = await open_session_for(u["id"])
-        leave = await active_leave_for(u["id"], today)
+        sess = sess_map.get(u["id"])
+        leave = leave_map.get(u["id"])
         if leave and leave["type"] == "tour":
             status_v = "on_tour"
             detail = leave.get("location") or "On tour"
@@ -907,10 +934,7 @@ async def presence(user: dict = Depends(get_current_user)):
             since = sess["check_in_at"]
             photo = sess.get("check_in_photo") or u.get("photo")
         else:
-            last = await db.attendance.find_one(
-                {"user_id": u["id"], "check_out_at": {"$ne": None}},
-                {"_id": 0}, sort=[("check_out_at", -1)],
-            )
+            last = last_map.get(u["id"])
             status_v = "exited"
             if last:
                 detail = "Left " + datetime.fromisoformat(last["check_out_at"]).strftime("%H:%M")
@@ -1052,18 +1076,25 @@ async def admin_summary(admin: dict = Depends(require_admin)):
 # ----------------------------------------------------------------------------
 async def compute_hours_report(start: str, end: str) -> List[dict]:
     """Aggregate hours and days present per member between dates inclusive."""
-    users = await db.users.find({}, {"_id": 0}).sort("full_name", 1).to_list(2000)
-    rows = []
-    # number of days in range
+    users = await db.users.find(
+        {}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1}
+    ).sort("full_name", 1).to_list(2000)
     sd = date.fromisoformat(start)
     ed = date.fromisoformat(end)
     span_days = max(1, (ed - sd).days + 1)
+
+    # Batch: all attendance in range with hours, grouped by user_id
+    atts = await db.attendance.find(
+        {"date": {"$gte": start, "$lte": end}, "hours": {"$ne": None}},
+        {"_id": 0, "user_id": 1, "date": 1, "hours": 1},
+    ).to_list(100000)
+    by_user: dict = {}
+    for a in atts:
+        by_user.setdefault(a["user_id"], []).append(a)
+
+    rows = []
     for u in users:
-        sessions = await db.attendance.find({
-            "user_id": u["id"],
-            "date": {"$gte": start, "$lte": end},
-            "hours": {"$ne": None},
-        }, {"_id": 0}).to_list(2000)
+        sessions = by_user.get(u["id"], [])
         total_hours = round(sum(s.get("hours") or 0 for s in sessions), 2)
         days_present = len({s["date"] for s in sessions})
         attendance_pct = round((days_present / span_days) * 100, 1)
