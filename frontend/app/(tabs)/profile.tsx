@@ -201,8 +201,10 @@ function AdminDashboard() {
 
   const actions = [
     { icon: "people-outline", label: "Manage Members", sub: "Add, edit, remove", route: "/manage-members", color: "#374151" },
+    { icon: "cloud-upload-outline", label: "Bulk Import Members", sub: "Excel upload + template", route: "/import-members", color: "#0F766E" },
     { icon: "checkmark-done-outline", label: "Leave Approvals", sub: "Review requests", route: "/leave-approvals", color: colors.warning, badge: summary?.pending_leaves },
     { icon: "bar-chart-outline", label: "Reports & Export", sub: "Hours, daily, CSV/PDF", route: "/reports", color: colors.info },
+    { icon: "settings-outline", label: "Office Settings", sub: "Location, geofence, timings", route: "/office-settings", color: "#4B5563" },
     { icon: "qr-code-outline", label: "Office Station QR", sub: "Display / regenerate", route: "/office-qr", color: "#111827" },
   ];
 

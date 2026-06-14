@@ -22,6 +22,9 @@ export default function MemberForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rank, setRank] = useState("");
+  const [mobile, setMobile] = useState("");
+  const [workStart, setWorkStart] = useState("");
+  const [workEnd, setWorkEnd] = useState("");
   const [category, setCategory] = useState<(typeof CATS)[number]>("sailor");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(editing);
@@ -36,6 +39,9 @@ export default function MemberForm() {
           setFullName(m.full_name);
           setEmail(m.email);
           setRank(m.rank || "");
+          setMobile(m.mobile || "");
+          setWorkStart(m.work_start || "");
+          setWorkEnd(m.work_end || "");
           setCategory(m.category);
         }
       } catch {}
@@ -43,15 +49,21 @@ export default function MemberForm() {
     })();
   }, [editing, id]);
 
+  const timeOk = (s: string) => s === "" || /^\d{1,2}:\d{2}$/.test(s);
+
   const save = async () => {
     if (!fullName.trim()) return toast.show("Enter full name", "error");
     if (!editing && (!email.trim() || !password)) return toast.show("Email and password required", "error");
+    if (!timeOk(workStart) || !timeOk(workEnd)) return toast.show("Timings must be HH:MM or left blank", "error");
     setLoading(true);
     try {
       if (editing) {
         await api.patch(`/members/${id}`, {
           full_name: fullName.trim(),
           rank: rank.trim() || null,
+          mobile: mobile.trim() || null,
+          work_start: workStart.trim() || null,
+          work_end: workEnd.trim() || null,
           category,
           ...(password ? { password } : {}),
         });
@@ -62,6 +74,9 @@ export default function MemberForm() {
           email: email.trim().toLowerCase(),
           password,
           rank: rank.trim() || null,
+          mobile: mobile.trim() || null,
+          work_start: workStart.trim() || null,
+          work_end: workEnd.trim() || null,
           category,
           role: "member",
         });
@@ -115,6 +130,19 @@ export default function MemberForm() {
 
         <Text style={styles.label}>Rank / Title</Text>
         <TextInput value={rank} onChangeText={setRank} placeholder="e.g. Petty Officer" placeholderTextColor={colors.muted} style={styles.input} testID="member-rank-input" />
+
+        <Text style={styles.label}>Mobile Number</Text>
+        <TextInput value={mobile} onChangeText={setMobile} placeholder="e.g. 9876543210" placeholderTextColor={colors.muted} keyboardType="phone-pad" style={styles.input} testID="member-mobile-input" />
+
+        <Text style={styles.label}>Custom Timings (optional — blank uses office default)</Text>
+        <View style={styles.catRow}>
+          <View style={{ flex: 1 }}>
+            <TextInput value={workStart} onChangeText={setWorkStart} placeholder="Start HH:MM" placeholderTextColor={colors.muted} style={styles.input} testID="member-work-start-input" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <TextInput value={workEnd} onChangeText={setWorkEnd} placeholder="End HH:MM" placeholderTextColor={colors.muted} style={styles.input} testID="member-work-end-input" />
+          </View>
+        </View>
 
         <Text style={styles.label}>Category</Text>
         <View style={styles.catRow}>

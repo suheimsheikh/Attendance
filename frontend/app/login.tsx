@@ -123,26 +123,19 @@ export default function Login() {
 
         <View style={styles.hintBox}>
           <Text style={styles.hintTitle}>Quick test login — one tap, no typing</Text>
-          <View style={styles.quickRow}>
-            <Pressable
-              testID="quick-login-admin"
-              onPress={() => quickLogin("admin@attendance.app", "Admin@12345")}
-              disabled={loading}
-              style={({ pressed }) => [styles.quickBtn, styles.quickAdmin, pressed && { opacity: 0.85 }]}
-            >
-              <Ionicons name="shield-checkmark" size={18} color="#fff" />
-              <Text style={styles.quickBtnText}>Enter as Admin</Text>
-            </Pressable>
-            <Pressable
-              testID="quick-login-member"
-              onPress={() => quickLogin("arjun@attendance.app", "pass123")}
-              disabled={loading}
-              style={({ pressed }) => [styles.quickBtn, styles.quickMember, pressed && { opacity: 0.85 }]}
-            >
-              <Ionicons name="person" size={18} color={colors.onSurface} />
-              <Text style={[styles.quickBtnText, { color: colors.onSurface }]}>Enter as Member</Text>
-            </Pressable>
-          </View>
+          <Pressable
+            testID="quick-login-admin"
+            onPress={() => quickLogin("admin@attendance.app", "Admin@12345")}
+            disabled={loading}
+            style={({ pressed }) => [styles.quickBtn, styles.quickAdmin, pressed && { opacity: 0.85 }]}
+          >
+            <Ionicons name="shield-checkmark" size={18} color="#fff" />
+            <Text style={styles.quickBtnText}>Enter as Admin</Text>
+          </Pressable>
+          <Text style={styles.hintNote}>
+            Members log in with the email & password you set (or import). Admins can preview the member view from
+            the Admin console.
+          </Text>
         </View>
       </KeyboardAwareScrollView>
     </View>
@@ -195,9 +188,8 @@ const styles = StyleSheet.create({
   },
   hintTitle: { fontSize: font.sm, fontWeight: "700", color: colors.onSurfaceTertiary, marginBottom: spacing.md },
   hintText: { fontSize: font.sm, color: colors.muted, lineHeight: 20 },
-  quickRow: { flexDirection: "row", gap: spacing.sm },
+  hintNote: { fontSize: font.sm, color: colors.muted, lineHeight: 19, marginTop: spacing.md },
   quickBtn: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -206,6 +198,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   quickAdmin: { backgroundColor: colors.brandPrimary },
-  quickMember: { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.borderStrong },
   quickBtnText: { fontSize: font.base, fontWeight: "700", color: "#fff" },
 });

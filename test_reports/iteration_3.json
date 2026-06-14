@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 3 — Tested master-data setup: (a) Office Settings with default_work_start/default_work_end, (b) per-member mobile + work_start/work_end on POST and PATCH, (c) /api/members/import-template returning an .xlsx with the exact header row [full_name, mobile, email, password, rank, category, work_start, work_end] and a Members sheet, (d) /api/members/import multipart upload — full row + minimal row (auto email <mobile>@attendance.app + password = mobile) + bad row (missing full_name) → created_count=2, error_count=1, error references missing-name row; re-importing the same file → created_count=0 with 'email already exists' errors; (e) member-role 403 on PUT /office, GET /import-template, POST /import; (f) Regression on login, presence, admin/summary, attendance checkin/checkout (using current office coords from GET /office), scan-card with personal_qr, leaves create+approve, reports/hours — all green. 14/14 new pytest tests pass against the deployed preview. Frontend Expo web preview on 390x844: Login shows only 'Enter as Admin' quick button (no member quick button); the Admin TAB on /(tabs) renders 'Bulk Import Members' (admin-action-import-members) and 'Office Settings' (admin-action-office-settings) quick-action rows; tapping Office Settings opens the form with all seven testIDs (office-name-input, latitude-input, longitude-input, radius-input, work-start-input, work-end-input, save-office-button); saving valid values (TEST Office UI / 15.4909 / 73.8278 / 80 / 08:30 / 16:30) returns 200 and shows the green 'Office settings saved' toast; Bulk Import screen renders download-template-button and pick-file-button; Add Member form renders member-mobile-input, member-work-start-input, member-work-end-input. Camera/file-picker not exercised in web preview as per request. No deprecated Expo packages introduced. Pre-existing pointerEvents deprecation warning from a 3rd-party RN-web lib still appears.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "pointerEvents prop", "issue": "Console warning 'props.pointerEvents is deprecated. Use style.pointerEvents' carried over from prior iterations. Non-blocking, originates in a 3rd-party RN-web lib."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_master_data.py",
+    "/app/test_reports/pytest/pytest_iter3.xml"
+  ],
+  "action_items": [
+    "No bugs to fix. Office Settings, custom timings, mobile field, Excel template + bulk import all work end-to-end.",
+    "Optional cleanup: /app/backend/tests/test_attendance_api.py (old iter-1 suite) is now stale because demo members were cleared this iteration — many of its 'member-role' tests fail at the setup step. Either delete it or rewrite it to create its own TEST_ members instead of relying on seeded demos.",
+    "Optional cleanup: /app/backend/tests/test_new_features.py hardcodes office geofence as 19.0760,72.8777,100m. The office is currently Naval Academy (15.4909,73.8278,80m), so 2 of its tests fail with OUT_OF_GEOFENCE. Make it read office via GET /api/office first (the same way the new test_master_data.py does).",
+    "Camera/file-picker are native-only — verify on a real device build before release."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~895 lines — well past the 700-line guideline. High time to split routers (auth/office/members/attendance/leaves/reports).",
+    "import_members has no upper bound on rows; a 100k-row sheet would hold the event loop and the DB connection. Consider chunking + a row cap (e.g. 5000).",
+    "import_members regex `^\\d{1,2}:\\d{2}$` accepts '99:99' as a valid time. Validate hour 0-23 and minute 0-59.",
+    "MemberCreate.mobile is Optional with no format check, yet the import code derives a login from it. Adding a Pydantic validator (digits + 7-15 chars) would prevent garbage mobiles.",
+    "UserPublic exposes email, mobile, work_start, work_end to every authenticated user via GET /api/members. Earlier iterations also flagged that emails leak to non-admins; mobile + work hours now compound that. Consider returning a slimmer DTO for non-admins.",
+    "OfficeConfig defaults latitude/longitude to 0,0 which would put the geofence in the Atlantic if anyone PUTs without coords. Validation should require non-zero or at least sensible lat/lng ranges."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_master_data.py (new, 14 tests)",
+    "/app/test_reports/iteration_3.json (new)",
+    "/app/test_reports/pytest/pytest_iter3.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (14/14 new feature + regression tests in test_master_data.py)", "frontend": "100% — every requested testID is present and the office-save flow shows a success toast"},
+  "seed_data_creation": "Tests create TEST_-prefixed members (TEST_member_office, TEST_custom_member, TEST_tmpl_member, TEST_imp_forbid, TEST_scan_reg) and two import rows (test_import_full@attendance.app + 9810099002@attendance.app); all cleaned up in per-test/class teardown via DELETE /api/members/{id}. Office is left at TEST Naval Academy 15.4909/73.8278/80m/08:30-16:30 (matches the manual setup the user reported pre-iteration).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run new tests with: EXPO_PUBLIC_BACKEND_URL=https://attendance-app-220.preview.emergentagent.com pytest /app/backend/tests/test_master_data.py -v. Office is currently Naval Academy 15.4909/73.8278/80m — read via GET /api/office before any check-in test. Auto-import email domain is @attendance.app (NOT .local). Multipart import field name is 'file'. Demo members are cleared — only admin@attendance.app remains until tests add their own.",
+  "rca_of_issue": "No new bugs. Two pre-existing test files (test_attendance_api.py, test_new_features.py) became stale because (1) demo members were removed in this iteration and (2) the office was relocated to Naval Academy before this iteration started. Those are test maintenance items, not application bugs."
+}
