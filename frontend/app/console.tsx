@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useRootNavigationState } from "expo-router";
 import { useAuth } from "@/src/context/AuthContext";
 import { colors, spacing, radius, font } from "@/src/theme";
 import { Avatar } from "@/src/components/ui";
@@ -33,21 +33,25 @@ const NAV = [
 ];
 
 export default function Console() {
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
   const router = useRouter();
+  const navState = useRootNavigationState();
   const { width } = useWindowDimensions();
   const [section, setSection] = useState("dashboard");
 
-  // Redirect to mobile app if not eligible (member, or narrow screen)
+  // Redirect to mobile app if not eligible (member, or narrow screen).
+  // Wait until the root navigator is mounted and auth has finished loading,
+  // otherwise expo-router throws "navigate before mounting the Root Layout".
   useEffect(() => {
+    if (!navState?.key || loading) return;
     if (!user) {
       router.replace("/login");
     } else if (user.role !== "admin" || width < DESKTOP_MIN_WIDTH) {
       router.replace("/(tabs)");
     }
-  }, [user, width, router]);
+  }, [user, loading, width, router, navState?.key]);
 
-  if (!user || user.role !== "admin" || width < DESKTOP_MIN_WIDTH) return null;
+  if (loading || !user || user.role !== "admin" || width < DESKTOP_MIN_WIDTH) return null;
 
   const renderSection = () => {
     switch (section) {
