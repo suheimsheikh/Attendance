@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File
 from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -12,6 +12,9 @@ import uuid
 import logging
 import bcrypt
 import jwt
+import re
+import openpyxl
+from openpyxl.utils import get_column_letter
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal
@@ -113,6 +116,9 @@ class UserPublic(BaseModel):
     role: str
     category: str
     rank: Optional[str] = None
+    mobile: Optional[str] = None
+    work_start: Optional[str] = None
+    work_end: Optional[str] = None
     photo: Optional[str] = None
 
 
@@ -122,6 +128,9 @@ class MemberCreate(BaseModel):
     full_name: str
     category: Literal["sailor", "staff", "coach"] = "sailor"
     rank: Optional[str] = None
+    mobile: Optional[str] = None
+    work_start: Optional[str] = None
+    work_end: Optional[str] = None
     role: Literal["admin", "member"] = "member"
 
 
@@ -129,6 +138,9 @@ class MemberUpdate(BaseModel):
     full_name: Optional[str] = None
     category: Optional[Literal["sailor", "staff", "coach"]] = None
     rank: Optional[str] = None
+    mobile: Optional[str] = None
+    work_start: Optional[str] = None
+    work_end: Optional[str] = None
     photo: Optional[str] = None
     password: Optional[str] = None
 
@@ -138,6 +150,8 @@ class OfficeConfig(BaseModel):
     latitude: float = 0.0
     longitude: float = 0.0
     radius_m: int = 100
+    default_work_start: str = "09:00"
+    default_work_end: str = "17:00"
 
 
 class CheckInIn(BaseModel):
@@ -218,6 +232,11 @@ async def seed():
             {"id": u["id"]},
             {"$set": {"personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper()}},
         )
+    # Backfill default office timings
+    await db.config.update_one(
+        {"id": "office", "default_work_start": {"$exists": False}},
+        {"$set": {"default_work_start": "09:00", "default_work_end": "17:00"}},
+    )
 
 
 @app.on_event("shutdown")
@@ -282,6 +301,9 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "role": body.role,
         "category": body.category,
         "rank": body.rank,
+        "mobile": body.mobile,
+        "work_start": body.work_start,
+        "work_end": body.work_end,
         "photo": None,
         "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
         "hashed_password": hash_password(body.password),
@@ -333,6 +355,119 @@ async def member_card(member_id: str, admin: dict = Depends(require_admin)):
         "personal_qr": u.get("personal_qr"),
         "photo": u.get("photo"),
     }
+
+
+@api_router.get("/members/import-template")
+async def import_template(admin: dict = Depends(require_admin)):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Members"
+    headers = ["full_name", "mobile", "email", "password", "rank", "category", "work_start", "work_end"]
+    ws.append(headers)
+    ws.append(["Arjun Nair", "9876543210", "arjun@academy.in", "secret123", "Petty Officer", "sailor", "08:00", "17:00"])
+    ws.append(["Meera Kapoor", "9876500001", "", "", "Leading Seaman", "sailor", "", ""])
+    ws.append(["Rohit Verma", "9876500002", "", "", "Head Coach", "coach", "06:00", "14:00"])
+    for i in range(1, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 18
+    # Notes sheet
+    notes = wb.create_sheet("Instructions")
+    for line in [
+        ["Column", "Required?", "Notes"],
+        ["full_name", "YES", "Person's full name"],
+        ["mobile", "YES", "Mobile number (also used as login if email is blank)"],
+        ["email", "No", "Login email. If blank, auto-generated as <mobile>@attendance.app"],
+        ["password", "No", "If blank, the mobile number is used as the password"],
+        ["rank", "No", "Rank / title, e.g. Petty Officer"],
+        ["category", "No", "sailor | staff | coach  (default: sailor)"],
+        ["work_start", "No", "Custom start time HH:MM (blank = office default)"],
+        ["work_end", "No", "Custom end time HH:MM (blank = office default)"],
+    ]:
+        notes.append(line)
+    for i in range(1, 4):
+        notes.column_dimensions[get_column_letter(i)].width = 40
+    buf = io.BytesIO()
+    wb.save(buf)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=members_template.xlsx"},
+    )
+
+
+@api_router.post("/members/import")
+async def import_members(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
+    raw = await file.read()
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(raw), data_only=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read the Excel file. Use the provided template (.xlsx).")
+    ws = wb["Members"] if "Members" in wb.sheetnames else wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    if len(rows) < 2:
+        return {"created": [], "errors": [], "created_count": 0, "error_count": 0}
+    header = [str(c).strip().lower() if c is not None else "" for c in rows[0]]
+    col = {name: i for i, name in enumerate(header)}
+
+    def cell(row, name):
+        i = col.get(name)
+        if i is None or i >= len(row):
+            return None
+        v = row[i]
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s or None
+
+    valid_cats = {"sailor", "staff", "coach"}
+    time_re = re.compile(r"^\d{1,2}:\d{2}$")
+    created, errors = [], []
+    for n, row in enumerate(rows[1:], start=2):
+        if row is None or all(c is None or str(c).strip() == "" for c in row):
+            continue
+        name = cell(row, "full_name")
+        mobile = cell(row, "mobile")
+        if not name:
+            errors.append({"row": n, "reason": "Missing full_name"})
+            continue
+        if not mobile:
+            errors.append({"row": n, "reason": "Missing mobile"})
+            continue
+        digits = re.sub(r"[^0-9]", "", mobile) or mobile
+        email = (cell(row, "email") or f"{digits}@attendance.app").lower()
+        password = cell(row, "password") or digits
+        if len(password) < 4:
+            password = (password + "0000")[:4]
+        rank = cell(row, "rank")
+        category = (cell(row, "category") or "sailor").lower()
+        if category not in valid_cats:
+            category = "sailor"
+        ws_start = cell(row, "work_start")
+        ws_end = cell(row, "work_end")
+        if ws_start and not time_re.match(ws_start):
+            ws_start = None
+        if ws_end and not time_re.match(ws_end):
+            ws_end = None
+        if await db.users.find_one({"email": email}):
+            errors.append({"row": n, "reason": f"Skipped — email already exists ({email})"})
+            continue
+        doc = {
+            "id": str(uuid.uuid4()),
+            "email": email,
+            "full_name": name,
+            "role": "member",
+            "category": category,
+            "rank": rank,
+            "mobile": mobile,
+            "work_start": ws_start,
+            "work_end": ws_end,
+            "photo": None,
+            "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
+            "hashed_password": hash_password(password),
+            "created_at": now_utc().isoformat(),
+        }
+        await db.users.insert_one(doc)
+        created.append({"full_name": name, "email": email, "password": password})
+    return {"created": created, "errors": errors, "created_count": len(created), "error_count": len(errors)}
 
 
 @api_router.post("/members/me/photo", response_model=UserPublic)
