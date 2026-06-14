@@ -7,6 +7,7 @@ import { api, ApiError, downloadFileWeb, uploadFileWeb } from "@/src/api/client"
 import { useToast } from "@/src/context/ToastContext";
 import { colors, spacing, radius, font, categoryLabel } from "@/src/theme";
 import { Avatar } from "@/src/components/ui";
+import { printQRSheet } from "@/src/utils/printCards";
 import {
   Panel,
   SectionTitle,
@@ -695,6 +696,7 @@ export const OfficeQRSection: React.FC = () => {
   const toast = useToast();
   const [o, setO] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const load = () => api.get<any>("/office").then(setO).catch(() => {});
   useEffect(() => { load(); }, []);
 
@@ -708,16 +710,51 @@ export const OfficeQRSection: React.FC = () => {
     finally { setBusy(false); }
   };
 
+  const printOffice = async () => {
+    const res = await printQRSheet({ officeQr: o.qr_token, officeName: o.name, includeOffice: true });
+    if (!res.ok) toast.show(res.reason || "Could not open print view", "error");
+  };
+
+  const printAllCards = async () => {
+    setPrinting(true);
+    try {
+      const data = await api.get<any>("/admin/cards");
+      if (!data.members?.length) { toast.show("No members to print yet", "error"); return; }
+      const res = await printQRSheet({ members: data.members, includeMembers: true });
+      if (!res.ok) toast.show(res.reason || "Could not open print view", "error");
+      else toast.show(`Preparing ${data.members.length} card(s)…`, "success");
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : "Failed to load cards", "error");
+    } finally { setPrinting(false); }
+  };
+
   if (!o) return <Loader />;
   return (
     <View>
       <SectionTitle title="Office Station QR" subtitle="Print and display at the gate" />
-      <Panel style={{ padding: spacing.xl, alignItems: "center", maxWidth: 460, gap: spacing.lg }}>
-        <View style={styles.qrBox}><QRCode value={o.qr_token} size={240} /></View>
-        <Text style={styles.qrToken}>{o.qr_token}</Text>
-        <Text style={styles.cellSub}>{o.name} · {Number(o.latitude).toFixed(4)}, {Number(o.longitude).toFixed(4)} · {o.radius_m}m</Text>
-        <WButton title="Regenerate QR" variant="ghost" icon="refresh-outline" loading={busy} onPress={regen} testID="regen-qr" />
-      </Panel>
+      <View style={{ flexDirection: "row", gap: spacing.lg, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <Panel style={{ padding: spacing.xl, alignItems: "center", maxWidth: 460, gap: spacing.lg }}>
+          <View style={styles.qrBox}><QRCode value={o.qr_token} size={240} /></View>
+          <Text style={styles.qrToken}>{o.qr_token}</Text>
+          <Text style={styles.cellSub}>{o.name} · {Number(o.latitude).toFixed(4)}, {Number(o.longitude).toFixed(4)} · {o.radius_m}m</Text>
+          <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap", justifyContent: "center" }}>
+            <WButton title="Print Master QR" icon="print-outline" onPress={printOffice} testID="print-office-qr" />
+            <WButton title="Regenerate QR" variant="ghost" icon="refresh-outline" loading={busy} onPress={regen} testID="regen-qr" />
+          </View>
+        </Panel>
+
+        <Panel style={{ padding: spacing.xl, flex: 1, minWidth: 300, gap: spacing.md }}>
+          <Text style={styles.panelTitle}>Member QR Cards</Text>
+          <Text style={styles.cellSub}>
+            Print a card for every member at once — ideal for sailors & staff without a phone. Hand them their card; anyone with the app scans it at the gate to mark their attendance.
+          </Text>
+          <WButton title="Print All Member Cards" icon="print-outline" loading={printing} onPress={printAllCards} testID="print-all-cards" />
+          <View style={styles.tip}>
+            <Ionicons name="information-circle-outline" size={18} color={colors.muted} />
+            <Text style={styles.tipText}>Opens a print-ready sheet in a new tab. Allow pop-ups if prompted.</Text>
+          </View>
+        </Panel>
+      </View>
     </View>
   );
 };

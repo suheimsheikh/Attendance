@@ -567,6 +567,29 @@ async def member_card(member_id: str, admin: dict = Depends(require_admin)):
     }
 
 
+@api_router.get("/admin/cards")
+async def all_cards(admin: dict = Depends(require_admin)):
+    """Office master QR + every member's personal QR — for batch printing."""
+    office = await db.config.find_one({"id": "office"}, {"_id": 0})
+    users = await db.users.find(
+        {}, {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1, "personal_qr": 1}
+    ).sort("full_name", 1).to_list(2000)
+    return {
+        "office_qr": office.get("qr_token") if office else None,
+        "office_name": office.get("name") if office else None,
+        "members": [
+            {
+                "id": u["id"],
+                "full_name": u["full_name"],
+                "rank": u.get("rank"),
+                "category": u["category"],
+                "personal_qr": u.get("personal_qr"),
+            }
+            for u in users
+        ],
+    }
+
+
 @api_router.get("/members/import-template")
 async def import_template(admin: dict = Depends(require_admin)):
     wb = openpyxl.Workbook()
