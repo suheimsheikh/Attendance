@@ -143,6 +143,7 @@ class MemberUpdate(BaseModel):
     work_end: Optional[str] = None
     photo: Optional[str] = None
     password: Optional[str] = None
+    role: Optional[Literal["admin", "member"]] = None
 
 
 class OfficeConfig(BaseModel):
@@ -321,6 +322,8 @@ async def list_members(user: dict = Depends(get_current_user)):
 
 @api_router.patch("/members/{member_id}", response_model=UserPublic)
 async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depends(require_admin)):
+    if body.role == "member" and member_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="You cannot remove your own admin access")
     update = {k: v for k, v in body.model_dump().items() if v is not None and k != "password"}
     if body.password:
         update["hashed_password"] = hash_password(body.password)

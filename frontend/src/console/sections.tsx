@@ -371,6 +371,7 @@ const MemberForm: React.FC<{ member: Member | null; onClose: () => void; onSaved
   const [ws, setWs] = useState(member?.work_start || "");
   const [we, setWe] = useState(member?.work_end || "");
   const [category, setCategory] = useState<(typeof CATS)[number]>((member?.category as never) || "sailor");
+  const [role, setRole] = useState<"member" | "admin">((member?.role as never) || "member");
   const [saving, setSaving] = useState(false);
 
   const timeOk = (s: string) => s === "" || /^\d{1,2}:\d{2}$/.test(s);
@@ -388,13 +389,14 @@ const MemberForm: React.FC<{ member: Member | null; onClose: () => void; onSaved
         work_start: ws.trim() || null,
         work_end: we.trim() || null,
         category,
+        role,
       };
       if (editing) {
         if (password) payload.password = password;
         await api.patch(`/members/${member!.id}`, payload);
         toast.show("Member updated", "success");
       } else {
-        await api.post("/members", { ...payload, email: email.trim().toLowerCase(), password, role: "member" });
+        await api.post("/members", { ...payload, email: email.trim().toLowerCase(), password });
         toast.show("Member added", "success");
       }
       onSaved();
@@ -428,6 +430,15 @@ const MemberForm: React.FC<{ member: Member | null; onClose: () => void; onSaved
             <Chip key={c} label={categoryLabel[c]} active={category === c} onPress={() => setCategory(c)} testID={`form-cat-${c}`} />
           ))}
         </View>
+      </Field>
+      <Field label="Access Level">
+        <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs }}>
+          <Chip label="Member" active={role === "member"} onPress={() => setRole("member")} testID="form-role-member" />
+          <Chip label="Admin" active={role === "admin"} onPress={() => setRole("admin")} testID="form-role-admin" />
+        </View>
+        <Text style={styles.cellSub}>
+          Admins can open the desktop Console on a laptop browser and manage members, settings, approvals and reports.
+        </Text>
       </Field>
       <View style={{ flexDirection: "row", gap: spacing.md, marginTop: spacing.xl, justifyContent: "flex-end" }}>
         <WButton title="Cancel" variant="ghost" onPress={onClose} />

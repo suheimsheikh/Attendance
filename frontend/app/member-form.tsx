@@ -26,6 +26,7 @@ export default function MemberForm() {
   const [workStart, setWorkStart] = useState("");
   const [workEnd, setWorkEnd] = useState("");
   const [category, setCategory] = useState<(typeof CATS)[number]>("sailor");
+  const [role, setRole] = useState<"member" | "admin">("member");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(editing);
 
@@ -43,6 +44,7 @@ export default function MemberForm() {
           setWorkStart(m.work_start || "");
           setWorkEnd(m.work_end || "");
           setCategory(m.category);
+          setRole(m.role || "member");
         }
       } catch {}
       setFetching(false);
@@ -65,6 +67,7 @@ export default function MemberForm() {
           work_start: workStart.trim() || null,
           work_end: workEnd.trim() || null,
           category,
+          role,
           ...(password ? { password } : {}),
         });
         toast.show("Member updated", "success");
@@ -78,7 +81,7 @@ export default function MemberForm() {
           work_start: workStart.trim() || null,
           work_end: workEnd.trim() || null,
           category,
-          role: "member",
+          role,
         });
         toast.show("Member added", "success");
       }
@@ -155,6 +158,18 @@ export default function MemberForm() {
           ))}
         </View>
 
+        <Text style={styles.label}>Access Level</Text>
+        <View style={styles.catRow}>
+          {(["member", "admin"] as const).map((r) => (
+            <Pressable key={r} onPress={() => setRole(r)} style={[styles.catBtn, role === r && styles.catBtnActive]} testID={`role-${r}`}>
+              <Text style={[styles.catText, role === r && styles.catTextActive]}>
+                {r === "member" ? "Member" : "Admin"}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={styles.hint}>Admins can open the desktop Console on a laptop browser to manage everything.</Text>
+
         <View style={{ height: spacing.xl }} />
         <Button title={editing ? "Save Changes" : "Add Member"} onPress={save} loading={loading} icon="checkmark" testID="save-member-button" />
       </KeyboardAwareScrollView>
@@ -174,6 +189,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: font.lg, fontWeight: "800", color: colors.onSurface },
   label: { fontSize: font.sm, fontWeight: "700", color: colors.onSurfaceTertiary, marginBottom: spacing.sm, marginTop: spacing.md },
+  hint: { fontSize: font.sm, color: colors.muted, marginTop: spacing.sm },
   input: {
     backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,

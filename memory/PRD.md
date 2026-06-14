@@ -19,6 +19,8 @@ Build a mobile "Attendance" app for a sailing academy to track **entry/exit of s
 - Reports: weekly/monthly hours + attendance %, daily leave & tour (early-morning) report, CSV/PDF export.
 
 ## Implemented (2026-06-10 → 2026-06-14)
+- **Designate Admins (2026-06-14):** Member add/edit form (desktop Console + mobile) now has an **Access Level (Member/Admin)** selector. `MemberUpdate` accepts `role` so existing members can be promoted/demoted; backend blocks self-demotion ("cannot remove your own admin access"). Lets the user create multiple admins who open the desktop Console on a laptop browser. Verified via curl (create-as-admin, login, promote/demote, guard) + console UI screenshot.
+- **Laptop access clarified (2026-06-14):** The "QR code" users saw is Emergent's *Try-on-mobile* preview helper, not part of the app. The web build already serves the Admin Console on wide laptop browsers; permanent access comes from Deploy (auto permanent URL, no DNS required; custom domain optional via Link domain).
 - JWT auth (admin+member), role-based access; demo members CLEARED — only admin remains for the user to populate.
 - Office config + **Office Settings screen**: manual latitude/longitude, geofence radius (10–100m), and default working hours (HH:MM).
 - **Per-member custom timings** (work_start/work_end) + **mobile number** field, editable in member form.
