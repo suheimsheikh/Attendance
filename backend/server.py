@@ -188,13 +188,6 @@ class CheckInIn(BaseModel):
     reason: Optional[str] = None  # required when outside geofence
 
 
-class RemoteCheckoutIn(BaseModel):
-    latitude: float
-    longitude: float
-    photo: Optional[str] = None
-    reason: Optional[str] = None  # optional — many users can't type
-
-
 class GeoToggleIn(BaseModel):
     latitude: float
     longitude: float
@@ -825,39 +818,6 @@ async def check_out(body: CheckInIn, user: dict = Depends(get_current_user)):
                                 body.photo, body.reason, "office_qr", None)
 
 
-@api_router.post("/attendance/remote-checkout")
-async def remote_checkout(body: RemoteCheckoutIn, user: dict = Depends(get_current_user)):
-    """Check out from anywhere (off campus) without the gate QR. Reason optional.
-    Always recorded with the device's GPS; flagged off-site when outside the geofence."""
-    sess = await open_session_for(user["id"])
-    if not sess:
-        raise HTTPException(status_code=400, detail="You are not checked in")
-    office = await db.config.find_one({"id": "office"})
-    lat, lng = body.latitude, body.longitude
-    dist = None
-    out = True
-    if office:
-        dist = round(haversine_m(lat, lng, office["latitude"], office["longitude"]), 1)
-        out = dist > office["radius_m"]
-    ts = now_utc()
-    cin = datetime.fromisoformat(sess["check_in_at"])
-    hours = round((ts - cin).total_seconds() / 3600.0, 2)
-    await db.attendance.update_one({"id": sess["id"]}, {"$set": {
-        "check_out_at": ts.isoformat(),
-        "check_out_photo": body.photo,
-        "hours": hours,
-        "exit_latitude": lat,
-        "exit_longitude": lng,
-        "exit_distance_m": dist,
-        "exit_out_of_geofence": out,
-        "exit_reason": (body.reason or None),
-        "exit_method": "remote",
-        "checked_out_by": None,
-    }})
-    return {"ok": True, "action": "checkout", "member": user["full_name"],
-            "hours": hours, "out_of_geofence": out, "remote": True}
-
-
 async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
                       reason: Optional[str], by: Optional[str]) -> dict:
     """GPS-based check in/out (no QR). Check-in requires being inside the geofence;
@@ -914,22 +874,22 @@ async def geo_toggle(body: GeoToggleIn, user: dict = Depends(get_current_user)):
 
 
 @api_router.post("/attendance/mark-member")
-async def mark_member(body: MarkMemberIn, user: dict = Depends(get_current_user)):
+async def mark_member(body: MarkMemberIn, admin: dict = Depends(require_admin)):
     """Mark a person WITHOUT a phone present/absent by picking them from a list.
-    Uses the marker's GPS for the geofence; records who did it."""
+    Restricted to admins (designated people). Uses the marker's GPS; records who did it."""
     office = await db.config.find_one({"id": "office"})
     if not office:
         raise HTTPException(status_code=500, detail="Office not configured")
     target = await db.users.find_one({"id": body.member_id}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="Member not found")
-    return await _geo_toggle(target, office, body.latitude, body.longitude, body.reason, user["id"])
+    return await _geo_toggle(target, office, body.latitude, body.longitude, body.reason, admin["id"])
 
 
 @api_router.post("/attendance/scan-card")
-async def scan_card(body: ScanCardIn, user: dict = Depends(get_current_user)):
+async def scan_card(body: ScanCardIn, admin: dict = Depends(require_admin)):
     """Proxy check-in/out for a person without a phone, via their personal QR card.
-    Scanned by anyone with the app. Auto-toggles the carded member's session."""
+    Restricted to admins (designated gate operators). Auto-toggles the carded member's session."""
     office = await db.config.find_one({"id": "office"})
     if not office:
         raise HTTPException(status_code=500, detail="Office not configured")
@@ -937,7 +897,7 @@ async def scan_card(body: ScanCardIn, user: dict = Depends(get_current_user)):
     if not target:
         raise HTTPException(status_code=404, detail="Card not recognised — unknown member")
     res = await perform_toggle(target, office, body.latitude, body.longitude,
-                               body.photo, body.reason, "card", user["id"])
+                               body.photo, body.reason, "card", admin["id"])
     res["proxy"] = True
     return res
 
