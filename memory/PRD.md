@@ -18,25 +18,27 @@ Build a mobile "Attendance" app for a sailing academy to track **entry/exit of s
 - Leave & tour applications with approval workflow.
 - Reports: weekly/monthly hours + attendance %, daily leave & tour (early-morning) report, CSV/PDF export.
 
-## Implemented (2026-06-10)
-- JWT auth (admin+member), role-based access, seeded admin + 6 demo members.
-- Office config (lat/lng/radius/QR token), regenerate QR.
-- Check-in/out: QR validation + haversine geofence + base64 photo + hours computation.
-- **Out-of-geofence check-in:** if outside the radius, stores actual GPS location + a mandatory reason; flagged "Off-site" on the board.
-- **Personal QR cards (people without phones):** every member has a unique permanent `personal_qr`; admin can view/print each card; anyone with the app can scan a member's card to check them in/out (proxy), recording who scanned.
-- Presence board with filter chips, summary stats, off-site flag, auto-refresh (15s) + pull-to-refresh.
-- Member management (create/edit/delete + view QR card), member profile with weekly/monthly hours + recent logs.
-- Leave/tour apply, my-applications, admin approvals (pending/approved/rejected).
-- Reports screen: hours (week/month) + daily leave/tour, CSV & PDF export via share sheet.
-- Verified: 49/49 backend pytest pass; all frontend screens render.
+## Implemented (2026-06-10 → 2026-06-14)
+- JWT auth (admin+member), role-based access; demo members CLEARED — only admin remains for the user to populate.
+- Office config + **Office Settings screen**: manual latitude/longitude, geofence radius (10–100m), and default working hours (HH:MM).
+- **Per-member custom timings** (work_start/work_end) + **mobile number** field, editable in member form.
+- **Bulk Excel import**: downloadable .xlsx template (with Instructions sheet) + upload/parse → creates members; blank email auto = `<mobile>@attendance.app`, blank password = mobile, blank timings = office default; returns created accounts + skipped-row reasons.
+- Check-in/out: QR validation + haversine geofence + base64 photo + hours; out-of-geofence stores location + mandatory reason (off-site flag).
+- Personal QR cards for phone-less people (proxy scan-in/out by anyone).
+- Presence board (filters, off-site flag, auto-refresh), member profile (hours), leave/tour apply + admin approvals, reports (hours + daily leave/tour, CSV/PDF export).
+- In-app role switcher (admin can preview member view), one-tap admin quick login.
+- Verified: 14/14 master-data backend tests + prior suites; all frontend screens render.
 
 ## Compatibility
-- iOS 15.1+ and Android 7.0+ (phones & tablets). Needs camera + location. Web/Expo Go preview can't use real camera/GPS — a "Simulate at office" switch covers preview testing.
+- iOS 15.1+ and Android 7.0+ (phones & tablets). Needs camera + location. Web/Expo Go preview can't use real camera/GPS/file-picker — a "Simulate at office" switch covers preview testing; full check-in/import on device or installed build.
 
 ## Backlog / Remaining
-- **Deferred (user-requested, revisit later):** WhatsApp companion channel — auto-send the early-morning tour & leave report to a WhatsApp group, notify admins on new leave requests, and allow leave requests via a WhatsApp bot. Requires WhatsApp Business Cloud API setup (Meta verification, registered number, approved templates).
-- **P1:** Real GPS + camera scan/photo require a native build (not testable in Expo Go web).
-- **P2:** Lost-card recovery (regenerate personal QR), member self-photo from profile, calendar history, date-picker for leave dates, auto check-out at midnight safeguard, restrict member visibility of others' emails, split server.py into routers.
+- **Deferred (user-requested):** WhatsApp companion channel — daily morning tour & leave report to a WhatsApp group, admin alerts on new leave, leave requests via bot (needs WhatsApp Business Cloud API).
+- **P1:** Real GPS + camera scan/photo + OS file-picker require a native build (not testable in Expo Go web).
+- **P2:** Late-arrival flagging using timings (needs office timezone), lost-card recovery (regenerate personal QR), member self-photo, calendar history, date-picker for leave dates, auto check-out at midnight, import row cap + stricter time/mobile validation, split server.py into routers.
+
+## Next Tasks
+- User to set real Office Settings (lat/long) and bulk-import their members, then test on a published build.
 
 ## Next Tasks
 - Gather feedback; optionally add member self-photo capture and a calendar history view.
