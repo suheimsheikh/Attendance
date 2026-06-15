@@ -62,8 +62,8 @@ export default function ImportMembers() {
             </div>
             {result.created.length === 0 ? <div className="p-6 text-center text-sm text-slate-500">Nothing new.</div> : (
               <ul className="divide-y divide-slate-100 max-h-80 overflow-y-auto text-sm">
-                {result.created.map((c, i) => (
-                  <li key={i} className="px-5 py-2">
+                {result.created.map((c) => (
+                  <li key={c.email} className="px-5 py-2">
                     <div className="font-semibold">{c.full_name}</div>
                     <div className="text-xs text-slate-500">{c.email} · pwd: {c.password}</div>
                   </li>
@@ -78,8 +78,8 @@ export default function ImportMembers() {
             </div>
             {result.errors.length === 0 ? <div className="p-6 text-center text-sm text-slate-500">No issues.</div> : (
               <ul className="divide-y divide-slate-100 max-h-80 overflow-y-auto text-sm">
-                {result.errors.map((e, i) => (
-                  <li key={i} className="px-5 py-2"><span className="text-xs text-slate-400">Row {e.row}: </span>{e.reason}</li>
+                {result.errors.map((e) => (
+                  <li key={`${e.row}-${e.reason}`} className="px-5 py-2"><span className="text-xs text-slate-400">Row {e.row}: </span>{e.reason}</li>
                 ))}
               </ul>
             )}

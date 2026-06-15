@@ -148,10 +148,12 @@ function MemberRow({ m }) {
 }
 
 function SkeletonList() {
+  // Static placeholder list — never reorders and has no underlying data,
+  // so using the array index as key is React-idiomatic here.
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
       {[...Array(6)].map((_, i) => (
-        <div key={i} className="iu-card p-4 flex items-center gap-4">
+        <div key={`skeleton-${i}`} className="iu-card p-4 flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-slate-200 animate-pulse" />
           <div className="flex-1">
             <div className="h-3 bg-slate-200 rounded w-1/2 animate-pulse" />

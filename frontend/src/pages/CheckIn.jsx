@@ -79,7 +79,10 @@ export default function CheckIn() {
     try {
       let coords = {};
       try { const loc = await getLocation(); coords = { latitude: loc.latitude, longitude: loc.longitude }; }
-      catch { /* return without coords is allowed */ }
+      catch (err) {
+        // Geolocation is optional on temp-return — log and continue without coords.
+        console.debug("temp-return geolocation skipped:", err?.message);
+      }
       await api.post("/attendance/temp-return", coords);
       toast.success("Welcome back!");
       refresh();
@@ -292,7 +295,10 @@ function TempExitCard({ onCreated }) {
     try {
       let coords = {};
       try { const loc = await getLocation(); coords = { latitude: loc.latitude, longitude: loc.longitude }; }
-      catch { /* coords optional for temp-exit */ }
+      catch (err) {
+        // Geolocation is optional on temp-exit — log and continue without coords.
+        console.debug("temp-exit geolocation skipped:", err?.message);
+      }
       await api.post("/attendance/temp-exit", {
         reason: reason.trim(),
         expected_return: expectedReturn || null,

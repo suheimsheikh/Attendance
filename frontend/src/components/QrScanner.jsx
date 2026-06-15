@@ -26,7 +26,7 @@ export default function QrScanner({ onScan, onError, height = 320, continuous = 
           if (stoppedRef.current) return;
           if (!continuous) {
             stoppedRef.current = true;
-            try { await qr.stop(); } catch {}
+            try { await qr.stop(); } catch (e) { console.debug("qr.stop after scan failed:", e?.message); }
           }
           onScan?.(decoded);
         };
@@ -49,7 +49,8 @@ export default function QrScanner({ onScan, onError, height = 320, continuous = 
       stoppedRef.current = true;
       const inst = instanceRef.current;
       if (inst) {
-        inst.stop().catch(() => {}).finally(() => { try { inst.clear(); } catch {} });
+        inst.stop().catch((e) => console.debug("qr.stop on cleanup failed:", e?.message))
+          .finally(() => { try { inst.clear(); } catch (e) { console.debug("qr.clear on cleanup failed:", e?.message); } });
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

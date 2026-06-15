@@ -47,7 +47,9 @@ export function AuthProvider({ children }) {
     try {
       const me = await api.get("/auth/me");
       setUser(me);
-    } catch {}
+    } catch (err) {
+      console.debug("refreshMe failed (token likely expired):", err?.message);
+    }
   }, []);
 
   return (

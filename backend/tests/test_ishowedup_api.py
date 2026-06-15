@@ -20,10 +20,10 @@ if not BASE_URL:
                     BASE_URL = line.split("=", 1)[1].strip().strip('"').rstrip("/")
                     break
 
-TEST_MEMBER_EMAIL = "test_sailor@iso.app"
-TEST_MEMBER_PASSWORD = "test1234"
-TEST_MEMBER_MOBILE = "9000000001"
-TEST_PHONE_NEW = "9876500099"
+TEST_MEMBER_EMAIL = os.environ.get("TEST_MEMBER_EMAIL", "test_sailor@iso.app")
+TEST_MEMBER_PASSWORD = os.environ.get("TEST_MEMBER_PASSWORD", "test1234")
+TEST_MEMBER_MOBILE = os.environ.get("TEST_MEMBER_MOBILE", "9000000001")
+TEST_PHONE_NEW = os.environ.get("TEST_PHONE_NEW", "9876500099")
 TEST_DEVICE_ID = f"web-test-{uuid.uuid4().hex[:8]}"
 
 

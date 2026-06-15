@@ -170,6 +170,7 @@ function StatCard({ label, value, color }) {
 function Timeline({ row }) {
   const items = [];
   items.push({
+    key: `in-${row.check_in_at}`,
     icon: <LogIn size={14}/>,
     color: "#10B981",
     title: "Checked in",
@@ -178,6 +179,7 @@ function Timeline({ row }) {
   });
   (row.excursions || []).forEach((e) => {
     items.push({
+      key: `out-${e.id}`,
       icon: <Coffee size={14}/>,
       color: "#06B6D4",
       title: `Stepped out · ${e.reason || ""}`,
@@ -186,6 +188,7 @@ function Timeline({ row }) {
     });
     if (e.in_time) {
       items.push({
+        key: `back-${e.id}`,
         icon: <LogIn size={14}/>,
         color: "#0EA5E9",
         title: "Returned",
@@ -196,6 +199,7 @@ function Timeline({ row }) {
       });
     } else {
       items.push({
+        key: `pending-${e.id}`,
         icon: <AlertTriangle size={14}/>,
         color: "#F59E0B",
         title: "Still away",
@@ -206,6 +210,7 @@ function Timeline({ row }) {
   });
   if (row.check_out_time) {
     items.push({
+      key: `out-${row.check_out_at}`,
       icon: <LogOutIcon size={14}/>,
       color: "#6B7280",
       title: "Checked out",
@@ -217,8 +222,8 @@ function Timeline({ row }) {
   return (
     <ol className="relative pl-6">
       <span className="absolute left-2 top-1 bottom-1 w-px bg-slate-200" />
-      {items.map((it, i) => (
-        <li key={i} className="relative pb-3 last:pb-0" data-testid={`timeline-${i}`}>
+      {items.map((it) => (
+        <li key={it.key} className="relative pb-3 last:pb-0" data-testid={`timeline-${it.key}`}>
           <span
             className="absolute -left-[18px] top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-white"
             style={{ background: it.color }}
