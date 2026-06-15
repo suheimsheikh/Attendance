@@ -945,7 +945,7 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
     if sess:
         cin = datetime.fromisoformat(sess["check_in_at"])
         excursions = sess.get("excursions") or []
-        # Auto-close a still-open excursion at this moment so net hours are correct.
+        # Auto-close a still-open excursion at this moment for clean records.
         for e in excursions:
             if e.get("out_at") and not e.get("in_at"):
                 e["in_at"] = ts.isoformat()
@@ -953,7 +953,8 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
                 e["in_longitude"] = lng
                 e["auto_closed"] = True
         away_s = _excursion_seconds(excursions)
-        hours = round(max(0.0, (ts - cin).total_seconds() - away_s) / 3600.0, 2)
+        # Excursions are on office hours — count the full session toward logged hours.
+        hours = round((ts - cin).total_seconds() / 3600.0, 2)
         await db.attendance.update_one({"id": sess["id"]}, {"$set": {
             "check_out_at": ts.isoformat(),
             "check_out_photo": photo,
@@ -1035,7 +1036,8 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
                 e["in_longitude"] = lng
                 e["auto_closed"] = True
         away_s = _excursion_seconds(excursions)
-        hours = round(max(0.0, (ts - cin).total_seconds() - away_s) / 3600.0, 2)
+        # Excursions are on office hours — count the full session toward logged hours.
+        hours = round((ts - cin).total_seconds() / 3600.0, 2)
         await db.attendance.update_one({"id": sess["id"]}, {"$set": {
             "check_out_at": ts.isoformat(),
             "hours": hours,
@@ -1366,13 +1368,12 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
                 "open": not bool(in_iso),
             })
 
-        # Net session/away/hours (live for open sessions).
+        # Hours logged = full session duration (excursions are on office hours).
         cin = datetime.fromisoformat(s["check_in_at"])
         cout = datetime.fromisoformat(s["check_out_at"]) if s.get("check_out_at") else None
         end_ref = cout or now
         away_s = _excursion_seconds(excursions, up_to=end_ref if not cout else None)
-        gross_s = max(0.0, (end_ref - cin).total_seconds())
-        net_hours = round(max(0.0, gross_s - away_s) / 3600.0, 2)
+        hours = round(max(0.0, (end_ref - cin).total_seconds()) / 3600.0, 2)
 
         rows.append({
             "session_id": s["id"],
@@ -1394,7 +1395,7 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
             "excursions": excs_out,
             "excursion_count": len(excs_out),
             "away_minutes": int(away_s / 60),
-            "net_hours": net_hours,
+            "hours": hours,
             "stored_hours": s.get("hours"),
         })
 

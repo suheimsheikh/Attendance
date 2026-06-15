@@ -135,7 +135,7 @@ export default function Sessions() {
                         </div>
                       ) : <span className="text-slate-400 text-sm">—</span>}
                     </td>
-                    <td className="iu-table-td font-bold">{r.net_hours}h</td>
+                    <td className="iu-table-td font-bold">{r.hours}h</td>
                   </tr>
                   {expanded.has(r.session_id) && (
                     <tr className="bg-slate-50/60">

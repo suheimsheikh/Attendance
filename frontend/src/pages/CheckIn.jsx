@@ -318,7 +318,7 @@ function TempExitCard({ onCreated }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-slate-900 text-sm">Stepping out for a bit?</div>
-          <div className="text-xs text-slate-600">Log a temporary exit (lunch, errand, etc.). Time away won't count toward your hours.</div>
+          <div className="text-xs text-slate-600">Log a temporary exit (lunch, errand, etc.). You remain on office hours.</div>
         </div>
         <button data-testid="temp-exit-open" onClick={() => setOpen(true)} className="iu-btn-secondary !h-9 !px-3 shrink-0">
           <ArrowLeftRight size={14} /> Temp exit
