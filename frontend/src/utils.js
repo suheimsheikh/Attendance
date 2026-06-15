@@ -83,6 +83,7 @@ export function categoryLabel(cat) {
 
 export const statusConfig = {
   on_campus: { label: "On Campus", color: "#10B981", bg: "rgba(16,185,129,0.12)", icon: "checkmark" },
+  temp_out:  { label: "Stepped Out", color: "#06B6D4", bg: "rgba(6,182,212,0.14)", icon: "out" },
   on_tour:   { label: "On Tour",   color: "#F97316", bg: "rgba(249,115,22,0.12)", icon: "plane" },
   on_leave:  { label: "On Leave",  color: "#F59E0B", bg: "rgba(245,158,11,0.12)", icon: "bed" },
   exited:    { label: "Exited",    color: "#6B7280", bg: "rgba(107,114,128,0.12)", icon: "exit" },

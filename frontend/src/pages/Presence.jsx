@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw } from "lucide-react";
+import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee } from "lucide-react";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
 import StatusBadge from "../components/StatusBadge";
@@ -8,6 +8,7 @@ import { categoryLabel, formatDate } from "../utils";
 const FILTERS = [
   { key: "all", label: "All" },
   { key: "on_campus", label: "On Campus" },
+  { key: "temp_out", label: "Stepped Out" },
   { key: "exited", label: "Exited" },
   { key: "on_tour", label: "On Tour" },
   { key: "on_leave", label: "On Leave" },
@@ -58,8 +59,9 @@ export default function Presence() {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <StatCard label="On Campus" value={counts.on_campus || 0} color="#10B981" Icon={CheckCircle2} />
+        <StatCard label="Stepped Out" value={counts.temp_out || 0} color="#06B6D4" Icon={Coffee} />
         <StatCard label="On Tour" value={counts.on_tour || 0} color="#F97316" Icon={Plane} />
         <StatCard label="On Leave" value={counts.on_leave || 0} color="#F59E0B" Icon={Bed} />
         <StatCard label="Exited" value={counts.exited || 0} color="#6B7280" Icon={ExitIcon} />

@@ -288,6 +288,21 @@ class DeviceApproveIn(BaseModel):
     rank: Optional[str] = None
 
 
+
+class TempExitIn(BaseModel):
+    """Temporary exit during an open attendance session (e.g. lunch, errand)."""
+    reason: str = Field(min_length=1)
+    expected_return: Optional[str] = None  # ISO datetime OR HH:MM (office local)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+class TempReturnIn(BaseModel):
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+
 # ----------------------------------------------------------------------------
 # Geo helpers
 # ----------------------------------------------------------------------------
@@ -794,10 +809,123 @@ async def open_session_for(user_id: str) -> Optional[dict]:
     return await db.attendance.find_one({"user_id": user_id, "check_out_at": None}, {"_id": 0})
 
 
+def _excursion_seconds(excursions: List[dict], up_to: Optional[datetime] = None) -> float:
+    """Total away-seconds across closed excursions. If `up_to` is given, any still-open
+    excursion is treated as closing at that moment (used at final check-out)."""
+    total = 0.0
+    for e in (excursions or []):
+        if not e.get("out_at"):
+            continue
+        try:
+            o = datetime.fromisoformat(e["out_at"])
+        except Exception:
+            continue
+        end = None
+        if e.get("in_at"):
+            try: end = datetime.fromisoformat(e["in_at"])
+            except Exception: end = None
+        elif up_to is not None:
+            end = up_to
+        if end:
+            total += max(0.0, (end - o).total_seconds())
+    return total
+
+
+def _open_excursion(sess: dict) -> Optional[dict]:
+    for e in reversed(sess.get("excursions") or []):
+        if e.get("out_at") and not e.get("in_at"):
+            return e
+    return None
+
+
+
 @api_router.get("/attendance/status")
 async def my_attendance_status(user: dict = Depends(get_current_user)):
     sess = await open_session_for(user["id"])
-    return {"checked_in": sess is not None, "session": sess}
+    open_exc = _open_excursion(sess) if sess else None
+    return {
+        "checked_in": sess is not None,
+        "on_temp_exit": open_exc is not None,
+        "current_excursion": open_exc,
+        "session": sess,
+    }
+
+
+def _parse_expected_return(raw: Optional[str], office: Optional[dict], now: datetime) -> Optional[str]:
+    """Accept either an HH:MM (today, office-local) or a full ISO datetime. Returns ISO/UTC."""
+    if not raw:
+        return None
+    raw = raw.strip()
+    # HH:MM short form -> today @ HH:MM in office tz
+    if re.match(r"^\d{1,2}:\d{2}$", raw):
+        try:
+            h, m = (int(x) for x in raw.split(":"))
+            local_now_v = now.astimezone(office_tz(office))
+            cand = local_now_v.replace(hour=h, minute=m, second=0, microsecond=0)
+            if cand <= local_now_v:
+                cand = cand + timedelta(days=1)
+            return cand.astimezone(timezone.utc).isoformat()
+        except Exception:
+            return None
+    # Full ISO
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=office_tz(office))
+        return dt.astimezone(timezone.utc).isoformat()
+    except Exception:
+        return None
+
+
+@api_router.post("/attendance/temp-exit")
+async def temp_exit(body: TempExitIn, user: dict = Depends(get_current_user)):
+    """Member temporarily steps off campus (e.g. lunch, errand) — does NOT close the
+    session. Time spent away is deducted from logged hours at final check-out."""
+    sess = await open_session_for(user["id"])
+    if not sess:
+        raise HTTPException(status_code=400, detail="You are not checked in")
+    if _open_excursion(sess):
+        raise HTTPException(status_code=400, detail="You are already on a temporary exit")
+    office = await db.config.find_one({"id": "office"})
+    now = now_utc()
+    exc = {
+        "id": str(uuid.uuid4()),
+        "out_at": now.isoformat(),
+        "in_at": None,
+        "reason": body.reason.strip(),
+        "expected_return": _parse_expected_return(body.expected_return, office, now),
+        "out_latitude": body.latitude,
+        "out_longitude": body.longitude,
+    }
+    await db.attendance.update_one({"id": sess["id"]}, {"$push": {"excursions": exc}})
+    return {"ok": True, "excursion": exc}
+
+
+@api_router.post("/attendance/temp-return")
+async def temp_return(body: TempReturnIn, user: dict = Depends(get_current_user)):
+    """Member returns from a temporary exit and resumes the same session."""
+    sess = await open_session_for(user["id"])
+    if not sess:
+        raise HTTPException(status_code=400, detail="You are not checked in")
+    excursions = sess.get("excursions") or []
+    target = None
+    for e in reversed(excursions):
+        if e.get("out_at") and not e.get("in_at"):
+            target = e
+            break
+    if not target:
+        raise HTTPException(status_code=400, detail="No active temporary exit found")
+    now = now_utc()
+    target["in_at"] = now.isoformat()
+    target["in_latitude"] = body.latitude
+    target["in_longitude"] = body.longitude
+    if target.get("expected_return"):
+        try:
+            target["overdue_minutes"] = max(0, int((now - datetime.fromisoformat(target["expected_return"])).total_seconds() // 60))
+        except Exception:
+            pass
+    await db.attendance.update_one({"id": sess["id"]}, {"$set": {"excursions": excursions}})
+    return {"ok": True, "excursion": target}
 
 
 def geo_check(office: dict, lat: float, lng: float, reason: Optional[str]):
@@ -816,11 +944,22 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
     ts = now_utc()
     if sess:
         cin = datetime.fromisoformat(sess["check_in_at"])
-        hours = round((ts - cin).total_seconds() / 3600.0, 2)
+        excursions = sess.get("excursions") or []
+        # Auto-close a still-open excursion at this moment so net hours are correct.
+        for e in excursions:
+            if e.get("out_at") and not e.get("in_at"):
+                e["in_at"] = ts.isoformat()
+                e["in_latitude"] = lat
+                e["in_longitude"] = lng
+                e["auto_closed"] = True
+        away_s = _excursion_seconds(excursions)
+        hours = round(max(0.0, (ts - cin).total_seconds() - away_s) / 3600.0, 2)
         await db.attendance.update_one({"id": sess["id"]}, {"$set": {
             "check_out_at": ts.isoformat(),
             "check_out_photo": photo,
             "hours": hours,
+            "away_minutes": int(away_s / 60),
+            "excursions": excursions,
             "exit_latitude": lat,
             "exit_longitude": lng,
             "exit_distance_m": dist,
@@ -888,10 +1027,20 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
     ts = now_utc()
     if sess:
         cin = datetime.fromisoformat(sess["check_in_at"])
-        hours = round((ts - cin).total_seconds() / 3600.0, 2)
+        excursions = sess.get("excursions") or []
+        for e in excursions:
+            if e.get("out_at") and not e.get("in_at"):
+                e["in_at"] = ts.isoformat()
+                e["in_latitude"] = lat
+                e["in_longitude"] = lng
+                e["auto_closed"] = True
+        away_s = _excursion_seconds(excursions)
+        hours = round(max(0.0, (ts - cin).total_seconds() - away_s) / 3600.0, 2)
         await db.attendance.update_one({"id": sess["id"]}, {"$set": {
             "check_out_at": ts.isoformat(),
             "hours": hours,
+            "away_minutes": int(away_s / 60),
+            "excursions": excursions,
             "exit_latitude": lat, "exit_longitude": lng,
             "exit_distance_m": dist, "exit_out_of_geofence": out,
             "exit_reason": (reason or None),
@@ -1034,10 +1183,17 @@ async def presence(user: dict = Depends(get_current_user)):
             since = leave["start_date"]
             photo = u.get("photo")
         elif sess:
-            status_v = "on_campus"
-            detail = "Since " + local_hm(office, sess["check_in_at"])
-            since = sess["check_in_at"]
-            photo = sess.get("check_in_photo") or u.get("photo")
+            open_exc = _open_excursion(sess)
+            if open_exc:
+                status_v = "temp_out"
+                detail = (open_exc.get("reason") or "Stepped out") + " · since " + local_hm(office, open_exc.get("out_at"))
+                since = open_exc.get("out_at")
+                photo = u.get("photo")
+            else:
+                status_v = "on_campus"
+                detail = "Since " + local_hm(office, sess["check_in_at"])
+                since = sess["check_in_at"]
+                photo = sess.get("check_in_photo") or u.get("photo")
         else:
             last = last_map.get(u["id"])
             status_v = "exited"
@@ -1061,10 +1217,11 @@ async def presence(user: dict = Depends(get_current_user)):
             "photo": photo,
             "flagged": bool(sess and sess.get("out_of_geofence") and status_v == "on_campus"),
             "late": bool(sess and sess.get("late") and status_v == "on_campus"),
+            "expected_return": (_open_excursion(sess) or {}).get("expected_return") if sess else None,
         })
-    order = {"on_campus": 0, "on_tour": 1, "on_leave": 2, "exited": 3}
+    order = {"on_campus": 0, "temp_out": 1, "on_tour": 2, "on_leave": 3, "exited": 4}
     result.sort(key=lambda r: (order.get(r["status"], 9), r["full_name"]))
-    counts = {"on_campus": 0, "exited": 0, "on_tour": 0, "on_leave": 0, "total": len(result)}
+    counts = {"on_campus": 0, "temp_out": 0, "exited": 0, "on_tour": 0, "on_leave": 0, "total": len(result)}
     for r in result:
         counts[r["status"]] = counts.get(r["status"], 0) + 1
     return {"members": result, "counts": counts, "date": today}
@@ -1156,6 +1313,102 @@ async def my_stats(user: dict = Depends(get_current_user)):
         "pending_leaves": pending_leaves,
         "recent": recent,
     }
+
+
+# ----------------------------------------------------------------------------
+# Daily sessions table — one row per member per day with full excursion timeline
+# ----------------------------------------------------------------------------
+@api_router.get("/admin/sessions")
+async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require_admin)):
+    office = await db.config.find_one({"id": "office"})
+    if not on:
+        on = local_date_str(office)
+
+    sessions = await db.attendance.find({"date": on}, {"_id": 0}).sort("check_in_at", 1).to_list(2000)
+    user_ids = list({s["user_id"] for s in sessions})
+    users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0}).to_list(2000)
+    umap = {u["id"]: u for u in users}
+    now = now_utc()
+
+    rows: List[dict] = []
+    for s in sessions:
+        u = umap.get(s["user_id"], {})
+        excursions = s.get("excursions") or []
+        # Decorate excursions with derived fields.
+        excs_out: List[dict] = []
+        for e in excursions:
+            out_iso = e.get("out_at")
+            in_iso = e.get("in_at")
+            duration_min = None
+            if out_iso and in_iso:
+                try:
+                    duration_min = max(0, int((datetime.fromisoformat(in_iso) - datetime.fromisoformat(out_iso)).total_seconds() // 60))
+                except Exception: pass
+            overdue_min = None
+            if e.get("expected_return"):
+                try:
+                    er = datetime.fromisoformat(e["expected_return"])
+                    ref = datetime.fromisoformat(in_iso) if in_iso else now
+                    diff = int((ref - er).total_seconds() // 60)
+                    overdue_min = max(0, diff)
+                except Exception: pass
+            excs_out.append({
+                "id": e.get("id"),
+                "out_at": out_iso,
+                "out_time": local_hm(office, out_iso),
+                "in_at": in_iso,
+                "in_time": local_hm(office, in_iso) if in_iso else "",
+                "reason": e.get("reason"),
+                "expected_return": e.get("expected_return"),
+                "expected_return_time": local_hm(office, e.get("expected_return")) if e.get("expected_return") else "",
+                "duration_min": duration_min,
+                "overdue_min": overdue_min,
+                "open": not bool(in_iso),
+            })
+
+        # Net session/away/hours (live for open sessions).
+        cin = datetime.fromisoformat(s["check_in_at"])
+        cout = datetime.fromisoformat(s["check_out_at"]) if s.get("check_out_at") else None
+        end_ref = cout or now
+        away_s = _excursion_seconds(excursions, up_to=end_ref if not cout else None)
+        gross_s = max(0.0, (end_ref - cin).total_seconds())
+        net_hours = round(max(0.0, gross_s - away_s) / 3600.0, 2)
+
+        rows.append({
+            "session_id": s["id"],
+            "member_id": s["user_id"],
+            "member_name": u.get("full_name", "Unknown"),
+            "member_category": u.get("category"),
+            "member_rank": u.get("rank"),
+            "photo": u.get("photo"),
+            "check_in_at": s["check_in_at"],
+            "check_in_time": local_hm(office, s["check_in_at"]),
+            "check_out_at": s.get("check_out_at"),
+            "check_out_time": local_hm(office, s["check_out_at"]) if s.get("check_out_at") else "",
+            "method": s.get("method"),
+            "late": bool(s.get("late")),
+            "late_minutes": s.get("late_minutes") or 0,
+            "out_of_geofence": bool(s.get("out_of_geofence")),
+            "open": s.get("check_out_at") is None,
+            "on_temp_exit": s.get("check_out_at") is None and any(e["open"] for e in excs_out),
+            "excursions": excs_out,
+            "excursion_count": len(excs_out),
+            "away_minutes": int(away_s / 60),
+            "net_hours": net_hours,
+            "stored_hours": s.get("hours"),
+        })
+
+    rows.sort(key=lambda r: (not r["open"], r["check_in_at"]))
+    counts = {
+        "members": len(rows),
+        "open": sum(1 for r in rows if r["open"]),
+        "on_temp_exit": sum(1 for r in rows if r["on_temp_exit"]),
+        "closed": sum(1 for r in rows if not r["open"]),
+        "total_excursions": sum(r["excursion_count"] for r in rows),
+    }
+    return {"date": on, "timezone": (office or {}).get("timezone") or DEFAULT_TZ, "rows": rows, "counts": counts}
+
+
 
 
 # ----------------------------------------------------------------------------
@@ -1260,6 +1513,33 @@ async def admin_activity(admin: dict = Depends(require_admin)):
                           + (" · Off-site" if a.get("exit_out_of_geofence") else ""),
                 "method": a.get("exit_method") or a.get("method"),
             })
+        # Temporary excursions (lunch / errand etc.)
+        for e in (a.get("excursions") or []):
+            if e.get("out_at"):
+                events.append({
+                    "id": f"tempout-{e.get('id', a['id'])}",
+                    "type": "temp_exit",
+                    "at": e["out_at"],
+                    "member_id": a.get("user_id"),
+                    "member_name": u.get("full_name", "Unknown"),
+                    "member_category": u.get("category"),
+                    "member_rank": u.get("rank"),
+                    "photo": u.get("photo"),
+                    "detail": "Temp exit · " + (e.get("reason") or "")
+                              + (f" · expected {local_hm(office, e.get('expected_return'))}" if e.get("expected_return") else ""),
+                })
+            if e.get("in_at"):
+                events.append({
+                    "id": f"tempin-{e.get('id', a['id'])}",
+                    "type": "temp_return",
+                    "at": e["in_at"],
+                    "member_id": a.get("user_id"),
+                    "member_name": u.get("full_name", "Unknown"),
+                    "member_category": u.get("category"),
+                    "member_rank": u.get("rank"),
+                    "photo": u.get("photo"),
+                    "detail": "Returned" + (f" · {int((datetime.fromisoformat(e['in_at']) - datetime.fromisoformat(e['out_at'])).total_seconds() // 60)}m away" if e.get("out_at") else ""),
+                })
 
     for l in leaves_today:
         u = umap.get(l.get("user_id"), {})
@@ -1302,6 +1582,8 @@ async def admin_activity(admin: dict = Depends(require_admin)):
         "counts": {
             "check_in": sum(1 for e in events if e["type"] == "check_in"),
             "check_out": sum(1 for e in events if e["type"] == "check_out"),
+            "temp_exit": sum(1 for e in events if e["type"] == "temp_exit"),
+            "temp_return": sum(1 for e in events if e["type"] == "temp_return"),
             "applications": sum(1 for e in events if e["type"] == "application"),
             "access_requests": sum(1 for e in events if e["type"] == "access_request"),
             "total": len(events),

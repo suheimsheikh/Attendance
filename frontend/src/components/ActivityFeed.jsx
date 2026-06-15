@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { LogIn, LogOut, Bed, Plane, IdCard, Clock, RefreshCw, Loader2 } from "lucide-react";
+import { LogIn, LogOut, Bed, Plane, IdCard, Clock, RefreshCw, Loader2, Coffee, ArrowLeftRight } from "lucide-react";
 import { api } from "../api";
 import Avatar from "./Avatar";
 import { categoryLabel } from "../utils";
@@ -7,6 +7,8 @@ import { categoryLabel } from "../utils";
 const TYPE_META = {
   check_in:        { label: "Check-in",   Icon: LogIn,   color: "#10B981" },
   check_out:       { label: "Check-out",  Icon: LogOut,  color: "#6B7280" },
+  temp_exit:       { label: "Temp exit",  Icon: Coffee,  color: "#06B6D4" },
+  temp_return:     { label: "Returned",   Icon: ArrowLeftRight, color: "#0EA5E9" },
   application:     { label: "Application", Icon: Bed,    color: "#F59E0B" },
   access_request:  { label: "Access",     Icon: IdCard,  color: "#0EA5E9" },
 };
@@ -15,6 +17,8 @@ const FILTERS = [
   { key: "all", label: "All" },
   { key: "check_in", label: "Check-ins" },
   { key: "check_out", label: "Check-outs" },
+  { key: "temp_exit", label: "Temp exits" },
+  { key: "temp_return", label: "Returns" },
   { key: "application", label: "Applications" },
   { key: "access_request", label: "Access requests" },
 ];

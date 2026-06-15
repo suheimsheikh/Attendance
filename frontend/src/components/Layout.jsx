@@ -4,7 +4,7 @@ import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, QrCode, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, ClipboardList, Building2, IdCard, FileSpreadsheet,
-  ShieldCheck, LogOut, Menu, X, Anchor
+  ShieldCheck, LogOut, Menu, X, Anchor, ListTree
 } from "lucide-react";
 import Avatar from "./Avatar";
 
@@ -17,6 +17,7 @@ const NAV_MEMBER = [
 
 const NAV_ADMIN = [
   { to: "/admin", label: "Admin Console", icon: ShieldCheck, end: true },
+  { to: "/admin/sessions", label: "Daily Sessions", icon: ListTree },
   { to: "/admin/members", label: "Members", icon: Users },
   { to: "/admin/leaves", label: "Leave Approvals", icon: ClipboardList },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },

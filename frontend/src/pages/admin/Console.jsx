@@ -20,6 +20,7 @@ export default function AdminConsole() {
   ];
 
   const links = [
+    { to: "/admin/sessions", label: "Daily sessions", desc: "Check-in, temp exits/returns & final check-out in one table" },
     { to: "/admin/members", label: "Manage members", desc: "Add, edit, deactivate members" },
     { to: "/admin/leaves", label: "Approve leaves", desc: "Review pending leave & tour requests" },
     { to: "/admin/devices", label: "Access requests", desc: "Approve new browser/device sign-ins" },

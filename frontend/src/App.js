@@ -15,6 +15,7 @@ import Devices from "./pages/admin/Devices";
 import OfficeSettings from "./pages/admin/Office";
 import OfficeQR from "./pages/admin/OfficeQR";
 import Reports from "./pages/admin/Reports";
+import Sessions from "./pages/admin/Sessions";
 import ImportMembers from "./pages/admin/ImportMembers";
 import Cards from "./pages/admin/Cards";
 import { Loader2 } from "lucide-react";
@@ -61,6 +62,7 @@ function App() {
             <Route path="admin/office" element={<RequireAdmin><OfficeSettings /></RequireAdmin>} />
             <Route path="admin/office-qr" element={<RequireAdmin><OfficeQR /></RequireAdmin>} />
             <Route path="admin/reports" element={<RequireAdmin><Reports /></RequireAdmin>} />
+            <Route path="admin/sessions" element={<RequireAdmin><Sessions /></RequireAdmin>} />
             <Route path="admin/import" element={<RequireAdmin><ImportMembers /></RequireAdmin>} />
             <Route path="admin/cards" element={<RequireAdmin><Cards /></RequireAdmin>} />
           </Route>
