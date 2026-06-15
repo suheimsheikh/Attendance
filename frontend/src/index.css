@@ -2,114 +2,105 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --surface: #F9F9FB;
+  --on-surface: #111827;
+  --surface-2: #FFFFFF;
+  --surface-3: #F3F4F6;
+  --muted-fg: #6B7280;
+  --brand: #111827;
+  --brand-2: #1F2937;
+  --brand-3: #374151;
+  --border-c: #E5E7EB;
+  --border-strong: #D1D5DB;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --info: #F97316;
+  --error: #EF4444;
+}
+
 body {
-    margin: 0;
-    font-family:
-        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-        "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-        sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--surface);
+  color: var(--on-surface);
 }
 
-code {
-    font-family:
-        source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+* { box-sizing: border-box; }
+
+/* Reusable primitives via @layer so tailwind utilities can still override */
+@layer components {
+  .iu-card {
+    @apply bg-white rounded-xl border border-slate-200 shadow-sm;
+  }
+  .iu-input {
+    @apply w-full h-11 px-3.5 rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition;
+  }
+  .iu-label {
+    @apply block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide;
+  }
+  .iu-btn {
+    @apply inline-flex items-center justify-center gap-2 h-11 px-5 rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .iu-btn-primary { @apply iu-btn bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-700; }
+  .iu-btn-secondary { @apply iu-btn bg-white border border-slate-200 text-slate-900 hover:bg-slate-50; }
+  .iu-btn-danger { @apply iu-btn bg-red-600 text-white hover:bg-red-700; }
+  .iu-btn-ghost { @apply iu-btn bg-transparent text-slate-700 hover:bg-slate-100; }
+  .iu-chip {
+    @apply inline-flex items-center gap-1.5 px-3 h-8 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200;
+  }
+  .iu-chip-active {
+    @apply bg-slate-900 text-white border-slate-900;
+  }
+  .iu-table-th {
+    @apply text-left text-xs font-semibold uppercase tracking-wide text-slate-500 py-3 px-4;
+  }
+  .iu-table-td {
+    @apply text-sm text-slate-700 py-3 px-4 border-t border-slate-100;
+  }
+}
+
+/* Subtle scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+/* QR scanner: hide the html5-qrcode library's UI we don't need */
+#qr-reader__dashboard_section_csr button {
+  display: none !important;
+}
+#qr-reader__filescan_input { display: none !important; }
+#qr-reader__dashboard_section_swaplink { color: var(--muted-fg); font-size: 12px !important; }
+#qr-reader__scan_region img { display: none !important; }
+#qr-reader__header_message { font-size: 12px !important; color: var(--muted-fg) !important; }
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 47% 11%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 222 47% 11%;
+    --radius: 0.5rem;
+  }
 }
 
 @layer base {
-    :root {
-        --background: 0 0% 100%;
-        --foreground: 0 0% 3.9%;
-        --card: 0 0% 100%;
-        --card-foreground: 0 0% 3.9%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 0 0% 3.9%;
-        --primary: 0 0% 9%;
-        --primary-foreground: 0 0% 98%;
-        --secondary: 0 0% 96.1%;
-        --secondary-foreground: 0 0% 9%;
-        --muted: 0 0% 96.1%;
-        --muted-foreground: 0 0% 45.1%;
-        --accent: 0 0% 96.1%;
-        --accent-foreground: 0 0% 9%;
-        --destructive: 0 84.2% 60.2%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 89.8%;
-        --input: 0 0% 89.8%;
-        --ring: 0 0% 3.9%;
-        --chart-1: 12 76% 61%;
-        --chart-2: 173 58% 39%;
-        --chart-3: 197 37% 24%;
-        --chart-4: 43 74% 66%;
-        --chart-5: 27 87% 67%;
-        --radius: 0.5rem;
-    }
-    .dark {
-        --background: 0 0% 3.9%;
-        --foreground: 0 0% 98%;
-        --card: 0 0% 3.9%;
-        --card-foreground: 0 0% 98%;
-        --popover: 0 0% 3.9%;
-        --popover-foreground: 0 0% 98%;
-        --primary: 0 0% 98%;
-        --primary-foreground: 0 0% 9%;
-        --secondary: 0 0% 14.9%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 0 0% 14.9%;
-        --muted-foreground: 0 0% 63.9%;
-        --accent: 0 0% 14.9%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 0 62.8% 30.6%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 14.9%;
-        --input: 0 0% 14.9%;
-        --ring: 0 0% 83.1%;
-        --chart-1: 220 70% 50%;
-        --chart-2: 160 60% 45%;
-        --chart-3: 30 80% 55%;
-        --chart-4: 280 65% 60%;
-        --chart-5: 340 75% 55%;
-    }
-}
-
-@layer base {
-    * {
-        @apply border-border;
-    }
-    body {
-        @apply bg-background text-foreground;
-    }
-}
-
-@layer base {
-    [data-debug-wrapper="true"] {
-        display: contents !important;
-    }
-
-    [data-debug-wrapper="true"] > * {
-        margin-left: inherit;
-        margin-right: inherit;
-        margin-top: inherit;
-        margin-bottom: inherit;
-        padding-left: inherit;
-        padding-right: inherit;
-        padding-top: inherit;
-        padding-bottom: inherit;
-        column-gap: inherit;
-        row-gap: inherit;
-        gap: inherit;
-        border-left-width: inherit;
-        border-right-width: inherit;
-        border-top-width: inherit;
-        border-bottom-width: inherit;
-        border-left-style: inherit;
-        border-right-style: inherit;
-        border-top-style: inherit;
-        border-bottom-style: inherit;
-        border-left-color: inherit;
-        border-right-color: inherit;
-        border-top-color: inherit;
-        border-bottom-color: inherit;
-    }
+  body { @apply bg-background text-foreground; }
 }
