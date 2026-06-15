@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Users, CalendarCheck2, Plane, Clock, ShieldCheck, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
+import ActivityFeed from "../../components/ActivityFeed";
 
 export default function AdminConsole() {
   const [summary, setSummary] = useState(null);
@@ -49,7 +50,7 @@ export default function AdminConsole() {
       </div>
 
       <h2 className="font-extrabold tracking-tight mb-3">Quick actions</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
         {links.map((l) => (
           <Link key={l.to} to={l.to} className="iu-card p-4 hover:shadow-md transition flex items-center" data-testid={`link-${l.to.replace(/\W+/g, "-")}`}>
             <div className="flex-1">
@@ -60,6 +61,8 @@ export default function AdminConsole() {
           </Link>
         ))}
       </div>
+
+      <ActivityFeed />
     </div>
   );
 }

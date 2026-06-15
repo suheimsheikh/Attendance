@@ -1184,6 +1184,134 @@ async def admin_summary(admin: dict = Depends(require_admin)):
 
 
 # ----------------------------------------------------------------------------
+# Live activity feed (today only — auto-resets each midnight in office tz)
+# ----------------------------------------------------------------------------
+@api_router.get("/admin/activity")
+async def admin_activity(admin: dict = Depends(require_admin)):
+    """Today's events in the office timezone: check-ins, check-outs, leave/tour
+    applications, and device access requests. Sorted newest-first."""
+    office = await db.config.find_one({"id": "office"})
+    today_local = local_date_str(office)  # YYYY-MM-DD in office tz
+
+    # Office tz start-of-today (UTC). We compare against UTC-ISO timestamps stored in DB.
+    tz = office_tz(office)
+    start_local = datetime.fromisoformat(today_local + "T00:00:00").replace(tzinfo=tz)
+    start_utc = start_local.astimezone(timezone.utc).isoformat()
+
+    # Pull today's attendance rows (already keyed by office-local date) — covers check-ins.
+    atts = await db.attendance.find({"date": today_local}, {"_id": 0}).to_list(2000)
+    # Plus any sessions that *checked out* today even if check-in was earlier (rare overnight case).
+    extra_outs = await db.attendance.find(
+        {"check_out_at": {"$gte": start_utc}, "date": {"$ne": today_local}},
+        {"_id": 0}
+    ).to_list(2000)
+    all_atts = atts + extra_outs
+
+    # Today's leave/tour submissions (regardless of approval state).
+    leaves_today = await db.leaves.find(
+        {"created_at": {"$gte": start_utc}}, {"_id": 0}
+    ).to_list(2000)
+
+    # Today's device sign-in requests.
+    devices_today = await db.devices.find(
+        {"created_at": {"$gte": start_utc}}, {"_id": 0}
+    ).to_list(2000)
+
+    # Resolve member names in one batch.
+    user_ids = set()
+    for a in all_atts:
+        if a.get("user_id"): user_ids.add(a["user_id"])
+    for l in leaves_today:
+        if l.get("user_id"): user_ids.add(l["user_id"])
+    for d in devices_today:
+        if d.get("user_id"): user_ids.add(d["user_id"])
+    users = await db.users.find({"id": {"$in": list(user_ids)}}, {"_id": 0}).to_list(2000)
+    umap = {u["id"]: u for u in users}
+
+    events: List[dict] = []
+
+    for a in all_atts:
+        u = umap.get(a.get("user_id"), {})
+        if a.get("check_in_at"):
+            events.append({
+                "id": f"checkin-{a['id']}",
+                "type": "check_in",
+                "at": a["check_in_at"],
+                "member_id": a.get("user_id"),
+                "member_name": u.get("full_name", "Unknown"),
+                "member_category": u.get("category"),
+                "member_rank": u.get("rank"),
+                "photo": u.get("photo"),
+                "detail": "Checked in" + (f" · Late {a.get('late_minutes')}m" if a.get("late") else "")
+                          + (" · Off-site" if a.get("out_of_geofence") else ""),
+                "method": a.get("method"),
+            })
+        if a.get("check_out_at"):
+            events.append({
+                "id": f"checkout-{a['id']}",
+                "type": "check_out",
+                "at": a["check_out_at"],
+                "member_id": a.get("user_id"),
+                "member_name": u.get("full_name", "Unknown"),
+                "member_category": u.get("category"),
+                "member_rank": u.get("rank"),
+                "photo": u.get("photo"),
+                "detail": f"Checked out · {a.get('hours', '?')}h"
+                          + (" · Off-site" if a.get("exit_out_of_geofence") else ""),
+                "method": a.get("exit_method") or a.get("method"),
+            })
+
+    for l in leaves_today:
+        u = umap.get(l.get("user_id"), {})
+        events.append({
+            "id": f"leave-{l['id']}",
+            "type": "application",
+            "subtype": l.get("type"),  # leave | tour
+            "at": l.get("created_at"),
+            "member_id": l.get("user_id"),
+            "member_name": u.get("full_name", "Unknown"),
+            "member_category": u.get("category"),
+            "member_rank": u.get("rank"),
+            "photo": u.get("photo"),
+            "detail": f"Applied for {l.get('type', 'leave')}"
+                      + (f" · {l.get('start_date')} → {l.get('end_date')}" if l.get("start_date") else "")
+                      + (f" · {l.get('location')}" if l.get("location") else ""),
+            "status": l.get("status"),
+        })
+
+    for d in devices_today:
+        u = umap.get(d.get("user_id"), {})
+        events.append({
+            "id": f"device-{d['id']}",
+            "type": "access_request",
+            "at": d.get("created_at"),
+            "member_id": d.get("user_id"),
+            "member_name": u.get("full_name") or (f"Unmatched · {d.get('phone')}" if d.get("phone") else "Unknown device"),
+            "member_category": u.get("category"),
+            "member_rank": u.get("rank"),
+            "photo": u.get("photo"),
+            "detail": f"New sign-in request · {d.get('device_name') or d.get('platform') or 'device'}",
+            "status": d.get("status"),
+        })
+
+    events.sort(key=lambda e: e.get("at") or "", reverse=True)
+    return {
+        "date": today_local,
+        "timezone": (office or {}).get("timezone") or DEFAULT_TZ,
+        "events": events,
+        "counts": {
+            "check_in": sum(1 for e in events if e["type"] == "check_in"),
+            "check_out": sum(1 for e in events if e["type"] == "check_out"),
+            "applications": sum(1 for e in events if e["type"] == "application"),
+            "access_requests": sum(1 for e in events if e["type"] == "access_request"),
+            "total": len(events),
+        },
+    }
+
+
+
+
+# ----------------------------------------------------------------------------
 # Reports
 # ----------------------------------------------------------------------------
 async def compute_hours_report(start: str, end: str) -> List[dict]:
