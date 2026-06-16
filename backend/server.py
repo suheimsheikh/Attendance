@@ -1337,6 +1337,156 @@ async def my_stats(user: dict = Depends(get_current_user)):
 
 
 # ----------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------
+# Muster roll — bulk check-in/out for sailors performed by a coach or admin.
+# Sailors typically don't have phones; a coach physically musters them and
+# ticks who's present (or who's departing).
+# ----------------------------------------------------------------------------
+def _can_muster(user: dict) -> bool:
+    return user.get("role") == "admin" or user.get("category") == "coach"
+
+
+def _require_muster(user: dict) -> None:
+    if not _can_muster(user):
+        raise HTTPException(status_code=403, detail="Only coaches and admins can run muster")
+
+
+class MusterBulkIn(BaseModel):
+    sailor_ids: List[str]
+
+
+@api_router.get("/muster/sailors")
+async def muster_sailors(mode: str = "checkin", user: dict = Depends(get_current_user)):
+    """List sailors eligible for the given muster mode:
+       checkin  → sailors not currently on-campus AND not on leave/tour AND not
+                  already closed-out today
+       checkout → sailors currently checked in (open session)
+    """
+    _require_muster(user)
+    if mode not in ("checkin", "checkout"):
+        raise HTTPException(status_code=400, detail="mode must be 'checkin' or 'checkout'")
+
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+
+    sailors = await db.users.find({"category": "sailor"}, {"_id": 0}).to_list(2000)
+
+    open_sessions = await db.attendance.find({"check_out_at": None}, {"_id": 0, "user_id": 1}).to_list(2000)
+    open_ids = {s["user_id"] for s in open_sessions}
+
+    closed_today = await db.attendance.find(
+        {"date": today, "check_out_at": {"$ne": None}},
+        {"_id": 0, "user_id": 1},
+    ).to_list(2000)
+    closed_today_ids = {s["user_id"] for s in closed_today}
+
+    on_leave = await db.leaves.find(
+        {"status": "approved", "start_date": {"$lte": today}, "end_date": {"$gte": today}},
+        {"_id": 0, "user_id": 1},
+    ).to_list(2000)
+    on_leave_ids = {l["user_id"] for l in on_leave}
+
+    out: List[dict] = []
+    for s in sailors:
+        sid = s["id"]
+        if mode == "checkin":
+            if sid in open_ids or sid in on_leave_ids or sid in closed_today_ids:
+                continue
+        else:  # checkout
+            if sid not in open_ids:
+                continue
+        out.append({
+            "id": sid,
+            "full_name": s["full_name"],
+            "rank": s.get("rank"),
+            "photo": s.get("photo"),
+        })
+
+    out.sort(key=lambda x: (x["full_name"] or "").lower())
+    return {"mode": mode, "date": today, "sailors": out, "count": len(out)}
+
+
+@api_router.post("/muster/checkin-bulk")
+async def muster_checkin_bulk(body: MusterBulkIn, user: dict = Depends(get_current_user)):
+    _require_muster(user)
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+    now = now_utc()
+    done, skipped = [], []
+    for sid in body.sailor_ids:
+        sailor = await db.users.find_one({"id": sid, "category": "sailor"}, {"_id": 0})
+        if not sailor:
+            skipped.append({"id": sid, "reason": "not a sailor"})
+            continue
+        if await db.attendance.find_one({"user_id": sid, "check_out_at": None}):
+            skipped.append({"id": sid, "name": sailor["full_name"], "reason": "already checked in"})
+            continue
+        late, late_min = compute_late(office, sailor, now)
+        att = {
+            "id": str(uuid.uuid4()),
+            "user_id": sid,
+            "date": today,
+            "check_in_at": now.isoformat(),
+            "check_in_photo": None,
+            "check_out_at": None,
+            "method": "muster",
+            "checked_in_by": user["full_name"],
+            "checked_in_by_id": user["id"],
+            "latitude": None,
+            "longitude": None,
+            "out_of_geofence": False,
+            "distance_m": 0,
+            "late": late,
+            "late_minutes": late_min,
+            "excursions": [],
+            "created_at": now.isoformat(),
+        }
+        await db.attendance.insert_one(att)
+        done.append({"id": sid, "name": sailor["full_name"], "late": late})
+    return {"checked_in_count": len(done), "skipped_count": len(skipped), "checked_in": done, "skipped": skipped}
+
+
+@api_router.post("/muster/checkout-bulk")
+async def muster_checkout_bulk(body: MusterBulkIn, user: dict = Depends(get_current_user)):
+    _require_muster(user)
+    now = now_utc()
+    done, skipped = [], []
+    for sid in body.sailor_ids:
+        sailor = await db.users.find_one({"id": sid, "category": "sailor"}, {"_id": 0})
+        if not sailor:
+            skipped.append({"id": sid, "reason": "not a sailor"})
+            continue
+        sess = await db.attendance.find_one({"user_id": sid, "check_out_at": None}, {"_id": 0})
+        if not sess:
+            skipped.append({"id": sid, "name": sailor["full_name"], "reason": "not checked in"})
+            continue
+        cin = datetime.fromisoformat(sess["check_in_at"])
+        excursions = sess.get("excursions") or []
+        for e in excursions:
+            if e.get("out_at") and not e.get("in_at"):
+                e["in_at"] = now.isoformat()
+                e["auto_closed"] = True
+        away_s = _excursion_seconds(excursions)
+        hours = round((now - cin).total_seconds() / 3600.0, 2)
+        await db.attendance.update_one({"id": sess["id"]}, {"$set": {
+            "check_out_at": now.isoformat(),
+            "hours": hours,
+            "away_minutes": int(away_s / 60),
+            "excursions": excursions,
+            "exit_method": "muster",
+            "exit_out_of_geofence": False,
+            "exit_latitude": None,
+            "exit_longitude": None,
+            "exit_distance_m": 0,
+            "checked_out_by": user["full_name"],
+            "checked_out_by_id": user["id"],
+        }})
+        done.append({"id": sid, "name": sailor["full_name"], "hours": hours})
+    return {"checked_out_count": len(done), "skipped_count": len(skipped), "checked_out": done, "skipped": skipped}
+
+
 # Daily sessions table — one row per member per day with full excursion timeline
 # ----------------------------------------------------------------------------
 @api_router.get("/admin/sessions")

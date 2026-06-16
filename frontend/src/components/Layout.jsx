@@ -4,7 +4,7 @@ import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, QrCode, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, ClipboardList, Building2, IdCard, FileSpreadsheet,
-  ShieldCheck, LogOut, Menu, X, Anchor, ListTree
+  ShieldCheck, LogOut, Menu, X, Anchor, ListTree, ClipboardCheck
 } from "lucide-react";
 import Avatar from "./Avatar";
 
@@ -33,6 +33,7 @@ export default function Layout() {
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const isAdmin = user?.role === "admin";
+  const canMuster = isAdmin || user?.category === "coach";
 
   const handleLogout = () => {
     logout();
@@ -56,6 +57,14 @@ export default function Layout() {
         {NAV_MEMBER.map((item) => (
           <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
         ))}
+        {canMuster && (
+          <NavItem
+            to="/muster"
+            label="Muster Roll"
+            icon={ClipboardCheck}
+            onClick={() => setOpen(false)}
+          />
+        )}
         {isAdmin && (
           <>
             <div className="text-[10px] uppercase tracking-widest text-slate-500 px-3 py-2 mt-4">Admin</div>

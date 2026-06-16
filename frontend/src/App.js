@@ -9,6 +9,7 @@ import Presence from "./pages/Presence";
 import CheckIn from "./pages/CheckIn";
 import Profile from "./pages/Profile";
 import MyLeaves from "./pages/MyLeaves";
+import Muster from "./pages/Muster";
 import AdminConsole from "./pages/admin/Console";
 import Members from "./pages/admin/Members";
 import AdminLeaves from "./pages/admin/Leaves";
@@ -36,6 +37,14 @@ function RequireAdmin({ children }) {
   return children;
 }
 
+function RequireMuster({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <FullPageSpinner />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== "admin" && user.category !== "coach") return <Navigate to="/" replace />;
+  return children;
+}
+
 function FullPageSpinner() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50" data-testid="app-loading">
@@ -55,6 +64,7 @@ function App() {
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<Presence />} />
             <Route path="check-in" element={<CheckIn />} />
+            <Route path="muster" element={<RequireMuster><Muster /></RequireMuster>} />
             <Route path="my-leaves" element={<MyLeaves />} />
             <Route path="profile" element={<Profile />} />
             <Route path="admin" element={<RequireAdmin><AdminConsole /></RequireAdmin>} />
