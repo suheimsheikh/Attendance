@@ -67,33 +67,8 @@ body {
 ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
 
-/* QR scanner: hide the html5-qrcode library's UI we don't need */
-#qr-reader__dashboard_section_csr button {
-  display: none !important;
-}
-#qr-reader__filescan_input { display: none !important; }
-#qr-reader__dashboard_section_swaplink { color: var(--muted-fg); font-size: 12px !important; }
-#qr-reader__scan_region img { display: none !important; }
-#qr-reader__header_message { font-size: 12px !important; color: var(--muted-fg) !important; }
-
-/* Force the html5-qrcode injected <video> to cover our square container so the
-   camera feed doesn't render with weird letterboxing or "double-view" on tall
-   Android screens. */
-#qr-scanner-region video {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  display: block !important;
-}
-#qr-scanner-region canvas {
-  position: absolute !important;
-  top: 0; left: 0;
-  width: 100% !important;
-  height: 100% !important;
-}
-#qr-scanner-region {
-  position: relative;
-}
+/* (QR scanner now uses raw <video> + jsQR/BarcodeDetector — no html5-qrcode
+   container CSS needed.) */
 
 @layer base {
   :root {

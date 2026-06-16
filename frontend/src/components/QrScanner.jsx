@@ -1,103 +1,154 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import jsQR from "jsqr";
 
 /**
- * QR scanner via the user's webcam. Calls onScan(text) once per detection.
- * Stops after first successful scan unless `continuous` is set.
+ * Robust QR scanner.
  *
- * NOTE on error handling: html5-qrcode's lifecycle methods (start/stop/clear)
- * can throw synchronously OR return rejecting promises depending on the device
- * (notably Android Chrome). We wrap every call defensively so a failed teardown
- * never crashes the React tree.
+ * Uses raw getUserMedia + canvas + jsQR rather than html5-qrcode, which had
+ * detection issues on Android Chrome (camera turned on but never decoded).
+ * If the platform exposes a native BarcodeDetector (modern Chromium), we use
+ * that for higher accuracy + lower CPU; otherwise we fall back to jsQR.
+ *
+ * Props:
+ *   onScan(text)   — fired once with the decoded string (unless `continuous`)
+ *   onError(err)   — fired if the camera can't start at all
+ *   continuous     — keep scanning after first hit (default false)
  */
-export default function QrScanner({ onScan, onError, height = 320, continuous = false }) {
-  const ref = useRef(null);
-  const instanceRef = useRef(null);
-  const stoppedRef = useRef(false);
+export default function QrScanner({ onScan, onError, continuous = false }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const rafRef = useRef(null);
+  const scannedRef = useRef(false);
+  const detectorRef = useRef(null);
   const [status, setStatus] = useState("Requesting camera…");
-  const elementId = "qr-scanner-region";
-
-  // Defensive teardown — swallow ALL errors (sync + async).
-  const safeStop = async (inst) => {
-    if (!inst) return;
-    try {
-      const p = inst.stop();
-      if (p && typeof p.then === "function") {
-        await p.catch((e) => console.debug("qr.stop async failed:", e?.message || e));
-      }
-    } catch (e) {
-      console.debug("qr.stop sync failed:", e?.message || e);
-    }
-    try { inst.clear(); }
-    catch (e) { console.debug("qr.clear failed:", e?.message || e); }
-  };
+  const [framesScanned, setFramesScanned] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    const start = async () => {
-      const el = document.getElementById(elementId);
-      if (!el) return;
-      try {
-        const qr = new Html5Qrcode(elementId, { verbose: false });
-        instanceRef.current = qr;
-        // Responsive qrbox sized to the smaller dimension of the viewport so
-        // it can never exceed the video area (which caused the "two cameras"
-        // ghosting on some Android phones).
-        const qrboxFn = (viewfinderWidth, viewfinderHeight) => {
-          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-          const size = Math.max(160, Math.floor(minEdge * 0.75));
-          return { width: size, height: size };
-        };
-        const config = {
-          fps: 10,
-          qrbox: qrboxFn,
-          aspectRatio: 1.0,                // square viewport — matches qrbox & avoids stacking
-          disableFlip: false,
-          videoConstraints: { facingMode: { ideal: "environment" } },
-        };
 
-        const handleSuccess = (decoded) => {
-          // Guard: only fire onScan once. Don't call qr.stop() here —
-          // the parent will unmount us via state change, and our cleanup
-          // useEffect will tear the camera down safely.
-          if (stoppedRef.current) return;
-          stoppedRef.current = true;
-          try { onScan?.(decoded); }
-          catch (e) { console.debug("onScan handler threw:", e?.message || e); }
-        };
+    const stop = () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      const s = streamRef.current;
+      if (s) {
+        try { s.getTracks().forEach((t) => t.stop()); } catch (e) { console.debug("stop tracks failed:", e?.message); }
+        streamRef.current = null;
+      }
+    };
 
+    const fire = (text) => {
+      if (scannedRef.current && !continuous) return;
+      scannedRef.current = true;
+      try { onScan?.(text); }
+      catch (e) { console.debug("onScan handler threw:", e?.message); }
+      if (!continuous) stop();
+    };
+
+    const scanLoop = async () => {
+      if (cancelled || (scannedRef.current && !continuous)) return;
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas || video.readyState < 2 || !video.videoWidth) {
+        rafRef.current = requestAnimationFrame(scanLoop);
+        return;
+      }
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      // Native BarcodeDetector path (Chromium, very fast & accurate).
+      if (detectorRef.current) {
         try {
-          await qr.start({ facingMode: "environment" }, config, handleSuccess, () => {});
+          const codes = await detectorRef.current.detect(video);
+          if (codes && codes.length && codes[0].rawValue) {
+            fire(codes[0].rawValue);
+            return;
+          }
         } catch (e) {
-          // Fallback to user-facing camera (laptops / front-cam-only devices).
-          try {
-            await qr.start({ facingMode: "user" }, config, handleSuccess, () => {});
-          } catch (e2) {
-            throw e2;
+          // Fall through to jsQR if the detector throws on this frame.
+        }
+      } else {
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        try {
+          ctx.drawImage(video, 0, 0, w, h);
+          const imageData = ctx.getImageData(0, 0, w, h);
+          const code = jsQR(imageData.data, w, h, { inversionAttempts: "attemptBoth" });
+          if (code && code.data) {
+            fire(code.data);
+            return;
+          }
+        } catch (e) {
+          // Frame draw can transiently fail (e.g. between page-visibility
+          // toggles); just try the next animation tick.
+          console.debug("scan frame failed:", e?.message);
+        }
+      }
+      // Update diagnostic counter every ~10 frames (cheap, helps verify the
+      // loop is actually running).
+      if (Math.random() < 0.1) setFramesScanned((n) => n + 1);
+      rafRef.current = requestAnimationFrame(scanLoop);
+    };
+
+    const start = async () => {
+      // Prepare BarcodeDetector if the browser supports it.
+      try {
+        if (typeof window !== "undefined" && "BarcodeDetector" in window) {
+          const supported = await window.BarcodeDetector.getSupportedFormats?.();
+          if (!supported || supported.includes("qr_code")) {
+            detectorRef.current = new window.BarcodeDetector({ formats: ["qr_code"] });
           }
         }
-        if (!cancelled) setStatus("");
+      } catch (e) {
+        detectorRef.current = null;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        const video = videoRef.current;
+        if (!video) return;
+        video.srcObject = stream;
+        // iOS Safari requires both these attributes inline (not just JS prop).
+        video.setAttribute("playsinline", "true");
+        video.setAttribute("muted", "true");
+        await video.play();
+        if (!cancelled) {
+          setStatus("");
+          rafRef.current = requestAnimationFrame(scanLoop);
+        }
       } catch (err) {
         const msg = err?.message || String(err) || "Unknown camera error";
         const userMsg = /Permission|NotAllowed/i.test(msg)
           ? "Camera blocked — allow camera access for this site in your browser settings."
           : /NotFound|Requested device not found/i.test(msg)
           ? "No camera detected on this device — switch to GPS only."
-          : /NotReadable|in use/i.test(msg)
+          : /NotReadable|in use|AbortError/i.test(msg)
           ? "Camera is busy (another app may be using it). Close other apps and try again."
           : "Could not start camera. " + msg;
         setStatus(userMsg);
         try { onError?.(err); } catch (e) { console.debug("onError handler threw:", e?.message); }
       }
     };
+
     start();
     return () => {
       cancelled = true;
-      stoppedRef.current = true;
-      const inst = instanceRef.current;
-      instanceRef.current = null;
-      // Fire & forget — never await in a cleanup. Promise + sync errors swallowed.
-      safeStop(inst);
+      scannedRef.current = true;
+      stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -105,12 +156,9 @@ export default function QrScanner({ onScan, onError, height = 320, continuous = 
   return (
     <div className="w-full">
       <div
-        id={elementId}
-        ref={ref}
         data-testid="qr-scanner-region"
-        // Square, centered, capped width — gives html5-qrcode a clean viewport
-        // and prevents the "double-camera" ghosting on tall Android screens.
         style={{
+          position: "relative",
           width: "100%",
           maxWidth: 360,
           margin: "0 auto",
@@ -119,10 +167,31 @@ export default function QrScanner({ onScan, onError, height = 320, continuous = 
           borderRadius: 12,
           overflow: "hidden",
         }}
-      />
-      {status && (
-        <p className="mt-2 text-sm text-slate-600" data-testid="qr-scanner-status">{status}</p>
-      )}
+      >
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+        {/* Visual reticle so users know where to aim — the actual scan covers
+            the full video frame so even a QR outside the box still decodes. */}
+        <div
+          style={{
+            position: "absolute",
+            inset: "16%",
+            border: "3px solid rgba(255,255,255,0.65)",
+            borderRadius: 16,
+            boxShadow: "0 0 0 9999px rgba(15,23,42,0.35) inset",
+            pointerEvents: "none",
+          }}
+        />
+        <canvas ref={canvasRef} style={{ display: "none" }} />
+      </div>
+      <p className="mt-2 text-xs text-slate-500 text-center" data-testid="qr-scanner-status">
+        {status || (detectorRef.current ? "Scanning (native)…" : `Scanning… frames seen: ${framesScanned * 10}`)}
+      </p>
     </div>
   );
 }
