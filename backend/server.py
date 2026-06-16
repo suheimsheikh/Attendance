@@ -1391,12 +1391,6 @@ async def muster_sailors(mode: str = "checkin", user: dict = Depends(get_current
     open_sessions = await db.attendance.find({"check_out_at": None}, {"_id": 0, "user_id": 1}).to_list(2000)
     open_ids = {s["user_id"] for s in open_sessions}
 
-    closed_today = await db.attendance.find(
-        {"date": today, "check_out_at": {"$ne": None}},
-        {"_id": 0, "user_id": 1},
-    ).to_list(2000)
-    closed_today_ids = {s["user_id"] for s in closed_today}
-
     on_leave = await db.leaves.find(
         {"status": "approved", "start_date": {"$lte": today}, "end_date": {"$gte": today}},
         {"_id": 0, "user_id": 1},
@@ -1407,7 +1401,9 @@ async def muster_sailors(mode: str = "checkin", user: dict = Depends(get_current
     for s in sailors:
         sid = s["id"]
         if mode == "checkin":
-            if sid in open_ids or sid in on_leave_ids or sid in closed_today_ids:
+            # Sailor is eligible to check in if NOT currently on-campus and NOT on leave/tour.
+            # (Sailors who already checked out today CAN check in again for a second session.)
+            if sid in open_ids or sid in on_leave_ids:
                 continue
         else:  # checkout
             if sid not in open_ids:
@@ -1417,6 +1413,8 @@ async def muster_sailors(mode: str = "checkin", user: dict = Depends(get_current
             "full_name": s["full_name"],
             "rank": s.get("rank"),
             "photo": s.get("photo"),
+            "institution": s.get("institution"),
+            "gender": s.get("gender"),
         })
 
     out.sort(key=lambda x: (x["full_name"] or "").lower())

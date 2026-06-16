@@ -20,6 +20,7 @@ export default function Muster() {
   const [saving, setSaving] = useState(false);
 
   const meta = MODES.find((m) => m.key === mode);
+  const [institutionFilter, setInstitutionFilter] = useState("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,16 +36,41 @@ export default function Muster() {
   }, [mode]);
 
   useEffect(() => { load(); }, [load]);
+  // Reset institution filter when mode changes so the user always starts broad.
+  useEffect(() => { setInstitutionFilter("all"); }, [mode]);
+
+  // Distinct institutions present in the current roster (sorted, "(none)" last).
+  const institutions = useMemo(() => {
+    const set = new Map();  // name -> count
+    (data?.sailors || []).forEach((s) => {
+      const k = s.institution || "(no institution)";
+      set.set(k, (set.get(k) || 0) + 1);
+    });
+    const arr = Array.from(set.entries()).map(([name, count]) => ({ name, count }));
+    arr.sort((a, b) => {
+      if (a.name === "(no institution)") return 1;
+      if (b.name === "(no institution)") return -1;
+      return a.name.localeCompare(b.name);
+    });
+    return arr;
+  }, [data]);
 
   const filtered = useMemo(() => {
     const list = data?.sailors || [];
     const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((s) =>
-      (s.full_name || "").toLowerCase().includes(q) ||
-      (s.rank || "").toLowerCase().includes(q)
-    );
-  }, [data, search]);
+    return list.filter((s) => {
+      if (institutionFilter !== "all") {
+        const sInst = s.institution || "(no institution)";
+        if (sInst !== institutionFilter) return false;
+      }
+      if (!q) return true;
+      return (
+        (s.full_name || "").toLowerCase().includes(q) ||
+        (s.rank || "").toLowerCase().includes(q) ||
+        (s.institution || "").toLowerCase().includes(q)
+      );
+    });
+  }, [data, search, institutionFilter]);
 
   const toggle = (id) => {
     const next = new Set(picked);
@@ -109,6 +135,41 @@ export default function Muster() {
           </button>
         ))}
       </div>
+
+      {/* Institution filter chips */}
+      {institutions.length > 1 && (
+        <div
+          className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-1 px-1"
+          data-testid="muster-institution-filter"
+        >
+          <button
+            data-testid="muster-institution-all"
+            onClick={() => setInstitutionFilter("all")}
+            className={`iu-chip whitespace-nowrap shrink-0 ${institutionFilter === "all" ? "iu-chip-active" : ""}`}
+          >
+            All
+            <span className={`min-w-[22px] h-5 px-1.5 rounded-full text-[10px] flex items-center justify-center ${institutionFilter === "all" ? "bg-white/20 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>
+              {(data?.sailors || []).length}
+            </span>
+          </button>
+          {institutions.map((inst) => {
+            const active = institutionFilter === inst.name;
+            return (
+              <button
+                key={inst.name}
+                data-testid={`muster-institution-${inst.name.replace(/\s+/g, "-").toLowerCase()}`}
+                onClick={() => setInstitutionFilter(inst.name)}
+                className={`iu-chip whitespace-nowrap shrink-0 ${active ? "iu-chip-active" : ""}`}
+              >
+                {inst.name}
+                <span className={`min-w-[22px] h-5 px-1.5 rounded-full text-[10px] flex items-center justify-center ${active ? "bg-white/20 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>
+                  {inst.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Search + bulk-tick */}
       <div className="iu-card p-3 mb-4 flex flex-wrap items-center gap-2">
@@ -178,7 +239,10 @@ export default function Muster() {
                 <Avatar name={s.full_name} photo={s.photo} size={38} />
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-slate-900 truncate">{s.full_name}</div>
-                  {s.rank && <div className="text-xs text-slate-500 truncate">{s.rank}</div>}
+                  <div className="text-xs text-slate-500 truncate">
+                    {s.rank ? `${s.rank} · ` : ""}
+                    {s.institution || (s.rank ? "" : "—")}
+                  </div>
                 </div>
               </li>
             );
