@@ -279,6 +279,11 @@ class PhoneLoginIn(BaseModel):
     device_name: Optional[str] = None
     model: Optional[str] = None
     platform: Optional[str] = None
+    # Self-introduction provided on first sign-in (used to pre-fill the
+    # admin approval form for brand-new members).
+    full_name: Optional[str] = None
+    rank: Optional[str] = None
+    category: Optional[Literal["sailor", "staff", "coach"]] = None
 
 
 class DeviceApproveIn(BaseModel):
@@ -435,6 +440,15 @@ async def phone_login(body: PhoneLoginIn):
         "platform": body.platform,
         "updated_at": now,
     }
+    # Self-introduction (only meaningful for unmatched / first-time users — never
+    # overwrite a real member's stored profile).
+    if not matched:
+        if body.full_name and body.full_name.strip():
+            meta["proposed_full_name"] = body.full_name.strip()
+        if body.rank and body.rank.strip():
+            meta["proposed_rank"] = body.rank.strip()
+        if body.category:
+            meta["proposed_category"] = body.category
     if device is None:
         device = {
             "id": str(uuid.uuid4()),
@@ -471,8 +485,12 @@ async def phone_login(body: PhoneLoginIn):
         }})
         return _device_token_response(matched, body.device_id)
 
-    return {"status": "pending", "device_id": body.device_id,
-            "matched_member": matched["full_name"] if matched else None}
+    return {
+        "status": "pending",
+        "device_id": body.device_id,
+        "matched_member": matched["full_name"] if matched else None,
+        "needs_profile": not matched and not (device.get("proposed_full_name") or "").strip(),
+    }
 
 
 @api_router.get("/auth/phone/status")
@@ -500,6 +518,7 @@ async def _enrich_devices(devices: List[dict]) -> List[dict]:
         d["member_name"] = u["full_name"] if u else None
         d["member_role"] = u["role"] if u else None
         d["member_category"] = u["category"] if u else None
+        d["member_rank"] = u.get("rank") if u else None
     return devices
 
 

@@ -57,11 +57,16 @@ export default function Devices() {
             <div key={d.id} className="iu-card p-4 flex flex-wrap items-center gap-4" data-testid={`device-row-${d.id}`}>
               <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center"><Smartphone size={18}/></div>
               <div className="flex-1 min-w-[200px]">
-                <div className="font-semibold">{d.member_name || (d.phone ? `Unmatched · ${d.phone}` : "Unknown device")}</div>
+                <div className="font-semibold">
+                  {d.member_name
+                    || d.proposed_full_name
+                    || (d.phone ? `Unmatched · ${d.phone}` : "Unknown device")}
+                </div>
                 <div className="text-xs text-slate-500">
-                  {d.member_rank ? `${d.member_rank} · ` : ""}{d.member_category ? categoryLabel(d.member_category) : ""}
-                  {d.member_category && d.member_role ? " · " : ""}
-                  {d.member_role === "admin" ? "Admin" : (d.member_role ? "Member" : "")}
+                  {(d.member_rank || d.proposed_rank) ? `${d.member_rank || d.proposed_rank} · ` : ""}
+                  {(d.member_category || d.proposed_category) ? categoryLabel(d.member_category || d.proposed_category) : ""}
+                  {(d.member_category || d.proposed_category) && d.member_role ? " · " : ""}
+                  {d.member_role === "admin" ? "Admin" : (d.member_role ? "Member" : (d.proposed_full_name ? "New sign-up" : ""))}
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
                   {d.device_name || "Device"} · {d.platform || "—"} · phone {d.phone || "—"}
@@ -94,10 +99,10 @@ export default function Devices() {
 function ApproveDialog({ device, onClose, onApproved }) {
   const matched = !!device.member_name;
   const [form, setForm] = useState({
-    full_name: device.member_name || "",
+    full_name: device.member_name || device.proposed_full_name || "",
     role: device.member_role || "member",
-    category: device.member_category || "sailor",
-    rank: device.member_rank || "",
+    category: device.member_category || device.proposed_category || "sailor",
+    rank: device.member_rank || device.proposed_rank || "",
   });
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -119,7 +124,11 @@ function ApproveDialog({ device, onClose, onApproved }) {
       <div className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl p-6" onClick={(e) => e.stopPropagation()} data-testid="approve-device-form">
         <h2 className="text-xl font-extrabold mb-1">Approve device</h2>
         <p className="text-sm text-slate-500 mb-4">
-          {matched ? `Approving for existing member: ${device.member_name}` : `Phone ${device.phone || "?"} doesn't match a member. We'll create one.`}
+          {matched
+            ? `Approving for existing member: ${device.member_name}`
+            : device.proposed_full_name
+              ? `${device.proposed_full_name} introduced themselves at sign-up. Review and approve to create their member record.`
+              : `Phone ${device.phone || "?"} doesn't match a member. We'll create one.`}
         </p>
         <form onSubmit={submit} className="space-y-3">
           {!matched && (

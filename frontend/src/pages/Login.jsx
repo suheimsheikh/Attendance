@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Anchor, Phone, Mail, Lock, ArrowRight, Loader2, ChevronDown, ChevronUp, Hourglass, RefreshCw } from "lucide-react";
+import { Anchor, Phone, Mail, Lock, ArrowRight, Loader2, ChevronDown, ChevronUp, Hourglass, RefreshCw, User, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../auth";
 import { api, ApiError, setToken } from "../api";
@@ -12,6 +12,7 @@ export default function Login() {
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState(false);
+  const [needsProfile, setNeedsProfile] = useState(false);  // new-user follow-up form
   const [showAdmin, setShowAdmin] = useState(false);
   const pollRef = useRef(null);
   const deviceIdRef = useRef("");
@@ -41,9 +42,14 @@ export default function Login() {
       if (res.status === "approved" && res.access_token && res.user) {
         enter(res.access_token, res.user);
       } else if (res.status === "pending") {
-        setPending(true);
-        startPolling(deviceId);
-        toast.success("Request sent. Awaiting admin approval.");
+        // First-time, unmatched user — ask for name before sending the request to admin.
+        if (res.needs_profile) {
+          setNeedsProfile(true);
+        } else {
+          setPending(true);
+          startPolling(deviceId);
+          toast.success("Request sent. Awaiting admin approval.");
+        }
       }
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not connect");
@@ -72,6 +78,39 @@ export default function Login() {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(() => checkStatus(deviceId), 4000);
   };
+
+  const submitProfile = async ({ full_name, rank, category }) => {
+    const deviceId = deviceIdRef.current || getDeviceId();
+    const info = getDeviceInfo();
+    try {
+      await api.post("/auth/phone", {
+        phone: phone.trim(),
+        device_id: deviceId,
+        ...info,
+        full_name,
+        rank: rank || null,
+        category,
+      });
+      setNeedsProfile(false);
+      setPending(true);
+      startPolling(deviceId);
+      toast.success("Thanks! Your request is with the admin.");
+    } catch (err) {
+      toast.error(err?.message || "Could not send request");
+    }
+  };
+
+  if (needsProfile) {
+    return (
+      <Shell>
+        <ProfileIntroForm
+          phone={phone}
+          onSubmit={submitProfile}
+          onBack={() => setNeedsProfile(false)}
+        />
+      </Shell>
+    );
+  }
 
   if (pending) {
     return (
@@ -241,5 +280,88 @@ function AdminEmailForm({ onLogin, onDone }) {
         {loading ? <Loader2 className="animate-spin" size={16} /> : "Sign in"}
       </button>
     </form>
+  );
+}
+
+function ProfileIntroForm({ phone, onSubmit, onBack }) {
+  const [fullName, setFullName] = useState("");
+  const [rank, setRank] = useState("");
+  const [category, setCategory] = useState("sailor");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (fullName.trim().length < 2) {
+      toast.error("Please enter your full name");
+      return;
+    }
+    setBusy(true);
+    try { await onSubmit({ full_name: fullName.trim(), rank: rank.trim(), category }); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div data-testid="profile-intro-panel">
+      <h2 className="text-3xl font-extrabold tracking-tight">Welcome aboard</h2>
+      <p className="text-slate-500 mt-2 text-sm">
+        We don't recognise <span className="font-semibold text-slate-700">{phone}</span> yet. Tell us a bit about yourself so your admin can approve you quickly.
+      </p>
+
+      <form onSubmit={submit} className="mt-7 space-y-4">
+        <div>
+          <label className="iu-label">Full name</label>
+          <div className="relative">
+            <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              data-testid="profile-fullname-input"
+              autoFocus
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="e.g. Suraj Verma"
+              className="iu-input pl-10"
+              autoComplete="name"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="iu-label">Rank / Title <span className="text-slate-400 normal-case font-normal">(optional)</span></label>
+          <div className="relative">
+            <Tag size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              data-testid="profile-rank-input"
+              value={rank}
+              onChange={(e) => setRank(e.target.value)}
+              placeholder="e.g. Petty Officer"
+              className="iu-input pl-10"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="iu-label">Category</label>
+          <div className="grid grid-cols-3 gap-2" data-testid="profile-category-row">
+            {["sailor", "staff", "coach"].map((c) => (
+              <button
+                key={c}
+                type="button"
+                data-testid={`profile-category-${c}`}
+                onClick={() => setCategory(c)}
+                className={`iu-btn ${category === c ? "iu-btn-primary" : "iu-btn-secondary"} capitalize !h-10`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-2">
+          <button type="button" onClick={onBack} className="iu-btn-secondary flex-1" data-testid="profile-back-button">
+            Back
+          </button>
+          <button data-testid="profile-submit-button" type="submit" disabled={busy} className="iu-btn-primary flex-1">
+            {busy ? <Loader2 className="animate-spin" size={16} /> : <>Send request <ArrowRight size={16} /></>}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
