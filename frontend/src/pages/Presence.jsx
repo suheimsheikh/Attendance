@@ -97,7 +97,7 @@ export default function Presence() {
           <p className="text-slate-500 font-semibold">Nobody matches this filter right now.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-testid="presence-list">
+        <div className="iu-card divide-y divide-slate-100 overflow-hidden" data-testid="presence-list">
           {members.map((m) => <MemberRow key={m.id} m={m} />)}
         </div>
       )}
@@ -121,22 +121,20 @@ function StatCard({ label, value, color, Icon }) {
 
 function MemberRow({ m }) {
   return (
-    <div className="iu-card p-4 flex items-center gap-4" data-testid={`presence-row-${m.id}`}>
-      <Avatar name={m.full_name} photo={m.photo} size={48} ring={m.status === "on_campus" ? "#10B981" : null} />
+    <div className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition" data-testid={`presence-row-${m.id}`}>
+      <Avatar name={m.full_name} photo={m.photo} size={40} ring={m.status === "on_campus" ? "#10B981" : null} />
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-slate-900 truncate">{m.full_name}</div>
         <div className="text-xs text-slate-500 truncate">
           {m.rank ? `${m.rank} · ` : ""}{categoryLabel(m.category)}
-        </div>
-        <div className="text-xs text-slate-600 mt-1 flex items-center gap-1.5 flex-wrap">
-          <span>{m.detail}</span>
+          {m.detail ? ` · ${m.detail}` : ""}
           {m.flagged && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
+            <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
               <AlertTriangle size={10} /> Off-site
             </span>
           )}
           {m.late && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
+            <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
               <Clock size={10} /> Late
             </span>
           )}
@@ -151,9 +149,9 @@ function SkeletonList() {
   // Static placeholder list — never reorders and has no underlying data,
   // so using the array index as key is React-idiomatic here.
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div className="iu-card divide-y divide-slate-100 overflow-hidden">
       {[...Array(6)].map((_, i) => (
-        <div key={`skeleton-${i}`} className="iu-card p-4 flex items-center gap-4">
+        <div key={`skeleton-${i}`} className="px-4 py-3 flex items-center gap-3">
           <div className="w-12 h-12 rounded-full bg-slate-200 animate-pulse" />
           <div className="flex-1">
             <div className="h-3 bg-slate-200 rounded w-1/2 animate-pulse" />
