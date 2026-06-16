@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { ScanLine, MapPin, Loader2, LogIn, LogOut as LogOutIcon, AlertTriangle, RotateCcw, CheckCircle2, Navigation, Coffee, ArrowLeftRight, Clock } from "lucide-react";
+import { ScanLine, MapPin, Loader2, LogIn, LogOut as LogOutIcon, AlertTriangle, RotateCcw, CheckCircle2, Navigation, Coffee, ArrowLeftRight, Clock, Keyboard } from "lucide-react";
 import { api, ApiError } from "../api";
 import QrScanner from "../components/QrScanner";
 import { getLocation } from "../utils";
@@ -235,6 +235,7 @@ export default function CheckIn() {
                 <p className="text-xs text-slate-500">Point the camera at the Office QR.</p>
                 <button onClick={() => setScanning(false)} className="iu-btn-ghost !h-9">Cancel</button>
               </div>
+              <ManualCodeEntry onSubmit={(code) => { setScanning(false); handleQrScan(code); }} working={working} />
             </>
           ) : (
             <div className="py-10 text-center">
@@ -251,6 +252,7 @@ export default function CheckIn() {
               >
                 {action === "checkin" ? <LogIn size={16} /> : <LogOutIcon size={16} />} {actionLabel}
               </button>
+              <ManualCodeEntry onSubmit={handleQrScan} working={working} />
             </div>
           )}
         </div>
@@ -365,6 +367,63 @@ function GeoDiagnostic({ office, fix }) {
         </p>
       )}
     </div>
+  );
+}
+
+function ManualCodeEntry({ onSubmit, working }) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        data-testid="manual-code-toggle"
+        onClick={() => setOpen(true)}
+        className="block mx-auto mt-4 text-xs font-semibold text-slate-500 underline hover:text-slate-900 inline-flex items-center gap-1.5"
+      >
+        <Keyboard size={12} /> Camera not working? Enter office code instead
+      </button>
+    );
+  }
+
+  const submit = (e) => {
+    e.preventDefault();
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    onSubmit(trimmed);
+    setOpen(false);
+    setCode("");
+  };
+
+  return (
+    <form onSubmit={submit} className="mt-4 p-3 rounded-lg bg-slate-50 border border-slate-200 text-left" data-testid="manual-code-form">
+      <label className="iu-label">Office code</label>
+      <p className="text-[11px] text-slate-500 -mt-1 mb-2">
+        Get it from your admin (Office QR page shows the text under the code, e.g. <code>OFFICE-XXXXXXXX</code>)
+      </p>
+      <div className="flex gap-2">
+        <input
+          data-testid="manual-code-input"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="OFFICE-…"
+          className="iu-input flex-1 !h-10 font-mono uppercase"
+          autoFocus
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+        />
+        <button
+          type="submit"
+          data-testid="manual-code-submit"
+          disabled={working || !code.trim()}
+          className="iu-btn-primary !h-10 !px-4"
+        >
+          {working ? <Loader2 className="animate-spin" size={14}/> : "Use"}
+        </button>
+      </div>
+    </form>
   );
 }
 

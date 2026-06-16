@@ -50,23 +50,36 @@ export function initials(name) {
   return name.trim().split(/\s+/).slice(0, 2).map((s) => s[0]).join("").toUpperCase();
 }
 
-export async function getLocation(timeout = 12000) {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error("Geolocation not supported in this browser"));
-      return;
+export async function getLocation(timeoutHigh = 15000, timeoutLow = 10000) {
+  if (!navigator.geolocation) {
+    throw new Error("Geolocation not supported in this browser");
+  }
+  const ask = (highAccuracy, timeout) =>
+    new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+        (err) => reject(err),
+        { enableHighAccuracy: highAccuracy, timeout, maximumAge: highAccuracy ? 30000 : 60000 }
+      );
+    });
+
+  // Step 1: try high-accuracy (uses GPS satellites — accurate but slow indoors).
+  try {
+    return await ask(true, timeoutHigh);
+  } catch (err1) {
+    // Step 2: fall back to low-accuracy (Wi-Fi / cell tower — fast, less accurate).
+    try {
+      return await ask(false, timeoutLow);
+    } catch (err2) {
+      const code = err2.code ?? err1.code;
+      const friendly =
+        code === 1 ? "Location permission denied — enable it in your browser settings."
+        : code === 2 ? "Position unavailable — try moving outdoors or near a window."
+        : code === 3 ? "Couldn't get a GPS fix (timed out twice). Step outdoors for 30 s, or use QR check-in."
+        : (err2.message || "Could not get location");
+      throw new Error(friendly);
     }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-      (err) => {
-        const msg = err.code === 1 ? "Location permission denied — enable it in your browser settings." :
-                    err.code === 2 ? "Position unavailable — try moving outdoors or onto Wi-Fi." :
-                    err.code === 3 ? "Location request timed out." : (err.message || "Could not get location");
-        reject(new Error(msg));
-      },
-      { enableHighAccuracy: true, timeout, maximumAge: 30000 }
-    );
-  });
+  }
 }
 
 export function todayIso() {
