@@ -42,12 +42,16 @@ export default function CheckIn() {
       setPendingScan(null);
       refresh();
     } catch (err) {
-      if (err instanceof ApiError && err.message.startsWith("OUT_OF_GEOFENCE:")) {
-        const dist = err.message.split(":")[1];
+      // Note: don't use `instanceof ApiError` — bundlers can duplicate the
+      // class across chunks, making the check unreliable in production.
+      const msg = err?.message || "";
+      if (typeof msg === "string" && msg.startsWith("OUT_OF_GEOFENCE:")) {
+        const dist = msg.split(":")[1];
         setPendingScan({ qr_token: qrToken, distance: dist });
         toast.warning(`About ${dist} m off-site — add a reason to continue.`);
       } else {
-        toast.error(err?.message || "Failed");
+        console.error("Check-in via QR failed:", err);
+        toast.error(msg || "Check-in failed");
       }
     } finally {
       setWorking(false);
