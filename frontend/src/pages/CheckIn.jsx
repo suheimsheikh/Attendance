@@ -15,6 +15,7 @@ export default function CheckIn() {
   const [reason, setReason] = useState("");
   const [pendingScan, setPendingScan] = useState(null); // { qr_token } awaiting reason
   const [lastFix, setLastFix] = useState(null); // {lat, lng, acc} for diagnostics
+  const [locating, setLocating] = useState(""); // live "Improving fix… ±N m" text
 
   const refresh = useCallback(async () => {
     try {
@@ -61,9 +62,24 @@ export default function CheckIn() {
 
   const handleGpsToggle = async () => {
     setWorking(true);
+    setLocating("Locating you…");
     try {
-      const loc = await getLocation();
+      const targetAccuracy = Math.max(40, Math.min(80, Math.floor((office?.radius_m || 80) * 0.6)));
+      const loc = await getLocation({
+        targetAccuracy,
+        maxWaitMs: 25000,
+        onProgress: (fix) => {
+          setLastFix({ lat: fix.latitude, lng: fix.longitude, acc: fix.accuracy });
+          setLocating(`Improving fix… ±${Math.round(fix.accuracy || 0)} m`);
+        },
+      });
       setLastFix({ lat: loc.latitude, lng: loc.longitude, acc: loc.accuracy });
+      // Guard: refuse to check in if the fix can't possibly resolve the geofence.
+      const radius = office?.radius_m || 80;
+      if ((loc.accuracy || 0) > radius * 2) {
+        toast.error(`GPS is too imprecise (±${Math.round(loc.accuracy)} m). Step outdoors with a clear view of the sky, wait 30 s and retry — or use QR check-in.`);
+        return;
+      }
       const res = await api.post("/attendance/geo-toggle", { latitude: loc.latitude, longitude: loc.longitude, reason: reason || undefined });
       toast.success(res.action === "checkin" ? `Checked in — welcome, ${res.member}!` : `Checked out — ${res.member} (${res.hours}h)`);
       setReason("");
@@ -72,16 +88,29 @@ export default function CheckIn() {
       toast.error(err?.message || "Failed");
     } finally {
       setWorking(false);
+      setLocating("");
     }
   };
 
   const captureLocation = async () => {
+    setLocating("Locating you…");
     try {
-      const loc = await getLocation();
+      const radius = office?.radius_m || 80;
+      const targetAccuracy = Math.max(30, Math.min(80, Math.floor(radius * 0.6)));
+      const loc = await getLocation({
+        targetAccuracy,
+        maxWaitMs: 25000,
+        onProgress: (fix) => {
+          setLastFix({ lat: fix.latitude, lng: fix.longitude, acc: fix.accuracy });
+          setLocating(`Improving fix… ±${Math.round(fix.accuracy || 0)} m`);
+        },
+      });
       setLastFix({ lat: loc.latitude, lng: loc.longitude, acc: loc.accuracy });
       toast.success(`Got fix: ${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)} (±${Math.round(loc.accuracy || 0)} m)`);
     } catch (err) {
       toast.error(err?.message || "Could not get location");
+    } finally {
+      setLocating("");
     }
   };
 
@@ -288,6 +317,10 @@ export default function CheckIn() {
             {working ? <Loader2 className="animate-spin" size={16} /> : (action === "checkin" ? <LogIn size={16} /> : <LogOutIcon size={16} />)}
             {actionLabel}
           </button>
+
+          {locating && (
+            <p className="text-xs text-slate-500 mt-3" data-testid="locating-status">{locating}</p>
+          )}
 
           <button
             type="button"

@@ -50,36 +50,69 @@ export function initials(name) {
   return name.trim().split(/\s+/).slice(0, 2).map((s) => s[0]).join("").toUpperCase();
 }
 
-export async function getLocation(timeoutHigh = 15000, timeoutLow = 10000) {
+/**
+ * Progressive GPS lookup. Uses watchPosition so we get an early (rough) reading
+ * fast, then keep improving as the GPS satellites lock in. Resolves as soon as
+ * a fix beats `targetAccuracy` m OR `maxWaitMs` elapses (whichever first).
+ *
+ * `onProgress(fix)` (optional) — called whenever a new (better) fix arrives so
+ * the UI can show live "± Nm accuracy" feedback.
+ */
+export async function getLocation({ targetAccuracy = 50, maxWaitMs = 25000, onProgress } = {}) {
   if (!navigator.geolocation) {
     throw new Error("Geolocation not supported in this browser");
   }
-  const ask = (highAccuracy, timeout) =>
-    new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-        (err) => reject(err),
-        { enableHighAccuracy: highAccuracy, timeout, maximumAge: highAccuracy ? 30000 : 60000 }
-      );
-    });
+  return new Promise((resolve, reject) => {
+    let best = null;
+    let watcher = null;
+    let resolved = false;
 
-  // Step 1: try high-accuracy (uses GPS satellites — accurate but slow indoors).
-  try {
-    return await ask(true, timeoutHigh);
-  } catch (err1) {
-    // Step 2: fall back to low-accuracy (Wi-Fi / cell tower — fast, less accurate).
+    const finish = (result, err) => {
+      if (resolved) return;
+      resolved = true;
+      if (watcher !== null) {
+        try { navigator.geolocation.clearWatch(watcher); } catch {}
+      }
+      clearTimeout(timer);
+      if (result) resolve(result);
+      else reject(err);
+    };
+
+    const timer = setTimeout(() => {
+      if (best) finish(best);
+      else finish(null, new Error("Couldn't get a GPS fix in 25 s. Step outdoors with a clear view of the sky and try again."));
+    }, maxWaitMs);
+
     try {
-      return await ask(false, timeoutLow);
-    } catch (err2) {
-      const code = err2.code ?? err1.code;
-      const friendly =
-        code === 1 ? "Location permission denied — enable it in your browser settings."
-        : code === 2 ? "Position unavailable — try moving outdoors or near a window."
-        : code === 3 ? "Couldn't get a GPS fix (timed out twice). Step outdoors for 30 s, or use QR check-in."
-        : (err2.message || "Could not get location");
-      throw new Error(friendly);
+      watcher = navigator.geolocation.watchPosition(
+        (pos) => {
+          const fix = {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          };
+          if (!best || (fix.accuracy ?? Infinity) < (best.accuracy ?? Infinity)) {
+            best = fix;
+            try { onProgress?.(fix); } catch {}
+          }
+          if ((fix.accuracy ?? Infinity) <= targetAccuracy) finish(fix);
+        },
+        (err) => {
+          // Permission denial or hard unavailability — bail immediately.
+          if (err.code === 1 || err.code === 2) {
+            const msg = err.code === 1
+              ? "Location permission denied — enable it in your browser settings."
+              : "Position unavailable — try moving outdoors or near a window.";
+            finish(null, new Error(msg));
+          }
+          // For code=3 (timeout per-event), keep waiting — watcher will retry.
+        },
+        { enableHighAccuracy: true, timeout: maxWaitMs, maximumAge: 0 }
+      );
+    } catch (e) {
+      finish(null, new Error(e?.message || "Could not start GPS watcher"));
     }
-  }
+  });
 }
 
 export function todayIso() {
