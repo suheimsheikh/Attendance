@@ -195,6 +195,7 @@ class UserPublic(BaseModel):
     work_start: Optional[str] = None
     work_end: Optional[str] = None
     photo: Optional[str] = None
+    institution: Optional[str] = None
 
 
 class MemberCreate(BaseModel):
@@ -207,6 +208,7 @@ class MemberCreate(BaseModel):
     work_start: Optional[str] = None
     work_end: Optional[str] = None
     role: Literal["admin", "member"] = "member"
+    institution: Optional[str] = None
 
 
 class MemberUpdate(BaseModel):
@@ -219,6 +221,7 @@ class MemberUpdate(BaseModel):
     photo: Optional[str] = None
     password: Optional[str] = None
     role: Optional[Literal["admin", "member"]] = None
+    institution: Optional[str] = None
 
 
 class OfficeConfig(BaseModel):
@@ -622,6 +625,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "mobile": body.mobile,
         "work_start": body.work_start,
         "work_end": body.work_end,
+        "institution": body.institution,
         "photo": None,
         "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
         "hashed_password": hash_password(body.password),
@@ -705,11 +709,11 @@ async def import_template(admin: dict = Depends(require_admin)):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Members"
-    headers = ["full_name", "mobile", "email", "password", "rank", "category", "work_start", "work_end"]
+    headers = ["full_name", "mobile", "email", "password", "rank", "category", "work_start", "work_end", "institution"]
     ws.append(headers)
-    ws.append(["Arjun Nair", "9876543210", "arjun@academy.in", "secret123", "Petty Officer", "sailor", "08:00", "17:00"])
-    ws.append(["Meera Kapoor", "9876500001", "", "", "Leading Seaman", "sailor", "", ""])
-    ws.append(["Rohit Verma", "9876500002", "", "", "Head Coach", "coach", "06:00", "14:00"])
+    ws.append(["Arjun Nair", "9876543210", "arjun@academy.in", "secret123", "Petty Officer", "sailor", "08:00", "17:00", "INS Hamla"])
+    ws.append(["Meera Kapoor", "9876500001", "", "", "Leading Seaman", "sailor", "", "", "Naval Sailing Academy"])
+    ws.append(["Rohit Verma", "9876500002", "", "", "Head Coach", "coach", "06:00", "14:00", "YCH Hyderabad"])
     for i in range(1, len(headers) + 1):
         ws.column_dimensions[get_column_letter(i)].width = 18
     # Notes sheet
@@ -724,6 +728,7 @@ async def import_template(admin: dict = Depends(require_admin)):
         ["category", "No", "sailor | staff | coach  (default: sailor)"],
         ["work_start", "No", "Custom start time HH:MM (blank = office default)"],
         ["work_end", "No", "Custom end time HH:MM (blank = office default)"],
+        ["institution", "No", "School / unit / academy name"],
     ]:
         notes.append(line)
     for i in range(1, 4):
@@ -786,6 +791,7 @@ async def import_members(file: UploadFile = File(...), admin: dict = Depends(req
             category = "sailor"
         ws_start = cell(row, "work_start")
         ws_end = cell(row, "work_end")
+        institution = cell(row, "institution")
         if ws_start and not time_re.match(ws_start):
             ws_start = None
         if ws_end and not time_re.match(ws_end):
@@ -803,6 +809,7 @@ async def import_members(file: UploadFile = File(...), admin: dict = Depends(req
             "mobile": mobile,
             "work_start": ws_start,
             "work_end": ws_end,
+            "institution": institution,
             "photo": None,
             "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
             "hashed_password": hash_password(password),

@@ -15,6 +15,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     role: initial?.role || "member",
     work_start: initial?.work_start || "",
     work_end: initial?.work_end || "",
+    institution: initial?.institution || "",
   });
   const [busy, setBusy] = useState(false);
 
@@ -87,6 +88,10 @@ export default function MemberForm({ initial, onClose, onSaved }) {
           <div>
             <label className="iu-label">Rank / Title</label>
             <input data-testid="mf-rank" value={form.rank} onChange={(e) => set("rank", e.target.value)} className="iu-input" placeholder="e.g. Petty Officer" />
+          </div>
+          <div>
+            <label className="iu-label">Institution</label>
+            <input data-testid="mf-institution" value={form.institution} onChange={(e) => set("institution", e.target.value)} className="iu-input" placeholder="e.g. INS Hamla, YCH Hyderabad, Naval Sailing Academy" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

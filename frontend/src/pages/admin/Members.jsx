@@ -33,7 +33,8 @@ export default function Members() {
       (m.full_name || "").toLowerCase().includes(q) ||
       (m.email || "").toLowerCase().includes(q) ||
       (m.rank || "").toLowerCase().includes(q) ||
-      (m.mobile || "").includes(q)
+      (m.mobile || "").includes(q) ||
+      (m.institution || "").toLowerCase().includes(q)
     );
   }, [members, search]);
 
@@ -87,6 +88,7 @@ export default function Members() {
                 <tr>
                   <th className="iu-table-th">Member</th>
                   <th className="iu-table-th hidden md:table-cell">Role</th>
+                  <th className="iu-table-th hidden lg:table-cell">Institution</th>
                   <th className="iu-table-th hidden lg:table-cell">Mobile</th>
                   <th className="iu-table-th hidden lg:table-cell">Hours</th>
                   <th className="iu-table-th">Status</th>
@@ -111,6 +113,7 @@ export default function Members() {
                         <div className="text-sm text-slate-700">{m.role === "admin" ? "Admin" : "Member"}</div>
                         <div className="text-xs text-slate-500">{m.rank ? `${m.rank} · ` : ""}{categoryLabel(m.category)}</div>
                       </td>
+                      <td className="iu-table-td hidden lg:table-cell text-sm text-slate-700">{m.institution || "—"}</td>
                       <td className="iu-table-td hidden lg:table-cell">{m.mobile || "—"}</td>
                       <td className="iu-table-td hidden lg:table-cell">{m.work_start || "—"} – {m.work_end || "—"}</td>
                       <td className="iu-table-td">{p ? <StatusBadge status={p.status} /> : <span className="text-xs text-slate-400">—</span>}</td>
@@ -133,7 +136,7 @@ export default function Members() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={6} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
                 )}
               </tbody>
             </table>
