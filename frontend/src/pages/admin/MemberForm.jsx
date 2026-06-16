@@ -16,6 +16,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     work_start: initial?.work_start || "",
     work_end: initial?.work_end || "",
     institution: initial?.institution || "",
+    gender: initial?.gender || "",
   });
   const [busy, setBusy] = useState(false);
 
@@ -85,9 +86,20 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               </select>
             </div>
           </div>
-          <div>
-            <label className="iu-label">Rank / Title</label>
-            <input data-testid="mf-rank" value={form.rank} onChange={(e) => set("rank", e.target.value)} className="iu-input" placeholder="e.g. Petty Officer" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="iu-label">Gender</label>
+              <select data-testid="mf-gender" value={form.gender || ""} onChange={(e) => set("gender", e.target.value)} className="iu-input">
+                <option value="">—</option>
+                <option value="M">Male</option>
+                <option value="F">Female</option>
+                <option value="O">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="iu-label">Rank / Title</label>
+              <input data-testid="mf-rank" value={form.rank} onChange={(e) => set("rank", e.target.value)} className="iu-input" placeholder="e.g. Petty Officer" />
+            </div>
           </div>
           <div>
             <label className="iu-label">Institution</label>
