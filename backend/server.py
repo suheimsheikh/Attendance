@@ -186,7 +186,7 @@ class LoginIn(BaseModel):
 
 class UserPublic(BaseModel):
     id: str
-    email: EmailStr
+    email: str  # plain str on output — validated on input via MemberCreate.email: EmailStr
     full_name: str
     role: str
     category: str
