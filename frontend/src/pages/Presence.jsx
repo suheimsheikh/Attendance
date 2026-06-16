@@ -18,7 +18,7 @@ export default function Presence() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("on_campus");
 
   const load = useCallback(async () => {
     try {
@@ -67,7 +67,7 @@ export default function Presence() {
         <StatCard label="Exited" value={counts.exited || 0} color="#6B7280" Icon={ExitIcon} />
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-3 mb-2 -mx-1 px-1">
+      <div className="flex flex-wrap justify-end gap-2 pb-3 mb-2 -mx-1 px-1">
         {FILTERS.map((f) => {
           const active = filter === f.key;
           const c = counts[f.key === "all" ? "total" : f.key] ?? 0;
