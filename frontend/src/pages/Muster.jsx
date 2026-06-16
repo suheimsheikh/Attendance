@@ -6,8 +6,8 @@ import Avatar from "../components/Avatar";
 import { useAuth } from "../auth";
 
 const MODES = [
-  { key: "checkin",  label: "Mark Present",  Icon: LogIn,        verb: "Check in",  color: "#10B981" },
-  { key: "checkout", label: "Mark Departed", Icon: LogOutIcon,   verb: "Check out", color: "#6B7280" },
+  { key: "checkin",  label: "Check in",  Icon: LogIn,        verb: "Check in",  color: "#10B981" },
+  { key: "checkout", label: "Check out", Icon: LogOutIcon,   verb: "Check out", color: "#6B7280" },
 ];
 
 export default function Muster() {
