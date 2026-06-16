@@ -40,7 +40,21 @@ export default function QrScanner({ onScan, onError, height = 320, continuous = 
       try {
         const qr = new Html5Qrcode(elementId, { verbose: false });
         instanceRef.current = qr;
-        const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+        // Responsive qrbox sized to the smaller dimension of the viewport so
+        // it can never exceed the video area (which caused the "two cameras"
+        // ghosting on some Android phones).
+        const qrboxFn = (viewfinderWidth, viewfinderHeight) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const size = Math.max(160, Math.floor(minEdge * 0.75));
+          return { width: size, height: size };
+        };
+        const config = {
+          fps: 10,
+          qrbox: qrboxFn,
+          aspectRatio: 1.0,                // square viewport — matches qrbox & avoids stacking
+          disableFlip: false,
+          videoConstraints: { facingMode: { ideal: "environment" } },
+        };
 
         const handleSuccess = (decoded) => {
           // Guard: only fire onScan once. Don't call qr.stop() here —
@@ -94,7 +108,17 @@ export default function QrScanner({ onScan, onError, height = 320, continuous = 
         id={elementId}
         ref={ref}
         data-testid="qr-scanner-region"
-        style={{ width: "100%", minHeight: height, background: "#0F172A", borderRadius: 12, overflow: "hidden" }}
+        // Square, centered, capped width — gives html5-qrcode a clean viewport
+        // and prevents the "double-camera" ghosting on tall Android screens.
+        style={{
+          width: "100%",
+          maxWidth: 360,
+          margin: "0 auto",
+          aspectRatio: "1 / 1",
+          background: "#0F172A",
+          borderRadius: 12,
+          overflow: "hidden",
+        }}
       />
       {status && (
         <p className="mt-2 text-sm text-slate-600" data-testid="qr-scanner-status">{status}</p>

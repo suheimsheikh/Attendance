@@ -76,6 +76,25 @@ body {
 #qr-reader__scan_region img { display: none !important; }
 #qr-reader__header_message { font-size: 12px !important; color: var(--muted-fg) !important; }
 
+/* Force the html5-qrcode injected <video> to cover our square container so the
+   camera feed doesn't render with weird letterboxing or "double-view" on tall
+   Android screens. */
+#qr-scanner-region video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+#qr-scanner-region canvas {
+  position: absolute !important;
+  top: 0; left: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+#qr-scanner-region {
+  position: relative;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

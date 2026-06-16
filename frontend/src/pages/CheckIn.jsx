@@ -14,6 +14,7 @@ export default function CheckIn() {
   const [scanning, setScanning] = useState(false);
   const [reason, setReason] = useState("");
   const [pendingScan, setPendingScan] = useState(null); // { qr_token } awaiting reason
+  const [lastFix, setLastFix] = useState(null); // {lat, lng, acc} for diagnostics
 
   const refresh = useCallback(async () => {
     try {
@@ -62,6 +63,7 @@ export default function CheckIn() {
     setWorking(true);
     try {
       const loc = await getLocation();
+      setLastFix({ lat: loc.latitude, lng: loc.longitude, acc: loc.accuracy });
       const res = await api.post("/attendance/geo-toggle", { latitude: loc.latitude, longitude: loc.longitude, reason: reason || undefined });
       toast.success(res.action === "checkin" ? `Checked in — welcome, ${res.member}!` : `Checked out — ${res.member} (${res.hours}h)`);
       setReason("");
@@ -70,6 +72,16 @@ export default function CheckIn() {
       toast.error(err?.message || "Failed");
     } finally {
       setWorking(false);
+    }
+  };
+
+  const captureLocation = async () => {
+    try {
+      const loc = await getLocation();
+      setLastFix({ lat: loc.latitude, lng: loc.longitude, acc: loc.accuracy });
+      toast.success(`Got fix: ${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)} (±${Math.round(loc.accuracy || 0)} m)`);
+    } catch (err) {
+      toast.error(err?.message || "Could not get location");
     }
   };
 
@@ -274,12 +286,82 @@ export default function CheckIn() {
             {working ? <Loader2 className="animate-spin" size={16} /> : (action === "checkin" ? <LogIn size={16} /> : <LogOutIcon size={16} />)}
             {actionLabel}
           </button>
+
+          <button
+            type="button"
+            data-testid="capture-location-button"
+            onClick={captureLocation}
+            className="block mx-auto mt-3 text-xs font-semibold text-slate-500 underline hover:text-slate-900"
+          >
+            Just show my location (don't check in)
+          </button>
         </div>
+      )}
+
+      {office && lastFix && (
+        <GeoDiagnostic office={office} fix={lastFix} />
       )}
 
       {office && (
         <p className="text-xs text-slate-400 mt-6 text-center">
           Office geofence: {office.radius_m} m around {office.name} • {office.timezone || "Asia/Kolkata"}
+          <br />
+          <span className="text-slate-300">Office anchor: {office.latitude?.toFixed(5)}, {office.longitude?.toFixed(5)}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Haversine distance in meters between two lat/lng pairs.
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (x) => (x * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function GeoDiagnostic({ office, fix }) {
+  const dist = Math.round(haversine(fix.lat, fix.lng, office.latitude, office.longitude));
+  const inFence = dist <= (office.radius_m || 0);
+  const mapsUrl = `https://www.google.com/maps?q=${fix.lat},${fix.lng}`;
+  return (
+    <div className="iu-card mt-4 p-4 text-left text-xs" data-testid="geo-diagnostic">
+      <div className="font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+        <Navigation size={13}/> GPS diagnostic
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-slate-600">
+        <div>
+          <div className="text-[10px] uppercase tracking-wide text-slate-400">Your phone</div>
+          <div className="font-mono">{fix.lat.toFixed(5)}, {fix.lng.toFixed(5)}</div>
+          {fix.acc ? <div className="text-slate-400 text-[10px]">±{Math.round(fix.acc)} m accuracy</div> : null}
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-wide text-slate-400">Office</div>
+          <div className="font-mono">{office.latitude?.toFixed(5)}, {office.longitude?.toFixed(5)}</div>
+          <div className="text-slate-400 text-[10px]">Radius {office.radius_m} m</div>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-wide text-slate-400">Distance</div>
+          <div className={`font-bold ${inFence ? "text-emerald-600" : "text-amber-600"}`}>{dist} m</div>
+          <div className="text-slate-400 text-[10px]">{inFence ? "Inside fence" : "Outside fence"}</div>
+        </div>
+      </div>
+      <a
+        href={mapsUrl}
+        target="_blank"
+        rel="noreferrer"
+        data-testid="open-in-maps"
+        className="block mt-3 text-[11px] font-semibold text-slate-700 underline"
+      >
+        Open my detected location in Google Maps →
+      </a>
+      {!inFence && (
+        <p className="text-[11px] text-slate-500 mt-2 leading-snug">
+          If the map pin looks correct but the distance is wrong, ask your admin to verify the office latitude/longitude in <b>Office Settings</b>.
+          If the map pin is in the wrong spot, your phone's GPS is reporting badly — go outdoors, wait 30 s, retry.
         </p>
       )}
     </div>
