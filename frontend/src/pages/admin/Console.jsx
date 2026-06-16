@@ -25,10 +25,8 @@ export default function AdminConsole() {
     { to: "/admin/leaves", label: "Approve leaves", desc: "Review pending leave & tour requests" },
     { to: "/admin/devices", label: "Access requests", desc: "Approve new browser/device sign-ins" },
     { to: "/admin/office", label: "Office settings", desc: "Geofence, work hours, timezone" },
-    { to: "/admin/office-qr", label: "Office QR", desc: "Display & regenerate the check-in QR" },
     { to: "/admin/reports", label: "Reports", desc: "Hours, attendance, exports" },
     { to: "/admin/import", label: "Import members", desc: "Bulk upload via Excel template" },
-    { to: "/admin/cards", label: "Member cards", desc: "Print personal QR cards" },
   ];
 
   return (

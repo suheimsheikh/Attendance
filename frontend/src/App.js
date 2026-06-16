@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Presence from "./pages/Presence";
 import CheckIn from "./pages/CheckIn";
 import Profile from "./pages/Profile";
+import DisabledFeature from "./pages/DisabledFeature";
 import MyLeaves from "./pages/MyLeaves";
 import Muster from "./pages/Muster";
 import AdminConsole from "./pages/admin/Console";
@@ -63,7 +64,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<Presence />} />
-            <Route path="check-in" element={<CheckIn />} />
+            <Route path="check-in" element={<DisabledFeature title="QR & GPS check-in disabled" reason="Use Muster Roll instead — your coach will check you in." />} />
             <Route path="muster" element={<RequireMuster><Muster /></RequireMuster>} />
             <Route path="my-leaves" element={<MyLeaves />} />
             <Route path="profile" element={<Profile />} />
@@ -72,11 +73,11 @@ function App() {
             <Route path="admin/leaves" element={<RequireAdmin><AdminLeaves /></RequireAdmin>} />
             <Route path="admin/devices" element={<RequireAdmin><Devices /></RequireAdmin>} />
             <Route path="admin/office" element={<RequireAdmin><OfficeSettings /></RequireAdmin>} />
-            <Route path="admin/office-qr" element={<RequireAdmin><OfficeQR /></RequireAdmin>} />
+            <Route path="admin/office-qr" element={<RequireAdmin><DisabledFeature title="Office QR disabled" reason="QR scanning is turned off — use Muster Roll." /></RequireAdmin>} />
             <Route path="admin/reports" element={<RequireAdmin><Reports /></RequireAdmin>} />
             <Route path="admin/sessions" element={<RequireAdmin><Sessions /></RequireAdmin>} />
             <Route path="admin/import" element={<RequireAdmin><ImportMembers /></RequireAdmin>} />
-            <Route path="admin/cards" element={<RequireAdmin><Cards /></RequireAdmin>} />
+            <Route path="admin/cards" element={<RequireAdmin><DisabledFeature title="Member Cards disabled" reason="Personal QR cards are turned off for now — Muster Roll handles attendance." /></RequireAdmin>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

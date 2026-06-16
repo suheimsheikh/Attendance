@@ -10,7 +10,7 @@ import Avatar from "./Avatar";
 
 const NAV_MEMBER = [
   { to: "/", label: "Presence", icon: LayoutDashboard, end: true },
-  { to: "/check-in", label: "Check In / Out", icon: ScanLine },
+  { to: "/check-in", label: "Check In / Out", icon: ScanLine, disabled: true, disabledReason: "QR & GPS check-in are disabled — use Muster Roll" },
   { to: "/my-leaves", label: "My Leaves", icon: CalendarCheck2 },
   { to: "/profile", label: "Profile", icon: UserCog },
 ];
@@ -22,8 +22,8 @@ const NAV_ADMIN = [
   { to: "/admin/leaves", label: "Leave Approvals", icon: ClipboardList },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/office", label: "Office Settings", icon: Building2 },
-  { to: "/admin/office-qr", label: "Office QR", icon: QrCode },
-  { to: "/admin/cards", label: "Member Cards", icon: IdCard },
+  { to: "/admin/office-qr", label: "Office QR", icon: QrCode, disabled: true, disabledReason: "QR scanning is disabled for now" },
+  { to: "/admin/cards", label: "Member Cards", icon: IdCard, disabled: true, disabledReason: "QR scanning is disabled for now" },
   { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
   { to: "/admin/import", label: "Import Members", icon: FileSpreadsheet },
 ];
@@ -131,7 +131,20 @@ export default function Layout() {
   );
 }
 
-function NavItem({ to, label, icon: Icon, end, onClick }) {
+function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason }) {
+  if (disabled) {
+    return (
+      <div
+        title={disabledReason || "Disabled"}
+        data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-disabled`}
+        className="flex items-center gap-3 px-3 h-10 rounded-lg text-sm font-medium mb-0.5 text-slate-500 opacity-50 cursor-not-allowed select-none"
+      >
+        <Icon size={17} />
+        <span className="flex-1">{label}</span>
+        <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">Off</span>
+      </div>
+    );
+  }
   return (
     <NavLink
       to={to}
