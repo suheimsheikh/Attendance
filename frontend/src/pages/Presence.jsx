@@ -1,24 +1,21 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin } from "lucide-react";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
-import StatusBadge from "../components/StatusBadge";
 import { categoryLabel, formatDate } from "../utils";
 
-const FILTERS = [
-  { key: "all", label: "All" },
-  { key: "on_campus", label: "On Campus" },
-  { key: "temp_out", label: "Stepped Out" },
-  { key: "exited", label: "Exited" },
-  { key: "on_tour", label: "On Tour" },
-  { key: "on_leave", label: "On Leave" },
+const COLUMNS = [
+  { key: "on_campus",  label: "On Campus",    icon: CheckCircle2, accent: "#10B981", soft: "bg-emerald-50",  badge: "bg-emerald-100 text-emerald-700" },
+  { key: "temp_out",   label: "Stepped Out",  icon: Coffee,       accent: "#06B6D4", soft: "bg-cyan-50",     badge: "bg-cyan-100 text-cyan-700" },
+  { key: "on_tour",    label: "Tour",         icon: Plane,        accent: "#F97316", soft: "bg-orange-50",   badge: "bg-orange-100 text-orange-700" },
+  { key: "on_leave",   label: "Leave",        icon: Bed,          accent: "#F59E0B", soft: "bg-amber-50",    badge: "bg-amber-100 text-amber-700" },
+  { key: "exited",     label: "Left",         icon: ExitIcon,     accent: "#6B7280", soft: "bg-slate-50",    badge: "bg-slate-200 text-slate-700" },
 ];
 
 export default function Presence() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [filter, setFilter] = useState("on_campus");
 
   const load = useCallback(async () => {
     try {
@@ -38,12 +35,28 @@ export default function Presence() {
     return () => clearInterval(t);
   }, [load]);
 
-  const members = (data?.members || []).filter((m) => filter === "all" || m.status === filter);
-  const counts = data?.counts || {};
+  const byColumn = useMemo(() => {
+    const buckets = Object.fromEntries(COLUMNS.map((c) => [c.key, []]));
+    for (const m of (data?.members || [])) {
+      if (buckets[m.status]) buckets[m.status].push(m);
+    }
+    // Sort each column by most recent activity first (then name)
+    for (const k of Object.keys(buckets)) {
+      buckets[k].sort((a, b) => {
+        const da = a.since ? new Date(a.since).getTime() : 0;
+        const db = b.since ? new Date(b.since).getTime() : 0;
+        if (db !== da) return db - da;
+        return (a.full_name || "").localeCompare(b.full_name || "");
+      });
+    }
+    return buckets;
+  }, [data]);
+
+  const totalMembers = data?.counts?.total ?? (data?.members?.length || 0);
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto">
-      <header className="flex flex-wrap items-end justify-between gap-3 mb-6">
+    <div className="p-4 md:p-6 max-w-[1500px] mx-auto">
+      <header className="flex flex-wrap items-end justify-between gap-3 mb-5">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight" data-testid="presence-title">Presence Board</h1>
           <p className="text-slate-500 mt-1 text-sm">{data ? formatDate(data.date) : "Live campus roster"}</p>
@@ -51,7 +64,7 @@ export default function Presence() {
         <div className="flex items-center gap-2">
           <div className="inline-flex items-center gap-2 bg-white border border-slate-200 px-3 h-9 rounded-full text-xs font-semibold text-slate-700">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            {counts.total || 0} members
+            {totalMembers} members
           </div>
           <button onClick={load} className="iu-btn-secondary !h-9 !px-3" data-testid="presence-refresh-button">
             <RefreshCw size={14} />
@@ -59,94 +72,94 @@ export default function Presence() {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        <StatCard label="On Campus" value={counts.on_campus || 0} color="#10B981" Icon={CheckCircle2} />
-        <StatCard label="Stepped Out" value={counts.temp_out || 0} color="#06B6D4" Icon={Coffee} />
-        <StatCard label="On Tour" value={counts.on_tour || 0} color="#F97316" Icon={Plane} />
-        <StatCard label="On Leave" value={counts.on_leave || 0} color="#F59E0B" Icon={Bed} />
-        <StatCard label="Exited" value={counts.exited || 0} color="#6B7280" Icon={ExitIcon} />
-      </div>
-
-      <div className="flex flex-wrap justify-end gap-2 pb-3 mb-2 -mx-1 px-1">
-        {FILTERS.map((f) => {
-          const active = filter === f.key;
-          const c = counts[f.key === "all" ? "total" : f.key] ?? 0;
-          return (
-            <button
-              key={f.key}
-              data-testid={`filter-chip-${f.key}`}
-              onClick={() => setFilter(f.key)}
-              className={`iu-chip whitespace-nowrap shrink-0 ${active ? "iu-chip-active" : ""}`}
-            >
-              {f.label}
-              <span className={`min-w-[22px] h-5 px-1.5 rounded-full text-[10px] flex items-center justify-center ${active ? "bg-white/20 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>{c}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {loading ? (
-        <SkeletonList />
+      {loading && !data ? (
+        <SkeletonBoard />
       ) : error ? (
         <div className="iu-card p-10 text-center">
           <p className="text-slate-500">Failed to load presence data.</p>
           <button onClick={load} className="iu-btn-primary mt-4">Retry</button>
         </div>
-      ) : members.length === 0 ? (
-        <div className="iu-card p-10 text-center" data-testid="presence-empty">
-          <p className="text-slate-500 font-semibold">Nobody matches this filter right now.</p>
-        </div>
       ) : (
-        <div className="iu-card divide-y divide-slate-100 overflow-hidden" data-testid="presence-list">
-          {members.map((m) => <MemberRow key={m.id} m={m} />)}
+        <div
+          className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5"
+          data-testid="presence-board"
+        >
+          {COLUMNS.map((col) => (
+            <Column key={col.key} col={col} members={byColumn[col.key]} />
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function StatCard({ label, value, color, Icon }) {
+function Column({ col, members }) {
+  const Icon = col.icon;
   return (
-    <div className="iu-card p-4">
-      <div className="flex items-center justify-between">
-        <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: color + "22", color }}>
-          <Icon size={18} />
+    <section
+      className={`flex flex-col rounded-2xl ${col.soft} border border-slate-200 overflow-hidden`}
+      data-testid={`presence-column-${col.key}`}
+    >
+      <header
+        className="px-4 py-3 flex items-center gap-2 bg-white/70 backdrop-blur border-b border-slate-200"
+        style={{ boxShadow: `inset 4px 0 0 ${col.accent}` }}
+      >
+        <div
+          className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
+          style={{ background: col.accent + "20", color: col.accent }}
+        >
+          <Icon size={15} />
         </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500">{col.label}</div>
+        </div>
+        <span className={`min-w-[26px] h-6 px-2 rounded-full text-xs font-bold flex items-center justify-center ${col.badge}`} data-testid={`column-count-${col.key}`}>
+          {members.length}
+        </span>
+      </header>
+
+      <div className="flex-1 overflow-y-auto max-h-[calc(100vh-220px)] min-h-[120px] divide-y divide-slate-100 bg-white">
+        {members.length === 0 ? (
+          <div className="px-4 py-8 text-center text-xs text-slate-400">No one here.</div>
+        ) : (
+          members.map((m) => <MemberCard key={m.id} m={m} accent={col.accent} columnKey={col.key} />)
+        )}
       </div>
-      <div className="text-2xl font-extrabold mt-3" data-testid={`stat-${label.toLowerCase().replace(/\s+/g, "-")}`}>{value}</div>
-      <div className="text-xs text-slate-500 font-semibold uppercase tracking-wide mt-0.5">{label}</div>
-    </div>
+    </section>
   );
 }
 
-function MemberRow({ m }) {
+function MemberCard({ m, accent, columnKey }) {
   return (
-    <div className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition" data-testid={`presence-row-${m.id}`}>
-      <Avatar name={m.full_name} photo={m.photo} size={40} ring={m.status === "on_campus" ? "#10B981" : null} />
+    <div className="px-3 py-2.5 flex gap-2.5 items-start hover:bg-slate-50 transition" data-testid={`presence-row-${m.id}`}>
+      <Avatar name={m.full_name} photo={m.photo} size={34} ring={columnKey === "on_campus" ? accent : null} />
       <div className="flex-1 min-w-0">
-        <div className="font-semibold text-slate-900 truncate">{m.full_name}</div>
-        <div className="text-xs text-slate-500 truncate">
+        <div className="text-[13px] font-semibold text-slate-900 leading-tight truncate">{m.full_name}</div>
+        <div className="text-[11px] text-slate-500 leading-tight truncate mt-0.5">
           {m.rank ? `${m.rank} · ` : ""}{categoryLabel(m.category)}
-          {m.detail ? ` · ${m.detail}` : ""}
+        </div>
+        {m.detail && (
+          <div className="text-[11px] text-slate-500 truncate mt-0.5">{m.detail}</div>
+        )}
+        <div className="flex flex-wrap gap-1 mt-1">
           {m.flagged && (
-            <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
-              <AlertTriangle size={10} /> Off-site
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
+              <AlertTriangle size={9} /> Off-site
             </span>
           )}
           {m.late && (
-            <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
-              <Clock size={10} /> Late
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
+              <Clock size={9} /> Late
             </span>
           )}
           {m.overdue_minutes > 0 && (
-            <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold" data-testid={`overdue-chip-${m.id}`}>
-              <AlertTriangle size={10} /> Overdue {m.overdue_minutes}m
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold" data-testid={`overdue-chip-${m.id}`}>
+              <AlertTriangle size={9} /> Overdue {m.overdue_minutes}m
             </span>
           )}
         </div>
         <GeoLine geoIn={m.geo_in} geoOut={m.geo_out} status={m.status} />
       </div>
-      <StatusBadge status={m.status} />
     </div>
   );
 }
@@ -160,17 +173,16 @@ function formatDist(m) {
 function describeGeo(g) {
   if (!g || !g.method) return null;
   if (g.method === "muster") {
-    return { label: g.by ? `Muster · by ${g.by}` : "Muster — no GPS captured", tone: "slate" };
+    return { label: g.by ? `Muster · by ${g.by}` : "Muster · no GPS", tone: "slate" };
   }
   if (g.geo_unavailable) {
-    return { label: "GPS unavailable — distance not captured", tone: "amber" };
+    return { label: "GPS unavailable", tone: "amber" };
   }
   const d = formatDist(g.distance_m);
-  if (d == null) return { label: `${g.method.toUpperCase()} — distance not captured`, tone: "amber" };
+  if (d == null) return { label: "distance not captured", tone: "amber" };
   return {
-    label: `${d} from office`,
+    label: `${d} ${g.out_of_geofence ? "off-site" : "on-site"}`,
     tone: g.out_of_geofence ? "amber" : "emerald",
-    suffix: g.out_of_geofence ? "off-site" : "on-site",
   };
 }
 
@@ -179,38 +191,41 @@ function GeoLine({ geoIn, geoOut, status }) {
   const outInfo = status === "exited" ? describeGeo(geoOut) : null;
   if (!inInfo && !outInfo) return null;
   return (
-    <div className="text-[11px] text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+    <div className="text-[10px] text-slate-500 mt-1 flex flex-col gap-0.5">
       {inInfo && <GeoChip label="IN" {...inInfo} />}
       {outInfo && <GeoChip label="OUT" {...outInfo} />}
     </div>
   );
 }
 
-function GeoChip({ label, tone, suffix, ...rest }) {
+function GeoChip({ label, tone, ...rest }) {
   const colour = tone === "amber" ? "text-amber-600" : tone === "emerald" ? "text-emerald-600" : "text-slate-500";
   return (
     <span className="inline-flex items-center gap-1">
       <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
-      <MapPin size={10} className={colour} />
+      <MapPin size={9} className={colour} />
       <span className={colour}>{rest.label}</span>
-      {suffix && <span className={`${colour} font-semibold`}>· {suffix}</span>}
     </span>
   );
 }
 
-function SkeletonList() {
-  // Static placeholder list — never reorders and has no underlying data,
-  // so using the array index as key is React-idiomatic here.
+function SkeletonBoard() {
   return (
-    <div className="iu-card divide-y divide-slate-100 overflow-hidden">
-      {[...Array(6)].map((_, i) => (
-        <div key={`skeleton-${i}`} className="px-4 py-3 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-slate-200 animate-pulse" />
-          <div className="flex-1">
-            <div className="h-3 bg-slate-200 rounded w-1/2 animate-pulse" />
-            <div className="h-2.5 bg-slate-200 rounded w-1/3 animate-pulse mt-2" />
+    <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+      {COLUMNS.map((col) => (
+        <div key={col.key} className={`rounded-2xl ${col.soft} border border-slate-200 overflow-hidden`}>
+          <div className="px-4 py-3 bg-white/70 border-b border-slate-200 h-12" />
+          <div className="bg-white divide-y divide-slate-100">
+            {[...Array(4)].map((_, i) => (
+              <div key={`sk-${col.key}-${i}`} className="px-3 py-3 flex items-start gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-slate-200 animate-pulse" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-2.5 bg-slate-200 rounded w-3/4 animate-pulse" />
+                  <div className="h-2 bg-slate-200 rounded w-1/2 animate-pulse" />
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="h-6 w-20 bg-slate-200 rounded-full animate-pulse" />
         </div>
       ))}
     </div>
