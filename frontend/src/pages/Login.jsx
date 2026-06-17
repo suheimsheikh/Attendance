@@ -198,14 +198,8 @@ export default function Login() {
 function Shell({ children }) {
   return (
     <div className="min-h-screen flex">
-      <div className="hidden md:flex md:w-1/2 relative items-end p-12 text-white overflow-hidden">
-        <div className="absolute inset-0 bg-cover bg-center" style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1689846136233-de0717f3675c?crop=entropy&cs=srgb&fm=jpg&w=1600&q=85')"
-        }} />
-        <div className="absolute inset-0" style={{
-          background: "linear-gradient(180deg, rgba(15,23,42,0.35) 0%, rgba(15,23,42,0.75) 60%, #0F172A 100%)"
-        }} />
-        <div className="relative z-10 max-w-sm bg-white/95 rounded-2xl p-6 shadow-2xl">
+      <div className="hidden md:flex md:w-1/2 relative items-center justify-center p-12 overflow-hidden bg-gradient-to-br from-slate-50 via-sky-50 to-teal-50">
+        <div className="relative z-10 max-w-md w-full bg-white rounded-2xl p-8 shadow-xl ring-1 ring-slate-200">
           <img src="/yc-logo.png" alt="The Yacht Club of Hyderabad" className="w-full h-auto" />
           <p className="mt-4 text-slate-600 text-sm text-center font-medium">Campus presence &amp; duty tracking</p>
         </div>
