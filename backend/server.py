@@ -1084,12 +1084,11 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             "checked_out_by": by,
         }})
         return {"ok": True, "action": "checkout", "member": target["full_name"],
-                "hours": hours, "out_of_geofence": out}
+                "hours": hours, "out_of_geofence": out, "distance_m": dist}
     if out:
-        raise HTTPException(
-            status_code=400,
-            detail=f"About {int(dist)} m from the office — move within {office['radius_m']} m to check in.",
-        )
+        # Geofence is informational only — distance is recorded on the
+        # attendance row but does not block the check-in.
+        pass
     late, late_minutes = compute_late(office, target, ts)
     doc = {
         "id": str(uuid.uuid4()),
@@ -1101,15 +1100,16 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         "check_out_photo": None,
         "hours": None,
         "latitude": lat, "longitude": lng,
-        "distance_m": dist, "out_of_geofence": False,
-        "geo_reason": None,
+        "distance_m": dist, "out_of_geofence": out,
+        "geo_reason": (reason or None) if out else None,
         "late": late,
         "late_minutes": late_minutes,
         "method": "geo",
         "checked_in_by": by,
     }
     await db.attendance.insert_one(doc)
-    return {"ok": True, "action": "checkin", "member": target["full_name"], "out_of_geofence": False}
+    return {"ok": True, "action": "checkin", "member": target["full_name"],
+            "out_of_geofence": out, "distance_m": dist}
 
 
 @api_router.post("/attendance/geo-toggle")

@@ -10,7 +10,7 @@ import Avatar from "./Avatar";
 
 const NAV_MEMBER = [
   { to: "/", label: "Presence", icon: LayoutDashboard, end: true },
-  { to: "/check-in", label: "Check In / Out", icon: ScanLine, disabled: true, disabledReason: "QR & GPS check-in are disabled — use Muster Roll" },
+  { to: "/check-in", label: "Check In / Out", icon: ScanLine },
   { to: "/my-leaves", label: "My Leaves", icon: CalendarCheck2 },
   { to: "/profile", label: "Profile", icon: UserCog },
 ];

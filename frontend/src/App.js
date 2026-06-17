@@ -6,7 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Presence from "./pages/Presence";
-import CheckIn from "./pages/CheckIn";
+import SelfCheckIn from "./pages/SelfCheckIn";
 import Profile from "./pages/Profile";
 import DisabledFeature from "./pages/DisabledFeature";
 import MyLeaves from "./pages/MyLeaves";
@@ -64,7 +64,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<Presence />} />
-            <Route path="check-in" element={<DisabledFeature title="QR & GPS check-in disabled" reason="Use Muster Roll instead — your coach will check you in." />} />
+            <Route path="check-in" element={<SelfCheckIn />} />
             <Route path="muster" element={<RequireMuster><Muster /></RequireMuster>} />
             <Route path="my-leaves" element={<MyLeaves />} />
             <Route path="profile" element={<Profile />} />
