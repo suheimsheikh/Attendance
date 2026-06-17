@@ -124,7 +124,7 @@ export function todayIso() {
 }
 
 export function categoryLabel(cat) {
-  return { sailor: "Sailor", staff: "Staff", coach: "Coach" }[cat] || cat;
+  return { athlete: "Athlete", staff: "Staff", coach: "Coach" }[cat] || cat;
 }
 
 export const statusConfig = {

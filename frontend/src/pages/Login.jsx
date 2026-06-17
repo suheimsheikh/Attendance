@@ -286,7 +286,7 @@ function AdminEmailForm({ onLogin, onDone }) {
 function ProfileIntroForm({ phone, onSubmit, onBack }) {
   const [fullName, setFullName] = useState("");
   const [rank, setRank] = useState("");
-  const [category, setCategory] = useState("sailor");
+  const [category, setCategory] = useState("athlete");
   const [busy, setBusy] = useState(false);
 
   const submit = async (e) => {
@@ -339,7 +339,7 @@ function ProfileIntroForm({ phone, onSubmit, onBack }) {
         <div>
           <label className="iu-label">Category</label>
           <div className="grid grid-cols-3 gap-2" data-testid="profile-category-row">
-            {["sailor", "staff", "coach"].map((c) => (
+            {["athlete", "staff", "coach"].map((c) => (
               <button
                 key={c}
                 type="button"

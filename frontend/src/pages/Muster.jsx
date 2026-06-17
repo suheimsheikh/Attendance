@@ -25,7 +25,7 @@ export default function Muster() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get("/muster/sailors", { mode });
+      const res = await api.get("/muster/athletes", { mode });
       setData(res);
       setPicked(new Set());
     } catch (err) {
@@ -42,7 +42,7 @@ export default function Muster() {
   // Distinct institutions present in the current roster (sorted, "(none)" last).
   const institutions = useMemo(() => {
     const set = new Map();  // name -> count
-    (data?.sailors || []).forEach((s) => {
+    (data?.athletes || []).forEach((s) => {
       const k = s.institution || "(no institution)";
       set.set(k, (set.get(k) || 0) + 1);
     });
@@ -56,7 +56,7 @@ export default function Muster() {
   }, [data]);
 
   const filtered = useMemo(() => {
-    const list = data?.sailors || [];
+    const list = data?.athletes || [];
     const q = search.trim().toLowerCase();
     return list.filter((s) => {
       if (institutionFilter !== "all") {
@@ -88,20 +88,20 @@ export default function Muster() {
 
   const submit = async () => {
     if (picked.size === 0) {
-      toast.error("Tick at least one sailor first");
+      toast.error("Tick at least one athlete first");
       return;
     }
     setSaving(true);
     try {
       const endpoint = mode === "checkin" ? "/muster/checkin-bulk" : "/muster/checkout-bulk";
-      const res = await api.post(endpoint, { sailor_ids: Array.from(picked) });
+      const res = await api.post(endpoint, { athlete_ids: Array.from(picked) });
       const doneCount = res.checked_in_count ?? res.checked_out_count ?? 0;
       const skipCount = res.skipped_count ?? 0;
       const skipNote = skipCount > 0 ? ` · ${skipCount} skipped` : "";
       toast.success(
         mode === "checkin"
-          ? `${doneCount} sailor${doneCount === 1 ? "" : "s"} marked present${skipNote}`
-          : `${doneCount} sailor${doneCount === 1 ? "" : "s"} marked departed${skipNote}`
+          ? `${doneCount} athlete${doneCount === 1 ? "" : "s"} marked present${skipNote}`
+          : `${doneCount} athlete${doneCount === 1 ? "" : "s"} marked departed${skipNote}`
       );
       load();
     } catch (err) {
@@ -118,7 +118,7 @@ export default function Muster() {
       <header className="mb-6">
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Muster Roll</h1>
         <p className="text-slate-500 text-sm mt-1">
-          Tick the sailors who are physically present. Their attendance is logged with your name as the verifier.
+          Tick the athletes who are physically present. Their attendance is logged with your name as the verifier.
         </p>
       </header>
 
@@ -149,7 +149,7 @@ export default function Muster() {
           >
             All
             <span className={`min-w-[22px] h-5 px-1.5 rounded-full text-[10px] flex items-center justify-center ${institutionFilter === "all" ? "bg-white/20 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>
-              {(data?.sailors || []).length}
+              {(data?.athletes || []).length}
             </span>
           </button>
           {institutions.map((inst) => {
@@ -179,7 +179,7 @@ export default function Muster() {
             data-testid="muster-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter sailors by name or rank…"
+            placeholder="Filter athletes by name or rank…"
             className="flex-1 outline-none bg-transparent text-sm"
           />
         </div>
@@ -200,7 +200,7 @@ export default function Muster() {
       {/* Summary line */}
       <div className="flex items-baseline justify-between mb-2 px-1">
         <p className="text-sm text-slate-600" data-testid="muster-summary">
-          <span className="font-bold text-slate-900">{filtered.length}</span> sailor{filtered.length === 1 ? "" : "s"} {mode === "checkin" ? "to check in" : "still on campus"}
+          <span className="font-bold text-slate-900">{filtered.length}</span> athlete{filtered.length === 1 ? "" : "s"} {mode === "checkin" ? "to check in" : "still on campus"}
           {picked.size > 0 && (
             <> · <span className="font-bold text-emerald-700">{picked.size}</span> ticked</>
           )}
@@ -218,7 +218,7 @@ export default function Muster() {
           </p>
           <p className="text-sm text-slate-500 mt-1">
             {mode === "checkin"
-              ? "All sailors are either already checked in, on leave, or have completed their day."
+              ? "All athletes are either already checked in, on leave, or have completed their day."
               : "There's nobody to check out right now."}
           </p>
         </div>
@@ -255,7 +255,7 @@ export default function Muster() {
         <div className="max-w-3xl mx-auto flex items-center gap-3">
           <div className="flex-1 text-sm">
             {picked.size === 0
-              ? <span className="text-slate-400">Tick sailors above to {meta.verb.toLowerCase()}</span>
+              ? <span className="text-slate-400">Tick athletes above to {meta.verb.toLowerCase()}</span>
               : <span className="font-semibold text-slate-900">{picked.size} ticked</span>}
             {user?.full_name && (
               <span className="text-xs text-slate-400 block">Verified by {user.full_name}</span>

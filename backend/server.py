@@ -203,7 +203,7 @@ class MemberCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=4)
     full_name: str
-    category: Literal["sailor", "staff", "coach"] = "sailor"
+    category: Literal["athlete", "staff", "coach"] = "athlete"
     rank: Optional[str] = None
     mobile: Optional[str] = None
     work_start: Optional[str] = None
@@ -215,7 +215,7 @@ class MemberCreate(BaseModel):
 
 class MemberUpdate(BaseModel):
     full_name: Optional[str] = None
-    category: Optional[Literal["sailor", "staff", "coach"]] = None
+    category: Optional[Literal["athlete", "staff", "coach"]] = None
     rank: Optional[str] = None
     mobile: Optional[str] = None
     work_start: Optional[str] = None
@@ -289,13 +289,13 @@ class PhoneLoginIn(BaseModel):
     # admin approval form for brand-new members).
     full_name: Optional[str] = None
     rank: Optional[str] = None
-    category: Optional[Literal["sailor", "staff", "coach"]] = None
+    category: Optional[Literal["athlete", "staff", "coach"]] = None
 
 
 class DeviceApproveIn(BaseModel):
     full_name: Optional[str] = None
     role: Literal["admin", "member"] = "member"
-    category: Literal["sailor", "staff", "coach"] = "sailor"
+    category: Literal["athlete", "staff", "coach"] = "athlete"
     rank: Optional[str] = None
 
 
@@ -715,8 +715,8 @@ async def import_template(admin: dict = Depends(require_admin)):
     ws.title = "Members"
     headers = ["full_name", "mobile", "email", "password", "rank", "category", "gender", "work_start", "work_end", "institution"]
     ws.append(headers)
-    ws.append(["Arjun Nair", "9876543210", "arjun@academy.in", "secret123", "Petty Officer", "sailor", "M", "08:00", "17:00", "INS Hamla"])
-    ws.append(["Meera Kapoor", "9876500001", "", "", "Leading Seaman", "sailor", "F", "", "", "Naval Sailing Academy"])
+    ws.append(["Arjun Nair", "9876543210", "arjun@academy.in", "secret123", "Petty Officer", "athlete", "M", "08:00", "17:00", "INS Hamla"])
+    ws.append(["Meera Kapoor", "9876500001", "", "", "Leading Seaman", "athlete", "F", "", "", "Naval Sailing Academy"])
     ws.append(["Rohit Verma", "9876500002", "", "", "Head Coach", "coach", "M", "06:00", "14:00", "YCH Hyderabad"])
     for i in range(1, len(headers) + 1):
         ws.column_dimensions[get_column_letter(i)].width = 18
@@ -729,7 +729,7 @@ async def import_template(admin: dict = Depends(require_admin)):
         ["email", "No", "Login email. If blank, auto-generated as <mobile>@attendance.app"],
         ["password", "No", "If blank, the mobile number is used as the password"],
         ["rank", "No", "Rank / title, e.g. Petty Officer"],
-        ["category", "No", "sailor | staff | coach  (default: sailor)"],
+        ["category", "No", "athlete | staff | coach  (default: athlete)"],
         ["gender", "No", "M | F | O   (Male / Female / Other)"],
         ["work_start", "No", "Custom start time HH:MM (blank = office default)"],
         ["work_end", "No", "Custom end time HH:MM (blank = office default)"],
@@ -771,7 +771,7 @@ async def import_members(file: UploadFile = File(...), admin: dict = Depends(req
         s = str(v).strip()
         return s or None
 
-    valid_cats = {"sailor", "staff", "coach"}
+    valid_cats = {"athlete", "staff", "coach"}
     time_re = re.compile(r"^\d{1,2}:\d{2}$")
     created, errors = [], []
     for n, row in enumerate(rows[1:], start=2):
@@ -791,9 +791,9 @@ async def import_members(file: UploadFile = File(...), admin: dict = Depends(req
         if len(password) < 4:
             password = (password + "0000")[:4]
         rank = cell(row, "rank")
-        category = (cell(row, "category") or "sailor").lower()
+        category = (cell(row, "category") or "athlete").lower()
         if category not in valid_cats:
-            category = "sailor"
+            category = "athlete"
         ws_start = cell(row, "work_start")
         ws_end = cell(row, "work_end")
         institution = cell(row, "institution")
@@ -1355,8 +1355,8 @@ async def my_stats(user: dict = Depends(get_current_user)):
 
 
 # ----------------------------------------------------------------------------
-# Muster roll — bulk check-in/out for sailors performed by a coach or admin.
-# Sailors typically don't have phones; a coach physically musters them and
+# Muster roll — bulk check-in/out for athletes performed by a coach or admin.
+# Athletes typically don't have phones; a coach physically musters them and
 # ticks who's present (or who's departing).
 # ----------------------------------------------------------------------------
 def _can_muster(user: dict) -> bool:
@@ -1369,15 +1369,15 @@ def _require_muster(user: dict) -> None:
 
 
 class MusterBulkIn(BaseModel):
-    sailor_ids: List[str]
+    athlete_ids: List[str]
 
 
-@api_router.get("/muster/sailors")
-async def muster_sailors(mode: str = "checkin", user: dict = Depends(get_current_user)):
-    """List sailors eligible for the given muster mode:
-       checkin  → sailors not currently on-campus AND not on leave/tour AND not
+@api_router.get("/muster/athletes")
+async def muster_athletes(mode: str = "checkin", user: dict = Depends(get_current_user)):
+    """List athletes eligible for the given muster mode:
+       checkin  → athletes not currently on-campus AND not on leave/tour AND not
                   already closed-out today
-       checkout → sailors currently checked in (open session)
+       checkout → athletes currently checked in (open session)
     """
     _require_muster(user)
     if mode not in ("checkin", "checkout"):
@@ -1386,7 +1386,7 @@ async def muster_sailors(mode: str = "checkin", user: dict = Depends(get_current
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
 
-    sailors = await db.users.find({"category": "sailor"}, {"_id": 0}).to_list(2000)
+    athletes = await db.users.find({"category": "athlete"}, {"_id": 0}).to_list(2000)
 
     open_sessions = await db.attendance.find({"check_out_at": None}, {"_id": 0, "user_id": 1}).to_list(2000)
     open_ids = {s["user_id"] for s in open_sessions}
@@ -1398,11 +1398,11 @@ async def muster_sailors(mode: str = "checkin", user: dict = Depends(get_current
     on_leave_ids = {l["user_id"] for l in on_leave}
 
     out: List[dict] = []
-    for s in sailors:
+    for s in athletes:
         sid = s["id"]
         if mode == "checkin":
-            # Sailor is eligible to check in if NOT currently on-campus and NOT on leave/tour.
-            # (Sailors who already checked out today CAN check in again for a second session.)
+            # Athlete is eligible to check in if NOT currently on-campus and NOT on leave/tour.
+            # (Athletes who already checked out today CAN check in again for a second session.)
             if sid in open_ids or sid in on_leave_ids:
                 continue
         else:  # checkout
@@ -1418,7 +1418,7 @@ async def muster_sailors(mode: str = "checkin", user: dict = Depends(get_current
         })
 
     out.sort(key=lambda x: (x["full_name"] or "").lower())
-    return {"mode": mode, "date": today, "sailors": out, "count": len(out)}
+    return {"mode": mode, "date": today, "athletes": out, "count": len(out)}
 
 
 @api_router.post("/muster/checkin-bulk")
@@ -1428,15 +1428,15 @@ async def muster_checkin_bulk(body: MusterBulkIn, user: dict = Depends(get_curre
     today = local_date_str(office)
     now = now_utc()
     done, skipped = [], []
-    for sid in body.sailor_ids:
-        sailor = await db.users.find_one({"id": sid, "category": "sailor"}, {"_id": 0})
-        if not sailor:
-            skipped.append({"id": sid, "reason": "not a sailor"})
+    for sid in body.athlete_ids:
+        athlete = await db.users.find_one({"id": sid, "category": "athlete"}, {"_id": 0})
+        if not athlete:
+            skipped.append({"id": sid, "reason": "not an athlete"})
             continue
         if await db.attendance.find_one({"user_id": sid, "check_out_at": None}):
-            skipped.append({"id": sid, "name": sailor["full_name"], "reason": "already checked in"})
+            skipped.append({"id": sid, "name": athlete["full_name"], "reason": "already checked in"})
             continue
-        late, late_min = compute_late(office, sailor, now)
+        late, late_min = compute_late(office, athlete, now)
         att = {
             "id": str(uuid.uuid4()),
             "user_id": sid,
@@ -1457,7 +1457,7 @@ async def muster_checkin_bulk(body: MusterBulkIn, user: dict = Depends(get_curre
             "created_at": now.isoformat(),
         }
         await db.attendance.insert_one(att)
-        done.append({"id": sid, "name": sailor["full_name"], "late": late})
+        done.append({"id": sid, "name": athlete["full_name"], "late": late})
     return {"checked_in_count": len(done), "skipped_count": len(skipped), "checked_in": done, "skipped": skipped}
 
 
@@ -1466,14 +1466,14 @@ async def muster_checkout_bulk(body: MusterBulkIn, user: dict = Depends(get_curr
     _require_muster(user)
     now = now_utc()
     done, skipped = [], []
-    for sid in body.sailor_ids:
-        sailor = await db.users.find_one({"id": sid, "category": "sailor"}, {"_id": 0})
-        if not sailor:
-            skipped.append({"id": sid, "reason": "not a sailor"})
+    for sid in body.athlete_ids:
+        athlete = await db.users.find_one({"id": sid, "category": "athlete"}, {"_id": 0})
+        if not athlete:
+            skipped.append({"id": sid, "reason": "not an athlete"})
             continue
         sess = await db.attendance.find_one({"user_id": sid, "check_out_at": None}, {"_id": 0})
         if not sess:
-            skipped.append({"id": sid, "name": sailor["full_name"], "reason": "not checked in"})
+            skipped.append({"id": sid, "name": athlete["full_name"], "reason": "not checked in"})
             continue
         cin = datetime.fromisoformat(sess["check_in_at"])
         excursions = sess.get("excursions") or []
@@ -1496,7 +1496,7 @@ async def muster_checkout_bulk(body: MusterBulkIn, user: dict = Depends(get_curr
             "checked_out_by": user["full_name"],
             "checked_out_by_id": user["id"],
         }})
-        done.append({"id": sid, "name": sailor["full_name"], "hours": hours})
+        done.append({"id": sid, "name": athlete["full_name"], "hours": hours})
     return {"checked_out_count": len(done), "skipped_count": len(skipped), "checked_out": done, "skipped": skipped}
 
 

@@ -12,7 +12,7 @@ function nDaysAgo(n) {
 
 const CATEGORY_FILTERS = [
   { key: "all", label: "All" },
-  { key: "sailor", label: "Sailors" },
+  { key: "athlete", label: "Athletes" },
   { key: "staff", label: "Staff" },
   { key: "coach", label: "Coaches" },
 ];

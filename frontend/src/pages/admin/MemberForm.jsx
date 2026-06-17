@@ -11,7 +11,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     password: "",
     mobile: initial?.mobile || "",
     rank: initial?.rank || "",
-    category: initial?.category || "sailor",
+    category: initial?.category || "athlete",
     role: initial?.role || "member",
     work_start: initial?.work_start || "",
     work_end: initial?.work_end || "",
@@ -80,7 +80,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
             <div>
               <label className="iu-label">Category</label>
               <select data-testid="mf-category" value={form.category} onChange={(e) => set("category", e.target.value)} className="iu-input">
-                <option value="sailor">Sailor</option>
+                <option value="athlete">Athlete</option>
                 <option value="staff">Staff</option>
                 <option value="coach">Coach</option>
               </select>

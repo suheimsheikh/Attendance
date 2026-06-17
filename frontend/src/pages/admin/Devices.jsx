@@ -101,7 +101,7 @@ function ApproveDialog({ device, onClose, onApproved }) {
   const [form, setForm] = useState({
     full_name: device.member_name || device.proposed_full_name || "",
     role: device.member_role || "member",
-    category: device.member_category || device.proposed_category || "sailor",
+    category: device.member_category || device.proposed_category || "athlete",
     rank: device.member_rank || device.proposed_rank || "",
   });
   const [busy, setBusy] = useState(false);
@@ -148,7 +148,7 @@ function ApproveDialog({ device, onClose, onApproved }) {
             <div>
               <label className="iu-label">Category</label>
               <select data-testid="ad-category" value={form.category} onChange={(e) => set("category", e.target.value)} className="iu-input">
-                <option value="sailor">Sailor</option>
+                <option value="athlete">Athlete</option>
                 <option value="staff">Staff</option>
                 <option value="coach">Coach</option>
               </select>
