@@ -1797,12 +1797,37 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
     for a in atts:
         by_user.setdefault(a["user_id"], []).append(a)
 
+    # Approved leaves/tours that overlap the report window, grouped by user.
+    leaves = await db.leaves.find(
+        {
+            "status": "approved",
+            "start_date": {"$lte": end},
+            "end_date": {"$gte": start},
+        },
+        {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1},
+    ).to_list(10000)
+    leaves_by_user: dict = {}
+    for l in leaves:
+        leaves_by_user.setdefault(l["user_id"], []).append(l)
+
+    def _count_leave_days(user_leaves: List[dict]) -> int:
+        days = set()
+        for l in user_leaves:
+            ls = max(date.fromisoformat(l["start_date"]), sd)
+            le = min(date.fromisoformat(l["end_date"]), ed)
+            cur = ls
+            while cur <= le:
+                days.add(cur.isoformat())
+                cur += timedelta(days=1)
+        return len(days)
+
     rows = []
     for u in users:
         sessions = by_user.get(u["id"], [])
         total_hours = round(sum(s.get("hours") or 0 for s in sessions), 2)
         days_present = len({s["date"] for s in sessions})
         late_days = len({s["date"] for s in sessions if s.get("late")})
+        days_on_leave = _count_leave_days(leaves_by_user.get(u["id"], []))
         attendance_pct = round((days_present / span_days) * 100, 1)
         rows.append({
             "member_id": u["id"],
@@ -1812,6 +1837,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "total_hours": total_hours,
             "days_present": days_present,
             "late_days": late_days,
+            "days_on_leave": days_on_leave,
             "span_days": span_days,
             "attendance_pct": attendance_pct,
         })
@@ -1882,9 +1908,9 @@ def _csv_response(headers: List[str], rows: List[List], filename: str) -> Respon
 @api_router.get("/reports/hours/export")
 async def export_hours(start: str, end: str, fmt: str = "csv", admin: dict = Depends(require_admin)):
     rows = await compute_hours_report(start, end)
-    headers = ["Name", "Category", "Rank", "Hours", "Days Present", "Late Days", "Attendance %"]
-    table = [[r["member_name"], r["category"], r.get("rank") or "-", r["total_hours"],
-              r["days_present"], r.get("late_days", 0), f"{r['attendance_pct']}%"] for r in rows]
+    headers = ["Attendance %", "Name", "Category", "Rank", "Hours", "Days Present", "Late Days", "Leave Days"]
+    table = [[f"{r['attendance_pct']}%", r["member_name"], r["category"], r.get("rank") or "-",
+              r["total_hours"], r["days_present"], r.get("late_days", 0), r.get("days_on_leave", 0)] for r in rows]
     if fmt == "pdf":
         pdf = _pdf_from_table("Attendance & Hours Report", headers, table, f"{start} to {end}")
         return Response(content=pdf, media_type="application/pdf",

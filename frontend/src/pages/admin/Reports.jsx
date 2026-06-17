@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, FileDown, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob } from "../../api";
@@ -10,6 +10,18 @@ function nDaysAgo(n) {
   return d.toISOString().slice(0, 10);
 }
 
+const CATEGORY_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "sailor", label: "Sailors" },
+  { key: "staff", label: "Staff" },
+  { key: "coach", label: "Coaches" },
+];
+
+const SORT_OPTIONS = [
+  { key: "alpha", label: "A → Z" },
+  { key: "pct_desc", label: "Attendance %" },
+];
+
 export default function Reports() {
   const [start, setStart] = useState(nDaysAgo(7));
   const [end, setEnd] = useState(todayIso());
@@ -18,6 +30,8 @@ export default function Reports() {
   const [tab, setTab] = useState("hours"); // hours | daily
   const [day, setDay] = useState(todayIso());
   const [daily, setDaily] = useState(null);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("alpha");
 
   const loadHours = async () => {
     setLoading(true);
@@ -39,6 +53,21 @@ export default function Reports() {
 
   const exportHours = (fmt) => downloadBlob("/reports/hours/export", `hours_${start}_${end}.${fmt}`, { start, end, fmt });
   const exportDaily = (fmt) => downloadBlob("/reports/daily/export", `daily_${day}.${fmt}`, { on: day, fmt });
+
+  const displayedRows = useMemo(() => {
+    let list = rows;
+    if (categoryFilter !== "all") {
+      list = list.filter((r) => r.category === categoryFilter);
+    }
+    const sorted = [...list];
+    if (sortBy === "pct_desc") {
+      sorted.sort((a, b) => (b.attendance_pct || 0) - (a.attendance_pct || 0)
+        || (a.member_name || "").localeCompare(b.member_name || ""));
+    } else {
+      sorted.sort((a, b) => (a.member_name || "").localeCompare(b.member_name || ""));
+    }
+    return sorted;
+  }, [rows, categoryFilter, sortBy]);
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
@@ -71,31 +100,66 @@ export default function Reports() {
             <button data-testid="export-hours-pdf" onClick={() => exportHours("pdf")} className="iu-btn-secondary"><FileText size={14}/> PDF</button>
           </div>
 
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div className="flex flex-wrap gap-2" data-testid="category-filters">
+              {CATEGORY_FILTERS.map((f) => {
+                const active = categoryFilter === f.key;
+                const count = f.key === "all" ? rows.length : rows.filter((r) => r.category === f.key).length;
+                return (
+                  <button
+                    key={f.key}
+                    data-testid={`cat-filter-${f.key}`}
+                    onClick={() => setCategoryFilter(f.key)}
+                    className={`iu-chip ${active ? "iu-chip-active" : ""}`}
+                  >
+                    {f.label}
+                    <span className={`min-w-[22px] h-5 px-1.5 rounded-full text-[10px] flex items-center justify-center ${active ? "bg-white/20 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2" data-testid="sort-options">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Sort</span>
+              {SORT_OPTIONS.map((s) => (
+                <button
+                  key={s.key}
+                  data-testid={`sort-${s.key}`}
+                  onClick={() => setSortBy(s.key)}
+                  className={`iu-chip ${sortBy === s.key ? "iu-chip-active" : ""}`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="iu-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50">
                   <tr>
+                    <th className="iu-table-th">Attendance</th>
                     <th className="iu-table-th">Member</th>
                     <th className="iu-table-th hidden md:table-cell">Category</th>
                     <th className="iu-table-th">Hours</th>
                     <th className="iu-table-th">Days</th>
                     <th className="iu-table-th hidden md:table-cell">Late days</th>
-                    <th className="iu-table-th">Attendance</th>
+                    <th className="iu-table-th">Leave days</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {displayedRows.map((r) => (
                     <tr key={r.member_id} className="hover:bg-slate-50" data-testid={`hours-row-${r.member_id}`}>
+                      <td className="iu-table-td font-bold">{r.attendance_pct}%</td>
                       <td className="iu-table-td font-semibold">{r.member_name}<div className="text-xs text-slate-400">{r.rank || ""}</div></td>
                       <td className="iu-table-td hidden md:table-cell">{categoryLabel(r.category)}</td>
-                      <td className="iu-table-td font-bold">{r.total_hours}h</td>
+                      <td className="iu-table-td">{r.total_hours}h</td>
                       <td className="iu-table-td">{r.days_present}/{r.span_days}</td>
                       <td className="iu-table-td hidden md:table-cell">{r.late_days}</td>
-                      <td className="iu-table-td">{r.attendance_pct}%</td>
+                      <td className="iu-table-td">{r.days_on_leave || 0}</td>
                     </tr>
                   ))}
-                  {rows.length === 0 && !loading && <tr><td colSpan={6} className="text-center py-10 text-slate-500">No data for this range.</td></tr>}
+                  {displayedRows.length === 0 && !loading && <tr><td colSpan={7} className="text-center py-10 text-slate-500">No data for this range.</td></tr>}
                 </tbody>
               </table>
             </div>
