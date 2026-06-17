@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Anchor, Phone, Mail, Lock, ArrowRight, Loader2, ChevronDown, ChevronUp, Hourglass, RefreshCw, User, Tag } from "lucide-react";
+import { Phone, Mail, Lock, ArrowRight, Loader2, ChevronDown, ChevronUp, Hourglass, RefreshCw, User, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../auth";
 import { api, ApiError, setToken } from "../api";
@@ -205,19 +205,16 @@ function Shell({ children }) {
         <div className="absolute inset-0" style={{
           background: "linear-gradient(180deg, rgba(15,23,42,0.35) 0%, rgba(15,23,42,0.75) 60%, #0F172A 100%)"
         }} />
-        <div className="relative z-10 max-w-sm">
-          <div className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center mb-4">
-            <Anchor />
-          </div>
-          <h1 className="text-4xl font-extrabold leading-tight">I Showed Up</h1>
-          <p className="mt-3 text-white/80 text-lg">Campus presence & duty tracking — now in your browser.</p>
+        <div className="relative z-10 max-w-sm bg-white/95 rounded-2xl p-6 shadow-2xl">
+          <img src="/yc-logo.png" alt="The Yacht Club of Hyderabad" className="w-full h-auto" />
+          <p className="mt-4 text-slate-600 text-sm text-center font-medium">Campus presence &amp; duty tracking</p>
         </div>
       </div>
       <div className="flex-1 flex items-center justify-center p-6 md:p-12 bg-white">
         <div className="w-full max-w-sm">
-          <div className="md:hidden flex items-center gap-2 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center"><Anchor size={18}/></div>
-            <span className="font-extrabold text-xl">I Showed Up</span>
+          <div className="md:hidden flex items-center gap-3 mb-6">
+            <img src="/favicon.png" alt="YCH" className="w-10 h-10 rounded-xl object-contain" />
+            <span className="font-extrabold text-xl leading-tight">Yacht Club<br/><span className="text-sm font-semibold text-slate-500">of Hyderabad</span></span>
           </div>
           {children}
         </div>

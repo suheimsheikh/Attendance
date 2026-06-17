@@ -4,7 +4,7 @@ import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, QrCode, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, ClipboardList, Building2, IdCard, FileSpreadsheet,
-  ShieldCheck, LogOut, Menu, X, Anchor, ListTree, ClipboardCheck
+  ShieldCheck, LogOut, Menu, X, ListTree, ClipboardCheck
 } from "lucide-react";
 import Avatar from "./Avatar";
 
@@ -43,12 +43,12 @@ export default function Layout() {
   const sidebar = (
     <aside className="w-64 shrink-0 bg-slate-900 text-slate-100 flex flex-col" data-testid="app-sidebar">
       <div className="flex items-center gap-2.5 px-5 h-16 border-b border-slate-800">
-        <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-          <Anchor size={18} />
+        <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center overflow-hidden">
+          <img src="/favicon.png" alt="YCH" className="w-8 h-8 object-contain" />
         </div>
         <div>
-          <div className="font-extrabold tracking-tight text-[15px] leading-none">I Showed Up</div>
-          <div className="text-[10px] uppercase tracking-widest text-slate-400 mt-1">Campus presence</div>
+          <div className="font-extrabold tracking-tight text-[15px] leading-none">Yacht Club</div>
+          <div className="text-[10px] uppercase tracking-widest text-slate-400 mt-1">of Hyderabad</div>
         </div>
       </div>
 
@@ -116,8 +116,8 @@ export default function Layout() {
             <Menu size={22} />
           </button>
           <div className="ml-2 flex items-center gap-2">
-            <Anchor size={18} className="text-slate-900" />
-            <span className="font-extrabold">I Showed Up</span>
+            <img src="/favicon.png" alt="YCH" className="w-6 h-6 object-contain" />
+            <span className="font-extrabold">Yacht Club</span>
           </div>
           <div className="ml-auto">
             <Avatar name={user?.full_name} photo={user?.photo} size={32} />
