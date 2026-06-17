@@ -145,6 +145,7 @@ export default function Reports() {
                     <th className="iu-table-th">Days</th>
                     <th className="iu-table-th hidden md:table-cell">Late days</th>
                     <th className="iu-table-th">Leave days</th>
+                    <th className="iu-table-th">Overstays</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -157,9 +158,10 @@ export default function Reports() {
                       <td className="iu-table-td">{r.days_present}/{r.span_days}</td>
                       <td className="iu-table-td hidden md:table-cell">{r.late_days}</td>
                       <td className="iu-table-td">{r.days_on_leave || 0}</td>
+                      <td className={`iu-table-td font-semibold ${(r.overstays || 0) > 0 ? "text-red-600" : "text-slate-400"}`}>{r.overstays || 0}</td>
                     </tr>
                   ))}
-                  {displayedRows.length === 0 && !loading && <tr><td colSpan={7} className="text-center py-10 text-slate-500">No data for this range.</td></tr>}
+                  {displayedRows.length === 0 && !loading && <tr><td colSpan={8} className="text-center py-10 text-slate-500">No data for this range.</td></tr>}
                 </tbody>
               </table>
             </div>

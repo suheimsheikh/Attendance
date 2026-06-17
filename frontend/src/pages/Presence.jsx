@@ -138,6 +138,11 @@ function MemberRow({ m }) {
               <Clock size={10} /> Late
             </span>
           )}
+          {m.overdue_minutes > 0 && (
+            <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold" data-testid={`overdue-chip-${m.id}`}>
+              <AlertTriangle size={10} /> Overdue {m.overdue_minutes}m
+            </span>
+          )}
         </div>
         <GeoLine geoIn={m.geo_in} geoOut={m.geo_out} status={m.status} />
       </div>

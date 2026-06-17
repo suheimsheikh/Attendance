@@ -1274,6 +1274,15 @@ async def presence(user: dict = Depends(get_current_user)):
                 detail = "Not on campus"
                 since = None
                 photo = u.get("photo")
+        # Open excursion: how many minutes overdue (if expected_return is in the past)?
+        open_exc_v = _open_excursion(sess) if sess else None
+        overdue_minutes = 0
+        if open_exc_v and open_exc_v.get("expected_return"):
+            try:
+                er = datetime.fromisoformat(open_exc_v["expected_return"])
+                overdue_minutes = max(0, int((now_utc() - er).total_seconds() // 60))
+            except Exception:
+                overdue_minutes = 0
         result.append({
             "id": u["id"],
             "full_name": u["full_name"],
@@ -1286,7 +1295,8 @@ async def presence(user: dict = Depends(get_current_user)):
             "photo": photo,
             "flagged": bool(sess and sess.get("out_of_geofence") and status_v == "on_campus"),
             "late": bool(sess and sess.get("late") and status_v == "on_campus"),
-            "expected_return": (_open_excursion(sess) or {}).get("expected_return") if sess else None,
+            "expected_return": open_exc_v.get("expected_return") if open_exc_v else None,
+            "overdue_minutes": overdue_minutes,
             "geo_in": geo_in or None,
             "geo_out": geo_out or None,
         })
@@ -1826,11 +1836,39 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
     # Batch: all attendance in range with hours, grouped by user_id
     atts = await db.attendance.find(
         {"date": {"$gte": start, "$lte": end}, "hours": {"$ne": None}},
-        {"_id": 0, "user_id": 1, "date": 1, "hours": 1, "late": 1},
+        {"_id": 0, "user_id": 1, "date": 1, "hours": 1, "late": 1, "excursions": 1},
     ).to_list(100000)
     by_user: dict = {}
     for a in atts:
         by_user.setdefault(a["user_id"], []).append(a)
+
+    def _overstays(sessions: List[dict]) -> int:
+        """Count excursions where the member returned later than the
+        expected_return time (or hasn't returned at all yet but expected_return
+        is past). Each such excursion counts as one overstay."""
+        count = 0
+        now = now_utc()
+        for s in sessions:
+            for e in (s.get("excursions") or []):
+                er_raw = e.get("expected_return")
+                if not er_raw:
+                    continue
+                try:
+                    er = datetime.fromisoformat(er_raw)
+                except Exception:
+                    continue
+                in_iso = e.get("in_at")
+                ref = None
+                if in_iso:
+                    try:
+                        ref = datetime.fromisoformat(in_iso)
+                    except Exception:
+                        ref = None
+                else:
+                    ref = now
+                if ref and (ref - er).total_seconds() > 0:
+                    count += 1
+        return count
 
     # Approved leaves/tours that overlap the report window, grouped by user.
     leaves = await db.leaves.find(
@@ -1863,6 +1901,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         days_present = len({s["date"] for s in sessions})
         late_days = len({s["date"] for s in sessions if s.get("late")})
         days_on_leave = _count_leave_days(leaves_by_user.get(u["id"], []))
+        overstays = _overstays(sessions)
         attendance_pct = round((days_present / span_days) * 100, 1)
         rows.append({
             "member_id": u["id"],
@@ -1873,6 +1912,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "days_present": days_present,
             "late_days": late_days,
             "days_on_leave": days_on_leave,
+            "overstays": overstays,
             "span_days": span_days,
             "attendance_pct": attendance_pct,
         })
@@ -1943,9 +1983,10 @@ def _csv_response(headers: List[str], rows: List[List], filename: str) -> Respon
 @api_router.get("/reports/hours/export")
 async def export_hours(start: str, end: str, fmt: str = "csv", admin: dict = Depends(require_admin)):
     rows = await compute_hours_report(start, end)
-    headers = ["Attendance %", "Name", "Category", "Rank", "Hours", "Days Present", "Late Days", "Leave Days"]
+    headers = ["Attendance %", "Name", "Category", "Rank", "Hours", "Days Present", "Late Days", "Leave Days", "Overstays"]
     table = [[f"{r['attendance_pct']}%", r["member_name"], r["category"], r.get("rank") or "-",
-              r["total_hours"], r["days_present"], r.get("late_days", 0), r.get("days_on_leave", 0)] for r in rows]
+              r["total_hours"], r["days_present"], r.get("late_days", 0), r.get("days_on_leave", 0),
+              r.get("overstays", 0)] for r in rows]
     if fmt == "pdf":
         pdf = _pdf_from_table("Attendance & Hours Report", headers, table, f"{start} to {end}")
         return Response(content=pdf, media_type="application/pdf",
