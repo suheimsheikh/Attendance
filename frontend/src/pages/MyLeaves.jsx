@@ -3,6 +3,7 @@ import { Loader2, Plus, X, CalendarDays, Plane, Bed } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import { shortDate, todayIso } from "../utils";
+import { useEscape } from "../hooks/useEscape";
 
 const TYPE_LABELS = { leave: { label: "Leave", color: "#F59E0B", Icon: Bed }, tour: { label: "Tour", color: "#F97316", Icon: Plane } };
 const STATUS_COLORS = {
@@ -72,6 +73,7 @@ export default function MyLeaves() {
 }
 
 function ApplyForm({ onClose, onCreated }) {
+  useEscape(onClose);
   const [type, setType] = useState("leave");
   const [start, setStart] = useState(todayIso());
   const [end, setEnd] = useState(todayIso());

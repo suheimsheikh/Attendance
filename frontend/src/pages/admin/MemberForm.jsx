@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
+import { useEscape } from "../../hooks/useEscape";
 
 export default function MemberForm({ initial, onClose, onSaved }) {
+  useEscape(onClose);
   const isEdit = !!initial;
   const [form, setForm] = useState({
     full_name: initial?.full_name || "",

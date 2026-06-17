@@ -3,6 +3,7 @@ import { Loader2, Check, X, Ban, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { categoryLabel } from "../../utils";
+import { useEscape } from "../../hooks/useEscape";
 
 const FILTERS = [
   { key: "pending", label: "Pending" },
@@ -97,6 +98,7 @@ export default function Devices() {
 }
 
 function ApproveDialog({ device, onClose, onApproved }) {
+  useEscape(onClose);
   const matched = !!device.member_name;
   const [form, setForm] = useState({
     full_name: device.member_name || device.proposed_full_name || "",
