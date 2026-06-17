@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee } from "lucide-react";
+import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin } from "lucide-react";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
 import StatusBadge from "../components/StatusBadge";
@@ -139,9 +139,57 @@ function MemberRow({ m }) {
             </span>
           )}
         </div>
+        <GeoLine geoIn={m.geo_in} geoOut={m.geo_out} status={m.status} />
       </div>
       <StatusBadge status={m.status} />
     </div>
+  );
+}
+
+function formatDist(m) {
+  if (m == null) return null;
+  if (m < 1000) return `${Math.round(m)} m`;
+  return `${(m / 1000).toFixed(1)} km`;
+}
+
+function describeGeo(g) {
+  if (!g || !g.method) return null;
+  if (g.method === "muster") {
+    return { label: g.by ? `Muster · by ${g.by}` : "Muster — no GPS captured", tone: "slate" };
+  }
+  if (g.geo_unavailable) {
+    return { label: "GPS unavailable — distance not captured", tone: "amber" };
+  }
+  const d = formatDist(g.distance_m);
+  if (d == null) return { label: `${g.method.toUpperCase()} — distance not captured`, tone: "amber" };
+  return {
+    label: `${d} from office`,
+    tone: g.out_of_geofence ? "amber" : "emerald",
+    suffix: g.out_of_geofence ? "off-site" : "on-site",
+  };
+}
+
+function GeoLine({ geoIn, geoOut, status }) {
+  const inInfo = describeGeo(geoIn);
+  const outInfo = status === "exited" ? describeGeo(geoOut) : null;
+  if (!inInfo && !outInfo) return null;
+  return (
+    <div className="text-[11px] text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+      {inInfo && <GeoChip label="IN" {...inInfo} />}
+      {outInfo && <GeoChip label="OUT" {...outInfo} />}
+    </div>
+  );
+}
+
+function GeoChip({ label, tone, suffix, ...rest }) {
+  const colour = tone === "amber" ? "text-amber-600" : tone === "emerald" ? "text-emerald-600" : "text-slate-500";
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+      <MapPin size={10} className={colour} />
+      <span className={colour}>{rest.label}</span>
+      {suffix && <span className={`${colour} font-semibold`}>· {suffix}</span>}
+    </span>
   );
 }
 

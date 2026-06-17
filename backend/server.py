@@ -1054,10 +1054,18 @@ async def check_out(body: CheckInIn, user: dict = Depends(get_current_user)):
 
 async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
                       reason: Optional[str], by: Optional[str]) -> dict:
-    """GPS-based check in/out (no QR). Check-in requires being inside the geofence;
-    check-out is allowed from anywhere (flagged off-site when outside)."""
-    dist = round(haversine_m(lat, lng, office["latitude"], office["longitude"]), 1)
-    out = dist > office["radius_m"]
+    """GPS-based check in/out (no QR). Distance from the office is recorded but
+    NOT enforced — a check-in always succeeds. If the caller could not obtain
+    a GPS fix they pass (0, 0) and we mark the row as `geo_unavailable`."""
+    geo_unavailable = (lat == 0 and lng == 0)
+    if geo_unavailable:
+        dist = None
+        out = False
+        stored_lat, stored_lng = None, None
+    else:
+        dist = round(haversine_m(lat, lng, office["latitude"], office["longitude"]), 1)
+        out = dist > office["radius_m"]
+        stored_lat, stored_lng = lat, lng
     sess = await open_session_for(target["id"])
     ts = now_utc()
     if sess:
@@ -1066,8 +1074,8 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         for e in excursions:
             if e.get("out_at") and not e.get("in_at"):
                 e["in_at"] = ts.isoformat()
-                e["in_latitude"] = lat
-                e["in_longitude"] = lng
+                e["in_latitude"] = stored_lat
+                e["in_longitude"] = stored_lng
                 e["auto_closed"] = True
         away_s = _excursion_seconds(excursions)
         # Excursions are on office hours — count the full session toward logged hours.
@@ -1077,8 +1085,9 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             "hours": hours,
             "away_minutes": int(away_s / 60),
             "excursions": excursions,
-            "exit_latitude": lat, "exit_longitude": lng,
+            "exit_latitude": stored_lat, "exit_longitude": stored_lng,
             "exit_distance_m": dist, "exit_out_of_geofence": out,
+            "exit_geo_unavailable": geo_unavailable,
             "exit_reason": (reason or None),
             "exit_method": "geo",
             "checked_out_by": by,
@@ -1099,8 +1108,9 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         "check_in_photo": None,
         "check_out_photo": None,
         "hours": None,
-        "latitude": lat, "longitude": lng,
+        "latitude": stored_lat, "longitude": stored_lng,
         "distance_m": dist, "out_of_geofence": out,
+        "geo_unavailable": geo_unavailable,
         "geo_reason": (reason or None) if out else None,
         "late": late,
         "late_minutes": late_minutes,
@@ -1198,16 +1208,18 @@ async def presence(user: dict = Depends(get_current_user)):
     last_outs = await db.attendance.aggregate([
         {"$match": {"check_out_at": {"$ne": None}}},
         {"$sort": {"check_out_at": -1}},
-        {"$group": {"_id": "$user_id",
-                    "check_out_at": {"$first": "$check_out_at"},
-                    "check_out_photo": {"$first": "$check_out_photo"}}},
+        {"$group": {"_id": "$user_id", "doc": {"$first": "$$ROOT"}}},
     ]).to_list(5000)
-    last_map = {d["_id"]: d for d in last_outs}
+    last_map = {d["_id"]: d["doc"] for d in last_outs}
 
     result = []
     for u in users:
         sess = sess_map.get(u["id"])
         leave = leave_map.get(u["id"])
+        # Geo info for whichever session is "current" (open session for on-campus/temp-out;
+        # last-completed session for exited members).
+        geo_in: dict = {}
+        geo_out: dict = {}
         if leave and leave["type"] == "tour":
             status_v = "on_tour"
             detail = leave.get("location") or "On tour"
@@ -1230,6 +1242,13 @@ async def presence(user: dict = Depends(get_current_user)):
                 detail = "Since " + local_hm(office, sess["check_in_at"])
                 since = sess["check_in_at"]
                 photo = sess.get("check_in_photo") or u.get("photo")
+            geo_in = {
+                "method": sess.get("method"),
+                "distance_m": sess.get("distance_m"),
+                "out_of_geofence": bool(sess.get("out_of_geofence")),
+                "geo_unavailable": bool(sess.get("geo_unavailable")),
+                "by": sess.get("checked_in_by"),
+            }
         else:
             last = last_map.get(u["id"])
             status_v = "exited"
@@ -1237,6 +1256,20 @@ async def presence(user: dict = Depends(get_current_user)):
                 detail = "Left " + local_hm(office, last["check_out_at"])
                 since = last["check_out_at"]
                 photo = last.get("check_out_photo") or u.get("photo")
+                geo_in = {
+                    "method": last.get("method"),
+                    "distance_m": last.get("distance_m"),
+                    "out_of_geofence": bool(last.get("out_of_geofence")),
+                    "geo_unavailable": bool(last.get("geo_unavailable")),
+                    "by": last.get("checked_in_by"),
+                }
+                geo_out = {
+                    "method": last.get("exit_method"),
+                    "distance_m": last.get("exit_distance_m"),
+                    "out_of_geofence": bool(last.get("exit_out_of_geofence")),
+                    "geo_unavailable": bool(last.get("exit_geo_unavailable")),
+                    "by": last.get("checked_out_by"),
+                }
             else:
                 detail = "Not on campus"
                 since = None
@@ -1254,6 +1287,8 @@ async def presence(user: dict = Depends(get_current_user)):
             "flagged": bool(sess and sess.get("out_of_geofence") and status_v == "on_campus"),
             "late": bool(sess and sess.get("late") and status_v == "on_campus"),
             "expected_return": (_open_excursion(sess) or {}).get("expected_return") if sess else None,
+            "geo_in": geo_in or None,
+            "geo_out": geo_out or None,
         })
     order = {"on_campus": 0, "temp_out": 1, "on_tour": 2, "on_leave": 3, "exited": 4}
     result.sort(key=lambda r: (order.get(r["status"], 9), r["full_name"]))
