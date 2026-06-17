@@ -27,7 +27,7 @@ export default function MyLeaves() {
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
       <header className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">My Leaves & Tours</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">My Leave and Tour</h1>
           <p className="text-slate-500 text-sm mt-1">Track your leave and tour requests.</p>
         </div>
         <button data-testid="apply-leave-button" onClick={() => setShowForm(true)} className="iu-btn-primary">

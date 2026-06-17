@@ -11,7 +11,7 @@ import Avatar from "./Avatar";
 const NAV_MEMBER = [
   { to: "/", label: "Presence", icon: LayoutDashboard, end: true },
   { to: "/check-in", label: "Check In / Out", icon: ScanLine },
-  { to: "/my-leaves", label: "My Leaves", icon: CalendarCheck2 },
+  { to: "/my-leaves", label: "My Leave and Tour", icon: CalendarCheck2 },
   { to: "/profile", label: "Profile", icon: UserCog },
 ];
 
