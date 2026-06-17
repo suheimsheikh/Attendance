@@ -57,7 +57,7 @@ export default function Sessions() {
       </div>
 
       <div className="iu-card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full">
             <thead className="bg-slate-50">
               <tr>

@@ -82,7 +82,7 @@ export default function Members() {
         <div className="text-center py-10"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
       ) : (
         <div className="iu-card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[70vh]">
             <table className="w-full">
               <thead className="bg-slate-50">
                 <tr>
