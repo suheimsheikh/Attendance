@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Plus, X, CalendarDays, Plane, Bed } from "lucide-react";
+import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import { shortDate, todayIso } from "../utils";
@@ -49,12 +49,19 @@ export default function MyLeaves() {
             const t = TYPE_LABELS[l.type] || TYPE_LABELS.leave;
             const s = STATUS_COLORS[l.status] || STATUS_COLORS.pending;
             return (
-              <div key={l.id} className="iu-card p-4 flex items-center gap-4" data-testid={`myleave-${l.id}`}>
+              <div key={l.id} className={`iu-card p-4 flex items-center gap-4 ${l.late_application ? "ring-2 ring-red-200 bg-red-50/50" : ""}`} data-testid={`myleave-${l.id}`}>
                 <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: t.color + "22", color: t.color }}>
                   <t.Icon size={18} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold">{t.label}{l.location ? ` · ${l.location}` : ""}</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="font-semibold">{t.label}{l.location ? ` · ${l.location}` : ""}</div>
+                    {l.late_application && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-extrabold uppercase tracking-wide">
+                        <AlertTriangle size={10} /> Late
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-slate-500">{shortDate(l.start_date)} – {shortDate(l.end_date)}</div>
                   <div className="text-xs text-slate-600 mt-1 line-clamp-2">{l.reason}</div>
                 </div>
@@ -122,6 +129,14 @@ function ApplyForm({ onClose, onCreated }) {
               <input data-testid="leave-end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} min={start} className="iu-input" />
             </div>
           </div>
+          {start < todayIso() && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-start gap-2" data-testid="late-application-notice">
+              <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" />
+              <div className="text-xs text-red-700">
+                <strong>Late application.</strong> Start date is in the past — this will be flagged for the admin to review.
+              </div>
+            </div>
+          )}
           {type === "tour" && (
             <div>
               <label className="iu-label">Tour location</label>

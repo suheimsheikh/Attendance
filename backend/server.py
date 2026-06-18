@@ -1398,6 +1398,11 @@ async def presence(user: dict = Depends(get_current_user)):
 # ----------------------------------------------------------------------------
 @api_router.post("/leaves")
 async def create_leave(body: LeaveCreate, user: dict = Depends(get_current_user)):
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+    # A "late application" is one where the leave/tour start date is in the past
+    # at the time of filing — i.e. it's being applied for retroactively.
+    late_application = bool(body.start_date and body.start_date < today)
     doc = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
@@ -1407,6 +1412,7 @@ async def create_leave(body: LeaveCreate, user: dict = Depends(get_current_user)
         "reason": body.reason,
         "location": body.location,
         "status": "pending",
+        "late_application": late_application,
         "created_at": now_utc().isoformat(),
     }
     await db.leaves.insert_one(doc)
@@ -1435,7 +1441,9 @@ async def my_leaves(user: dict = Depends(get_current_user)):
 @api_router.get("/leaves")
 async def all_leaves(status_filter: Optional[str] = None, admin: dict = Depends(require_admin)):
     q = {}
-    if status_filter:
+    if status_filter == "late":
+        q["late_application"] = True
+    elif status_filter:
         q["status"] = status_filter
     leaves = await db.leaves.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return await enrich_leaves(leaves)

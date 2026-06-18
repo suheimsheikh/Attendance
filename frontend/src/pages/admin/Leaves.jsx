@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Check, X, Bed, Plane } from "lucide-react";
+import { Loader2, Check, X, Bed, Plane, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { shortDate } from "../../utils";
@@ -8,6 +8,7 @@ const FILTERS = [
   { key: "pending", label: "Pending" },
   { key: "approved", label: "Approved" },
   { key: "rejected", label: "Rejected" },
+  { key: "late", label: "Late applications" },
   { key: "all", label: "All" },
 ];
 
@@ -58,12 +59,19 @@ export default function AdminLeaves() {
       ) : (
         <div className="space-y-3" data-testid="admin-leaves-list">
           {items.map((l) => (
-            <div key={l.id} className="iu-card p-4 flex flex-wrap items-center gap-4" data-testid={`leave-row-${l.id}`}>
+            <div key={l.id} className={`iu-card p-4 flex flex-wrap items-center gap-4 ${l.late_application ? "ring-2 ring-red-200 bg-red-50/50" : ""}`} data-testid={`leave-row-${l.id}`}>
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${l.type === "tour" ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700"}`}>
                 {l.type === "tour" ? <Plane size={18}/> : <Bed size={18}/>}
               </div>
               <div className="flex-1 min-w-[200px]">
-                <div className="font-semibold">{l.member_name}</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="font-semibold">{l.member_name}</div>
+                  {l.late_application && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-extrabold uppercase tracking-wide" data-testid={`late-chip-${l.id}`}>
+                      <AlertTriangle size={10} /> Late application
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs text-slate-500">{l.member_rank ? `${l.member_rank} · ` : ""}{l.member_category}</div>
                 <div className="text-xs text-slate-600 mt-1">
                   {shortDate(l.start_date)} – {shortDate(l.end_date)}{l.location ? ` · ${l.location}` : ""}
