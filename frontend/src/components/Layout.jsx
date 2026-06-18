@@ -10,29 +10,32 @@ import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
 import DailyQuote from "./DailyQuote";
 
-const NAV_MEMBER = [
-  { to: "/", label: "Presence", icon: LayoutDashboard, end: true },
-  { to: "/check-in", label: "Check In / Out", icon: ScanLine },
-  { to: "/my-leaves", label: "My Leave and Tour", icon: CalendarCheck2 },
+const NAV_MEMBER_BEFORE_MUSTER = [
+  { to: "/", label: "Check In / Out", icon: ScanLine, end: true },
+  { to: "/my-leaves", label: "Leave / Tour / Comp Off", icon: CalendarCheck2 },
+];
+const NAV_MEMBER_AFTER_MUSTER = [
+  { to: "/presence", label: "Presence", icon: LayoutDashboard },
   { to: "/profile", label: "Profile", icon: UserCog },
 ];
 
 const NAV_ADMIN = [
+  { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin", label: "Admin Console", icon: ShieldCheck, end: true },
-  { to: "/admin/sessions", label: "Daily Sessions", icon: ListTree },
   { to: "/admin/members", label: "Members", icon: Users },
+  { to: "/admin/sessions", label: "Daily Sessions", icon: ListTree },
   { to: "/admin/leaves", label: "Leave Approvals", icon: ClipboardList },
   { to: "/admin/group-leave", label: "Group Leave", icon: Users },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
   { to: "/admin/institutions", label: "Institutions", icon: Building2 },
   { to: "/admin/overtime", label: "Overtime Approvals", icon: ClipboardCheck },
   { to: "/admin/payroll", label: "Monthly Payroll", icon: FileSpreadsheet },
-  { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/office", label: "Office Settings", icon: Building2 },
-  { to: "/admin/office-qr", label: "Office QR", icon: QrCode, disabled: true, disabledReason: "QR scanning is disabled for now" },
-  { to: "/admin/cards", label: "Member Cards", icon: IdCard, disabled: true, disabledReason: "QR scanning is disabled for now" },
+  // Hidden / disabled tools (kept in routes but pushed to the bottom of the menu).
   { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
   { to: "/admin/import", label: "Import Members", icon: FileSpreadsheet },
+  { to: "/admin/office-qr", label: "Office QR", icon: QrCode, disabled: true, disabledReason: "QR scanning is disabled for now" },
+  { to: "/admin/cards", label: "Member Cards", icon: IdCard, disabled: true, disabledReason: "QR scanning is disabled for now" },
 ];
 
 export default function Layout() {
@@ -61,7 +64,7 @@ export default function Layout() {
 
       <nav className="px-3 py-4 flex-1 overflow-y-auto">
         <div className="text-[10px] uppercase tracking-widest text-slate-500 px-3 py-2">Member</div>
-        {NAV_MEMBER.map((item) => (
+        {NAV_MEMBER_BEFORE_MUSTER.map((item) => (
           <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
         ))}
         {canMuster && (
@@ -72,6 +75,9 @@ export default function Layout() {
             onClick={() => setOpen(false)}
           />
         )}
+        {NAV_MEMBER_AFTER_MUSTER.map((item) => (
+          <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
+        ))}
         {isAdmin && (
           <>
             <div className="text-[10px] uppercase tracking-widest text-slate-500 px-3 py-2 mt-4">Admin</div>

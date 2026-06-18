@@ -68,8 +68,9 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
-            <Route index element={<Presence />} />
+            <Route index element={<SelfCheckIn />} />
             <Route path="check-in" element={<SelfCheckIn />} />
+            <Route path="presence" element={<Presence />} />
             <Route path="muster" element={<RequireMuster><Muster /></RequireMuster>} />
             <Route path="my-leaves" element={<MyLeaves />} />
             <Route path="profile" element={<Profile />} />
