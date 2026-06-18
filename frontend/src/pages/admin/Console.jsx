@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { Users, CalendarCheck2, Plane, Clock, ShieldCheck, ArrowRight } from "lucide-react";
+import { Users, CalendarCheck2, Plane, Clock, ShieldCheck, ArrowRight, AlertTriangle, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
 import ActivityFeed from "../../components/ActivityFeed";
 
 export default function AdminConsole() {
   const [summary, setSummary] = useState(null);
+  const [otNeedsReview, setOtNeedsReview] = useState(null);
 
   useEffect(() => {
     api.get("/admin/summary").then(setSummary).catch(() => {});
+    api.get("/admin/overtime/needs-review").then(setOtNeedsReview).catch(() => {});
   }, []);
 
   const cards = [
@@ -35,6 +37,29 @@ export default function AdminConsole() {
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Admin Console</h1>
         <p className="text-slate-500 text-sm mt-1">Everything you need to run the campus.</p>
       </header>
+
+      {otNeedsReview && otNeedsReview.total_pending > 0 && (
+        <Link
+          to={`/admin/overtime?status=pending${otNeedsReview.yesterday ? `&from=${otNeedsReview.yesterday}&to=${otNeedsReview.yesterday}` : ""}`}
+          className="block iu-card p-4 mb-6 border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 transition"
+          data-testid="overtime-banner"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center shrink-0">
+              <AlertTriangle size={20} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-extrabold text-amber-900">
+                {otNeedsReview.yesterday_count > 0
+                  ? `${otNeedsReview.yesterday_count} overtime ${otNeedsReview.yesterday_count === 1 ? "entry" : "entries"} from yesterday need your review`
+                  : `${otNeedsReview.total_pending} pending overtime ${otNeedsReview.total_pending === 1 ? "entry" : "entries"} to review`}
+              </div>
+              <div className="text-xs text-amber-800 mt-0.5">Tap to approve or reject with a note.</div>
+            </div>
+            <ChevronRight size={20} className="text-amber-700 shrink-0" />
+          </div>
+        </Link>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8" data-testid="admin-summary-cards">
         {cards.map((c) => (

@@ -1,16 +1,30 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { Loader2, LogIn, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock } from "lucide-react";
+import { Loader2, LogIn, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, AlertTriangle } from "lucide-react";
 import { api } from "../api";
+import { useAuth } from "../auth";
 import { getLocation } from "../utils";
 
+function hmNow() {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+}
+function hmParse(s) {
+  if (!s || !/^\d{1,2}:\d{2}$/.test(s)) return null;
+  const [h, m] = s.split(":").map(Number);
+  return h * 60 + m;
+}
+const OT_THRESHOLD = 30;
+
 export default function SelfCheckIn() {
+  const { user } = useAuth();
   const [status, setStatus] = useState(null);
   const [office, setOffice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [locating, setLocating] = useState("");
   const [lastDistance, setLastDistance] = useState(null);
+  const [overtimeReason, setOvertimeReason] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -26,16 +40,35 @@ export default function SelfCheckIn() {
 
   const onTempOut = !!status?.on_temp_exit;
   const currentExcursion = status?.current_excursion;
-  const action = status?.checked_in ? "checkout" : "checkin";
   const actionLabel = status?.checked_in ? "I'm Leaving" : "I'm Here";
+
+  // Overtime detection (staff only).
+  const otInfo = useMemo(() => {
+    if (user?.category !== "staff") return null;
+    const wsMin = hmParse(user?.work_start);
+    const weMin = hmParse(user?.work_end);
+    const now = hmNow();
+    if (!status?.checked_in) {
+      if (wsMin == null) return null;
+      const diff = wsMin - now;
+      if (diff >= OT_THRESHOLD) {
+        return { kind: "early", minutes: diff, label: `You're checking in ${diff} min before your start time (${user.work_start})` };
+      }
+    } else {
+      if (weMin == null) return null;
+      const diff = now - weMin;
+      if (diff >= OT_THRESHOLD) {
+        return { kind: "late", minutes: diff, label: `You're checking out ${diff} min after your end time (${user.work_end})` };
+      }
+    }
+    return null;
+  }, [user, status]);
 
   const handleToggle = async () => {
     setWorking(true);
     setLocating("Getting your location…");
     let lat = null, lng = null, acc = null;
     try {
-      // Try to capture a quick GPS fix — purely informational. If GPS is
-      // unavailable we still submit a check-in without coords.
       try {
         const loc = await getLocation({ targetAccuracy: 100, maxWaitMs: 8000 });
         lat = loc.latitude; lng = loc.longitude; acc = loc.accuracy;
@@ -46,6 +79,7 @@ export default function SelfCheckIn() {
       const body = lat != null && lng != null
         ? { latitude: lat, longitude: lng }
         : { latitude: 0, longitude: 0 };
+      if (otInfo && overtimeReason.trim()) body.overtime_reason = overtimeReason.trim();
       const res = await api.post("/attendance/geo-toggle", body);
       const dist = res.distance_m;
       setLastDistance({ dist, acc, off: res.out_of_geofence });
@@ -54,6 +88,7 @@ export default function SelfCheckIn() {
           ? `Checked in — welcome, ${res.member}!`
           : `Checked out — ${res.member} (${res.hours}h)`
       );
+      setOvertimeReason("");
       refresh();
     } catch (err) {
       toast.error(err?.message || "Failed");
@@ -142,6 +177,24 @@ export default function SelfCheckIn() {
       {/* Big primary check-in/out button */}
       {!onTempOut && (
         <div className="iu-card p-8 text-center" data-testid="self-checkin-card">
+          {otInfo && (
+            <div className="mb-5 text-left rounded-xl border border-amber-200 bg-amber-50 p-3" data-testid="ot-reason-block">
+              <div className="flex items-start gap-2 mb-2">
+                <AlertTriangle size={14} className="text-amber-700 mt-0.5 shrink-0" />
+                <div className="text-xs text-amber-800 font-semibold">{otInfo.label}</div>
+              </div>
+              <label className="iu-label text-amber-900">Reason for overtime (optional)</label>
+              <textarea
+                data-testid="ot-reason-input"
+                rows={2}
+                value={overtimeReason}
+                onChange={(e) => setOvertimeReason(e.target.value)}
+                placeholder={otInfo.kind === "early" ? "e.g. Pre-event setup, training session…" : "e.g. End-of-day reconciliation, regatta cleanup…"}
+                className="iu-input !h-auto py-2"
+              />
+              <p className="text-[11px] text-amber-700 mt-1.5">Admin will review and approve overtime tomorrow morning.</p>
+            </div>
+          )}
           <button
             data-testid="self-checkin-button"
             disabled={working}

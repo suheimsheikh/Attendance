@@ -141,7 +141,8 @@ export default function Reports() {
                     <th className="iu-table-th">Attendance</th>
                     <th className="iu-table-th">Member</th>
                     <th className="iu-table-th hidden md:table-cell">Category</th>
-                    <th className="iu-table-th">Hours</th>
+                    <th className="iu-table-th">Total hrs</th>
+                    <th className="iu-table-th">OT hrs</th>
                     <th className="iu-table-th">Days</th>
                     <th className="iu-table-th hidden md:table-cell">Late days</th>
                     <th className="iu-table-th">Leave days</th>
@@ -155,13 +156,19 @@ export default function Reports() {
                       <td className="iu-table-td font-semibold">{r.member_name}<div className="text-xs text-slate-400">{r.rank || ""}</div></td>
                       <td className="iu-table-td hidden md:table-cell">{categoryLabel(r.category)}</td>
                       <td className="iu-table-td">{r.total_hours}h</td>
+                      <td className="iu-table-td">
+                        <span className="font-semibold text-emerald-700">{r.overtime_hours_approved || 0}h</span>
+                        {r.overtime_hours_pending > 0 && (
+                          <span className="ml-1 text-amber-600 text-xs">(+{r.overtime_hours_pending}h pending)</span>
+                        )}
+                      </td>
                       <td className="iu-table-td">{r.days_present}/{r.span_days}</td>
                       <td className="iu-table-td hidden md:table-cell">{r.late_days}</td>
                       <td className="iu-table-td">{r.days_on_leave || 0}</td>
                       <td className={`iu-table-td font-semibold ${(r.overstays || 0) > 0 ? "text-red-600" : "text-slate-400"}`}>{r.overstays || 0}</td>
                     </tr>
                   ))}
-                  {displayedRows.length === 0 && !loading && <tr><td colSpan={8} className="text-center py-10 text-slate-500">No data for this range.</td></tr>}
+                  {displayedRows.length === 0 && !loading && <tr><td colSpan={9} className="text-center py-10 text-slate-500">No data for this range.</td></tr>}
                 </tbody>
               </table>
             </div>

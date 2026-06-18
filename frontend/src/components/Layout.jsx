@@ -21,6 +21,7 @@ const NAV_ADMIN = [
   { to: "/admin/sessions", label: "Daily Sessions", icon: ListTree },
   { to: "/admin/members", label: "Members", icon: Users },
   { to: "/admin/leaves", label: "Leave Approvals", icon: ClipboardList },
+  { to: "/admin/overtime", label: "Overtime Approvals", icon: ClipboardCheck },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/office", label: "Office Settings", icon: Building2 },
   { to: "/admin/office-qr", label: "Office QR", icon: QrCode, disabled: true, disabledReason: "QR scanning is disabled for now" },

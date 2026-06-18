@@ -1,8 +1,32 @@
 import React, { useState } from "react";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { useEscape } from "../../hooks/useEscape";
+import Avatar from "../../components/Avatar";
+
+const MAX_PHOTO_PX = 320;
+function fileToResizedDataUrl(file, maxPx = MAX_PHOTO_PX) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL("image/jpeg", 0.82));
+      };
+      img.onerror = reject;
+      img.src = r.result;
+    };
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
 
 export default function MemberForm({ initial, onClose, onSaved }) {
   useEscape(onClose);
@@ -19,10 +43,26 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     work_end: initial?.work_end || "",
     institution: initial?.institution || "",
     gender: initial?.gender || "",
+    photo: initial?.photo || "",
   });
   const [busy, setBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const onPickPhoto = async (file) => {
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { toast.error("Please pick an image file"); return; }
+    setPhotoBusy(true);
+    try {
+      const url = await fileToResizedDataUrl(file);
+      set("photo", url);
+    } catch {
+      toast.error("Could not read image");
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -57,6 +97,24 @@ export default function MemberForm({ initial, onClose, onSaved }) {
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="space-y-3">
+          <div className="flex items-center gap-4 pb-2">
+            <Avatar name={form.full_name || "?"} photo={form.photo} size={64} />
+            <div className="flex-1">
+              <label className="iu-label">Photo</label>
+              <div className="flex gap-2 items-center">
+                <label className="iu-btn-secondary !h-9 !px-3 cursor-pointer" data-testid="mf-photo-pick">
+                  {photoBusy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Choose file
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => onPickPhoto(e.target.files?.[0])} />
+                </label>
+                {form.photo && (
+                  <button type="button" data-testid="mf-photo-clear" onClick={() => set("photo", "")} className="iu-btn-secondary !h-9 !px-3 text-red-600">
+                    <X size={14} /> Remove
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Resized to 320 px for fast load.</p>
+            </div>
+          </div>
           <div>
             <label className="iu-label">Full name</label>
             <input data-testid="mf-name" value={form.full_name} onChange={(e) => set("full_name", e.target.value)} className="iu-input" />

@@ -17,7 +17,7 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Tuple
 from datetime import datetime, timezone, timedelta, date
 from zoneinfo import ZoneInfo
 
@@ -150,6 +150,45 @@ def phone_key(raw: str) -> str:
     return d[-10:] if len(d) >= 10 else d
 
 
+OVERTIME_THRESHOLD_MIN = 30  # only flag OT when delta >= this many minutes
+OVERTIME_CATEGORIES = {"staff"}  # only staff get OT tracked
+
+
+def _hm_to_minutes(hm: Optional[str]) -> Optional[int]:
+    if not hm or not re.match(r"^\d{1,2}:\d{2}$", hm):
+        return None
+    h, m = (int(x) for x in hm.split(":"))
+    return h * 60 + m
+
+
+def compute_overtime_in(office: Optional[dict], member: dict, ts: datetime) -> Tuple[int, str]:
+    """Returns (early_minutes, work_start_hm). 0 if not applicable."""
+    if member.get("category") not in OVERTIME_CATEGORIES:
+        return 0, ""
+    work_start = member.get("work_start")
+    ws_min = _hm_to_minutes(work_start)
+    if ws_min is None:
+        return 0, ""
+    local = ts.astimezone(office_tz(office))
+    ts_min = local.hour * 60 + local.minute
+    diff = ws_min - ts_min
+    return (diff if diff >= OVERTIME_THRESHOLD_MIN else 0), work_start
+
+
+def compute_overtime_out(office: Optional[dict], member: dict, ts: datetime) -> Tuple[int, str]:
+    """Returns (late_minutes, work_end_hm). 0 if not applicable."""
+    if member.get("category") not in OVERTIME_CATEGORIES:
+        return 0, ""
+    work_end = member.get("work_end")
+    we_min = _hm_to_minutes(work_end)
+    if we_min is None:
+        return 0, ""
+    local = ts.astimezone(office_tz(office))
+    ts_min = local.hour * 60 + local.minute
+    diff = ts_min - we_min
+    return (diff if diff >= OVERTIME_THRESHOLD_MIN else 0), work_end
+
+
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
@@ -250,6 +289,7 @@ class GeoToggleIn(BaseModel):
     latitude: float
     longitude: float
     reason: Optional[str] = None
+    overtime_reason: Optional[str] = None
 
 
 class MarkMemberIn(BaseModel):
@@ -1138,7 +1178,8 @@ async def check_out(body: CheckInIn, user: dict = Depends(get_current_user)):
 
 
 async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
-                      reason: Optional[str], by: Optional[str]) -> dict:
+                      reason: Optional[str], by: Optional[str],
+                      overtime_reason: Optional[str] = None) -> dict:
     """GPS-based check in/out (no QR). Distance from the office is recorded but
     NOT enforced — a check-in always succeeds. If the caller could not obtain
     a GPS fix they pass (0, 0) and we mark the row as `geo_unavailable`."""
@@ -1165,7 +1206,23 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         away_s = _excursion_seconds(excursions)
         # Excursions are on office hours — count the full session toward logged hours.
         hours = round((ts - cin).total_seconds() / 3600.0, 2)
-        await db.attendance.update_one({"id": sess["id"]}, {"$set": {
+        # Compute late-checkout overtime (staff only).
+        late_min, work_end_hm = compute_overtime_out(office, target, ts)
+        ot_updates: dict = {}
+        if late_min > 0:
+            existing_early = int(sess.get("overtime_early_min") or 0)
+            existing_reason = sess.get("overtime_reason") or ""
+            ot_updates = {
+                "overtime_late_min": late_min,
+                "overtime_total_min": existing_early + late_min,
+                "overtime_status": "pending",
+                "overtime_reason": (overtime_reason or existing_reason or "").strip() or None,
+                "work_end_at_session": work_end_hm,
+            }
+        elif overtime_reason and (sess.get("overtime_total_min") or 0) > 0:
+            # No new late OT but member supplied a reason that supplements the early-OT one.
+            ot_updates = {"overtime_reason": overtime_reason.strip()}
+        update_fields = {
             "check_out_at": ts.isoformat(),
             "hours": hours,
             "away_minutes": int(away_s / 60),
@@ -1176,14 +1233,18 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             "exit_reason": (reason or None),
             "exit_method": "geo",
             "checked_out_by": by,
-        }})
+        }
+        update_fields.update(ot_updates)
+        await db.attendance.update_one({"id": sess["id"]}, {"$set": update_fields})
         return {"ok": True, "action": "checkout", "member": target["full_name"],
-                "hours": hours, "out_of_geofence": out, "distance_m": dist}
+                "hours": hours, "out_of_geofence": out, "distance_m": dist,
+                "overtime_minutes": ot_updates.get("overtime_total_min", 0)}
     if out:
         # Geofence is informational only — distance is recorded on the
         # attendance row but does not block the check-in.
         pass
     late, late_minutes = compute_late(office, target, ts)
+    early_min, work_start_hm = compute_overtime_in(office, target, ts)
     doc = {
         "id": str(uuid.uuid4()),
         "user_id": target["id"],
@@ -1202,9 +1263,18 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         "method": "geo",
         "checked_in_by": by,
     }
+    if early_min > 0:
+        doc.update({
+            "overtime_early_min": early_min,
+            "overtime_total_min": early_min,
+            "overtime_status": "pending",
+            "overtime_reason": (overtime_reason or "").strip() or None,
+            "work_start_at_session": work_start_hm,
+        })
     await db.attendance.insert_one(doc)
     return {"ok": True, "action": "checkin", "member": target["full_name"],
-            "out_of_geofence": out, "distance_m": dist}
+            "out_of_geofence": out, "distance_m": dist,
+            "overtime_minutes": early_min}
 
 
 @api_router.post("/attendance/geo-toggle")
@@ -1213,7 +1283,8 @@ async def geo_toggle(body: GeoToggleIn, user: dict = Depends(get_current_user)):
     office = await db.config.find_one({"id": "office"})
     if not office:
         raise HTTPException(status_code=500, detail="Office not configured")
-    return await _geo_toggle(user, office, body.latitude, body.longitude, body.reason, None)
+    return await _geo_toggle(user, office, body.latitude, body.longitude,
+                             body.reason, None, body.overtime_reason)
 
 
 @api_router.post("/attendance/mark-member")
@@ -1259,6 +1330,100 @@ async def admin_toggle_attendance(member_id: str, body: dict = None, admin: dict
                                None, reason, "admin_console", admin["id"])
     res["override"] = True
     return res
+
+
+# ----------------------------------------------------------------------------
+# Overtime — staff only, 30+ minutes outside their work_start/work_end window
+# ----------------------------------------------------------------------------
+class OvertimeDecisionIn(BaseModel):
+    status: Literal["approved", "rejected"]
+    admin_note: Optional[str] = None
+
+
+@api_router.get("/admin/overtime/needs-review")
+async def overtime_needs_review(admin: dict = Depends(require_admin)):
+    """Counts pending OT entries from the previous office-local date — used
+    to drive the "you have OT to review" banner that pops on admin login."""
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+    yesterday = (date.fromisoformat(today) - timedelta(days=1)).isoformat()
+    cnt = await db.attendance.count_documents({
+        "overtime_status": "pending",
+        "date": yesterday,
+    })
+    total_pending = await db.attendance.count_documents({"overtime_status": "pending"})
+    return {"yesterday": yesterday, "yesterday_count": cnt, "total_pending": total_pending}
+
+
+@api_router.get("/admin/overtime")
+async def overtime_list(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    status: Optional[str] = "pending",
+    admin: dict = Depends(require_admin),
+):
+    office = await db.config.find_one({"id": "office"})
+    if not date_from and not date_to:
+        today = local_date_str(office)
+        yesterday = (date.fromisoformat(today) - timedelta(days=1)).isoformat()
+        date_from = date_to = yesterday
+    q: dict = {"overtime_total_min": {"$gt": 0}}
+    if status and status != "all":
+        q["overtime_status"] = status
+    if date_from or date_to:
+        date_q: dict = {}
+        if date_from:
+            date_q["$gte"] = date_from
+        if date_to:
+            date_q["$lte"] = date_to
+        q["date"] = date_q
+    rows = await db.attendance.find(q, {"_id": 0}).sort("date", -1).to_list(2000)
+    user_ids = list({r["user_id"] for r in rows})
+    users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0}).to_list(2000)
+    umap = {u["id"]: u for u in users}
+    out = []
+    for r in rows:
+        u = umap.get(r["user_id"], {})
+        out.append({
+            "session_id": r["id"],
+            "user_id": r["user_id"],
+            "member_name": u.get("full_name", "Unknown"),
+            "category": u.get("category"),
+            "rank": u.get("rank"),
+            "photo": u.get("photo"),
+            "date": r.get("date"),
+            "check_in_at": r.get("check_in_at"),
+            "check_out_at": r.get("check_out_at"),
+            "work_start": u.get("work_start"),
+            "work_end": u.get("work_end"),
+            "early_min": int(r.get("overtime_early_min") or 0),
+            "late_min": int(r.get("overtime_late_min") or 0),
+            "total_min": int(r.get("overtime_total_min") or 0),
+            "reason": r.get("overtime_reason"),
+            "status": r.get("overtime_status") or "pending",
+            "admin_note": r.get("overtime_admin_note"),
+            "decided_by": r.get("overtime_decided_by"),
+            "decided_at": r.get("overtime_decided_at"),
+        })
+    return {"date_from": date_from, "date_to": date_to, "rows": out}
+
+
+@api_router.post("/admin/overtime/{session_id}/decide")
+async def overtime_decide(session_id: str, body: OvertimeDecisionIn, admin: dict = Depends(require_admin)):
+    sess = await db.attendance.find_one({"id": session_id}, {"_id": 0})
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if int(sess.get("overtime_total_min") or 0) <= 0:
+        raise HTTPException(status_code=400, detail="No overtime on this session")
+    await db.attendance.update_one({"id": session_id}, {"$set": {
+        "overtime_status": body.status,
+        "overtime_admin_note": (body.admin_note or "").strip() or None,
+        "overtime_decided_by": admin["full_name"],
+        "overtime_decided_at": now_utc().isoformat(),
+    }})
+    return {"ok": True, "status": body.status}
+
+
 
 
 # ----------------------------------------------------------------------------
@@ -1929,7 +2094,8 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
     # Batch: all attendance in range with hours, grouped by user_id
     atts = await db.attendance.find(
         {"date": {"$gte": start, "$lte": end}, "hours": {"$ne": None}},
-        {"_id": 0, "user_id": 1, "date": 1, "hours": 1, "late": 1, "excursions": 1},
+        {"_id": 0, "user_id": 1, "date": 1, "hours": 1, "late": 1, "excursions": 1,
+         "overtime_total_min": 1, "overtime_status": 1},
     ).to_list(100000)
     by_user: dict = {}
     for a in atts:
@@ -1995,6 +2161,12 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         late_days = len({s["date"] for s in sessions if s.get("late")})
         days_on_leave = _count_leave_days(leaves_by_user.get(u["id"], []))
         overstays = _overstays(sessions)
+        approved_ot_min = sum(int(s.get("overtime_total_min") or 0)
+                              for s in sessions
+                              if s.get("overtime_status") == "approved")
+        pending_ot_min = sum(int(s.get("overtime_total_min") or 0)
+                             for s in sessions
+                             if s.get("overtime_status") == "pending")
         attendance_pct = round((days_present / span_days) * 100, 1)
         rows.append({
             "member_id": u["id"],
@@ -2006,6 +2178,8 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "late_days": late_days,
             "days_on_leave": days_on_leave,
             "overstays": overstays,
+            "overtime_hours_approved": round(approved_ot_min / 60.0, 2),
+            "overtime_hours_pending": round(pending_ot_min / 60.0, 2),
             "span_days": span_days,
             "attendance_pct": attendance_pct,
         })
@@ -2076,9 +2250,11 @@ def _csv_response(headers: List[str], rows: List[List], filename: str) -> Respon
 @api_router.get("/reports/hours/export")
 async def export_hours(start: str, end: str, fmt: str = "csv", admin: dict = Depends(require_admin)):
     rows = await compute_hours_report(start, end)
-    headers = ["Attendance %", "Name", "Category", "Rank", "Hours", "Days Present", "Late Days", "Leave Days", "Overstays"]
+    headers = ["Attendance %", "Name", "Category", "Rank", "Hours", "OT Hours (approved)",
+               "OT Hours (pending)", "Days Present", "Late Days", "Leave Days", "Overstays"]
     table = [[f"{r['attendance_pct']}%", r["member_name"], r["category"], r.get("rank") or "-",
-              r["total_hours"], r["days_present"], r.get("late_days", 0), r.get("days_on_leave", 0),
+              r["total_hours"], r.get("overtime_hours_approved", 0), r.get("overtime_hours_pending", 0),
+              r["days_present"], r.get("late_days", 0), r.get("days_on_leave", 0),
               r.get("overstays", 0)] for r in rows]
     if fmt == "pdf":
         pdf = _pdf_from_table("Attendance & Hours Report", headers, table, f"{start} to {end}")
