@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { Loader2, Plus, Search, Edit3, Trash2, LogIn, LogOut as LogOutIcon } from "lucide-react";
+import { Loader2, Plus, Search, Edit3, Trash2, LogIn, LogOut as LogOutIcon, Check } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import Avatar from "../../components/Avatar";
@@ -77,6 +77,19 @@ export default function Members() {
     } catch (err) { toast.error(err?.message || "Failed"); }
   };
 
+  // Inline patch — update parent_mobile fields locally + persist to API on blur,
+  // without triggering a full reload (which would interrupt other open inputs).
+  const patchParent = async (memberId, field, value) => {
+    const trimmed = (value || "").trim();
+    setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, [field]: trimmed } : m)));
+    try {
+      await api.patch(`/members/${memberId}`, { [field]: trimmed });
+    } catch (err) {
+      toast.error(err?.message || "Save failed");
+      throw err;
+    }
+  };
+
   const toggleAttendance = async (m) => {
     setBusyId(m.id);
     try {
@@ -150,6 +163,7 @@ export default function Members() {
               <thead className="bg-slate-50">
                 <tr>
                   <th className="iu-table-th">Member</th>
+                  <th className="iu-table-th">Parents / Guardian</th>
                   <th className="iu-table-th hidden md:table-cell">Role</th>
                   <th className="iu-table-th hidden lg:table-cell">Institution</th>
                   <th className="iu-table-th hidden lg:table-cell">Mobile</th>
@@ -175,6 +189,13 @@ export default function Members() {
                             </div>
                             <div className="text-xs text-slate-500 truncate">{m.email}</div>
                           </div>
+                        </div>
+                      </td>
+                      <td className="iu-table-td">
+                        <div className="flex flex-col gap-1 min-w-[180px] max-w-[220px]">
+                          <ParentInlineInput memberId={m.id} field="father_mobile" label="F" initial={m.father_mobile} onSave={patchParent} />
+                          <ParentInlineInput memberId={m.id} field="mother_mobile" label="M" initial={m.mother_mobile} onSave={patchParent} />
+                          <ParentInlineInput memberId={m.id} field="guardian_mobile" label="G" initial={m.guardian_mobile} onSave={patchParent} />
                         </div>
                       </td>
                       <td className="iu-table-td hidden md:table-cell">
@@ -207,7 +228,7 @@ export default function Members() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={7} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
+                  <tr><td colSpan={8} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
                 )}
               </tbody>
             </table>
@@ -222,6 +243,59 @@ export default function Members() {
           onSaved={() => { setEditing(null); load(); }}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Tiny per-cell editor for one parent_mobile field. Persists on blur or
+ * Enter; shows a green check for ~1s after a successful save so the admin
+ * can confirm without a toast spam.
+ */
+function ParentInlineInput({ memberId, field, label, initial, onSave }) {
+  const [val, setVal] = useState(initial || "");
+  const [busy, setBusy] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  // Re-sync local state if a fresh reload from the server brings new data.
+  useEffect(() => { setVal(initial || ""); }, [initial]);
+
+  const persist = async () => {
+    const trimmed = val.trim();
+    if (trimmed === (initial || "").trim()) return;
+    setBusy(true);
+    try {
+      await onSave(memberId, field, trimmed);
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1200);
+    } catch {
+      setVal(initial || "");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const labelColor = label === "F" ? "bg-sky-100 text-sky-700"
+    : label === "M" ? "bg-pink-100 text-pink-700"
+    : "bg-violet-100 text-violet-700";
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center ${labelColor}`}>{label}</span>
+      <input
+        type="tel"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={persist}
+        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+        placeholder="—"
+        data-testid={`inline-${field}-${memberId}`}
+        className="flex-1 min-w-0 px-2 h-7 text-xs font-mono rounded border border-slate-200 bg-white focus:bg-white focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
+        disabled={busy}
+      />
+      {busy
+        ? <Loader2 size={11} className="animate-spin text-slate-400" />
+        : (savedFlash ? <Check size={11} className="text-emerald-600" /> : <span className="w-3" />)}
     </div>
   );
 }
