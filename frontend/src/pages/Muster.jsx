@@ -25,7 +25,7 @@ export default function Muster() {
   const savePhoto = async (dataUrl) => {
     if (!photoTarget) return;
     try {
-      await api.patch(`/members/${photoTarget.id}`, { photo: dataUrl });
+      await api.post(`/members/${photoTarget.id}/photo`, { photo: dataUrl });
       toast.success(`Photo saved for ${photoTarget.full_name}`);
       setPhotoTarget(null);
       load();

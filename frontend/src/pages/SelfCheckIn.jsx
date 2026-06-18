@@ -70,7 +70,7 @@ export default function SelfCheckIn() {
 
   const saveSelfie = async (dataUrl) => {
     if (!user?.id) return;
-    await api.patch(`/members/${user.id}`, { photo: dataUrl });
+    await api.post("/members/me/photo", { photo: dataUrl });
     await refreshMe();
     setShowSelfie(false);
     toast.success("Photo saved");

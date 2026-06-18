@@ -1088,6 +1088,24 @@ async def set_my_photo(body: dict, user: dict = Depends(get_current_user)):
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
 
 
+@api_router.post("/members/{member_id}/photo", response_model=UserPublic)
+async def set_member_photo(member_id: str, body: dict, user: dict = Depends(get_current_user)):
+    """Update another member's photo. Permitted when the caller is the member
+    themselves, or an admin, or a coach (coaches run the muster roll and capture
+    missing photos for athletes). Staff cannot edit other members' photos."""
+    is_self = member_id == user["id"]
+    is_admin = user.get("role") == "admin"
+    is_coach = user.get("category") == "coach"
+    if not (is_self or is_admin or is_coach):
+        raise HTTPException(status_code=403, detail="Not allowed to set this member's photo")
+    target = await db.users.find_one({"id": member_id}, {"_id": 0, "id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    await db.users.update_one({"id": member_id}, {"$set": {"photo": body.get("photo")}})
+    u = await db.users.find_one({"id": member_id}, {"_id": 0})
+    return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
+
+
 # ----------------------------------------------------------------------------
 # Attendance: check-in / check-out
 # ----------------------------------------------------------------------------
