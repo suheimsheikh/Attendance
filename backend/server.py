@@ -3,6 +3,7 @@ from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 from fastapi.security import OAuth2PasswordBearer
 import os
 import io
@@ -133,6 +134,18 @@ def create_token(user_id: str, role: str, device_id: Optional[str] = None,
     if device_id:
         payload["device_id"] = device_id
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
+
+
+# Cap any photo POSTed to the API. Frontend resizes to 320 px (~30 KB), so
+# 250 KB is generous and still rejects obvious abuse / accidental uploads.
+MAX_PHOTO_BYTES = 250_000
+
+def _check_photo_size(photo: Optional[str]):
+    if photo and len(photo) > MAX_PHOTO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Photo too large ({len(photo)} bytes; max {MAX_PHOTO_BYTES})",
+        )
 
 
 # Long-lived tokens for approved devices (passwordless phone login)
@@ -413,6 +426,11 @@ async def seed():
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
     await db.devices.create_index("device_id", unique=True)
+    # Prevent duplicate parent-notification dispatches per (user, day, type)
+    # if two coaches tap "Notify parents" simultaneously.
+    await db.parent_notifications.create_index(
+        [("user_id", 1), ("date", 1), ("type", 1)], unique=True
+    )
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({
@@ -453,6 +471,12 @@ async def seed():
     await db.config.update_one(
         {"id": "office", "timezone": {"$exists": False}},
         {"$set": {"timezone": DEFAULT_TZ, "late_grace_minutes": 0}},
+    )
+    # Backfill parent-notify grace (default 30 min after work_start before
+    # the "Notify parents" button appears on the Presence Board).
+    await db.config.update_one(
+        {"id": "office", "parent_notify_grace_minutes": {"$exists": False}},
+        {"$set": {"parent_notify_grace_minutes": 30}},
     )
     # Seed institutions master from any existing distinct institution strings on users
     await db.institutions.create_index("name", unique=True)
@@ -751,6 +775,8 @@ async def list_members(user: dict = Depends(get_current_user)):
 async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depends(require_admin)):
     if body.role == "member" and member_id == admin["id"]:
         raise HTTPException(status_code=400, detail="You cannot remove your own admin access")
+    if body.photo is not None:
+        _check_photo_size(body.photo)
     update = {k: v for k, v in body.model_dump().items() if v is not None and k != "password"}
     if body.password:
         update["hashed_password"] = hash_password(body.password)
@@ -1083,6 +1109,7 @@ async def import_members(file: UploadFile = File(...), admin: dict = Depends(req
 @api_router.post("/members/me/photo", response_model=UserPublic)
 async def set_my_photo(body: dict, user: dict = Depends(get_current_user)):
     photo = body.get("photo")
+    _check_photo_size(photo)
     await db.users.update_one({"id": user["id"]}, {"$set": {"photo": photo}})
     u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
@@ -1101,6 +1128,7 @@ async def set_member_photo(member_id: str, body: dict, user: dict = Depends(get_
     target = await db.users.find_one({"id": member_id}, {"_id": 0, "id": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Member not found")
+    _check_photo_size(body.get("photo"))
     await db.users.update_one({"id": member_id}, {"$set": {"photo": body.get("photo")}})
     u = await db.users.find_one({"id": member_id}, {"_id": 0})
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
@@ -1921,7 +1949,16 @@ async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depe
         "sent_by_id": user["id"],
         "sent_by_name": user.get("full_name"),
     }
-    await db.parent_notifications.insert_one(doc)
+    try:
+        await db.parent_notifications.insert_one(doc)
+    except DuplicateKeyError:
+        # Concurrent coaches both clicked Notify at the same moment — the
+        # unique (user_id,date,type) index won the race for us. Re-read and
+        # report the winner.
+        existing = await db.parent_notifications.find_one(
+            {"user_id": body.user_id, "date": today, "type": body.type}, {"_id": 0}
+        )
+        return {"already_sent": True, "sent_at": existing.get("sent_at"), "sent_by": existing.get("sent_by_name")}
     return {"already_sent": False, "sent_at": doc["sent_at"], "sent_by": doc["sent_by_name"]}
 
 

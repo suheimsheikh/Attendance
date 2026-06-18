@@ -45,6 +45,7 @@ export default function OfficeSettings() {
         default_work_end: form.default_work_end || "17:00",
         timezone: form.timezone || "Asia/Kolkata",
         late_grace_minutes: Number(form.late_grace_minutes || 0),
+        parent_notify_grace_minutes: Number(form.parent_notify_grace_minutes ?? 30),
       };
       const updated = await api.put("/office", body);
       setForm(updated);
@@ -109,6 +110,20 @@ export default function OfficeSettings() {
           <select data-testid="of-tz" value={form.timezone || "Asia/Kolkata"} onChange={(e) => set("timezone", e.target.value)} className="iu-input">
             {TZS.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
+        </div>
+
+        <div>
+          <label className="iu-label">Notify parents after (minutes past work start)</label>
+          <input
+            data-testid="of-parent-notify-grace"
+            type="number"
+            min={0}
+            max={240}
+            value={form.parent_notify_grace_minutes ?? 30}
+            onChange={(e) => set("parent_notify_grace_minutes", e.target.value)}
+            className="iu-input"
+          />
+          <p className="text-[11px] text-slate-500 mt-1">How long after an athlete&apos;s work start time before the &quot;Notify parents&quot; button appears on the Presence Board. Default 30 minutes.</p>
         </div>
 
         <button data-testid="of-save" disabled={saving} className="iu-btn-primary w-full">

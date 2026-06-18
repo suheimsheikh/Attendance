@@ -58,6 +58,9 @@ export default function Muster() {
           ? `${doneCount} athlete${doneCount === 1 ? "" : "s"} marked present${skipNote}`
           : `${doneCount} athlete${doneCount === 1 ? "" : "s"} marked departed${skipNote}`
       );
+      // Clear the ticked set so the next round starts fresh (the just-saved
+      // members no longer appear in the picker anyway, but state was lingering).
+      setPicked(new Set());
       load();
     } catch (err) {
       toast.error(err?.message || "Save failed");
