@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { Loader2, Plus, Search, Edit3, Trash2, LogIn, LogOut as LogOutIcon, Check } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
-import Avatar from "../../components/Avatar";
+import InlinePhotoAvatar from "../../components/InlinePhotoAvatar";
 import ParentContact from "../../components/ParentContact";
 import StatusBadge from "../../components/StatusBadge";
 import MemberForm from "./MemberForm";
@@ -181,7 +181,11 @@ export default function Members() {
                       <td className="iu-table-td relative pl-5">
                         <span className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r ${b.stripe}`} aria-hidden="true" />
                         <div className="flex items-center gap-3">
-                          <Avatar name={m.full_name} photo={m.photo} size={36} />
+                          <InlinePhotoAvatar
+                            member={m}
+                            size={40}
+                            onUpdated={(u) => setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, photo: u.photo } : x)))}
+                          />
                           <div className="min-w-0">
                             <div className="font-semibold text-slate-900 truncate flex items-center gap-2">
                               <span className="truncate">{m.full_name}</span>

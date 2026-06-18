@@ -3,30 +3,8 @@ import { X, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { useEscape } from "../../hooks/useEscape";
+import { fileToResizedDataUrl } from "../../utils";
 import Avatar from "../../components/Avatar";
-
-const MAX_PHOTO_PX = 320;
-function fileToResizedDataUrl(file, maxPx = MAX_PHOTO_PX) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const c = document.createElement("canvas");
-        c.width = w; c.height = h;
-        c.getContext("2d").drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL("image/jpeg", 0.82));
-      };
-      img.onerror = reject;
-      img.src = r.result;
-    };
-    r.onerror = reject;
-    r.readAsDataURL(file);
-  });
-}
 
 export default function MemberForm({ initial, onClose, onSaved }) {
   useEscape(onClose);

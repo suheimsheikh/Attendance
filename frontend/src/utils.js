@@ -127,6 +127,33 @@ export function categoryLabel(cat) {
   return { athlete: "Athlete", staff: "Staff", coach: "Coach" }[cat] || cat;
 }
 
+/**
+ * Read an image file, shrink it to `maxPx` on the longest side, and return
+ * a JPEG data: URL. Shared by Member Form and the inline avatar-uploader on
+ * the Members table.
+ */
+export function fileToResizedDataUrl(file, maxPx = 320) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL("image/jpeg", 0.82));
+      };
+      img.onerror = reject;
+      img.src = r.result;
+    };
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
 export const statusConfig = {
   on_campus: { label: "On Campus", color: "#10B981", bg: "rgba(16,185,129,0.12)", icon: "checkmark" },
   temp_out:  { label: "Stepped Out", color: "#06B6D4", bg: "rgba(6,182,212,0.14)", icon: "out" },
