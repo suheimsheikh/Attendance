@@ -38,27 +38,51 @@ export default function AdminConsole() {
         <p className="text-slate-500 text-sm mt-1">Everything you need to run the campus.</p>
       </header>
 
-      {otNeedsReview && otNeedsReview.total_pending > 0 && (
-        <Link
-          to={`/admin/overtime?status=pending${otNeedsReview.yesterday ? `&from=${otNeedsReview.yesterday}&to=${otNeedsReview.yesterday}` : ""}`}
-          className="block iu-card p-4 mb-6 border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 transition"
-          data-testid="overtime-banner"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center shrink-0">
-              <AlertTriangle size={20} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-extrabold text-amber-900">
-                {otNeedsReview.yesterday_count > 0
-                  ? `${otNeedsReview.yesterday_count} overtime ${otNeedsReview.yesterday_count === 1 ? "entry" : "entries"} from yesterday need your review`
-                  : `${otNeedsReview.total_pending} pending overtime ${otNeedsReview.total_pending === 1 ? "entry" : "entries"} to review`}
+      {otNeedsReview && (otNeedsReview.total_pending > 0 || otNeedsReview.comp_off_pending > 0) && (
+        <div className="space-y-3 mb-6">
+          {otNeedsReview.total_pending > 0 && (
+            <Link
+              to={`/admin/overtime?status=pending${otNeedsReview.yesterday ? `&from=${otNeedsReview.yesterday}&to=${otNeedsReview.yesterday}` : ""}`}
+              className="block iu-card p-4 border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 transition"
+              data-testid="overtime-banner"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-extrabold text-amber-900">
+                    {otNeedsReview.yesterday_count > 0
+                      ? `${otNeedsReview.yesterday_count} overtime ${otNeedsReview.yesterday_count === 1 ? "entry" : "entries"} from yesterday need your review`
+                      : `${otNeedsReview.total_pending} pending overtime ${otNeedsReview.total_pending === 1 ? "entry" : "entries"} to review`}
+                  </div>
+                  <div className="text-xs text-amber-800 mt-0.5">Tap to approve or reject with a note.</div>
+                </div>
+                <ChevronRight size={20} className="text-amber-700 shrink-0" />
               </div>
-              <div className="text-xs text-amber-800 mt-0.5">Tap to approve or reject with a note.</div>
-            </div>
-            <ChevronRight size={20} className="text-amber-700 shrink-0" />
-          </div>
-        </Link>
+            </Link>
+          )}
+          {otNeedsReview.comp_off_pending > 0 && (
+            <Link
+              to="/admin/leaves?type=comp_off"
+              className="block iu-card p-4 border-2 border-violet-300 bg-violet-50 hover:bg-violet-100 transition"
+              data-testid="comp-off-banner"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-full bg-violet-200 text-violet-800 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-extrabold text-violet-900">
+                    {otNeedsReview.comp_off_pending} compensatory off {otNeedsReview.comp_off_pending === 1 ? "request" : "requests"} awaiting approval
+                  </div>
+                  <div className="text-xs text-violet-800 mt-0.5">Members claimed comp-offs for working on their weekly off — review them.</div>
+                </div>
+                <ChevronRight size={20} className="text-violet-700 shrink-0" />
+              </div>
+            </Link>
+          )}
+        </div>
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8" data-testid="admin-summary-cards">

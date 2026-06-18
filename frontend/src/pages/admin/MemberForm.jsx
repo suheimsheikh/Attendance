@@ -44,6 +44,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     institution: initial?.institution || "",
     gender: initial?.gender || "",
     photo: initial?.photo || "",
+    weekly_off: initial?.weekly_off || "monday",
   });
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -174,6 +175,19 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               <label className="iu-label">Work end</label>
               <input data-testid="mf-work-end" type="time" value={form.work_end} onChange={(e) => set("work_end", e.target.value)} className="iu-input" />
             </div>
+          </div>
+          <div>
+            <label className="iu-label">Weekly off</label>
+            <select data-testid="mf-weekly-off" value={form.weekly_off} onChange={(e) => set("weekly_off", e.target.value)} className="iu-input">
+              <option value="monday">Monday</option>
+              <option value="tuesday">Tuesday</option>
+              <option value="wednesday">Wednesday</option>
+              <option value="thursday">Thursday</option>
+              <option value="friday">Friday</option>
+              <option value="saturday">Saturday</option>
+              <option value="sunday">Sunday</option>
+            </select>
+            <p className="text-[11px] text-slate-500 mt-1">Working on this day earns a compensatory off.</p>
           </div>
           <div>
             <label className="iu-label">{isEdit ? "Reset password (leave blank to keep)" : "Password"}</label>

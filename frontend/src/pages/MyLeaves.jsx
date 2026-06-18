@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle } from "lucide-react";
+import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import { shortDate, todayIso } from "../utils";
 import { useEscape } from "../hooks/useEscape";
 
-const TYPE_LABELS = { leave: { label: "Leave", color: "#F59E0B", Icon: Bed }, tour: { label: "Tour", color: "#F97316", Icon: Plane } };
+const TYPE_LABELS = {
+  leave:    { label: "Leave",    color: "#F59E0B", Icon: Bed },
+  tour:     { label: "Tour",     color: "#F97316", Icon: Plane },
+  comp_off: { label: "Comp Off", color: "#8B5CF6", Icon: RefreshCw },
+};
 const STATUS_COLORS = {
   pending: { bg: "rgba(245,158,11,0.12)", color: "#B45309" },
   approved: { bg: "rgba(16,185,129,0.12)", color: "#047857" },
@@ -114,10 +118,14 @@ function ApplyForm({ onClose, onCreated }) {
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label className="iu-label">Type</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button data-testid="leave-type-leave" type="button" onClick={() => setType("leave")} className={`iu-btn ${type === "leave" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Bed size={16}/> Leave</button>
               <button data-testid="leave-type-tour" type="button" onClick={() => setType("tour")} className={`iu-btn ${type === "tour" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Plane size={16}/> Tour</button>
+              <button data-testid="leave-type-comp-off" type="button" onClick={() => setType("comp_off")} className={`iu-btn ${type === "comp_off" ? "iu-btn-primary" : "iu-btn-secondary"}`}><RefreshCw size={16}/> Comp Off</button>
             </div>
+            {type === "comp_off" && (
+              <p className="text-[11px] text-slate-500 mt-1.5">Claim a comp-off against a weekly-off day you worked. Admin will verify.</p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

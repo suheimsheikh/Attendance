@@ -250,6 +250,7 @@ class MemberCreate(BaseModel):
     role: Literal["admin", "member"] = "member"
     institution: Optional[str] = None
     gender: Optional[Literal["M", "F", "O"]] = None
+    weekly_off: Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"] = "monday"
 
 
 class MemberUpdate(BaseModel):
@@ -264,6 +265,7 @@ class MemberUpdate(BaseModel):
     role: Optional[Literal["admin", "member"]] = None
     institution: Optional[str] = None
     gender: Optional[Literal["M", "F", "O"]] = None
+    weekly_off: Optional[Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]] = None
 
 
 class OfficeConfig(BaseModel):
@@ -308,7 +310,7 @@ class ScanCardIn(BaseModel):
 
 
 class LeaveCreate(BaseModel):
-    type: Literal["leave", "tour"]
+    type: Literal["leave", "tour", "comp_off"]
     start_date: str  # YYYY-MM-DD
     end_date: str
     reason: str
@@ -1352,7 +1354,12 @@ async def overtime_needs_review(admin: dict = Depends(require_admin)):
         "date": yesterday,
     })
     total_pending = await db.attendance.count_documents({"overtime_status": "pending"})
-    return {"yesterday": yesterday, "yesterday_count": cnt, "total_pending": total_pending}
+    comp_off_pending = await db.leaves.count_documents({
+        "type": "comp_off", "status": "pending",
+    })
+    return {"yesterday": yesterday, "yesterday_count": cnt,
+            "total_pending": total_pending,
+            "comp_off_pending": comp_off_pending}
 
 
 @api_router.get("/admin/overtime")
@@ -2085,7 +2092,7 @@ async def admin_activity(admin: dict = Depends(require_admin)):
 async def compute_hours_report(start: str, end: str) -> List[dict]:
     """Aggregate hours and days present per member between dates inclusive."""
     users = await db.users.find(
-        {}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1}
+        {}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "weekly_off": 1}
     ).sort("full_name", 1).to_list(2000)
     sd = date.fromisoformat(start)
     ed = date.fromisoformat(end)
@@ -2153,6 +2160,20 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
                 cur += timedelta(days=1)
         return len(days)
 
+    WEEKDAY_NAME = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
+
+    def _comp_off_earned(u: dict, sessions: List[dict]) -> int:
+        wo = (u.get("weekly_off") or "monday").lower()
+        unique_days = set()
+        for s in sessions:
+            try:
+                d_ = date.fromisoformat(s["date"])
+            except Exception:
+                continue
+            if WEEKDAY_NAME[d_.weekday()] == wo:
+                unique_days.add(s["date"])
+        return len(unique_days)
+
     rows = []
     for u in users:
         sessions = by_user.get(u["id"], [])
@@ -2167,12 +2188,26 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         pending_ot_min = sum(int(s.get("overtime_total_min") or 0)
                              for s in sessions
                              if s.get("overtime_status") == "pending")
+        # Compensatory off bookkeeping (within this report's date range)
+        co_earned = _comp_off_earned(u, sessions)
+        co_used = 0
+        for l in (leaves_by_user.get(u["id"]) or []):
+            if l.get("type") != "comp_off":
+                continue
+            ls = max(date.fromisoformat(l["start_date"]), sd)
+            le = min(date.fromisoformat(l["end_date"]), ed)
+            cur = ls
+            while cur <= le:
+                co_used += 1
+                cur += timedelta(days=1)
+        co_pending = max(0, co_earned - co_used)
         attendance_pct = round((days_present / span_days) * 100, 1)
         rows.append({
             "member_id": u["id"],
             "member_name": u["full_name"],
             "category": u["category"],
             "rank": u.get("rank"),
+            "weekly_off": u.get("weekly_off") or "monday",
             "total_hours": total_hours,
             "days_present": days_present,
             "late_days": late_days,
@@ -2180,6 +2215,9 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "overstays": overstays,
             "overtime_hours_approved": round(approved_ot_min / 60.0, 2),
             "overtime_hours_pending": round(pending_ot_min / 60.0, 2),
+            "comp_off_earned": co_earned,
+            "comp_off_used": co_used,
+            "comp_off_pending": co_pending,
             "span_days": span_days,
             "attendance_pct": attendance_pct,
         })
@@ -2250,12 +2288,16 @@ def _csv_response(headers: List[str], rows: List[List], filename: str) -> Respon
 @api_router.get("/reports/hours/export")
 async def export_hours(start: str, end: str, fmt: str = "csv", admin: dict = Depends(require_admin)):
     rows = await compute_hours_report(start, end)
-    headers = ["Attendance %", "Name", "Category", "Rank", "Hours", "OT Hours (approved)",
-               "OT Hours (pending)", "Days Present", "Late Days", "Leave Days", "Overstays"]
+    headers = ["Attendance %", "Name", "Category", "Rank", "Weekly off", "Hours",
+               "OT Hours (approved)", "OT Hours (pending)",
+               "Days Present", "Late Days", "Leave Days", "Overstays",
+               "Comp-Off Earned", "Comp-Off Used", "Comp-Off Pending"]
     table = [[f"{r['attendance_pct']}%", r["member_name"], r["category"], r.get("rank") or "-",
+              (r.get("weekly_off") or "monday").title(),
               r["total_hours"], r.get("overtime_hours_approved", 0), r.get("overtime_hours_pending", 0),
               r["days_present"], r.get("late_days", 0), r.get("days_on_leave", 0),
-              r.get("overstays", 0)] for r in rows]
+              r.get("overstays", 0),
+              r.get("comp_off_earned", 0), r.get("comp_off_used", 0), r.get("comp_off_pending", 0)] for r in rows]
     if fmt == "pdf":
         pdf = _pdf_from_table("Attendance & Hours Report", headers, table, f"{start} to {end}")
         return Response(content=pdf, media_type="application/pdf",

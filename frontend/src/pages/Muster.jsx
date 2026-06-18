@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { Loader2, Search, RefreshCw, CheckSquare, Square, LogIn, LogOut as LogOutIcon, Users } from "lucide-react";
+import { Loader2, Search, RefreshCw, CheckSquare, Square, LogIn, LogOut as LogOutIcon, Users, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
 import { useAuth } from "../auth";
+import SelfieCapture from "../components/SelfieCapture";
 
 const MODES = [
   { key: "checkin",  label: "Check in",  Icon: LogIn,        verb: "Check in",  color: "#10B981" },
@@ -18,6 +19,19 @@ export default function Muster() {
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState(new Set());
   const [saving, setSaving] = useState(false);
+  const [photoTarget, setPhotoTarget] = useState(null); // {id, full_name}
+
+  const savePhoto = async (dataUrl) => {
+    if (!photoTarget) return;
+    try {
+      await api.patch(`/members/${photoTarget.id}`, { photo: dataUrl });
+      toast.success(`Photo saved for ${photoTarget.full_name}`);
+      setPhotoTarget(null);
+      load();
+    } catch (err) {
+      toast.error(err?.message || "Failed to save photo");
+    }
+  };
 
   const meta = MODES.find((m) => m.key === mode);
   const [institutionFilter, setInstitutionFilter] = useState("all");
@@ -244,6 +258,16 @@ export default function Muster() {
                     {s.institution || (s.rank ? "" : "—")}
                   </div>
                 </div>
+                {!s.photo && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setPhotoTarget({ id: s.id, full_name: s.full_name }); }}
+                    className="ml-2 inline-flex items-center gap-1 px-2 h-7 rounded-full bg-amber-100 text-amber-700 text-[11px] font-bold hover:bg-amber-200 shrink-0"
+                    data-testid={`muster-photo-${s.id}`}
+                  >
+                    <Camera size={11} /> Add photo
+                  </button>
+                )}
               </li>
             );
           })}
@@ -273,6 +297,16 @@ export default function Muster() {
           </button>
         </div>
       </div>
+
+      {photoTarget && (
+        <SelfieCapture
+          title={`Photo for ${photoTarget.full_name}`}
+          subtitle="Point your camera at the athlete. We'll save this to their profile."
+          facingMode="environment"
+          onCapture={savePhoto}
+          onClose={() => setPhotoTarget(null)}
+        />
+      )}
     </div>
   );
 }
