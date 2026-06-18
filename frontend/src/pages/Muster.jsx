@@ -3,6 +3,7 @@ import { Loader2, Search, RefreshCw, CheckSquare, Square, LogIn, LogOut as LogOu
 import { toast } from "sonner";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
+import ParentContact from "../components/ParentContact";
 import { useAuth } from "../auth";
 import SelfieCapture from "../components/SelfieCapture";
 
@@ -252,7 +253,10 @@ export default function Muster() {
                 </div>
                 <Avatar name={s.full_name} photo={s.photo} size={38} />
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-slate-900 truncate">{s.full_name}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-semibold text-slate-900 truncate flex-1">{s.full_name}</div>
+                    <ParentContact father={s.father_mobile} mother={s.mother_mobile} guardian={s.guardian_mobile} />
+                  </div>
                   <div className="text-xs text-slate-500 truncate">
                     {s.rank ? `${s.rank} · ` : ""}
                     {s.institution || (s.rank ? "" : "—")}

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin, UserX } from "lucide-react";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
+import ParentContact from "../components/ParentContact";
 import { categoryLabel, formatDate } from "../utils";
 
 const COLUMNS = [
@@ -158,7 +159,10 @@ function MemberCard({ m, accent, columnKey }) {
     <div className={`px-3 py-2.5 flex gap-2.5 items-start transition ${lateBg}`} data-testid={`presence-row-${m.id}`}>
       <Avatar name={m.full_name} photo={m.photo} size={34} ring={columnKey === "on_campus" ? accent : null} />
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-semibold text-slate-900 leading-tight truncate">{m.full_name}</div>
+        <div className="flex items-start gap-1.5">
+          <div className="text-[13px] font-semibold text-slate-900 leading-tight truncate flex-1">{m.full_name}</div>
+          <ParentContact father={m.father_mobile} mother={m.mother_mobile} guardian={m.guardian_mobile} />
+        </div>
         <div className="text-[11px] text-slate-500 leading-tight truncate mt-0.5">
           {m.rank ? `${m.rank} · ` : ""}{categoryLabel(m.category)}
         </div>

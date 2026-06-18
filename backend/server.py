@@ -236,6 +236,9 @@ class UserPublic(BaseModel):
     photo: Optional[str] = None
     institution: Optional[str] = None
     gender: Optional[str] = None
+    father_mobile: Optional[str] = None
+    mother_mobile: Optional[str] = None
+    guardian_mobile: Optional[str] = None
 
 
 class MemberCreate(BaseModel):
@@ -251,6 +254,9 @@ class MemberCreate(BaseModel):
     institution: Optional[str] = None
     gender: Optional[Literal["M", "F", "O"]] = None
     weekly_off: Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"] = "monday"
+    father_mobile: Optional[str] = None
+    mother_mobile: Optional[str] = None
+    guardian_mobile: Optional[str] = None
 
 
 class MemberUpdate(BaseModel):
@@ -267,6 +273,9 @@ class MemberUpdate(BaseModel):
     gender: Optional[Literal["M", "F", "O"]] = None
     weekly_off: Optional[Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]] = None
     leave_balance_opening: Optional[float] = None
+    father_mobile: Optional[str] = None
+    mother_mobile: Optional[str] = None
+    guardian_mobile: Optional[str] = None
 
 
 class LeaveBalanceBulkRow(BaseModel):
@@ -718,6 +727,10 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "work_end": body.work_end,
         "institution": body.institution,
         "gender": body.gender,
+        "weekly_off": body.weekly_off,
+        "father_mobile": body.father_mobile,
+        "mother_mobile": body.mother_mobile,
+        "guardian_mobile": body.guardian_mobile,
         "photo": None,
         "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
         "hashed_password": hash_password(body.password),
@@ -1647,7 +1660,8 @@ async def presence(user: dict = Depends(get_current_user)):
     today = local_date_str(office)
     users = await db.users.find(
         {}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1,
-             "photo": 1, "work_start": 1, "work_end": 1}
+             "photo": 1, "work_start": 1, "work_end": 1,
+             "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1}
     ).sort("full_name", 1).to_list(2000)
 
     # Batch: open sessions, active leaves for today, and last checkout per user
@@ -1783,6 +1797,9 @@ async def presence(user: dict = Depends(get_current_user)):
             "overdue_minutes": overdue_minutes,
             "geo_in": geo_in or None,
             "geo_out": geo_out or None,
+            "father_mobile": u.get("father_mobile"),
+            "mother_mobile": u.get("mother_mobile"),
+            "guardian_mobile": u.get("guardian_mobile"),
         })
     order = {"on_campus": 0, "temp_out": 1, "on_tour": 2, "on_leave": 3, "absent": 4, "exited": 5, "not_due": 6}
     result.sort(key=lambda r: (order.get(r["status"], 9), r["full_name"]))
@@ -1966,6 +1983,9 @@ async def muster_athletes(mode: str = "checkin", user: dict = Depends(get_curren
             "photo": s.get("photo"),
             "institution": s.get("institution"),
             "gender": s.get("gender"),
+            "father_mobile": s.get("father_mobile"),
+            "mother_mobile": s.get("mother_mobile"),
+            "guardian_mobile": s.get("guardian_mobile"),
         })
 
     out.sort(key=lambda x: (x["full_name"] or "").lower())

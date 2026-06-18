@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, FileDown, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob } from "../../api";
+import ParentContact from "../../components/ParentContact";
 import { todayIso, shortDate, categoryLabel } from "../../utils";
 
 function nDaysAgo(n) {
@@ -155,7 +156,13 @@ export default function Reports() {
                   {displayedRows.map((r) => (
                     <tr key={r.member_id} className="hover:bg-slate-50" data-testid={`hours-row-${r.member_id}`}>
                       <td className="iu-table-td font-bold">{r.attendance_pct}%</td>
-                      <td className="iu-table-td font-semibold">{r.member_name}<div className="text-xs text-slate-400">{r.rank || ""}</div></td>
+                      <td className="iu-table-td font-semibold">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate">{r.member_name}</span>
+                          <ParentContact father={r.father_mobile} mother={r.mother_mobile} guardian={r.guardian_mobile} />
+                        </div>
+                        <div className="text-xs text-slate-400">{r.rank || ""}</div>
+                      </td>
                       <td className="iu-table-td hidden md:table-cell">{categoryLabel(r.category)}</td>
                       <td className="iu-table-td hidden md:table-cell capitalize text-xs text-slate-600">{r.weekly_off || "monday"}</td>
                       <td className="iu-table-td">{r.total_hours}h</td>

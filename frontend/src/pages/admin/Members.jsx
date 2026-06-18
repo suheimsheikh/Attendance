@@ -3,6 +3,7 @@ import { Loader2, Plus, Search, Edit3, Trash2, LogIn, LogOut as LogOutIcon } fro
 import { toast } from "sonner";
 import { api } from "../../api";
 import Avatar from "../../components/Avatar";
+import ParentContact from "../../components/ParentContact";
 import StatusBadge from "../../components/StatusBadge";
 import MemberForm from "./MemberForm";
 import { categoryLabel } from "../../utils";
@@ -168,7 +169,10 @@ export default function Members() {
                         <div className="flex items-center gap-3">
                           <Avatar name={m.full_name} photo={m.photo} size={36} />
                           <div className="min-w-0">
-                            <div className="font-semibold text-slate-900 truncate">{m.full_name}</div>
+                            <div className="font-semibold text-slate-900 truncate flex items-center gap-2">
+                              <span className="truncate">{m.full_name}</span>
+                              <ParentContact father={m.father_mobile} mother={m.mother_mobile} guardian={m.guardian_mobile} />
+                            </div>
                             <div className="text-xs text-slate-500 truncate">{m.email}</div>
                           </div>
                         </div>

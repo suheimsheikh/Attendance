@@ -6,20 +6,29 @@
 #emergent-badge { display: none !important; }
 
 :root {
-  --surface: #F9F9FB;
-  --on-surface: #111827;
+  /* Yacht Club of Hyderabad — brand palette sampled from the logo */
+  --ych-navy:  #1C2D48;
+  --ych-navy-2:#2A3F5F;
+  --ych-teal:  #2B8E86;
+  --ych-teal-2:#3FB0A6;
+  --ych-coral: #E85D5D;
+  --ych-gold:  #B08441;
+  --ych-sky:   #3FA9F5;
+
+  --surface: #F6F8FB;
+  --on-surface: #0F1B2D;
   --surface-2: #FFFFFF;
-  --surface-3: #F3F4F6;
+  --surface-3: #EEF2F8;
   --muted-fg: #6B7280;
-  --brand: #111827;
-  --brand-2: #1F2937;
+  --brand: var(--ych-navy);
+  --brand-2: var(--ych-navy-2);
   --brand-3: #374151;
   --border-c: #E5E7EB;
   --border-strong: #D1D5DB;
-  --success: #10B981;
-  --warning: #F59E0B;
-  --info: #F97316;
-  --error: #EF4444;
+  --success: var(--ych-teal);
+  --warning: var(--ych-gold);
+  --info: var(--ych-sky);
+  --error: var(--ych-coral);
 }
 
 body {
@@ -39,15 +48,19 @@ body {
     @apply bg-white rounded-xl border border-slate-200 shadow-sm;
   }
   .iu-input {
-    @apply w-full h-11 px-3.5 rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition;
+    @apply w-full h-11 px-3.5 rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 transition;
+    border-color: #e5e7eb;
   }
+  .iu-input:focus { border-color: var(--ych-navy); --tw-ring-color: rgba(28,45,72,0.15); }
   .iu-label {
     @apply block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide;
   }
   .iu-btn {
     @apply inline-flex items-center justify-center gap-2 h-11 px-5 rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed;
   }
-  .iu-btn-primary { @apply iu-btn bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-700; }
+  .iu-btn-primary { @apply iu-btn text-white; background: var(--ych-navy); }
+  .iu-btn-primary:hover { background: var(--ych-navy-2); }
+  .iu-btn-primary:active { background: #14233a; }
   .iu-btn-secondary { @apply iu-btn bg-white border border-slate-200 text-slate-900 hover:bg-slate-50; }
   .iu-btn-danger { @apply iu-btn bg-red-600 text-white hover:bg-red-700; }
   .iu-btn-ghost { @apply iu-btn bg-transparent text-slate-700 hover:bg-slate-100; }

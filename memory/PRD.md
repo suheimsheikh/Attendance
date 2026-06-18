@@ -54,7 +54,15 @@
 | P2 | Add validators on `LeaveCreate` (date format + start≤end) — minor backend gap noted by testing agent. |
 | P2 | Add a `members/{id}/reset-card` endpoint (regenerate personal QR if a card is lost). |
 | P2 | Optional UI polish: skeleton states for admin pages, empty-state illustrations. |
-| P3 | Split `server.py` (1333 lines) into focused routers (auth, office, members, attendance, leaves, reports, devices). |
+| P2 | Migrate existing user emails from `@sailors.local` → `@athletes.local` (cleanup). |
+| P2 | PWA install prompt ("Add to Home Screen") for Coaches/Staff. |
+| P2 | Add "Institution" filter pills to Muster Roll. |
+| P3 | WebP logo variants for faster loading. |
+| P3 | Split `server.py` (>2600 lines) into focused routers. |
+
+## Recently Added (Feb 2026)
+- **YCH branding & color palette**: Navy / Teal / Coral / Gold / Sky CSS variables across the app.
+- **Parent / Guardian contact (Feb 2026)**: Added `father_mobile`, `mother_mobile`, `guardian_mobile` to `UserPublic`, `MemberCreate`, `MemberUpdate`. Admin can enter all three in the Member Form. A reusable `ParentContact` popover (sky-blue phone chip) renders next to every athlete name on **Presence Board**, **Muster Roll**, **Members list**, and **Reports → Hours**, exposing one-tap `tel:` (Call) and `sms:` (Message) actions for each parent on file. Backend endpoints `/api/presence`, `/api/muster/athletes`, `/api/reports/hours` now include the parent numbers.
 
 ## Test Credentials
-See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345.
+See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or phone `9849002111` for OTP-bypass).
