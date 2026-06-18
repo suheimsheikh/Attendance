@@ -25,7 +25,6 @@ const NAV_ADMIN = [
   { to: "/admin/members", label: "Members", icon: Users },
   { to: "/admin/sessions", label: "Daily Sessions", icon: ListTree },
   { to: "/admin/leaves", label: "Leave Approvals", icon: ClipboardList },
-  { to: "/admin/group-leave", label: "Group Leave", icon: Users },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
   { to: "/admin/institutions", label: "Institutions", icon: Building2 },
   { to: "/admin/overtime", label: "Overtime Approvals", icon: ClipboardCheck },
