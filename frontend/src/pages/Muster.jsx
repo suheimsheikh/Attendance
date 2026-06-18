@@ -21,18 +21,9 @@ export default function Muster() {
   const [picked, setPicked] = useState(new Set());
   const [saving, setSaving] = useState(false);
   const [photoTarget, setPhotoTarget] = useState(null); // {id, full_name}
-
-  const savePhoto = async (dataUrl) => {
-    if (!photoTarget) return;
-    try {
-      await api.post(`/members/${photoTarget.id}/photo`, { photo: dataUrl });
-      toast.success(`Photo saved for ${photoTarget.full_name}`);
-      setPhotoTarget(null);
-      load();
-    } catch (err) {
-      toast.error(err?.message || "Failed to save photo");
-    }
-  };
+  // Queue of athlete IDs to capture photos for *before* submitting the muster.
+  // Each capture or skip pops the next; once empty we run the bulk endpoint.
+  const [photoQueue, setPhotoQueue] = useState([]);
 
   const meta = MODES.find((m) => m.key === mode);
   const [institutionFilter, setInstitutionFilter] = useState("all");
@@ -53,6 +44,72 @@ export default function Muster() {
   useEffect(() => { load(); }, [load]);
   // Reset institution filter when mode changes so the user always starts broad.
   useEffect(() => { setInstitutionFilter("all"); }, [mode]);
+
+  const runBulk = useCallback(async (ids) => {
+    setSaving(true);
+    try {
+      const endpoint = mode === "checkin" ? "/muster/checkin-bulk" : "/muster/checkout-bulk";
+      const res = await api.post(endpoint, { athlete_ids: ids });
+      const doneCount = res.checked_in_count ?? res.checked_out_count ?? 0;
+      const skipCount = res.skipped_count ?? 0;
+      const skipNote = skipCount > 0 ? ` · ${skipCount} skipped` : "";
+      toast.success(
+        mode === "checkin"
+          ? `${doneCount} athlete${doneCount === 1 ? "" : "s"} marked present${skipNote}`
+          : `${doneCount} athlete${doneCount === 1 ? "" : "s"} marked departed${skipNote}`
+      );
+      load();
+    } catch (err) {
+      toast.error(err?.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }, [mode, load]);
+
+  // Step through the photo queue: open the next missing-photo athlete in the
+  // selfie modal until empty, then submit the muster bulk endpoint.
+  const advancePhotoQueue = useCallback((queue) => {
+    if (queue.length === 0) {
+      setPhotoTarget(null);
+      setPhotoQueue([]);
+      // queue exhausted — submit the actual muster now with the originally
+      // picked IDs (which we read from state at the moment of submit).
+      runBulk(Array.from(picked));
+      return;
+    }
+    const next = queue[0];
+    setPhotoTarget({ id: next.id, full_name: next.full_name, queued: true });
+    setPhotoQueue(queue);
+  }, [picked, runBulk]);
+
+  const savePhoto = async (dataUrl) => {
+    if (!photoTarget) return;
+    try {
+      await api.post(`/members/${photoTarget.id}/photo`, { photo: dataUrl });
+      toast.success(`Photo saved for ${photoTarget.full_name}`);
+      setData((d) => d ? {
+        ...d,
+        athletes: d.athletes.map((a) => a.id === photoTarget.id ? { ...a, photo: dataUrl } : a),
+      } : d);
+    } catch (err) {
+      toast.error(err?.message || "Failed to save photo");
+      return;
+    }
+    if (photoTarget.queued) {
+      advancePhotoQueue(photoQueue.slice(1));
+    } else {
+      setPhotoTarget(null);
+      load();
+    }
+  };
+
+  const skipPhoto = () => {
+    if (photoTarget?.queued) {
+      advancePhotoQueue(photoQueue.slice(1));
+    } else {
+      setPhotoTarget(null);
+    }
+  };
 
   // Distinct institutions present in the current roster (sorted, "(none)" last).
   const institutions = useMemo(() => {
@@ -106,24 +163,17 @@ export default function Muster() {
       toast.error("Tick at least one athlete first");
       return;
     }
-    setSaving(true);
-    try {
-      const endpoint = mode === "checkin" ? "/muster/checkin-bulk" : "/muster/checkout-bulk";
-      const res = await api.post(endpoint, { athlete_ids: Array.from(picked) });
-      const doneCount = res.checked_in_count ?? res.checked_out_count ?? 0;
-      const skipCount = res.skipped_count ?? 0;
-      const skipNote = skipCount > 0 ? ` · ${skipCount} skipped` : "";
-      toast.success(
-        mode === "checkin"
-          ? `${doneCount} athlete${doneCount === 1 ? "" : "s"} marked present${skipNote}`
-          : `${doneCount} athlete${doneCount === 1 ? "" : "s"} marked departed${skipNote}`
-      );
-      load();
-    } catch (err) {
-      toast.error(err?.message || "Save failed");
-    } finally {
-      setSaving(false);
+    // Only prompt for photos on check-IN (during muster the coach has the
+    // athlete in front of them). Check-OUT skips this — most go home in groups
+    // and we don't want to slow that down.
+    const missing = mode === "checkin"
+      ? (data?.athletes || []).filter((a) => picked.has(a.id) && !a.photo)
+      : [];
+    if (missing.length > 0) {
+      advancePhotoQueue(missing);
+      return;
     }
+    runBulk(Array.from(picked));
   };
 
   const allVisiblePicked = filtered.length > 0 && filtered.every((s) => picked.has(s.id));
@@ -305,10 +355,14 @@ export default function Muster() {
       {photoTarget && (
         <SelfieCapture
           title={`Photo for ${photoTarget.full_name}`}
-          subtitle="Point your camera at the athlete. We'll save this to their profile."
+          subtitle={
+            photoTarget.queued
+              ? `Capturing photos before check-in · ${photoQueue.length} left. Tap Skip to do it later.`
+              : "Point your camera at the athlete. We'll save this to their profile."
+          }
           facingMode="environment"
           onCapture={savePhoto}
-          onClose={() => setPhotoTarget(null)}
+          onClose={skipPhoto}
         />
       )}
     </div>
