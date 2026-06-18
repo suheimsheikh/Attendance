@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide the Emergent platform badge — it was overlapping app controls. */
+#emergent-badge { display: none !important; }
+
 :root {
   --surface: #F9F9FB;
   --on-surface: #111827;

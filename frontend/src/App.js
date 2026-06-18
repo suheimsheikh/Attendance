@@ -84,19 +84,13 @@ function App() {
             <Route path="admin/sessions" element={<RequireAdmin><Sessions /></RequireAdmin>} />
             <Route path="admin/overtime" element={<RequireAdmin><Overtime /></RequireAdmin>} />
             <Route path="admin/leave-balances" element={<RequireAdmin><LeaveBalances /></RequireAdmin>} />
+            <Route path="admin/group-leave" element={<RequireAdmin><GroupLeave /></RequireAdmin>} />
+            <Route path="admin/institutions" element={<RequireAdmin><Institutions /></RequireAdmin>} />
             <Route path="admin/import" element={<RequireAdmin><ImportMembers /></RequireAdmin>} />
             <Route path="admin/cards" element={<RequireAdmin><DisabledFeature title="Member Cards disabled" reason="Personal QR cards are turned off for now — Muster Roll handles attendance." /></RequireAdmin>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
-    </AuthProvider>
-    </ErrorBoundary>
-  );
-}
-
-export default App;
-outes>
       </BrowserRouter>
     </AuthProvider>
     </ErrorBoundary>
