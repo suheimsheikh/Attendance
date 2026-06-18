@@ -83,7 +83,7 @@ export default function MyLeaves() {
   );
 }
 
-function ApplyForm({ onClose, onCreated }) {
+export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   useEscape(onClose);
   const [type, setType] = useState("leave");
   const [start, setStart] = useState(todayIso());
@@ -91,14 +91,24 @@ function ApplyForm({ onClose, onCreated }) {
   const [reason, setReason] = useState("");
   const [location, setLocation] = useState("");
   const [busy, setBusy] = useState(false);
+  const [memberId, setMemberId] = useState("");
+  const [members, setMembers] = useState([]);
+
+  useEffect(() => {
+    if (!asAdmin) return;
+    api.get("/members").then((m) => setMembers(m || [])).catch(() => {});
+  }, [asAdmin]);
 
   const submit = async (e) => {
     e.preventDefault();
+    if (asAdmin && !memberId) { toast.error("Pick a member"); return; }
     if (!reason.trim()) { toast.error("Enter a reason"); return; }
     if (end < start) { toast.error("End date must be after start"); return; }
     setBusy(true);
     try {
-      await api.post("/leaves", { type, start_date: start, end_date: end, reason, location: type === "tour" ? location : null });
+      const payload = { type, start_date: start, end_date: end, reason, location: type === "tour" ? location : null };
+      const path = asAdmin ? `/leaves?target_user_id=${encodeURIComponent(memberId)}` : "/leaves";
+      await api.post(path, payload);
       toast.success("Request submitted");
       onCreated();
     } catch (err) {
@@ -112,10 +122,21 @@ function ApplyForm({ onClose, onCreated }) {
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={onClose}>
       <div className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="apply-leave-form">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-extrabold">New request</h2>
+          <h2 className="text-xl font-extrabold">{asAdmin ? "Apply on behalf of member" : "New request"}</h2>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="space-y-4">
+          {asAdmin && (
+            <div>
+              <label className="iu-label">Member</label>
+              <select data-testid="leave-target-member" value={memberId} onChange={(e) => setMemberId(e.target.value)} className="iu-input">
+                <option value="">— Pick a member —</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>{m.full_name}{m.rank ? ` · ${m.rank}` : ""}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="iu-label">Type</label>
             <div className="grid grid-cols-3 gap-2">

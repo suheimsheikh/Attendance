@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Check, X, Bed, Plane, AlertTriangle } from "lucide-react";
+import { Loader2, Check, X, Bed, Plane, AlertTriangle, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { shortDate } from "../../utils";
+import { ApplyForm } from "../MyLeaves";
 
 const FILTERS = [
   { key: "pending", label: "Pending" },
@@ -16,6 +17,7 @@ export default function AdminLeaves() {
   const [filter, setFilter] = useState("pending");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showOnBehalf, setShowOnBehalf] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -36,9 +38,14 @@ export default function AdminLeaves() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto">
-      <header className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Leave Approvals</h1>
-        <p className="text-slate-500 text-sm mt-1">Review and decide on leave & tour requests.</p>
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Leave Approvals</h1>
+          <p className="text-slate-500 text-sm mt-1">Review and decide on leave & tour requests.</p>
+        </div>
+        <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} className="iu-btn-primary">
+          <Plus size={16}/> Apply on behalf
+        </button>
       </header>
 
       <div className="flex gap-2 overflow-x-auto pb-3 mb-2">
@@ -91,6 +98,14 @@ export default function AdminLeaves() {
             </div>
           ))}
         </div>
+      )}
+
+      {showOnBehalf && (
+        <ApplyForm
+          asAdmin
+          onClose={() => setShowOnBehalf(false)}
+          onCreated={() => { setShowOnBehalf(false); load(); }}
+        />
       )}
     </div>
   );

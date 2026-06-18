@@ -266,6 +266,16 @@ class MemberUpdate(BaseModel):
     institution: Optional[str] = None
     gender: Optional[Literal["M", "F", "O"]] = None
     weekly_off: Optional[Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]] = None
+    leave_balance_opening: Optional[float] = None
+
+
+class LeaveBalanceBulkRow(BaseModel):
+    member_id: str
+    opening: float
+
+
+class LeaveBalanceBulkIn(BaseModel):
+    rows: List[LeaveBalanceBulkRow]
 
 
 class OfficeConfig(BaseModel):
@@ -710,6 +720,58 @@ async def delete_member(member_id: str, admin: dict = Depends(require_admin)):
     await db.attendance.delete_many({"user_id": member_id})
     await db.leaves.delete_many({"user_id": member_id})
     return {"ok": True}
+
+
+
+@api_router.get("/leave-balances")
+async def list_leave_balances(admin: dict = Depends(require_admin)):
+    """Return every member with their opening leave balance and current usage,
+    used by the spreadsheet-style admin editor."""
+    users = await db.users.find({}, {"_id": 0, "id": 1, "full_name": 1, "category": 1,
+                                      "rank": 1, "institution": 1,
+                                      "leave_balance_opening": 1, "weekly_off": 1}
+                                ).sort("full_name", 1).to_list(2000)
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+    year = today[:4]
+    leaves = await db.leaves.find({
+        "status": "approved", "type": "leave",
+        "start_date": {"$gte": f"{year}-01-01", "$lte": f"{year}-12-31"},
+    }, {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1}).to_list(20000)
+    used: dict = {}
+    for l in leaves:
+        try:
+            sd = date.fromisoformat(l["start_date"])
+            ed = date.fromisoformat(l["end_date"])
+            n = (ed - sd).days + 1
+        except Exception:
+            n = 1
+        used[l["user_id"]] = used.get(l["user_id"], 0) + n
+    out = []
+    for u in users:
+        opening = float(u.get("leave_balance_opening") or 0)
+        taken = float(used.get(u["id"], 0))
+        out.append({
+            "id": u["id"],
+            "full_name": u["full_name"],
+            "category": u.get("category"),
+            "rank": u.get("rank"),
+            "institution": u.get("institution"),
+            "opening": opening,
+            "taken_this_year": taken,
+            "balance": round(opening - taken, 1),
+        })
+    return {"year": int(year), "rows": out}
+
+
+@api_router.post("/leave-balances/bulk")
+async def bulk_set_leave_balances(body: LeaveBalanceBulkIn, admin: dict = Depends(require_admin)):
+    updated = 0
+    for row in body.rows:
+        r = await db.users.update_one({"id": row.member_id}, {"$set": {"leave_balance_opening": float(row.opening)}})
+        if r.modified_count or r.matched_count:
+            updated += 1
+    return {"ok": True, "updated": updated}
 
 
 @api_router.get("/members/{member_id}/card")
@@ -1569,15 +1631,23 @@ async def presence(user: dict = Depends(get_current_user)):
 # Leave / Tour
 # ----------------------------------------------------------------------------
 @api_router.post("/leaves")
-async def create_leave(body: LeaveCreate, user: dict = Depends(get_current_user)):
+async def create_leave(body: LeaveCreate, target_user_id: Optional[str] = None,
+                      user: dict = Depends(get_current_user)):
+    """Create a leave/tour/comp-off request. Admins may pass `target_user_id`
+    to file on behalf of another member."""
+    target_user = user
+    if target_user_id and target_user_id != user["id"]:
+        if user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Only admins may file on behalf of others")
+        target_user = await db.users.find_one({"id": target_user_id}, {"_id": 0})
+        if not target_user:
+            raise HTTPException(status_code=404, detail="Target member not found")
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
-    # A "late application" is one where the leave/tour start date is in the past
-    # at the time of filing — i.e. it's being applied for retroactively.
     late_application = bool(body.start_date and body.start_date < today)
     doc = {
         "id": str(uuid.uuid4()),
-        "user_id": user["id"],
+        "user_id": target_user["id"],
         "type": body.type,
         "start_date": body.start_date,
         "end_date": body.end_date,
@@ -1585,6 +1655,8 @@ async def create_leave(body: LeaveCreate, user: dict = Depends(get_current_user)
         "location": body.location,
         "status": "pending",
         "late_application": late_application,
+        "filed_by_admin": user["id"] if target_user["id"] != user["id"] else None,
+        "filed_by_admin_name": user["full_name"] if target_user["id"] != user["id"] else None,
         "created_at": now_utc().isoformat(),
     }
     await db.leaves.insert_one(doc)
@@ -2228,6 +2300,47 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
 async def hours_report(start: str, end: str, admin: dict = Depends(require_admin)):
     rows = await compute_hours_report(start, end)
     return {"start": start, "end": end, "rows": rows}
+
+
+@api_router.get("/reports/payroll")
+async def payroll_report(month: Optional[str] = None, admin: dict = Depends(require_admin)):
+    """Monthly payroll report. `month` = YYYY-MM (defaults to the previous
+    calendar month so a 1st-of-month run pulls last month's numbers)."""
+    office = await db.config.find_one({"id": "office"})
+    today = date.fromisoformat(local_date_str(office))
+    if not month:
+        first_this = today.replace(day=1)
+        last_prev = first_this - timedelta(days=1)
+        month = f"{last_prev.year:04d}-{last_prev.month:02d}"
+    y, m = (int(x) for x in month.split("-"))
+    start_d = date(y, m, 1)
+    if m == 12:
+        end_d = date(y + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_d = date(y, m + 1, 1) - timedelta(days=1)
+    start_iso, end_iso = start_d.isoformat(), end_d.isoformat()
+    rows = await compute_hours_report(start_iso, end_iso)
+    # Attach leave balance (annual taken vs opening, computed from full year-to-date)
+    users = await db.users.find({}, {"_id": 0, "id": 1, "leave_balance_opening": 1}).to_list(2000)
+    opening_map = {u["id"]: float(u.get("leave_balance_opening") or 0) for u in users}
+    leaves = await db.leaves.find({
+        "status": "approved", "type": "leave",
+        "start_date": {"$gte": f"{y}-01-01", "$lte": f"{y}-12-31"},
+    }, {"_id": 0}).to_list(20000)
+    ytd_taken: dict = {}
+    for l in leaves:
+        try:
+            n = (date.fromisoformat(l["end_date"]) - date.fromisoformat(l["start_date"])).days + 1
+        except Exception:
+            n = 1
+        ytd_taken[l["user_id"]] = ytd_taken.get(l["user_id"], 0) + n
+    for r in rows:
+        opening = opening_map.get(r["member_id"], 0.0)
+        taken = float(ytd_taken.get(r["member_id"], 0))
+        r["leave_balance_opening"] = opening
+        r["leave_balance_taken_ytd"] = taken
+        r["leave_balance_remaining"] = round(opening - taken, 1)
+    return {"month": month, "start": start_iso, "end": end_iso, "rows": rows}
 
 
 @api_router.get("/reports/daily")

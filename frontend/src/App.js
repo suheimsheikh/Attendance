@@ -20,6 +20,8 @@ import OfficeQR from "./pages/admin/OfficeQR";
 import Reports from "./pages/admin/Reports";
 import Sessions from "./pages/admin/Sessions";
 import Overtime from "./pages/admin/Overtime";
+import LeaveBalances from "./pages/admin/LeaveBalances";
+import Payroll from "./pages/admin/Payroll";
 import ImportMembers from "./pages/admin/ImportMembers";
 import Cards from "./pages/admin/Cards";
 import { Loader2 } from "lucide-react";
@@ -76,8 +78,10 @@ function App() {
             <Route path="admin/office" element={<RequireAdmin><OfficeSettings /></RequireAdmin>} />
             <Route path="admin/office-qr" element={<RequireAdmin><DisabledFeature title="Office QR disabled" reason="QR scanning is turned off — use Muster Roll." /></RequireAdmin>} />
             <Route path="admin/reports" element={<RequireAdmin><Reports /></RequireAdmin>} />
+            <Route path="admin/payroll" element={<RequireAdmin><Payroll /></RequireAdmin>} />
             <Route path="admin/sessions" element={<RequireAdmin><Sessions /></RequireAdmin>} />
             <Route path="admin/overtime" element={<RequireAdmin><Overtime /></RequireAdmin>} />
+            <Route path="admin/leave-balances" element={<RequireAdmin><LeaveBalances /></RequireAdmin>} />
             <Route path="admin/import" element={<RequireAdmin><ImportMembers /></RequireAdmin>} />
             <Route path="admin/cards" element={<RequireAdmin><DisabledFeature title="Member Cards disabled" reason="Personal QR cards are turned off for now — Muster Roll handles attendance." /></RequireAdmin>} />
           </Route>
