@@ -301,7 +301,7 @@ export default function Muster() {
                 <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 ${isPicked ? "bg-emerald-600 border-emerald-600 text-white" : "border-slate-300"}`}>
                   {isPicked && <CheckSquare size={14}/>}
                 </div>
-                <Avatar name={s.full_name} photo={s.photo} size={38} />
+                <Avatar name={s.full_name} photo={s.photo} size={48} ring={picked.has(s.id) ? "#10B981" : null} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <div className="font-semibold text-slate-900 truncate flex-1">{s.full_name}</div>

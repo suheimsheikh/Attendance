@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Users, CalendarCheck2, Plane, Clock, ShieldCheck, ArrowRight, AlertTriangle, ChevronRight } from "lucide-react";
+import { Users, CalendarCheck2, Plane, Clock, ShieldCheck, ArrowRight, AlertTriangle, ChevronRight, Calendar, ClipboardCheck, ClipboardList, FileSpreadsheet, Building2, IdCard, Building, FileBarChart2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
 import ActivityFeed from "../../components/ActivityFeed";
@@ -13,26 +13,30 @@ export default function AdminConsole() {
     api.get("/admin/overtime/needs-review").then(setOtNeedsReview).catch(() => {});
   }, []);
 
+  // 5 summary tiles — each gets a vibrant colour to make scanning easier.
   const cards = [
-    { label: "Total members", value: summary?.total_members ?? "—", Icon: Users, color: "#111827", to: "/admin/members" },
-    { label: "On campus now", value: summary?.on_campus ?? "—", Icon: ShieldCheck, color: "#10B981", to: "/" },
+    { label: "Total members", value: summary?.total_members ?? "—", Icon: Users, color: "#0EA5E9", to: "/admin/members" },
+    { label: "On campus now", value: summary?.on_campus ?? "—", Icon: ShieldCheck, color: "#10B981", to: "/presence" },
     { label: "Pending leaves", value: summary?.pending_leaves ?? "—", Icon: CalendarCheck2, color: "#F59E0B", to: "/admin/leaves" },
     { label: "On leave / tour", value: summary?.on_leave_tour ?? "—", Icon: Plane, color: "#F97316", to: "/admin/leaves" },
     { label: "Late today", value: summary?.late_today ?? "—", Icon: Clock, color: "#EF4444", to: "/admin/reports" },
   ];
 
+  // Each quick-action card has its own colour theme: vivid icon, soft tinted
+  // background + matching border so admins can recognise each shortcut at a
+  // glance instead of reading text.
   const links = [
-    { to: "/admin/sessions", label: "Daily sessions", desc: "Check-in, temp exits/returns & final check-out in one table" },
-    { to: "/admin/members", label: "Manage members", desc: "Add, edit, deactivate members" },
-    { to: "/admin/leaves", label: "Approve leaves", desc: "Review pending leave & tour requests" },
-    { to: "/admin/overtime", label: "Overtime approvals", desc: "Approve / reject staff overtime entries" },
-    { to: "/admin/leave-balances", label: "Leave balances", desc: "Set opening balances & see consumed / pending" },
-    { to: "/admin/payroll", label: "Monthly payroll", desc: "Generate the monthly payroll report" },
-    { to: "/admin/institutions", label: "Institutions", desc: "Manage the institutions list (MJPT, Rainbow Home, YCH…)" },
-    { to: "/admin/devices", label: "Access requests", desc: "Approve new browser/device sign-ins" },
-    { to: "/admin/office", label: "Office settings", desc: "Geofence, work hours, timezone" },
-    { to: "/admin/reports", label: "Reports", desc: "Hours, attendance, exports" },
-    { to: "/admin/import", label: "Import members", desc: "Bulk upload via Excel template" },
+    { to: "/admin/sessions",       label: "Daily sessions",     desc: "Check-in, temp exits/returns & final check-out in one table", Icon: Calendar,         color: "#10B981" },
+    { to: "/admin/members",        label: "Manage members",     desc: "Add, edit, deactivate members",                              Icon: Users,             color: "#0EA5E9" },
+    { to: "/admin/leaves",         label: "Approve leaves",     desc: "Review pending leave & tour requests",                        Icon: ClipboardList,    color: "#F59E0B" },
+    { to: "/admin/overtime",       label: "Overtime approvals", desc: "Approve / reject staff overtime entries",                     Icon: ClipboardCheck,   color: "#8B5CF6" },
+    { to: "/admin/leave-balances", label: "Leave balances",     desc: "Set opening balances & see consumed / pending",               Icon: CalendarCheck2,   color: "#06B6D4" },
+    { to: "/admin/payroll",        label: "Monthly payroll",    desc: "Generate the monthly payroll report",                         Icon: FileSpreadsheet,  color: "#F97316" },
+    { to: "/admin/institutions",   label: "Institutions",       desc: "Manage the institutions list (MJPT, Rainbow Home, YCH…)",     Icon: Building,         color: "#6366F1" },
+    { to: "/admin/devices",        label: "Access requests",    desc: "Approve new browser/device sign-ins",                         Icon: IdCard,            color: "#F43F5E" },
+    { to: "/admin/office",         label: "Office settings",    desc: "Geofence, work hours, timezone",                              Icon: Building2,         color: "#14B8A6" },
+    { to: "/admin/reports",        label: "Reports",            desc: "Hours, attendance, exports",                                  Icon: FileBarChart2,     color: "#EC4899" },
+    { to: "/admin/import",         label: "Import members",     desc: "Bulk upload via Excel template",                              Icon: FileSpreadsheet,  color: "#84CC16" },
   ];
 
   return (
@@ -91,12 +95,21 @@ export default function AdminConsole() {
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8" data-testid="admin-summary-cards">
         {cards.map((c) => (
-          <Link key={c.label} to={c.to} className="iu-card p-4 hover:shadow-md transition" data-testid={`summary-${c.label.toLowerCase().replace(/\s+/g, "-")}`}>
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3" style={{ background: c.color + "22", color: c.color }}>
-              <c.Icon size={18} />
+          <Link
+            key={c.label}
+            to={c.to}
+            className="iu-card p-4 hover:shadow-lg transition border-2"
+            style={{
+              background: `linear-gradient(135deg, ${c.color}18 0%, ${c.color}05 100%)`,
+              borderColor: c.color + "33",
+            }}
+            data-testid={`summary-${c.label.toLowerCase().replace(/\s+/g, "-")}`}
+          >
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 shadow-sm" style={{ background: c.color, color: "#fff" }}>
+              <c.Icon size={20} />
             </div>
-            <div className="text-2xl font-extrabold">{c.value}</div>
-            <div className="text-xs text-slate-500 font-semibold uppercase tracking-wide mt-0.5">{c.label}</div>
+            <div className="text-2xl font-extrabold" style={{ color: c.color }}>{c.value}</div>
+            <div className="text-xs font-bold uppercase tracking-wide mt-0.5 text-slate-700">{c.label}</div>
           </Link>
         ))}
       </div>
@@ -104,12 +117,27 @@ export default function AdminConsole() {
       <h2 className="font-extrabold tracking-tight mb-3">Quick actions</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
         {links.map((l) => (
-          <Link key={l.to} to={l.to} className="iu-card p-4 hover:shadow-md transition flex items-center" data-testid={`link-${l.to.replace(/\W+/g, "-")}`}>
-            <div className="flex-1">
-              <div className="font-semibold">{l.label}</div>
-              <div className="text-xs text-slate-500 mt-0.5">{l.desc}</div>
+          <Link
+            key={l.to}
+            to={l.to}
+            data-testid={`link-${l.to.replace(/\W+/g, "-")}`}
+            className="iu-card p-4 hover:shadow-lg transition flex items-center gap-3 border-2"
+            style={{
+              backgroundColor: l.color + "10",   // ~6% opacity tint
+              borderColor: l.color + "33",       // ~20% opacity border
+            }}
+          >
+            <div
+              className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+              style={{ backgroundColor: l.color, color: "#fff" }}
+            >
+              <l.Icon size={20} />
             </div>
-            <ArrowRight size={16} className="text-slate-400" />
+            <div className="flex-1 min-w-0">
+              <div className="font-bold text-slate-900">{l.label}</div>
+              <div className="text-xs text-slate-600 mt-0.5">{l.desc}</div>
+            </div>
+            <ArrowRight size={16} style={{ color: l.color }} />
           </Link>
         ))}
       </div>
