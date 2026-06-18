@@ -20,19 +20,12 @@ const NAV_MEMBER_AFTER_MUSTER = [
 ];
 
 const NAV_ADMIN = [
-  { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin", label: "Admin Console", icon: ShieldCheck, end: true },
-  { to: "/admin/members", label: "Members", icon: Users },
-  { to: "/admin/sessions", label: "Daily Sessions", icon: ListTree },
-  { to: "/admin/leaves", label: "Leave Approvals", icon: ClipboardList },
+  { to: "/admin/overtime", label: "Overtime Approvals", icon: ClipboardCheck },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
   { to: "/admin/institutions", label: "Institutions", icon: Building2 },
-  { to: "/admin/overtime", label: "Overtime Approvals", icon: ClipboardCheck },
   { to: "/admin/payroll", label: "Monthly Payroll", icon: FileSpreadsheet },
-  { to: "/admin/office", label: "Office Settings", icon: Building2 },
   // Hidden / disabled tools (kept in routes but pushed to the bottom of the menu).
-  { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
-  { to: "/admin/import", label: "Import Members", icon: FileSpreadsheet },
   { to: "/admin/office-qr", label: "Office QR", icon: QrCode, disabled: true, disabledReason: "QR scanning is disabled for now" },
   { to: "/admin/cards", label: "Member Cards", icon: IdCard, disabled: true, disabledReason: "QR scanning is disabled for now" },
 ];

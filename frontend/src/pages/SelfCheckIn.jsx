@@ -44,7 +44,7 @@ export default function SelfCheckIn() {
 
   const onTempOut = !!status?.on_temp_exit;
   const currentExcursion = status?.current_excursion;
-  const actionLabel = status?.checked_in ? "I'm Leaving" : "I'm Here";
+  const actionLabel = status?.checked_in ? "I'm Leaving" : "I showed up 😊";
 
   // Overtime detection (staff only).
   const otInfo = useMemo(() => {
