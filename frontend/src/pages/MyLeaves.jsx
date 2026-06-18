@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
-import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw, Clock } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw, Clock, Search, Check } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
+import Avatar from "../components/Avatar";
 import { shortDate, todayIso } from "../utils";
 import { useEscape } from "../hooks/useEscape";
 
@@ -93,13 +94,41 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   const [location, setLocation] = useState("");
   const [expectedArrival, setExpectedArrival] = useState("");
   const [busy, setBusy] = useState(false);
-  const [memberId, setMemberId] = useState("");
+  const [memberId, setMemberId] = useState("");          // legacy single-pick (non-admin path unchanged)
   const [members, setMembers] = useState([]);
+  // Admin multi-select state
+  const [institutions, setInstitutions] = useState([]);
+  const [instFilter, setInstFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [picked, setPicked] = useState(new Set());
+  const [autoApprove, setAutoApprove] = useState(true);
 
   useEffect(() => {
     if (!asAdmin) return;
     api.get("/members").then((m) => setMembers(m || [])).catch(() => {});
+    api.get("/institutions").then((r) => setInstitutions(r || [])).catch(() => {});
   }, [asAdmin]);
+
+  // Filtered list of athletes/members for the multi-select panel.
+  const filteredMembers = useMemo(() => {
+    if (!asAdmin) return [];
+    const q = search.trim().toLowerCase();
+    return members.filter((m) => {
+      if (instFilter && m.institution !== instFilter) return false;
+      if (!q) return true;
+      return (m.full_name || "").toLowerCase().includes(q) ||
+             (m.rank || "").toLowerCase().includes(q) ||
+             (m.email || "").toLowerCase().includes(q);
+    });
+  }, [asAdmin, members, instFilter, search]);
+
+  const togglePick = (id) => setPicked((p) => {
+    const n = new Set(p);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const pickAllFiltered = () => setPicked(new Set(filteredMembers.map((m) => m.id)));
+  const clearPicked = () => setPicked(new Set());
 
   // Late-coming is single-day & today
   useEffect(() => {
@@ -111,20 +140,38 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (asAdmin && !memberId) { toast.error("Pick a member"); return; }
+    if (asAdmin && picked.size === 0) { toast.error("Pick at least one member"); return; }
     if (!reason.trim()) { toast.error("Enter a reason"); return; }
     if (type === "late_coming" && !expectedArrival) { toast.error("Tell us when you'll arrive"); return; }
     if (end < start) { toast.error("End date must be after start"); return; }
     setBusy(true);
     try {
-      const payload = {
-        type, start_date: start, end_date: end, reason,
-        location: type === "tour" ? location : null,
-        expected_arrival: type === "late_coming" ? expectedArrival : null,
-      };
-      const path = asAdmin ? `/leaves?target_user_id=${encodeURIComponent(memberId)}` : "/leaves";
-      await api.post(path, payload);
-      toast.success("Request submitted");
+      if (asAdmin) {
+        // Admin path → always use the group endpoint, even for a single pick.
+        // expected_arrival isn't accepted by /leaves/group; fold it into the reason
+        // so the admin's intent isn't lost.
+        const reasonOut = type === "late_coming" && expectedArrival
+          ? `${reason.trim()} (expected arrival ${expectedArrival})`
+          : reason.trim();
+        const r = await api.post("/leaves/group", {
+          user_ids: [...picked],
+          type,
+          start_date: start,
+          end_date: end,
+          reason: reasonOut,
+          location: type === "tour" ? location : null,
+          auto_approve: autoApprove,
+        });
+        toast.success(`${r.created} ${r.created === 1 ? "request" : "requests"} created (${r.status})`);
+      } else {
+        const payload = {
+          type, start_date: start, end_date: end, reason,
+          location: type === "tour" ? location : null,
+          expected_arrival: type === "late_coming" ? expectedArrival : null,
+        };
+        await api.post("/leaves", payload);
+        toast.success("Request submitted");
+      }
       onCreated();
     } catch (err) {
       toast.error(err?.message || "Failed");
@@ -135,21 +182,91 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={onClose}>
-      <div className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="apply-leave-form">
+      <div className={`bg-white w-full ${asAdmin ? "md:max-w-3xl" : "md:max-w-md"} rounded-t-2xl md:rounded-2xl p-6 max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()} data-testid="apply-leave-form">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-extrabold">{asAdmin ? "Apply on behalf of member" : "New request"}</h2>
+          <h2 className="text-xl font-extrabold">{asAdmin ? "Apply on behalf of members" : "New request"}</h2>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="space-y-4">
           {asAdmin && (
-            <div>
-              <label className="iu-label">Member</label>
-              <select data-testid="leave-target-member" value={memberId} onChange={(e) => setMemberId(e.target.value)} className="iu-input">
-                <option value="">— Pick a member —</option>
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>{m.full_name}{m.rank ? ` · ${m.rank}` : ""}</option>
-                ))}
-              </select>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <label className="iu-label !mb-0">Pick members ({picked.size} selected)</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={pickAllFiltered}
+                    data-testid="ob-pick-all"
+                    className="iu-btn-secondary !h-8 !px-2 !text-xs"
+                  >Pick all ({filteredMembers.length})</button>
+                  <button
+                    type="button"
+                    onClick={clearPicked}
+                    data-testid="ob-clear"
+                    className="iu-btn-secondary !h-8 !px-2 !text-xs"
+                    disabled={picked.size === 0}
+                  >Clear</button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-2 px-2 h-9 rounded-lg border border-slate-200 bg-white">
+                  <Search size={14} className="text-slate-400" />
+                  <input
+                    data-testid="ob-search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search by name, rank or email…"
+                    className="flex-1 outline-none bg-transparent text-sm"
+                  />
+                </div>
+                <select
+                  data-testid="ob-inst-filter"
+                  value={instFilter}
+                  onChange={(e) => setInstFilter(e.target.value)}
+                  className="iu-input !h-9 !w-44"
+                >
+                  <option value="">All institutions</option>
+                  {institutions.map((i) => <option key={i.id} value={i.name}>{i.name}</option>)}
+                </select>
+              </div>
+              <div className="bg-white rounded-lg border border-slate-200 max-h-[34vh] overflow-auto divide-y divide-slate-100" data-testid="ob-member-list">
+                {filteredMembers.length === 0 ? (
+                  <div className="px-3 py-6 text-center text-sm text-slate-500">No members match.</div>
+                ) : filteredMembers.map((m) => {
+                  const on = picked.has(m.id);
+                  return (
+                    <label
+                      key={m.id}
+                      className={`px-3 py-2 flex items-center gap-3 cursor-pointer transition ${on ? "bg-emerald-50/70" : "hover:bg-slate-50"}`}
+                      data-testid={`ob-row-${m.id}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => togglePick(m.id)}
+                        data-testid={`ob-checkbox-${m.id}`}
+                      />
+                      <Avatar name={m.full_name} photo={m.photo} size={28} />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-slate-900 truncate">{m.full_name}</div>
+                        <div className="text-[11px] text-slate-500 truncate">
+                          {m.rank ? `${m.rank} · ` : ""}{m.institution || "—"}
+                        </div>
+                      </div>
+                      {on && <Check size={14} className="text-emerald-600" />}
+                    </label>
+                  );
+                })}
+              </div>
+              <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={autoApprove}
+                  onChange={(e) => setAutoApprove(e.target.checked)}
+                  data-testid="ob-auto-approve"
+                />
+                Auto-approve (skip the pending queue)
+              </label>
             </div>
           )}
           <div>
@@ -164,7 +281,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
               <p className="text-[11px] text-slate-500 mt-1.5">Claim a comp-off against a weekly-off day you worked. Admin will verify.</p>
             )}
             {type === "late_coming" && (
-              <p className="text-[11px] text-slate-500 mt-1.5">Use this when you'll arrive late today. Admin gets pinged so you're not flagged as absent.</p>
+              <p className="text-[11px] text-slate-500 mt-1.5">Use this when you&apos;ll arrive late today. Admin gets pinged so you&apos;re not flagged as absent.</p>
             )}
           </div>
           {type === "late_coming" && (
