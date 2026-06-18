@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw } from "lucide-react";
+import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import { shortDate, todayIso } from "../utils";
 import { useEscape } from "../hooks/useEscape";
 
 const TYPE_LABELS = {
-  leave:    { label: "Leave",    color: "#F59E0B", Icon: Bed },
-  tour:     { label: "Tour",     color: "#F97316", Icon: Plane },
-  comp_off: { label: "Comp Off", color: "#8B5CF6", Icon: RefreshCw },
+  leave:        { label: "Leave",        color: "#F59E0B", Icon: Bed },
+  tour:         { label: "Tour",         color: "#F97316", Icon: Plane },
+  comp_off:     { label: "Comp Off",     color: "#8B5CF6", Icon: RefreshCw },
+  late_coming:  { label: "Late Coming",  color: "#DC2626", Icon: Clock },
 };
 const STATUS_COLORS = {
   pending: { bg: "rgba(245,158,11,0.12)", color: "#B45309" },
@@ -90,6 +91,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   const [end, setEnd] = useState(todayIso());
   const [reason, setReason] = useState("");
   const [location, setLocation] = useState("");
+  const [expectedArrival, setExpectedArrival] = useState("");
   const [busy, setBusy] = useState(false);
   const [memberId, setMemberId] = useState("");
   const [members, setMembers] = useState([]);
@@ -99,14 +101,27 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
     api.get("/members").then((m) => setMembers(m || [])).catch(() => {});
   }, [asAdmin]);
 
+  // Late-coming is single-day & today
+  useEffect(() => {
+    if (type === "late_coming") {
+      const t = todayIso();
+      setStart(t); setEnd(t);
+    }
+  }, [type]);
+
   const submit = async (e) => {
     e.preventDefault();
     if (asAdmin && !memberId) { toast.error("Pick a member"); return; }
     if (!reason.trim()) { toast.error("Enter a reason"); return; }
+    if (type === "late_coming" && !expectedArrival) { toast.error("Tell us when you'll arrive"); return; }
     if (end < start) { toast.error("End date must be after start"); return; }
     setBusy(true);
     try {
-      const payload = { type, start_date: start, end_date: end, reason, location: type === "tour" ? location : null };
+      const payload = {
+        type, start_date: start, end_date: end, reason,
+        location: type === "tour" ? location : null,
+        expected_arrival: type === "late_coming" ? expectedArrival : null,
+      };
       const path = asAdmin ? `/leaves?target_user_id=${encodeURIComponent(memberId)}` : "/leaves";
       await api.post(path, payload);
       toast.success("Request submitted");
@@ -139,15 +154,31 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           )}
           <div>
             <label className="iu-label">Type</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <button data-testid="leave-type-leave" type="button" onClick={() => setType("leave")} className={`iu-btn ${type === "leave" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Bed size={16}/> Leave</button>
               <button data-testid="leave-type-tour" type="button" onClick={() => setType("tour")} className={`iu-btn ${type === "tour" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Plane size={16}/> Tour</button>
               <button data-testid="leave-type-comp-off" type="button" onClick={() => setType("comp_off")} className={`iu-btn ${type === "comp_off" ? "iu-btn-primary" : "iu-btn-secondary"}`}><RefreshCw size={16}/> Comp Off</button>
+              <button data-testid="leave-type-late-coming" type="button" onClick={() => setType("late_coming")} className={`iu-btn ${type === "late_coming" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Clock size={16}/> Late Coming</button>
             </div>
             {type === "comp_off" && (
               <p className="text-[11px] text-slate-500 mt-1.5">Claim a comp-off against a weekly-off day you worked. Admin will verify.</p>
             )}
+            {type === "late_coming" && (
+              <p className="text-[11px] text-slate-500 mt-1.5">Use this when you'll arrive late today. Admin gets pinged so you're not flagged as absent.</p>
+            )}
           </div>
+          {type === "late_coming" && (
+            <div>
+              <label className="iu-label">Expected arrival today</label>
+              <input
+                data-testid="leave-expected-arrival"
+                type="time"
+                value={expectedArrival}
+                onChange={(e) => setExpectedArrival(e.target.value)}
+                className="iu-input"
+              />
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="iu-label">From</label>

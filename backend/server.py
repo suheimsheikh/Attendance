@@ -320,11 +320,12 @@ class ScanCardIn(BaseModel):
 
 
 class LeaveCreate(BaseModel):
-    type: Literal["leave", "tour", "comp_off"]
+    type: Literal["leave", "tour", "comp_off", "late_coming"]
     start_date: str  # YYYY-MM-DD
     end_date: str
     reason: str
     location: Optional[str] = None  # for tour
+    expected_arrival: Optional[str] = None  # HH:MM for late_coming
 
 
 class LeaveDecision(BaseModel):
@@ -1512,7 +1513,8 @@ async def presence(user: dict = Depends(get_current_user)):
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
     users = await db.users.find(
-        {}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1, "photo": 1}
+        {}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1,
+             "photo": 1, "work_start": 1, "work_end": 1}
     ).sort("full_name", 1).to_list(2000)
 
     # Batch: open sessions, active leaves for today, and last checkout per user
@@ -1607,8 +1609,17 @@ async def presence(user: dict = Depends(get_current_user)):
                 except Exception:
                     past_start = True
                 if past_start:
+                    # Approved late-coming notice covering today → softer treatment
+                    late_today = await db.leaves.find_one({
+                        "user_id": u["id"], "status": "approved", "type": "late_coming",
+                        "start_date": {"$lte": today}, "end_date": {"$gte": today},
+                    }, {"_id": 0, "expected_arrival": 1, "reason": 1})
                     status_v = "absent"
-                    detail = f"Expected by {ws_hm}"
+                    if late_today:
+                        ea = late_today.get("expected_arrival")
+                        detail = f"Notified late — expected by {ea or 'today'}"
+                    else:
+                        detail = f"Expected by {ws_hm}"
                 else:
                     status_v = "not_due"
                     detail = f"Shift starts {ws_hm}"
@@ -1677,6 +1688,7 @@ async def create_leave(body: LeaveCreate, target_user_id: Optional[str] = None,
         "end_date": body.end_date,
         "reason": body.reason,
         "location": body.location,
+        "expected_arrival": body.expected_arrival,
         "status": "pending",
         "late_application": late_application,
         "filed_by_admin": user["id"] if target_user["id"] != user["id"] else None,
