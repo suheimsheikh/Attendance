@@ -2318,6 +2318,112 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
 # ----------------------------------------------------------------------------
 # Admin dashboard summary
 # ----------------------------------------------------------------------------
+@api_router.get("/admin/backup")
+async def admin_backup(admin: dict = Depends(require_admin)):
+    """Download a master-data snapshot (users, institutions, office config)
+    as a single tar.gz. Use this to bootstrap a fresh deployment on Day 1 of
+    any new term — transactional data (attendance, leaves, notifications,
+    devices) is intentionally NOT included so the new term starts clean."""
+    import tarfile
+    import io as _io
+    import json as _json
+    from datetime import datetime as _dt, timezone as _tz
+
+    buf = _io.BytesIO()
+    tf = tarfile.open(fileobj=buf, mode="w:gz")
+
+    masters = ["users", "institutions", "config"]
+    manifest = {
+        "created_at": _dt.now(_tz.utc).isoformat(),
+        "kind": "ych-master",
+        "collections": {},
+    }
+    for name in masters:
+        docs = await db[name].find({}).to_list(10000)
+        for d in docs:
+            d.pop("_id", None)
+        payload = _json.dumps(docs, default=str, indent=2).encode("utf-8")
+        info = tarfile.TarInfo(f"ych-master/{name}.json")
+        info.size = len(payload)
+        tf.addfile(info, _io.BytesIO(payload))
+        manifest["collections"][name] = len(docs)
+
+    mpayload = _json.dumps(manifest, indent=2).encode("utf-8")
+    info = tarfile.TarInfo("ych-master/manifest.json")
+    info.size = len(mpayload)
+    tf.addfile(info, _io.BytesIO(mpayload))
+    tf.close()
+
+    fname = f"ych-master-{_dt.now().strftime('%Y%m%d-%H%M')}.tar.gz"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/gzip",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@api_router.post("/admin/restore")
+async def admin_restore(
+    file: UploadFile = File(...),
+    mode: str = "merge",
+    admin: dict = Depends(require_admin),
+):
+    """Restore master data from a backup tar.gz.
+    mode='merge'   → insert only new docs (existing users/institutions/config
+                     stay intact — safe default)
+    mode='replace' → wipe the master collections first (DANGEROUS — clears
+                     current admins/members)"""
+    import tarfile
+    import io as _io
+    import json as _json
+
+    raw = await file.read()
+    try:
+        tf = tarfile.open(fileobj=_io.BytesIO(raw), mode="r:gz")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not open archive: {e}")
+
+    counts: dict = {}
+    masters = ["users", "institutions", "config"]
+    for tname in masters:
+        member = None
+        for m in tf.getmembers():
+            if m.name.endswith(f"/{tname}.json") or m.name == f"{tname}.json":
+                member = m
+                break
+        if not member:
+            counts[tname] = 0
+            continue
+        fh = tf.extractfile(member)
+        if not fh:
+            counts[tname] = 0
+            continue
+        try:
+            docs = _json.loads(fh.read().decode("utf-8"))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"{tname}.json parse failed: {e}")
+        if not isinstance(docs, list):
+            raise HTTPException(status_code=400, detail=f"{tname}.json must be a JSON list")
+        col = db[tname]
+        if mode == "replace":
+            await col.delete_many({})
+        added = 0
+        for d in docs:
+            d.pop("_id", None)
+            doc_id = d.get("id")
+            if mode == "merge" and doc_id:
+                existing = await col.find_one({"id": doc_id}, {"_id": 1})
+                if existing:
+                    continue
+            try:
+                await col.insert_one(d)
+                added += 1
+            except DuplicateKeyError:
+                pass  # already there
+        counts[tname] = added
+    return {"mode": mode, "inserted": counts}
+
+
 @api_router.post("/admin/snapshot/import")
 async def admin_snapshot_import(
     file: UploadFile = File(...),
