@@ -130,8 +130,9 @@ function Column({ col, members }) {
 }
 
 function MemberCard({ m, accent, columnKey }) {
+  const lateBg = m.late ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50";
   return (
-    <div className="px-3 py-2.5 flex gap-2.5 items-start hover:bg-slate-50 transition" data-testid={`presence-row-${m.id}`}>
+    <div className={`px-3 py-2.5 flex gap-2.5 items-start transition ${lateBg}`} data-testid={`presence-row-${m.id}`}>
       <Avatar name={m.full_name} photo={m.photo} size={34} ring={columnKey === "on_campus" ? accent : null} />
       <div className="flex-1 min-w-0">
         <div className="text-[13px] font-semibold text-slate-900 leading-tight truncate">{m.full_name}</div>

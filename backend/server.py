@@ -885,6 +885,91 @@ async def my_attendance_status(user: dict = Depends(get_current_user)):
     }
 
 
+@api_router.get("/attendance/stale-session")
+async def stale_session(user: dict = Depends(get_current_user)):
+    """If the user has an open session from a previous office-local day,
+    surface it so the UI can prompt them to retroactively check out."""
+    sess = await open_session_for(user["id"])
+    if not sess or sess.get("forgot_checkout_skipped"):
+        return {"stale": None}
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+    if sess.get("date") and sess["date"] >= today:
+        return {"stale": None}
+    return {"stale": {
+        "session_id": sess["id"],
+        "check_in_at": sess["check_in_at"],
+        "date": sess.get("date"),
+        "work_end": user.get("work_end") or "18:00",
+    }}
+
+
+class ResolveStaleIn(BaseModel):
+    session_id: str
+    # One of: ISO datetime (close at this time) | "work_end" | "skip"
+    action: str
+
+
+@api_router.post("/attendance/resolve-stale")
+async def resolve_stale(body: ResolveStaleIn, user: dict = Depends(get_current_user)):
+    sess = await db.attendance.find_one({"id": body.session_id, "user_id": user["id"]}, {"_id": 0})
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if sess.get("check_out_at"):
+        raise HTTPException(status_code=400, detail="Already closed")
+
+    if body.action == "skip":
+        await db.attendance.update_one({"id": sess["id"]}, {"$set": {
+            "forgot_checkout_skipped": True,
+            "forgot_checkout_skipped_at": now_utc().isoformat(),
+        }})
+        return {"ok": True, "action": "skipped"}
+
+    office = await db.config.find_one({"id": "office"})
+    cin = datetime.fromisoformat(sess["check_in_at"])
+    cin_local = cin.astimezone(office_tz(office))
+
+    # Decide the close time
+    if body.action == "work_end":
+        target_hm = user.get("work_end") or "18:00"
+    else:
+        # body.action should be an ISO datetime OR HH:MM
+        target_hm = body.action
+
+    close_dt: Optional[datetime] = None
+    if re.match(r"^\d{1,2}:\d{2}$", target_hm):
+        h, m = (int(x) for x in target_hm.split(":"))
+        close_dt = cin_local.replace(hour=h, minute=m, second=0, microsecond=0)
+        # Must be after check-in
+        if close_dt <= cin_local:
+            close_dt = close_dt + timedelta(days=1)
+    else:
+        try:
+            close_dt = datetime.fromisoformat(target_hm)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid close time")
+
+    close_utc = close_dt.astimezone(timezone.utc)
+    # Close any open excursion at the close-time as well
+    excursions = sess.get("excursions") or []
+    for e in excursions:
+        if e.get("out_at") and not e.get("in_at"):
+            e["in_at"] = close_utc.isoformat()
+            e["auto_closed"] = True
+    away_s = _excursion_seconds(excursions)
+    hours = round(max(0.0, (close_utc - cin).total_seconds() / 3600.0), 2)
+    await db.attendance.update_one({"id": sess["id"]}, {"$set": {
+        "check_out_at": close_utc.isoformat(),
+        "hours": hours,
+        "away_minutes": int(away_s / 60),
+        "excursions": excursions,
+        "exit_method": "user_late_resolve",
+        "forgot_checkout": True,
+        "checked_out_by": user["full_name"],
+    }})
+    return {"ok": True, "action": "closed", "hours": hours, "close_at": close_utc.isoformat()}
+
+
 def _parse_expected_return(raw: Optional[str], office: Optional[dict], now: datetime) -> Optional[str]:
     """Accept either an HH:MM (today, office-local) or a full ISO datetime. Returns ISO/UTC."""
     if not raw:

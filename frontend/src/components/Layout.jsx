@@ -7,6 +7,7 @@ import {
   ShieldCheck, LogOut, Menu, X, ListTree, ClipboardCheck
 } from "lucide-react";
 import Avatar from "./Avatar";
+import StaleSessionPrompt from "./StaleSessionPrompt";
 
 const NAV_MEMBER = [
   { to: "/", label: "Presence", icon: LayoutDashboard, end: true },
@@ -127,6 +128,7 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      <StaleSessionPrompt />
     </div>
   );
 }
