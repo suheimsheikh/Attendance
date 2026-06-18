@@ -83,6 +83,27 @@ body {
 ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
 
+/* Search-box tint — any container that wraps an input flagged as a search
+   field (data-testid ending in "-search" or named exactly "search-*") gets
+   a light sky-blue background and border. This catches every search bar in
+   the app without each component needing the styling individually. */
+.iu-card:has(> input[data-testid$="-search"]),
+.iu-card:has(> input[data-testid^="search-"]),
+div:has(> input[data-testid$="-search"]):not(.iu-card),
+div:has(> input[data-testid^="search-"]):not(.iu-card) {
+  background-color: #EFF6FF;        /* tailwind sky-50 */
+  border-color: #BAE6FD;             /* tailwind sky-200 */
+}
+input[data-testid$="-search"],
+input[data-testid^="search-"] {
+  background-color: transparent;
+}
+input[data-testid$="-search"]::placeholder,
+input[data-testid^="search-"]::placeholder {
+  color: #38BDF8;                    /* tailwind sky-400 */
+  opacity: 0.85;
+}
+
 /* (QR scanner now uses raw <video> + jsQR/BarcodeDetector — no html5-qrcode
    container CSS needed.) */
 
