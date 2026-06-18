@@ -3,6 +3,8 @@ import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, Ref
 import { api } from "../api";
 import Avatar from "../components/Avatar";
 import ParentContact from "../components/ParentContact";
+import NotifyParentsButton from "../components/NotifyParentsButton";
+import { useAuth } from "../auth";
 import { categoryLabel, formatDate } from "../utils";
 
 const COLUMNS = [
@@ -15,6 +17,7 @@ const COLUMNS = [
 ];
 
 export default function Presence() {
+  const { user: currentUser } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -109,7 +112,14 @@ export default function Presence() {
           data-testid="presence-board"
         >
           {COLUMNS.map((col) => (
-            <Column key={col.key} col={col} members={byColumn[col.key]} />
+            <Column
+              key={col.key}
+              col={col}
+              members={byColumn[col.key]}
+              adminContacts={data?.admin_contacts || []}
+              coachMobile={currentUser?.mobile}
+              onSent={load}
+            />
           ))}
         </div>
       )}
@@ -117,7 +127,7 @@ export default function Presence() {
   );
 }
 
-function Column({ col, members }) {
+function Column({ col, members, adminContacts, coachMobile, onSent }) {
   const Icon = col.icon;
   return (
     <section
@@ -146,15 +156,31 @@ function Column({ col, members }) {
         {members.length === 0 ? (
           <div className="px-4 py-8 text-center text-xs text-slate-400">No one here.</div>
         ) : (
-          members.map((m) => <MemberCard key={m.id} m={m} accent={col.accent} columnKey={col.key} />)
+          members.map((m) => (
+            <MemberCard
+              key={m.id}
+              m={m}
+              accent={col.accent}
+              columnKey={col.key}
+              adminContacts={adminContacts}
+              coachMobile={coachMobile}
+              onSent={onSent}
+            />
+          ))
         )}
       </div>
     </section>
   );
 }
 
-function MemberCard({ m, accent, columnKey }) {
+function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent }) {
   const lateBg = m.late ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50";
+  const notifyDueType = m.notify_due?.not_arrived
+    ? "not_arrived"
+    : (m.notify_due?.late ? "late" : null);
+  const notifiedType = m.notified_today?.not_arrived
+    ? "not_arrived"
+    : (m.notified_today?.late ? "late" : null);
   return (
     <div className={`px-3 py-2.5 flex gap-2.5 items-start transition ${lateBg}`} data-testid={`presence-row-${m.id}`}>
       <Avatar name={m.full_name} photo={m.photo} size={34} ring={columnKey === "on_campus" ? accent : null} />
@@ -184,6 +210,18 @@ function MemberCard({ m, accent, columnKey }) {
             <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold" data-testid={`overdue-chip-${m.id}`}>
               <AlertTriangle size={9} /> Overdue {m.overdue_minutes}m
             </span>
+          )}
+          {notifyDueType && (
+            <NotifyParentsButton
+              member={m}
+              type={notifyDueType}
+              adminContacts={adminContacts}
+              coachMobile={coachMobile}
+              onSent={onSent}
+            />
+          )}
+          {!notifyDueType && notifiedType && (
+            <NotifyParentsButton member={m} type={notifiedType} notified onSent={onSent} />
           )}
         </div>
         <GeoLine geoIn={m.geo_in} geoOut={m.geo_out} status={m.status} />

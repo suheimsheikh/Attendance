@@ -312,6 +312,7 @@ class OfficeConfig(BaseModel):
     default_work_end: str = "17:00"
     timezone: str = "Asia/Kolkata"
     late_grace_minutes: int = 0
+    parent_notify_grace_minutes: int = 30
 
 
 class CheckInIn(BaseModel):
@@ -1680,6 +1681,25 @@ async def presence(user: dict = Depends(get_current_user)):
     ]).to_list(5000)
     last_map = {d["_id"]: d["doc"] for d in last_outs}
 
+    # Today's parent-notification dispatches → keyed (user_id, type) for fast lookup.
+    notified_today = await db.parent_notifications.find(
+        {"date": today}, {"_id": 0, "user_id": 1, "type": 1}
+    ).to_list(5000)
+    notify_map: dict = {}
+    for n in notified_today:
+        notify_map.setdefault(n["user_id"], set()).add(n["type"])
+
+    # Admin contacts to surface as the "call the academy" numbers in the SMS body.
+    admin_docs = await db.users.find(
+        {"role": "admin"},
+        {"_id": 0, "id": 1, "full_name": 1, "mobile": 1},
+    ).sort("full_name", 1).to_list(50)
+    admin_contacts = [
+        {"id": a["id"], "full_name": a["full_name"], "mobile": a.get("mobile")}
+        for a in admin_docs if a.get("mobile")
+    ]
+    notify_grace = int(office.get("parent_notify_grace_minutes") or 30)
+
     result = []
     for u in users:
         sess = sess_map.get(u["id"])
@@ -1781,6 +1801,29 @@ async def presence(user: dict = Depends(get_current_user)):
                 overdue_minutes = max(0, int((now_utc() - er).total_seconds() // 60))
             except Exception:
                 overdue_minutes = 0
+
+        # Parent-notification eligibility: "not_arrived" if athlete is absent AND
+        # now is past their work_start + notify_grace; "late" if they've checked
+        # in late today. Either is suppressed once already dispatched.
+        sent_types = notify_map.get(u["id"], set())
+        notify_due_not_arrived = False
+        notify_due_late = False
+        if u.get("category") == "athlete":
+            if status_v == "absent":
+                ws_hm2 = u.get("work_start") or office.get("default_work_start") or "09:00"
+                try:
+                    h2, m2 = (int(x) for x in ws_hm2.split(":")[:2])
+                    nthr = now_utc().astimezone(office_tz(office)).replace(
+                        hour=h2, minute=m2, second=0, microsecond=0
+                    ) + timedelta(minutes=notify_grace)
+                    if now_utc().astimezone(office_tz(office)) > nthr and "not_arrived" not in sent_types:
+                        notify_due_not_arrived = True
+                except Exception:
+                    pass
+            if status_v == "on_campus" and bool(sess and sess.get("late")) and "late" not in sent_types:
+                notify_due_late = True
+        has_parent = bool(u.get("father_mobile") or u.get("mother_mobile") or u.get("guardian_mobile"))
+
         result.append({
             "id": u["id"],
             "full_name": u["full_name"],
@@ -1800,6 +1843,15 @@ async def presence(user: dict = Depends(get_current_user)):
             "father_mobile": u.get("father_mobile"),
             "mother_mobile": u.get("mother_mobile"),
             "guardian_mobile": u.get("guardian_mobile"),
+            "work_start": u.get("work_start"),
+            "notified_today": {
+                "not_arrived": "not_arrived" in sent_types,
+                "late": "late" in sent_types,
+            },
+            "notify_due": {
+                "not_arrived": notify_due_not_arrived and has_parent,
+                "late": notify_due_late and has_parent,
+            },
         })
     order = {"on_campus": 0, "temp_out": 1, "on_tour": 2, "on_leave": 3, "absent": 4, "exited": 5, "not_due": 6}
     result.sort(key=lambda r: (order.get(r["status"], 9), r["full_name"]))
@@ -1809,7 +1861,50 @@ async def presence(user: dict = Depends(get_current_user)):
         counts[r["status"]] = counts.get(r["status"], 0) + 1
         if r.get("late"):
             counts["late"] += 1
-    return {"members": result, "counts": counts, "date": today}
+    return {
+        "members": result,
+        "counts": counts,
+        "date": today,
+        "admin_contacts": admin_contacts,
+        "notify_grace_minutes": notify_grace,
+    }
+
+
+# ----------------------------------------------------------------------------
+# Parent-notification dispatches
+# ----------------------------------------------------------------------------
+class ParentNotifyDispatchIn(BaseModel):
+    user_id: str
+    type: Literal["not_arrived", "late"]
+
+
+@api_router.post("/parent-notify/dispatch")
+async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depends(get_current_user)):
+    """Record that the current operator has dispatched a parent-notification SMS
+    (via the device's native SMS composer). One record per (user, date, type)
+    so the UI suppresses the button after the first send. This endpoint does
+    not actually send any SMS — the device's messaging app does."""
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+    target = await db.users.find_one({"id": body.user_id}, {"_id": 0, "full_name": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    existing = await db.parent_notifications.find_one(
+        {"user_id": body.user_id, "date": today, "type": body.type}, {"_id": 0}
+    )
+    if existing:
+        return {"already_sent": True, "sent_at": existing.get("sent_at"), "sent_by": existing.get("sent_by_name")}
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": body.user_id,
+        "date": today,
+        "type": body.type,
+        "sent_at": now_utc().isoformat(),
+        "sent_by_id": user["id"],
+        "sent_by_name": user.get("full_name"),
+    }
+    await db.parent_notifications.insert_one(doc)
+    return {"already_sent": False, "sent_at": doc["sent_at"], "sent_by": doc["sent_by_name"]}
 
 
 # ----------------------------------------------------------------------------
