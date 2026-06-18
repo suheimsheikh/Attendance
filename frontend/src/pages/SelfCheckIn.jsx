@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { Loader2, LogIn, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, AlertTriangle, Camera } from "lucide-react";
+import { Loader2, LogIn, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, AlertTriangle } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { getLocation } from "../utils";
-import SelfieCapture from "../components/SelfieCapture";
 
 function hmNow() {
   const d = new Date();
@@ -18,7 +17,7 @@ function hmParse(s) {
 const OT_THRESHOLD = 30;
 
 export default function SelfCheckIn() {
-  const { user, refreshMe } = useAuth();
+  const { user } = useAuth();
   const [status, setStatus] = useState(null);
   const [office, setOffice] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -26,7 +25,6 @@ export default function SelfCheckIn() {
   const [locating, setLocating] = useState("");
   const [lastDistance, setLastDistance] = useState(null);
   const [overtimeReason, setOvertimeReason] = useState("");
-  const [showSelfie, setShowSelfie] = useState(false);
 
   const hasPhoto = !!user?.photo;
 
@@ -68,20 +66,7 @@ export default function SelfCheckIn() {
     return null;
   }, [user, status]);
 
-  const saveSelfie = async (dataUrl) => {
-    if (!user?.id) return;
-    await api.post("/members/me/photo", { photo: dataUrl });
-    await refreshMe();
-    setShowSelfie(false);
-    toast.success("Photo saved");
-  };
-
   const handleToggle = async () => {
-    // First time someone without a photo checks in → prompt for selfie.
-    if (!hasPhoto && !status?.checked_in) {
-      setShowSelfie(true);
-      return;
-    }
     setWorking(true);
     setLocating("Getting your location…");
     let lat = null, lng = null, acc = null;
@@ -233,8 +218,8 @@ export default function SelfCheckIn() {
           </button>
 
           {!hasPhoto && !status?.checked_in && (
-            <p className="text-[11px] text-slate-500 mt-3 flex items-center justify-center gap-1.5" data-testid="selfie-hint">
-              <Camera size={12} /> We&apos;ll grab a quick selfie first — one tap and you&apos;re done.
+            <p className="text-[11px] text-slate-500 mt-3 flex items-center justify-center gap-1.5" data-testid="no-photo-hint">
+              No profile photo yet — ask your admin to set one on the Members page.
             </p>
           )}
 
@@ -257,15 +242,6 @@ export default function SelfCheckIn() {
         <p className="text-[11px] text-slate-400 mt-6 text-center">
           Distance is recorded but not enforced · Office radius {office.radius_m} m · {office.timezone || "Asia/Kolkata"}
         </p>
-      )}
-
-      {showSelfie && (
-        <SelfieCapture
-          title="One quick selfie"
-          subtitle="So your coach can recognise you on the muster list."
-          onCapture={saveSelfie}
-          onClose={() => setShowSelfie(false)}
-        />
       )}
     </div>
   );
