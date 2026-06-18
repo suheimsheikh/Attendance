@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin, UserX } from "lucide-react";
+import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin, UserX, Search } from "lucide-react";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
 import ParentContact from "../components/ParentContact";
@@ -22,6 +22,7 @@ export default function Presence() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [lateOnly, setLateOnly] = useState(false);
+  const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -43,7 +44,15 @@ export default function Presence() {
 
   const byColumn = useMemo(() => {
     const buckets = Object.fromEntries(COLUMNS.map((c) => [c.key, []]));
-    const members = (data?.members || []).filter((m) => lateOnly ? m.late : true);
+    const q = query.trim().toLowerCase();
+    const members = (data?.members || []).filter((m) => {
+      if (lateOnly && !m.late) return false;
+      if (!q) return true;
+      return (m.full_name || "").toLowerCase().includes(q)
+        || (m.rank || "").toLowerCase().includes(q)
+        || (m.category || "").toLowerCase().includes(q)
+        || (m.institution || "").toLowerCase().includes(q);
+    });
     for (const m of members) {
       if (buckets[m.status]) buckets[m.status].push(m);
     }
@@ -56,7 +65,12 @@ export default function Presence() {
       });
     }
     return buckets;
-  }, [data, lateOnly]);
+  }, [data, lateOnly, query]);
+
+  const filteredTotal = useMemo(
+    () => Object.values(byColumn).reduce((sum, list) => sum + list.length, 0),
+    [byColumn]
+  );
 
   const totalMembers = data?.counts?.total ?? (data?.members?.length || 0);
   const lateCount = data?.counts?.late || 0;
@@ -98,6 +112,27 @@ export default function Presence() {
           </button>
         </div>
       </header>
+
+      <div className="iu-card mb-4 px-3 py-2 flex items-center gap-3" data-testid="presence-search-wrap">
+        <Search size={16} className="text-sky-500 shrink-0" />
+        <input
+          data-testid="presence-search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by name, rank, category or institution…"
+          className="flex-1 outline-none bg-transparent text-sm"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            data-testid="presence-search-clear"
+            className="text-[11px] font-semibold text-sky-700 hover:text-sky-900"
+          >
+            Clear · {filteredTotal} match{filteredTotal === 1 ? "" : "es"}
+          </button>
+        )}
+      </div>
 
       {loading && !data ? (
         <SkeletonBoard />
