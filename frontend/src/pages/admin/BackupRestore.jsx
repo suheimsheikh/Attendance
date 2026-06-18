@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Download, Upload, Loader2, AlertTriangle, CheckCircle2, Database } from "lucide-react";
+import { Download, Upload, Loader2, AlertTriangle, CheckCircle2, Database, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getToken } from "../../api";
 
@@ -16,6 +16,27 @@ export default function BackupRestore() {
   const [mode, setMode] = useState("merge");
   const [file, setFile] = useState(null);
   const [report, setReport] = useState(null);
+  const [wiping, setWiping] = useState(false);
+
+  const wipeAttendance = async () => {
+    if (!window.confirm("This will delete ALL attendance records (every check-in, check-out, and temp-exit history). Members, leaves, institutions and settings stay intact. Proceed?")) return;
+    if (!window.confirm("Last check — are you sure you want to wipe every attendance record?")) return;
+    setWiping(true);
+    try {
+      const token = getToken();
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/admin/attendance/wipe`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
+      toast.success(`Deleted ${json.deleted} attendance records`);
+    } catch (err) {
+      toast.error(err?.message || "Wipe failed");
+    } finally {
+      setWiping(false);
+    }
+  };
 
   const downloadBackup = async () => {
     setDownloading(true);
@@ -173,6 +194,31 @@ export default function BackupRestore() {
           </ul>
         </div>
       )}
+
+      {/* Danger zone — wipe every attendance record for a clean slate. */}
+      <div className="iu-card p-5 mt-6 border-2 border-rose-300" style={{ background: "#FFF1F2" }}>
+        <div className="flex items-start gap-3">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-rose-600 text-white shrink-0 shadow-sm">
+            <Trash2 size={20} />
+          </div>
+          <div className="flex-1">
+            <div className="font-bold text-rose-900 mb-1">Danger zone — wipe attendance</div>
+            <p className="text-sm text-rose-800 mb-3">
+              Deletes <b>every</b> attendance record (check-ins, check-outs, temp-exits). Members, leaves, institutions and settings are NOT touched.
+              Useful when starting a fresh term or after restoring master data on a new deployment.
+            </p>
+            <button
+              onClick={wipeAttendance}
+              disabled={wiping}
+              data-testid="br-wipe-attendance"
+              className="iu-btn-primary !bg-rose-600 hover:!bg-rose-700"
+            >
+              {wiping ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+              {wiping ? "Wiping…" : "Wipe all attendance"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

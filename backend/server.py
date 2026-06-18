@@ -2318,6 +2318,20 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
 # ----------------------------------------------------------------------------
 # Admin dashboard summary
 # ----------------------------------------------------------------------------
+@api_router.post("/admin/attendance/wipe")
+async def admin_wipe_attendance(admin: dict = Depends(require_admin)):
+    """Danger zone: delete ALL attendance records. Useful when starting a
+    fresh term or restoring from a master-only backup. Leaves users,
+    leaves, institutions, and office config untouched."""
+    before = await db.attendance.count_documents({})
+    res = await db.attendance.delete_many({})
+    return {
+        "before": before,
+        "deleted": res.deleted_count,
+        "remaining": await db.attendance.count_documents({}),
+    }
+
+
 @api_router.get("/admin/backup")
 async def admin_backup(admin: dict = Depends(require_admin)):
     """Download a master-data snapshot (users, institutions, office config)
