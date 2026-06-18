@@ -2318,6 +2318,70 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
 # ----------------------------------------------------------------------------
 # Admin dashboard summary
 # ----------------------------------------------------------------------------
+@api_router.post("/admin/snapshot/import")
+async def admin_snapshot_import(
+    file: UploadFile = File(...),
+    mode: str = "merge",
+    admin: dict = Depends(require_admin),
+):
+    """One-time data migration helper. Accepts a tar.gz snapshot (a folder of
+    `<collection>.json` files) and inserts the docs into the live DB.
+
+    mode='merge'   → insert only if a doc with the same `id` doesn't exist
+                     (existing admin accounts, devices, config stay intact).
+    mode='replace' → wipe each target collection first, then load.
+    """
+    import tarfile
+    import io as _io
+    import json as _json
+    raw = await file.read()
+    try:
+        tf = tarfile.open(fileobj=_io.BytesIO(raw), mode="r:gz")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not open archive: {e}")
+
+    counts: dict = {}
+    targets = ["users", "attendance", "leaves", "institutions", "config", "devices", "parent_notifications"]
+    for tname in targets:
+        member = None
+        for m in tf.getmembers():
+            if m.name.endswith(f"/{tname}.json") or m.name == f"{tname}.json":
+                member = m
+                break
+        if not member:
+            counts[tname] = 0
+            continue
+        fh = tf.extractfile(member)
+        if not fh:
+            counts[tname] = 0
+            continue
+        try:
+            docs = _json.loads(fh.read().decode("utf-8"))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"{tname}.json parse failed: {e}")
+        if not isinstance(docs, list):
+            raise HTTPException(status_code=400, detail=f"{tname}.json must be a JSON list")
+        col = db[tname]
+        if mode == "replace":
+            await col.delete_many({})
+        added = 0
+        for d in docs:
+            d.pop("_id", None)
+            doc_id = d.get("id")
+            if mode == "merge" and doc_id:
+                existing = await col.find_one({"id": doc_id}, {"_id": 1})
+                if existing:
+                    continue
+            try:
+                await col.insert_one(d)
+                added += 1
+            except DuplicateKeyError:
+                pass  # already there (unique-indexed field collision)
+        counts[tname] = added
+    return {"mode": mode, "inserted": counts}
+
+
+
 @api_router.get("/admin/summary")
 async def admin_summary(admin: dict = Depends(require_admin)):
     office = await db.config.find_one({"id": "office"})
@@ -2780,6 +2844,14 @@ async def export_daily(on: Optional[str] = None, fmt: str = "csv", user: dict = 
 
 # ----------------------------------------------------------------------------
 app.include_router(api_router)
+
+
+# Lightweight keep-alive endpoint — no auth, no DB hit. Plug an UptimeRobot
+# (or similar) ping into https://i-showed-up.ychyderabad.com/api/health every
+# 5-10 minutes to prevent any idle-container cold-starts during morning peak.
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "service": "i-showed-up"}
 
 app.add_middleware(
     CORSMiddleware,
