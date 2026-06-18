@@ -278,6 +278,22 @@ class LeaveBalanceBulkIn(BaseModel):
     rows: List[LeaveBalanceBulkRow]
 
 
+class InstitutionIn(BaseModel):
+    name: str
+    short_name: Optional[str] = None
+    active: bool = True
+
+
+class GroupLeaveIn(BaseModel):
+    user_ids: List[str]
+    type: Literal["leave", "tour", "comp_off", "late_coming"]
+    start_date: str
+    end_date: str
+    reason: str
+    location: Optional[str] = None
+    auto_approve: bool = True
+
+
 class OfficeConfig(BaseModel):
     name: str = "Campus Office"
     latitude: float = 0.0
@@ -428,6 +444,25 @@ async def seed():
         {"id": "office", "timezone": {"$exists": False}},
         {"$set": {"timezone": DEFAULT_TZ, "late_grace_minutes": 0}},
     )
+    # Seed institutions master from any existing distinct institution strings on users
+    await db.institutions.create_index("name", unique=True)
+    seeded = await db.institutions.count_documents({})
+    if seeded == 0:
+        distinct = await db.users.distinct("institution")
+        for name in distinct:
+            if not name or not str(name).strip():
+                continue
+            try:
+                await db.institutions.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "name": str(name).strip(),
+                    "short_name": None,
+                    "active": True,
+                    "created_at": now_utc().isoformat(),
+                })
+            except Exception:
+                pass
+        logger.info(f"Seeded institutions master from existing users")
 
 
 @app.on_event("shutdown")
@@ -773,6 +808,104 @@ async def bulk_set_leave_balances(body: LeaveBalanceBulkIn, admin: dict = Depend
         if r.modified_count or r.matched_count:
             updated += 1
     return {"ok": True, "updated": updated}
+
+
+# ----------------------------------------------------------------------------
+# Institutions master
+# ----------------------------------------------------------------------------
+@api_router.get("/institutions")
+async def list_institutions(user: dict = Depends(get_current_user)):
+    rows = await db.institutions.find({}, {"_id": 0}).sort("name", 1).to_list(500)
+    pipeline = [{"$group": {"_id": "$institution", "n": {"$sum": 1}}}]
+    counts = {c["_id"]: c["n"] async for c in db.users.aggregate(pipeline)}
+    for r in rows:
+        r["member_count"] = counts.get(r["name"], 0)
+    return rows
+
+
+@api_router.post("/institutions")
+async def create_institution(body: InstitutionIn, admin: dict = Depends(require_admin)):
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name required")
+    if await db.institutions.find_one({"name": name}):
+        raise HTTPException(status_code=409, detail="Institution already exists")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "short_name": (body.short_name or "").strip() or None,
+        "active": body.active,
+        "created_at": now_utc().isoformat(),
+    }
+    await db.institutions.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.patch("/institutions/{inst_id}")
+async def update_institution(inst_id: str, body: InstitutionIn, admin: dict = Depends(require_admin)):
+    inst = await db.institutions.find_one({"id": inst_id}, {"_id": 0})
+    if not inst:
+        raise HTTPException(status_code=404, detail="Not found")
+    old_name = inst["name"]
+    new_name = body.name.strip()
+    await db.institutions.update_one({"id": inst_id}, {"$set": {
+        "name": new_name,
+        "short_name": (body.short_name or "").strip() or None,
+        "active": body.active,
+    }})
+    if new_name != old_name:
+        await db.users.update_many({"institution": old_name}, {"$set": {"institution": new_name}})
+    return {"ok": True}
+
+
+@api_router.delete("/institutions/{inst_id}")
+async def delete_institution(inst_id: str, admin: dict = Depends(require_admin)):
+    inst = await db.institutions.find_one({"id": inst_id}, {"_id": 0})
+    if not inst:
+        raise HTTPException(status_code=404, detail="Not found")
+    in_use = await db.users.count_documents({"institution": inst["name"]})
+    if in_use > 0:
+        raise HTTPException(status_code=409, detail=f"{in_use} members still use this institution — reassign first.")
+    await db.institutions.delete_one({"id": inst_id})
+    return {"ok": True}
+
+
+# ----------------------------------------------------------------------------
+# Group leave — file the same leave for many members in one shot
+# ----------------------------------------------------------------------------
+@api_router.post("/leaves/group")
+async def group_leave(body: GroupLeaveIn, admin: dict = Depends(require_admin)):
+    if not body.user_ids:
+        raise HTTPException(status_code=400, detail="Pick at least one member")
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+    late_application = bool(body.start_date and body.start_date < today)
+    docs = []
+    for uid in body.user_ids:
+        d = {
+            "id": str(uuid.uuid4()),
+            "user_id": uid,
+            "type": body.type,
+            "start_date": body.start_date,
+            "end_date": body.end_date,
+            "reason": body.reason,
+            "location": body.location,
+            "status": "approved" if body.auto_approve else "pending",
+            "late_application": late_application,
+            "filed_by_admin": admin["id"],
+            "filed_by_admin_name": admin["full_name"],
+            "group_leave": True,
+            "created_at": now_utc().isoformat(),
+        }
+        if body.auto_approve:
+            d["decided_by"] = admin["full_name"]
+            d["decided_at"] = now_utc().isoformat()
+        docs.append(d)
+    if docs:
+        await db.leaves.insert_many(docs)
+    return {"ok": True, "created": len(docs), "status": "approved" if body.auto_approve else "pending"}
+
 
 
 @api_router.get("/members/{member_id}/card")

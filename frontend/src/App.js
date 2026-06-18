@@ -22,6 +22,8 @@ import Sessions from "./pages/admin/Sessions";
 import Overtime from "./pages/admin/Overtime";
 import LeaveBalances from "./pages/admin/LeaveBalances";
 import Payroll from "./pages/admin/Payroll";
+import Institutions from "./pages/admin/Institutions";
+import GroupLeave from "./pages/admin/GroupLeave";
 import ImportMembers from "./pages/admin/ImportMembers";
 import Cards from "./pages/admin/Cards";
 import { Loader2 } from "lucide-react";
@@ -87,6 +89,14 @@ function App() {
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+    </ErrorBoundary>
+  );
+}
+
+export default App;
+outes>
       </BrowserRouter>
     </AuthProvider>
     </ErrorBoundary>

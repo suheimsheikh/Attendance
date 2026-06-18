@@ -28,14 +28,17 @@ export default function Members() {
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState(null);
   const [bucket, setBucket] = useState("all");
+  const [instFilter, setInstFilter] = useState("");
+  const [institutions, setInstitutions] = useState([]);
 
   const load = async () => {
     try {
-      const [m, p] = await Promise.all([api.get("/members"), api.get("/presence")]);
+      const [m, p, i] = await Promise.all([api.get("/members"), api.get("/presence"), api.get("/institutions")]);
       setMembers(m);
       const map = {};
       (p.members || []).forEach((x) => { map[x.id] = x; });
       setPresence(map);
+      setInstitutions(i || []);
     } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
@@ -53,6 +56,7 @@ export default function Members() {
     const q = search.trim().toLowerCase();
     let list = members;
     if (bucket !== "all") list = list.filter((m) => bucketOf(m) === bucket);
+    if (instFilter) list = list.filter((m) => m.institution === instFilter);
     if (!q) return list;
     return list.filter((m) =>
       (m.full_name || "").toLowerCase().includes(q) ||
@@ -61,7 +65,7 @@ export default function Members() {
       (m.mobile || "").includes(q) ||
       (m.institution || "").toLowerCase().includes(q)
     );
-  }, [members, search, bucket]);
+  }, [members, search, bucket, instFilter]);
 
   const remove = async (m) => {
     if (!window.confirm(`Delete ${m.full_name}? This also removes their attendance & leaves.`)) return;
@@ -123,6 +127,17 @@ export default function Members() {
             </button>
           );
         })}
+        {institutions.length > 0 && (
+          <select
+            data-testid="member-inst-filter"
+            value={instFilter}
+            onChange={(e) => setInstFilter(e.target.value)}
+            className="ml-auto h-8 px-3 rounded-full text-xs font-semibold border border-slate-200 bg-white text-slate-700"
+          >
+            <option value="">All institutions</option>
+            {institutions.map((i) => <option key={i.id} value={i.name}>{i.name}</option>)}
+          </select>
+        )}
       </div>
 
       {loading ? (

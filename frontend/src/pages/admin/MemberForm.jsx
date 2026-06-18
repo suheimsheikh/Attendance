@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { X, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
@@ -48,6 +48,11 @@ export default function MemberForm({ initial, onClose, onSaved }) {
   });
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [institutions, setInstitutions] = useState([]);
+
+  useEffect(() => {
+    api.get("/institutions").then((rows) => setInstitutions((rows || []).filter((r) => r.active))).catch(() => {});
+  }, []);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -164,7 +169,15 @@ export default function MemberForm({ initial, onClose, onSaved }) {
           </div>
           <div>
             <label className="iu-label">Institution</label>
-            <input data-testid="mf-institution" value={form.institution} onChange={(e) => set("institution", e.target.value)} className="iu-input" placeholder="e.g. INS Hamla, YCH Hyderabad, Naval Sailing Academy" />
+            <select data-testid="mf-institution" value={form.institution} onChange={(e) => set("institution", e.target.value)} className="iu-input">
+              <option value="">— Select institution —</option>
+              {institutions.map((i) => (
+                <option key={i.id} value={i.name}>{i.name}{i.short_name ? ` (${i.short_name})` : ""}</option>
+              ))}
+              {form.institution && !institutions.some((i) => i.name === form.institution) && (
+                <option value={form.institution}>{form.institution} (legacy)</option>
+              )}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
