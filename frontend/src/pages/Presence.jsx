@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin } from "lucide-react";
+import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin, UserX } from "lucide-react";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
 import { categoryLabel, formatDate } from "../utils";
@@ -9,6 +9,7 @@ const COLUMNS = [
   { key: "temp_out",   label: "Stepped Out",  icon: Coffee,       accent: "#06B6D4", soft: "bg-cyan-50",     badge: "bg-cyan-100 text-cyan-700" },
   { key: "on_tour",    label: "Tour",         icon: Plane,        accent: "#F97316", soft: "bg-orange-50",   badge: "bg-orange-100 text-orange-700" },
   { key: "on_leave",   label: "Leave",        icon: Bed,          accent: "#F59E0B", soft: "bg-amber-50",    badge: "bg-amber-100 text-amber-700" },
+  { key: "absent",     label: "Absent",       icon: UserX,        accent: "#DC2626", soft: "bg-red-50",      badge: "bg-red-100 text-red-700" },
   { key: "exited",     label: "Left",         icon: ExitIcon,     accent: "#6B7280", soft: "bg-slate-50",    badge: "bg-slate-200 text-slate-700" },
 ];
 
@@ -16,6 +17,7 @@ export default function Presence() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [lateOnly, setLateOnly] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -37,10 +39,10 @@ export default function Presence() {
 
   const byColumn = useMemo(() => {
     const buckets = Object.fromEntries(COLUMNS.map((c) => [c.key, []]));
-    for (const m of (data?.members || [])) {
+    const members = (data?.members || []).filter((m) => lateOnly ? m.late : true);
+    for (const m of members) {
       if (buckets[m.status]) buckets[m.status].push(m);
     }
-    // Sort each column by most recent activity first (then name)
     for (const k of Object.keys(buckets)) {
       buckets[k].sort((a, b) => {
         const da = a.since ? new Date(a.since).getTime() : 0;
@@ -50,9 +52,11 @@ export default function Presence() {
       });
     }
     return buckets;
-  }, [data]);
+  }, [data, lateOnly]);
 
   const totalMembers = data?.counts?.total ?? (data?.members?.length || 0);
+  const lateCount = data?.counts?.late || 0;
+  const absentCount = data?.counts?.absent || 0;
 
   return (
     <div className="p-4 md:p-6 max-w-[1500px] mx-auto">
@@ -62,6 +66,25 @@ export default function Presence() {
           <p className="text-slate-500 mt-1 text-sm">{data ? formatDate(data.date) : "Live campus roster"}</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            data-testid="late-only-toggle"
+            onClick={() => setLateOnly((v) => !v)}
+            className={`inline-flex items-center gap-2 px-3 h-9 rounded-full text-xs font-semibold border transition ${
+              lateOnly
+                ? "bg-red-600 text-white border-transparent"
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+            }`}
+            title="Show only members who are late today"
+          >
+            <Clock size={13} />
+            {lateOnly ? `Showing late (${lateCount})` : `Late today · ${lateCount}`}
+          </button>
+          {absentCount > 0 && (
+            <div className="inline-flex items-center gap-2 bg-red-50 border border-red-200 px-3 h-9 rounded-full text-xs font-semibold text-red-700">
+              <UserX size={13} />
+              {absentCount} absent
+            </div>
+          )}
           <div className="inline-flex items-center gap-2 bg-white border border-slate-200 px-3 h-9 rounded-full text-xs font-semibold text-slate-700">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
             {totalMembers} members
@@ -81,7 +104,7 @@ export default function Presence() {
         </div>
       ) : (
         <div
-          className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5"
+          className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
           data-testid="presence-board"
         >
           {COLUMNS.map((col) => (
@@ -212,7 +235,7 @@ function GeoChip({ label, tone, ...rest }) {
 
 function SkeletonBoard() {
   return (
-    <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {COLUMNS.map((col) => (
         <div key={col.key} className={`rounded-2xl ${col.soft} border border-slate-200 overflow-hidden`}>
           <div className="px-4 py-3 bg-white/70 border-b border-slate-200 h-12" />

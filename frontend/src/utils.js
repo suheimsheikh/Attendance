@@ -132,5 +132,7 @@ export const statusConfig = {
   temp_out:  { label: "Stepped Out", color: "#06B6D4", bg: "rgba(6,182,212,0.14)", icon: "out" },
   on_tour:   { label: "On Tour",   color: "#F97316", bg: "rgba(249,115,22,0.12)", icon: "plane" },
   on_leave:  { label: "On Leave",  color: "#F59E0B", bg: "rgba(245,158,11,0.12)", icon: "bed" },
-  exited:    { label: "Exited",    color: "#6B7280", bg: "rgba(107,114,128,0.12)", icon: "exit" },
+  absent:    { label: "Absent",    color: "#DC2626", bg: "rgba(220,38,38,0.12)",   icon: "exit" },
+  exited:    { label: "Left",      color: "#6B7280", bg: "rgba(107,114,128,0.12)", icon: "exit" },
+  not_due:   { label: "Not yet due", color: "#94A3B8", bg: "rgba(148,163,184,0.12)", icon: "exit" },
 };

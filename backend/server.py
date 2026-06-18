@@ -1570,8 +1570,14 @@ async def presence(user: dict = Depends(get_current_user)):
             }
         else:
             last = last_map.get(u["id"])
-            status_v = "exited"
-            if last:
+            # Has the member shown any session today? `last` could be from a
+            # previous day. Decide between "exited" (closed session today),
+            # "absent" (no session today, past work_start), or "not_due"
+            # (no session today, not yet past work_start).
+            today = local_date_str(office)
+            last_today = last and (last.get("date") == today)
+            if last_today:
+                status_v = "exited"
                 detail = "Left " + local_hm(office, last["check_out_at"])
                 since = last["check_out_at"]
                 photo = last.get("check_out_photo") or u.get("photo")
@@ -1590,7 +1596,22 @@ async def presence(user: dict = Depends(get_current_user)):
                     "by": last.get("checked_out_by"),
                 }
             else:
-                detail = "Not on campus"
+                # No session today — decide absent vs not_due via work_start.
+                ws_hm = u.get("work_start") or office.get("default_work_start") or "09:00"
+                grace = int(office.get("late_grace_minutes") or 0)
+                try:
+                    ws_h, ws_m = (int(x) for x in ws_hm.split(":")[:2])
+                    local_now = now_utc().astimezone(office_tz(office))
+                    threshold = local_now.replace(hour=ws_h, minute=ws_m, second=0, microsecond=0) + timedelta(minutes=grace)
+                    past_start = local_now > threshold
+                except Exception:
+                    past_start = True
+                if past_start:
+                    status_v = "absent"
+                    detail = f"Expected by {ws_hm}"
+                else:
+                    status_v = "not_due"
+                    detail = f"Shift starts {ws_hm}"
                 since = None
                 photo = u.get("photo")
         # Open excursion: how many minutes overdue (if expected_return is in the past)?
@@ -1619,11 +1640,14 @@ async def presence(user: dict = Depends(get_current_user)):
             "geo_in": geo_in or None,
             "geo_out": geo_out or None,
         })
-    order = {"on_campus": 0, "temp_out": 1, "on_tour": 2, "on_leave": 3, "exited": 4}
+    order = {"on_campus": 0, "temp_out": 1, "on_tour": 2, "on_leave": 3, "absent": 4, "exited": 5, "not_due": 6}
     result.sort(key=lambda r: (order.get(r["status"], 9), r["full_name"]))
-    counts = {"on_campus": 0, "temp_out": 0, "exited": 0, "on_tour": 0, "on_leave": 0, "total": len(result)}
+    counts = {"on_campus": 0, "temp_out": 0, "exited": 0, "on_tour": 0, "on_leave": 0,
+              "absent": 0, "not_due": 0, "late": 0, "total": len(result)}
     for r in result:
         counts[r["status"]] = counts.get(r["status"], 0) + 1
+        if r.get("late"):
+            counts["late"] += 1
     return {"members": result, "counts": counts, "date": today}
 
 
