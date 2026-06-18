@@ -62,6 +62,11 @@ export default function MemberForm({ initial, onClose, onSaved }) {
         const body = { ...form };
         if (!body.password) delete body.password;
         delete body.email; // backend doesn't update email
+        // Strip empty optional fields so Pydantic Literal validators (gender, role, etc.) don't 422.
+        // We keep explicit nulls but drop "" since the backend treats absent == unchanged.
+        Object.keys(body).forEach((k) => {
+          if (body[k] === "") delete body[k];
+        });
         await api.patch(`/members/${initial.id}`, body);
         toast.success("Member updated");
       } else {
