@@ -59,7 +59,7 @@ export default function OfficeQR() {
                 <h2 className="text-lg font-extrabold text-slate-900">Generate a new Office QR?</h2>
                 <p className="text-sm text-slate-600 mt-1">
                   The current QR <code className="text-xs bg-slate-100 px-1 rounded">{office.qr_token}</code> will stop
-                  working immediately. Any printed copies will become invalid. You'll need to reprint and replace them.
+                  working immediately. Any printed copies will become invalid. You&apos;ll need to reprint and replace them.
                 </p>
               </div>
               <button

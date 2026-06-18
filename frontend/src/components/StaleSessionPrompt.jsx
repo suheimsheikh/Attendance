@@ -78,7 +78,7 @@ export default function StaleSessionPrompt() {
           <div className="flex-1 min-w-0">
             <h3 className="font-extrabold text-lg text-slate-900">Did you forget to check out?</h3>
             <p className="text-sm text-slate-600 mt-0.5">
-              You're still showing checked-in from <span className="font-semibold">{fmtDate(stale.check_in_at)} · {fmtTime(stale.check_in_at)}</span>. When did you actually leave?
+              You&apos;re still showing checked-in from <span className="font-semibold">{fmtDate(stale.check_in_at)} · {fmtTime(stale.check_in_at)}</span>. When did you actually leave?
             </p>
           </div>
         </div>

@@ -50,7 +50,7 @@ export default function Reports() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { if (tab === "hours") loadHours(); else loadDaily(); /* eslint-disable-next-line */ }, [tab]);
+  useEffect(() => { if (tab === "hours") loadHours(); else loadDaily();   }, [tab]);
 
   const exportHours = (fmt) => downloadBlob("/reports/hours/export", `hours_${start}_${end}.${fmt}`, { start, end, fmt });
   const exportDaily = (fmt) => downloadBlob("/reports/daily/export", `daily_${day}.${fmt}`, { on: day, fmt });

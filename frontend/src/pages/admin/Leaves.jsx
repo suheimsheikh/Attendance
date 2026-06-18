@@ -26,7 +26,7 @@ export default function AdminLeaves() {
       setItems(await api.get("/leaves", params));
     } finally { setLoading(false); }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [filter]);
+  useEffect(() => { load();   }, [filter]);
 
   const decide = async (id, status) => {
     try {

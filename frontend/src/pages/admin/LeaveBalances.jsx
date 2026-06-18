@@ -54,7 +54,7 @@ export default function LeaveBalances() {
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <header className="mb-5">
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Leave Balances</h1>
-        <p className="text-slate-500 text-sm mt-1">Set each member's opening leave balance for {data?.year || "this year"}. Edit any cell, then Save.</p>
+        <p className="text-slate-500 text-sm mt-1">Set each member&apos;s opening leave balance for {data?.year || "this year"}. Edit any cell, then Save.</p>
       </header>
 
       <div className="iu-card p-3 mb-4 flex items-center gap-3 sticky top-0 z-10">

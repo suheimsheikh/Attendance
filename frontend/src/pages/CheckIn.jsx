@@ -191,7 +191,7 @@ export default function CheckIn() {
             disabled={working}
             className="iu-btn-primary mt-4 mx-auto"
           >
-            {working ? <Loader2 className="animate-spin" size={16} /> : <ArrowLeftRight size={16} />} I'm back
+            {working ? <Loader2 className="animate-spin" size={16} /> : <ArrowLeftRight size={16} />} I&apos;m back
           </button>
         </div>
       )}
@@ -272,7 +272,7 @@ export default function CheckIn() {
                 <ScanLine size={26} />
               </div>
               <h3 className="font-extrabold text-lg">Scan Office QR</h3>
-              <p className="text-sm text-slate-500 mt-1">We'll verify your location automatically.</p>
+              <p className="text-sm text-slate-500 mt-1">We&apos;ll verify your location automatically.</p>
               <button
                 data-testid="start-scan-button"
                 onClick={startScan}
@@ -296,7 +296,7 @@ export default function CheckIn() {
           <p className="text-sm text-slate-500 mt-1 max-w-xs mx-auto">
             {action === "checkin"
               ? `Stand within ${office?.radius_m ?? 100} m of the office geofence.`
-              : "Check out from anywhere — we'll flag if you're off-site."}
+              : "Check out from anywhere — we&apos;ll flag if you&apos;re off-site."}
           </p>
           {action === "checkout" && (
             <textarea
@@ -328,7 +328,7 @@ export default function CheckIn() {
             onClick={captureLocation}
             className="block mx-auto mt-3 text-xs font-semibold text-slate-500 underline hover:text-slate-900"
           >
-            Just show my location (don't check in)
+            Just show my location (don&apos;t check in)
           </button>
         </div>
       )}
@@ -396,7 +396,7 @@ function GeoDiagnostic({ office, fix }) {
       {!inFence && (
         <p className="text-[11px] text-slate-500 mt-2 leading-snug">
           If the map pin looks correct but the distance is wrong, ask your admin to verify the office latitude/longitude in <b>Office Settings</b>.
-          If the map pin is in the wrong spot, your phone's GPS is reporting badly — go outdoors, wait 30 s, retry.
+          If the map pin is in the wrong spot, your phone&apos;s GPS is reporting badly — go outdoors, wait 30 s, retry.
         </p>
       )}
     </div>

@@ -181,7 +181,7 @@ export default function SelfCheckIn() {
             disabled={working}
             className="iu-btn-primary mt-4 mx-auto"
           >
-            {working ? <Loader2 className="animate-spin" size={16} /> : <ArrowLeftRight size={16} />} I'm back
+            {working ? <Loader2 className="animate-spin" size={16} /> : <ArrowLeftRight size={16} />} I&apos;m back
           </button>
         </div>
       )}
@@ -234,7 +234,7 @@ export default function SelfCheckIn() {
 
           {!hasPhoto && !status?.checked_in && (
             <p className="text-[11px] text-slate-500 mt-3 flex items-center justify-center gap-1.5" data-testid="selfie-hint">
-              <Camera size={12} /> We'll grab a quick selfie first — one tap and you're done.
+              <Camera size={12} /> We&apos;ll grab a quick selfie first — one tap and you&apos;re done.
             </p>
           )}
 

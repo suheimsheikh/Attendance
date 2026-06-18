@@ -72,7 +72,7 @@ export default function ActivityFeed() {
     <section className="iu-card" data-testid="activity-feed">
       <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="font-extrabold tracking-tight">Today's Activity</h2>
+          <h2 className="font-extrabold tracking-tight">Today&apos;s Activity</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             {data ? `${data.date} · ${data.timezone}` : "Live feed — resets each day"}
             {data ? ` · ${counts.total || 0} events` : ""}
@@ -113,14 +113,14 @@ export default function ActivityFeed() {
         <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
       ) : error ? (
         <div className="p-10 text-center">
-          <p className="text-sm text-slate-500">Couldn't load the activity feed.</p>
+          <p className="text-sm text-slate-500">Couldn&apos;t load the activity feed.</p>
           <button onClick={load} className="iu-btn-secondary mt-3 mx-auto">Retry</button>
         </div>
       ) : events.length === 0 ? (
         <div className="p-10 text-center" data-testid="activity-empty">
           <Clock className="mx-auto text-slate-300 mb-2" size={32} />
           <p className="font-semibold text-slate-700">No activity yet today</p>
-          <p className="text-xs text-slate-500 mt-1">As soon as members check in / out or submit requests, they'll show up here.</p>
+          <p className="text-xs text-slate-500 mt-1">As soon as members check in / out or submit requests, they&apos;ll show up here.</p>
         </div>
       ) : (
         <ul className="divide-y divide-slate-100 max-h-[520px] overflow-y-auto">

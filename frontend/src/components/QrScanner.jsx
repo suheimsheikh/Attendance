@@ -150,7 +150,7 @@ export default function QrScanner({ onScan, onError, continuous = false }) {
       scannedRef.current = true;
       stop();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   return (

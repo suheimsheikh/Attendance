@@ -53,7 +53,7 @@ export default function Overtime() {
       }
     } finally { setLoading(false); }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [status, from, to]);
+  useEffect(() => { load();   }, [status, from, to]);
 
   useEffect(() => {
     const next = {};
@@ -150,7 +150,7 @@ export default function Overtime() {
                 )}
                 {r.reason && (
                   <div className="text-sm text-slate-800 bg-slate-50 rounded-md px-2 py-1.5 mt-2 border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">Member's reason</span><br />
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Member&apos;s reason</span><br />
                     {r.reason}
                   </div>
                 )}

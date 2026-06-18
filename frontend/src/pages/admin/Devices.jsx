@@ -23,7 +23,7 @@ export default function Devices() {
     try { setItems(await api.get("/admin/devices", { status_filter: filter })); }
     finally { setLoading(false); }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [filter]);
+  useEffect(() => { load();   }, [filter]);
 
   const reject = async (d) => {
     try { await api.post(`/admin/devices/${d.id}/reject`); toast.success("Rejected"); load(); }

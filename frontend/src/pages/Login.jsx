@@ -121,7 +121,7 @@ export default function Login() {
           </div>
           <h2 className="text-2xl font-extrabold text-slate-900">Waiting for approval</h2>
           <p className="text-slate-500 mt-2 max-w-sm mx-auto">
-            Your request has been sent to your admin. As soon as they approve this device, you'll be signed in automatically.
+            Your request has been sent to your admin. As soon as they approve this device, you&apos;ll be signed in automatically.
           </p>
           <div className="flex items-center justify-center gap-2 my-6 text-slate-400">
             <Loader2 className="animate-spin" size={18} /> Checking…
@@ -150,7 +150,7 @@ export default function Login() {
       <div>
         <h2 className="text-3xl font-extrabold tracking-tight">Sign in</h2>
         <p className="text-slate-500 mt-2 text-sm">
-          Enter your phone number — your admin approves your browser once, then you're in for good.
+          Enter your phone number — your admin approves your browser once, then you&apos;re in for good.
         </p>
 
         <form onSubmit={submitPhone} className="mt-7 space-y-4">
@@ -295,7 +295,7 @@ function ProfileIntroForm({ phone, onSubmit, onBack }) {
     <div data-testid="profile-intro-panel">
       <h2 className="text-3xl font-extrabold tracking-tight">Welcome aboard</h2>
       <p className="text-slate-500 mt-2 text-sm">
-        We don't recognise <span className="font-semibold text-slate-700">{phone}</span> yet. Tell us a bit about yourself so your admin can approve you quickly.
+        We don&apos;t recognise <span className="font-semibold text-slate-700">{phone}</span> yet. Tell us a bit about yourself so your admin can approve you quickly.
       </p>
 
       <form onSubmit={submit} className="mt-7 space-y-4">

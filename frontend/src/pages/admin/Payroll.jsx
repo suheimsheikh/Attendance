@@ -22,7 +22,7 @@ export default function Payroll() {
     catch (err) { toast.error(err?.message || "Failed"); }
     finally { setLoading(false); }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [month]);
+  useEffect(() => { load();   }, [month]);
 
   const exportFmt = (fmt) => {
     if (!data) return;
