@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
+import DailyQuote from "./DailyQuote";
 
 const NAV_MEMBER = [
   { to: "/", label: "Presence", icon: LayoutDashboard, end: true },
@@ -134,6 +135,7 @@ export default function Layout() {
         </main>
       </div>
       <StaleSessionPrompt />
+      <DailyQuote userId={user?.id} />
     </div>
   );
 }
