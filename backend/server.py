@@ -720,6 +720,26 @@ async def revoke_device(device_pk: str, admin: dict = Depends(require_admin)):
     return {"ok": True}
 
 
+@api_router.post("/admin/devices/{device_pk}/reinstate")
+async def reinstate_device(device_pk: str, admin: dict = Depends(require_admin)):
+    """Bring a revoked or rejected device back to approved. The device retains
+    its existing user_id; if it never had one (a rejected new-signup), the
+    admin must re-run the regular approve flow which prompts for a name."""
+    device = await db.devices.find_one({"id": device_pk}, {"_id": 0})
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    if device.get("status") not in ("revoked", "rejected"):
+        raise HTTPException(status_code=400, detail="Only revoked or rejected devices can be re-enabled")
+    if not device.get("user_id"):
+        raise HTTPException(status_code=400, detail="This device was never linked to a member — use the regular Approve flow")
+    now = now_utc().isoformat()
+    await db.devices.update_one(
+        {"id": device_pk},
+        {"$set": {"status": "approved", "approved_by": admin["id"], "approved_at": now}},
+    )
+    return {"ok": True}
+
+
 # ----------------------------------------------------------------------------
 # Office config routes
 # ----------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Check, X, Ban, Smartphone } from "lucide-react";
+import { Loader2, Check, X, Ban, Smartphone, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { categoryLabel } from "../../utils";
@@ -32,6 +32,12 @@ export default function Devices() {
   const revoke = async (d) => {
     if (!window.confirm("Revoke this device? The user will be signed out.")) return;
     try { await api.post(`/admin/devices/${d.id}/revoke`); toast.success("Revoked"); load(); }
+    catch (err) { toast.error(err?.message || "Failed"); }
+  };
+  const reinstate = async (d) => {
+    const who = d.member_name || d.proposed_full_name || (d.phone ? `phone ${d.phone}` : "this device");
+    if (!window.confirm(`Re-enable this device for ${who}?`)) return;
+    try { await api.post(`/admin/devices/${d.id}/reinstate`); toast.success("Re-enabled"); load(); }
     catch (err) { toast.error(err?.message || "Failed"); }
   };
 
@@ -84,7 +90,19 @@ export default function Devices() {
                   <button data-testid={`revoke-device-${d.id}`} onClick={() => revoke(d)} className="iu-btn-danger !h-9 !px-3"><Ban size={14}/> Revoke</button>
                 )}
                 {(filter === "rejected" || filter === "revoked") && (
-                  <span className="iu-chip capitalize">{d.status}</span>
+                  <>
+                    <span className="iu-chip capitalize">{d.status}</span>
+                    {d.user_id && (
+                      <button
+                        data-testid={`reinstate-device-${d.id}`}
+                        onClick={() => reinstate(d)}
+                        className="iu-btn-primary !h-9 !px-3"
+                        title="Bring this device back to approved status"
+                      >
+                        <RotateCcw size={14} /> Re-enable
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
