@@ -1930,6 +1930,18 @@ async def presence(user: dict = Depends(get_current_user)):
                 notify_due_late = True
         has_parent = bool(u.get("father_mobile") or u.get("mother_mobile") or u.get("guardian_mobile"))
 
+        # Recompute "late" at read-time using current office grace settings.
+        # Stored `late` on the session reflects the grace value at check-in time;
+        # by recomputing here we let admins drop late_grace_minutes (e.g. 15 → 0)
+        # and see the badge update immediately without a session-rewrite migration.
+        recomputed_late = False
+        if sess and status_v == "on_campus" and sess.get("check_in_at"):
+            try:
+                ci = datetime.fromisoformat(sess["check_in_at"])
+                recomputed_late, _ = compute_late(office, u, ci)
+            except Exception:
+                recomputed_late = bool(sess.get("late"))
+
         result.append({
             "id": u["id"],
             "full_name": u["full_name"],
@@ -1942,7 +1954,7 @@ async def presence(user: dict = Depends(get_current_user)):
             "since": since,
             "photo": photo,
             "flagged": bool(sess and sess.get("out_of_geofence") and status_v == "on_campus"),
-            "late": bool(sess and sess.get("late") and status_v == "on_campus"),
+            "late": recomputed_late,
             "expected_return": open_exc_v.get("expected_return") if open_exc_v else None,
             "overdue_minutes": overdue_minutes,
             "geo_in": geo_in or None,
