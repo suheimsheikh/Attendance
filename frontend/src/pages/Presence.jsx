@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin, UserX, Search } from "lucide-react";
+import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin, UserX, Search, UserPlus, X } from "lucide-react";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
 import ParentContact from "../components/ParentContact";
 import NotifyParentsButton from "../components/NotifyParentsButton";
+import GuestCheckInModal from "../components/GuestCheckInModal";
+import MemberForm from "./admin/MemberForm";
 import { useAuth } from "../auth";
 import { categoryLabel, formatDate } from "../utils";
+import { toast } from "sonner";
 
 const COLUMNS = [
   { key: "on_campus",  label: "On Campus",    icon: CheckCircle2, accent: "#10B981", soft: "bg-emerald-50",  badge: "bg-emerald-100 text-emerald-700" },
@@ -18,23 +21,65 @@ const COLUMNS = [
 
 export default function Presence() {
   const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "admin";
+  const canManageGuests = isAdmin || currentUser?.category === "coach";
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [lateOnly, setLateOnly] = useState(false);
   const [query, setQuery] = useState("");
+  const [guests, setGuests] = useState({ active: [], completed: [], active_count: 0 });
+  const [showGuestModal, setShowGuestModal] = useState(false);
+  const [editingMember, setEditingMember] = useState(null);
 
   const load = useCallback(async () => {
     try {
       setError(false);
-      const res = await api.get("/presence");
+      const [res, gRes] = await Promise.all([
+        api.get("/presence"),
+        canManageGuests ? api.get("/guests/today").catch(() => null) : Promise.resolve(null),
+      ]);
       setData(res);
+      if (gRes) setGuests(gRes);
     } catch {
       setError(true);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canManageGuests]);
+
+  // Open the Members edit modal by fetching the full doc (Presence rows only
+  // carry a subset of fields). Admin-only — coaches don't see the option.
+  const openEdit = useCallback(async (memberId) => {
+    if (!isAdmin) return;
+    try {
+      const full = await api.get(`/members/${memberId}`);
+      setEditingMember(full);
+    } catch (err) {
+      toast.error(err?.message || "Couldn't load member");
+    }
+  }, [isAdmin]);
+
+  const checkoutGuest = async (guestId, name) => {
+    try {
+      await api.post(`/guests/${guestId}/checkout`);
+      toast.success(`${name} checked out`);
+      load();
+    } catch (err) {
+      toast.error(err?.message || "Failed");
+    }
+  };
+
+  const deleteGuest = async (guestId, name) => {
+    if (!window.confirm(`Remove ${name}'s check-in entry?`)) return;
+    try {
+      await api.del(`/guests/${guestId}`);
+      toast.success("Guest entry removed");
+      load();
+    } catch (err) {
+      toast.error(err?.message || "Failed");
+    }
+  };
 
   useEffect(() => {
     load();
@@ -103,6 +148,22 @@ export default function Presence() {
               {absentCount} absent
             </div>
           )}
+          {canManageGuests && (
+            <button
+              data-testid="presence-add-guest"
+              onClick={() => setShowGuestModal(true)}
+              className="inline-flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white px-3 h-9 rounded-full text-xs font-bold transition"
+              title="Check in a visitor (parent, prospect, dignitary)"
+            >
+              <UserPlus size={13} />
+              Guest
+              {guests.active_count > 0 && (
+                <span className="ml-1 px-1.5 h-5 rounded-full bg-white/25 text-[10px] flex items-center justify-center font-extrabold">
+                  {guests.active_count}
+                </span>
+              )}
+            </button>
+          )}
           <div className="inline-flex items-center gap-2 bg-white border border-slate-200 px-3 h-9 rounded-full text-xs font-semibold text-slate-700">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
             {totalMembers} members
@@ -143,7 +204,7 @@ export default function Presence() {
         </div>
       ) : (
         <div
-          className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+          className={`grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${canManageGuests ? "xl:grid-cols-7" : "xl:grid-cols-6"}`}
           data-testid="presence-board"
         >
           {COLUMNS.map((col) => (
@@ -154,15 +215,38 @@ export default function Presence() {
               adminContacts={data?.admin_contacts || []}
               coachMobile={currentUser?.mobile}
               onSent={load}
+              onRowDoubleClick={isAdmin ? openEdit : null}
             />
           ))}
+          {canManageGuests && (
+            <GuestColumn
+              guests={guests}
+              onCheckout={checkoutGuest}
+              onDelete={deleteGuest}
+              onAdd={() => setShowGuestModal(true)}
+            />
+          )}
         </div>
+      )}
+
+      {showGuestModal && (
+        <GuestCheckInModal
+          onClose={() => setShowGuestModal(false)}
+          onCheckedIn={load}
+        />
+      )}
+      {editingMember && (
+        <MemberForm
+          initial={editingMember}
+          onClose={() => setEditingMember(null)}
+          onSaved={() => { setEditingMember(null); load(); }}
+        />
       )}
     </div>
   );
 }
 
-function Column({ col, members, adminContacts, coachMobile, onSent }) {
+function Column({ col, members, adminContacts, coachMobile, onSent, onRowDoubleClick }) {
   const Icon = col.icon;
   // Per-category breakdown shown under the column label so coaches can see
   // "how many Athletes / Coaches / Staff" in each presence bucket at a glance.
@@ -230,6 +314,7 @@ function Column({ col, members, adminContacts, coachMobile, onSent }) {
               adminContacts={adminContacts}
               coachMobile={coachMobile}
               onSent={onSent}
+              onDoubleClick={onRowDoubleClick}
             />
           ))
         )}
@@ -238,7 +323,7 @@ function Column({ col, members, adminContacts, coachMobile, onSent }) {
   );
 }
 
-function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent }) {
+function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick }) {
   const lateBg = m.late ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50";
   const notifyDueType = m.notify_due?.not_arrived
     ? "not_arrived"
@@ -246,12 +331,18 @@ function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent }
   const notifiedType = m.notified_today?.not_arrived
     ? "not_arrived"
     : (m.notified_today?.late ? "late" : null);
+  const handleDouble = onDoubleClick ? () => onDoubleClick(m.id) : undefined;
   return (
-    <div className={`px-3 py-2.5 flex gap-2.5 items-start transition ${lateBg}`} data-testid={`presence-row-${m.id}`}>
+    <div
+      className={`px-3 py-2.5 flex gap-2.5 items-start transition ${lateBg} ${onDoubleClick ? "cursor-pointer select-none" : ""}`}
+      data-testid={`presence-row-${m.id}`}
+      onDoubleClick={handleDouble}
+      title={onDoubleClick ? "Double-click to edit member" : undefined}
+    >
       <Avatar name={m.full_name} photo={m.photo} size={34} ring={columnKey === "on_campus" ? accent : null} />
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-1.5">
-          <div className="text-[13px] font-semibold text-slate-900 leading-tight truncate flex-1">{m.full_name}</div>
+          <div className={`text-[13px] font-semibold leading-tight truncate flex-1 ${m.late ? "text-red-700" : "text-slate-900"}`}>{m.full_name}</div>
           {m.institution && (
             <span
               title={`Institution: ${m.institution}`}
@@ -276,7 +367,7 @@ function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent }
             </span>
           )}
           {m.late && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold" data-testid={`late-chip-${m.id}`}>
               <Clock size={9} /> Late
             </span>
           )}
@@ -308,6 +399,95 @@ function formatDist(m) {
   if (m == null) return null;
   if (m < 1000) return `${Math.round(m)} m`;
   return `${(m / 1000).toFixed(1)} km`;
+}
+
+function GuestColumn({ guests, onCheckout, onDelete, onAdd }) {
+  const active = guests.active || [];
+  const completed = guests.completed || [];
+  return (
+    <section
+      className="flex flex-col rounded-2xl bg-violet-50 border border-violet-200 overflow-hidden"
+      data-testid="presence-column-guests"
+    >
+      <header
+        className="px-4 py-3 bg-white/70 backdrop-blur border-b border-violet-200"
+        style={{ boxShadow: `inset 4px 0 0 #7C3AED` }}
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-violet-100 text-violet-700">
+            <UserPlus size={15} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] uppercase tracking-wider font-bold text-violet-700">Guests</div>
+          </div>
+          <span className="min-w-[26px] h-6 px-2 rounded-full text-xs font-bold flex items-center justify-center bg-violet-200 text-violet-800" data-testid="column-count-guests">
+            {active.length}
+          </span>
+        </div>
+        <button
+          onClick={onAdd}
+          data-testid="guests-add-inline"
+          className="mt-2 w-full inline-flex items-center justify-center gap-1 px-2 h-7 rounded-md text-[11px] font-bold bg-violet-600 text-white hover:bg-violet-700 transition"
+        >
+          <UserPlus size={12} /> Check in a guest
+        </button>
+      </header>
+
+      <div className="flex-1 overflow-y-auto max-h-[calc(100vh-220px)] min-h-[120px] divide-y divide-violet-100 bg-white">
+        {active.length === 0 && completed.length === 0 ? (
+          <div className="px-4 py-8 text-center text-xs text-slate-400">No guests today.</div>
+        ) : (
+          <>
+            {active.map((g) => (
+              <GuestRow key={g.id} guest={g} active onCheckout={onCheckout} onDelete={onDelete} />
+            ))}
+            {completed.length > 0 && (
+              <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-400 bg-slate-50">
+                Checked out today
+              </div>
+            )}
+            {completed.map((g) => (
+              <GuestRow key={g.id} guest={g} active={false} onCheckout={onCheckout} onDelete={onDelete} />
+            ))}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function GuestRow({ guest, active, onCheckout, onDelete }) {
+  return (
+    <div className={`px-3 py-2.5 flex gap-2.5 items-start ${active ? "" : "opacity-60"}`} data-testid={`guest-row-${guest.id}`}>
+      <Avatar name={guest.name} photo={guest.photo} size={34} ring={active ? "#7C3AED" : null} />
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-semibold text-slate-900 leading-tight truncate">{guest.name}</div>
+        <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+          {active ? "In" : "Out"} at {new Date(active ? guest.checked_in_at : guest.checked_out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          {" · by "}{active ? guest.checked_in_by_name : guest.checked_out_by_name}
+        </div>
+        <div className="mt-1.5 flex gap-1.5">
+          {active ? (
+            <button
+              onClick={() => onCheckout(guest.id, guest.name)}
+              data-testid={`guest-checkout-${guest.id}`}
+              className="inline-flex items-center gap-1 px-2 h-6 rounded text-[10px] font-bold bg-slate-700 text-white hover:bg-slate-900"
+            >
+              <ExitIcon size={10} /> Check out
+            </button>
+          ) : null}
+          <button
+            onClick={() => onDelete(guest.id, guest.name)}
+            data-testid={`guest-delete-${guest.id}`}
+            className="inline-flex items-center px-1.5 h-6 rounded text-[10px] font-bold text-rose-700 hover:bg-rose-50"
+            title="Remove this guest entry"
+          >
+            <X size={10} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function describeGeo(g) {

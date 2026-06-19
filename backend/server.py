@@ -228,6 +228,14 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     return user
 
 
+async def require_coach_or_admin(user: dict = Depends(get_current_user)) -> dict:
+    if user.get("role") == "admin":
+        return user
+    if user.get("category") == "coach":
+        return user
+    raise HTTPException(status_code=403, detail="Coach or admin privileges required")
+
+
 # ----------------------------------------------------------------------------
 # Models
 # ----------------------------------------------------------------------------
@@ -783,6 +791,15 @@ async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depend
         update["hashed_password"] = hash_password(body.password)
     if update:
         await db.users.update_one({"id": member_id}, {"$set": update})
+    u = await db.users.find_one({"id": member_id}, {"_id": 0})
+    if not u:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
+
+
+@api_router.get("/members/{member_id}", response_model=UserPublic)
+async def get_member(member_id: str, admin: dict = Depends(require_admin)):
+    """Single-member fetch used by double-click edit on the Presence Board."""
     u = await db.users.find_one({"id": member_id}, {"_id": 0})
     if not u:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -3013,6 +3030,10 @@ app.include_router(api_router)
 # generated once per day with Gemini and cached in MongoDB.
 from daily_content import make_router as _daily_router  # noqa: E402
 app.include_router(_daily_router(db))
+
+# Guest check-in / check-out (coaches + admins).
+from guests import make_router as _guests_router  # noqa: E402
+app.include_router(_guests_router(db, require_coach_or_admin, local_date_str))
 
 
 # Lightweight keep-alive endpoint — no auth, no DB hit. Plug an UptimeRobot
