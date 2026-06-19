@@ -167,15 +167,16 @@ function Column({ col, members, adminContacts, coachMobile, onSent }) {
   // Per-category breakdown shown under the column label so coaches can see
   // "how many Athletes / Coaches / Staff" in each presence bucket at a glance.
   // Letters keep the chips legible inside the narrow 6-column grid.
-  const catCounts = { athlete: 0, coach: 0, staff: 0 };
+  const catCounts = { athlete: 0, coach: 0, staff: 0, executive: 0 };
   for (const m of members) {
     const c = (m.category || "athlete").toLowerCase();
     if (catCounts[c] !== undefined) catCounts[c] += 1;
   }
   const breakdown = [
-    { key: "athlete", letter: "A", title: "Athletes", chip: "bg-sky-100 text-sky-700",       n: catCounts.athlete },
-    { key: "coach",   letter: "C", title: "Coaches",  chip: "bg-emerald-100 text-emerald-700", n: catCounts.coach },
-    { key: "staff",   letter: "S", title: "Staff",    chip: "bg-amber-100 text-amber-700",     n: catCounts.staff },
+    { key: "athlete",   letter: "A", title: "Athletes",   chip: "bg-sky-100 text-sky-700",         n: catCounts.athlete },
+    { key: "coach",     letter: "C", title: "Coaches",    chip: "bg-emerald-100 text-emerald-700", n: catCounts.coach },
+    { key: "staff",     letter: "S", title: "Staff",      chip: "bg-amber-100 text-amber-700",     n: catCounts.staff },
+    { key: "executive", letter: "E", title: "Executives", chip: "bg-violet-100 text-violet-700",   n: catCounts.executive },
   ];
 
   return (

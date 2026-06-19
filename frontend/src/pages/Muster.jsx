@@ -308,12 +308,20 @@ export default function Muster() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <div className="font-semibold text-slate-900 truncate flex-1">{s.full_name}</div>
+                    {s.institution && (
+                      <span
+                        title={`Institution: ${s.institution}`}
+                        data-testid={`muster-institution-chip-${s.id}`}
+                        className="inline-flex items-center px-1.5 h-5 rounded text-[10px] font-bold bg-sky-100 text-sky-700 shrink-0 max-w-[110px] truncate"
+                      >
+                        {s.institution}
+                      </span>
+                    )}
                     <ParentContact father={s.father_mobile} mother={s.mother_mobile} guardian={s.guardian_mobile} />
                   </div>
-                  <div className="text-xs text-slate-500 truncate">
-                    {s.rank ? `${s.rank} · ` : ""}
-                    {s.institution || (s.rank ? "" : "—")}
-                  </div>
+                  {s.rank && (
+                    <div className="text-xs text-slate-500 truncate">{s.rank}</div>
+                  )}
                 </div>
                 {!s.photo && (
                   <button

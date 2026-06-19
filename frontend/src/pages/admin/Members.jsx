@@ -13,9 +13,10 @@ import { categoryLabel } from "../../utils";
 const BUCKETS = [
   { key: "all",     label: "All",      dotBg: "bg-slate-400",   activeBg: "bg-slate-900",   activeText: "text-white", inactiveBg: "bg-slate-100",  inactiveText: "text-slate-700",  inactiveBorder: "border-slate-200",  stripe: "",                rowHover: "" },
   { key: "admin",   label: "Admins",   dotBg: "bg-indigo-500",  activeBg: "bg-indigo-600",  activeText: "text-white", inactiveBg: "bg-indigo-50",  inactiveText: "text-indigo-700", inactiveBorder: "border-indigo-200", stripe: "bg-indigo-500",   rowHover: "hover:bg-indigo-50/60" },
-  { key: "coach",   label: "Coaches",  dotBg: "bg-emerald-500", activeBg: "bg-emerald-600", activeText: "text-white", inactiveBg: "bg-emerald-50", inactiveText: "text-emerald-700",inactiveBorder: "border-emerald-200",stripe: "bg-emerald-500",  rowHover: "hover:bg-emerald-50/60" },
-  { key: "staff",   label: "Staff",    dotBg: "bg-amber-500",   activeBg: "bg-amber-600",   activeText: "text-white", inactiveBg: "bg-amber-50",   inactiveText: "text-amber-700",  inactiveBorder: "border-amber-200",  stripe: "bg-amber-500",    rowHover: "hover:bg-amber-50/60" },
-  { key: "athlete", label: "Athletes", dotBg: "bg-sky-500",     activeBg: "bg-sky-600",     activeText: "text-white", inactiveBg: "bg-sky-50",     inactiveText: "text-sky-700",    inactiveBorder: "border-sky-200",    stripe: "bg-sky-500",      rowHover: "hover:bg-sky-50/60" },
+  { key: "coach",     label: "Coaches",    dotBg: "bg-emerald-500", activeBg: "bg-emerald-600", activeText: "text-white", inactiveBg: "bg-emerald-50", inactiveText: "text-emerald-700",inactiveBorder: "border-emerald-200",stripe: "bg-emerald-500",  rowHover: "hover:bg-emerald-50/60" },
+  { key: "staff",     label: "Staff",      dotBg: "bg-amber-500",   activeBg: "bg-amber-600",   activeText: "text-white", inactiveBg: "bg-amber-50",   inactiveText: "text-amber-700",  inactiveBorder: "border-amber-200",  stripe: "bg-amber-500",    rowHover: "hover:bg-amber-50/60" },
+  { key: "executive", label: "Executives", dotBg: "bg-violet-500",  activeBg: "bg-violet-600",  activeText: "text-white", inactiveBg: "bg-violet-50",  inactiveText: "text-violet-700", inactiveBorder: "border-violet-200", stripe: "bg-violet-500",   rowHover: "hover:bg-violet-50/60" },
+  { key: "athlete",   label: "Athletes",   dotBg: "bg-sky-500",     activeBg: "bg-sky-600",     activeText: "text-white", inactiveBg: "bg-sky-50",     inactiveText: "text-sky-700",    inactiveBorder: "border-sky-200",    stripe: "bg-sky-500",      rowHover: "hover:bg-sky-50/60" },
 ];
 const BUCKET_BY_KEY = Object.fromEntries(BUCKETS.map((b) => [b.key, b]));
 
@@ -45,7 +46,7 @@ export default function Members() {
   useEffect(() => { load(); }, []);
 
   const counts = useMemo(() => {
-    const c = { all: members.length, admin: 0, coach: 0, staff: 0, athlete: 0 };
+    const c = { all: members.length, admin: 0, coach: 0, staff: 0, executive: 0, athlete: 0 };
     for (const m of members) {
       const b = bucketOf(m);
       if (c[b] !== undefined) c[b] += 1;

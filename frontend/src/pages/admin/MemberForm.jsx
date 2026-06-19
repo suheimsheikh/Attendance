@@ -135,6 +135,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
                 <option value="athlete">Athlete</option>
                 <option value="staff">Staff</option>
                 <option value="coach">Coach</option>
+                <option value="executive">Executive</option>
               </select>
             </div>
           </div>

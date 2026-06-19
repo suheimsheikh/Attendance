@@ -124,7 +124,7 @@ export function todayIso() {
 }
 
 export function categoryLabel(cat) {
-  return { athlete: "Athlete", staff: "Staff", coach: "Coach" }[cat] || cat;
+  return { athlete: "Athlete", staff: "Staff", coach: "Coach", executive: "Executive" }[cat] || cat;
 }
 
 /**

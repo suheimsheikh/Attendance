@@ -329,8 +329,8 @@ function ProfileIntroForm({ phone, onSubmit, onBack }) {
         </div>
         <div>
           <label className="iu-label">Category</label>
-          <div className="grid grid-cols-3 gap-2" data-testid="profile-category-row">
-            {["athlete", "staff", "coach"].map((c) => (
+          <div className="grid grid-cols-2 gap-2" data-testid="profile-category-row">
+            {["athlete", "staff", "coach", "executive"].map((c) => (
               <button
                 key={c}
                 type="button"

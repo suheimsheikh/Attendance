@@ -153,6 +153,7 @@ function ApproveDialog({ device, onClose, onApproved }) {
                 <option value="athlete">Athlete</option>
                 <option value="staff">Staff</option>
                 <option value="coach">Coach</option>
+                <option value="executive">Executive</option>
               </select>
             </div>
           </div>

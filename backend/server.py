@@ -259,7 +259,7 @@ class MemberCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=4)
     full_name: str
-    category: Literal["athlete", "staff", "coach"] = "athlete"
+    category: Literal["athlete", "staff", "coach", "executive"] = "athlete"
     rank: Optional[str] = None
     mobile: Optional[str] = None
     work_start: Optional[str] = None
@@ -275,7 +275,7 @@ class MemberCreate(BaseModel):
 
 class MemberUpdate(BaseModel):
     full_name: Optional[str] = None
-    category: Optional[Literal["athlete", "staff", "coach"]] = None
+    category: Optional[Literal["athlete", "staff", "coach", "executive"]] = None
     rank: Optional[str] = None
     mobile: Optional[str] = None
     work_start: Optional[str] = None
@@ -382,13 +382,13 @@ class PhoneLoginIn(BaseModel):
     # admin approval form for brand-new members).
     full_name: Optional[str] = None
     rank: Optional[str] = None
-    category: Optional[Literal["athlete", "staff", "coach"]] = None
+    category: Optional[Literal["athlete", "staff", "coach", "executive"]] = None
 
 
 class DeviceApproveIn(BaseModel):
     full_name: Optional[str] = None
     role: Literal["admin", "member"] = "member"
-    category: Literal["athlete", "staff", "coach"] = "athlete"
+    category: Literal["athlete", "staff", "coach", "executive"] = "athlete"
     rank: Optional[str] = None
 
 
@@ -1050,7 +1050,7 @@ async def import_members(file: UploadFile = File(...), admin: dict = Depends(req
         s = str(v).strip()
         return s or None
 
-    valid_cats = {"athlete", "staff", "coach"}
+    valid_cats = {"athlete", "staff", "coach", "executive"}
     time_re = re.compile(r"^\d{1,2}:\d{2}$")
     created, errors = [], []
     for n, row in enumerate(rows[1:], start=2):

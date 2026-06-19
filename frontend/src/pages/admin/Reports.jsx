@@ -16,6 +16,7 @@ const CATEGORY_FILTERS = [
   { key: "athlete", label: "Athletes" },
   { key: "staff", label: "Staff" },
   { key: "coach", label: "Coaches" },
+  { key: "executive", label: "Executives" },
 ];
 
 const SORT_OPTIONS = [
