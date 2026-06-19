@@ -13,11 +13,16 @@ import { toast } from "sonner";
 const COLUMNS = [
   { key: "on_campus",  label: "On Campus",    icon: CheckCircle2, accent: "#10B981", soft: "bg-emerald-50",  badge: "bg-emerald-100 text-emerald-700" },
   { key: "temp_out",   label: "Stepped Out",  icon: Coffee,       accent: "#06B6D4", soft: "bg-cyan-50",     badge: "bg-cyan-100 text-cyan-700" },
+  { key: "exited",     label: "Checked Out",  icon: ExitIcon,     accent: "#6B7280", soft: "bg-slate-50",    badge: "bg-slate-200 text-slate-700" },
   { key: "on_tour",    label: "Tour",         icon: Plane,        accent: "#F97316", soft: "bg-orange-50",   badge: "bg-orange-100 text-orange-700" },
   { key: "on_leave",   label: "Leave",        icon: Bed,          accent: "#F59E0B", soft: "bg-amber-50",    badge: "bg-amber-100 text-amber-700" },
   { key: "absent",     label: "Absent",       icon: UserX,        accent: "#DC2626", soft: "bg-red-50",      badge: "bg-red-100 text-red-700" },
-  { key: "exited",     label: "Check Out",    icon: ExitIcon,     accent: "#6B7280", soft: "bg-slate-50",    badge: "bg-slate-200 text-slate-700" },
 ];
+
+// These two columns share a single sorted union of members so each member's
+// row sits at the same vertical position in both columns (blank where the
+// member isn't in that status). Order them so the "paired" pair is contiguous.
+const PAIRED_COLUMN_KEYS = new Set(["temp_out", "exited"]);
 
 export default function Presence() {
   const { user: currentUser } = useAuth();
@@ -111,6 +116,21 @@ export default function Presence() {
     }
     return buckets;
   }, [data, lateOnly, query]);
+
+  // Build the paired (vertically-aligned) display lists for the
+  // Stepped Out + Checked Out pair. Each entry is `{member, visible}` — when
+  // `visible=true` we render the real card, otherwise we render an INVISIBLE
+  // clone of the OTHER column's member at this index so the row heights match
+  // exactly across both columns. Union is sorted alphabetically so both
+  // columns scroll in lockstep.
+  const pairedDisplay = useMemo(() => {
+    const union = [...byColumn.temp_out, ...byColumn.exited]
+      .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
+    return {
+      temp_out: union.map((m) => ({ member: m, visible: m.status === "temp_out" })),
+      exited:   union.map((m) => ({ member: m, visible: m.status === "exited" })),
+    };
+  }, [byColumn]);
 
   const filteredTotal = useMemo(
     () => Object.values(byColumn).reduce((sum, list) => sum + list.length, 0),
@@ -221,6 +241,7 @@ export default function Presence() {
               key={col.key}
               col={col}
               members={byColumn[col.key]}
+              displayList={PAIRED_COLUMN_KEYS.has(col.key) ? pairedDisplay[col.key] : null}
               adminContacts={data?.admin_contacts || []}
               coachMobile={currentUser?.mobile}
               onSent={load}
@@ -247,7 +268,7 @@ export default function Presence() {
   );
 }
 
-function Column({ col, members, adminContacts, coachMobile, onSent, onRowDoubleClick }) {
+function Column({ col, members, displayList, adminContacts, coachMobile, onSent, onRowDoubleClick }) {
   const Icon = col.icon;
   // Per-category breakdown shown under the column label so coaches can see
   // "how many Athletes / Coaches / Staff" in each presence bucket at a glance.
@@ -303,7 +324,25 @@ function Column({ col, members, adminContacts, coachMobile, onSent, onRowDoubleC
       </header>
 
       <div className="flex-1 overflow-y-auto max-h-[calc(100vh-220px)] min-h-[120px] divide-y divide-slate-100 bg-white">
-        {members.length === 0 ? (
+        {displayList ? (
+          displayList.length === 0 ? (
+            <div className="px-4 py-8 text-center text-xs text-slate-400">No one here.</div>
+          ) : (
+            displayList.map((entry, idx) => (
+              <MemberCard
+                key={`${col.key}-${entry.member.id}-${idx}`}
+                m={entry.member}
+                accent={col.accent}
+                columnKey={col.key}
+                adminContacts={adminContacts}
+                coachMobile={coachMobile}
+                onSent={onSent}
+                onDoubleClick={entry.visible ? onRowDoubleClick : null}
+                hidden={!entry.visible}
+              />
+            ))
+          )
+        ) : members.length === 0 ? (
           <div className="px-4 py-8 text-center text-xs text-slate-400">No one here.</div>
         ) : (
           members.map((m) => (
@@ -324,7 +363,7 @@ function Column({ col, members, adminContacts, coachMobile, onSent, onRowDoubleC
   );
 }
 
-function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick }) {
+function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick, hidden }) {
   const lateBg = m.late ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50";
   const notifyDueType = m.notify_due?.not_arrived
     ? "not_arrived"
@@ -332,13 +371,19 @@ function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, 
   const notifiedType = m.notified_today?.not_arrived
     ? "not_arrived"
     : (m.notified_today?.late ? "late" : null);
-  const handleDouble = onDoubleClick ? () => onDoubleClick(m.id) : undefined;
+  const handleDouble = !hidden && onDoubleClick ? () => onDoubleClick(m.id) : undefined;
+  // When `hidden`, the row reserves the same space as the real card in the
+  // paired column at this index — guarantees pixel-aligned rows across the
+  // Stepped Out / Checked Out pair without measurement hacks.
+  const hiddenStyle = hidden ? { visibility: "hidden", pointerEvents: "none" } : undefined;
   return (
     <div
-      className={`px-3 py-2.5 flex gap-2.5 items-start transition ${lateBg} ${onDoubleClick ? "cursor-pointer select-none" : ""}`}
-      data-testid={`presence-row-${m.id}`}
+      className={`px-3 py-2.5 flex gap-2.5 items-start transition ${hidden ? "" : lateBg} ${!hidden && onDoubleClick ? "cursor-pointer select-none" : ""}`}
+      data-testid={hidden ? `presence-blank-${columnKey}-${m.id}` : `presence-row-${m.id}`}
       onDoubleClick={handleDouble}
-      title={onDoubleClick ? "Double-click to edit member" : undefined}
+      title={!hidden && onDoubleClick ? "Double-click to edit member" : undefined}
+      style={hiddenStyle}
+      aria-hidden={hidden ? true : undefined}
     >
       <Avatar name={m.full_name} photo={m.photo} size={34} ring={columnKey === "on_campus" ? accent : null} />
       <div className="flex-1 min-w-0">
