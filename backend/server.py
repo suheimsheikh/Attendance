@@ -648,7 +648,10 @@ async def phone_status(device_id: str):
 
 async def _enrich_devices(devices: List[dict]) -> List[dict]:
     uids = list({d["user_id"] for d in devices if d.get("user_id")})
-    users = await db.users.find({"id": {"$in": uids}}, {"_id": 0}).to_list(2000)
+    # Also resolve admin display names for the audit-trail line.
+    actor_ids = list({d["last_action_by"] for d in devices if d.get("last_action_by")})
+    lookup_ids = list(set(uids + actor_ids))
+    users = await db.users.find({"id": {"$in": lookup_ids}}, {"_id": 0}).to_list(2000)
     umap = {u["id"]: u for u in users}
     for d in devices:
         u = umap.get(d.get("user_id"))
@@ -656,7 +659,24 @@ async def _enrich_devices(devices: List[dict]) -> List[dict]:
         d["member_role"] = u["role"] if u else None
         d["member_category"] = u["category"] if u else None
         d["member_rank"] = u.get("rank") if u else None
+        actor = umap.get(d.get("last_action_by"))
+        d["last_action_by_name"] = actor["full_name"] if actor else None
     return devices
+
+
+async def _stamp_action(device_pk: str, status: str, admin_id: str, extra: Optional[dict] = None) -> int:
+    """Update a device's status AND the audit trail in one shot. Returns
+    matched_count so callers can 404 on missing devices."""
+    payload = {
+        "status": status,
+        "last_action": status,
+        "last_action_by": admin_id,
+        "last_action_at": now_utc().isoformat(),
+    }
+    if extra:
+        payload.update(extra)
+    res = await db.devices.update_one({"id": device_pk}, {"$set": payload})
+    return res.matched_count
 
 
 @api_router.get("/admin/devices")
@@ -700,22 +720,21 @@ async def approve_device(device_pk: str, body: DeviceApproveIn, admin: dict = De
     await db.devices.update_one({"id": device_pk}, {"$set": {
         "status": "approved", "user_id": user_id,
         "approved_by": admin["id"], "approved_at": now,
+        "last_action": "approved", "last_action_by": admin["id"], "last_action_at": now,
     }})
     return {"ok": True}
 
 
 @api_router.post("/admin/devices/{device_pk}/reject")
 async def reject_device(device_pk: str, admin: dict = Depends(require_admin)):
-    res = await db.devices.update_one({"id": device_pk}, {"$set": {"status": "rejected"}})
-    if res.matched_count == 0:
+    if await _stamp_action(device_pk, "rejected", admin["id"]) == 0:
         raise HTTPException(status_code=404, detail="Device request not found")
     return {"ok": True}
 
 
 @api_router.post("/admin/devices/{device_pk}/revoke")
 async def revoke_device(device_pk: str, admin: dict = Depends(require_admin)):
-    res = await db.devices.update_one({"id": device_pk}, {"$set": {"status": "revoked"}})
-    if res.matched_count == 0:
+    if await _stamp_action(device_pk, "revoked", admin["id"]) == 0:
         raise HTTPException(status_code=404, detail="Device not found")
     return {"ok": True}
 
@@ -732,11 +751,10 @@ async def reinstate_device(device_pk: str, admin: dict = Depends(require_admin))
         raise HTTPException(status_code=400, detail="Only revoked or rejected devices can be re-enabled")
     if not device.get("user_id"):
         raise HTTPException(status_code=400, detail="This device was never linked to a member — use the regular Approve flow")
-    now = now_utc().isoformat()
-    await db.devices.update_one(
-        {"id": device_pk},
-        {"$set": {"status": "approved", "approved_by": admin["id"], "approved_at": now}},
-    )
+    await _stamp_action(device_pk, "approved", admin["id"], extra={
+        "approved_by": admin["id"],
+        "approved_at": now_utc().isoformat(),
+    })
     return {"ok": True}
 
 

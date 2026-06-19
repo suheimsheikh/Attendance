@@ -2,8 +2,14 @@ import React, { useEffect, useState } from "react";
 import { Loader2, Check, X, Ban, Smartphone, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
-import { categoryLabel } from "../../utils";
+import { categoryLabel, formatDate } from "../../utils";
 import { useEscape } from "../../hooks/useEscape";
+
+const ACTION_LABELS = {
+  approved: "approved",
+  rejected: "rejected",
+  revoked:  "revoked",
+};
 
 const FILTERS = [
   { key: "pending", label: "Pending" },
@@ -78,6 +84,13 @@ export default function Devices() {
                 <div className="text-xs text-slate-400 mt-1">
                   {d.device_name || "Device"} · {d.platform || "—"} · phone {d.phone || "—"}
                 </div>
+                {d.last_action && (
+                  <div className="text-[11px] text-slate-500 mt-1" data-testid={`audit-${d.id}`}>
+                    Last action: <span className="font-semibold">{ACTION_LABELS[d.last_action] || d.last_action}</span>
+                    {d.last_action_by_name ? <> by {d.last_action_by_name}</> : null}
+                    {d.last_action_at ? <> · {formatDate(d.last_action_at)}</> : null}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {filter === "pending" && (
