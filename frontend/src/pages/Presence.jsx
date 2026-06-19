@@ -13,7 +13,7 @@ const COLUMNS = [
   { key: "on_tour",    label: "Tour",         icon: Plane,        accent: "#F97316", soft: "bg-orange-50",   badge: "bg-orange-100 text-orange-700" },
   { key: "on_leave",   label: "Leave",        icon: Bed,          accent: "#F59E0B", soft: "bg-amber-50",    badge: "bg-amber-100 text-amber-700" },
   { key: "absent",     label: "Absent",       icon: UserX,        accent: "#DC2626", soft: "bg-red-50",      badge: "bg-red-100 text-red-700" },
-  { key: "exited",     label: "Left",         icon: ExitIcon,     accent: "#6B7280", soft: "bg-slate-50",    badge: "bg-slate-200 text-slate-700" },
+  { key: "exited",     label: "Check Out",    icon: ExitIcon,     accent: "#6B7280", soft: "bg-slate-50",    badge: "bg-slate-200 text-slate-700" },
 ];
 
 export default function Presence() {
@@ -312,22 +312,34 @@ function formatDist(m) {
 
 function describeGeo(g) {
   if (!g || !g.method) return null;
-  if (g.method === "muster") {
-    return { label: g.by ? `Muster · by ${g.by}` : "Muster · no GPS", tone: "slate" };
-  }
+  // GPS truly missing → "GPS unavailable", optionally annotated with the muster verifier.
   if (g.geo_unavailable) {
-    return { label: "GPS unavailable", tone: "amber" };
+    const suffix = g.method === "muster" && g.by ? ` · muster by ${g.by}` : "";
+    return { label: `GPS unavailable${suffix}`, tone: "amber" };
   }
   const d = formatDist(g.distance_m);
-  if (d == null) return { label: "distance not captured", tone: "amber" };
+  // No distance value at all → fall back to whatever annotation we have.
+  if (d == null) {
+    if (g.method === "muster") {
+      return { label: g.by ? `Muster · by ${g.by}` : "Muster · no GPS", tone: "slate" };
+    }
+    return { label: "distance not captured", tone: "amber" };
+  }
+  // Distance present — always lead with it. For muster check-ins, append the
+  // coach name so admins can still see who marked attendance.
+  const siteTag = g.out_of_geofence ? "off-site" : "on-site";
+  const verifier = g.method === "muster" && g.by ? ` · muster by ${g.by}` : "";
   return {
-    label: `${d} ${g.out_of_geofence ? "off-site" : "on-site"}`,
+    label: `${d} ${siteTag}${verifier}`,
     tone: g.out_of_geofence ? "amber" : "emerald",
   };
 }
 
 function GeoLine({ geoIn, geoOut, status }) {
   const inInfo = describeGeo(geoIn);
+  // Show check-out distance whenever it's recorded — exited members will
+  // always have it, and an "on_campus" member with an open temp-exit may
+  // have one as well. Today we only render it for "exited" to stay tight.
   const outInfo = status === "exited" ? describeGeo(geoOut) : null;
   if (!inInfo && !outInfo) return null;
   return (
