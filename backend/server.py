@@ -247,6 +247,7 @@ class UserPublic(BaseModel):
     work_start: Optional[str] = None
     work_end: Optional[str] = None
     photo: Optional[str] = None
+    photo_captured_at: Optional[str] = None
     institution: Optional[str] = None
     gender: Optional[str] = None
     father_mobile: Optional[str] = None
@@ -1106,11 +1107,50 @@ async def import_members(file: UploadFile = File(...), admin: dict = Depends(req
     return {"created": created, "errors": errors, "created_count": len(created), "error_count": len(errors)}
 
 
+# Threshold for forcing a photo refresh. Members re-capture once a year so
+# coaches always see a current likeness on the muster.
+PHOTO_REFRESH_DAYS = 365
+
+
+@api_router.get("/me/photo-status")
+async def my_photo_status(user: dict = Depends(get_current_user)):
+    """Tells the SelfCheckIn page whether the member needs to (re)capture a
+    selfie before checking in. A photo is "needed" if missing OR older than
+    PHOTO_REFRESH_DAYS. Legacy timestamps that fail to parse are treated as
+    fresh (no forced re-capture of pre-existing photos)."""
+    photo = user.get("photo")
+    captured_at = user.get("photo_captured_at")
+    days_since = None
+    needs = not photo  # no photo at all → always need one
+    if photo and captured_at:
+        try:
+            dt = datetime.fromisoformat(captured_at)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            days_since = (now_utc() - dt).days
+            if days_since >= PHOTO_REFRESH_DAYS:
+                needs = True
+        except Exception:
+            pass
+    reason = "missing" if not photo else ("expired" if needs else "ok")
+    return {
+        "has_photo": bool(photo),
+        "captured_at": captured_at,
+        "days_since": days_since,
+        "refresh_after_days": PHOTO_REFRESH_DAYS,
+        "needs_photo": needs,
+        "reason": reason,
+    }
+
+
 @api_router.post("/members/me/photo", response_model=UserPublic)
 async def set_my_photo(body: dict, user: dict = Depends(get_current_user)):
     photo = body.get("photo")
     _check_photo_size(photo)
-    await db.users.update_one({"id": user["id"]}, {"$set": {"photo": photo}})
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"photo": photo, "photo_captured_at": now_utc().isoformat()}},
+    )
     u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
 
@@ -1129,7 +1169,10 @@ async def set_member_photo(member_id: str, body: dict, user: dict = Depends(get_
     if not target:
         raise HTTPException(status_code=404, detail="Member not found")
     _check_photo_size(body.get("photo"))
-    await db.users.update_one({"id": member_id}, {"$set": {"photo": body.get("photo")}})
+    await db.users.update_one(
+        {"id": member_id},
+        {"$set": {"photo": body.get("photo"), "photo_captured_at": now_utc().isoformat()}},
+    )
     u = await db.users.find_one({"id": member_id}, {"_id": 0})
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
 
@@ -2964,6 +3007,11 @@ async def export_daily(on: Optional[str] = None, fmt: str = "csv", user: dict = 
 
 # ----------------------------------------------------------------------------
 app.include_router(api_router)
+
+# Daily bilingual content (motivational quote / English-Telugu word-of-the-day)
+# generated once per day with Gemini and cached in MongoDB.
+from daily_content import make_router as _daily_router  # noqa: E402
+app.include_router(_daily_router(db))
 
 
 # Lightweight keep-alive endpoint — no auth, no DB hit. Plug an UptimeRobot

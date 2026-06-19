@@ -5,6 +5,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { getLocation } from "../utils";
 import SelfieCapture from "../components/SelfieCapture";
+import DailyContent from "../components/DailyContent";
 
 function hmNow() {
   const d = new Date();
@@ -27,14 +28,20 @@ export default function SelfCheckIn() {
   const [lastDistance, setLastDistance] = useState(null);
   const [overtimeReason, setOvertimeReason] = useState("");
   const [showSelfie, setShowSelfie] = useState(false);
+  const [photoStatus, setPhotoStatus] = useState(null);
 
-  const hasPhoto = !!user?.photo;
+  const photoNeeded = photoStatus ? photoStatus.needs_photo : !user?.photo;
 
   const refresh = useCallback(async () => {
     try {
-      const [s, o] = await Promise.all([api.get("/attendance/status"), api.get("/office")]);
+      const [s, o, ps] = await Promise.all([
+        api.get("/attendance/status"),
+        api.get("/office"),
+        api.get("/me/photo-status").catch(() => null),
+      ]);
       setStatus(s);
       setOffice(o);
+      if (ps) setPhotoStatus(ps);
     } finally {
       setLoading(false);
     }
@@ -105,10 +112,10 @@ export default function SelfCheckIn() {
   };
 
   const handleToggle = async () => {
-    // First time someone without a photo checks in → prompt for selfie.
-    // The selfie BECOMES their profile photo (one-time bootstrap) and the
-    // check-in then continues automatically — no second tap needed.
-    if (!hasPhoto && !status?.checked_in) {
+    // Force a selfie when the member has no photo on file OR their photo is
+    // older than the refresh threshold (365 days). The captured selfie becomes
+    // their new profile photo and check-in continues automatically.
+    if (photoNeeded && !status?.checked_in) {
       setShowSelfie(true);
       return;
     }
@@ -121,6 +128,8 @@ export default function SelfCheckIn() {
     try {
       await api.post("/members/me/photo", { photo: dataUrl });
       await refreshMe();
+      // Pull fresh photo-status so the yearly refresh logic recomputes correctly.
+      api.get("/me/photo-status").then(setPhotoStatus).catch(() => {});
       toast.success("Photo saved — checking you in…");
     } catch (err) {
       toast.error(err?.message || "Couldn't save photo");
@@ -160,6 +169,8 @@ export default function SelfCheckIn() {
               : "Tap once to log your arrival. Your distance from the office is recorded for the log."}
         </p>
       </header>
+
+      <DailyContent />
 
       {/* Status banner */}
       <div className="iu-card p-4 mb-6 flex items-center gap-3" data-testid="status-banner">
@@ -247,9 +258,12 @@ export default function SelfCheckIn() {
             <span className="text-lg font-extrabold tracking-tight">{actionLabel}</span>
           </button>
 
-          {!hasPhoto && !status?.checked_in && (
+          {photoNeeded && !status?.checked_in && (
             <p className="text-[11px] text-slate-500 mt-3 flex items-center justify-center gap-1.5" data-testid="selfie-hint">
-              <Camera size={12} /> We&apos;ll grab a quick selfie first — one tap and you&apos;re done.
+              <Camera size={12} />
+              {photoStatus?.reason === "expired"
+                ? "Your photo is over a year old — we'll grab a fresh selfie first."
+                : "We'll grab a quick selfie first — one tap and you're done."}
             </p>
           )}
 
@@ -276,8 +290,10 @@ export default function SelfCheckIn() {
 
       {showSelfie && (
         <SelfieCapture
-          title="One quick selfie"
-          subtitle="So your coach can recognise you on the muster list. You only do this once."
+          title={photoStatus?.reason === "expired" ? "Time for a fresh photo" : "One quick selfie"}
+          subtitle={photoStatus?.reason === "expired"
+            ? "Your photo's over a year old — let's update it so your coach can still recognise you on the muster."
+            : "So your coach can recognise you on the muster list. You only do this once."}
           onCapture={saveSelfie}
           onClose={() => setShowSelfie(false)}
         />
