@@ -1446,7 +1446,7 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
             "checked_out_by": scanned_by,
         }})
         return {"ok": True, "action": "checkout", "member": target["full_name"],
-                "hours": hours, "out_of_geofence": out}
+                "hours": hours, "out_of_geofence": out, "distance_m": dist}
     late, late_minutes = compute_late(office, target, ts)
     doc = {
         "id": str(uuid.uuid4()),
@@ -1468,7 +1468,9 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
         "checked_in_by": scanned_by,
     }
     await db.attendance.insert_one(doc)
-    return {"ok": True, "action": "checkin", "member": target["full_name"], "out_of_geofence": out}
+    return {"ok": True, "action": "checkin", "member": target["full_name"],
+            "out_of_geofence": out, "distance_m": dist,
+            "late": late, "late_minutes": late_minutes}
 
 
 @api_router.post("/attendance/checkin")
@@ -1592,6 +1594,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
     await db.attendance.insert_one(doc)
     return {"ok": True, "action": "checkin", "member": target["full_name"],
             "out_of_geofence": out, "distance_m": dist,
+            "late": late, "late_minutes": late_minutes,
             "overtime_minutes": early_min}
 
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Quote, BookOpen, Loader2 } from "lucide-react";
 import { api } from "../api";
+import { formatDate } from "../utils";
 
 /**
  * Persistent bilingual content card shown on the Check-In page all day long.
@@ -55,7 +56,7 @@ export default function DailyContent() {
           {isWord ? "Word of the day" : "Quote of the day"}
         </span>
         <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold hidden sm:block">
-          {new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" })}
+          {formatDate(new Date())}
         </span>
       </div>
 

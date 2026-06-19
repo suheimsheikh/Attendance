@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../../api";
 import Avatar from "../../components/Avatar";
+import { shortDate } from "../../utils";
 
 const STATUS_FILTERS = [
   { key: "pending",  label: "Pending" },
@@ -19,9 +20,7 @@ function fmtHrs(min) {
   return `${h}:${String(m).padStart(2, "0")}`;
 }
 function fmtDay(iso) {
-  if (!iso) return "—";
-  try { return new Date(iso + "T00:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }); }
-  catch { return iso; }
+  return iso ? shortDate(iso) : "—";
 }
 function fmtTime(iso) {
   if (!iso) return "—";

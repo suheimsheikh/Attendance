@@ -3,15 +3,10 @@ import { Loader2, AlertCircle, Check } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import { useEscape } from "../hooks/useEscape";
+import { formatDate } from "../utils";
 
 function fmtDate(iso) {
-  if (!iso) return "";
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString([], { weekday: "short", day: "numeric", month: "short" });
-  } catch {
-    return iso;
-  }
+  return iso ? formatDate(iso) : "";
 }
 
 function fmtTime(iso) {

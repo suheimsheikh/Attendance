@@ -29,19 +29,34 @@ export function formatTime(iso) {
   } catch { return ""; }
 }
 
+/**
+ * Format a date as `dd/mm/yy` — always shows the 2-digit year. Used in
+ * contexts where the year might differ (Profile session history, headers).
+ */
 export function formatDate(d) {
   if (!d) return "";
   try {
     const date = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + "T00:00:00") : new Date(d);
-    return date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const yy = String(date.getFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
   } catch { return d; }
 }
 
+/**
+ * Compact `dd/mm` — strips the year when it matches the current calendar
+ * year (the common case), otherwise falls back to `dd/mm/yy`. Used in
+ * leave / report ranges that almost always sit inside the current year.
+ */
 export function shortDate(d) {
   if (!d) return "";
   try {
     const date = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + "T00:00:00") : new Date(d);
-    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const sameYear = date.getFullYear() === new Date().getFullYear();
+    return sameYear ? `${dd}/${mm}` : `${dd}/${mm}/${String(date.getFullYear()).slice(-2)}`;
   } catch { return d; }
 }
 
@@ -163,3 +178,94 @@ export const statusConfig = {
   exited:    { label: "Left",      color: "#6B7280", bg: "rgba(107,114,128,0.12)", icon: "exit" },
   not_due:   { label: "Not yet due", color: "#94A3B8", bg: "rgba(148,163,184,0.12)", icon: "exit" },
 };
+
+/**
+ * Pick the best available Indian-female voice from the SpeechSynthesis
+ * voice list. Falls back gracefully through (in order):
+ *   1. Known Indian-female voice names (Veena, Heera, Lekha, Isha…)
+ *   2. Any en-IN voice flagged as female (Chrome on Android)
+ *   3. Any en-IN voice
+ *   4. Any English voice flagged as female
+ *   5. The platform default
+ * Browsers populate voices async — call after `voiceschanged` fires.
+ */
+function pickIndianFemaleVoice() {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices() || [];
+  if (voices.length === 0) return null;
+  const knownIndianFemaleNames = ["veena", "heera", "lekha", "isha", "raveena", "swara", "kalpana", "shruti"];
+  const lc = (v) => (v.name || "").toLowerCase();
+  const isEnIN = (v) => (v.lang || "").toLowerCase().startsWith("en-in");
+  const isFemale = (v) => /female|woman|veena|heera|lekha|isha/i.test(v.name || "");
+
+  return (
+    voices.find((v) => knownIndianFemaleNames.some((n) => lc(v).includes(n)))
+    || voices.find((v) => isEnIN(v) && isFemale(v))
+    || voices.find((v) => isEnIN(v))
+    || voices.find((v) => /^en/i.test(v.lang || "") && isFemale(v))
+    || voices.find((v) => /^en/i.test(v.lang || ""))
+    || voices[0]
+  );
+}
+
+/**
+ * Speak a "you were late" message in an Indian female voice (best-effort).
+ * Safe to call even if the browser has no TTS support — it just no-ops.
+ * Must be invoked from a user gesture (click) or browsers will block it.
+ */
+export function speakLateMessage(minutes, memberName) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  // Stop anything already queued (avoids overlap if user taps quickly).
+  try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+
+  const speak = () => {
+    const voice = pickIndianFemaleVoice();
+    let line;
+    if (!minutes || minutes < 1) {
+      line = memberName
+        ? `Hello ${memberName}, you have just checked in. Please try to be early tomorrow.`
+        : `You have just checked in. Please try to be early tomorrow.`;
+    } else if (minutes < 60) {
+      line = memberName
+        ? `Hello ${memberName}, you are ${minutes} minute${minutes === 1 ? "" : "s"} late today. Please try to be on time tomorrow.`
+        : `You are ${minutes} minute${minutes === 1 ? "" : "s"} late today. Please try to be on time tomorrow.`;
+    } else {
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      const parts = [`${h} hour${h === 1 ? "" : "s"}`];
+      if (m) parts.push(`${m} minute${m === 1 ? "" : "s"}`);
+      line = memberName
+        ? `Hello ${memberName}, you are ${parts.join(" and ")} late today. Please try to be on time tomorrow.`
+        : `You are ${parts.join(" and ")} late today. Please try to be on time tomorrow.`;
+    }
+    const u = new SpeechSynthesisUtterance(line);
+    if (voice) {
+      u.voice = voice;
+      u.lang = voice.lang || "en-IN";
+    } else {
+      u.lang = "en-IN";
+    }
+    u.rate = 0.95;
+    u.pitch = 1.05;
+    u.volume = 1;
+    try { window.speechSynthesis.speak(u); } catch { /* ignore */ }
+  };
+
+  // Voices may not be loaded yet on first page open; wait for the event.
+  const voices = window.speechSynthesis.getVoices();
+  if (voices && voices.length > 0) {
+    speak();
+  } else {
+    const onReady = () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", onReady);
+      speak();
+    };
+    window.speechSynthesis.addEventListener("voiceschanged", onReady);
+    // Safety timeout in case voiceschanged never fires
+    setTimeout(() => {
+      window.speechSynthesis.removeEventListener("voiceschanged", onReady);
+      speak();
+    }, 800);
+  }
+}
+

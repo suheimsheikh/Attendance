@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Loader2, LogIn, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, AlertTriangle, Camera } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import { getLocation } from "../utils";
+import { getLocation, speakLateMessage } from "../utils";
 import SelfieCapture from "../components/SelfieCapture";
 import DailyContent from "../components/DailyContent";
 
@@ -101,6 +101,11 @@ export default function SelfCheckIn() {
           ? `Checked in — welcome, ${res.member}!`
           : `Checked out — ${res.member} (${res.hours}h)`
       );
+      // Play a friendly Indian-female voice nudge when a check-in is marked
+      // late — handy reminder for the member at the device.
+      if (res.action === "checkin" && res.late) {
+        speakLateMessage(res.late_minutes, res.member);
+      }
       setOvertimeReason("");
       refresh();
     } catch (err) {
