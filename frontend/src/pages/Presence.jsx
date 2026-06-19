@@ -164,27 +164,56 @@ export default function Presence() {
 
 function Column({ col, members, adminContacts, coachMobile, onSent }) {
   const Icon = col.icon;
+  // Per-category breakdown shown under the column label so coaches can see
+  // "how many Athletes / Coaches / Staff" in each presence bucket at a glance.
+  // Letters keep the chips legible inside the narrow 6-column grid.
+  const catCounts = { athlete: 0, coach: 0, staff: 0 };
+  for (const m of members) {
+    const c = (m.category || "athlete").toLowerCase();
+    if (catCounts[c] !== undefined) catCounts[c] += 1;
+  }
+  const breakdown = [
+    { key: "athlete", letter: "A", title: "Athletes", chip: "bg-sky-100 text-sky-700",       n: catCounts.athlete },
+    { key: "coach",   letter: "C", title: "Coaches",  chip: "bg-emerald-100 text-emerald-700", n: catCounts.coach },
+    { key: "staff",   letter: "S", title: "Staff",    chip: "bg-amber-100 text-amber-700",     n: catCounts.staff },
+  ];
+
   return (
     <section
       className={`flex flex-col rounded-2xl ${col.soft} border border-slate-200 overflow-hidden`}
       data-testid={`presence-column-${col.key}`}
     >
       <header
-        className="px-4 py-3 flex items-center gap-2 bg-white/70 backdrop-blur border-b border-slate-200"
+        className="px-4 py-3 bg-white/70 backdrop-blur border-b border-slate-200"
         style={{ boxShadow: `inset 4px 0 0 ${col.accent}` }}
       >
-        <div
-          className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
-          style={{ background: col.accent + "20", color: col.accent }}
-        >
-          <Icon size={15} />
+        <div className="flex items-center gap-2">
+          <div
+            className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
+            style={{ background: col.accent + "20", color: col.accent }}
+          >
+            <Icon size={15} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500">{col.label}</div>
+          </div>
+          <span className={`min-w-[26px] h-6 px-2 rounded-full text-xs font-bold flex items-center justify-center ${col.badge}`} data-testid={`column-count-${col.key}`}>
+            {members.length}
+          </span>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500">{col.label}</div>
+        <div className="flex items-center gap-1.5 mt-2 flex-wrap" data-testid={`column-breakdown-${col.key}`}>
+          {breakdown.map((b) => (
+            <span
+              key={b.key}
+              title={`${b.title}: ${b.n}`}
+              data-testid={`column-breakdown-${col.key}-${b.key}`}
+              className={`inline-flex items-center gap-1 px-1.5 h-5 rounded text-[10px] font-bold tracking-tight ${b.chip} ${b.n === 0 ? "opacity-40" : ""}`}
+            >
+              <span className="font-extrabold">{b.letter}</span>
+              <span className="tabular-nums">{b.n}</span>
+            </span>
+          ))}
         </div>
-        <span className={`min-w-[26px] h-6 px-2 rounded-full text-xs font-bold flex items-center justify-center ${col.badge}`} data-testid={`column-count-${col.key}`}>
-          {members.length}
-        </span>
       </header>
 
       <div className="flex-1 overflow-y-auto max-h-[calc(100vh-220px)] min-h-[120px] divide-y divide-slate-100 bg-white">
