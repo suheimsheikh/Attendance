@@ -1750,7 +1750,7 @@ async def presence(user: dict = Depends(get_current_user)):
     today = local_date_str(office)
     users = await db.users.find(
         {}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1,
-             "photo": 1, "work_start": 1, "work_end": 1,
+             "photo": 1, "work_start": 1, "work_end": 1, "institution": 1,
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1}
     ).sort("full_name", 1).to_list(2000)
 
@@ -1919,6 +1919,7 @@ async def presence(user: dict = Depends(get_current_user)):
             "role": u["role"],
             "category": u["category"],
             "rank": u.get("rank"),
+            "institution": u.get("institution"),
             "status": status_v,
             "detail": detail,
             "since": since,

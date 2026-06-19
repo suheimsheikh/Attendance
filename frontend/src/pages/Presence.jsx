@@ -252,6 +252,15 @@ function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent }
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-1.5">
           <div className="text-[13px] font-semibold text-slate-900 leading-tight truncate flex-1">{m.full_name}</div>
+          {m.institution && (
+            <span
+              title={`Institution: ${m.institution}`}
+              data-testid={`presence-institution-chip-${m.id}`}
+              className="inline-flex items-center px-1 h-4 rounded text-[9px] font-bold bg-sky-100 text-sky-700 shrink-0 max-w-[80px] truncate leading-none"
+            >
+              {m.institution}
+            </span>
+          )}
           <ParentContact father={m.father_mobile} mother={m.mother_mobile} guardian={m.guardian_mobile} />
         </div>
         <div className="text-[11px] text-slate-500 leading-tight truncate mt-0.5">
