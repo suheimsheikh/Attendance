@@ -500,25 +500,29 @@ function GuestStripRow({ guest, active, onCheckout, onDelete }) {
 
 function describeGeo(g) {
   if (!g || !g.method) return null;
-  // GPS truly missing → "GPS unavailable", optionally annotated with the muster verifier.
+  // GPS truly missing → "GPS unavailable", with the muster verifier as a
+  // separate field so the UI can bold their name.
   if (g.geo_unavailable) {
-    const suffix = g.method === "muster" && g.by ? ` · muster by ${g.by}` : "";
-    return { label: `GPS unavailable${suffix}`, tone: "amber" };
+    return {
+      label: "GPS unavailable",
+      verifierName: g.method === "muster" ? g.by || null : null,
+      tone: "amber",
+    };
   }
   const d = formatDist(g.distance_m);
-  // No distance value at all → fall back to whatever annotation we have.
   if (d == null) {
     if (g.method === "muster") {
-      return { label: g.by ? `Muster · by ${g.by}` : "Muster · no GPS", tone: "slate" };
+      return { label: g.by ? "" : "Muster · no GPS", verifierName: g.by || null, tone: "slate" };
     }
-    return { label: "distance not captured", tone: "amber" };
+    return { label: "distance not captured", verifierName: null, tone: "amber" };
   }
-  // Distance present — always lead with it. For muster check-ins, append the
-  // coach name so admins can still see who marked attendance.
+  // Distance present — always lead with it. For muster check-ins, hand the
+  // verifier's name to the UI separately so it can render it in bold (saves
+  // a few characters vs the previous "· muster by Name" prefix).
   const siteTag = g.out_of_geofence ? "off-site" : "on-site";
-  const verifier = g.method === "muster" && g.by ? ` · muster by ${g.by}` : "";
   return {
-    label: `${d} ${siteTag}${verifier}`,
+    label: `${d} ${siteTag}`,
+    verifierName: g.method === "muster" ? g.by || null : null,
     tone: g.out_of_geofence ? "amber" : "emerald",
   };
 }
@@ -544,7 +548,10 @@ function GeoChip({ label, tone, ...rest }) {
     <span className="inline-flex items-center gap-1">
       <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
       <MapPin size={9} className={colour} />
-      <span className={colour}>{rest.label}</span>
+      {rest.label && <span className={colour}>{rest.label}</span>}
+      {rest.verifierName && (
+        <span className={`font-bold ${colour}`}>{rest.verifierName}</span>
+      )}
     </span>
   );
 }
