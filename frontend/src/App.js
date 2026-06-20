@@ -23,6 +23,7 @@ import Overtime from "./pages/admin/Overtime";
 import LeaveBalances from "./pages/admin/LeaveBalances";
 import Payroll from "./pages/admin/Payroll";
 import Institutions from "./pages/admin/Institutions";
+import Camps from "./pages/admin/Camps";
 import BackupRestore from "./pages/admin/BackupRestore";
 import ImportMembers from "./pages/admin/ImportMembers";
 import Cards from "./pages/admin/Cards";
@@ -87,6 +88,7 @@ function App() {
             <Route path="admin/leave-balances" element={<RequireAdmin><LeaveBalances /></RequireAdmin>} />
             <Route path="admin/group-leave" element={<Navigate to="/admin/leaves" replace />} />
             <Route path="admin/institutions" element={<RequireAdmin><Institutions /></RequireAdmin>} />
+            <Route path="admin/camps" element={<RequireAdmin><Camps /></RequireAdmin>} />
             <Route path="admin/backup" element={<RequireAdmin><BackupRestore /></RequireAdmin>} />
             <Route path="admin/import" element={<RequireAdmin><ImportMembers /></RequireAdmin>} />
             <Route path="admin/cards" element={<RequireAdmin><DisabledFeature title="Member Cards disabled" reason="Personal QR cards are turned off for now — Muster Roll handles attendance." /></RequireAdmin>} />

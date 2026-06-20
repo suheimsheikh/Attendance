@@ -22,6 +22,10 @@ from typing import List, Optional, Literal, Tuple
 from datetime import datetime, timezone, timedelta, date
 from zoneinfo import ZoneInfo
 
+# Local modules — imported up-top so `_active_camp_for` (used during request
+# handling for check-in late computation) can reference them.
+import camps as _camps_module
+
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
@@ -92,11 +96,18 @@ def local_hm(office: Optional[dict], iso_str: Optional[str]) -> str:
     return datetime.fromisoformat(iso_str).astimezone(office_tz(office)).strftime("%H:%M")
 
 
-def compute_late(office: dict, target: dict, ts: datetime) -> tuple[bool, int]:
-    """Returns (is_late, minutes_late) comparing the check-in local time against the
-    member's work_start (or office default) plus the configured grace period."""
-    ws = (target.get("work_start") or office.get("default_work_start") or "09:00")
-    grace = int(office.get("late_grace_minutes") or 0)
+def compute_late(office: dict, target: dict, ts: datetime, camp: Optional[dict] = None) -> tuple[bool, int]:
+    """Returns (is_late, minutes_late) comparing the check-in local time against
+    the effective work_start + grace. If `camp` is provided, its `start_time`
+    and (optional) `late_grace_minutes` override the member's defaults — this
+    is how institutional camps replace a member's normal schedule."""
+    if camp:
+        ws = camp.get("start_time") or "09:00"
+        cg = camp.get("late_grace_minutes")
+        grace = int(cg if cg is not None else (office.get("late_grace_minutes") or 0))
+    else:
+        ws = (target.get("work_start") or office.get("default_work_start") or "09:00")
+        grace = int(office.get("late_grace_minutes") or 0)
     try:
         h, m = (int(x) for x in ws.split(":")[:2])
     except Exception:
@@ -106,6 +117,15 @@ def compute_late(office: dict, target: dict, ts: datetime) -> tuple[bool, int]:
     if local > threshold:
         return True, int((local - threshold).total_seconds() // 60)
     return False, 0
+
+
+async def _active_camp_for(target: dict, ts: datetime, office: dict) -> Optional[dict]:
+    """Look up the camp that applies to `target` at timestamp `ts` (used at
+    check-in time so the stored late/late_minutes reflect the camp overlay)."""
+    today_str = local_date_str(office, ts)
+    weekday = _camps_module.weekday_key(ts.astimezone(office_tz(office)))
+    camps_today = await _camps_module.fetch_camps_active_on(db, today_str)
+    return _camps_module.resolve_member_camp(target, camps_today, weekday, today_str)
 
 
 
@@ -1485,7 +1505,7 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
         }})
         return {"ok": True, "action": "checkout", "member": target["full_name"],
                 "hours": hours, "out_of_geofence": out, "distance_m": dist}
-    late, late_minutes = compute_late(office, target, ts)
+    late, late_minutes = compute_late(office, target, ts, camp=await _active_camp_for(target, ts, office))
     doc = {
         "id": str(uuid.uuid4()),
         "user_id": target["id"],
@@ -1601,7 +1621,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         # Geofence is informational only — distance is recorded on the
         # attendance row but does not block the check-in.
         pass
-    late, late_minutes = compute_late(office, target, ts)
+    late, late_minutes = compute_late(office, target, ts, camp=await _active_camp_for(target, ts, office))
     early_min, work_start_hm = compute_overtime_in(office, target, ts)
     doc = {
         "id": str(uuid.uuid4()),
@@ -1836,6 +1856,13 @@ async def presence(user: dict = Depends(get_current_user)):
     for n in notified_today:
         notify_map.setdefault(n["user_id"], set()).add(n["type"])
 
+    # Camps overlay — fetch all camps whose date range covers today in a single
+    # query, then resolve per-member at the loop level. Cheaper than per-user.
+    camps_today = await _camps_module.fetch_camps_active_on(db, today)
+    today_weekday = _camps_module.weekday_key(now_utc().astimezone(office_tz(office)))
+    def _camp_for(u: dict) -> Optional[dict]:
+        return _camps_module.resolve_member_camp(u, camps_today, today_weekday, today)
+
     # Admin contacts to surface as the "call the academy" numbers in the SMS body.
     admin_docs = await db.users.find(
         {"role": "admin"},
@@ -1913,8 +1940,22 @@ async def presence(user: dict = Depends(get_current_user)):
                 }
             else:
                 # No session today — decide absent vs not_due via work_start.
-                ws_hm = u.get("work_start") or office.get("default_work_start") or "09:00"
-                grace = int(office.get("late_grace_minutes") or 0)
+                # If an institutional camp is active for this member today, its
+                # times override; otherwise fall back to the member's personal
+                # work_start (or the office default).
+                camp_today = _camp_for(u)
+                if camp_today:
+                    ws_hm = camp_today.get("start_time") or "09:00"
+                    cg = camp_today.get("late_grace_minutes")
+                    grace = int(cg if cg is not None else (office.get("late_grace_minutes") or 0))
+                    is_expected_today = True
+                else:
+                    ws_hm = u.get("work_start") or office.get("default_work_start") or "09:00"
+                    grace = int(office.get("late_grace_minutes") or 0)
+                    # Athletes with no personal work_start AND no camp today
+                    # aren't expected on campus. Skip the "absent" branch so
+                    # we don't slander camp-only kids on weekdays.
+                    is_expected_today = bool(u.get("work_start")) or u.get("category") != "athlete"
                 try:
                     ws_h, ws_m = (int(x) for x in ws_hm.split(":")[:2])
                     local_now = now_utc().astimezone(office_tz(office))
@@ -1922,7 +1963,7 @@ async def presence(user: dict = Depends(get_current_user)):
                     past_start = local_now > threshold
                 except Exception:
                     past_start = True
-                if past_start:
+                if past_start and is_expected_today:
                     # Approved late-coming notice covering today → softer treatment
                     late_today = await db.leaves.find_one({
                         "user_id": u["id"], "status": "approved", "type": "late_coming",
@@ -1932,11 +1973,18 @@ async def presence(user: dict = Depends(get_current_user)):
                     if late_today:
                         ea = late_today.get("expected_arrival")
                         detail = f"Notified late — expected by {ea or 'today'}"
+                    elif camp_today:
+                        detail = f"Camp “{camp_today['name']}” started {ws_hm}"
                     else:
                         detail = f"Expected by {ws_hm}"
                 else:
                     status_v = "not_due"
-                    detail = f"Shift starts {ws_hm}"
+                    if camp_today:
+                        detail = f"Camp “{camp_today['name']}” starts {ws_hm}"
+                    elif is_expected_today:
+                        detail = f"Shift starts {ws_hm}"
+                    else:
+                        detail = "No camp scheduled today"
                 since = None
                 photo = u.get("photo")
         # Open excursion: how many minutes overdue (if expected_return is in the past)?
@@ -1979,7 +2027,7 @@ async def presence(user: dict = Depends(get_current_user)):
         if sess and status_v == "on_campus" and sess.get("check_in_at"):
             try:
                 ci = datetime.fromisoformat(sess["check_in_at"])
-                recomputed_late, _ = compute_late(office, u, ci)
+                recomputed_late, _ = compute_late(office, u, ci, camp=_camp_for(u))
             except Exception:
                 recomputed_late = bool(sess.get("late"))
 
@@ -3087,6 +3135,10 @@ app.include_router(_daily_router(db))
 # Guest check-in / check-out (coaches + admins).
 from guests import make_router as _guests_router  # noqa: E402
 app.include_router(_guests_router(db, require_coach_or_admin, local_date_str))
+
+# Camps — scheduling overlay for institutional camps. Imported at the top of
+# this file so the helpers can be reused by the late computation paths above.
+app.include_router(_camps_module.make_router(db, require_admin))
 
 
 # Lightweight keep-alive endpoint — no auth, no DB hit. Plug an UptimeRobot
