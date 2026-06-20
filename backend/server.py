@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query
 from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -493,6 +493,15 @@ async def seed():
     await db.parent_notifications.create_index(
         [("user_id", 1), ("date", 1), ("type", 1)], unique=True
     )
+    # Hot-path indexes — added 06/2026 after a code review flagged that the
+    # phone-login matcher and /presence aggregations were doing full collection
+    # scans. With ~150 members today the wins are small; once attendance grows
+    # past a few thousand sessions these matter a lot.
+    await db.users.create_index("mobile")
+    await db.attendance.create_index([("user_id", 1), ("date", -1)])
+    await db.attendance.create_index("check_out_at")
+    await db.leaves.create_index([("status", 1), ("start_date", 1), ("end_date", 1)])
+    await db.leaves.create_index([("user_id", 1), ("status", 1)])
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({
@@ -572,7 +581,7 @@ async def seed():
                 })
             except Exception:
                 pass
-        logger.info(f"Seeded institutions master from existing users")
+        logger.info("Seeded institutions master from existing users")
 
 
 @app.on_event("shutdown")
@@ -807,12 +816,12 @@ async def _enrich_devices(devices: List[dict]) -> List[dict]:
     return devices
 
 
-async def _stamp_action(device_pk: str, status: str, admin_id: str, extra: Optional[dict] = None) -> int:
+async def _stamp_action(device_pk: str, new_status: str, admin_id: str, extra: Optional[dict] = None) -> int:
     """Update a device's status AND the audit trail in one shot. Returns
     matched_count so callers can 404 on missing devices."""
     payload = {
-        "status": status,
-        "last_action": status,
+        "status": new_status,
+        "last_action": new_status,
         "last_action_by": admin_id,
         "last_action_at": now_utc().isoformat(),
     }
@@ -957,8 +966,17 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
 
 @api_router.get("/members", response_model=List[UserPublic])
 async def list_members(user: dict = Depends(get_current_user)):
+    """List all members. For bandwidth reasons we substitute the small
+    `photo_thumb` into the `photo` field — callers needing the full original
+    fetch `/members/{id}` (admin) or `/members/{id}/card` (printable)."""
     users = await db.users.find({}, {"_id": 0, "hashed_password": 0}).sort("full_name", 1).to_list(2000)
-    return [UserPublic(**{k: u.get(k) for k in UserPublic.model_fields}) for u in users]
+    out: List[UserPublic] = []
+    for u in users:
+        thumb = u.get("photo_thumb") or u.get("photo")
+        # Swap photo → thumb just on the way out so DB stays the source of truth.
+        u_swapped = {**u, "photo": thumb}
+        out.append(UserPublic(**{k: u_swapped.get(k) for k in UserPublic.model_fields}))
+    return out
 
 
 @api_router.patch("/members/{member_id}", response_model=UserPublic)
@@ -970,10 +988,18 @@ async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depend
     update = {k: v for k, v in body.model_dump().items() if v is not None and k != "password"}
     if body.password:
         update["hashed_password"] = hash_password(body.password)
-    # Keep `photo_thumb` in sync whenever `photo` changes (including being cleared).
+    # Keep `photo_thumb` in sync ONLY when the photo bytes actually changed.
+    # The MemberForm always submits its current `photo` value (even when the
+    # admin didn't touch it), so blindly regenerating would reset the 365-day
+    # yearly-refresh timer on every member edit.
     if body.photo is not None:
-        update["photo_thumb"] = _make_thumbnail(body.photo) if body.photo else None
-        update["photo_captured_at"] = now_utc().isoformat()
+        existing = await db.users.find_one({"id": member_id}, {"_id": 0, "photo": 1})
+        if existing is not None and (existing.get("photo") or "") != (body.photo or ""):
+            update["photo_thumb"] = _make_thumbnail(body.photo) if body.photo else None
+            update["photo_captured_at"] = now_utc().isoformat()
+        else:
+            # No-op: drop the photo field so we don't touch it at all.
+            update.pop("photo", None)
     if update:
         await db.users.update_one({"id": member_id}, {"$set": update})
     u = await db.users.find_one({"id": member_id}, {"_id": 0})
@@ -1018,14 +1044,14 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
         "start_date": {"$gte": f"{year}-01-01", "$lte": f"{year}-12-31"},
     }, {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1}).to_list(20000)
     used: dict = {}
-    for l in leaves:
+    for leave in leaves:
         try:
-            sd = date.fromisoformat(l["start_date"])
-            ed = date.fromisoformat(l["end_date"])
+            sd = date.fromisoformat(leave["start_date"])
+            ed = date.fromisoformat(leave["end_date"])
             n = (ed - sd).days + 1
         except Exception:
             n = 1
-        used[l["user_id"]] = used.get(l["user_id"], 0) + n
+        used[leave["user_id"]] = used.get(leave["user_id"], 0) + n
     out = []
     for u in users:
         opening = float(u.get("leave_balance_opening") or 0)
@@ -1402,8 +1428,10 @@ def _excursion_seconds(excursions: List[dict], up_to: Optional[datetime] = None)
             continue
         end = None
         if e.get("in_at"):
-            try: end = datetime.fromisoformat(e["in_at"])
-            except Exception: end = None
+            try:
+                end = datetime.fromisoformat(e["in_at"])
+            except Exception:
+                end = None
         elif up_to is not None:
             end = up_to
         if end:
@@ -1879,7 +1907,7 @@ async def overtime_needs_review(admin: dict = Depends(require_admin)):
 async def overtime_list(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-    status: Optional[str] = "pending",
+    status_filter: Optional[str] = Query("pending", alias="status"),
     admin: dict = Depends(require_admin),
 ):
     office = await db.config.find_one({"id": "office"})
@@ -1888,8 +1916,8 @@ async def overtime_list(
         yesterday = (date.fromisoformat(today) - timedelta(days=1)).isoformat()
         date_from = date_to = yesterday
     q: dict = {"overtime_total_min": {"$gt": 0}}
-    if status and status != "all":
-        q["overtime_status"] = status
+    if status_filter and status_filter != "all":
+        q["overtime_status"] = status_filter
     if date_from or date_to:
         date_q: dict = {}
         if date_from:
@@ -1975,7 +2003,7 @@ async def presence(user: dict = Depends(get_current_user)):
     leaves = await db.leaves.find({
         "status": "approved", "start_date": {"$lte": today}, "end_date": {"$gte": today},
     }, {"_id": 0}).to_list(5000)
-    leave_map = {l["user_id"]: l for l in leaves}
+    leave_map = {leave["user_id"]: leave for leave in leaves}
 
     last_outs = await db.attendance.aggregate([
         {"$match": {"check_out_at": {"$ne": None}}},
@@ -2303,14 +2331,14 @@ async def create_leave(body: LeaveCreate, target_user_id: Optional[str] = None,
 
 
 async def enrich_leaves(leaves: List[dict]) -> List[dict]:
-    user_ids = list({l["user_id"] for l in leaves})
+    user_ids = list({leave["user_id"] for leave in leaves})
     users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0}).to_list(2000)
     umap = {u["id"]: u for u in users}
-    for l in leaves:
-        u = umap.get(l["user_id"], {})
-        l["member_name"] = u.get("full_name", "Unknown")
-        l["member_category"] = u.get("category")
-        l["member_rank"] = u.get("rank")
+    for leave in leaves:
+        u = umap.get(leave["user_id"], {})
+        leave["member_name"] = u.get("full_name", "Unknown")
+        leave["member_category"] = u.get("category")
+        leave["member_rank"] = u.get("rank")
     return leaves
 
 
@@ -2334,10 +2362,10 @@ async def all_leaves(status_filter: Optional[str] = None, admin: dict = Depends(
 @api_router.patch("/leaves/{leave_id}")
 async def decide_leave(leave_id: str, body: LeaveDecision, admin: dict = Depends(require_admin)):
     await db.leaves.update_one({"id": leave_id}, {"$set": {"status": body.status}})
-    l = await db.leaves.find_one({"id": leave_id}, {"_id": 0})
-    if not l:
+    leave = await db.leaves.find_one({"id": leave_id}, {"_id": 0})
+    if not leave:
         raise HTTPException(status_code=404, detail="Leave not found")
-    return l
+    return leave
 
 
 # ----------------------------------------------------------------------------
@@ -2415,7 +2443,7 @@ async def muster_athletes(mode: str = "checkin", user: dict = Depends(get_curren
         {"status": "approved", "start_date": {"$lte": today}, "end_date": {"$gte": today}},
         {"_id": 0, "user_id": 1},
     ).to_list(2000)
-    on_leave_ids = {l["user_id"] for l in on_leave}
+    on_leave_ids = {leave["user_id"] for leave in on_leave}
 
     out: List[dict] = []
     for s in athletes:
@@ -2459,7 +2487,7 @@ async def muster_checkin_bulk(body: MusterBulkIn, user: dict = Depends(get_curre
         if await db.attendance.find_one({"user_id": sid, "check_out_at": None}):
             skipped.append({"id": sid, "name": athlete["full_name"], "reason": "already checked in"})
             continue
-        late, late_min = compute_late(office, athlete, now)
+        late, late_min = compute_late(office, athlete, now, camp=await _active_camp_for(athlete, now, office))
         att = {
             "id": str(uuid.uuid4()),
             "user_id": sid,
@@ -2550,7 +2578,8 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
             if out_iso and in_iso:
                 try:
                     duration_min = max(0, int((datetime.fromisoformat(in_iso) - datetime.fromisoformat(out_iso)).total_seconds() // 60))
-                except Exception: pass
+                except Exception:
+                    pass
             overdue_min = None
             if e.get("expected_return"):
                 try:
@@ -2558,7 +2587,8 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
                     ref = datetime.fromisoformat(in_iso) if in_iso else now
                     diff = int((ref - er).total_seconds() // 60)
                     overdue_min = max(0, diff)
-                except Exception: pass
+                except Exception:
+                    pass
             excs_out.append({
                 "id": e.get("id"),
                 "out_at": out_iso,
@@ -2863,11 +2893,14 @@ async def admin_activity(admin: dict = Depends(require_admin)):
     # Resolve member names in one batch.
     user_ids = set()
     for a in all_atts:
-        if a.get("user_id"): user_ids.add(a["user_id"])
-    for l in leaves_today:
-        if l.get("user_id"): user_ids.add(l["user_id"])
+        if a.get("user_id"):
+            user_ids.add(a["user_id"])
+    for leave in leaves_today:
+        if leave.get("user_id"):
+            user_ids.add(leave["user_id"])
     for d in devices_today:
-        if d.get("user_id"): user_ids.add(d["user_id"])
+        if d.get("user_id"):
+            user_ids.add(d["user_id"])
     users = await db.users.find({"id": {"$in": list(user_ids)}}, {"_id": 0}).to_list(2000)
     umap = {u["id"]: u for u in users}
 
@@ -2931,22 +2964,22 @@ async def admin_activity(admin: dict = Depends(require_admin)):
                     "detail": "Returned" + (f" · {int((datetime.fromisoformat(e['in_at']) - datetime.fromisoformat(e['out_at'])).total_seconds() // 60)}m away" if e.get("out_at") else ""),
                 })
 
-    for l in leaves_today:
-        u = umap.get(l.get("user_id"), {})
+    for leave in leaves_today:
+        u = umap.get(leave.get("user_id"), {})
         events.append({
-            "id": f"leave-{l['id']}",
+            "id": f"leave-{leave['id']}",
             "type": "application",
-            "subtype": l.get("type"),  # leave | tour
-            "at": l.get("created_at"),
-            "member_id": l.get("user_id"),
+            "subtype": leave.get("type"),  # leave | tour
+            "at": leave.get("created_at"),
+            "member_id": leave.get("user_id"),
             "member_name": u.get("full_name", "Unknown"),
             "member_category": u.get("category"),
             "member_rank": u.get("rank"),
             "photo": u.get("photo_thumb") or u.get("photo"),
-            "detail": f"Applied for {l.get('type', 'leave')}"
-                      + (f" · {l.get('start_date')} → {l.get('end_date')}" if l.get("start_date") else "")
-                      + (f" · {l.get('location')}" if l.get("location") else ""),
-            "status": l.get("status"),
+            "detail": f"Applied for {leave.get('type', 'leave')}"
+                      + (f" · {leave.get('start_date')} → {leave.get('end_date')}" if leave.get("start_date") else "")
+                      + (f" · {leave.get('location')}" if leave.get("location") else ""),
+            "status": leave.get("status"),
         })
 
     for d in devices_today:
@@ -3043,14 +3076,14 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1},
     ).to_list(10000)
     leaves_by_user: dict = {}
-    for l in leaves:
-        leaves_by_user.setdefault(l["user_id"], []).append(l)
+    for leave in leaves:
+        leaves_by_user.setdefault(leave["user_id"], []).append(leave)
 
     def _count_leave_days(user_leaves: List[dict]) -> int:
         days = set()
-        for l in user_leaves:
-            ls = max(date.fromisoformat(l["start_date"]), sd)
-            le = min(date.fromisoformat(l["end_date"]), ed)
+        for leave in user_leaves:
+            ls = max(date.fromisoformat(leave["start_date"]), sd)
+            le = min(date.fromisoformat(leave["end_date"]), ed)
             cur = ls
             while cur <= le:
                 days.add(cur.isoformat())
@@ -3088,11 +3121,11 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         # Compensatory off bookkeeping (within this report's date range)
         co_earned = _comp_off_earned(u, sessions)
         co_used = 0
-        for l in (leaves_by_user.get(u["id"]) or []):
-            if l.get("type") != "comp_off":
+        for leave in (leaves_by_user.get(u["id"]) or []):
+            if leave.get("type") != "comp_off":
                 continue
-            ls = max(date.fromisoformat(l["start_date"]), sd)
-            le = min(date.fromisoformat(l["end_date"]), ed)
+            ls = max(date.fromisoformat(leave["start_date"]), sd)
+            le = min(date.fromisoformat(leave["end_date"]), ed)
             cur = ls
             while cur <= le:
                 co_used += 1
@@ -3153,12 +3186,12 @@ async def payroll_report(month: Optional[str] = None, admin: dict = Depends(requ
         "start_date": {"$gte": f"{y}-01-01", "$lte": f"{y}-12-31"},
     }, {"_id": 0}).to_list(20000)
     ytd_taken: dict = {}
-    for l in leaves:
+    for leave in leaves:
         try:
-            n = (date.fromisoformat(l["end_date"]) - date.fromisoformat(l["start_date"])).days + 1
+            n = (date.fromisoformat(leave["end_date"]) - date.fromisoformat(leave["start_date"])).days + 1
         except Exception:
             n = 1
-        ytd_taken[l["user_id"]] = ytd_taken.get(l["user_id"], 0) + n
+        ytd_taken[leave["user_id"]] = ytd_taken.get(leave["user_id"], 0) + n
     for r in rows:
         opening = opening_map.get(r["member_id"], 0.0)
         taken = float(ytd_taken.get(r["member_id"], 0))
@@ -3180,8 +3213,8 @@ async def daily_report(on: Optional[str] = None, user: dict = Depends(get_curren
         "end_date": {"$gte": on},
     }, {"_id": 0}).to_list(1000)
     leaves = await enrich_leaves(leaves)
-    on_leave = [l for l in leaves if l["type"] == "leave"]
-    on_tour = [l for l in leaves if l["type"] == "tour"]
+    on_leave = [leave for leave in leaves if leave["type"] == "leave"]
+    on_tour = [leave for leave in leaves if leave["type"] == "tour"]
     return {"date": on, "on_leave": on_leave, "on_tour": on_tour}
 
 
@@ -3255,8 +3288,8 @@ async def export_daily(on: Optional[str] = None, fmt: str = "csv", user: dict = 
     }, {"_id": 0}).to_list(1000)
     leaves = await enrich_leaves(leaves)
     headers = ["Name", "Type", "Location", "From", "Till", "Reason"]
-    table = [[l["member_name"], l["type"].title(), l.get("location") or "-",
-              l["start_date"], l["end_date"], l.get("reason") or "-"] for l in leaves]
+    table = [[leave["member_name"], leave["type"].title(), leave.get("location") or "-",
+              leave["start_date"], leave["end_date"], leave.get("reason") or "-"] for leave in leaves]
     if fmt == "pdf":
         pdf = _pdf_from_table("Daily Leave & Tour Report", headers, table, f"Date: {on}")
         return Response(content=pdf, media_type="application/pdf",
@@ -3295,7 +3328,9 @@ async def health():
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=False,
-    allow_origins=["*"],
+    allow_origins=[
+        o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()
+    ] or ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

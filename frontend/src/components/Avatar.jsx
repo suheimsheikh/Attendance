@@ -1,13 +1,22 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { initials } from "../utils";
 
 export default function Avatar({ name, photo, size = 40, ring = null }) {
   const dim = `${size}px`;
-  if (photo) {
+  // Track whether the provided photo URL/data URL failed to load. If yes, we
+  // gracefully fall back to the initials block — broken-image glyphs look bad
+  // on the Presence board.
+  const [broken, setBroken] = useState(false);
+  // Reset broken state when the photo prop changes (e.g. after admin uploads
+  // a replacement) so we don't get stuck showing initials forever.
+  useEffect(() => { setBroken(false); }, [photo]);
+
+  if (photo && !broken) {
     return (
       <img
         src={photo}
         alt={name || ""}
+        onError={() => setBroken(true)}
         style={{
           width: dim,
           height: dim,

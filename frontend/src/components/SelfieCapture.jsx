@@ -56,7 +56,16 @@ export default function SelfieCapture({ title = "Take a selfie", subtitle, facin
     const sy = (h - side) / 2;
     const c = document.createElement("canvas");
     c.width = 320; c.height = 320;
-    c.getContext("2d").drawImage(v, sx, sy, side, side, 0, 0, 320, 320);
+    const ctx = c.getContext("2d");
+    // Mirror the canvas when using the front camera so the captured photo
+    // matches what the user just saw in the preview. Without this the saved
+    // image is left-right flipped vs the on-screen preview, which is jarring
+    // (text on shirts/IDs appears reversed).
+    if (facingMode === "user") {
+      ctx.translate(320, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(v, sx, sy, side, side, 0, 0, 320, 320);
     setPreview(c.toDataURL("image/jpeg", 0.82));
   };
 

@@ -16,15 +16,30 @@ from __future__ import annotations
 import json
 import logging
 import os
-import random
 from datetime import date, datetime, timezone
 from typing import Any, Dict, Optional
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
+
+try:
+    # Top-level import keeps the LLM SDK out of the request hot-path. Falling
+    # back gracefully — if the SDK isn't installed the endpoint still returns
+    # the static fallback pool.
+    from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
+    _LLM_AVAILABLE = True
+except Exception:  # pragma: no cover
+    LlmChat = None  # type: ignore
+    UserMessage = None  # type: ignore
+    _LLM_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["daily-content"])
+
+# Default office tz — matches server.py's DEFAULT_TZ. We read the real timezone
+# from the office config doc per-request so academies in other cities work too.
+DEFAULT_TZ = "Asia/Kolkata"
 
 
 # ---------------------------------------------------------------------------
@@ -68,8 +83,19 @@ FALLBACK_WORDS = [
 ]
 
 
-def _today_str() -> str:
-    return date.today().isoformat()
+def _office_today(office: Optional[dict]) -> date:
+    """Calendar date in the office's local timezone — so the daily content
+    flips at office midnight (not at server-host UTC midnight)."""
+    tz_name = (office or {}).get("timezone") or DEFAULT_TZ
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo(DEFAULT_TZ)
+    return datetime.now(tz).date()
+
+
+def _today_str(office: Optional[dict] = None) -> str:
+    return _office_today(office).isoformat()
 
 
 def _kind_for(d: date) -> str:
@@ -81,14 +107,9 @@ def _kind_for(d: date) -> str:
 # ---------------------------------------------------------------------------
 # LLM call — Gemini via Emergent universal key. Single short request.
 # ---------------------------------------------------------------------------
-async def _generate_quote_with_llm() -> Optional[Dict[str, Any]]:
+async def _generate_quote_with_llm(today: str) -> Optional[Dict[str, Any]]:
     key = os.environ.get("EMERGENT_LLM_KEY")
-    if not key:
-        return None
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-    except Exception as exc:  # pragma: no cover - import guard
-        logger.warning("emergentintegrations not available: %s", exc)
+    if not key or not _LLM_AVAILABLE:
         return None
 
     system = (
@@ -107,7 +128,7 @@ async def _generate_quote_with_llm() -> Optional[Dict[str, Any]]:
     try:
         chat = LlmChat(
             api_key=key,
-            session_id=f"daily-quote-{_today_str()}",
+            session_id=f"daily-quote-{today}",
             system_message=system,
         ).with_model("gemini", "gemini-3.1-pro-preview")
         text = await chat.send_message(UserMessage(text=prompt))
@@ -117,14 +138,9 @@ async def _generate_quote_with_llm() -> Optional[Dict[str, Any]]:
         return None
 
 
-async def _generate_word_with_llm() -> Optional[Dict[str, Any]]:
+async def _generate_word_with_llm(today: str) -> Optional[Dict[str, Any]]:
     key = os.environ.get("EMERGENT_LLM_KEY")
-    if not key:
-        return None
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-    except Exception as exc:  # pragma: no cover
-        logger.warning("emergentintegrations not available: %s", exc)
+    if not key or not _LLM_AVAILABLE:
         return None
 
     system = (
@@ -144,7 +160,7 @@ async def _generate_word_with_llm() -> Optional[Dict[str, Any]]:
     try:
         chat = LlmChat(
             api_key=key,
-            session_id=f"daily-word-{_today_str()}",
+            session_id=f"daily-word-{today}",
             system_message=system,
         ).with_model("gemini", "gemini-3.1-pro-preview")
         text = await chat.send_message(UserMessage(text=prompt))
@@ -184,8 +200,12 @@ def make_router(db) -> APIRouter:
 
     @router.get("/daily-content")
     async def daily_content():
-        today = _today_str()
-        kind = _kind_for(date.today())
+        # Use the office's local date so the quote/word flips at office
+        # midnight (e.g. 00:00 IST) — not when the server-host UTC day rolls.
+        office = await db.config.find_one({"id": "office"}, {"_id": 0, "timezone": 1})
+        today_date = _office_today(office)
+        today = today_date.isoformat()
+        kind = _kind_for(today_date)
         cached = await db.daily_content.find_one({"date": today, "kind": kind}, {"_id": 0})
         if cached:
             return cached
@@ -195,8 +215,8 @@ def make_router(db) -> APIRouter:
         source = "llm"
         try:
             generated = (
-                await _generate_word_with_llm() if kind == "word"
-                else await _generate_quote_with_llm()
+                await _generate_word_with_llm(today) if kind == "word"
+                else await _generate_quote_with_llm(today)
             )
         except Exception as exc:  # defensive: should be caught inside helpers
             logger.exception("daily-content LLM dispatch failed: %s", exc)
@@ -215,7 +235,7 @@ def make_router(db) -> APIRouter:
             pool = FALLBACK_WORDS if kind == "word" else FALLBACK_QUOTES
             # Deterministic-per-day fallback so users don't see two different
             # fallback items if they refresh.
-            generated = dict(pool[date.today().toordinal() % len(pool)])
+            generated = dict(pool[today_date.toordinal() % len(pool)])
 
         doc = {
             "date": today,

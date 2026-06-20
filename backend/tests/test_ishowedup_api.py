@@ -209,7 +209,7 @@ def test_13_create_and_get_my_leave(base_url, shared_state):
     r2 = requests.get(f"{base_url}/api/leaves/mine",
                       headers={"Authorization": f"Bearer {token}"}, timeout=30)
     assert r2.status_code == 200
-    ids = [l["id"] for l in r2.json()]
+    ids = [item["id"] for item in r2.json()]
     assert leave["id"] in ids
 
 
@@ -217,7 +217,7 @@ def test_14_admin_list_and_approve_leave(admin_client, base_url, shared_state):
     r = admin_client.get(f"{base_url}/api/leaves?status_filter=pending", timeout=30)
     assert r.status_code == 200, r.text
     pending = r.json()
-    ids = {l["id"] for l in pending}
+    ids = {item["id"] for item in pending}
     assert shared_state["leave_id"] in ids
 
     lid = shared_state["leave_id"]

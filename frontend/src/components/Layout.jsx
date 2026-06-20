@@ -40,6 +40,15 @@ export default function Layout() {
   const isAdmin = user?.role === "admin";
   const canMuster = isAdmin || user?.category === "coach";
 
+  // Lock body scroll while the mobile drawer is open so the page underneath
+  // doesn't scroll behind the overlay (fixes a "scroll bleed" on iOS Safari).
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
   const handleLogout = () => {
     logout();
     nav("/login");
