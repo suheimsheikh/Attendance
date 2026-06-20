@@ -292,15 +292,40 @@ function CampForm({ initial, onClose, onSaved }) {
         </div>
 
         <div>
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
             <label className="iu-label !m-0">Enrolled athletes ({form.member_ids.length})</label>
-            <input
-              data-testid="cf-member-search"
-              value={memberSearch}
-              onChange={(e) => setMemberSearch(e.target.value)}
-              placeholder="Search by name…"
-              className="iu-input !h-8 !text-xs !py-1 !w-44"
-            />
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                data-testid="cf-select-all"
+                disabled={filteredMembers.length === 0}
+                onClick={() => set("member_ids", Array.from(new Set([...form.member_ids, ...filteredMembers.map((m) => m.id)])))}
+                className="px-2 h-7 rounded text-[11px] font-bold bg-violet-50 text-violet-700 hover:bg-violet-100 disabled:opacity-40 disabled:hover:bg-violet-50"
+                title={form.institution ? `Select all visible (${filteredMembers.length})` : "Select all matching the current filter"}
+              >
+                Select all{form.institution ? ` ${form.institution}` : ""}
+              </button>
+              <button
+                type="button"
+                data-testid="cf-deselect-all"
+                disabled={form.member_ids.length === 0}
+                onClick={() => {
+                  const visible = new Set(filteredMembers.map((m) => m.id));
+                  set("member_ids", form.member_ids.filter((id) => !visible.has(id)));
+                }}
+                className="px-2 h-7 rounded text-[11px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-slate-100"
+                title="Deselect visible athletes"
+              >
+                Clear visible
+              </button>
+              <input
+                data-testid="cf-member-search"
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder="Search by name…"
+                className="iu-input !h-8 !text-xs !py-1 !w-44"
+              />
+            </div>
           </div>
           <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto divide-y divide-slate-100">
             {filteredMembers.length === 0 ? (
