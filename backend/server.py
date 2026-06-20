@@ -537,6 +537,82 @@ async def shutdown_db_client():
 
 
 # ----------------------------------------------------------------------------
+# Midnight auto-checkout
+# Members who forget to check out leave open sessions hanging across days.
+# A background task closes any open session whose date < today (office-local)
+# every midnight, stamping it as auto_checkout and setting hours from
+# check_in_at to 23:59:59 of the original day.
+# ----------------------------------------------------------------------------
+async def _close_stale_open_sessions(reason: str) -> int:
+    """Close every attendance session with check_out_at=None whose `date` is
+    before today in office-local time. Returns count of sessions closed."""
+    office = await db.config.find_one({"id": "office"}, {"_id": 0})
+    today_str = local_date_str(office)
+    tz = office_tz(office)
+    cur = db.attendance.find({"check_out_at": None, "date": {"$lt": today_str}}, {"_id": 0})
+    count = 0
+    async for sess in cur:
+        try:
+            close_local = datetime.fromisoformat(sess["date"] + "T23:59:59").replace(tzinfo=tz)
+            close_utc = close_local.astimezone(timezone.utc)
+            ci = datetime.fromisoformat(sess["check_in_at"])
+            hours = round(max(0.0, (close_utc - ci).total_seconds() / 3600), 2)
+        except Exception:
+            close_utc = now_utc()
+            hours = 0
+        await db.attendance.update_one(
+            {"id": sess["id"]},
+            {"$set": {
+                "check_out_at": close_utc.isoformat(),
+                "auto_checkout": True,
+                "auto_checkout_reason": reason,
+                "hours": hours,
+            }},
+        )
+        count += 1
+    return count
+
+
+async def _midnight_auto_checkout_loop():
+    """Forever: sleep until the next office-local midnight (+10s safety buffer),
+    then run the cleanup. Resilient — caught exceptions don't kill the loop."""
+    import asyncio
+    while True:
+        try:
+            office = await db.config.find_one({"id": "office"}, {"_id": 0})
+            tz = office_tz(office)
+            now_local = datetime.now(tz)
+            next_run = (now_local + timedelta(days=1)).replace(hour=0, minute=0, second=10, microsecond=0)
+            wait = max(60, (next_run - now_local).total_seconds())
+            await asyncio.sleep(wait)
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception("midnight scheduler tick failed; retrying in 1h")
+            await asyncio.sleep(3600)
+            continue
+        try:
+            n = await _close_stale_open_sessions("midnight_cron")
+            logger.info("midnight auto-checkout: closed %d stale session(s)", n)
+        except Exception:
+            logger.exception("midnight auto-checkout job failed")
+
+
+@app.on_event("startup")
+async def _start_midnight_scheduler():
+    """Catch up at startup (in case the server was down across midnight), then
+    spawn the recurring loop."""
+    import asyncio
+    try:
+        n = await _close_stale_open_sessions("startup_catchup")
+        if n:
+            logger.info("startup catch-up auto-checkout: closed %d stale session(s)", n)
+    except Exception:
+        logger.exception("startup catch-up auto-checkout failed")
+    asyncio.create_task(_midnight_auto_checkout_loop())
+
+
+# ----------------------------------------------------------------------------
 # Auth routes
 # ----------------------------------------------------------------------------
 @api_router.post("/auth/login")
