@@ -185,7 +185,9 @@ def phone_key(raw: str) -> str:
 
 
 OVERTIME_THRESHOLD_MIN = 30  # only flag OT when delta >= this many minutes
-OVERTIME_CATEGORIES = {"staff"}  # only staff get OT tracked
+OVERTIME_CATEGORIES = {"staff"}  # OT policy: ONLY staff accrue OT. Athletes,
+                                 # coaches and executives never accumulate OT
+                                 # minutes regardless of their check-in time.
 
 
 def _hm_to_minutes(hm: Optional[str]) -> Optional[int]:

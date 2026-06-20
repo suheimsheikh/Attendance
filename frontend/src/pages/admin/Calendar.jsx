@@ -31,6 +31,12 @@ export default function Calendar() {
   const [regattas, setRegattas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingRegatta, setEditingRegatta] = useState(null);
+  const [activeDay, setActiveDay] = useState(null);     // YYYY-MM-DD
+  const [members, setMembers] = useState([]);
+
+  useEffect(() => {
+    api.get("/members").then(setMembers).catch(() => {});
+  }, []);
 
   const monthStart = useMemo(() => startOfMonth(cursor), [cursor]);
   const monthEnd = useMemo(() => endOfMonth(cursor), [cursor]);
@@ -157,11 +163,13 @@ export default function Calendar() {
               const dayData = byDay[key];
               const camps_ = dayData?.camps || [];
               const regs_  = dayData?.regattas || [];
+              const hasEntries = camps_.length + regs_.length > 0;
               return (
                 <div
                   key={key + "-" + idx}
                   data-testid={`cal-day-${key}`}
-                  className={`min-h-[88px] border-b border-r border-slate-100 p-1.5 ${inMonth ? "bg-white" : "bg-slate-50/50 text-slate-400"} ${isToday ? "ring-2 ring-sky-400 ring-inset" : ""}`}
+                  onClick={() => { if (hasEntries) setActiveDay(key); }}
+                  className={`min-h-[88px] border-b border-r border-slate-100 p-1.5 ${inMonth ? "bg-white" : "bg-slate-50/50 text-slate-400"} ${isToday ? "ring-2 ring-sky-400 ring-inset" : ""} ${hasEntries ? "cursor-pointer hover:bg-sky-50" : ""}`}
                 >
                   <div className={`text-[11px] font-bold mb-1 ${isToday ? "text-sky-700" : ""}`}>{d.getDate()}</div>
                   <div className="space-y-0.5">
@@ -238,6 +246,135 @@ export default function Calendar() {
           onSaved={() => { setEditingRegatta(null); load(); }}
         />
       )}
+      {activeDay && (
+        <DayDetailModal
+          dateKey={activeDay}
+          dayData={byDay[activeDay]}
+          members={members}
+          onClose={() => setActiveDay(null)}
+          onEditRegatta={(r) => { setActiveDay(null); setEditingRegatta(r); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DayDetailModal({ dateKey, dayData, members, onClose, onEditRegatta }) {
+  useEscape(onClose);
+  const camps_ = dayData?.camps || [];
+  const regs_  = dayData?.regattas || [];
+  const memberById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members]);
+
+  const headerDate = new Date(dateKey + "T00:00:00").toLocaleDateString(undefined, {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+
+  // Resolve "enrolled count" per camp — explicit member_ids OR all athletes in
+  // the institution (mirrors the backend `camp_applies_to` rule).
+  const enrolledFor = (c) => {
+    if ((c.member_ids || []).length) return c.member_ids.length;
+    if (c.institution) return members.filter((m) => m.category === "athlete" && (m.institution || "") === c.institution).length;
+    return 0;
+  };
+  const enrolledMembersFor = (c) => {
+    if ((c.member_ids || []).length) {
+      return c.member_ids.map((id) => memberById[id]).filter(Boolean);
+    }
+    if (c.institution) {
+      return members.filter((m) => m.category === "athlete" && (m.institution || "") === c.institution);
+    }
+    return [];
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        data-testid="day-detail-modal"
+        className="bg-white w-full md:max-w-2xl rounded-t-2xl md:rounded-2xl p-6 max-h-[92vh] overflow-y-auto"
+      >
+        <header className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-extrabold">{headerDate}</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {camps_.length} camp{camps_.length === 1 ? "" : "s"} · {regs_.length} regatta{regs_.length === 1 ? "" : "s"} active
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
+        </header>
+
+        {camps_.length > 0 && (
+          <section className="mb-6">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 mb-2 flex items-center gap-1">
+              <Tent size={11} /> Camps
+            </h3>
+            <div className="space-y-2">
+              {camps_.map((c) => {
+                const count = enrolledFor(c);
+                const sampleMembers = enrolledMembersFor(c).slice(0, 6);
+                return (
+                  <div key={c.id} data-testid={`day-camp-${c.id}`} className="border border-emerald-200 bg-emerald-50/40 rounded-lg p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-bold text-slate-900">{c.name}</div>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                        {count} enrolled
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-600 mt-1 flex flex-wrap gap-x-3">
+                      <span>{c.start_time} – {c.end_time}</span>
+                      {c.institution && <span className="font-semibold">{c.institution}</span>}
+                      {c.late_grace_minutes != null && <span>grace {c.late_grace_minutes}m</span>}
+                    </div>
+                    {sampleMembers.length > 0 && (
+                      <div className="text-[11px] text-slate-500 mt-2">
+                        {sampleMembers.map((m) => m.full_name).join(", ")}
+                        {count > sampleMembers.length && <> + {count - sampleMembers.length} more</>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {regs_.length > 0 && (
+          <section>
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-violet-700 mb-2 flex items-center gap-1">
+              <Sailboat size={11} /> Regattas
+            </h3>
+            <div className="space-y-2">
+              {regs_.map((r) => {
+                const st = LEVEL_STYLE[r.level] || LEVEL_STYLE.club;
+                return (
+                  <div key={r.id} data-testid={`day-regatta-${r.id}`} className="border border-slate-200 rounded-lg p-3 flex items-center gap-3">
+                    <span className={`inline-flex items-center px-2 h-5 rounded text-[10px] font-bold ${st.chip}`}>{st.label}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-900 truncate">{r.name}</div>
+                      <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3">
+                        <span>{r.start_date} → {r.end_date}</span>
+                        {r.location && <span>{r.location}{r.country ? `, ${r.country}` : ""}</span>}
+                        {r.host_org && <span className="italic">{r.host_org}</span>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onEditRegatta(r)}
+                      data-testid={`day-regatta-edit-${r.id}`}
+                      className="iu-btn-secondary !px-3 !h-8 text-xs"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {camps_.length === 0 && regs_.length === 0 && (
+          <div className="py-8 text-center text-sm text-slate-400">Nothing scheduled for this day.</div>
+        )}
+      </div>
     </div>
   );
 }
