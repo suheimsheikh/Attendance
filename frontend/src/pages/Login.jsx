@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Phone, Mail, Lock, ArrowRight, Loader2, ChevronDown, ChevronUp, Hourglass, RefreshCw, User, Tag } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "../auth";
+import { useAuth, getRememberedUser, forgetRememberedUser } from "../auth";
 import { api, ApiError, setToken } from "../api";
 import { getDeviceId, getDeviceInfo } from "../utils";
+import Avatar from "../components/Avatar";
 
 export default function Login() {
   const nav = useNavigate();
@@ -13,6 +14,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState(false);
   const [needsProfile, setNeedsProfile] = useState(false);  // new-user follow-up form
+  const [remembered, setRemembered] = useState(() => getRememberedUser());
   const [showAdmin, setShowAdmin] = useState(false);
   const pollRef = useRef(null);
   const deviceIdRef = useRef("");
@@ -148,6 +150,31 @@ export default function Login() {
   return (
     <Shell>
       <div>
+        {remembered && (remembered.full_name || remembered.photo) && (
+          <div
+            data-testid="login-welcome-back"
+            className="mb-6 p-4 rounded-2xl bg-gradient-to-br from-sky-50 via-white to-emerald-50 ring-1 ring-sky-200/70 flex items-center gap-3"
+          >
+            <Avatar
+              name={remembered.full_name || "Member"}
+              photo={remembered.photo}
+              size={56}
+              ring="#0EA5E9"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-wider font-bold text-sky-700">Welcome back</div>
+              <div className="text-base font-extrabold text-slate-900 truncate">{remembered.full_name || "Member"}</div>
+              <button
+                type="button"
+                data-testid="login-not-me"
+                onClick={() => { forgetRememberedUser(); setRemembered(null); }}
+                className="text-[11px] text-slate-500 hover:text-slate-800 underline mt-0.5"
+              >
+                Not me?
+              </button>
+            </div>
+          </div>
+        )}
         <h2 className="text-3xl font-extrabold tracking-tight">Sign in</h2>
         <p className="text-slate-500 mt-2 text-sm">
           Enter your phone number — your admin approves your browser once, then you&apos;re in for good.
