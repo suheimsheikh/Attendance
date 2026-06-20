@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 # Local modules — imported up-top so `_active_camp_for` (used during request
 # handling for check-in late computation) can reference them.
 import camps as _camps_module
+import regattas as _regattas_module
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -3139,6 +3140,10 @@ app.include_router(_guests_router(db, require_coach_or_admin, local_date_str))
 # Camps — scheduling overlay for institutional camps. Imported at the top of
 # this file so the helpers can be reused by the late computation paths above.
 app.include_router(_camps_module.make_router(db, require_admin))
+
+# Regattas — national / international sailing events. Shown alongside camps on
+# the unified Calendar view.
+app.include_router(_regattas_module.make_router(db, require_admin))
 
 
 # Lightweight keep-alive endpoint — no auth, no DB hit. Plug an UptimeRobot
