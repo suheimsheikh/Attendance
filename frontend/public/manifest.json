@@ -1,0 +1,25 @@
+{
+  "name": "I Showed Up — Yacht Club of Hyderabad",
+  "short_name": "I Showed Up",
+  "description": "Attendance, muster roll and presence board for the Yacht Club of Hyderabad academy.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0EA5E9",
+  "background_color": "#FFFFFF",
+  "lang": "en-IN",
+  "categories": ["productivity", "education"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Check In / Out",   "short_name": "Check In", "url": "/",         "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Muster Roll",      "short_name": "Muster",   "url": "/muster",   "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Presence Board",   "short_name": "Presence", "url": "/presence", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

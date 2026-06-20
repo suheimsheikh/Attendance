@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
+import InstallPrompt from "./InstallPrompt";
 
 const NAV_MEMBER_BEFORE_MUSTER = [
   { to: "/", label: "Check In / Out", icon: ScanLine, end: true },
@@ -134,6 +135,7 @@ export default function Layout() {
         </main>
       </div>
       <StaleSessionPrompt />
+      <InstallPrompt />
     </div>
   );
 }

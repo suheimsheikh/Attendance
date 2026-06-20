@@ -21,3 +21,14 @@ root.render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
+
+// Register service worker for PWA (install + offline shell). Only in production
+// builds — CRA's dev server doesn't serve sw.js reliably, and registering it in
+// dev can cache a stale dev bundle.
+if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => {
+      console.debug("SW registration failed:", err);
+    });
+  });
+}
