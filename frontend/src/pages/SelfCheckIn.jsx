@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { getLocation, speakLateMessage } from "../utils";
 import SelfieCapture from "../components/SelfieCapture";
 import DailyContent from "../components/DailyContent";
+import BrandHero from "../components/BrandHero";
 
 function hmNow() {
   const d = new Date();
@@ -164,8 +165,11 @@ export default function SelfCheckIn() {
 
   return (
     <div className="p-4 md:p-8 max-w-xl mx-auto">
-      <header className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Check In / Out</h1>
+      <BrandHero />
+
+      <header className="mb-6 text-center md:text-left">
+        <h2 className="text-lg md:text-xl font-bold tracking-tight md:hidden">Check In / Out</h2>
+        <h2 className="hidden md:block text-2xl md:text-3xl font-extrabold tracking-tight">Check In / Out</h2>
         <p className="text-slate-500 text-sm mt-1">
           {onTempOut
             ? "You're currently stepped out. Tap Return when you're back."
