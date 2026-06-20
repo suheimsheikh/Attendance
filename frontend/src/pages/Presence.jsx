@@ -37,6 +37,24 @@ export default function Presence() {
   const [guests, setGuests] = useState({ active: [], completed: [], active_count: 0 });
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  // Tap-to-zoom: holds { id, full_name, photo, loading } for the avatar modal.
+  // We seed with the thumbnail instantly, then swap in the full-res photo.
+  const [zoomMember, setZoomMember] = useState(null);
+
+  const openZoom = useCallback(async (member) => {
+    if (!member?.photo) return;
+    setZoomMember({ id: member.id, full_name: member.full_name, photo: member.photo, loading: true });
+    try {
+      const res = await api.get(`/members/${member.id}/photo-full`);
+      setZoomMember((cur) =>
+        cur && cur.id === member.id
+          ? { ...cur, photo: res.photo || cur.photo, loading: false }
+          : cur
+      );
+    } catch {
+      setZoomMember((cur) => (cur && cur.id === member.id ? { ...cur, loading: false } : cur));
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -247,6 +265,7 @@ export default function Presence() {
               coachMobile={currentUser?.mobile}
               onSent={load}
               onRowDoubleClick={isAdmin ? openEdit : null}
+              onZoom={openZoom}
             />
           ))}
         </div>
@@ -265,11 +284,14 @@ export default function Presence() {
           onSaved={() => { setEditingMember(null); load(); }}
         />
       )}
+      {zoomMember && (
+        <PhotoZoomModal member={zoomMember} onClose={() => setZoomMember(null)} />
+      )}
     </div>
   );
 }
 
-function Column({ col, members, displayList, adminContacts, coachMobile, onSent, onRowDoubleClick }) {
+function Column({ col, members, displayList, adminContacts, coachMobile, onSent, onRowDoubleClick, onZoom }) {
   const Icon = col.icon;
   // Per-category breakdown shown under the column label so coaches can see
   // "how many Athletes / Coaches / Staff" in each presence bucket at a glance.
@@ -339,6 +361,7 @@ function Column({ col, members, displayList, adminContacts, coachMobile, onSent,
                 coachMobile={coachMobile}
                 onSent={onSent}
                 onDoubleClick={entry.visible ? onRowDoubleClick : null}
+                onZoom={onZoom}
                 hidden={!entry.visible}
               />
             ))
@@ -356,6 +379,7 @@ function Column({ col, members, displayList, adminContacts, coachMobile, onSent,
               coachMobile={coachMobile}
               onSent={onSent}
               onDoubleClick={onRowDoubleClick}
+              onZoom={onZoom}
             />
           ))
         )}
@@ -364,7 +388,7 @@ function Column({ col, members, displayList, adminContacts, coachMobile, onSent,
   );
 }
 
-function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick, hidden }) {
+function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick, onZoom, hidden }) {
   const lateBg = m.late ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50";
   const notifyDueType = m.notify_due?.not_arrived
     ? "not_arrived"
@@ -386,7 +410,19 @@ function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, 
       style={hiddenStyle}
       aria-hidden={hidden ? true : undefined}
     >
-      <Avatar name={m.full_name} photo={m.photo} size={34} ring={columnKey === "on_campus" ? accent : null} />
+      {!hidden && m.photo && onZoom ? (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onZoom(m); }}
+          data-testid={`presence-avatar-zoom-${m.id}`}
+          title="Tap to enlarge photo"
+          className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-sky-400 transition hover:opacity-90 cursor-zoom-in"
+        >
+          <Avatar name={m.full_name} photo={m.photo} size={34} ring={columnKey === "on_campus" ? accent : null} />
+        </button>
+      ) : (
+        <Avatar name={m.full_name} photo={m.photo} size={34} ring={columnKey === "on_campus" ? accent : null} />
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-1.5">
           <div className={`text-[13px] font-semibold leading-tight truncate flex-1 ${m.late ? "text-red-700" : "text-slate-900"}`}>{m.full_name}</div>
@@ -599,6 +635,52 @@ function GeoChip({ label, tone, ...rest }) {
         <span className={`font-bold ${colour}`}>{rest.verifierName}</span>
       )}
     </span>
+  );
+}
+
+function PhotoZoomModal({ member, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+      data-testid="photo-zoom-overlay"
+    >
+      <div
+        className="relative max-w-md w-full flex flex-col items-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          data-testid="photo-zoom-close"
+          className="absolute -top-2 -right-2 z-10 w-9 h-9 rounded-full bg-white text-slate-700 shadow-lg flex items-center justify-center hover:bg-slate-100 transition"
+          aria-label="Close"
+        >
+          <X size={18} />
+        </button>
+        <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-2xl w-full aspect-square flex items-center justify-center">
+          <img
+            src={member.photo}
+            alt={member.full_name || ""}
+            data-testid="photo-zoom-image"
+            className="w-full h-full object-cover"
+          />
+          {member.loading && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <RefreshCw size={28} className="text-white/80 animate-spin" />
+            </div>
+          )}
+        </div>
+        <div className="mt-3 text-center text-white font-semibold text-sm" data-testid="photo-zoom-name">
+          {member.full_name}
+        </div>
+      </div>
+    </div>
   );
 }
 

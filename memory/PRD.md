@@ -139,3 +139,6 @@
 
 ## Test Credentials
 See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or phone `9849002111` for OTP-bypass).
+
+- **Tap-to-zoom avatars on Presence Board (June 2026)**: New endpoint `GET /api/members/{id}/photo-full` (any authenticated user) returns the full-resolution photo on demand (falls back to thumbnail if no original). Presence rows wrap the avatar in a clickable button (`presence-avatar-zoom-{id}`); clicking opens a full-screen `PhotoZoomModal` that seeds with the thumbnail instantly then swaps in the full-res image, with member name, close button (Esc / backdrop click), and a loading spinner. Keeps list payloads light while letting coaches/admins inspect a member's face up close. Verified end-to-end via screenshot tool.
+

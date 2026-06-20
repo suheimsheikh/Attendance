@@ -1017,6 +1017,23 @@ async def get_member(member_id: str, admin: dict = Depends(require_admin)):
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
 
 
+@api_router.get("/members/{member_id}/photo-full")
+async def get_member_photo_full(member_id: str, user: dict = Depends(get_current_user)):
+    """Return the full-resolution photo for a member, used by tap-to-zoom on the
+    Presence Board. Lists only carry the 96px thumbnail to save bandwidth; this
+    endpoint serves the original on demand. Any authenticated user can view."""
+    u = await db.users.find_one(
+        {"id": member_id}, {"_id": 0, "photo": 1, "photo_thumb": 1, "full_name": 1}
+    )
+    if not u:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return {
+        "id": member_id,
+        "full_name": u.get("full_name"),
+        "photo": u.get("photo") or u.get("photo_thumb"),
+    }
+
+
 @api_router.delete("/members/{member_id}")
 async def delete_member(member_id: str, admin: dict = Depends(require_admin)):
     if member_id == admin["id"]:
