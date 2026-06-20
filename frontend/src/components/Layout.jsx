@@ -9,6 +9,7 @@ import {
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
 import InstallPrompt from "./InstallPrompt";
+import OfflineBanner from "./OfflineBanner";
 
 const NAV_MEMBER_BEFORE_MUSTER = [
   { to: "/", label: "Check In / Out", icon: ScanLine, end: true },
@@ -136,6 +137,7 @@ export default function Layout() {
       </div>
       <StaleSessionPrompt />
       <InstallPrompt />
+      <OfflineBanner />
     </div>
   );
 }

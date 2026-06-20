@@ -16,6 +16,8 @@ import jwt
 import re
 import openpyxl
 from openpyxl.utils import get_column_letter
+import base64
+from PIL import Image
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal, Tuple
@@ -167,6 +169,34 @@ def _check_photo_size(photo: Optional[str]):
             status_code=413,
             detail=f"Photo too large ({len(photo)} bytes; max {MAX_PHOTO_BYTES})",
         )
+
+
+# Thumbnail size for list views (presence board, muster, sessions, timeline).
+# 96 px keeps avatars crisp on retina while landing ~2-4 KB per photo —
+# bringing /api/presence from ~3 MB to <200 KB for a 60-member academy.
+THUMB_MAX_PX = 96
+THUMB_QUALITY = 70
+
+def _make_thumbnail(photo: Optional[str]) -> Optional[str]:
+    """Take a `data:image/...;base64,...` string and return a tiny JPEG data URL.
+    Returns None if `photo` is falsy or cannot be decoded — the caller should
+    keep the original photo as the only source in that case."""
+    if not photo or not isinstance(photo, str):
+        return None
+    try:
+        # Strip the data-URL prefix if present
+        b64 = photo.split(",", 1)[1] if photo.startswith("data:") else photo
+        raw = base64.b64decode(b64)
+        with Image.open(io.BytesIO(raw)) as im:
+            im = im.convert("RGB")
+            im.thumbnail((THUMB_MAX_PX, THUMB_MAX_PX))
+            buf = io.BytesIO()
+            im.save(buf, format="JPEG", quality=THUMB_QUALITY, optimize=True)
+            enc = base64.b64encode(buf.getvalue()).decode("ascii")
+            return f"data:image/jpeg;base64,{enc}"
+    except Exception as e:
+        logger.warning("Failed to build thumbnail: %s", e)
+        return None
 
 
 # Long-lived tokens for approved devices (passwordless phone login)
@@ -494,6 +524,20 @@ async def seed():
             {"id": u["id"]},
             {"$set": {"personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper()}},
         )
+    # Backfill photo thumbnails for any user with a profile photo but no thumb.
+    # Keeps existing members shrunk in /presence the first time the server boots
+    # after this change ships — no admin re-upload needed.
+    backfilled = 0
+    async for u in db.users.find(
+        {"photo": {"$nin": [None, ""]}, "photo_thumb": {"$in": [None, ""]}},
+        {"_id": 0, "id": 1, "photo": 1},
+    ):
+        thumb = _make_thumbnail(u.get("photo"))
+        if thumb:
+            await db.users.update_one({"id": u["id"]}, {"$set": {"photo_thumb": thumb}})
+            backfilled += 1
+    if backfilled:
+        logger.info("Backfilled %d photo thumbnails", backfilled)
     # Backfill default office timings
     await db.config.update_one(
         {"id": "office", "default_work_start": {"$exists": False}},
@@ -926,6 +970,10 @@ async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depend
     update = {k: v for k, v in body.model_dump().items() if v is not None and k != "password"}
     if body.password:
         update["hashed_password"] = hash_password(body.password)
+    # Keep `photo_thumb` in sync whenever `photo` changes (including being cleared).
+    if body.photo is not None:
+        update["photo_thumb"] = _make_thumbnail(body.photo) if body.photo else None
+        update["photo_captured_at"] = now_utc().isoformat()
     if update:
         await db.users.update_one({"id": member_id}, {"$set": update})
     u = await db.users.find_one({"id": member_id}, {"_id": 0})
@@ -1301,9 +1349,10 @@ async def my_photo_status(user: dict = Depends(get_current_user)):
 async def set_my_photo(body: dict, user: dict = Depends(get_current_user)):
     photo = body.get("photo")
     _check_photo_size(photo)
+    thumb = _make_thumbnail(photo) if photo else None
     await db.users.update_one(
         {"id": user["id"]},
-        {"$set": {"photo": photo, "photo_captured_at": now_utc().isoformat()}},
+        {"$set": {"photo": photo, "photo_thumb": thumb, "photo_captured_at": now_utc().isoformat()}},
     )
     u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
@@ -1322,10 +1371,12 @@ async def set_member_photo(member_id: str, body: dict, user: dict = Depends(get_
     target = await db.users.find_one({"id": member_id}, {"_id": 0, "id": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Member not found")
-    _check_photo_size(body.get("photo"))
+    photo = body.get("photo")
+    _check_photo_size(photo)
+    thumb = _make_thumbnail(photo) if photo else None
     await db.users.update_one(
         {"id": member_id},
-        {"$set": {"photo": body.get("photo"), "photo_captured_at": now_utc().isoformat()}},
+        {"$set": {"photo": photo, "photo_thumb": thumb, "photo_captured_at": now_utc().isoformat()}},
     )
     u = await db.users.find_one({"id": member_id}, {"_id": 0})
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
@@ -1556,6 +1607,9 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
     dist, out = geo_check(office, lat, lng, reason)
     sess = await open_session_for(target["id"])
     ts = now_utc()
+    # Build a small thumbnail of the verification photo so the Presence board
+    # can render it without pulling the full ~30 KB JPEG per member.
+    photo_thumb = _make_thumbnail(photo) if photo else None
     if sess:
         cin = datetime.fromisoformat(sess["check_in_at"])
         excursions = sess.get("excursions") or []
@@ -1572,6 +1626,7 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
         await db.attendance.update_one({"id": sess["id"]}, {"$set": {
             "check_out_at": ts.isoformat(),
             "check_out_photo": photo,
+            "check_out_photo_thumb": photo_thumb,
             "hours": hours,
             "away_minutes": int(away_s / 60),
             "excursions": excursions,
@@ -1592,7 +1647,9 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
         "check_in_at": ts.isoformat(),
         "check_out_at": None,
         "check_in_photo": photo,
+        "check_in_photo_thumb": photo_thumb,
         "check_out_photo": None,
+        "check_out_photo_thumb": None,
         "hours": None,
         "latitude": lat,
         "longitude": lng,
@@ -1853,7 +1910,7 @@ async def overtime_list(
             "member_name": u.get("full_name", "Unknown"),
             "category": u.get("category"),
             "rank": u.get("rank"),
-            "photo": u.get("photo"),
+            "photo": u.get("photo_thumb") or u.get("photo"),
             "date": r.get("date"),
             "check_in_at": r.get("check_in_at"),
             "check_out_at": r.get("check_out_at"),
@@ -1907,7 +1964,7 @@ async def presence(user: dict = Depends(get_current_user)):
     today = local_date_str(office)
     users = await db.users.find(
         {}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1,
-             "photo": 1, "work_start": 1, "work_end": 1, "institution": 1,
+             "photo_thumb": 1, "photo": 1, "work_start": 1, "work_end": 1, "institution": 1,
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1}
     ).sort("full_name", 1).to_list(2000)
 
@@ -1955,6 +2012,10 @@ async def presence(user: dict = Depends(get_current_user)):
 
     result = []
     for u in users:
+        # Use a small thumbnail in list responses so the Presence Board payload
+        # stays under a couple hundred KB regardless of head-count. Falls back to
+        # the full photo for legacy members who haven't been backfilled yet.
+        u_thumb = u.get("photo_thumb") or u.get("photo")
         sess = sess_map.get(u["id"])
         leave = leave_map.get(u["id"])
         # Geo info for whichever session is "current" (open session for on-campus/temp-out;
@@ -1965,24 +2026,24 @@ async def presence(user: dict = Depends(get_current_user)):
             status_v = "on_tour"
             detail = leave.get("location") or "On tour"
             since = leave["start_date"]
-            photo = u.get("photo")
+            photo = u_thumb
         elif leave and leave["type"] == "leave":
             status_v = "on_leave"
             detail = f"Till {leave['end_date']}"
             since = leave["start_date"]
-            photo = u.get("photo")
+            photo = u_thumb
         elif sess:
             open_exc = _open_excursion(sess)
             if open_exc:
                 status_v = "temp_out"
                 detail = (open_exc.get("reason") or "Stepped out") + " · since " + local_hm(office, open_exc.get("out_at"))
                 since = open_exc.get("out_at")
-                photo = u.get("photo")
+                photo = u_thumb
             else:
                 status_v = "on_campus"
                 detail = "Since " + local_hm(office, sess["check_in_at"])
                 since = sess["check_in_at"]
-                photo = sess.get("check_in_photo") or u.get("photo")
+                photo = sess.get("check_in_photo_thumb") or u_thumb
             geo_in = {
                 "method": sess.get("method"),
                 "distance_m": sess.get("distance_m"),
@@ -2002,7 +2063,7 @@ async def presence(user: dict = Depends(get_current_user)):
                 status_v = "exited"
                 detail = "Left " + local_hm(office, last["check_out_at"])
                 since = last["check_out_at"]
-                photo = last.get("check_out_photo") or u.get("photo")
+                photo = last.get("check_out_photo_thumb") or u_thumb
                 geo_in = {
                     "method": last.get("method"),
                     "distance_m": last.get("distance_m"),
@@ -2065,7 +2126,7 @@ async def presence(user: dict = Depends(get_current_user)):
                     else:
                         detail = "No camp scheduled today"
                 since = None
-                photo = u.get("photo")
+                photo = u_thumb
         # Open excursion: how many minutes overdue (if expected_return is in the past)?
         open_exc_v = _open_excursion(sess) if sess else None
         overdue_minutes = 0
@@ -2371,7 +2432,7 @@ async def muster_athletes(mode: str = "checkin", user: dict = Depends(get_curren
             "id": sid,
             "full_name": s["full_name"],
             "rank": s.get("rank"),
-            "photo": s.get("photo"),
+            "photo": s.get("photo_thumb") or s.get("photo"),
             "institution": s.get("institution"),
             "gender": s.get("gender"),
             "father_mobile": s.get("father_mobile"),
@@ -2525,7 +2586,7 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
             "member_name": u.get("full_name", "Unknown"),
             "member_category": u.get("category"),
             "member_rank": u.get("rank"),
-            "photo": u.get("photo"),
+            "photo": u.get("photo_thumb") or u.get("photo"),
             "check_in_at": s["check_in_at"],
             "check_in_time": local_hm(office, s["check_in_at"]),
             "check_out_at": s.get("check_out_at"),
@@ -2823,7 +2884,7 @@ async def admin_activity(admin: dict = Depends(require_admin)):
                 "member_name": u.get("full_name", "Unknown"),
                 "member_category": u.get("category"),
                 "member_rank": u.get("rank"),
-                "photo": u.get("photo"),
+                "photo": u.get("photo_thumb") or u.get("photo"),
                 "detail": "Checked in" + (f" · Late {a.get('late_minutes')}m" if a.get("late") else "")
                           + (" · Off-site" if a.get("out_of_geofence") else ""),
                 "method": a.get("method"),
@@ -2837,7 +2898,7 @@ async def admin_activity(admin: dict = Depends(require_admin)):
                 "member_name": u.get("full_name", "Unknown"),
                 "member_category": u.get("category"),
                 "member_rank": u.get("rank"),
-                "photo": u.get("photo"),
+                "photo": u.get("photo_thumb") or u.get("photo"),
                 "detail": f"Checked out · {a.get('hours', '?')}h"
                           + (" · Off-site" if a.get("exit_out_of_geofence") else ""),
                 "method": a.get("exit_method") or a.get("method"),
@@ -2853,7 +2914,7 @@ async def admin_activity(admin: dict = Depends(require_admin)):
                     "member_name": u.get("full_name", "Unknown"),
                     "member_category": u.get("category"),
                     "member_rank": u.get("rank"),
-                    "photo": u.get("photo"),
+                    "photo": u.get("photo_thumb") or u.get("photo"),
                     "detail": "Temp exit · " + (e.get("reason") or "")
                               + (f" · expected {local_hm(office, e.get('expected_return'))}" if e.get("expected_return") else ""),
                 })
@@ -2866,7 +2927,7 @@ async def admin_activity(admin: dict = Depends(require_admin)):
                     "member_name": u.get("full_name", "Unknown"),
                     "member_category": u.get("category"),
                     "member_rank": u.get("rank"),
-                    "photo": u.get("photo"),
+                    "photo": u.get("photo_thumb") or u.get("photo"),
                     "detail": "Returned" + (f" · {int((datetime.fromisoformat(e['in_at']) - datetime.fromisoformat(e['out_at'])).total_seconds() // 60)}m away" if e.get("out_at") else ""),
                 })
 
@@ -2881,7 +2942,7 @@ async def admin_activity(admin: dict = Depends(require_admin)):
             "member_name": u.get("full_name", "Unknown"),
             "member_category": u.get("category"),
             "member_rank": u.get("rank"),
-            "photo": u.get("photo"),
+            "photo": u.get("photo_thumb") or u.get("photo"),
             "detail": f"Applied for {l.get('type', 'leave')}"
                       + (f" · {l.get('start_date')} → {l.get('end_date')}" if l.get("start_date") else "")
                       + (f" · {l.get('location')}" if l.get("location") else ""),
@@ -2898,7 +2959,7 @@ async def admin_activity(admin: dict = Depends(require_admin)):
             "member_name": u.get("full_name") or (f"Unmatched · {d.get('phone')}" if d.get("phone") else "Unknown device"),
             "member_category": u.get("category"),
             "member_rank": u.get("rank"),
-            "photo": u.get("photo"),
+            "photo": u.get("photo_thumb") or u.get("photo"),
             "detail": f"New sign-in request · {d.get('device_name') or d.get('platform') or 'device'}",
             "status": d.get("status"),
         })
