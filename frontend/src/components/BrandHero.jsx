@@ -35,16 +35,10 @@ export default function BrandHero() {
       </div>
 
       <h1
-        className="mt-3 text-[26px] sm:text-3xl md:text-2xl lg:text-3xl font-extrabold tracking-tight text-slate-900 leading-none"
-        style={{ fontFamily: "'Cormorant Garamond', 'Playfair Display', 'Georgia', serif", letterSpacing: "0.01em" }}
-      >
-        Yacht Club of Hyderabad
-      </h1>
-      <p
-        className="mt-1 text-[11px] sm:text-xs md:text-[11px] uppercase tracking-[0.28em] text-slate-500 font-bold"
+        className="mt-3 text-[11px] sm:text-xs md:text-[11px] uppercase tracking-[0.28em] text-slate-500 font-bold"
       >
         I&nbsp;Showed&nbsp;Up
-      </p>
+      </h1>
 
       <style>{`
         @keyframes brand-pop {
