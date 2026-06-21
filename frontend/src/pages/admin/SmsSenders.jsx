@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Loader2, Save, MessageSquare, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
@@ -56,11 +56,11 @@ function SenderRow({ row, onSaved }) {
 export default function SmsSenders() {
   const [rows, setRows] = useState(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try { setRows(await api.get("/admin/sms-senders")); }
     catch { setRows([]); }
-  };
-  useEffect(() => { load(); }, []);
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <div className="bg-white rounded-2xl shadow-sm p-5 mt-6" data-testid="sms-senders-card">

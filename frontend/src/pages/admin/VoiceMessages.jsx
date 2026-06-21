@@ -63,11 +63,11 @@ function VoiceRow({ type, label, info, onChanged }) {
 
 export default function VoiceMessages() {
   const [items, setItems] = useState(null);
-  const load = async () => {
+  const load = useCallback(async () => {
     try { setItems(await api.get("/admin/voice-messages")); }
     catch { setItems([]); }
-  };
-  useEffect(() => { load(); }, []);
+  }, []);
+  useEffect(() => { load(); }, [load]);
   const infoFor = (k) => (items || []).find((i) => i.type === k);
 
   return (
