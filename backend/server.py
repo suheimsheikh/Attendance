@@ -602,6 +602,7 @@ async def seed():
     )
     # Seed institutions master from any existing distinct institution strings on users
     await db.institutions.create_index("name", unique=True)
+    await db.sms_senders.create_index("institution", unique=True)
     seeded = await db.institutions.count_documents({})
     if seeded == 0:
         distinct = await db.users.distinct("institution")
@@ -1237,6 +1238,56 @@ async def delete_institution(inst_id: str, admin: dict = Depends(require_admin))
         raise HTTPException(status_code=409, detail=f"{in_use} members still use this institution — reassign first.")
     await db.institutions.delete_one({"id": inst_id})
     return {"ok": True}
+
+
+# ----------------------------------------------------------------------------
+# Parent-SMS Twilio senders — one Twilio account per institution (+ a default)
+# ----------------------------------------------------------------------------
+class SmsSenderIn(BaseModel):
+    account_sid: Optional[str] = None
+    auth_token: Optional[str] = None
+    from_number: Optional[str] = None
+
+
+def _mask_sender(doc: dict) -> dict:
+    return {
+        "institution": doc.get("institution"),
+        "account_sid": doc.get("account_sid") or "",
+        "from_number": doc.get("from_number") or "",
+        "auth_token_set": bool(doc.get("auth_token")),
+        "configured": bool(doc.get("account_sid") and doc.get("auth_token") and doc.get("from_number")),
+    }
+
+
+@api_router.get("/admin/sms-senders")
+async def list_sms_senders(admin: dict = Depends(require_admin)):
+    insts = await db.institutions.find({}, {"_id": 0, "name": 1}).sort("name", 1).to_list(500)
+    stored = {}
+    async for d in db.sms_senders.find({}, {"_id": 0}):
+        stored[d["institution"]] = d
+    rows = [_mask_sender(stored.get("__default__", {"institution": "__default__"}))]
+    for i in insts:
+        rows.append(_mask_sender(stored.get(i["name"], {"institution": i["name"]})))
+    return rows
+
+
+@api_router.put("/admin/sms-senders/{institution}")
+async def upsert_sms_sender(institution: str, body: SmsSenderIn, admin: dict = Depends(require_admin)):
+    existing = await db.sms_senders.find_one({"institution": institution}, {"_id": 0})
+    setdoc = {
+        "institution": institution,
+        "account_sid": (body.account_sid or "").strip() or None,
+        "from_number": (body.from_number or "").strip() or None,
+    }
+    tok = (body.auth_token or "").strip()
+    # Only overwrite the token when a real (non-masked) value is supplied.
+    if tok and set(tok) != {"\u2022"}:
+        setdoc["auth_token"] = tok
+    elif existing:
+        setdoc["auth_token"] = existing.get("auth_token")
+    await db.sms_senders.update_one({"institution": institution}, {"$set": setdoc}, upsert=True)
+    return _mask_sender(await db.sms_senders.find_one({"institution": institution}, {"_id": 0}))
+
 
 
 # ----------------------------------------------------------------------------
@@ -2491,36 +2542,47 @@ def _e164_india(num: Optional[str]) -> Optional[str]:
     return None
 
 
-def _twilio_send(to: str, body: str) -> str:
-    """Blocking Twilio send — call via asyncio.to_thread. Returns message SID."""
+def _twilio_send(sender: dict, to: str, body: str) -> str:
+    """Blocking Twilio send using a specific institution's account.
+    Call via asyncio.to_thread. Returns message SID."""
     from twilio.rest import Client
-    client = Client(os.environ["TWILIO_ACCOUNT_SID"], os.environ["TWILIO_AUTH_TOKEN"])
-    msg = client.messages.create(to=to, from_=os.environ["TWILIO_FROM_NUMBER"], body=body)
+    from twilio.http.http_client import TwilioHttpClient
+    client = Client(sender["account_sid"], sender["auth_token"], http_client=TwilioHttpClient(timeout=15))
+    msg = client.messages.create(to=to, from_=sender["from_number"], body=body)
     return msg.sid
 
 
-async def _send_parent_sms(numbers: List[str], body: str) -> dict:
-    sid = os.environ.get("TWILIO_ACCOUNT_SID")
-    tok = os.environ.get("TWILIO_AUTH_TOKEN")
-    sender = os.environ.get("TWILIO_FROM_NUMBER")
-    if not (sid and tok and sender):
-        return {"configured": False, "sent": 0, "failed": []}
+async def _sender_for_institution(institution: Optional[str]) -> Optional[dict]:
+    """Resolve the Twilio sender for a member's institution, falling back to the
+    configured default. Returns a dict with account_sid/auth_token/from_number
+    only if fully configured, else None."""
+    doc = None
+    if institution:
+        doc = await db.sms_senders.find_one({"institution": institution}, {"_id": 0})
+    if not (doc and doc.get("account_sid") and doc.get("auth_token") and doc.get("from_number")):
+        doc = await db.sms_senders.find_one({"institution": "__default__"}, {"_id": 0})
+    if doc and doc.get("account_sid") and doc.get("auth_token") and doc.get("from_number"):
+        return doc
+    return None
+
+
+async def _send_parent_sms(numbers: List[str], body: str, sender: dict) -> dict:
     # de-dupe normalised numbers
     seen, targets = set(), []
     for raw in numbers:
         e = _e164_india(raw)
         if e and e not in seen:
             seen.add(e)
-            targets.append((raw, e))
+            targets.append(e)
     sent, failed = [], []
-    for raw, to in targets:
+    for to in targets:
         try:
-            msg_sid = await asyncio.to_thread(_twilio_send, to, body)
+            msg_sid = await asyncio.to_thread(_twilio_send, sender, to, body)
             sent.append({"to": to, "sid": msg_sid})
         except Exception as e:  # noqa: BLE001
             logger.warning("Twilio send failed to %s: %s", to, e)
             failed.append({"to": to, "error": str(e)})
-    return {"configured": True, "sent": len(sent), "details": sent, "failed": failed}
+    return {"sent": len(sent), "details": sent, "failed": failed}
 
 
 @api_router.post("/parent-notify/dispatch")
@@ -2532,7 +2594,7 @@ async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depe
     today = local_date_str(office)
     target = await db.users.find_one(
         {"id": body.user_id},
-        {"_id": 0, "full_name": 1, "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1},
+        {"_id": 0, "full_name": 1, "institution": 1, "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1},
     )
     if not target:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -2547,6 +2609,14 @@ async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depe
     if not numbers:
         raise HTTPException(status_code=400, detail="No parent/guardian number on file for this member")
 
+    sender = await _sender_for_institution(target.get("institution"))
+    if not sender:
+        inst = target.get("institution") or "this member"
+        raise HTTPException(
+            status_code=400,
+            detail=f"No SMS sender configured for {inst}. Add a Twilio sender in Office Settings → Parent SMS.",
+        )
+
     org = (office or {}).get("name") or "YCH"
     try:
         nice_date = datetime.strptime(today, "%Y-%m-%d").strftime("%d %b %Y")
@@ -2560,9 +2630,7 @@ async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depe
     else:
         text = f"{org}: Dear Parent, {name} has not reported to the sailing academy today ({nice_date}). Please contact the coach."
 
-    result = await _send_parent_sms(numbers, text)
-    if not result["configured"]:
-        raise HTTPException(status_code=400, detail="SMS is not configured yet — add Twilio credentials to enable parent notifications.")
+    result = await _send_parent_sms(numbers, text, sender)
     if result["sent"] == 0:
         detail = result["failed"][0]["error"] if result["failed"] else "Unknown error"
         raise HTTPException(status_code=502, detail=f"Could not send SMS: {detail}")

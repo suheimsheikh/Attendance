@@ -3,6 +3,7 @@ import { Loader2, Save, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { getLocation } from "../../utils";
+import SmsSenders from "./SmsSenders";
 
 const TZS = ["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Australia/Sydney"];
 
@@ -159,6 +160,8 @@ export default function OfficeSettings() {
           {saving ? <Loader2 className="animate-spin" size={16}/> : <><Save size={16}/> Save settings</>}
         </button>
       </form>
+
+      <SmsSenders />
     </div>
   );
 }
