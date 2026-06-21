@@ -28,6 +28,7 @@ const NAV_ADMIN = [
   { to: "/admin/camps", label: "Camps & Regattas", icon: Tent, tip: "Schedule training camps and outstation regattas/tours" },
   { to: "/admin/schedule", label: "Schedule & Holidays", icon: CalendarClock, tip: "Set weekly timing overrides, one-off changes and holidays" },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays, tip: "Month view of camps, regattas and events" },
+  { to: "/admin/sessions", label: "Daily Sessions", icon: ListTree, tip: "Pick any date to review each person's check-in → temp exits → check-out and hours" },
   { to: "/admin/payroll", label: "Monthly Payroll", icon: FileSpreadsheet, tip: "Generate and export monthly payroll" },
   // Hidden / disabled tools (kept in routes but pushed to the bottom of the menu).
   { to: "/admin/office-qr", label: "Office QR", icon: QrCode, disabled: true, disabledReason: "QR scanning is disabled for now" },
