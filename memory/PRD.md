@@ -195,3 +195,6 @@ See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or
 
 ### Daily Sessions surfaced in sidebar (June 21 2026)
 - User questioned whether "Today's Activity" (Console `ActivityFeed`) and "Daily Sessions" (`/admin/sessions`) are redundant with Presence. Conclusion: keep both. Today's Activity = time-ordered event log (check-ins/outs, temp exits, applications, access requests) which user said they need. Daily Sessions = per-person, per-date in/out timeline + hours (the ONLY place to review a PAST day; user had "nowhere" for this). It was orphaned (no menu link) → added a sidebar entry "Daily Sessions" (ListTree icon) → `/admin/sessions`. No logic change to the page itself; just made it reachable. Verified it loads with live data.
+
+### YAI 2026 events imported into Regattas (June 21 2026)
+- Scraped all 28 events from https://www.yai.org.in/events.html and inserted into the `regattas` collection (managed on the Calendar page; renders in the Regattas list + calendar grid). Mapping: level=international if name has International/Asian/World/Eurasia else national; host_org=organising club; notes=YAI category + "Source: YAI 2026 calendar"; country=India. Deduped by name+dates. Result: 30 total regattas (8 international, 22 national). Verified via /api/regattas + Calendar screenshot.
