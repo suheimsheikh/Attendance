@@ -15,6 +15,7 @@ import bcrypt
 import jwt
 import re
 import secrets
+import asyncio
 import openpyxl
 from openpyxl.utils import get_column_letter
 import base64
@@ -2472,17 +2473,67 @@ async def presence(user: dict = Depends(get_current_user)):
 class ParentNotifyDispatchIn(BaseModel):
     user_id: str
     type: Literal["not_arrived", "late"]
+    message: Optional[str] = None  # client-composed (bilingual) body; falls back to a default
+
+
+def _e164_india(num: Optional[str]) -> Optional[str]:
+    """Normalise an Indian mobile to E.164 (+91XXXXXXXXXX)."""
+    if not num:
+        return None
+    s = str(num).strip()
+    if s.startswith("+"):
+        return s
+    d = "".join(ch for ch in s if ch.isdigit())
+    if len(d) == 12 and d.startswith("91"):
+        return "+" + d
+    if len(d) == 10 and d[0] in "6789":
+        return "+91" + d
+    return None
+
+
+def _twilio_send(to: str, body: str) -> str:
+    """Blocking Twilio send — call via asyncio.to_thread. Returns message SID."""
+    from twilio.rest import Client
+    client = Client(os.environ["TWILIO_ACCOUNT_SID"], os.environ["TWILIO_AUTH_TOKEN"])
+    msg = client.messages.create(to=to, from_=os.environ["TWILIO_FROM_NUMBER"], body=body)
+    return msg.sid
+
+
+async def _send_parent_sms(numbers: List[str], body: str) -> dict:
+    sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    tok = os.environ.get("TWILIO_AUTH_TOKEN")
+    sender = os.environ.get("TWILIO_FROM_NUMBER")
+    if not (sid and tok and sender):
+        return {"configured": False, "sent": 0, "failed": []}
+    # de-dupe normalised numbers
+    seen, targets = set(), []
+    for raw in numbers:
+        e = _e164_india(raw)
+        if e and e not in seen:
+            seen.add(e)
+            targets.append((raw, e))
+    sent, failed = [], []
+    for raw, to in targets:
+        try:
+            msg_sid = await asyncio.to_thread(_twilio_send, to, body)
+            sent.append({"to": to, "sid": msg_sid})
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Twilio send failed to %s: %s", to, e)
+            failed.append({"to": to, "error": str(e)})
+    return {"configured": True, "sent": len(sent), "details": sent, "failed": failed}
 
 
 @api_router.post("/parent-notify/dispatch")
 async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depends(get_current_user)):
-    """Record that the current operator has dispatched a parent-notification SMS
-    (via the device's native SMS composer). One record per (user, date, type)
-    so the UI suppresses the button after the first send. This endpoint does
-    not actually send any SMS — the device's messaging app does."""
+    """Send a parent/guardian SMS (via Twilio) for a late / not-arrived child and
+    record it. One record per (user, date, type) so the button is suppressed
+    after a successful send."""
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
-    target = await db.users.find_one({"id": body.user_id}, {"_id": 0, "full_name": 1})
+    target = await db.users.find_one(
+        {"id": body.user_id},
+        {"_id": 0, "full_name": 1, "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1},
+    )
     if not target:
         raise HTTPException(status_code=404, detail="Member not found")
     existing = await db.parent_notifications.find_one(
@@ -2490,6 +2541,32 @@ async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depe
     )
     if existing:
         return {"already_sent": True, "sent_at": existing.get("sent_at"), "sent_by": existing.get("sent_by_name")}
+
+    numbers = [target.get("father_mobile"), target.get("mother_mobile"), target.get("guardian_mobile")]
+    numbers = [n for n in numbers if n]
+    if not numbers:
+        raise HTTPException(status_code=400, detail="No parent/guardian number on file for this member")
+
+    org = (office or {}).get("name") or "YCH"
+    try:
+        nice_date = datetime.strptime(today, "%Y-%m-%d").strftime("%d %b %Y")
+    except Exception:
+        nice_date = today
+    name = target.get("full_name") or "your ward"
+    if body.message and body.message.strip():
+        text = body.message.strip()
+    elif body.type == "late":
+        text = f"{org}: Dear Parent, {name} has arrived late to the sailing academy today ({nice_date})."
+    else:
+        text = f"{org}: Dear Parent, {name} has not reported to the sailing academy today ({nice_date}). Please contact the coach."
+
+    result = await _send_parent_sms(numbers, text)
+    if not result["configured"]:
+        raise HTTPException(status_code=400, detail="SMS is not configured yet — add Twilio credentials to enable parent notifications.")
+    if result["sent"] == 0:
+        detail = result["failed"][0]["error"] if result["failed"] else "Unknown error"
+        raise HTTPException(status_code=502, detail=f"Could not send SMS: {detail}")
+
     doc = {
         "id": str(uuid.uuid4()),
         "user_id": body.user_id,
@@ -2498,18 +2575,18 @@ async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depe
         "sent_at": now_utc().isoformat(),
         "sent_by_id": user["id"],
         "sent_by_name": user.get("full_name"),
+        "channel": "twilio_sms",
+        "sms_to": [s["to"] for s in result["details"]],
     }
     try:
         await db.parent_notifications.insert_one(doc)
     except DuplicateKeyError:
-        # Concurrent coaches both clicked Notify at the same moment — the
-        # unique (user_id,date,type) index won the race for us. Re-read and
-        # report the winner.
         existing = await db.parent_notifications.find_one(
             {"user_id": body.user_id, "date": today, "type": body.type}, {"_id": 0}
         )
         return {"already_sent": True, "sent_at": existing.get("sent_at"), "sent_by": existing.get("sent_by_name")}
-    return {"already_sent": False, "sent_at": doc["sent_at"], "sent_by": doc["sent_by_name"]}
+    return {"already_sent": False, "sent_at": doc["sent_at"], "sent_by": doc["sent_by_name"],
+            "sms_sent": result["sent"], "sms_failed": len(result["failed"])}
 
 
 # ----------------------------------------------------------------------------

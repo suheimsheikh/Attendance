@@ -65,28 +65,20 @@ export default function NotifyParentsButton({ member, type, adminContacts = [], 
       `ప్రశ్నల కోసం ${callbackJoined || "అకాడమీ"}కి ఫోన్ చేయండి.`;
   }
 
-  // sms: URI — both iOS and Android accept comma-separated recipients.
-  // iOS prefers `&body=`, Android accepts `?body=`. The query-string form
-  // works on both modern platforms.
-  const recipients = parentNumbers.join(",");
-  const href = `sms:${recipients}?body=${encodeURIComponent(body)}`;
-
   const handleClick = async (e) => {
     e.stopPropagation();
     setBusy(true);
-    // Open the native SMS composer first so the user-gesture is preserved
-    // (browsers block sms:/tel: launches that happen after async awaits).
+    // Server sends the SMS via Twilio (no device composer — avoids double-send).
     try {
-      window.location.href = href;
-    } catch {
-      /* swallow — sms: URI rejection is best-effort */
-    }
-    try {
-      await api.post("/parent-notify/dispatch", { user_id: member.id, type });
-      toast.success(`Recorded SMS to ${member.full_name}'s parents`);
+      const res = await api.post("/parent-notify/dispatch", { user_id: member.id, type, message: body });
+      if (res.already_sent) {
+        toast.success(`Parents already notified today`);
+      } else {
+        toast.success(`SMS sent to ${member.full_name}'s parents (${res.sms_sent})`);
+      }
       onSent && onSent();
     } catch (err) {
-      toast.error(err?.message || "Couldn't record dispatch");
+      toast.error(err?.message || "Couldn't send SMS");
     } finally {
       setBusy(false);
     }
