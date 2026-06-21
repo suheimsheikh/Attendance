@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin, UserX, Search, UserPlus, X } from "lucide-react";
+import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin, UserX, Search, UserPlus, X, CalendarOff } from "lucide-react";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
 import ParentContact from "../components/ParentContact";
@@ -212,6 +212,10 @@ export default function Presence() {
           </button>
         </div>
       </header>
+
+      {data?.day_schedule && (
+        <DayScheduleBanner ds={data.day_schedule} />
+      )}
 
       <div className="iu-card mb-4 px-3 py-2 flex items-center gap-3" data-testid="presence-search-wrap">
         <Search size={16} className="text-sky-500 shrink-0" />
@@ -682,6 +686,37 @@ function PhotoZoomModal({ member, onClose }) {
       </div>
     </div>
   );
+}
+
+function DayScheduleBanner({ ds }) {
+  if (!ds) return null;
+  if (ds.holiday) {
+    return (
+      <div data-testid="day-schedule-banner" className="mb-4 rounded-2xl bg-rose-50 border border-rose-200 px-4 py-2.5 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+          <CalendarOff size={16} />
+        </div>
+        <div className="text-sm">
+          <span className="font-bold text-rose-800">Holiday today{ds.holiday_name ? ` — ${ds.holiday_name}` : ""}.</span>
+          <span className="text-rose-700"> No one is expected; nobody is marked absent. Check-ins are still allowed.</span>
+        </div>
+      </div>
+    );
+  }
+  if (ds.start_time) {
+    return (
+      <div data-testid="day-schedule-banner" className="mb-4 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-2.5 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+          <Clock size={16} />
+        </div>
+        <div className="text-sm">
+          <span className="font-bold text-amber-800">Special timings today — start {ds.start_time}{ds.end_time ? `, end ${ds.end_time}` : ""}.</span>
+          <span className="text-amber-700"> {ds.source === "weekly" ? "Recurring weekly override" : "One-off change"} — applies to everyone.</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
 }
 
 function SkeletonBoard() {

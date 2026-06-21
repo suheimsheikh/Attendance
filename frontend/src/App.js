@@ -24,6 +24,7 @@ import LeaveBalances from "./pages/admin/LeaveBalances";
 import Payroll from "./pages/admin/Payroll";
 import Institutions from "./pages/admin/Institutions";
 import Camps from "./pages/admin/Camps";
+import Schedule from "./pages/admin/Schedule";
 import Calendar from "./pages/admin/Calendar";
 import BackupRestore from "./pages/admin/BackupRestore";
 import ImportMembers from "./pages/admin/ImportMembers";
@@ -90,6 +91,7 @@ function App() {
             <Route path="admin/group-leave" element={<Navigate to="/admin/leaves" replace />} />
             <Route path="admin/institutions" element={<RequireAdmin><Institutions /></RequireAdmin>} />
             <Route path="admin/camps" element={<RequireAdmin><Camps /></RequireAdmin>} />
+            <Route path="admin/schedule" element={<RequireAdmin><Schedule /></RequireAdmin>} />
             <Route path="admin/calendar" element={<RequireAdmin><Calendar /></RequireAdmin>} />
             <Route path="admin/backup" element={<RequireAdmin><BackupRestore /></RequireAdmin>} />
             <Route path="admin/import" element={<RequireAdmin><ImportMembers /></RequireAdmin>} />

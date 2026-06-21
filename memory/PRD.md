@@ -140,6 +140,13 @@
 ## Test Credentials
 See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or phone `9849002111` for OTP-bypass).
 
+- **Schedule overrides & holidays (June 2026)**: New `/app/backend/schedule.py` module + `schedule_exceptions` collection + a `weekly_overrides` field on the office config doc. New admin page **"Schedule & Holidays"** (`/admin/schedule`).
+  - **Weekly overrides**: per-weekday start/end time (e.g. every Sunday 08:00 instead of 06:00). `GET/PUT /api/schedule/weekly`.
+  - **Schedule exceptions**: `kind="holiday"` (date or range, nobody expected → everyone `not_due` "Holiday — {name}", never Absent, camps suspended, check-in still allowed) or `kind="timing"` (one-off date/range with a different start/end time). `GET/POST/PATCH/DELETE /api/schedule/exceptions`.
+  - **Precedence** (campus-wide, applies to everyone incl. overriding active camps): holiday > one-off date timing > weekly override > camp > personal work_start > office default. Threaded into `compute_late` (new `day_start` arg) via `_compute_late_for()` at all check-in/muster paths, and into `/api/presence` (new `day_schedule` field in response).
+  - Frontend: `Schedule.jsx` (weekly grid + holiday/timing list & form with type toggle), sidebar entry, and a Presence-board banner (rose for holidays, amber for special timings). Verified end-to-end via curl (holiday → 0 absent; timing 23:30 → 0 absent/not_due; validation) and screenshots.
+
+
 - **Camps & Regattas — outstation events (June 2026)**: Renamed the "Camps" admin page → **"Camps & Regattas"** and extended the `camps` collection with two fields: `kind` (`"camp"` | `"outstation"`, default `camp`) and `location` (free-text). 
   - **Camp** = existing local training schedule (times + days drive late/absent for enrolled athletes; now also carries an optional location). `start_time`/`end_time` are required for camps.
   - **Outstation event** = a travel window covering a date range at a `location`, enrolling a **mixed group** (athletes → "regatta", coaches/staff → "tour"). Times/days/grace are not used. `camps.py` gained `resolve_member_outstation()`; `resolve_member_camp()` now excludes outstation-kind so they never act as a training schedule.

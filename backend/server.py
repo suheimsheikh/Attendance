@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 # handling for check-in late computation) can reference them.
 import camps as _camps_module
 import regattas as _regattas_module
+import schedule as _schedule_module
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -99,12 +100,15 @@ def local_hm(office: Optional[dict], iso_str: Optional[str]) -> str:
     return datetime.fromisoformat(iso_str).astimezone(office_tz(office)).strftime("%H:%M")
 
 
-def compute_late(office: dict, target: dict, ts: datetime, camp: Optional[dict] = None) -> tuple[bool, int]:
+def compute_late(office: dict, target: dict, ts: datetime, camp: Optional[dict] = None, day_start: Optional[str] = None) -> tuple[bool, int]:
     """Returns (is_late, minutes_late) comparing the check-in local time against
-    the effective work_start + grace. If `camp` is provided, its `start_time`
-    and (optional) `late_grace_minutes` override the member's defaults — this
-    is how institutional camps replace a member's normal schedule."""
-    if camp:
+    the effective work_start + grace. Resolution order for the start time:
+    an explicit `day_start` (a campus-wide weekly/one-off override) wins, then a
+    `camp` start, then the member's personal work_start, then the office default."""
+    if day_start:
+        ws = day_start
+        grace = int(office.get("late_grace_minutes") or 0)
+    elif camp:
         ws = camp.get("start_time") or "09:00"
         cg = camp.get("late_grace_minutes")
         grace = int(cg if cg is not None else (office.get("late_grace_minutes") or 0))
@@ -129,6 +133,28 @@ async def _active_camp_for(target: dict, ts: datetime, office: dict) -> Optional
     weekday = _camps_module.weekday_key(ts.astimezone(office_tz(office)))
     camps_today = await _camps_module.fetch_camps_active_on(db, today_str)
     return _camps_module.resolve_member_camp(target, camps_today, weekday, today_str)
+
+
+async def _resolve_day(office: dict, ts: datetime) -> Optional[dict]:
+    """Campus-wide schedule override for the local day of `ts`. Returns a holiday
+    marker, a timing override {start_time,end_time}, or None. See schedule.py."""
+    date_str = local_date_str(office, ts)
+    weekday = _camps_module.weekday_key(ts.astimezone(office_tz(office)))
+    exceptions = await _schedule_module.fetch_exceptions_active_on(db, date_str)
+    weekly = office.get("weekly_overrides") or {}
+    return _schedule_module.resolve_day_schedule(date_str, weekday, exceptions, weekly)
+
+
+async def _compute_late_for(target: dict, ts: datetime, office: dict) -> tuple[bool, int]:
+    """Late check that threads the campus-wide day override (holiday / weekly /
+    one-off timing) and any active camp into compute_late. On a holiday nobody
+    is late."""
+    day = await _resolve_day(office, ts)
+    if day and day.get("holiday"):
+        return False, 0
+    day_start = day.get("start_time") if day else None
+    camp = await _active_camp_for(target, ts, office)
+    return compute_late(office, target, ts, camp=camp, day_start=day_start)
 
 
 
@@ -1684,7 +1710,7 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
         }})
         return {"ok": True, "action": "checkout", "member": target["full_name"],
                 "hours": hours, "out_of_geofence": out, "distance_m": dist}
-    late, late_minutes = compute_late(office, target, ts, camp=await _active_camp_for(target, ts, office))
+    late, late_minutes = await _compute_late_for(target, ts, office)
     doc = {
         "id": str(uuid.uuid4()),
         "user_id": target["id"],
@@ -1802,7 +1828,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         # Geofence is informational only — distance is recorded on the
         # attendance row but does not block the check-in.
         pass
-    late, late_minutes = compute_late(office, target, ts, camp=await _active_camp_for(target, ts, office))
+    late, late_minutes = await _compute_late_for(target, ts, office)
     early_min, work_start_hm = compute_overtime_in(office, target, ts)
     doc = {
         "id": str(uuid.uuid4()),
@@ -2046,6 +2072,15 @@ async def presence(user: dict = Depends(get_current_user)):
     def _outstation_for(u: dict) -> Optional[dict]:
         return _camps_module.resolve_member_outstation(u, camps_today, today)
 
+    # Campus-wide schedule override for today (holiday / weekly / one-off timing).
+    exceptions_today = await _schedule_module.fetch_exceptions_active_on(db, today)
+    day_sched = _schedule_module.resolve_day_schedule(
+        today, today_weekday, exceptions_today, office.get("weekly_overrides") or {}
+    )
+    is_holiday = bool(day_sched and day_sched.get("holiday"))
+    holiday_name = day_sched.get("name") if is_holiday else None
+    day_start_override = (day_sched or {}).get("start_time") if (day_sched and not is_holiday) else None
+
     # Admin contacts to surface as the "call the academy" numbers in the SMS body.
     admin_docs = await db.users.find(
         {"role": "admin"},
@@ -2138,30 +2173,42 @@ async def presence(user: dict = Depends(get_current_user)):
                 }
             else:
                 # No session today — decide absent vs not_due via work_start.
-                # If an institutional camp is active for this member today, its
-                # times override; otherwise fall back to the member's personal
-                # work_start (or the office default).
-                camp_today = _camp_for(u)
-                if camp_today:
+                # On a campus holiday, nobody is expected → not_due ("Holiday").
+                if is_holiday:
+                    status_v = "not_due"
+                    detail = f"Holiday — {holiday_name}" if holiday_name else "Holiday"
+                    since = None
+                    photo = u_thumb
+                else:
+                  # If an institutional camp is active for this member today, its
+                  # times override; otherwise fall back to the member's personal
+                  # work_start (or the office default). A campus-wide timing
+                  # override (weekly / one-off) wins over the camp for that day.
+                  camp_today = _camp_for(u)
+                  if day_start_override:
+                    ws_hm = day_start_override
+                    grace = int(office.get("late_grace_minutes") or 0)
+                    is_expected_today = bool(u.get("work_start")) or u.get("category") != "athlete" or bool(camp_today)
+                  elif camp_today:
                     ws_hm = camp_today.get("start_time") or "09:00"
                     cg = camp_today.get("late_grace_minutes")
                     grace = int(cg if cg is not None else (office.get("late_grace_minutes") or 0))
                     is_expected_today = True
-                else:
+                  else:
                     ws_hm = u.get("work_start") or office.get("default_work_start") or "09:00"
                     grace = int(office.get("late_grace_minutes") or 0)
                     # Athletes with no personal work_start AND no camp today
                     # aren't expected on campus. Skip the "absent" branch so
                     # we don't slander camp-only kids on weekdays.
                     is_expected_today = bool(u.get("work_start")) or u.get("category") != "athlete"
-                try:
+                  try:
                     ws_h, ws_m = (int(x) for x in ws_hm.split(":")[:2])
                     local_now = now_utc().astimezone(office_tz(office))
                     threshold = local_now.replace(hour=ws_h, minute=ws_m, second=0, microsecond=0) + timedelta(minutes=grace)
                     past_start = local_now > threshold
-                except Exception:
+                  except Exception:
                     past_start = True
-                if past_start and is_expected_today:
+                  if past_start and is_expected_today:
                     # Approved late-coming notice covering today → softer treatment
                     late_today = await db.leaves.find_one({
                         "user_id": u["id"], "status": "approved", "type": "late_coming",
@@ -2171,20 +2218,20 @@ async def presence(user: dict = Depends(get_current_user)):
                     if late_today:
                         ea = late_today.get("expected_arrival")
                         detail = f"Notified late — expected by {ea or 'today'}"
-                    elif camp_today:
+                    elif camp_today and not day_start_override:
                         detail = f"Camp “{camp_today['name']}” started {ws_hm}"
                     else:
                         detail = f"Expected by {ws_hm}"
-                else:
+                  else:
                     status_v = "not_due"
-                    if camp_today:
+                    if camp_today and not day_start_override:
                         detail = f"Camp “{camp_today['name']}” starts {ws_hm}"
                     elif is_expected_today:
                         detail = f"Shift starts {ws_hm}"
                     else:
                         detail = "No camp scheduled today"
-                since = None
-                photo = u_thumb
+                  since = None
+                  photo = u_thumb
         # Open excursion: how many minutes overdue (if expected_return is in the past)?
         open_exc_v = _open_excursion(sess) if sess else None
         overdue_minutes = 0
@@ -2222,10 +2269,10 @@ async def presence(user: dict = Depends(get_current_user)):
         # by recomputing here we let admins drop late_grace_minutes (e.g. 15 → 0)
         # and see the badge update immediately without a session-rewrite migration.
         recomputed_late = False
-        if sess and status_v == "on_campus" and sess.get("check_in_at"):
+        if sess and status_v == "on_campus" and sess.get("check_in_at") and not is_holiday:
             try:
                 ci = datetime.fromisoformat(sess["check_in_at"])
-                recomputed_late, _ = compute_late(office, u, ci, camp=_camp_for(u))
+                recomputed_late, _ = compute_late(office, u, ci, camp=_camp_for(u), day_start=day_start_override)
             except Exception:
                 recomputed_late = bool(sess.get("late"))
 
@@ -2273,6 +2320,13 @@ async def presence(user: dict = Depends(get_current_user)):
         "date": today,
         "admin_contacts": admin_contacts,
         "notify_grace_minutes": notify_grace,
+        "day_schedule": {
+            "holiday": is_holiday,
+            "holiday_name": holiday_name,
+            "start_time": day_start_override,
+            "end_time": (day_sched or {}).get("end_time") if (day_sched and not is_holiday) else None,
+            "source": (day_sched or {}).get("source") if (day_sched and not is_holiday) else None,
+        } if day_sched else None,
     }
 
 
@@ -2517,7 +2571,7 @@ async def muster_checkin_bulk(body: MusterBulkIn, user: dict = Depends(get_curre
         if await db.attendance.find_one({"user_id": sid, "check_out_at": None}):
             skipped.append({"id": sid, "name": athlete["full_name"], "reason": "already checked in"})
             continue
-        late, late_min = compute_late(office, athlete, now, camp=await _active_camp_for(athlete, now, office))
+        late, late_min = await _compute_late_for(athlete, now, office)
         att = {
             "id": str(uuid.uuid4()),
             "user_id": sid,
@@ -3346,6 +3400,9 @@ app.include_router(_camps_module.make_router(db, require_admin))
 # Regattas — national / international sailing events. Shown alongside camps on
 # the unified Calendar view.
 app.include_router(_regattas_module.make_router(db, require_admin))
+
+# Schedule exceptions & holidays — day-specific timing overrides and holidays.
+app.include_router(_schedule_module.make_router(db, require_admin, get_current_user))
 
 
 # Lightweight keep-alive endpoint — no auth, no DB hit. Plug an UptimeRobot
