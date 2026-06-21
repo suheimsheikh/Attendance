@@ -198,3 +198,6 @@ See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or
 
 ### YAI 2026 events imported into Regattas (June 21 2026)
 - Scraped all 28 events from https://www.yai.org.in/events.html and inserted into the `regattas` collection (managed on the Calendar page; renders in the Regattas list + calendar grid). Mapping: level=international if name has International/Asian/World/Eurasia else national; host_org=organising club; notes=YAI category + "Source: YAI 2026 calendar"; country=India. Deduped by name+dates. Result: 30 total regattas (8 international, 22 national). Verified via /api/regattas + Calendar screenshot.
+
+### Admin checklist — overtime row added (June 21 2026)
+- Added a 9th item to `GET /api/admin/checklist`: "Pending overtime approvals" — count of attendance sessions with `overtime_total_min>0` and `overtime_status=="pending"`, linking to `/admin/leave-management?tab=overtime`. Frontend `AdminChecklist.jsx` renders items generically so it shows automatically. Now covers all approval queues: leave/tour, comp-off, overtime, devices (+ camps, outstation, timings, holiday, missing photos). Verified via API.

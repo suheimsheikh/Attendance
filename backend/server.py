@@ -2099,6 +2099,9 @@ async def admin_checklist(admin: dict = Depends(require_admin)):
         {"status": "pending", "type": {"$in": ["leave", "tour", "late_coming"]}}
     )
     pending_comp_off = await db.leaves.count_documents({"status": "pending", "type": "comp_off"})
+    pending_overtime = await db.attendance.count_documents(
+        {"overtime_total_min": {"$gt": 0}, "overtime_status": "pending"}
+    )
     pending_devices = await db.devices.count_documents({"status": "pending"})
     missing_photos = await db.users.count_documents(
         {"$or": [{"photo": {"$in": [None, ""]}}, {"photo": {"$exists": False}}]}
@@ -2119,6 +2122,8 @@ async def admin_checklist(admin: dict = Depends(require_admin)):
          "hint": "Clear the approval queue", "link": "/admin/leaves"},
         {"key": "pending_comp_off", "label": "Pending comp-off requests", "count": pending_comp_off,
          "hint": "Review compensatory-off claims", "link": "/admin/leaves"},
+        {"key": "pending_overtime", "label": "Pending overtime approvals", "count": pending_overtime,
+         "hint": "Review and approve overtime hours", "link": "/admin/leave-management?tab=overtime"},
         {"key": "pending_devices", "label": "Pending device approvals", "count": pending_devices,
          "hint": "Approve members' devices", "link": "/admin"},
         {"key": "missing_photos", "label": "Members missing a photo", "count": missing_photos,
