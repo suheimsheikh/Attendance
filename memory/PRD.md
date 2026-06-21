@@ -201,3 +201,6 @@ See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or
 
 ### Admin checklist — overtime row added (June 21 2026)
 - Added a 9th item to `GET /api/admin/checklist`: "Pending overtime approvals" — count of attendance sessions with `overtime_total_min>0` and `overtime_status=="pending"`, linking to `/admin/leave-management?tab=overtime`. Frontend `AdminChecklist.jsx` renders items generically so it shows automatically. Now covers all approval queues: leave/tour, comp-off, overtime, devices (+ camps, outstation, timings, holiday, missing photos). Verified via API.
+
+### Admin checklist — auto-hide cleared rows (June 21 2026)
+- `AdminChecklist.jsx`: rows that are "clear" (count 0, or status None/No) are auto-hidden so admins see only actionable items. Header shows live "N items need your attention". Cleared rows collapse behind a "Show N cleared items" toggle. When nothing is pending, shows an "All set for today" empty state. Frontend-only change (no backend). Verified via screenshot: 5 actionable shown, 4 cleared hidden, toggle reveals all 9.

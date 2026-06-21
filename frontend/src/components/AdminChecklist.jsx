@@ -11,6 +11,7 @@ export default function AdminChecklist() {
   const [open, setOpen] = useState(false);
   const [ticked, setTicked] = useState({});
   const [busy, setBusy] = useState(false);
+  const [showCleared, setShowCleared] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,6 +26,17 @@ export default function AdminChecklist() {
   }, []);
 
   if (!open || !data) return null;
+
+  // A row is "clear" (nothing to do) when its count is 0, or its status reads
+  // "None"/"No". Those are auto-hidden so the admin only sees what needs action.
+  const isClear = (it) =>
+    it.status !== undefined
+      ? it.status === "None" || it.status === "No"
+      : (it.count || 0) === 0;
+  const actionable = data.items.filter((it) => !isClear(it));
+  const cleared = data.items.filter(isClear);
+  const visible = showCleared ? data.items : actionable;
+  const allClear = actionable.length === 0;
 
   const toggle = (key) => setTicked((t) => ({ ...t, [key]: !t[key] }));
 
@@ -65,7 +77,9 @@ export default function AdminChecklist() {
             </div>
             <div>
               <h2 className="text-lg font-extrabold leading-tight">Daily readiness check</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Confirm today&apos;s setup before the day kicks off.</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {allClear ? "Everything's clear for today." : `${actionable.length} item${actionable.length === 1 ? "" : "s"} need${actionable.length === 1 ? "s" : ""} your attention.`}
+              </p>
             </div>
           </div>
           <button onClick={() => setOpen(false)} data-testid="checklist-close" className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400" title="Remind me on next login">
@@ -74,7 +88,16 @@ export default function AdminChecklist() {
         </header>
 
         <div className="px-4 py-3 overflow-y-auto divide-y divide-slate-100">
-          {data.items.map((it) => {
+          {allClear && !showCleared ? (
+            <div className="py-10 text-center" data-testid="checklist-all-clear">
+              <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 size={28} />
+              </div>
+              <p className="font-extrabold text-slate-800">All set for today</p>
+              <p className="text-xs text-slate-500 mt-1">No pending approvals or setup needed. Have a great day on the water!</p>
+            </div>
+          ) : (
+            visible.map((it) => {
             const on = !!ticked[it.key];
             return (
               <div key={it.key} data-testid={`checklist-item-${it.key}`} className="flex items-center gap-3 py-2.5">
@@ -102,7 +125,19 @@ export default function AdminChecklist() {
                 </button>
               </div>
             );
-          })}
+          })
+          )}
+
+          {cleared.length > 0 && (
+            <button
+              type="button"
+              data-testid="checklist-toggle-cleared"
+              onClick={() => setShowCleared((s) => !s)}
+              className="w-full text-center py-3 text-xs font-semibold text-slate-400 hover:text-slate-600"
+            >
+              {showCleared ? "Hide cleared items" : `Show ${cleared.length} cleared item${cleared.length === 1 ? "" : "s"}`}
+            </button>
+          )}
         </div>
 
         <footer className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3">
