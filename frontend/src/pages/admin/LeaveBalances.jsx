@@ -54,7 +54,7 @@ export default function LeaveBalances() {
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <header className="mb-5">
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Leave Balances</h1>
-        <p className="text-slate-500 text-sm mt-1">Set each member&apos;s opening leave balance for {data?.year || "this year"}. Edit any cell, then Save.</p>
+        <p className="text-slate-500 text-sm mt-1">Set each member&apos;s opening annual leave for {data?.year || "this year"} (edit a cell, then Save). Comp-off balances are auto-calculated.</p>
       </header>
 
       <div className="iu-card p-3 mb-4 flex items-center gap-3 sticky top-0 z-10">
@@ -89,9 +89,10 @@ export default function LeaveBalances() {
                   <th className="iu-table-th">Member</th>
                   <th className="iu-table-th hidden md:table-cell">Category</th>
                   <th className="iu-table-th hidden lg:table-cell">Institution</th>
-                  <th className="iu-table-th text-right">Opening</th>
+                  <th className="iu-table-th text-right">Annual Opening</th>
                   <th className="iu-table-th text-right">Taken YTD</th>
-                  <th className="iu-table-th text-right">Balance</th>
+                  <th className="iu-table-th text-right">Annual Bal.</th>
+                  <th className="iu-table-th text-right">Comp-off Bal.</th>
                 </tr>
               </thead>
               <tbody>
@@ -117,11 +118,15 @@ export default function LeaveBalances() {
                       </td>
                       <td className="iu-table-td text-right text-slate-600">{r.taken_this_year}</td>
                       <td className={`iu-table-td text-right font-bold ${balance < 0 ? "text-red-600" : "text-emerald-700"}`}>{balance}</td>
+                      <td className="iu-table-td text-right" data-testid={`lb-comp-${r.id}`}>
+                        <span className={`font-bold ${(r.comp_balance || 0) > 0 ? "text-sky-700" : "text-slate-400"}`}>{r.comp_balance || 0}</span>
+                        <div className="text-[10px] text-slate-400">{r.comp_earned || 0} earned · {r.comp_used || 0} used{r.comp_pending ? ` · ${r.comp_pending} held` : ""}</div>
+                      </td>
                     </tr>
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={6} className="text-center py-10 text-slate-500">No members match.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-10 text-slate-500">No members match.</td></tr>
                 )}
               </tbody>
             </table>

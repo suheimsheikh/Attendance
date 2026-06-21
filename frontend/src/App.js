@@ -13,14 +13,12 @@ import MyLeaves from "./pages/MyLeaves";
 import Muster from "./pages/Muster";
 import AdminConsole from "./pages/admin/Console";
 import Members from "./pages/admin/Members";
-import AdminLeaves from "./pages/admin/Leaves";
 import Devices from "./pages/admin/Devices";
 import OfficeSettings from "./pages/admin/Office";
 import OfficeQR from "./pages/admin/OfficeQR";
 import Reports from "./pages/admin/Reports";
 import Sessions from "./pages/admin/Sessions";
-import Overtime from "./pages/admin/Overtime";
-import LeaveBalances from "./pages/admin/LeaveBalances";
+import LeaveManagement from "./pages/admin/LeaveManagement";
 import Payroll from "./pages/admin/Payroll";
 import Institutions from "./pages/admin/Institutions";
 import Camps from "./pages/admin/Camps";
@@ -79,16 +77,17 @@ function App() {
             <Route path="profile" element={<Profile />} />
             <Route path="admin" element={<RequireAdmin><AdminConsole /></RequireAdmin>} />
             <Route path="admin/members" element={<RequireAdmin><Members /></RequireAdmin>} />
-            <Route path="admin/leaves" element={<RequireAdmin><AdminLeaves /></RequireAdmin>} />
+            <Route path="admin/leaves" element={<Navigate to="/admin/leave-management?tab=requests" replace />} />
             <Route path="admin/devices" element={<RequireAdmin><Devices /></RequireAdmin>} />
             <Route path="admin/office" element={<RequireAdmin><OfficeSettings /></RequireAdmin>} />
             <Route path="admin/office-qr" element={<RequireAdmin><DisabledFeature title="Office QR disabled" reason="QR scanning is turned off — use Muster Roll." /></RequireAdmin>} />
             <Route path="admin/reports" element={<RequireAdmin><Reports /></RequireAdmin>} />
             <Route path="admin/payroll" element={<RequireAdmin><Payroll /></RequireAdmin>} />
             <Route path="admin/sessions" element={<RequireAdmin><Sessions /></RequireAdmin>} />
-            <Route path="admin/overtime" element={<RequireAdmin><Overtime /></RequireAdmin>} />
-            <Route path="admin/leave-balances" element={<RequireAdmin><LeaveBalances /></RequireAdmin>} />
-            <Route path="admin/group-leave" element={<Navigate to="/admin/leaves" replace />} />
+            <Route path="admin/leave-management" element={<RequireAdmin><LeaveManagement /></RequireAdmin>} />
+            <Route path="admin/overtime" element={<Navigate to="/admin/leave-management?tab=overtime" replace />} />
+            <Route path="admin/leave-balances" element={<Navigate to="/admin/leave-management?tab=balances" replace />} />
+            <Route path="admin/group-leave" element={<Navigate to="/admin/leave-management?tab=requests" replace />} />
             <Route path="admin/institutions" element={<RequireAdmin><Institutions /></RequireAdmin>} />
             <Route path="admin/camps" element={<RequireAdmin><Camps /></RequireAdmin>} />
             <Route path="admin/schedule" element={<RequireAdmin><Schedule /></RequireAdmin>} />

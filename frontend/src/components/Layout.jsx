@@ -23,9 +23,7 @@ const NAV_MEMBER_AFTER_MUSTER = [
 
 const NAV_ADMIN = [
   { to: "/admin", label: "Admin Console", icon: ShieldCheck, end: true, tip: "Overview of today's stats and quick actions" },
-  { to: "/admin/leaves", label: "Leave Approvals", icon: ClipboardList, tip: "Approve leave/tour requests and apply on behalf of a member" },
-  { to: "/admin/overtime", label: "Overtime Approvals", icon: ClipboardCheck, tip: "Review and approve overtime hours" },
-  { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2, tip: "View each member's leave and comp-off balances" },
+  { to: "/admin/leave-management", label: "Leave & Overtime", icon: ClipboardList, tip: "Requests, overtime approvals and leave/comp-off balances — all in one place" },
   { to: "/admin/institutions", label: "Institutions", icon: Building2, tip: "Manage partner institutions" },
   { to: "/admin/camps", label: "Camps & Regattas", icon: Tent, tip: "Schedule training camps and outstation regattas/tours" },
   { to: "/admin/schedule", label: "Schedule & Holidays", icon: CalendarClock, tip: "Set weekly timing overrides, one-off changes and holidays" },

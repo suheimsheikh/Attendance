@@ -1114,9 +1114,41 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
             n = 1
         used[leave["user_id"]] = used.get(leave["user_id"], 0) + n
     out = []
+    # ---- Comp-off (bulk): earned = distinct attendance dates on a weekly-off or
+    # holiday; spent/held = approved/pending comp_off leaves. Computed here in
+    # bulk (a few collection-wide reads) instead of N per-member ledger calls.
+    holidays = await db.schedule_exceptions.find(
+        {"kind": "holiday"}, {"_id": 0, "name": 1, "start_date": 1, "end_date": 1}
+    ).to_list(500)
+    def _holiday_on(dstr: str) -> bool:
+        return any(h["start_date"] <= dstr <= h["end_date"] for h in holidays)
+    att_by_user: dict = {}
+    async for s in db.attendance.find({}, {"_id": 0, "user_id": 1, "date": 1}):
+        d = s.get("date")
+        if d:
+            att_by_user.setdefault(s["user_id"], set()).add(d)
+    co_by_user: dict = {}
+    async for l in db.leaves.find(
+        {"type": "comp_off", "status": {"$in": ["approved", "pending"]}},
+        {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1, "status": 1},
+    ):
+        co_by_user.setdefault(l["user_id"], []).append(l)
+
     for u in users:
         opening = float(u.get("leave_balance_opening") or 0)
         taken = float(used.get(u["id"], 0))
+        wo = (u.get("weekly_off") or "monday").lower()
+        earned = 0
+        for dstr in att_by_user.get(u["id"], set()):
+            try:
+                d_ = date.fromisoformat(dstr)
+            except Exception:
+                continue
+            if _WEEKDAY_NAMES[d_.weekday()] == wo or _holiday_on(dstr):
+                earned += 1
+        co_leaves = co_by_user.get(u["id"], [])
+        co_used = sum(_count_date_span(l["start_date"], l["end_date"]) for l in co_leaves if l["status"] == "approved")
+        co_pending = sum(_count_date_span(l["start_date"], l["end_date"]) for l in co_leaves if l["status"] == "pending")
         out.append({
             "id": u["id"],
             "full_name": u["full_name"],
@@ -1126,6 +1158,10 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
             "opening": opening,
             "taken_this_year": taken,
             "balance": round(opening - taken, 1),
+            "comp_earned": earned,
+            "comp_used": co_used,
+            "comp_pending": co_pending,
+            "comp_balance": earned - co_used - co_pending,
         })
     return {"year": int(year), "rows": out}
 
