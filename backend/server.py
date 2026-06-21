@@ -2043,6 +2043,8 @@ async def presence(user: dict = Depends(get_current_user)):
     today_weekday = _camps_module.weekday_key(now_utc().astimezone(office_tz(office)))
     def _camp_for(u: dict) -> Optional[dict]:
         return _camps_module.resolve_member_camp(u, camps_today, today_weekday, today)
+    def _outstation_for(u: dict) -> Optional[dict]:
+        return _camps_module.resolve_member_outstation(u, camps_today, today)
 
     # Admin contacts to surface as the "call the academy" numbers in the SMS body.
     admin_docs = await db.users.find(
@@ -2067,7 +2069,18 @@ async def presence(user: dict = Depends(get_current_user)):
         # last-completed session for exited members).
         geo_in: dict = {}
         geo_out: dict = {}
-        if leave and leave["type"] == "tour":
+        outstation = _outstation_for(u)
+        if outstation:
+            # Enrolled in a regatta (athletes) / tour (coaches & staff). Auto-
+            # excused for the whole event window — never absent, no check-in.
+            status_v = "on_tour"
+            is_athlete = u.get("category") == "athlete"
+            loc = outstation.get("location") or outstation.get("name")
+            verb = "At regatta" if is_athlete else "On tour"
+            detail = f"{verb} · {loc}" if loc else verb
+            since = outstation.get("start_date")
+            photo = u_thumb
+        elif leave and leave["type"] == "tour":
             status_v = "on_tour"
             detail = leave.get("location") or "On tour"
             since = leave["start_date"]

@@ -25,7 +25,7 @@ const NAV_ADMIN = [
   { to: "/admin/overtime", label: "Overtime Approvals", icon: ClipboardCheck },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
   { to: "/admin/institutions", label: "Institutions", icon: Building2 },
-  { to: "/admin/camps", label: "Camps", icon: Tent },
+  { to: "/admin/camps", label: "Camps & Regattas", icon: Tent },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/admin/payroll", label: "Monthly Payroll", icon: FileSpreadsheet },
   // Hidden / disabled tools (kept in routes but pushed to the bottom of the menu).

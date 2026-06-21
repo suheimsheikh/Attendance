@@ -321,7 +321,9 @@ function DayDetailModal({ dateKey, dayData, members, onClose, onEditRegatta }) {
                       </span>
                     </div>
                     <div className="text-xs text-slate-600 mt-1 flex flex-wrap gap-x-3">
-                      <span>{c.start_time} – {c.end_time}</span>
+                      {c.kind === "outstation"
+                        ? <span className="font-semibold text-violet-700">{c.location ? `Outstation · ${c.location}` : "Outstation"}</span>
+                        : <span>{c.start_time} – {c.end_time}</span>}
                       {c.institution && <span className="font-semibold">{c.institution}</span>}
                       {c.late_grace_minutes != null && <span>grace {c.late_grace_minutes}m</span>}
                     </div>

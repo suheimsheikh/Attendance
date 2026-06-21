@@ -140,5 +140,12 @@
 ## Test Credentials
 See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or phone `9849002111` for OTP-bypass).
 
+- **Camps & Regattas — outstation events (June 2026)**: Renamed the "Camps" admin page → **"Camps & Regattas"** and extended the `camps` collection with two fields: `kind` (`"camp"` | `"outstation"`, default `camp`) and `location` (free-text). 
+  - **Camp** = existing local training schedule (times + days drive late/absent for enrolled athletes; now also carries an optional location). `start_time`/`end_time` are required for camps.
+  - **Outstation event** = a travel window covering a date range at a `location`, enrolling a **mixed group** (athletes → "regatta", coaches/staff → "tour"). Times/days/grace are not used. `camps.py` gained `resolve_member_outstation()`; `resolve_member_camp()` now excludes outstation-kind so they never act as a training schedule.
+  - **Presence overlay**: a new highest-priority branch in `/api/presence` marks enrolled members `status="on_tour"` with detail `"At regatta · {location}"` (athletes) or `"On tour · {location}"` (coaches/staff) for the entire event range — auto-excused, never "Absent", no check-in required. Coexists with the legacy per-person `leaves type="tour"`.
+  - Frontend `Camps.jsx`: Camp/Outstation type toggle, Location field (MapPin), conditional time/days/grace (hidden for outstation), member picker includes all categories for outstation (Staff/Coach badges) vs athletes-only for camps, kind/location badges on list rows. `Calendar.jsx` guards the time display for outstation entries. Verified end-to-end via curl (athlete+coach enrolled → correct on_tour labels; camp time validation) and screenshot.
+
+
 - **Tap-to-zoom avatars on Presence Board (June 2026)**: New endpoint `GET /api/members/{id}/photo-full` (any authenticated user) returns the full-resolution photo on demand (falls back to thumbnail if no original). Presence rows wrap the avatar in a clickable button (`presence-avatar-zoom-{id}`); clicking opens a full-screen `PhotoZoomModal` that seeds with the thumbnail instantly then swaps in the full-res image, with member name, close button (Esc / backdrop click), and a loading spinner. Keeps list payloads light while letting coaches/admins inspect a member's face up close. Verified end-to-end via screenshot tool.
 

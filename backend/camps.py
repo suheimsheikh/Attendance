@@ -38,13 +38,23 @@ _TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
+# kind: "camp" = local daily training schedule (drives late/absent for athletes).
+#       "outstation" = a travel event (regatta for athletes / tour for staff &
+#       coaches) at a `location`; enrolled members are auto-excused (shown
+#       "on tour / at regatta", never absent) for the whole date range and are
+#       not required to check in. Times are optional for outstation events.
+CampKind = Literal["camp", "outstation"]
+
+
 class CampIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
+    kind: CampKind = "camp"
+    location: Optional[str] = None  # where the camp/regatta/tour is held
     institution: Optional[str] = None  # purely informational filter
     start_date: str
     end_date: str
-    start_time: str
-    end_time: str
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     days_of_week: List[Literal["mon","tue","wed","thu","fri","sat","sun"]] = Field(default_factory=list)
     member_ids: List[str] = Field(default_factory=list)
     late_grace_minutes: Optional[int] = None
@@ -59,7 +69,9 @@ class CampIn(BaseModel):
 
     @field_validator("start_time", "end_time")
     @classmethod
-    def _check_time(cls, v: str) -> str:
+    def _check_time(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
         if not _TIME_RE.match(v):
             raise ValueError("must be HH:MM (24-hour)")
         return v
@@ -67,6 +79,8 @@ class CampIn(BaseModel):
 
 class CampPatch(BaseModel):
     name: Optional[str] = None
+    kind: Optional[CampKind] = None
+    location: Optional[str] = None
     institution: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
@@ -126,11 +140,29 @@ async def fetch_camps_active_on(db, today_str: str) -> List[dict]:
 
 
 def resolve_member_camp(member: dict, camps_today: List[dict], weekday: str, today_str: str) -> Optional[dict]:
-    """Pick the camp that applies to this member today. If multiple match, the
-    one with explicit member_ids wins (more specific) over an
-    institution-wide one."""
+    """Pick the *training camp* that applies to this member today. Outstation
+    events (regattas/tours) are excluded — they never act as a daily schedule.
+    If multiple match, the one with explicit member_ids wins (more specific)
+    over an institution-wide one."""
     matches = [c for c in camps_today
-               if camp_active_on(c, today_str, weekday) and camp_applies_to(c, member)]
+               if c.get("kind", "camp") != "outstation"
+               and camp_active_on(c, today_str, weekday) and camp_applies_to(c, member)]
+    if not matches:
+        return None
+    matches.sort(key=lambda c: 0 if (c.get("member_ids") or []) else 1)
+    return matches[0]
+
+
+def resolve_member_outstation(member: dict, camps_today: List[dict], today_str: str) -> Optional[dict]:
+    """Pick the active outstation event (regatta/tour) this member is enrolled in
+    today, if any. Outstation events ignore day-of-week filtering — a travel
+    window covers every day in its date range. Explicit member_ids win over an
+    institution-wide enrollment."""
+    matches = [c for c in camps_today
+               if c.get("kind") == "outstation"
+               and (not c.get("start_date") or c["start_date"] <= today_str)
+               and (not c.get("end_date") or c["end_date"] >= today_str)
+               and camp_applies_to(c, member)]
     if not matches:
         return None
     matches.sort(key=lambda c: 0 if (c.get("member_ids") or []) else 1)
@@ -152,7 +184,12 @@ def make_router(db, require_admin) -> APIRouter:
     async def create_camp(body: CampIn, admin: dict = Depends(require_admin)):
         if body.start_date > body.end_date:
             raise HTTPException(status_code=400, detail="start_date must be on or before end_date")
-        if body.start_time >= body.end_time:
+        if body.kind == "camp":
+            if not body.start_time or not body.end_time:
+                raise HTTPException(status_code=400, detail="Camps require start_time and end_time")
+            if body.start_time >= body.end_time:
+                raise HTTPException(status_code=400, detail="start_time must be before end_time")
+        elif body.start_time and body.end_time and body.start_time >= body.end_time:
             raise HTTPException(status_code=400, detail="start_time must be before end_time")
         doc = body.model_dump()
         doc["id"] = str(uuid.uuid4())
@@ -180,11 +217,11 @@ def make_router(db, require_admin) -> APIRouter:
             raise HTTPException(status_code=404, detail="Camp not found")
         sd = payload.get("start_date", existing["start_date"])
         ed = payload.get("end_date", existing["end_date"])
-        st = payload.get("start_time", existing["start_time"])
-        et = payload.get("end_time", existing["end_time"])
+        st = payload.get("start_time", existing.get("start_time"))
+        et = payload.get("end_time", existing.get("end_time"))
         if sd > ed:
             raise HTTPException(status_code=400, detail="start_date must be on or before end_date")
-        if st >= et:
+        if st and et and st >= et:
             raise HTTPException(status_code=400, detail="start_time must be before end_time")
         payload["updated_at"] = datetime.now(timezone.utc).isoformat()
         payload["updated_by"] = admin["id"]
