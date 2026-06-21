@@ -14,6 +14,7 @@ import logging
 import bcrypt
 import jwt
 import re
+import secrets
 import openpyxl
 from openpyxl.utils import get_column_letter
 import base64
@@ -890,7 +891,10 @@ async def approve_device(device_pk: str, body: DeviceApproveIn, admin: dict = De
             "work_end": None,
             "photo": None,
             "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
-            "hashed_password": hash_password(digits or uuid.uuid4().hex[:8]),
+            # Auto-provisioned device-login users never sign in via email/password,
+            # so give them a strong random secret (not the guessable phone number)
+            # to prevent account takeover through the email/password form.
+            "hashed_password": hash_password(secrets.token_urlsafe(32)),
             "created_at": now,
         }
         await db.users.insert_one(new_user)
