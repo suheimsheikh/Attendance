@@ -13,23 +13,24 @@ import AdminChecklist from "./AdminChecklist";
 import OfflineBanner from "./OfflineBanner";
 
 const NAV_MEMBER_BEFORE_MUSTER = [
-  { to: "/", label: "Check In / Out", icon: ScanLine, end: true },
-  { to: "/my-leaves", label: "Leave / Tour / Comp Off", icon: CalendarCheck2 },
+  { to: "/", label: "Check In / Out", icon: ScanLine, end: true, tip: "Mark yourself present or check out for the day" },
+  { to: "/my-leaves", label: "Leave / Tour / Comp Off", icon: CalendarCheck2, tip: "Apply for leave or a tour, and view your comp-off balance" },
 ];
 const NAV_MEMBER_AFTER_MUSTER = [
-  { to: "/presence", label: "Presence", icon: LayoutDashboard },
-  { to: "/profile", label: "Profile", icon: UserCog },
+  { to: "/presence", label: "Presence", icon: LayoutDashboard, tip: "See who's on campus, on leave, on tour or absent right now" },
+  { to: "/profile", label: "Profile", icon: UserCog, tip: "View and edit your profile and photo" },
 ];
 
 const NAV_ADMIN = [
-  { to: "/admin", label: "Admin Console", icon: ShieldCheck, end: true },
-  { to: "/admin/overtime", label: "Overtime Approvals", icon: ClipboardCheck },
-  { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
-  { to: "/admin/institutions", label: "Institutions", icon: Building2 },
-  { to: "/admin/camps", label: "Camps & Regattas", icon: Tent },
-  { to: "/admin/schedule", label: "Schedule & Holidays", icon: CalendarClock },
-  { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
-  { to: "/admin/payroll", label: "Monthly Payroll", icon: FileSpreadsheet },
+  { to: "/admin", label: "Admin Console", icon: ShieldCheck, end: true, tip: "Overview of today's stats and quick actions" },
+  { to: "/admin/leaves", label: "Leave Approvals", icon: ClipboardList, tip: "Approve leave/tour requests and apply on behalf of a member" },
+  { to: "/admin/overtime", label: "Overtime Approvals", icon: ClipboardCheck, tip: "Review and approve overtime hours" },
+  { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2, tip: "View each member's leave and comp-off balances" },
+  { to: "/admin/institutions", label: "Institutions", icon: Building2, tip: "Manage partner institutions" },
+  { to: "/admin/camps", label: "Camps & Regattas", icon: Tent, tip: "Schedule training camps and outstation regattas/tours" },
+  { to: "/admin/schedule", label: "Schedule & Holidays", icon: CalendarClock, tip: "Set weekly timing overrides, one-off changes and holidays" },
+  { to: "/admin/calendar", label: "Calendar", icon: CalendarDays, tip: "Month view of camps, regattas and events" },
+  { to: "/admin/payroll", label: "Monthly Payroll", icon: FileSpreadsheet, tip: "Generate and export monthly payroll" },
   // Hidden / disabled tools (kept in routes but pushed to the bottom of the menu).
   { to: "/admin/office-qr", label: "Office QR", icon: QrCode, disabled: true, disabledReason: "QR scanning is disabled for now" },
   { to: "/admin/cards", label: "Member Cards", icon: IdCard, disabled: true, disabledReason: "QR scanning is disabled for now" },
@@ -105,6 +106,7 @@ export default function Layout() {
         <button
           data-testid="logout-button"
           onClick={handleLogout}
+          title="Sign out of your account"
           className="w-full mt-2 flex items-center justify-center gap-2 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-semibold transition"
         >
           <LogOut size={16} /> Sign out
@@ -131,7 +133,7 @@ export default function Layout() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile header */}
         <header className="md:hidden h-14 bg-white border-b border-slate-200 flex items-center px-4 sticky top-0 z-30">
-          <button data-testid="open-sidebar-button" onClick={() => setOpen(true)} className="p-2 -ml-2 rounded-lg hover:bg-slate-100">
+          <button data-testid="open-sidebar-button" onClick={() => setOpen(true)} title="Open menu" className="p-2 -ml-2 rounded-lg hover:bg-slate-100">
             <Menu size={22} />
           </button>
           <div className="ml-2 flex items-center gap-2">
@@ -154,7 +156,7 @@ export default function Layout() {
   );
 }
 
-function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason }) {
+function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason, tip }) {
   if (disabled) {
     return (
       <div
@@ -173,6 +175,7 @@ function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason
       to={to}
       end={end}
       onClick={onClick}
+      title={tip || label}
       data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
       className={({ isActive }) =>
         `flex items-center gap-3 px-3 h-10 rounded-lg text-sm font-medium transition mb-0.5 ${

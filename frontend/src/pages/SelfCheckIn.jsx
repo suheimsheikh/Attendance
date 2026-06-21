@@ -145,6 +145,16 @@ export default function SelfCheckIn() {
     performToggle();
   };
 
+  // The selfie is encouraged but must never block a check-in: if the member
+  // skips, closes, or their camera is unavailable, we still log their arrival
+  // (without a photo) and nudge them again next time. This prevents the
+  // "I tapped check-in but I'm not on the board" problem.
+  const skipSelfieAndCheckIn = () => {
+    setShowSelfie(false);
+    toast.info("Checking you in — you can add your photo later.");
+    performToggle();
+  };
+
   const handleTempReturn = async () => {
     setWorking(true);
     try {
@@ -214,6 +224,7 @@ export default function SelfCheckIn() {
             data-testid="temp-return-button"
             onClick={handleTempReturn}
             disabled={working}
+            title="Mark yourself back on campus"
             className="iu-btn-primary mt-4 mx-auto"
           >
             {working ? <Loader2 className="animate-spin" size={16} /> : <ArrowLeftRight size={16} />} I&apos;m back
@@ -251,6 +262,7 @@ export default function SelfCheckIn() {
             data-testid="self-checkin-button"
             disabled={working}
             onClick={handleToggle}
+            title={status?.checked_in ? "Tap to check out for the day" : "Tap to log your arrival on campus"}
             className={`mx-auto inline-flex flex-col items-center justify-center gap-2 rounded-3xl shadow-xl transition active:scale-[0.97] disabled:opacity-60 w-44 h-44 text-white ${
               status?.checked_in
                 ? "bg-gradient-to-br from-rose-500 to-rose-700"
@@ -301,10 +313,10 @@ export default function SelfCheckIn() {
         <SelfieCapture
           title={photoStatus?.reason === "expired" ? "Time for a fresh photo" : "One quick selfie"}
           subtitle={photoStatus?.reason === "expired"
-            ? "Your photo's over a year old — let's update it so your coach can still recognise you on the muster."
-            : "So your coach can recognise you on the muster list. You only do this once."}
+            ? "Your photo's over a year old — let's update it. You can Skip and we'll still check you in."
+            : "So your coach can recognise you on the muster. Tap Skip if you can't right now — we'll still check you in."}
           onCapture={saveSelfie}
-          onClose={() => setShowSelfie(false)}
+          onClose={skipSelfieAndCheckIn}
         />
       )}
     </div>
@@ -351,7 +363,7 @@ function TempExitCard({ onCreated }) {
           <div className="font-semibold text-slate-900 text-sm">Stepping out for a bit?</div>
           <div className="text-xs text-slate-600">Log a temporary exit (lunch, errand, etc.). You remain on office hours.</div>
         </div>
-        <button data-testid="temp-exit-open" onClick={() => setOpen(true)} className="iu-btn-secondary !h-9 !px-3 shrink-0">
+        <button data-testid="temp-exit-open" onClick={() => setOpen(true)} title="Log a short temporary exit (lunch, errand) without checking out" className="iu-btn-secondary !h-9 !px-3 shrink-0">
           <ArrowLeftRight size={14} /> Temp exit
         </button>
       </div>

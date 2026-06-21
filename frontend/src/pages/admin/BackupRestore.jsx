@@ -118,6 +118,7 @@ export default function BackupRestore() {
               onClick={downloadBackup}
               disabled={downloading}
               data-testid="br-download"
+              title="Download a master-data backup (.tar.gz)"
               className="iu-btn-primary !bg-emerald-600 hover:!bg-emerald-700"
             >
               {downloading ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
@@ -168,6 +169,7 @@ export default function BackupRestore() {
                 onClick={upload}
                 disabled={uploading || !file}
                 data-testid="br-restore"
+                title="Restore master data from the selected backup file"
                 className="iu-btn-primary !bg-sky-600 hover:!bg-sky-700"
               >
                 {uploading ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
@@ -211,6 +213,7 @@ export default function BackupRestore() {
               onClick={wipeAttendance}
               disabled={wiping}
               data-testid="br-wipe-attendance"
+              title="Permanently delete every attendance record"
               className="iu-btn-primary !bg-rose-600 hover:!bg-rose-700"
             >
               {wiping ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}

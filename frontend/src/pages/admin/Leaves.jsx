@@ -43,7 +43,7 @@ export default function AdminLeaves() {
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Leave Approvals</h1>
           <p className="text-slate-500 text-sm mt-1">Review and decide on leave & tour requests.</p>
         </div>
-        <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} className="iu-btn-primary">
+        <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} title="File a leave or tour on behalf of a member who forgot" className="iu-btn-primary">
           <Plus size={16}/> Apply on behalf
         </button>
       </header>
@@ -88,8 +88,8 @@ export default function AdminLeaves() {
               <div className="flex items-center gap-2">
                 {l.status === "pending" ? (
                   <>
-                    <button data-testid={`approve-${l.id}`} onClick={() => decide(l.id, "approved")} className="iu-btn-primary !h-9 !px-3"><Check size={14}/> Approve</button>
-                    <button data-testid={`reject-${l.id}`} onClick={() => decide(l.id, "rejected")} className="iu-btn-secondary !h-9 !px-3"><X size={14}/> Reject</button>
+                    <button data-testid={`approve-${l.id}`} onClick={() => decide(l.id, "approved")} title="Approve this request" className="iu-btn-primary !h-9 !px-3"><Check size={14}/> Approve</button>
+                    <button data-testid={`reject-${l.id}`} onClick={() => decide(l.id, "rejected")} title="Reject this request" className="iu-btn-secondary !h-9 !px-3"><X size={14}/> Reject</button>
                   </>
                 ) : (
                   <span className="iu-chip capitalize">{l.status}</span>

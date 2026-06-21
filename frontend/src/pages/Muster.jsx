@@ -197,6 +197,7 @@ export default function Muster() {
             key={m.key}
             data-testid={`muster-mode-${m.key}`}
             onClick={() => setMode(m.key)}
+            title={`Switch to ${m.label.toLowerCase()} mode`}
             className={`iu-btn ${mode === m.key ? "iu-btn-primary" : "iu-btn-secondary"}`}
           >
             <m.Icon size={16} /> {m.label}
@@ -255,12 +256,13 @@ export default function Muster() {
           data-testid="muster-toggle-all"
           onClick={toggleAllVisible}
           disabled={filtered.length === 0}
+          title={allVisiblePicked ? "Untick all visible athletes" : "Tick every visible athlete at once"}
           className="iu-btn-ghost !h-9 !px-3 text-xs"
         >
           {allVisiblePicked ? <CheckSquare size={14}/> : <Square size={14}/>}
           {allVisiblePicked ? "Untick visible" : "Tick all visible"}
         </button>
-        <button onClick={load} className="iu-btn-secondary !h-9 !px-3" data-testid="muster-refresh">
+        <button onClick={load} className="iu-btn-secondary !h-9 !px-3" title="Refresh the roster" data-testid="muster-refresh">
           <RefreshCw size={14} />
         </button>
       </div>
@@ -327,6 +329,7 @@ export default function Muster() {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setPhotoTarget({ id: s.id, full_name: s.full_name }); }}
+                    title={`Capture a photo for ${s.full_name}`}
                     className="ml-2 inline-flex items-center gap-1 px-2 h-7 rounded-full bg-amber-100 text-amber-700 text-[11px] font-bold hover:bg-amber-200 shrink-0"
                     data-testid={`muster-photo-${s.id}`}
                   >
@@ -354,6 +357,7 @@ export default function Muster() {
             data-testid="muster-submit"
             onClick={submit}
             disabled={saving || picked.size === 0}
+            title={`${meta.verb} the ${picked.size} ticked athlete${picked.size === 1 ? "" : "s"}`}
             className="iu-btn-primary"
             style={{ background: picked.size > 0 ? meta.color : undefined }}
           >

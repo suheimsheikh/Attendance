@@ -108,7 +108,7 @@ export default function Members() {
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Members</h1>
           <p className="text-slate-500 text-sm mt-1">{members.length} total</p>
         </div>
-        <button data-testid="new-member-button" onClick={() => setEditing("new")} className="iu-btn-primary"><Plus size={16}/> Add member</button>
+        <button data-testid="new-member-button" onClick={() => setEditing("new")} title="Add a new member" className="iu-btn-primary"><Plus size={16}/> Add member</button>
       </header>
 
       <div className="iu-card p-4 mb-4 flex items-center gap-3">
@@ -225,8 +225,8 @@ export default function Members() {
                           >
                             {busyId === m.id ? <Loader2 className="animate-spin" size={16}/> : (p?.status === "on_campus" ? <LogOutIcon size={16}/> : <LogIn size={16}/>)}
                           </button>
-                          <button data-testid={`edit-member-${m.id}`} onClick={() => setEditing(m)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-700"><Edit3 size={16} /></button>
-                          <button data-testid={`delete-member-${m.id}`} onClick={() => remove(m)} className="p-2 rounded-lg hover:bg-red-50 text-red-600"><Trash2 size={16} /></button>
+                          <button data-testid={`edit-member-${m.id}`} onClick={() => setEditing(m)} title={`Edit ${m.full_name}`} className="p-2 rounded-lg hover:bg-slate-100 text-slate-700"><Edit3 size={16} /></button>
+                          <button data-testid={`delete-member-${m.id}`} onClick={() => remove(m)} title={`Delete ${m.full_name}`} className="p-2 rounded-lg hover:bg-red-50 text-red-600"><Trash2 size={16} /></button>
                         </div>
                       </td>
                     </tr>
