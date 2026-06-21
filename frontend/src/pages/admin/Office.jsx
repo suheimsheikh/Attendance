@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api } from "../../api";
 import { getLocation } from "../../utils";
 import SmsSenders from "./SmsSenders";
+import VoiceMessages from "./VoiceMessages";
 
 const TZS = ["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Australia/Sydney"];
 
@@ -162,6 +163,7 @@ export default function OfficeSettings() {
       </form>
 
       <SmsSenders />
+      <VoiceMessages />
     </div>
   );
 }

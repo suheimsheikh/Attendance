@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, Request
 from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -1289,6 +1289,76 @@ async def upsert_sms_sender(institution: str, body: SmsSenderIn, admin: dict = D
     return _mask_sender(await db.sms_senders.find_one({"institution": institution}, {"_id": 0}))
 
 
+# ----------------------------------------------------------------------------
+# Prerecorded parent voice-call messages (Telugu + Hindi), played via Twilio.
+# ----------------------------------------------------------------------------
+VOICE_TEXTS = {
+    "late": {
+        "te": "నమస్కారం. మీ విద్యార్థి ఈ రోజు సెయిలింగ్ అకాడమీకి ఆలస్యంగా చేరుకున్నారు.",
+        "hi": "नमस्ते। आपका विद्यार्थी आज सेलिंग अकादमी में देर से पहुँचा है।",
+    },
+    "absent": {
+        "te": "నమస్కారం. మీ విద్యార్థి ఈ రోజు సెయిలింగ్ అకాడమీకి హాజరు కాలేదు. దయచేసి కోచ్‌ను సంప్రదించండి.",
+        "hi": "नमस्ते। आपका विद्यार्थी आज सेलिंग अकादमी में उपस्थित नहीं हुआ है। कृपया कोच से संपर्क करें।",
+    },
+}
+
+
+async def _generate_voice_audio(vtype: str) -> bytes:
+    from emergentintegrations.llm.openai import OpenAITextToSpeech
+    tts = OpenAITextToSpeech(api_key=os.environ["EMERGENT_LLM_KEY"])
+    t = VOICE_TEXTS[vtype]
+    text = t["te"] + "  " + t["hi"]
+    return await tts.generate_speech(text=text, model="tts-1", voice="alloy")
+
+
+@api_router.get("/admin/voice-messages")
+async def list_voice_messages(admin: dict = Depends(require_admin)):
+    out = []
+    for vt in ("late", "absent"):
+        d = await db.voice_messages.find_one({"type": vt}, {"_id": 0, "source": 1, "updated_at": 1})
+        out.append({"type": vt, "set": bool(d), "source": (d or {}).get("source"), "updated_at": (d or {}).get("updated_at")})
+    return out
+
+
+@api_router.post("/admin/voice-messages/{vtype}/generate")
+async def generate_voice_message(vtype: str, admin: dict = Depends(require_admin)):
+    if vtype not in VOICE_TEXTS:
+        raise HTTPException(status_code=400, detail="Invalid message type")
+    audio = await _generate_voice_audio(vtype)
+    await db.voice_messages.update_one(
+        {"type": vtype},
+        {"$set": {"type": vtype, "audio_b64": base64.b64encode(audio).decode(), "source": "generated", "updated_at": now_utc().isoformat()}},
+        upsert=True,
+    )
+    return {"ok": True, "type": vtype, "bytes": len(audio)}
+
+
+@api_router.post("/admin/voice-messages/{vtype}/upload")
+async def upload_voice_message(vtype: str, file: UploadFile = File(...), admin: dict = Depends(require_admin)):
+    if vtype not in VOICE_TEXTS:
+        raise HTTPException(status_code=400, detail="Invalid message type")
+    data = await file.read()
+    if len(data) > 5_000_000:
+        raise HTTPException(status_code=400, detail="Audio too large (max 5MB)")
+    await db.voice_messages.update_one(
+        {"type": vtype},
+        {"$set": {"type": vtype, "audio_b64": base64.b64encode(data).decode(), "source": "uploaded", "updated_at": now_utc().isoformat()}},
+        upsert=True,
+    )
+    return {"ok": True, "type": vtype, "bytes": len(data)}
+
+
+@api_router.get("/voice-messages/{vtype}/audio")
+async def get_voice_audio(vtype: str):
+    """PUBLIC (no auth) — Twilio fetches this URL to play the message on a call."""
+    d = await db.voice_messages.find_one({"type": vtype}, {"_id": 0, "audio_b64": 1})
+    if not d or not d.get("audio_b64"):
+        raise HTTPException(status_code=404, detail="No voice message set")
+    return Response(content=base64.b64decode(d["audio_b64"]), media_type="audio/mpeg")
+
+
+
 
 # ----------------------------------------------------------------------------
 # Group leave — file the same leave for many members in one shot
@@ -2566,6 +2636,34 @@ async def _sender_for_institution(institution: Optional[str]) -> Optional[dict]:
     return None
 
 
+def _twilio_call(sender: dict, to: str, twiml: str) -> str:
+    from twilio.rest import Client
+    from twilio.http.http_client import TwilioHttpClient
+    client = Client(sender["account_sid"], sender["auth_token"], http_client=TwilioHttpClient(timeout=15))
+    call = client.calls.create(twiml=twiml, to=to, from_=sender["from_number"])
+    return call.sid
+
+
+async def _place_parent_calls(numbers: List[str], audio_url: str, sender: dict) -> dict:
+    twiml = f"<Response><Play>{audio_url}</Play></Response>"
+    seen, targets = set(), []
+    for raw in numbers:
+        e = _e164_india(raw)
+        if e and e not in seen:
+            seen.add(e)
+            targets.append(e)
+    placed, failed = [], []
+    for to in targets:
+        try:
+            sid = await asyncio.to_thread(_twilio_call, sender, to, twiml)
+            placed.append({"to": to, "sid": sid})
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Twilio call failed to %s: %s", to, e)
+            failed.append({"to": to, "error": str(e)})
+    return {"placed": len(placed), "failed": failed}
+
+
+
 async def _send_parent_sms(numbers: List[str], body: str, sender: dict) -> dict:
     # de-dupe normalised numbers
     seen, targets = set(), []
@@ -2586,7 +2684,7 @@ async def _send_parent_sms(numbers: List[str], body: str, sender: dict) -> dict:
 
 
 @api_router.post("/parent-notify/dispatch")
-async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depends(get_current_user)):
+async def parent_notify_dispatch(body: ParentNotifyDispatchIn, request: Request, user: dict = Depends(get_current_user)):
     """Send a parent/guardian SMS (via Twilio) for a late / not-arrived child and
     record it. One record per (user, date, type) so the button is suppressed
     after a successful send."""
@@ -2635,6 +2733,19 @@ async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depe
         detail = result["failed"][0]["error"] if result["failed"] else "Unknown error"
         raise HTTPException(status_code=502, detail=f"Could not send SMS: {detail}")
 
+    # Also place a prerecorded voice call (best-effort) if a clip is configured.
+    voice_type = "late" if body.type == "late" else "absent"
+    call_result = {"placed": 0, "failed": []}
+    vm = await db.voice_messages.find_one({"type": voice_type}, {"_id": 1})
+    if vm:
+        proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get("host")
+        audio_url = f"{proto}://{host}/api/voice-messages/{voice_type}/audio"
+        try:
+            call_result = await _place_parent_calls(numbers, audio_url, sender)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Voice call dispatch failed: %s", e)
+
     doc = {
         "id": str(uuid.uuid4()),
         "user_id": body.user_id,
@@ -2643,8 +2754,9 @@ async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depe
         "sent_at": now_utc().isoformat(),
         "sent_by_id": user["id"],
         "sent_by_name": user.get("full_name"),
-        "channel": "twilio_sms",
+        "channel": "twilio_sms+voice" if call_result["placed"] else "twilio_sms",
         "sms_to": [s["to"] for s in result["details"]],
+        "calls_placed": call_result["placed"],
     }
     try:
         await db.parent_notifications.insert_one(doc)
@@ -2654,7 +2766,8 @@ async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depe
         )
         return {"already_sent": True, "sent_at": existing.get("sent_at"), "sent_by": existing.get("sent_by_name")}
     return {"already_sent": False, "sent_at": doc["sent_at"], "sent_by": doc["sent_by_name"],
-            "sms_sent": result["sent"], "sms_failed": len(result["failed"])}
+            "sms_sent": result["sent"], "sms_failed": len(result["failed"]),
+            "calls_placed": call_result["placed"]}
 
 
 # ----------------------------------------------------------------------------
