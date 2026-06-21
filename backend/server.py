@@ -403,6 +403,7 @@ class GroupLeaveIn(BaseModel):
     reason: str
     location: Optional[str] = None
     auto_approve: bool = True
+    half_day: Optional[Literal["forenoon", "afternoon"]] = None
 
 
 class OfficeConfig(BaseModel):
@@ -415,6 +416,10 @@ class OfficeConfig(BaseModel):
     timezone: str = "Asia/Kolkata"
     late_grace_minutes: int = 0
     parent_notify_grace_minutes: int = 30
+    forenoon_start: str = "09:30"
+    forenoon_end: str = "13:30"
+    afternoon_start: str = "13:30"
+    afternoon_end: str = "17:30"
 
 
 class CheckInIn(BaseModel):
@@ -454,6 +459,7 @@ class LeaveCreate(BaseModel):
     reason: str
     location: Optional[str] = None  # for tour
     expected_arrival: Optional[str] = None  # HH:MM for late_coming
+    half_day: Optional[Literal["forenoon", "afternoon"]] = None  # single-date Leave/Comp-off only
 
 
 class LeaveDecision(BaseModel):
@@ -1103,15 +1109,10 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
     leaves = await db.leaves.find({
         "status": "approved", "type": "leave",
         "start_date": {"$gte": f"{year}-01-01", "$lte": f"{year}-12-31"},
-    }, {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1}).to_list(20000)
+    }, {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1, "half_day": 1}).to_list(20000)
     used: dict = {}
     for leave in leaves:
-        try:
-            sd = date.fromisoformat(leave["start_date"])
-            ed = date.fromisoformat(leave["end_date"])
-            n = (ed - sd).days + 1
-        except Exception:
-            n = 1
+        n = _leave_units(leave)
         used[leave["user_id"]] = used.get(leave["user_id"], 0) + n
     out = []
     # ---- Comp-off (bulk): earned = distinct attendance dates on a weekly-off or
@@ -1130,7 +1131,7 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
     co_by_user: dict = {}
     async for l in db.leaves.find(
         {"type": "comp_off", "status": {"$in": ["approved", "pending"]}},
-        {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1, "status": 1},
+        {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1, "status": 1, "half_day": 1},
     ):
         co_by_user.setdefault(l["user_id"], []).append(l)
 
@@ -1147,8 +1148,8 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
             if _WEEKDAY_NAMES[d_.weekday()] == wo or _holiday_on(dstr):
                 earned += 1
         co_leaves = co_by_user.get(u["id"], [])
-        co_used = sum(_count_date_span(l["start_date"], l["end_date"]) for l in co_leaves if l["status"] == "approved")
-        co_pending = sum(_count_date_span(l["start_date"], l["end_date"]) for l in co_leaves if l["status"] == "pending")
+        co_used = sum(_leave_units(l) for l in co_leaves if l["status"] == "approved")
+        co_pending = sum(_leave_units(l) for l in co_leaves if l["status"] == "pending")
         out.append({
             "id": u["id"],
             "full_name": u["full_name"],
@@ -1244,6 +1245,9 @@ async def delete_institution(inst_id: str, admin: dict = Depends(require_admin))
 async def group_leave(body: GroupLeaveIn, admin: dict = Depends(require_admin)):
     if not body.user_ids:
         raise HTTPException(status_code=400, detail="Pick at least one member")
+    half_day = body.half_day
+    if half_day and (body.type not in ("leave", "comp_off") or body.start_date != body.end_date):
+        raise HTTPException(status_code=400, detail="Half-day applies only to single-date Leave or Comp-off")
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
     late_application = bool(body.start_date and body.start_date < today)
@@ -1257,6 +1261,7 @@ async def group_leave(body: GroupLeaveIn, admin: dict = Depends(require_admin)):
             "end_date": body.end_date,
             "reason": body.reason,
             "location": body.location,
+            "half_day": half_day,
             "status": "approved" if body.auto_approve else "pending",
             "late_application": late_application,
             "filed_by_admin": admin["id"],
@@ -2249,7 +2254,11 @@ async def presence(user: dict = Depends(get_current_user)):
             photo = u_thumb
         elif leave and leave["type"] == "leave":
             status_v = "on_leave"
-            detail = f"Till {leave['end_date']}"
+            hd = leave.get("half_day")
+            if hd in ("forenoon", "afternoon"):
+                detail = f"Half day ({hd})"
+            else:
+                detail = f"Till {leave['end_date']}"
             since = leave["start_date"]
             photo = u_thumb
         elif sess:
@@ -2519,6 +2528,14 @@ def _count_date_span(start_date: str, end_date: str) -> int:
     return max(1, (e - s).days + 1)
 
 
+def _leave_units(leave: dict) -> float:
+    """Leave days a record consumes — 0.5 for a half-day (forenoon/afternoon),
+    otherwise the inclusive calendar span."""
+    if leave.get("half_day") in ("forenoon", "afternoon"):
+        return 0.5
+    return float(_count_date_span(leave["start_date"], leave["end_date"]))
+
+
 async def _comp_off_ledger(member: dict) -> dict:
     """Compensatory-off bookkeeping for a member.
 
@@ -2563,10 +2580,10 @@ async def _comp_off_ledger(member: dict) -> dict:
 
     co_leaves = await db.leaves.find(
         {"user_id": member["id"], "type": "comp_off", "status": {"$in": ["approved", "pending"]}},
-        {"_id": 0, "start_date": 1, "end_date": 1, "status": 1},
+        {"_id": 0, "start_date": 1, "end_date": 1, "status": 1, "half_day": 1},
     ).to_list(500)
-    used = sum(_count_date_span(l["start_date"], l["end_date"]) for l in co_leaves if l["status"] == "approved")
-    pending = sum(_count_date_span(l["start_date"], l["end_date"]) for l in co_leaves if l["status"] == "pending")
+    used = sum(_leave_units(l) for l in co_leaves if l["status"] == "approved")
+    pending = sum(_leave_units(l) for l in co_leaves if l["status"] == "pending")
     return {
         "earned": earned,
         "used": used,
@@ -2603,9 +2620,15 @@ async def create_leave(body: LeaveCreate, target_user_id: Optional[str] = None,
             raise HTTPException(status_code=404, detail="Target member not found")
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
+    half_day = body.half_day
+    if half_day:
+        if body.type not in ("leave", "comp_off"):
+            raise HTTPException(status_code=400, detail="Half-day applies only to Leave and Comp-off")
+        if body.start_date != body.end_date:
+            raise HTTPException(status_code=400, detail="Half-day leave must be for a single date")
     if body.type == "comp_off":
         ledger = await _comp_off_ledger(target_user)
-        requested = _count_date_span(body.start_date, body.end_date)
+        requested = 0.5 if half_day else _count_date_span(body.start_date, body.end_date)
         if requested > ledger["balance"]:
             raise HTTPException(
                 status_code=400,
@@ -2621,6 +2644,7 @@ async def create_leave(body: LeaveCreate, target_user_id: Optional[str] = None,
         "reason": body.reason,
         "location": body.location,
         "expected_arrival": body.expected_arrival,
+        "half_day": half_day,
         "status": "pending",
         "late_application": late_application,
         "filed_by_admin": user["id"] if target_user["id"] != user["id"] else None,

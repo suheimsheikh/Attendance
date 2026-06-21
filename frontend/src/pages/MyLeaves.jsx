@@ -121,7 +121,7 @@ export default function MyLeaves() {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-slate-500">{shortDate(l.start_date)} – {shortDate(l.end_date)}</div>
+                  <div className="text-xs text-slate-500">{shortDate(l.start_date)} – {shortDate(l.end_date)}{l.half_day ? ` · ${l.half_day === "forenoon" ? "Forenoon" : "Afternoon"} (½)` : ""}</div>
                   <div className="text-xs text-slate-600 mt-1 line-clamp-2">{l.reason}</div>
                 </div>
                 <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold capitalize" style={{ background: s.bg, color: s.color }}>
@@ -156,6 +156,23 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   const [picked, setPicked] = useState(new Set());
   const [autoApprove, setAutoApprove] = useState(true);
   const [compOff, setCompOff] = useState(null);
+  const [halfDay, setHalfDay] = useState("full");  // full | forenoon | afternoon
+  const [office, setOffice] = useState(null);
+
+  useEffect(() => {
+    api.get("/office").then(setOffice).catch(() => {});
+  }, []);
+
+  // Half-day is only valid for single-date Leave / Comp-off.
+  const halfDayEligible = (type === "leave" || type === "comp_off") && start === end;
+  useEffect(() => {
+    if (!halfDayEligible && halfDay !== "full") setHalfDay("full");
+  }, [halfDayEligible, halfDay]);
+  const sessTimes = (k) => {
+    const o = office || {};
+    if (k === "forenoon") return `${o.forenoon_start || "09:30"}–${o.forenoon_end || "13:30"}`;
+    return `${o.afternoon_start || "13:30"}–${o.afternoon_end || "17:30"}`;
+  };
 
   // Pull the member's comp-off balance when they switch to that type so we can
   // show how many days are available and block over-spending up front.
@@ -206,12 +223,13 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
     if (type === "late_coming" && !expectedArrival) { toast.error("Tell us when you'll arrive"); return; }
     if (end < start) { toast.error("End date must be after start"); return; }
     if (!asAdmin && type === "comp_off") {
-      const reqDays = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1);
+      const reqDays = halfDay !== "full" ? 0.5 : Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1);
       if (!compOff || reqDays > compOff.balance) {
         toast.error(`Insufficient comp-off balance — you have ${compOff?.balance || 0} day(s), requested ${reqDays}.`);
         return;
       }
     }
+    const halfDayOut = halfDayEligible && halfDay !== "full" ? halfDay : null;
     setBusy(true);
     try {
       if (asAdmin) {
@@ -229,6 +247,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           reason: reasonOut,
           location: type === "tour" ? location : null,
           auto_approve: autoApprove,
+          half_day: halfDayOut,
         });
         toast.success(`${r.created} ${r.created === 1 ? "request" : "requests"} created (${r.status})`);
       } else {
@@ -236,6 +255,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           type, start_date: start, end_date: end, reason,
           location: type === "tour" ? location : null,
           expected_arrival: type === "late_coming" ? expectedArrival : null,
+          half_day: halfDayOut,
         };
         await api.post("/leaves", payload);
         toast.success("Request submitted");
@@ -387,6 +407,25 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
               <input data-testid="leave-end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} min={start} className="iu-input" />
             </div>
           </div>
+          {halfDayEligible && (
+            <div data-testid="half-day-block">
+              <label className="iu-label">Session</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button type="button" data-testid="half-day-full" onClick={() => setHalfDay("full")} className={`iu-btn ${halfDay === "full" ? "iu-btn-primary" : "iu-btn-secondary"} !text-xs flex-col !h-auto py-2`}>
+                  <span className="font-bold">Full day</span>
+                </button>
+                <button type="button" data-testid="half-day-forenoon" onClick={() => setHalfDay("forenoon")} className={`iu-btn ${halfDay === "forenoon" ? "iu-btn-primary" : "iu-btn-secondary"} !text-xs flex-col !h-auto py-2`}>
+                  <span className="font-bold">Forenoon</span>
+                  <span className="text-[10px] opacity-80">{sessTimes("forenoon")}</span>
+                </button>
+                <button type="button" data-testid="half-day-afternoon" onClick={() => setHalfDay("afternoon")} className={`iu-btn ${halfDay === "afternoon" ? "iu-btn-primary" : "iu-btn-secondary"} !text-xs flex-col !h-auto py-2`}>
+                  <span className="font-bold">Afternoon</span>
+                  <span className="text-[10px] opacity-80">{sessTimes("afternoon")}</span>
+                </button>
+              </div>
+              {halfDay !== "full" && <p className="text-[11px] text-violet-600 mt-1.5">Half day — counts as 0.5 against your balance.</p>}
+            </div>
+          )}
           {start < todayIso() && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-start gap-2" data-testid="late-application-notice">
               <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" />

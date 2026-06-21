@@ -46,6 +46,10 @@ export default function OfficeSettings() {
         timezone: form.timezone || "Asia/Kolkata",
         late_grace_minutes: Number(form.late_grace_minutes || 0),
         parent_notify_grace_minutes: Number(form.parent_notify_grace_minutes ?? 30),
+        forenoon_start: form.forenoon_start || "09:30",
+        forenoon_end: form.forenoon_end || "13:30",
+        afternoon_start: form.afternoon_start || "13:30",
+        afternoon_end: form.afternoon_end || "17:30",
       };
       const updated = await api.put("/office", body);
       setForm(updated);
@@ -110,6 +114,31 @@ export default function OfficeSettings() {
           <select data-testid="of-tz" value={form.timezone || "Asia/Kolkata"} onChange={(e) => set("timezone", e.target.value)} className="iu-input">
             {TZS.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-3" data-testid="of-half-day-block">
+          <div>
+            <p className="text-sm font-bold text-slate-800">Half-day session timings</p>
+            <p className="text-[11px] text-slate-500">Used when a member applies for a half-day (forenoon / afternoon) leave or comp-off.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="iu-label">Forenoon start</label>
+              <input data-testid="of-forenoon-start" type="time" value={form.forenoon_start || "09:30"} onChange={(e) => set("forenoon_start", e.target.value)} className="iu-input" />
+            </div>
+            <div>
+              <label className="iu-label">Forenoon end</label>
+              <input data-testid="of-forenoon-end" type="time" value={form.forenoon_end || "13:30"} onChange={(e) => set("forenoon_end", e.target.value)} className="iu-input" />
+            </div>
+            <div>
+              <label className="iu-label">Afternoon start</label>
+              <input data-testid="of-afternoon-start" type="time" value={form.afternoon_start || "13:30"} onChange={(e) => set("afternoon_start", e.target.value)} className="iu-input" />
+            </div>
+            <div>
+              <label className="iu-label">Afternoon end</label>
+              <input data-testid="of-afternoon-end" type="time" value={form.afternoon_end || "17:30"} onChange={(e) => set("afternoon_end", e.target.value)} className="iu-input" />
+            </div>
+          </div>
         </div>
 
         <div>
