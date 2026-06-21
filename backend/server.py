@@ -2018,6 +2018,74 @@ async def overtime_decide(session_id: str, body: OvertimeDecisionIn, admin: dict
 
 
 # ----------------------------------------------------------------------------
+# Admin daily readiness checklist
+# ----------------------------------------------------------------------------
+@api_router.get("/admin/checklist")
+async def admin_checklist(admin: dict = Depends(require_admin)):
+    """Live daily-readiness checklist shown to admins on login. Each item carries
+    a live count/status so the admin can confirm the day's ops are set up."""
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+    weekday = _camps_module.weekday_key(now_utc().astimezone(office_tz(office)))
+
+    camps_today = await _camps_module.fetch_camps_active_on(db, today)
+    camps_n = sum(1 for c in camps_today if c.get("kind", "camp") != "outstation")
+    outstation_n = sum(1 for c in camps_today if c.get("kind") == "outstation")
+
+    exceptions_today = await _schedule_module.fetch_exceptions_active_on(db, today)
+    day_sched = _schedule_module.resolve_day_schedule(
+        today, weekday, exceptions_today, office.get("weekly_overrides") or {}
+    )
+    is_holiday = bool(day_sched and day_sched.get("holiday"))
+    timing_status = None
+    if day_sched and not is_holiday and day_sched.get("start_time"):
+        timing_status = day_sched["start_time"] + (f"–{day_sched['end_time']}" if day_sched.get("end_time") else "")
+
+    pending_leaves = await db.leaves.count_documents(
+        {"status": "pending", "type": {"$in": ["leave", "tour", "late_coming"]}}
+    )
+    pending_comp_off = await db.leaves.count_documents({"status": "pending", "type": "comp_off"})
+    pending_devices = await db.devices.count_documents({"status": "pending"})
+    missing_photos = await db.users.count_documents(
+        {"$or": [{"photo": {"$in": [None, ""]}}, {"photo": {"$exists": False}}]}
+    )
+
+    dismissal = await db.checklist_dismissals.find_one({"admin_id": admin["id"], "date": today})
+
+    items = [
+        {"key": "camps", "label": "Camps scheduled for today", "count": camps_n,
+         "hint": "Confirm today's training camps are correct", "link": "/admin/camps"},
+        {"key": "outstation", "label": "Outstation regattas / tours active", "count": outstation_n,
+         "hint": "Confirm travelling members are enrolled", "link": "/admin/camps"},
+        {"key": "timing", "label": "Special timings today", "status": timing_status or "None",
+         "hint": "Check weekly / one-off timing overrides", "link": "/admin/schedule"},
+        {"key": "holiday", "label": "Holiday today", "status": (day_sched.get("name") if is_holiday else "No"),
+         "hint": "Confirm holidays are marked", "link": "/admin/schedule"},
+        {"key": "pending_leaves", "label": "Pending leave / tour approvals", "count": pending_leaves,
+         "hint": "Clear the approval queue", "link": "/admin/leaves"},
+        {"key": "pending_comp_off", "label": "Pending comp-off requests", "count": pending_comp_off,
+         "hint": "Review compensatory-off claims", "link": "/admin/leaves"},
+        {"key": "pending_devices", "label": "Pending device approvals", "count": pending_devices,
+         "hint": "Approve members' devices", "link": "/admin"},
+        {"key": "missing_photos", "label": "Members missing a photo", "count": missing_photos,
+         "hint": "Capture missing member photos", "link": "/admin/members"},
+    ]
+    return {"date": today, "dismissed": bool(dismissal), "items": items}
+
+
+@api_router.post("/admin/checklist/dismiss")
+async def admin_checklist_dismiss(admin: dict = Depends(require_admin)):
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+    await db.checklist_dismissals.update_one(
+        {"admin_id": admin["id"], "date": today},
+        {"$set": {"admin_id": admin["id"], "date": today, "dismissed_at": now_utc().isoformat()}},
+        upsert=True,
+    )
+    return {"ok": True, "date": today}
+
+
+# ----------------------------------------------------------------------------
 # Presence board
 # ----------------------------------------------------------------------------
 async def active_leave_for(user_id: str, on: str) -> Optional[dict]:
@@ -2379,6 +2447,89 @@ async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depe
 # ----------------------------------------------------------------------------
 # Leave / Tour
 # ----------------------------------------------------------------------------
+_WEEKDAY_NAMES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+
+def _count_date_span(start_date: str, end_date: str) -> int:
+    """Inclusive number of calendar days between two ISO dates (min 1)."""
+    try:
+        s = date.fromisoformat(start_date)
+        e = date.fromisoformat(end_date)
+    except Exception:
+        return 1
+    return max(1, (e - s).days + 1)
+
+
+async def _comp_off_ledger(member: dict) -> dict:
+    """Compensatory-off bookkeeping for a member.
+
+    A comp-off day is *earned* automatically whenever the member has any
+    attendance on a day that was their weekly-off OR a campus holiday. It is
+    *spent* by an approved `comp_off` leave; pending comp-off requests are held
+    against the balance so members can't double-book.
+    """
+    wo = (member.get("weekly_off") or "monday").lower()
+    sessions = await db.attendance.find(
+        {"user_id": member["id"]}, {"_id": 0, "date": 1, "check_in_at": 1}
+    ).to_list(8000)
+    holidays = await db.schedule_exceptions.find(
+        {"kind": "holiday"}, {"_id": 0, "name": 1, "start_date": 1, "end_date": 1}
+    ).to_list(500)
+
+    def holiday_name(dstr: str) -> Optional[str]:
+        for h in holidays:
+            if h["start_date"] <= dstr <= h["end_date"]:
+                return h.get("name") or "Holiday"
+        return None
+
+    earned_days = []
+    seen = set()
+    for s in sessions:
+        dstr = s.get("date")
+        if not dstr or dstr in seen:
+            continue
+        try:
+            d_ = date.fromisoformat(dstr)
+        except Exception:
+            continue
+        hol = holiday_name(dstr)
+        if _WEEKDAY_NAMES[d_.weekday()] == wo:
+            seen.add(dstr)
+            earned_days.append({"date": dstr, "reason": "weekly_off", "name": "Weekly off"})
+        elif hol:
+            seen.add(dstr)
+            earned_days.append({"date": dstr, "reason": "holiday", "name": hol})
+    earned_days.sort(key=lambda x: x["date"], reverse=True)
+    earned = len(earned_days)
+
+    co_leaves = await db.leaves.find(
+        {"user_id": member["id"], "type": "comp_off", "status": {"$in": ["approved", "pending"]}},
+        {"_id": 0, "start_date": 1, "end_date": 1, "status": 1},
+    ).to_list(500)
+    used = sum(_count_date_span(l["start_date"], l["end_date"]) for l in co_leaves if l["status"] == "approved")
+    pending = sum(_count_date_span(l["start_date"], l["end_date"]) for l in co_leaves if l["status"] == "pending")
+    return {
+        "earned": earned,
+        "used": used,
+        "pending": pending,
+        "balance": earned - used - pending,
+        "earned_days": earned_days,
+    }
+
+
+@api_router.get("/me/comp-off")
+async def my_comp_off(user: dict = Depends(get_current_user)):
+    return await _comp_off_ledger(user)
+
+
+@api_router.get("/members/{member_id}/comp-off")
+async def member_comp_off(member_id: str, admin: dict = Depends(require_admin)):
+    m = await db.users.find_one({"id": member_id}, {"_id": 0})
+    if not m:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return await _comp_off_ledger(m)
+
+
 @api_router.post("/leaves")
 async def create_leave(body: LeaveCreate, target_user_id: Optional[str] = None,
                       user: dict = Depends(get_current_user)):
@@ -2393,6 +2544,14 @@ async def create_leave(body: LeaveCreate, target_user_id: Optional[str] = None,
             raise HTTPException(status_code=404, detail="Target member not found")
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
+    if body.type == "comp_off":
+        ledger = await _comp_off_ledger(target_user)
+        requested = _count_date_span(body.start_date, body.end_date)
+        if requested > ledger["balance"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient comp-off balance — you have {ledger['balance']} day(s) available but requested {requested}. You earn comp-off by working on a weekly-off or holiday.",
+            )
     late_application = bool(body.start_date and body.start_date < today)
     doc = {
         "id": str(uuid.uuid4()),

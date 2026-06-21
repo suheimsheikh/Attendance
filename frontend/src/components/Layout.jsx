@@ -9,6 +9,7 @@ import {
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
 import InstallPrompt from "./InstallPrompt";
+import AdminChecklist from "./AdminChecklist";
 import OfflineBanner from "./OfflineBanner";
 
 const NAV_MEMBER_BEFORE_MUSTER = [
@@ -148,6 +149,7 @@ export default function Layout() {
       <StaleSessionPrompt />
       <InstallPrompt />
       <OfflineBanner />
+      {isAdmin && <AdminChecklist />}
     </div>
   );
 }

@@ -22,10 +22,18 @@ export default function MyLeaves() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [compOff, setCompOff] = useState(null);
+  const [showEarned, setShowEarned] = useState(false);
 
   const load = async () => {
-    try { setItems(await api.get("/leaves/mine")); }
-    finally { setLoading(false); }
+    try {
+      const [list, co] = await Promise.all([
+        api.get("/leaves/mine"),
+        api.get("/me/comp-off").catch(() => null),
+      ]);
+      setItems(list);
+      setCompOff(co);
+    } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
 
@@ -40,6 +48,51 @@ export default function MyLeaves() {
           <Plus size={16} /> Apply
         </button>
       </header>
+
+      {compOff && (
+        <div className="mb-6" data-testid="comp-off-balance-card">
+          <button
+            type="button"
+            onClick={() => setShowEarned((v) => !v)}
+            data-testid="comp-off-balance-toggle"
+            className="w-full iu-card p-4 flex items-center gap-4 text-left hover:bg-violet-50/40 transition"
+          >
+            <div className="w-12 h-12 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center shrink-0">
+              <RefreshCw size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-slate-800">Comp-off balance</div>
+              <div className="text-[11px] text-slate-500">
+                Earned {compOff.earned} · Used {compOff.used} · Pending {compOff.pending}. Tap to see the days you worked.
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className={`text-2xl font-extrabold ${compOff.balance > 0 ? "text-violet-700" : "text-slate-400"}`} data-testid="comp-off-balance-value">{compOff.balance}</div>
+              <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">day{compOff.balance === 1 ? "" : "s"} free</div>
+            </div>
+          </button>
+          {showEarned && (
+            <div className="mt-2 iu-card p-3" data-testid="comp-off-earned-list">
+              <div className="text-[11px] uppercase tracking-wider font-bold text-slate-400 mb-2 px-1">Days you worked on an off-day / holiday</div>
+              {compOff.earned_days.length === 0 ? (
+                <p className="text-sm text-slate-500 px-1 py-2">No off-day work recorded yet. Come in on a weekly-off or holiday to earn comp-off.</p>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {compOff.earned_days.map((d) => (
+                    <div key={d.date} data-testid={`comp-off-earned-${d.date}`} className="flex items-center gap-3 py-2 px-1">
+                      <CalendarDays size={15} className="text-violet-500 shrink-0" />
+                      <div className="flex-1 text-sm font-semibold text-slate-800">{shortDate(d.date)}</div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${d.reason === "holiday" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>
+                        {d.reason === "holiday" ? (d.name || "Holiday") : "Weekly off"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-10"><Loader2 className="mx-auto animate-spin text-slate-400" /></div>
@@ -102,6 +155,14 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState(new Set());
   const [autoApprove, setAutoApprove] = useState(true);
+  const [compOff, setCompOff] = useState(null);
+
+  // Pull the member's comp-off balance when they switch to that type so we can
+  // show how many days are available and block over-spending up front.
+  useEffect(() => {
+    if (asAdmin || type !== "comp_off") return;
+    api.get("/me/comp-off").then(setCompOff).catch(() => setCompOff(null));
+  }, [type, asAdmin]);
 
   useEffect(() => {
     if (!asAdmin) return;
@@ -144,6 +205,13 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
     if (!reason.trim()) { toast.error("Enter a reason"); return; }
     if (type === "late_coming" && !expectedArrival) { toast.error("Tell us when you'll arrive"); return; }
     if (end < start) { toast.error("End date must be after start"); return; }
+    if (!asAdmin && type === "comp_off") {
+      const reqDays = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1);
+      if (!compOff || reqDays > compOff.balance) {
+        toast.error(`Insufficient comp-off balance — you have ${compOff?.balance || 0} day(s), requested ${reqDays}.`);
+        return;
+      }
+    }
     setBusy(true);
     try {
       if (asAdmin) {
@@ -278,7 +346,20 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
               <button data-testid="leave-type-late-coming" type="button" onClick={() => setType("late_coming")} className={`iu-btn ${type === "late_coming" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Clock size={16}/> Late Coming</button>
             </div>
             {type === "comp_off" && (
-              <p className="text-[11px] text-slate-500 mt-1.5">Claim a comp-off against a weekly-off day you worked. Admin will verify.</p>
+              <div className="mt-1.5" data-testid="apply-comp-off-info">
+                {asAdmin ? (
+                  <p className="text-[11px] text-slate-500">Comp-off is earned automatically when a member works on a weekly-off or holiday.</p>
+                ) : compOff ? (
+                  <div className={`rounded-lg px-3 py-2 text-xs flex items-center gap-2 ${compOff.balance > 0 ? "bg-violet-50 text-violet-700 border border-violet-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
+                    <RefreshCw size={13} />
+                    {compOff.balance > 0
+                      ? <span>You have <strong>{compOff.balance}</strong> comp-off day{compOff.balance === 1 ? "" : "s"} available (earned by working off-days/holidays).</span>
+                      : <span>You have <strong>no comp-off balance</strong>. You earn it by working on a weekly-off or holiday.</span>}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500">Comp-off is earned by working on a weekly-off or holiday.</p>
+                )}
+              </div>
             )}
             {type === "late_coming" && (
               <p className="text-[11px] text-slate-500 mt-1.5">Use this when you&apos;ll arrive late today. Admin gets pinged so you&apos;re not flagged as absent.</p>

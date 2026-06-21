@@ -140,6 +140,11 @@
 ## Test Credentials
 See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or phone `9849002111` for OTP-bypass).
 
+- **Admin daily checklist + comp-off balance (June 2026)**:
+  - **Admin login checklist**: `GET /api/admin/checklist` returns 8 live-status items (camps today, outstation events, special timings, holiday, pending leave/tour, pending comp-off, pending devices, members missing photos) + `dismissed` flag. `POST /api/admin/checklist/dismiss` records a per-admin/per-day dismissal in `checklist_dismissals`. Frontend `AdminChecklist.jsx` modal mounts in `Layout` for admins, shows on every login/load until "Done for today" is clicked (each row has live count/status badge, tick checkbox, and an arrow to jump to the relevant page). "Remind me later" closes without dismissing.
+  - **Comp-off balance (auto-earned)**: A comp-off day is earned automatically whenever a member has attendance on a day that was their `weekly_off` OR a campus holiday (`schedule_exceptions`). `GET /api/me/comp-off` & `GET /api/members/{id}/comp-off` return `{earned, used, pending, balance, earned_days[]}`. `create_leave` now blocks a `comp_off` request when requested days exceed the available balance. Frontend `MyLeaves.jsx`: a clickable comp-off balance card that expands to list the earned (worked off-day/holiday) dates, and the Apply form shows the live balance and blocks over-spend. Verified end-to-end via curl (holiday on a worked date → +1 earned; 0-balance apply → 400) and screenshots.
+
+
 - **Schedule overrides & holidays (June 2026)**: New `/app/backend/schedule.py` module + `schedule_exceptions` collection + a `weekly_overrides` field on the office config doc. New admin page **"Schedule & Holidays"** (`/admin/schedule`).
   - **Weekly overrides**: per-weekday start/end time (e.g. every Sunday 08:00 instead of 06:00). `GET/PUT /api/schedule/weekly`.
   - **Schedule exceptions**: `kind="holiday"` (date or range, nobody expected → everyone `not_due` "Holiday — {name}", never Absent, camps suspended, check-in still allowed) or `kind="timing"` (one-off date/range with a different start/end time). `GET/POST/PATCH/DELETE /api/schedule/exceptions`.
