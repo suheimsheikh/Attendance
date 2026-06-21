@@ -478,6 +478,9 @@ class DeviceApproveIn(BaseModel):
     role: Literal["admin", "member"] = "member"
     category: Literal["athlete", "staff", "coach", "executive"] = "athlete"
     rank: Optional[str] = None
+    # When set, link this device to an EXISTING member instead of creating a new
+    # one — prevents duplicate accounts when a member's phone wasn't on file.
+    link_user_id: Optional[str] = None
 
 
 
@@ -874,6 +877,17 @@ async def approve_device(device_pk: str, body: DeviceApproveIn, admin: dict = De
         raise HTTPException(status_code=404, detail="Device request not found")
     now = now_utc().isoformat()
     user_id = device.get("user_id")
+    # Admin chose to attach this device to an EXISTING member (no duplicate).
+    if not user_id and body.link_user_id:
+        target = await db.users.find_one({"id": body.link_user_id}, {"_id": 0})
+        if not target:
+            raise HTTPException(status_code=404, detail="Member to link not found")
+        user_id = target["id"]
+        # Backfill the member's mobile from the device's phone if it was missing,
+        # so future phone logins match them directly and no duplicate is created.
+        digits = device.get("phone") or ""
+        if digits and not target.get("mobile"):
+            await db.users.update_one({"id": user_id}, {"$set": {"mobile": digits}})
     if not user_id:
         digits = device.get("phone") or ""
         email = f"{digits}@attendance.app"

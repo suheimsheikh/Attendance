@@ -140,13 +140,31 @@ function ApproveDialog({ device, onClose, onApproved }) {
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+  // Link-to-existing-member (prevents duplicate accounts when a member's phone
+  // wasn't on file). Only relevant for unmatched device requests.
+  const [members, setMembers] = useState([]);
+  const [linkId, setLinkId] = useState("");
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    if (matched) return;
+    api.get("/members").then((list) => setMembers(list || [])).catch(() => {});
+  }, [matched]);
+
+  const filtered = search.trim()
+    ? members.filter((m) => (m.full_name || "").toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : [];
+  const linked = members.find((m) => m.id === linkId);
+
   const submit = async (e) => {
     e.preventDefault();
-    if (!matched && !form.full_name.trim()) { toast.error("Full name required for new member"); return; }
+    if (!matched && !linkId && !form.full_name.trim()) { toast.error("Full name required for new member"); return; }
     setBusy(true);
     try {
-      await api.post(`/admin/devices/${device.id}/approve`, form);
-      toast.success("Device approved");
+      const payload = linkId
+        ? { link_user_id: linkId, role: linked?.role || "member", category: linked?.category || "athlete" }
+        : form;
+      await api.post(`/admin/devices/${device.id}/approve`, payload);
+      toast.success(linkId ? `Linked to ${linked?.full_name}` : "Device approved");
       onApproved();
     } catch (err) { toast.error(err?.message || "Failed"); }
     finally { setBusy(false); }
@@ -154,48 +172,94 @@ function ApproveDialog({ device, onClose, onApproved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={onClose}>
-      <div className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl p-6" onClick={(e) => e.stopPropagation()} data-testid="approve-device-form">
+      <div className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="approve-device-form">
         <h2 className="text-xl font-extrabold mb-1">Approve device</h2>
         <p className="text-sm text-slate-500 mb-4">
           {matched
             ? `Approving for existing member: ${device.member_name}`
             : device.proposed_full_name
-              ? `${device.proposed_full_name} introduced themselves at sign-up. Review and approve to create their member record.`
-              : `Phone ${device.phone || "?"} doesn't match a member. We'll create one.`}
+              ? `${device.proposed_full_name} introduced themselves at sign-up. Link them to an existing member, or create a new record.`
+              : `Phone ${device.phone || "?"} doesn't match a member. Link to an existing member, or create a new one.`}
         </p>
+
+        {!matched && (
+          <div className="mb-4 p-3 rounded-xl bg-sky-50 ring-1 ring-sky-100" data-testid="link-existing-block">
+            <label className="iu-label !text-sky-800">Link to an existing member <span className="normal-case font-normal text-slate-500">(avoids duplicates)</span></label>
+            {linked ? (
+              <div className="flex items-center justify-between gap-2 mt-1 bg-white rounded-lg px-3 py-2 ring-1 ring-sky-200">
+                <span className="font-semibold text-slate-800 truncate" data-testid="linked-member-name">{linked.full_name}</span>
+                <button type="button" data-testid="clear-link-button" onClick={() => { setLinkId(""); setSearch(""); }} className="text-xs text-slate-500 underline hover:text-slate-800">Clear</button>
+              </div>
+            ) : (
+              <>
+                <input
+                  data-testid="link-member-search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search a member by name…"
+                  className="iu-input mt-1"
+                />
+                {filtered.length > 0 && (
+                  <div className="mt-2 space-y-1" data-testid="link-member-results">
+                    {filtered.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        data-testid={`link-member-${m.id}`}
+                        onClick={() => { setLinkId(m.id); }}
+                        className="w-full text-left px-3 py-2 rounded-lg bg-white hover:bg-sky-100 ring-1 ring-slate-100 text-sm flex items-center justify-between"
+                      >
+                        <span className="font-medium text-slate-800">{m.full_name}</span>
+                        <span className="text-xs text-slate-400 capitalize">{m.category}{m.mobile ? "" : " · no phone"}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {search.trim() && filtered.length === 0 && (
+                  <p className="text-xs text-slate-400 mt-2">No member matches “{search}”. Fill the form below to create a new one.</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         <form onSubmit={submit} className="space-y-3">
-          {!matched && (
+          {!matched && !linkId && (
             <div>
-              <label className="iu-label">Full name</label>
+              <label className="iu-label">Full name <span className="normal-case font-normal text-slate-500">(new member)</span></label>
               <input data-testid="ad-name" value={form.full_name} onChange={(e) => set("full_name", e.target.value)} className="iu-input" />
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="iu-label">Role</label>
-              <select data-testid="ad-role" value={form.role} onChange={(e) => set("role", e.target.value)} className="iu-input">
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <div>
-              <label className="iu-label">Category</label>
-              <select data-testid="ad-category" value={form.category} onChange={(e) => set("category", e.target.value)} className="iu-input">
-                <option value="athlete">Athlete</option>
-                <option value="staff">Staff</option>
-                <option value="coach">Coach</option>
-                <option value="executive">Executive</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="iu-label">Rank (optional)</label>
-            <input data-testid="ad-rank" value={form.rank} onChange={(e) => set("rank", e.target.value)} className="iu-input" />
-          </div>
+          {!linkId && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="iu-label">Role</label>
+                  <select data-testid="ad-role" value={form.role} onChange={(e) => set("role", e.target.value)} className="iu-input">
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="iu-label">Category</label>
+                  <select data-testid="ad-category" value={form.category} onChange={(e) => set("category", e.target.value)} className="iu-input">
+                    <option value="athlete">Athlete</option>
+                    <option value="staff">Staff</option>
+                    <option value="coach">Coach</option>
+                    <option value="executive">Executive</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="iu-label">Rank (optional)</label>
+                <input data-testid="ad-rank" value={form.rank} onChange={(e) => set("rank", e.target.value)} className="iu-input" />
+              </div>
+            </>
+          )}
           <div className="flex gap-2">
             <button onClick={onClose} type="button" className="iu-btn-secondary flex-1">Cancel</button>
             <button data-testid="ad-submit" type="submit" disabled={busy} className="iu-btn-primary flex-1">
-              {busy ? <Loader2 className="animate-spin" size={16}/> : "Approve & Sign in user"}
+              {busy ? <Loader2 className="animate-spin" size={16}/> : (linkId ? "Link & Sign in" : "Approve & Sign in user")}
             </button>
           </div>
         </form>
