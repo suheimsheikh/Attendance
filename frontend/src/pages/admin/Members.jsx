@@ -249,9 +249,9 @@ export default function Members() {
                           the row's edit modal). */}
                       <td className="iu-table-td">
                         <div className="flex flex-col gap-1 min-w-[320px] max-w-[420px]">
-                          <ParentInlineInput memberId={m.id} field="father_mobile" label={m.father_name || "Father"} initial={m.father_mobile} onSave={patchParent} />
-                          <ParentInlineInput memberId={m.id} field="mother_mobile" label={m.mother_name || "Mother"} initial={m.mother_mobile} onSave={patchParent} />
-                          <ParentInlineInput memberId={m.id} field="guardian_mobile" label={m.guardian_name || "Guardian"} initial={m.guardian_mobile} onSave={patchParent} />
+                          <ParentInlineInput memberId={m.id} field="father_mobile" label={m.father_name || "F"} initial={m.father_mobile} onSave={patchParent} />
+                          <ParentInlineInput memberId={m.id} field="mother_mobile" label={m.mother_name || "M"} initial={m.mother_mobile} onSave={patchParent} />
+                          <ParentInlineInput memberId={m.id} field="guardian_mobile" label={m.guardian_name || "G"} initial={m.guardian_mobile} onSave={patchParent} />
                         </div>
                       </td>
                       <td className="iu-table-td">
