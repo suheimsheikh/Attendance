@@ -28,6 +28,7 @@ import Camps from "./pages/admin/Camps";
 import Calendar from "./pages/admin/Calendar";
 import BackupRestore from "./pages/admin/BackupRestore";
 import ImportMembers from "./pages/admin/ImportMembers";
+import SmsLog from "./pages/admin/SmsLog";
 import Cards from "./pages/admin/Cards";
 import { Loader2 } from "lucide-react";
 
@@ -88,6 +89,7 @@ function App() {
             <Route path="admin/overtime-page" element={<RequireAdmin><Overtime /></RequireAdmin>} />
             <Route path="admin/devices" element={<RequireAdmin><Devices /></RequireAdmin>} />
             <Route path="admin/office" element={<RequireAdmin><OfficeSettings /></RequireAdmin>} />
+            <Route path="admin/sms-log" element={<RequireAdmin><SmsLog /></RequireAdmin>} />
             <Route path="admin/office-qr" element={<RequireAdmin><DisabledFeature title="Office QR disabled" reason="QR scanning is turned off — use Muster Roll." /></RequireAdmin>} />
             <Route path="admin/reports" element={<RequireAdmin><Reports /></RequireAdmin>} />
             <Route path="admin/payroll" element={<RequireAdmin><Payroll /></RequireAdmin>} />

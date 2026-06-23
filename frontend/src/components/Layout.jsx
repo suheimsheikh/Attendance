@@ -4,7 +4,7 @@ import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, QrCode, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, ClipboardList, Building2, IdCard, FileSpreadsheet,
-  ShieldCheck, LogOut, Menu, X, ListTree, ClipboardCheck, Tent, CalendarDays, Settings
+  ShieldCheck, LogOut, Menu, X, ListTree, ClipboardCheck, Tent, CalendarDays, Settings, MessageSquare
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -33,6 +33,7 @@ const NAV_ADMIN = [
   { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
+  { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare },
   { to: "/admin/institutions", label: "Institutions", icon: Building2 },
   { to: "/admin/office", label: "Office Settings", icon: Settings },
   { to: "/admin/camps", label: "Camps", icon: Tent },

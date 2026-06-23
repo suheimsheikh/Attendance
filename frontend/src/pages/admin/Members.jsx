@@ -244,12 +244,14 @@ export default function Members() {
                         {m.work_start || "—"}{m.work_end ? <> – {m.work_end}</> : null}
                       </td>
                       <td className="iu-table-td text-slate-700 text-xs capitalize">{m.weekly_off || "—"}</td>
-                      {/* Inline editable parent mobile numbers */}
+                      {/* Inline editable parent mobile numbers, prefixed with the
+                          parent's NAME (read-only here — names are edited via
+                          the row's edit modal). */}
                       <td className="iu-table-td">
-                        <div className="flex flex-col gap-1 min-w-[180px] max-w-[220px]">
-                          <ParentInlineInput memberId={m.id} field="father_mobile" label="F" initial={m.father_mobile} onSave={patchParent} />
-                          <ParentInlineInput memberId={m.id} field="mother_mobile" label="M" initial={m.mother_mobile} onSave={patchParent} />
-                          <ParentInlineInput memberId={m.id} field="guardian_mobile" label="G" initial={m.guardian_mobile} onSave={patchParent} />
+                        <div className="flex flex-col gap-1 min-w-[220px] max-w-[260px]">
+                          <ParentInlineInput memberId={m.id} field="father_mobile" label={m.father_name || "Father"} initial={m.father_mobile} onSave={patchParent} />
+                          <ParentInlineInput memberId={m.id} field="mother_mobile" label={m.mother_name || "Mother"} initial={m.mother_mobile} onSave={patchParent} />
+                          <ParentInlineInput memberId={m.id} field="guardian_mobile" label={m.guardian_name || "Guardian"} initial={m.guardian_mobile} onSave={patchParent} />
                         </div>
                       </td>
                       <td className="iu-table-td">
@@ -322,13 +324,24 @@ function ParentInlineInput({ memberId, field, label, initial, onSave }) {
     }
   };
 
-  const labelColor = label === "F" ? "bg-sky-100 text-sky-700"
-    : label === "M" ? "bg-pink-100 text-pink-700"
+  // Background tint stays consistent per role. The `label` text itself now
+  // shows the parent's NAME (truncated) when available — falling back to a
+  // single-letter role badge for older records.
+  const isFather = field === "father_mobile";
+  const isMother = field === "mother_mobile";
+  const labelColor = isFather ? "bg-sky-100 text-sky-700"
+    : isMother ? "bg-pink-100 text-pink-700"
     : "bg-violet-100 text-violet-700";
+  const isShortBadge = label && label.length <= 1;
 
   return (
     <div className="flex items-center gap-1.5">
-      <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center ${labelColor}`}>{label}</span>
+      <span
+        className={`${isShortBadge ? "w-5 h-5" : "px-1.5 h-5 max-w-[110px] truncate"} rounded text-[10px] font-bold flex items-center justify-center ${labelColor}`}
+        title={label}
+      >
+        {label}
+      </span>
       <input
         type="tel"
         value={val}

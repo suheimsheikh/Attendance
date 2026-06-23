@@ -24,8 +24,11 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     photo: initial?.photo || "",
     weekly_off: initial?.weekly_off || "monday",
     father_mobile: initial?.father_mobile || "",
+    father_name: initial?.father_name || "",
     mother_mobile: initial?.mother_mobile || "",
+    mother_name: initial?.mother_name || "",
     guardian_mobile: initial?.guardian_mobile || "",
+    guardian_name: initial?.guardian_name || "",
   });
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -195,40 +198,37 @@ export default function MemberForm({ initial, onClose, onSaved }) {
           </div>
           <div className="pt-3 mt-3 border-t border-slate-100">
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Parents & guardian</div>
-            <p className="text-[11px] text-slate-500 mb-3">Mobile numbers shown next to the athlete&apos;s name across the app. Tap to call or message when they&apos;re late or absent.</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="iu-label">Father&apos;s mobile</label>
-                <input
-                  data-testid="mf-father-mobile"
-                  type="tel"
-                  value={form.father_mobile}
-                  onChange={(e) => set("father_mobile", e.target.value)}
-                  className="iu-input"
-                  placeholder="+91…"
-                />
+            <p className="text-[11px] text-slate-500 mb-3">Names + mobile numbers shown across the app and used when an athlete is late or absent. Imported via Admin → Import members → Parents.</p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="iu-label">Father&apos;s name</label>
+                  <input data-testid="mf-father-name" value={form.father_name} onChange={(e) => set("father_name", e.target.value)} className="iu-input" />
+                </div>
+                <div>
+                  <label className="iu-label">Father&apos;s mobile</label>
+                  <input data-testid="mf-father-mobile" type="tel" value={form.father_mobile} onChange={(e) => set("father_mobile", e.target.value)} className="iu-input font-mono text-xs" placeholder="+91…" />
+                </div>
               </div>
-              <div>
-                <label className="iu-label">Mother&apos;s mobile</label>
-                <input
-                  data-testid="mf-mother-mobile"
-                  type="tel"
-                  value={form.mother_mobile}
-                  onChange={(e) => set("mother_mobile", e.target.value)}
-                  className="iu-input"
-                  placeholder="+91…"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="iu-label">Mother&apos;s name</label>
+                  <input data-testid="mf-mother-name" value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} className="iu-input" />
+                </div>
+                <div>
+                  <label className="iu-label">Mother&apos;s mobile</label>
+                  <input data-testid="mf-mother-mobile" type="tel" value={form.mother_mobile} onChange={(e) => set("mother_mobile", e.target.value)} className="iu-input font-mono text-xs" placeholder="+91…" />
+                </div>
               </div>
-              <div>
-                <label className="iu-label">Guardian&apos;s mobile</label>
-                <input
-                  data-testid="mf-guardian-mobile"
-                  type="tel"
-                  value={form.guardian_mobile}
-                  onChange={(e) => set("guardian_mobile", e.target.value)}
-                  className="iu-input"
-                  placeholder="+91…"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="iu-label">Guardian&apos;s name</label>
+                  <input data-testid="mf-guardian-name" value={form.guardian_name} onChange={(e) => set("guardian_name", e.target.value)} className="iu-input" />
+                </div>
+                <div>
+                  <label className="iu-label">Guardian&apos;s mobile</label>
+                  <input data-testid="mf-guardian-mobile" type="tel" value={form.guardian_mobile} onChange={(e) => set("guardian_mobile", e.target.value)} className="iu-input font-mono text-xs" placeholder="+91…" />
+                </div>
               </div>
             </div>
           </div>
