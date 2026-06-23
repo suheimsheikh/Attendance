@@ -21,6 +21,16 @@ const BUCKETS = [
 const BUCKET_BY_KEY = Object.fromEntries(BUCKETS.map((b) => [b.key, b]));
 
 const bucketOf = (m) => (m.role === "admin" ? "admin" : (m.category || "athlete"));
+const GENDER_LABEL = { M: "Male", F: "Female", O: "Other" };
+
+// Open the edit modal when a row is double-clicked — but only when the click
+// didn't originate from an interactive element (inputs / buttons / labels for
+// photo upload), otherwise the parent-mobile editor double-click-to-select
+// gesture would surprise admins with a modal.
+const isInteractive = (target) => {
+  const el = target?.closest?.("input, button, select, textarea, a, label");
+  return !!el;
+};
 
 export default function Members() {
   const [members, setMembers] = useState([]);
@@ -102,11 +112,11 @@ export default function Members() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 max-w-[1600px] mx-auto">
       <header className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Members</h1>
-          <p className="text-slate-500 text-sm mt-1">{members.length} total</p>
+          <p className="text-slate-500 text-sm mt-1">{members.length} total · double-click any row to edit</p>
         </div>
         <button data-testid="new-member-button" onClick={() => setEditing("new")} className="iu-btn-primary"><Plus size={16}/> Add member</button>
       </header>
@@ -159,18 +169,22 @@ export default function Members() {
         <div className="text-center py-10"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
       ) : (
         <div className="iu-card overflow-hidden">
-          <div className="overflow-auto max-h-[70vh]">
-            <table className="w-full">
-              <thead className="bg-slate-50">
+          <div className="overflow-auto max-h-[75vh]">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 sticky top-0 z-10">
                 <tr>
+                  <th className="iu-table-th w-10 text-center">Edit</th>
                   <th className="iu-table-th">Member</th>
+                  <th className="iu-table-th">Role / Category</th>
+                  <th className="iu-table-th">Rank</th>
+                  <th className="iu-table-th">Gender</th>
+                  <th className="iu-table-th">Mobile</th>
+                  <th className="iu-table-th">Institution</th>
+                  <th className="iu-table-th">Hours</th>
+                  <th className="iu-table-th">Weekly off</th>
                   <th className="iu-table-th">Parents / Guardian</th>
-                  <th className="iu-table-th hidden md:table-cell">Role</th>
-                  <th className="iu-table-th hidden lg:table-cell">Institution</th>
-                  <th className="iu-table-th hidden lg:table-cell">Mobile</th>
-                  <th className="iu-table-th hidden lg:table-cell">Hours</th>
                   <th className="iu-table-th">Status</th>
-                  <th className="iu-table-th text-right">Actions</th>
+                  <th className="iu-table-th text-center w-12">Del</th>
                 </tr>
               </thead>
               <tbody data-testid="members-table">
@@ -178,9 +192,27 @@ export default function Members() {
                   const p = presence[m.id];
                   const b = BUCKET_BY_KEY[bucketOf(m)] || BUCKET_BY_KEY.athlete;
                   return (
-                    <tr key={m.id} className={`transition ${b.rowHover}`} data-testid={`member-row-${m.id}`}>
-                      <td className="iu-table-td relative pl-5">
+                    <tr
+                      key={m.id}
+                      className={`transition cursor-pointer ${b.rowHover}`}
+                      data-testid={`member-row-${m.id}`}
+                      onDoubleClick={(e) => { if (!isInteractive(e.target)) setEditing(m); }}
+                      title="Double-click to edit"
+                    >
+                      {/* Edit pencil — extreme left, always visible */}
+                      <td className="iu-table-td text-center relative pl-2 pr-1">
                         <span className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r ${b.stripe}`} aria-hidden="true" />
+                        <button
+                          data-testid={`edit-member-${m.id}`}
+                          onClick={() => setEditing(m)}
+                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-700"
+                          title="Edit member"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                      </td>
+                      {/* Member: photo + name + email + parent-contact icon */}
+                      <td className="iu-table-td">
                         <div className="flex items-center gap-3">
                           <InlinePhotoAvatar
                             member={m}
@@ -196,6 +228,23 @@ export default function Members() {
                           </div>
                         </div>
                       </td>
+                      {/* Role / category pill */}
+                      <td className="iu-table-td">
+                        <span className={`inline-flex items-center gap-1.5 px-2 h-6 rounded-full text-[11px] font-semibold border ${b.inactiveBg} ${b.inactiveText} ${b.inactiveBorder}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${b.dotBg}`} />
+                          {b.label.replace(/s$/, "")}
+                        </span>
+                        <div className="text-xs text-slate-500 mt-1">{m.role === "admin" ? "Admin" : categoryLabel(m.category)}</div>
+                      </td>
+                      <td className="iu-table-td text-slate-700">{m.rank || "—"}</td>
+                      <td className="iu-table-td text-slate-700">{GENDER_LABEL[m.gender] || "—"}</td>
+                      <td className="iu-table-td text-slate-700 font-mono text-xs">{m.mobile || "—"}</td>
+                      <td className="iu-table-td text-slate-700">{m.institution || "—"}</td>
+                      <td className="iu-table-td text-slate-700 text-xs whitespace-nowrap">
+                        {m.work_start || "—"}{m.work_end ? <> – {m.work_end}</> : null}
+                      </td>
+                      <td className="iu-table-td text-slate-700 text-xs capitalize">{m.weekly_off || "—"}</td>
+                      {/* Inline editable parent mobile numbers */}
                       <td className="iu-table-td">
                         <div className="flex flex-col gap-1 min-w-[180px] max-w-[220px]">
                           <ParentInlineInput memberId={m.id} field="father_mobile" label="F" initial={m.father_mobile} onSave={patchParent} />
@@ -203,37 +252,30 @@ export default function Members() {
                           <ParentInlineInput memberId={m.id} field="guardian_mobile" label="G" initial={m.guardian_mobile} onSave={patchParent} />
                         </div>
                       </td>
-                      <td className="iu-table-td hidden md:table-cell">
-                        <span className={`inline-flex items-center gap-1.5 px-2 h-6 rounded-full text-[11px] font-semibold border ${b.inactiveBg} ${b.inactiveText} ${b.inactiveBorder}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${b.dotBg}`} />
-                          {b.label.replace(/s$/, "")}
-                        </span>
-                        <div className="text-xs text-slate-500 mt-1">{m.rank ? m.rank : (m.role === "admin" ? "" : categoryLabel(m.category))}</div>
-                      </td>
-                      <td className="iu-table-td hidden lg:table-cell text-sm text-slate-700">{m.institution || "—"}</td>
-                      <td className="iu-table-td hidden lg:table-cell">{m.mobile || "—"}</td>
-                      <td className="iu-table-td hidden lg:table-cell">{m.work_start || "—"} – {m.work_end || "—"}</td>
-                      <td className="iu-table-td">{p ? <StatusBadge status={p.status} /> : <span className="text-xs text-slate-400">—</span>}</td>
-                      <td className="iu-table-td text-right">
-                        <div className="flex justify-end gap-1">
+                      <td className="iu-table-td">
+                        <div className="flex items-center gap-1">
                           <button
                             data-testid={`toggle-attendance-${m.id}`}
                             disabled={busyId === m.id}
                             onClick={() => toggleAttendance(m)}
                             title={p?.status === "on_campus" ? "Force check-out" : "Force check-in"}
-                            className="p-2 rounded-lg hover:bg-slate-100 text-slate-700"
+                            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-700"
                           >
-                            {busyId === m.id ? <Loader2 className="animate-spin" size={16}/> : (p?.status === "on_campus" ? <LogOutIcon size={16}/> : <LogIn size={16}/>)}
+                            {busyId === m.id ? <Loader2 className="animate-spin" size={14}/> : (p?.status === "on_campus" ? <LogOutIcon size={14}/> : <LogIn size={14}/>)}
                           </button>
-                          <button data-testid={`edit-member-${m.id}`} onClick={() => setEditing(m)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-700"><Edit3 size={16} /></button>
-                          <button data-testid={`delete-member-${m.id}`} onClick={() => remove(m)} className="p-2 rounded-lg hover:bg-red-50 text-red-600"><Trash2 size={16} /></button>
+                          {p ? <StatusBadge status={p.status} /> : <span className="text-xs text-slate-400">—</span>}
                         </div>
+                      </td>
+                      <td className="iu-table-td text-center">
+                        <button data-testid={`delete-member-${m.id}`} onClick={() => remove(m)} className="p-2 rounded-lg hover:bg-red-50 text-red-600" title="Delete member">
+                          <Trash2 size={16} />
+                        </button>
                       </td>
                     </tr>
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={8} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
+                  <tr><td colSpan={12} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
                 )}
               </tbody>
             </table>
