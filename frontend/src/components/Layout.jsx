@@ -31,6 +31,8 @@ const NAV_ADMIN = [
   { to: "/admin", label: "Admin Console", icon: ShieldCheck, end: true },
   { to: "/admin/members", label: "Manage Members", icon: Users },
   { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck },
+  { to: "/admin/devices", label: "Access Requests", icon: IdCard },
+  { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
   { to: "/admin/institutions", label: "Institutions", icon: Building2 },
   { to: "/admin/office", label: "Office Settings", icon: Settings },
   { to: "/admin/camps", label: "Camps", icon: Tent },
