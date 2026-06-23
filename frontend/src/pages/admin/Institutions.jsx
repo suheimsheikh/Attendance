@@ -50,7 +50,11 @@ export default function Institutions() {
               <div className="flex-1 min-w-0">
                 <div className="font-semibold truncate">{r.name}</div>
                 <div className="text-xs text-slate-500">{r.short_name ? `${r.short_name} · ` : ""}{r.member_count} member{r.member_count === 1 ? "" : "s"}</div>
-                {(r.sms_from_number || r.voice_from_number) && (
+                {/* Institution-level Twilio chips are temporarily hidden —
+                    the app uses the Office default-from-number for every
+                    notification. Re-enable by removing the `false &&` below
+                    when per-institution sender numbers are needed again. */}
+                {false && (r.sms_from_number || r.voice_from_number) && (
                   <div className="text-[11px] text-emerald-700 font-mono mt-0.5 truncate">
                     {r.sms_from_number ? `SMS ${r.sms_from_number}` : ""}
                     {r.sms_from_number && r.voice_from_number ? "  ·  " : ""}
@@ -121,29 +125,38 @@ function InstForm({ initial, onClose, onSaved }) {
           <label className="iu-label">Short name <span className="text-slate-400 font-normal normal-case">(optional)</span></label>
           <input data-testid="inst-short" value={shortName} onChange={(e) => setShortName(e.target.value)} className="iu-input" placeholder="e.g. IIT, KIIT" />
         </div>
-        {/* Per-institution Twilio sender numbers — when a parent of an athlete
-            from this institution is contacted, the SMS / voice call comes from
-            these numbers (so parents see the brand they expect). */}
+        {/* Per-institution Twilio sender numbers — disabled for now. The
+            app uses the Office Settings default-from-number for every parent
+            notification. The fields are intentionally retained (and the
+            backend resolution still falls through correctly) so we can
+            re-enable per-institution sender branding later without losing
+            the wiring. */}
         <div className="pt-2 border-t border-slate-200">
-          <p className="text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">Twilio sender numbers</p>
+          <p className="text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">
+            Twilio sender numbers <span className="text-amber-700 font-normal normal-case ml-1">(disabled — using Office default)</span>
+          </p>
           <div>
-            <label className="iu-label">SMS &quot;from&quot; number</label>
+            <label className="iu-label text-slate-400">SMS &quot;from&quot; number</label>
             <input
               data-testid="inst-sms-from"
               value={smsFrom}
               onChange={(e) => setSmsFrom(e.target.value)}
-              className="iu-input font-mono text-xs"
-              placeholder="+91XXXXXXXXXX (E.164) — falls back to office default if empty"
+              disabled
+              className="iu-input font-mono text-xs bg-slate-100 text-slate-400 cursor-not-allowed"
+              placeholder="Disabled — Office default-from used for all SMS"
+              title="Per-institution sender numbers are disabled. The app uses the Office Settings default-from-number for every parent notification."
             />
           </div>
           <div className="mt-2">
-            <label className="iu-label">Voice &quot;from&quot; number</label>
+            <label className="iu-label text-slate-400">Voice &quot;from&quot; number</label>
             <input
               data-testid="inst-voice-from"
               value={voiceFrom}
               onChange={(e) => setVoiceFrom(e.target.value)}
-              className="iu-input font-mono text-xs"
-              placeholder="+91XXXXXXXXXX (E.164) — falls back to office default"
+              disabled
+              className="iu-input font-mono text-xs bg-slate-100 text-slate-400 cursor-not-allowed"
+              placeholder="Disabled — Office default-from used for all voice calls"
+              title="Per-institution sender numbers are disabled. The app uses the Office Settings default-from-number for every voice call."
             />
           </div>
         </div>

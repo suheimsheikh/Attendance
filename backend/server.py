@@ -312,8 +312,11 @@ class UserPublic(BaseModel):
     institution: Optional[str] = None
     gender: Optional[str] = None
     father_mobile: Optional[str] = None
+    father_name: Optional[str] = None
     mother_mobile: Optional[str] = None
+    mother_name: Optional[str] = None
     guardian_mobile: Optional[str] = None
+    guardian_name: Optional[str] = None
 
 
 class MemberCreate(BaseModel):
@@ -330,8 +333,11 @@ class MemberCreate(BaseModel):
     gender: Optional[Literal["M", "F", "O"]] = None
     weekly_off: Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"] = "monday"
     father_mobile: Optional[str] = None
+    father_name: Optional[str] = None
     mother_mobile: Optional[str] = None
+    mother_name: Optional[str] = None
     guardian_mobile: Optional[str] = None
+    guardian_name: Optional[str] = None
 
 
 class MemberUpdate(BaseModel):
@@ -349,8 +355,11 @@ class MemberUpdate(BaseModel):
     weekly_off: Optional[Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]] = None
     leave_balance_opening: Optional[float] = None
     father_mobile: Optional[str] = None
+    father_name: Optional[str] = None
     mother_mobile: Optional[str] = None
+    mother_name: Optional[str] = None
     guardian_mobile: Optional[str] = None
+    guardian_name: Optional[str] = None
 
 
 class LeaveBalanceBulkRow(BaseModel):
@@ -1030,8 +1039,11 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "gender": body.gender,
         "weekly_off": body.weekly_off,
         "father_mobile": body.father_mobile,
+        "father_name": body.father_name,
         "mother_mobile": body.mother_mobile,
+        "mother_name": body.mother_name,
         "guardian_mobile": body.guardian_mobile,
+        "guardian_name": body.guardian_name,
         "photo": None,
         "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
         "hashed_password": hash_password(body.password),
@@ -1414,6 +1426,138 @@ async def import_members(file: UploadFile = File(...), admin: dict = Depends(req
         await db.users.insert_one(doc)
         created.append({"full_name": name, "email": email, "password": password})
     return {"created": created, "errors": errors, "created_count": len(created), "error_count": len(errors)}
+
+
+def _norm_name(s: str) -> str:
+    """Normalize a sailor / member name for matching across the parents file
+    and the existing DB. Lowercases, strips diacritics, collapses spaces, and
+    drops common honorifics so 'PREETHI KONGARA' matches 'Preethi Kongara '."""
+    if not s:
+        return ""
+    s = str(s).strip().lower()
+    # Collapse multiple spaces
+    s = " ".join(s.split())
+    return s
+
+
+def _norm_mobile(v) -> Optional[str]:
+    """Coerce an Excel mobile cell (int, float, or string) into a clean digits
+    string. Returns None for the common 'no number' markers — 'LATE', '-', 'N/A',
+    blanks — so the DB stores a clean null instead of garbage."""
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        # Excel often delivers a 10-digit number as an int; .0 floats too.
+        n = int(v)
+        if n <= 0:
+            return None
+        return str(n)
+    s = str(v).strip()
+    if not s:
+        return None
+    upper = s.upper()
+    if upper in ("LATE", "N/A", "NA", "-", "--", "NIL", "NONE"):
+        return None
+    # Keep only digits — drop +, spaces, dashes, country codes.
+    digits = "".join(c for c in s if c.isdigit())
+    return digits or None
+
+
+def _clean_name(v) -> Optional[str]:
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s or s.upper() in ("-", "--", "N/A", "NA", "NIL", "NONE", "LATE"):
+        return None
+    # Strip a leading "LATE " prefix from deceased-parent entries so the
+    # display name is just the parent's name.
+    if s.upper().startswith("LATE "):
+        s = s[5:].strip()
+    return s or None
+
+
+@api_router.post("/members/import-parents")
+async def import_parents(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
+    """Import parent / guardian names + contact numbers into existing members
+    from the YCH "Sailors Parents details" .xlsx.
+
+    Expected layout (header row at row 2, data from row 3):
+        Col  1: S/No
+        Col  2: (institution code — currently ignored, members are matched by
+                 SAILOR NAME against the live users collection)
+        Col  3: SAILOR NAME            ← used as the join key
+        Col  4: G (gender)             ← ignored
+        Col  5: DOB                    ← ignored
+        Col  6: DOJ                    ← ignored
+        Col  7: Father Name
+        Col  8: Father Contact Number
+        Col  9: Mother Name
+        Col 10: Mother Contact Number
+        Col 11: Legal Guardian
+        Col 12: Guardian Contact Number
+
+    Matching is by normalized sailor name (case-insensitive, whitespace
+    collapsed) against the members' `full_name`. Unmatched rows are reported
+    in `unmatched` so the admin can fix the source spreadsheet and re-run.
+
+    The import is **idempotent**: existing parent fields are overwritten with
+    the new values. Re-running is safe (and the standard way to push a
+    refreshed roster into production).
+    """
+    raw = await file.read()
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(raw), data_only=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read the Excel file. Send an .xlsx.")
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+
+    # Header row is the SECOND row in the YCH template (row 1 is a title).
+    if len(rows) < 3:
+        raise HTTPException(status_code=400, detail="File looks empty or missing a header row.")
+
+    # Pre-cache members for O(1) name lookup.
+    name_index: Dict[str, dict] = {}
+    async for u in db.users.find({}, {"_id": 0, "id": 1, "full_name": 1}):
+        key = _norm_name(u.get("full_name", ""))
+        if key:
+            name_index[key] = u
+
+    updated, unmatched, skipped = [], [], []
+    for n, row in enumerate(rows[2:], start=3):
+        # Defensive: ensure the row has 12 columns. openpyxl returns None for
+        # missing trailing cells when iter_rows is used without max_col.
+        cells = list(row) + [None] * (12 - len(row))
+        sailor_name = cells[2]
+        if not sailor_name or not str(sailor_name).strip():
+            skipped.append({"row": n, "reason": "blank sailor name"})
+            continue
+
+        key = _norm_name(sailor_name)
+        member = name_index.get(key)
+        if not member:
+            unmatched.append({"row": n, "sailor_name": str(sailor_name).strip()})
+            continue
+
+        update = {
+            "father_name":     _clean_name(cells[6]),
+            "father_mobile":   _norm_mobile(cells[7]),
+            "mother_name":     _clean_name(cells[8]),
+            "mother_mobile":   _norm_mobile(cells[9]),
+            "guardian_name":   _clean_name(cells[10]),
+            "guardian_mobile": _norm_mobile(cells[11]),
+        }
+        await db.users.update_one({"id": member["id"]}, {"$set": update})
+        updated.append({"sailor_name": member["full_name"], "id": member["id"], **update})
+
+    return {
+        "updated_count": len(updated),
+        "unmatched_count": len(unmatched),
+        "skipped_count": len(skipped),
+        "updated": updated[:200],   # cap response size for the UI
+        "unmatched": unmatched,
+        "skipped": skipped,
+    }
 
 
 # Threshold for forcing a photo refresh. Members re-capture once a year so
