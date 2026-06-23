@@ -1875,6 +1875,34 @@ async def admin_toggle_attendance(member_id: str, body: dict = None, admin: dict
     return res
 
 
+@api_router.delete("/admin/attendance/open-session/{member_id}")
+async def admin_remove_open_session(member_id: str, admin: dict = Depends(require_admin)):
+    """Wipe today's OPEN attendance session for a member.
+
+    Used by the Presence Board "Remove from On Campus" gesture — when a coach
+    or admin sees a member that's mistakenly shown as on campus (wrong button,
+    accidental muster scan, etc.), this clears the row entirely so the member
+    can check in fresh via Self Check-In or Muster.
+
+    Only the *open* session (no check_out_at) for *today* is removed. Closed
+    sessions are left intact so historical reports stay correct.
+    """
+    target = await db.users.find_one({"id": member_id}, {"_id": 0, "id": 1, "full_name": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+    res = await db.attendance.delete_one({
+        "user_id": member_id,
+        "date": today,
+        "check_out_at": None,
+    })
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="No open session for today to remove")
+    logger.info("Admin %s removed open session for %s (%s)", admin["id"], member_id, target.get("full_name"))
+    return {"ok": True, "removed": 1, "member": target.get("full_name")}
+
+
 # ----------------------------------------------------------------------------
 # Overtime — staff only, 30+ minutes outside their work_start/work_end window
 # ----------------------------------------------------------------------------

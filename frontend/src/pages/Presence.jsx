@@ -66,6 +66,40 @@ export default function Presence() {
     }
   }, [isAdmin]);
 
+  // Remove a member from On Campus by deleting their open session for today.
+  // The member instantly disappears from the board and can check in again via
+  // Self Check-In or Muster Roll — useful when a member was wrongly marked
+  // present (mis-tap, double-scan, accidental muster).
+  const removeFromCampus = useCallback(async (memberId, memberName) => {
+    if (!isAdmin) return;
+    const ok = window.confirm(
+      `Remove ${memberName} from On Campus?\n\n` +
+      `Their current check-in for today will be cleared, and they can check in again via Self Check-In or Muster.\n\n` +
+      `This does NOT affect their photo, profile, or past attendance.`
+    );
+    if (!ok) return;
+    try {
+      await api.del(`/admin/attendance/open-session/${memberId}`);
+      toast.success(`${memberName} removed from On Campus`);
+      load();
+    } catch (err) {
+      toast.error(err?.message || "Couldn't remove — they may have already checked out");
+    }
+  }, [isAdmin, load]);
+
+  // Single dispatcher for member-card double-clicks. On Campus members get the
+  // "Remove from On Campus" confirm; every other status keeps the edit-modal
+  // behavior (admins can fix a member's profile from anywhere on the board).
+  const handleMemberDoubleClick = useCallback((memberId) => {
+    if (!isAdmin) return;
+    const m = (data?.members || []).find((x) => x.id === memberId);
+    if (m && m.status === "on_campus") {
+      removeFromCampus(memberId, m.full_name);
+    } else {
+      openEdit(memberId);
+    }
+  }, [isAdmin, data, openEdit, removeFromCampus]);
+
   const checkoutGuest = async (guestId, name) => {
     try {
       await api.post(`/guests/${guestId}/checkout`);
@@ -246,7 +280,7 @@ export default function Presence() {
               adminContacts={data?.admin_contacts || []}
               coachMobile={currentUser?.mobile}
               onSent={load}
-              onRowDoubleClick={isAdmin ? openEdit : null}
+              onRowDoubleClick={isAdmin ? handleMemberDoubleClick : null}
             />
           ))}
         </div>
@@ -382,7 +416,7 @@ function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, 
       className={`px-3 py-2.5 flex gap-2.5 items-start transition ${hidden ? "" : lateBg} ${!hidden && onDoubleClick ? "cursor-pointer select-none" : ""}`}
       data-testid={hidden ? `presence-blank-${columnKey}-${m.id}` : `presence-row-${m.id}`}
       onDoubleClick={handleDouble}
-      title={!hidden && onDoubleClick ? "Double-click to edit member" : undefined}
+      title={!hidden && onDoubleClick ? (columnKey === "on_campus" ? "Double-click to remove from On Campus" : "Double-click to edit member") : undefined}
       style={hiddenStyle}
       aria-hidden={hidden ? true : undefined}
     >
