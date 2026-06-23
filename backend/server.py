@@ -20,7 +20,7 @@ import base64
 from PIL import Image
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional, Literal, Tuple
+from typing import List, Optional, Literal, Tuple, Dict
 from datetime import datetime, timezone, timedelta, date
 from zoneinfo import ZoneInfo
 
@@ -366,6 +366,12 @@ class InstitutionIn(BaseModel):
     name: str
     short_name: Optional[str] = None
     active: bool = True
+    # Per-institution Twilio "from" numbers. When a parent of an athlete in this
+    # institution is notified, the SMS/voice call originates from this number
+    # instead of the office default — gives each institution its own caller-ID
+    # branding (MJPT parents see the MJPT number, YCH parents see YCH, etc.).
+    sms_from_number: Optional[str] = None
+    voice_from_number: Optional[str] = None
 
 
 class GroupLeaveIn(BaseModel):
@@ -378,6 +384,36 @@ class GroupLeaveIn(BaseModel):
     auto_approve: bool = True
 
 
+# Default bilingual message bodies — overridable per office via the UI.
+# `{name}` and `{academy}` are simple templated placeholders, substituted at
+# send-time by `sms.py::_render_template`.
+DEFAULT_PARENT_TEMPLATES = {
+    "late_en":     "Hello, {name} is yet to arrive at {academy}. We will update you shortly.",
+    "late_te":     "నమస్కారం, {name} ఇంకా {academy} కి రాలేదు. మీకు త్వరలో తెలియజేస్తాము.",
+    "absent_en":   "Hello, {name} has not arrived at {academy} today. Please contact the academy.",
+    "absent_te":   "నమస్కారం, {name} ఈరోజు {academy} కి రాలేదు. దయచేసి అకాడెమీని సంప్రదించండి.",
+    "voice_en":    "This is an automated call from {academy}. Your child {name} has not arrived today. Please contact the academy.",
+    "voice_te":    "ఇది {academy} నుండి ఆటోమేటెడ్ కాల్. మీ పిల్లవాడు {name} ఈరోజు రాలేదు. దయచేసి అకాడెమీని సంప్రదించండి.",
+}
+
+
+class TwilioConfig(BaseModel):
+    """Stored in the office config doc — NOT in .env — so admins can rotate
+    credentials from the UI without a deploy. The auth token is masked in
+    GET responses (only the last 4 chars are returned)."""
+    enabled: bool = False
+    account_sid: Optional[str] = None
+    auth_token: Optional[str] = None
+    messaging_service_sid: Optional[str] = None   # alternative to per-number from
+    default_from_number: Optional[str] = None      # E.164, e.g. "+15551234567"
+    voice_language_en: str = "en-IN"
+    voice_language_te: str = "te-IN"
+    voice_voice_en: str = "Polly.Aditi"            # Polly.Aditi supports en-IN + te-IN
+    voice_voice_te: str = "Polly.Aditi"
+    # Bilingual message templates — kept here so admins can rephrase without code.
+    templates: Dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_PARENT_TEMPLATES))
+
+
 class OfficeConfig(BaseModel):
     name: str = "Campus Office"
     latitude: float = 0.0
@@ -388,6 +424,7 @@ class OfficeConfig(BaseModel):
     timezone: str = "Asia/Kolkata"
     late_grace_minutes: int = 0
     parent_notify_grace_minutes: int = 30
+    twilio: TwilioConfig = Field(default_factory=TwilioConfig)
 
 
 class CheckInIn(BaseModel):
@@ -916,12 +953,24 @@ async def reinstate_device(device_pk: str, admin: dict = Depends(require_admin))
 @api_router.get("/office")
 async def get_office(user: dict = Depends(get_current_user)):
     office = await db.config.find_one({"id": "office"}, {"_id": 0})
+    # Mask the Twilio auth token so it's never sent back in plaintext over the
+    # wire. The frontend renders a "Change token" button instead of exposing it.
+    if office and (office.get("twilio") or {}).get("auth_token"):
+        tok = office["twilio"]["auth_token"]
+        office["twilio"] = {**office["twilio"], "auth_token": "•" * max(0, len(tok) - 4) + tok[-4:], "has_auth_token": True}
+    elif office and "twilio" in office:
+        office["twilio"] = {**office["twilio"], "has_auth_token": False}
     return office
 
 
 @api_router.put("/office")
 async def update_office(body: OfficeConfig, admin: dict = Depends(require_admin)):
-    await db.config.update_one({"id": "office"}, {"$set": body.model_dump()})
+    # The Office page only edits geofence / hours / timezone — Twilio settings
+    # use the dedicated /api/sms/config endpoint so a partial save here never
+    # wipes credentials. We drop the twilio subdoc to prevent accidental nuke.
+    payload = body.model_dump()
+    payload.pop("twilio", None)
+    await db.config.update_one({"id": "office"}, {"$set": payload})
     return await db.config.find_one({"id": "office"}, {"_id": 0})
 
 
@@ -1104,6 +1153,8 @@ async def create_institution(body: InstitutionIn, admin: dict = Depends(require_
         "name": name,
         "short_name": (body.short_name or "").strip() or None,
         "active": body.active,
+        "sms_from_number": (body.sms_from_number or "").strip() or None,
+        "voice_from_number": (body.voice_from_number or "").strip() or None,
         "created_at": now_utc().isoformat(),
     }
     await db.institutions.insert_one(doc)
@@ -1122,6 +1173,8 @@ async def update_institution(inst_id: str, body: InstitutionIn, admin: dict = De
         "name": new_name,
         "short_name": (body.short_name or "").strip() or None,
         "active": body.active,
+        "sms_from_number": (body.sms_from_number or "").strip() or None,
+        "voice_from_number": (body.voice_from_number or "").strip() or None,
     }})
     if new_name != old_name:
         await db.users.update_many({"institution": old_name}, {"$set": {"institution": new_name}})
@@ -3344,6 +3397,11 @@ app.include_router(_camps_module.make_router(db, require_admin))
 # Regattas — national / international sailing events. Shown alongside camps on
 # the unified Calendar view.
 app.include_router(_regattas_module.make_router(db, require_admin))
+
+
+# Twilio SMS + Voice — parent notifications, per-institution sender numbers.
+from sms import make_router as _sms_router  # noqa: E402
+app.include_router(_sms_router(db, require_admin))
 
 
 # Lightweight keep-alive endpoint — no auth, no DB hit. Plug an UptimeRobot

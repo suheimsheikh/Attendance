@@ -45,11 +45,18 @@ export default function Institutions() {
       ) : (
         <div className="space-y-2">
           {rows.map((r) => (
-            <div key={r.id} className="iu-card p-3 flex items-center gap-3" data-testid={`inst-row-${r.id}`}>
+            <div key={r.id} className="iu-card p-3 flex items-center gap-3 flex-wrap" data-testid={`inst-row-${r.id}`}>
               <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center"><Building2 size={16}/></div>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold truncate">{r.name}</div>
                 <div className="text-xs text-slate-500">{r.short_name ? `${r.short_name} · ` : ""}{r.member_count} member{r.member_count === 1 ? "" : "s"}</div>
+                {(r.sms_from_number || r.voice_from_number) && (
+                  <div className="text-[11px] text-emerald-700 font-mono mt-0.5 truncate">
+                    {r.sms_from_number ? `SMS ${r.sms_from_number}` : ""}
+                    {r.sms_from_number && r.voice_from_number ? "  ·  " : ""}
+                    {r.voice_from_number ? `Voice ${r.voice_from_number}` : ""}
+                  </div>
+                )}
               </div>
               {!r.active && <span className="text-[10px] uppercase font-bold text-slate-400 mr-2">Inactive</span>}
               <button onClick={() => setEditing(r)} className="p-2 rounded-lg hover:bg-slate-100" data-testid={`inst-edit-${r.id}`}><Edit3 size={16}/></button>
@@ -74,6 +81,8 @@ function InstForm({ initial, onClose, onSaved }) {
   const [name, setName] = useState(initial?.name || "");
   const [shortName, setShortName] = useState(initial?.short_name || "");
   const [active, setActive] = useState(initial?.active ?? true);
+  const [smsFrom, setSmsFrom] = useState(initial?.sms_from_number || "");
+  const [voiceFrom, setVoiceFrom] = useState(initial?.voice_from_number || "");
   const [busy, setBusy] = useState(false);
   const isEdit = !!initial;
 
@@ -82,10 +91,17 @@ function InstForm({ initial, onClose, onSaved }) {
     if (!name.trim()) { toast.error("Name required"); return; }
     setBusy(true);
     try {
+      const payload = {
+        name: name.trim(),
+        short_name: shortName.trim(),
+        active,
+        sms_from_number: smsFrom.trim(),
+        voice_from_number: voiceFrom.trim(),
+      };
       if (isEdit) {
-        await api.patch(`/institutions/${initial.id}`, { name: name.trim(), short_name: shortName.trim(), active });
+        await api.patch(`/institutions/${initial.id}`, payload);
       } else {
-        await api.post("/institutions", { name: name.trim(), short_name: shortName.trim(), active });
+        await api.post("/institutions", payload);
       }
       toast.success("Saved");
       onSaved();
@@ -95,7 +111,7 @@ function InstForm({ initial, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <form onSubmit={submit} className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-3">
+      <form onSubmit={submit} className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
         <h3 className="font-extrabold text-lg">{isEdit ? "Edit" : "Add"} institution</h3>
         <div>
           <label className="iu-label">Name</label>
@@ -105,7 +121,33 @@ function InstForm({ initial, onClose, onSaved }) {
           <label className="iu-label">Short name <span className="text-slate-400 font-normal normal-case">(optional)</span></label>
           <input data-testid="inst-short" value={shortName} onChange={(e) => setShortName(e.target.value)} className="iu-input" placeholder="e.g. IIT, KIIT" />
         </div>
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
+        {/* Per-institution Twilio sender numbers — when a parent of an athlete
+            from this institution is contacted, the SMS / voice call comes from
+            these numbers (so parents see the brand they expect). */}
+        <div className="pt-2 border-t border-slate-200">
+          <p className="text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">Twilio sender numbers</p>
+          <div>
+            <label className="iu-label">SMS &quot;from&quot; number</label>
+            <input
+              data-testid="inst-sms-from"
+              value={smsFrom}
+              onChange={(e) => setSmsFrom(e.target.value)}
+              className="iu-input font-mono text-xs"
+              placeholder="+91XXXXXXXXXX (E.164) — falls back to office default if empty"
+            />
+          </div>
+          <div className="mt-2">
+            <label className="iu-label">Voice &quot;from&quot; number</label>
+            <input
+              data-testid="inst-voice-from"
+              value={voiceFrom}
+              onChange={(e) => setVoiceFrom(e.target.value)}
+              className="iu-input font-mono text-xs"
+              placeholder="+91XXXXXXXXXX (E.164) — falls back to office default"
+            />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-sm cursor-pointer pt-2">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
           Active (show in onboarding dropdown)
         </label>

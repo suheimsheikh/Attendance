@@ -32,7 +32,6 @@ export default function AdminConsole() {
     { to: "/admin/sessions",       label: "Daily sessions",     desc: "Check-in, temp exits/returns & final check-out in one table", Icon: Calendar,         color: "#10B981" },
     { to: "/admin/leave-balances", label: "Leave balances",     desc: "Set opening balances & see consumed / pending",               Icon: CalendarCheck2,   color: "#06B6D4" },
     { to: "/admin/devices",        label: "Access requests",    desc: "Approve new browser/device sign-ins",                         Icon: IdCard,            color: "#F43F5E" },
-    { to: "/admin/office",         label: "Office settings",    desc: "Geofence, work hours, timezone",                              Icon: Building2,         color: "#14B8A6" },
     { to: "/admin/reports",        label: "Reports",            desc: "Hours, attendance, exports",                                  Icon: FileBarChart2,     color: "#EC4899" },
     { to: "/admin/import",         label: "Import members",     desc: "Bulk upload via Excel template",                              Icon: FileSpreadsheet,  color: "#84CC16" },
     { to: "/admin/backup",         label: "Backup & restore",   desc: "Download or restore master data (members, settings, institutions)", Icon: Database,    color: "#475569" },

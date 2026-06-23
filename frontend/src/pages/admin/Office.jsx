@@ -1,10 +1,24 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Save, MapPin } from "lucide-react";
+import { Loader2, Save, MapPin, MessageSquare, Phone, KeyRound, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { getLocation } from "../../utils";
 
 const TZS = ["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Australia/Sydney"];
+
+// Polly voices that support both en-IN and te-IN. Aditi is the safe default.
+const VOICES = ["Polly.Aditi", "Polly.Raveena", "Polly.Kajal-Neural"];
+const LANG_EN = ["en-IN", "en-US", "en-GB"];
+const LANG_TE = ["te-IN"];
+
+const TEMPLATE_FIELDS = [
+  { key: "late_en",   label: "Parent SMS — child is late (English)",   long: true },
+  { key: "late_te",   label: "Parent SMS — child is late (Telugu)",    long: true },
+  { key: "absent_en", label: "Parent SMS — child is absent (English)", long: true },
+  { key: "absent_te", label: "Parent SMS — child is absent (Telugu)",  long: true },
+  { key: "voice_en",  label: "Voice call message (English)",           long: true },
+  { key: "voice_te",  label: "Voice call message (Telugu)",            long: true },
+];
 
 export default function OfficeSettings() {
   const [form, setForm] = useState(null);
@@ -130,6 +144,273 @@ export default function OfficeSettings() {
           {saving ? <Loader2 className="animate-spin" size={16}/> : <><Save size={16}/> Save settings</>}
         </button>
       </form>
+
+      <TwilioPanel />
+    </div>
+  );
+}
+
+
+/**
+ * Twilio configuration card — credentials, default sender number, bilingual
+ * message templates, and test buttons. Lives inside Office Settings so admins
+ * have a single screen for all academy-wide configuration.
+ *
+ * Auth token is NEVER returned in plaintext from the backend — GET shows a
+ * masked dot-string. Admins click "Change token" to enter a new one. A blank
+ * token field on save is treated as "leave existing token untouched".
+ */
+function TwilioPanel() {
+  const [cfg, setCfg] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editToken, setEditToken] = useState(false);
+  const [newToken, setNewToken] = useState("");
+  const [testTo, setTestTo] = useState("");
+  const [busyTest, setBusyTest] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    try { setCfg(await api.get("/sms/config")); }
+    catch (err) { toast.error(err?.message || "Failed to load Twilio config"); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const set = (k, v) => setCfg((c) => ({ ...c, [k]: v }));
+  const setTpl = (k, v) => setCfg((c) => ({ ...c, templates: { ...(c.templates || {}), [k]: v } }));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const body = {
+        enabled: !!cfg.enabled,
+        account_sid: cfg.account_sid || "",
+        messaging_service_sid: cfg.messaging_service_sid || "",
+        default_from_number: cfg.default_from_number || "",
+        voice_language_en: cfg.voice_language_en || "en-IN",
+        voice_language_te: cfg.voice_language_te || "te-IN",
+        voice_voice_en: cfg.voice_voice_en || "Polly.Aditi",
+        voice_voice_te: cfg.voice_voice_te || "Polly.Aditi",
+        templates: cfg.templates || {},
+      };
+      // Only include auth_token if the admin actually typed a fresh one —
+      // otherwise we'd overwrite the stored token with the masked string.
+      if (editToken && newToken.trim()) body.auth_token = newToken.trim();
+      await api.put("/sms/config", body);
+      toast.success("Twilio settings saved");
+      setEditToken(false); setNewToken("");
+      load();
+    } catch (err) { toast.error(err?.message || "Failed"); }
+    finally { setSaving(false); }
+  };
+
+  const sendTestSms = async () => {
+    const to = (testTo || "").trim();
+    if (!to.startsWith("+")) { toast.error("Use E.164 format, e.g. +91XXXXXXXXXX"); return; }
+    setBusyTest("sms");
+    try {
+      const res = await api.post("/sms/test", { to });
+      toast.success(`SMS queued (sid: ${res.twilio_sid?.slice(-6)})`);
+    } catch (err) { toast.error(err?.message || "Failed"); }
+    finally { setBusyTest(null); }
+  };
+
+  const sendTestVoice = async () => {
+    const to = (testTo || "").trim();
+    if (!to.startsWith("+")) { toast.error("Use E.164 format, e.g. +91XXXXXXXXXX"); return; }
+    setBusyTest("voice");
+    try {
+      const res = await api.post("/sms/voice/test", { to });
+      toast.success(`Voice call queued (sid: ${res.twilio_sid?.slice(-6)})`);
+    } catch (err) { toast.error(err?.message || "Failed"); }
+    finally { setBusyTest(null); }
+  };
+
+  if (loading || !cfg) {
+    return <div className="iu-card p-6 mt-6 text-center text-slate-400"><Loader2 className="animate-spin mx-auto"/></div>;
+  }
+
+  return (
+    <div className="iu-card p-5 md:p-6 mt-6 space-y-5" data-testid="twilio-panel">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
+            <MessageSquare size={18} className="text-emerald-600" /> Twilio — Parent SMS &amp; Voice
+          </h2>
+          <p className="text-slate-500 text-sm mt-1">SMS &amp; voice notifications to parents and guardians, in English and Telugu. Per-institution sender numbers are configured in <strong>Institutions</strong>.</p>
+        </div>
+        <label className="inline-flex items-center gap-2 cursor-pointer select-none shrink-0">
+          <input
+            data-testid="tw-enabled"
+            type="checkbox"
+            checked={!!cfg.enabled}
+            onChange={(e) => set("enabled", e.target.checked)}
+            className="w-4 h-4 accent-emerald-600"
+          />
+          <span className="text-sm font-semibold">{cfg.enabled ? "Enabled" : "Disabled"}</span>
+        </label>
+      </div>
+
+      {/* ──────────── Credentials ──────────── */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <div>
+          <label className="iu-label">Account SID</label>
+          <input
+            data-testid="tw-sid"
+            value={cfg.account_sid || ""}
+            onChange={(e) => set("account_sid", e.target.value)}
+            placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            className="iu-input font-mono text-xs"
+          />
+        </div>
+        <div>
+          <label className="iu-label flex items-center justify-between">
+            <span>Auth Token</span>
+            {cfg.has_auth_token && !editToken && (
+              <button
+                type="button"
+                onClick={() => { setEditToken(true); setNewToken(""); }}
+                className="text-[11px] text-amber-700 underline"
+              >
+                Change token
+              </button>
+            )}
+          </label>
+          {editToken || !cfg.has_auth_token ? (
+            <input
+              data-testid="tw-token"
+              type="password"
+              value={newToken}
+              onChange={(e) => setNewToken(e.target.value)}
+              placeholder="Enter new Twilio auth token"
+              className="iu-input font-mono text-xs"
+              autoComplete="off"
+            />
+          ) : (
+            <div className="iu-input font-mono text-xs bg-slate-50 text-slate-500 flex items-center gap-2">
+              <KeyRound size={14} /> {cfg.auth_token || "•••••"}
+            </div>
+          )}
+        </div>
+        <div>
+          <label className="iu-label">Default &quot;From&quot; number</label>
+          <input
+            data-testid="tw-from"
+            value={cfg.default_from_number || ""}
+            onChange={(e) => set("default_from_number", e.target.value)}
+            placeholder="+15551234567 (E.164)"
+            className="iu-input font-mono text-xs"
+          />
+          <p className="text-[11px] text-slate-500 mt-1">Used when an institution has no sender number of its own.</p>
+        </div>
+        <div>
+          <label className="iu-label">Messaging Service SID (optional)</label>
+          <input
+            data-testid="tw-msvc"
+            value={cfg.messaging_service_sid || ""}
+            onChange={(e) => set("messaging_service_sid", e.target.value)}
+            placeholder="MGxxxxxxxx (preferred for Indian DLT)"
+            className="iu-input font-mono text-xs"
+          />
+          <p className="text-[11px] text-slate-500 mt-1">Recommended for Indian DLT — handles sender rotation, delivery webhooks, opt-outs.</p>
+        </div>
+      </div>
+
+      {/* ──────────── Voice settings ──────────── */}
+      <div className="grid md:grid-cols-4 gap-4 pt-2 border-t border-slate-200">
+        <div>
+          <label className="iu-label">Voice (English)</label>
+          <select className="iu-input" value={cfg.voice_voice_en || "Polly.Aditi"} onChange={(e) => set("voice_voice_en", e.target.value)} data-testid="tw-voice-en">
+            {VOICES.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="iu-label">Voice language (EN)</label>
+          <select className="iu-input" value={cfg.voice_language_en || "en-IN"} onChange={(e) => set("voice_language_en", e.target.value)}>
+            {LANG_EN.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="iu-label">Voice (Telugu)</label>
+          <select className="iu-input" value={cfg.voice_voice_te || "Polly.Aditi"} onChange={(e) => set("voice_voice_te", e.target.value)} data-testid="tw-voice-te">
+            {VOICES.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="iu-label">Voice language (TE)</label>
+          <select className="iu-input" value={cfg.voice_language_te || "te-IN"} onChange={(e) => set("voice_language_te", e.target.value)}>
+            {LANG_TE.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* ──────────── Templates ──────────── */}
+      <div className="pt-2 border-t border-slate-200 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-bold text-slate-700">Message templates</div>
+          <div className="text-[11px] text-slate-500">Use <code className="px-1 bg-slate-100 rounded">{"{name}"}</code> for child first name, <code className="px-1 bg-slate-100 rounded">{"{academy}"}</code> for office name.</div>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          {TEMPLATE_FIELDS.map((f) => (
+            <div key={f.key}>
+              <label className="iu-label">{f.label}</label>
+              <textarea
+                data-testid={`tw-tpl-${f.key}`}
+                value={(cfg.templates || {})[f.key] || ""}
+                onChange={(e) => setTpl(f.key, e.target.value)}
+                className="iu-input"
+                rows={f.long ? 3 : 2}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ──────────── Test panel ──────────── */}
+      <div className="pt-2 border-t border-slate-200 space-y-3">
+        <div className="text-sm font-bold text-slate-700">Send test</div>
+        <div className="flex flex-wrap gap-2 items-end">
+          <div className="flex-1 min-w-[220px]">
+            <label className="iu-label">Test number (E.164)</label>
+            <input
+              data-testid="tw-test-to"
+              value={testTo}
+              onChange={(e) => setTestTo(e.target.value)}
+              placeholder="+91XXXXXXXXXX"
+              className="iu-input font-mono text-xs"
+            />
+          </div>
+          <button
+            type="button"
+            data-testid="tw-test-sms"
+            onClick={sendTestSms}
+            disabled={busyTest !== null || !cfg.enabled}
+            className="iu-btn-primary"
+          >
+            {busyTest === "sms" ? <Loader2 className="animate-spin" size={14}/> : <><MessageSquare size={14}/> Test SMS</>}
+          </button>
+          <button
+            type="button"
+            data-testid="tw-test-voice"
+            onClick={sendTestVoice}
+            disabled={busyTest !== null || !cfg.enabled}
+            className="inline-flex items-center gap-2 px-3 h-10 rounded-lg border-2 border-emerald-500 text-emerald-700 font-semibold hover:bg-emerald-50"
+          >
+            {busyTest === "voice" ? <Loader2 className="animate-spin" size={14}/> : <><Phone size={14}/> Test voice</>}
+          </button>
+        </div>
+        {!cfg.enabled && <p className="text-[11px] text-amber-700">Twilio is currently disabled — enable above and save before sending tests.</p>}
+      </div>
+
+      <div className="flex gap-2 pt-3 border-t border-slate-200">
+        <button data-testid="tw-save" onClick={save} disabled={saving} className="iu-btn-primary">
+          {saving ? <Loader2 className="animate-spin" size={16}/> : <><Save size={16}/> Save Twilio settings</>}
+        </button>
+        <button type="button" onClick={load} className="inline-flex items-center gap-2 px-3 h-10 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50" title="Reload from server">
+          <RefreshCw size={14}/> Reload
+        </button>
+      </div>
     </div>
   );
 }
