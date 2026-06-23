@@ -248,7 +248,7 @@ export default function Members() {
                           parent's NAME (read-only here — names are edited via
                           the row's edit modal). */}
                       <td className="iu-table-td">
-                        <div className="flex flex-col gap-1 min-w-[220px] max-w-[260px]">
+                        <div className="flex flex-col gap-1 min-w-[320px] max-w-[420px]">
                           <ParentInlineInput memberId={m.id} field="father_mobile" label={m.father_name || "Father"} initial={m.father_mobile} onSave={patchParent} />
                           <ParentInlineInput memberId={m.id} field="mother_mobile" label={m.mother_name || "Mother"} initial={m.mother_mobile} onSave={patchParent} />
                           <ParentInlineInput memberId={m.id} field="guardian_mobile" label={m.guardian_name || "Guardian"} initial={m.guardian_mobile} onSave={patchParent} />
@@ -337,7 +337,7 @@ function ParentInlineInput({ memberId, field, label, initial, onSave }) {
   return (
     <div className="flex items-center gap-1.5">
       <span
-        className={`${isShortBadge ? "w-5 h-5" : "px-1.5 h-5 max-w-[110px] truncate"} rounded text-[10px] font-bold flex items-center justify-center ${labelColor}`}
+        className={`${isShortBadge ? "w-5 h-5" : "px-1.5 h-5 max-w-[200px] truncate"} rounded text-[10px] font-bold flex items-center justify-center ${labelColor}`}
         title={label}
       >
         {label}
