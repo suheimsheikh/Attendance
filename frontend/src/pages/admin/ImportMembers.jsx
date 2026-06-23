@@ -107,20 +107,42 @@ export default function ImportMembers() {
  */
 function ParentImport() {
   const [file, setFile] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(null); // "preview" | "apply" | null
+  const [preview, setPreview] = useState(null);
+  // Per-row decisions keyed by row number:
+  //   { member_id, use_name: "spreadsheet" | "member" }   ← match a candidate
+  //   { skip: true }                                       ← explicitly skip
+  const [decisions, setDecisions] = useState({});
+  const [final, setFinal] = useState(null);
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const reset = () => { setPreview(null); setDecisions({}); setFinal(null); };
+
+  const runPreview = async (e) => {
+    e?.preventDefault?.();
     if (!file) { toast.error("Pick the parents .xlsx first"); return; }
-    setBusy(true);
+    setBusy("preview"); setFinal(null);
     try {
-      const res = await uploadFile("/members/import-parents", file);
-      setResult(res);
-      toast.success(`Parents imported — ${res.updated_count} matched, ${res.unmatched_count} unmatched`);
+      const res = await uploadFile("/members/import-parents?mode=preview", file);
+      setPreview(res); setDecisions({});
+      toast.success(`Preview ready — ${res.matched_count} exact, ${res.suggestion_count} need review, ${res.unmatched_count} unmatched`);
     } catch (err) {
-      toast.error(err?.message || err?.response?.data?.detail || "Upload failed");
-    } finally { setBusy(false); }
+      toast.error(err?.message || err?.response?.data?.detail || "Preview failed");
+    } finally { setBusy(null); }
+  };
+
+  const applyAll = async () => {
+    if (!file || !preview) return;
+    const mappings = Object.entries(decisions)
+      .filter(([, v]) => v?.member_id && !v?.skip)
+      .map(([row, v]) => ({ row: Number(row), member_id: v.member_id, use_name: v.use_name || "member" }));
+    setBusy("apply");
+    try {
+      const res = await uploadFile("/members/import-parents", file, { mode: "apply", mappings: JSON.stringify(mappings) });
+      setFinal(res);
+      toast.success(`Imported — ${res.matched_count} updated (${mappings.length} via your spelling resolutions)`);
+    } catch (err) {
+      toast.error(err?.message || err?.response?.data?.detail || "Apply failed");
+    } finally { setBusy(null); }
   };
 
   return (
@@ -128,50 +150,113 @@ function ParentImport() {
       <header className="mb-3">
         <h2 className="text-xl font-extrabold tracking-tight">Import Parents &amp; Guardians</h2>
         <p className="text-slate-500 text-sm mt-1">
-          Bulk-update existing members with father / mother / guardian names &amp; contact numbers. Match key is the <strong>sailor name</strong>. Idempotent — safe to re-run after fixing unmatched rows.
+          Bulk-update existing members with father / mother / guardian names &amp; contact numbers. The import is fuzzy — close spellings show up for you to confirm.
         </p>
       </header>
-      <form onSubmit={submit} className="iu-card p-5 md:p-6 space-y-4">
+
+      <form onSubmit={runPreview} className="iu-card p-5 md:p-6 space-y-4">
         <div>
           <label className="iu-label">Parents .xlsx</label>
           <input
             data-testid="parents-file"
             type="file"
             accept=".xlsx"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            onChange={(e) => { setFile(e.target.files?.[0] || null); reset(); }}
             className="block w-full text-sm text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-700 file:text-white hover:file:bg-emerald-800"
           />
-          <p className="text-[11px] text-slate-500 mt-1.5">Expected columns: S/No · Institution · Sailor Name · G · DOB · DOJ · Father Name · Father Contact · Mother Name · Mother Contact · Guardian Name · Guardian Contact (header row at row 2).</p>
+          <p className="text-[11px] text-slate-500 mt-1.5">Expected columns at row 2: S/No · Institution · Sailor Name · G · DOB · DOJ · Father Name · Father Contact · Mother Name · Mother Contact · Guardian Name · Guardian Contact.</p>
         </div>
-        <button data-testid="parents-submit" type="submit" disabled={busy || !file} className="iu-btn-primary">
-          {busy ? <Loader2 className="animate-spin" size={14}/> : <Upload size={14}/>} Import parents
+        <button data-testid="parents-preview" type="submit" disabled={busy !== null || !file} className="iu-btn-primary">
+          {busy === "preview" ? <Loader2 className="animate-spin" size={14}/> : <Upload size={14}/>} Preview
         </button>
       </form>
 
-      {result && (
-        <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="iu-card p-4 text-center">
-            <div className="text-2xl font-extrabold text-emerald-700">{result.updated_count}</div>
-            <div className="text-xs uppercase tracking-wide text-slate-500 mt-1">Matched &amp; updated</div>
-          </div>
-          <div className="iu-card p-4 text-center">
-            <div className="text-2xl font-extrabold text-amber-600">{result.unmatched_count}</div>
-            <div className="text-xs uppercase tracking-wide text-slate-500 mt-1">Unmatched names</div>
-          </div>
-          <div className="iu-card p-4 text-center">
-            <div className="text-2xl font-extrabold text-slate-400">{result.skipped_count}</div>
-            <div className="text-xs uppercase tracking-wide text-slate-500 mt-1">Skipped (blank)</div>
+      {preview && (
+        <div className="mt-5 space-y-4" data-testid="parents-preview-result">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <SummaryTile color="emerald" value={preview.matched_count}     label="Exact matches" />
+            <SummaryTile color="amber"   value={preview.suggestion_count}  label="Need spelling review" />
+            <SummaryTile color="rose"    value={preview.unmatched_count}   label="No candidate found" />
+            <SummaryTile color="slate"   value={preview.skipped_count}     label="Skipped (blank)" />
           </div>
 
-          {result.unmatched?.length > 0 && (
-            <div className="iu-card md:col-span-3">
+          {preview.suggestions.length > 0 && (
+            <div className="iu-card">
               <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
                 <AlertTriangle className="text-amber-600" size={16}/>
-                <h3 className="font-bold text-sm">Unmatched names — fix the source file &amp; re-run</h3>
+                <h3 className="font-bold text-sm">Spelling review — {preview.suggestions.length} {preview.suggestions.length === 1 ? "row" : "rows"}</h3>
+                <span className="ml-auto text-[11px] text-slate-500">Pick the best match. Choose whose spelling to keep.</span>
               </div>
-              <ul className="px-5 py-3 text-sm space-y-1 max-h-72 overflow-y-auto">
-                {result.unmatched.map((u) => (
-                  <li key={`unmatched-${u.row}-${u.sailor_name}`} className="flex justify-between gap-3">
+              <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
+                {preview.suggestions.map((s) => {
+                  const d = decisions[s.row] || {};
+                  return (
+                    <div key={`sugg-${s.row}-${s.sailor_name}`} className="p-4 space-y-2" data-testid={`sugg-row-${s.row}`}>
+                      <div className="text-sm">
+                        <span className="text-slate-400 text-xs mr-2">row {s.row}</span>
+                        <span className="font-semibold">From file:</span>{" "}
+                        <span className="font-mono text-slate-700">{s.sailor_name}</span>
+                      </div>
+                      <div className="flex flex-col gap-1 ml-1">
+                        {s.candidates.map((c) => {
+                          const picked = d.member_id === c.member_id && !d.skip;
+                          return (
+                            <label key={c.member_id} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border ${picked ? "bg-emerald-50 border-emerald-300" : "bg-white border-slate-200 hover:bg-slate-50"}`}>
+                              <input
+                                type="radio"
+                                name={`row-${s.row}`}
+                                checked={picked}
+                                onChange={() => setDecisions((p) => ({ ...p, [s.row]: { member_id: c.member_id, use_name: d.use_name || "member" } }))}
+                                data-testid={`sugg-pick-${s.row}-${c.member_id}`}
+                              />
+                              <span className="font-mono text-sm flex-1">{c.member_name}</span>
+                              <span className="text-[11px] font-bold text-slate-500">{Math.round(c.score * 100)}% similar</span>
+                            </label>
+                          );
+                        })}
+                        <label className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border ${d.skip ? "bg-slate-100 border-slate-300" : "bg-white border-slate-200 hover:bg-slate-50"}`}>
+                          <input
+                            type="radio"
+                            name={`row-${s.row}`}
+                            checked={!!d.skip}
+                            onChange={() => setDecisions((p) => ({ ...p, [s.row]: { skip: true } }))}
+                            data-testid={`sugg-skip-${s.row}`}
+                          />
+                          <span className="text-sm text-slate-600 italic">Skip this row</span>
+                        </label>
+                      </div>
+                      {/* Which spelling to keep — only relevant once a candidate is picked. */}
+                      {d.member_id && !d.skip && (
+                        <div className="ml-1 mt-2 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="text-slate-500">Keep spelling:</span>
+                          <button
+                            type="button"
+                            onClick={() => setDecisions((p) => ({ ...p, [s.row]: { ...p[s.row], use_name: "member" } }))}
+                            className={`px-2 h-7 rounded-md border text-xs font-semibold ${(d.use_name || "member") === "member" ? "bg-slate-900 text-white border-transparent" : "bg-white border-slate-200 text-slate-700"}`}
+                          >Existing (DB): {(s.candidates.find((c) => c.member_id === d.member_id) || {}).member_name}</button>
+                          <button
+                            type="button"
+                            onClick={() => setDecisions((p) => ({ ...p, [s.row]: { ...p[s.row], use_name: "spreadsheet" } }))}
+                            className={`px-2 h-7 rounded-md border text-xs font-semibold ${d.use_name === "spreadsheet" ? "bg-slate-900 text-white border-transparent" : "bg-white border-slate-200 text-slate-700"}`}
+                          >From file: {s.sailor_name}</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {preview.unmatched.length > 0 && (
+            <div className="iu-card">
+              <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
+                <AlertTriangle className="text-rose-600" size={16}/>
+                <h3 className="font-bold text-sm">No similar member found ({preview.unmatched.length}) — these will be skipped</h3>
+              </div>
+              <ul className="px-5 py-3 text-sm space-y-1 max-h-60 overflow-y-auto">
+                {preview.unmatched.map((u) => (
+                  <li key={`unm-${u.row}-${u.sailor_name}`} className="flex justify-between gap-3">
                     <span className="text-slate-700">{u.sailor_name}</span>
                     <span className="text-slate-400 text-xs">row {u.row}</span>
                   </li>
@@ -179,8 +264,40 @@ function ParentImport() {
               </ul>
             </div>
           )}
+
+          <div className="flex flex-wrap gap-2 pt-2">
+            <button data-testid="parents-apply" onClick={applyAll} disabled={busy !== null} className="iu-btn-primary">
+              {busy === "apply" ? <Loader2 className="animate-spin" size={14}/> : <CheckCircle2 size={14}/>}
+              Apply import ({preview.matched_count + Object.values(decisions).filter((d) => d.member_id && !d.skip).length} rows)
+            </button>
+            <button onClick={runPreview} disabled={busy !== null} className="iu-btn-secondary">
+              <Upload size={14}/> Re-preview
+            </button>
+          </div>
+
+          {final && (
+            <div className="iu-card p-4 bg-emerald-50 border border-emerald-200" data-testid="parents-applied">
+              <div className="font-bold text-emerald-800 mb-1">Imported {final.matched_count} rows</div>
+              <div className="text-sm text-emerald-700">Skipped: {final.skipped_count}. You can re-upload the file anytime to refresh.</div>
+            </div>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function SummaryTile({ color, value, label }) {
+  const tints = {
+    emerald: "text-emerald-700",
+    amber:   "text-amber-600",
+    rose:    "text-rose-600",
+    slate:   "text-slate-400",
+  };
+  return (
+    <div className="iu-card p-4 text-center">
+      <div className={`text-2xl font-extrabold ${tints[color] || "text-slate-700"}`}>{value}</div>
+      <div className="text-xs uppercase tracking-wide text-slate-500 mt-1">{label}</div>
     </div>
   );
 }

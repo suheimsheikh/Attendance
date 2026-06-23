@@ -1434,6 +1434,14 @@ def _norm_name(s: str) -> str:
     return s
 
 
+def _fuzzy_score(a: str, b: str) -> float:
+    """Lightweight similarity (0-1) using difflib.SequenceMatcher on normalized
+    names. Used to suggest near-matches when the spreadsheet spelling drifts
+    slightly from the DB ('Preethi Kongra' vs 'Preethi Kongara')."""
+    import difflib
+    return difflib.SequenceMatcher(None, _norm_name(a), _norm_name(b)).ratio()
+
+
 def _norm_mobile(v) -> Optional[str]:
     """Coerce an Excel mobile cell (int, float, or string) into a clean digits
     string. Returns None for the common 'no number' markers — 'LATE', '-', 'N/A',
@@ -1471,32 +1479,25 @@ def _clean_name(v) -> Optional[str]:
 
 
 @api_router.post("/members/import-parents")
-async def import_parents(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
-    """Import parent / guardian names + contact numbers into existing members
-    from the YCH "Sailors Parents details" .xlsx.
+async def import_parents(
+    file: UploadFile = File(...),
+    mode: str = "preview",
+    mappings: Optional[str] = None,
+    admin: dict = Depends(require_admin),
+):
+    """Import parent / guardian names + contact numbers into existing members.
 
-    Expected layout (header row at row 2, data from row 3):
-        Col  1: S/No
-        Col  2: (institution code — currently ignored, members are matched by
-                 SAILOR NAME against the live users collection)
-        Col  3: SAILOR NAME            ← used as the join key
-        Col  4: G (gender)             ← ignored
-        Col  5: DOB                    ← ignored
-        Col  6: DOJ                    ← ignored
-        Col  7: Father Name
-        Col  8: Father Contact Number
-        Col  9: Mother Name
-        Col 10: Mother Contact Number
-        Col 11: Legal Guardian
-        Col 12: Guardian Contact Number
+    Two-phase flow, controlled by the `mode` query parameter:
+      • `mode=preview`  (default) — parse the file, categorize every row as
+        exact-match / fuzzy-candidate / unmatched, return the result WITHOUT
+        writing. The frontend uses this to render a review screen where the
+        admin resolves spelling drift.
+      • `mode=apply`    — actually persist. `mappings` is a JSON-encoded list
+        of `{"row": <int>, "member_id": <str>, "use_name": "spreadsheet"|"member"}`.
+        Any unresolved fuzzy rows (no `member_id`) are skipped silently.
 
-    Matching is by normalized sailor name (case-insensitive, whitespace
-    collapsed) against the members' `full_name`. Unmatched rows are reported
-    in `unmatched` so the admin can fix the source spreadsheet and re-run.
-
-    The import is **idempotent**: existing parent fields are overwritten with
-    the new values. Re-running is safe (and the standard way to push a
-    refreshed roster into production).
+    Exact-name matches are auto-applied in both modes (no admin step needed
+    for the obvious cases).
     """
     raw = await file.read()
     try:
@@ -1505,33 +1506,39 @@ async def import_parents(file: UploadFile = File(...), admin: dict = Depends(req
         raise HTTPException(status_code=400, detail="Could not read the Excel file. Send an .xlsx.")
     ws = wb.active
     rows = list(ws.iter_rows(values_only=True))
-
-    # Header row is the SECOND row in the YCH template (row 1 is a title).
     if len(rows) < 3:
         raise HTTPException(status_code=400, detail="File looks empty or missing a header row.")
 
-    # Pre-cache members for O(1) name lookup.
+    # Build name → member index for both exact and fuzzy lookups.
+    members: list = []
     name_index: Dict[str, dict] = {}
     async for u in db.users.find({}, {"_id": 0, "id": 1, "full_name": 1}):
+        members.append(u)
         key = _norm_name(u.get("full_name", ""))
         if key:
             name_index[key] = u
 
-    updated, unmatched, skipped = [], [], []
+    # Parse mappings (apply mode only)
+    resolved: Dict[int, dict] = {}
+    if mode == "apply" and mappings:
+        try:
+            import json
+            for m in json.loads(mappings):
+                if m.get("row") is not None and m.get("member_id"):
+                    resolved[int(m["row"])] = m
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid mappings JSON")
+
+    FUZZY_THRESHOLD = 0.72  # show suggestions with similarity >= 72%
+    matched, suggestions, unmatched, skipped = [], [], [], []
+
     for n, row in enumerate(rows[2:], start=3):
-        # Defensive: ensure the row has 12 columns. openpyxl returns None for
-        # missing trailing cells when iter_rows is used without max_col.
         cells = list(row) + [None] * (12 - len(row))
         sailor_name = cells[2]
         if not sailor_name or not str(sailor_name).strip():
             skipped.append({"row": n, "reason": "blank sailor name"})
             continue
-
-        key = _norm_name(sailor_name)
-        member = name_index.get(key)
-        if not member:
-            unmatched.append({"row": n, "sailor_name": str(sailor_name).strip()})
-            continue
+        sailor_name_clean = str(sailor_name).strip()
 
         update = {
             "father_name":     _clean_name(cells[6]),
@@ -1541,14 +1548,71 @@ async def import_parents(file: UploadFile = File(...), admin: dict = Depends(req
             "guardian_name":   _clean_name(cells[10]),
             "guardian_mobile": _norm_mobile(cells[11]),
         }
-        await db.users.update_one({"id": member["id"]}, {"$set": update})
-        updated.append({"sailor_name": member["full_name"], "id": member["id"], **update})
+
+        # Pass 1 — exact normalized name match (auto-applied).
+        member = name_index.get(_norm_name(sailor_name_clean))
+        if member:
+            if mode == "apply":
+                # Exact matches always keep the existing DB name.
+                await db.users.update_one({"id": member["id"]}, {"$set": update})
+            matched.append({
+                "row": n,
+                "sailor_name": sailor_name_clean,
+                "member_id": member["id"],
+                "member_name": member["full_name"],
+                **update,
+            })
+            continue
+
+        # Pass 2 — admin-resolved mapping for this row (apply mode only).
+        if mode == "apply" and n in resolved:
+            choice = resolved[n]
+            chosen = await db.users.find_one({"id": choice["member_id"]}, {"_id": 0, "id": 1, "full_name": 1})
+            if chosen:
+                set_doc = dict(update)
+                # If admin picked "spreadsheet" spelling, also rename the
+                # member to match the file. Otherwise keep the existing DB
+                # spelling intact.
+                if choice.get("use_name") == "spreadsheet":
+                    set_doc["full_name"] = sailor_name_clean
+                await db.users.update_one({"id": chosen["id"]}, {"$set": set_doc})
+                matched.append({
+                    "row": n,
+                    "sailor_name": sailor_name_clean,
+                    "member_id": chosen["id"],
+                    "member_name": set_doc.get("full_name", chosen["full_name"]),
+                    "resolved_by_admin": True,
+                    **update,
+                })
+                continue
+
+        # Pass 3 — fuzzy candidates for the review UI.
+        scored = []
+        for u in members:
+            score = _fuzzy_score(sailor_name_clean, u["full_name"])
+            if score >= FUZZY_THRESHOLD:
+                scored.append({"member_id": u["id"], "member_name": u["full_name"], "score": round(score, 3)})
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        scored = scored[:3]
+
+        if scored:
+            suggestions.append({
+                "row": n,
+                "sailor_name": sailor_name_clean,
+                "candidates": scored,
+                "parent_data": update,
+            })
+        else:
+            unmatched.append({"row": n, "sailor_name": sailor_name_clean, "parent_data": update})
 
     return {
-        "updated_count": len(updated),
+        "mode": mode,
+        "matched_count": len(matched),
+        "suggestion_count": len(suggestions),
         "unmatched_count": len(unmatched),
         "skipped_count": len(skipped),
-        "updated": updated[:200],   # cap response size for the UI
+        "matched": matched[:300],
+        "suggestions": suggestions,
         "unmatched": unmatched,
         "skipped": skipped,
     }
