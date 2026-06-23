@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, ChevronLeft, ChevronRight, Plus, Trash2, Edit3, Tent, Sailboat, CalendarDays, Globe } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Plus, Trash2, Edit3, Tent, Sailboat, CalendarDays, Globe, Download } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { useEscape } from "../../hooks/useEscape";
@@ -117,13 +117,30 @@ export default function Calendar() {
             Camps and regattas at a glance. Switch months with the arrows; click a regatta below to edit.
           </p>
         </div>
-        <button
-          onClick={() => setEditingRegatta({})}
-          data-testid="regatta-add"
-          className="iu-btn-primary"
-        >
-          <Plus size={16} /> New regatta
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={async () => {
+              if (!window.confirm("Import the YAI 2026 sailing calendar?\n\nAlready-present events will be updated, new ones added. No existing data is deleted.")) return;
+              try {
+                const res = await api.post("/regattas/import-yai");
+                toast.success(`YAI calendar synced — ${res.inserted} new, ${res.updated} updated`);
+                load();
+              } catch (err) { toast.error(err?.message || "Import failed"); }
+            }}
+            data-testid="yai-import"
+            className="iu-btn-secondary"
+            title="Import / refresh the Yachting Association of India 2026 domestic calendar"
+          >
+            <Download size={16} /> Import from YAI
+          </button>
+          <button
+            onClick={() => setEditingRegatta({})}
+            data-testid="regatta-add"
+            className="iu-btn-primary"
+          >
+            <Plus size={16} /> New regatta
+          </button>
+        </div>
       </header>
 
       {/* Legend */}
