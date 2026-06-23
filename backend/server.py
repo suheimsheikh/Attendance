@@ -790,6 +790,15 @@ async def phone_login(body: PhoneLoginIn):
         upd = dict(meta)
         if matched and not device.get("user_id"):
             upd["user_id"] = matched["id"]
+        # If this device was previously REJECTED and the user is trying again
+        # (e.g. admin rejected by mistake, or member's circumstances changed),
+        # flip the status back to "pending" so the new attempt re-appears in
+        # the admin Access Requests queue. Without this, the rejected record
+        # silently keeps every retry invisible to the admin.
+        if device.get("status") == "rejected":
+            upd["status"] = "pending"
+            upd["last_action"] = "re-requested"
+            upd["last_action_at"] = now
         await db.devices.update_one({"device_id": body.device_id}, {"$set": upd})
         device = await db.devices.find_one({"device_id": body.device_id}, {"_id": 0})
 
@@ -803,13 +812,32 @@ async def phone_login(body: PhoneLoginIn):
             await db.devices.update_one({"device_id": body.device_id}, {"$set": {"last_login_at": now}})
             return _device_token_response(u, body.device_id)
 
-    # Pre-designated admin -> instant approve + login (the "cinch")
+    # Pre-designated admin -> instant approve + login (the original "cinch")
     if matched and matched.get("role") == "admin":
         await db.devices.update_one({"device_id": body.device_id}, {"$set": {
             "status": "approved", "user_id": matched["id"],
             "approved_by": "auto-admin", "approved_at": now, "last_login_at": now,
         }})
         return _device_token_response(matched, body.device_id)
+
+    # Trusted-phone cinch: if the matched member ALREADY has another approved
+    # device, auto-approve this new device too. This covers the very common
+    # case where a member's browser cache / PWA install creates a fresh
+    # device_id — without this they'd be stuck on "Awaiting approval" forever
+    # while their phone is shown as already approved in the admin queue.
+    if matched and device["status"] != "approved":
+        prior = await db.devices.find_one({
+            "user_id": matched["id"],
+            "status": "approved",
+            "device_id": {"$ne": body.device_id},
+        }, {"_id": 0, "id": 1})
+        if prior:
+            await db.devices.update_one({"device_id": body.device_id}, {"$set": {
+                "status": "approved", "user_id": matched["id"],
+                "approved_by": "auto-trusted-phone", "approved_at": now, "last_login_at": now,
+                "last_action": "approved", "last_action_by": "auto-trusted-phone", "last_action_at": now,
+            }})
+            return _device_token_response(matched, body.device_id)
 
     return {
         "status": "pending",
