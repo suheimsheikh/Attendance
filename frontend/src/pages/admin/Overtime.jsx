@@ -28,7 +28,7 @@ function fmtTime(iso) {
   catch { return iso; }
 }
 
-export default function Overtime() {
+export default function Overtime({ embedded = false }) {
   const [params, setParams] = useSearchParams();
   const [status, setStatus] = useState(params.get("status") || "pending");
   const [from, setFrom] = useState(params.get("from") || "");
@@ -55,12 +55,15 @@ export default function Overtime() {
   useEffect(() => { load();   }, [status, from, to]);
 
   useEffect(() => {
-    const next = {};
-    if (status) next.status = status;
-    if (from) next.from = from;
-    if (to) next.to = to;
+    // Preserve the parent `?tab=overtime` param when this page is embedded in
+    // the unified Approvals view — otherwise the tab gets dropped on every
+    // filter change.
+    const next = new URLSearchParams(params);
+    if (status) next.set("status", status); else next.delete("status");
+    if (from) next.set("from", from); else next.delete("from");
+    if (to) next.set("to", to); else next.delete("to");
     setParams(next, { replace: true });
-  }, [status, from, to, setParams]);
+  }, [status, from, to]);
 
   const decide = async (row, decision) => {
     setBusyId(row.session_id);
@@ -79,11 +82,13 @@ export default function Overtime() {
   }, [rows]);
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
-      <header className="mb-5">
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Overtime Approvals</h1>
-        <p className="text-slate-500 text-sm mt-1">Review staff sessions with 30+ min of overtime. Approved hours flow into Reports.</p>
-      </header>
+    <div className={embedded ? "" : "p-4 md:p-8 max-w-5xl mx-auto"}>
+      {!embedded && (
+        <header className="mb-5">
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Overtime Approvals</h1>
+          <p className="text-slate-500 text-sm mt-1">Review staff sessions with 30+ min of overtime. Approved hours flow into Reports.</p>
+        </header>
+      )}
 
       <div className="iu-card p-4 mb-4 flex flex-wrap items-end gap-3">
         <div>

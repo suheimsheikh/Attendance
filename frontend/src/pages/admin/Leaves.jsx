@@ -13,7 +13,7 @@ const FILTERS = [
   { key: "all", label: "All" },
 ];
 
-export default function AdminLeaves() {
+export default function AdminLeaves({ embedded = false }) {
   const [filter, setFilter] = useState("pending");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,27 +36,39 @@ export default function AdminLeaves() {
     } catch (err) { toast.error(err?.message || "Failed"); }
   };
 
+  // When mounted inside the Approvals tab container, drop the page padding +
+  // page-level h1 (the wrapper already renders them) but keep the "Apply on
+  // behalf" CTA + the filter chips above the list.
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Leave Approvals</h1>
-          <p className="text-slate-500 text-sm mt-1">Review and decide on leave & tour requests.</p>
-        </div>
-        <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} className="iu-btn-primary">
-          <Plus size={16}/> Apply on behalf
-        </button>
-      </header>
+    <div className={embedded ? "" : "p-4 md:p-8 max-w-5xl mx-auto"}>
+      {!embedded && (
+        <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Leave Approvals</h1>
+            <p className="text-slate-500 text-sm mt-1">Review and decide on leave & tour requests.</p>
+          </div>
+          <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} className="iu-btn-primary">
+            <Plus size={16}/> Apply on behalf
+          </button>
+        </header>
+      )}
 
-      <div className="flex gap-2 overflow-x-auto pb-3 mb-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            data-testid={`leaves-filter-${f.key}`}
-            onClick={() => setFilter(f.key)}
-            className={`iu-chip whitespace-nowrap shrink-0 ${filter === f.key ? "iu-chip-active" : ""}`}
-          >{f.label}</button>
-        ))}
+      <div className="flex items-center gap-3 mb-2 flex-wrap">
+        <div className="flex gap-2 overflow-x-auto pb-3 flex-1">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              data-testid={`leaves-filter-${f.key}`}
+              onClick={() => setFilter(f.key)}
+              className={`iu-chip whitespace-nowrap shrink-0 ${filter === f.key ? "iu-chip-active" : ""}`}
+            >{f.label}</button>
+          ))}
+        </div>
+        {embedded && (
+          <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} className="iu-btn-primary !h-9 !px-3 shrink-0">
+            <Plus size={14}/> Apply on behalf
+          </button>
+        )}
       </div>
 
       {loading ? (

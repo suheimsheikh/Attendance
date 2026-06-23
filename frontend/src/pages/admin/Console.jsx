@@ -14,25 +14,23 @@ export default function AdminConsole() {
   }, []);
 
   // 5 summary tiles — each gets a vibrant colour to make scanning easier.
+  // These remain INFO tiles (not nav duplicates) — they show live counts but
+  // route to the canonical sidebar destination.
   const cards = [
     { label: "Total members", value: summary?.total_members ?? "—", Icon: Users, color: "#0EA5E9", to: "/admin/members" },
     { label: "On campus now", value: summary?.on_campus ?? "—", Icon: ShieldCheck, color: "#10B981", to: "/presence" },
-    { label: "Pending leaves", value: summary?.pending_leaves ?? "—", Icon: CalendarCheck2, color: "#F59E0B", to: "/admin/leaves" },
-    { label: "On leave / tour", value: summary?.on_leave_tour ?? "—", Icon: Plane, color: "#F97316", to: "/admin/leaves" },
+    { label: "Pending leaves", value: summary?.pending_leaves ?? "—", Icon: CalendarCheck2, color: "#F59E0B", to: "/admin/approvals?tab=leaves" },
+    { label: "On leave / tour", value: summary?.on_leave_tour ?? "—", Icon: Plane, color: "#F97316", to: "/admin/approvals?tab=leaves" },
     { label: "Late today", value: summary?.late_today ?? "—", Icon: Clock, color: "#EF4444", to: "/admin/reports" },
   ];
 
-  // Each quick-action card has its own colour theme: vivid icon, soft tinted
-  // background + matching border so admins can recognise each shortcut at a
-  // glance instead of reading text.
+  // Quick actions only show items NOT already reachable from the sidebar —
+  // single point of access keeps the admin's mental model clean. Items now in
+  // the sidebar (Manage Members, Approvals, Monthly Payroll, Institutions,
+  // Camps, Calendar) are deliberately excluded.
   const links = [
     { to: "/admin/sessions",       label: "Daily sessions",     desc: "Check-in, temp exits/returns & final check-out in one table", Icon: Calendar,         color: "#10B981" },
-    { to: "/admin/members",        label: "Manage members",     desc: "Add, edit, deactivate members",                              Icon: Users,             color: "#0EA5E9" },
-    { to: "/admin/leaves",         label: "Approve leaves",     desc: "Review pending leave & tour requests",                        Icon: ClipboardList,    color: "#F59E0B" },
-    { to: "/admin/overtime",       label: "Overtime approvals", desc: "Approve / reject staff overtime entries",                     Icon: ClipboardCheck,   color: "#8B5CF6" },
     { to: "/admin/leave-balances", label: "Leave balances",     desc: "Set opening balances & see consumed / pending",               Icon: CalendarCheck2,   color: "#06B6D4" },
-    { to: "/admin/payroll",        label: "Monthly payroll",    desc: "Generate the monthly payroll report",                         Icon: FileSpreadsheet,  color: "#F97316" },
-    { to: "/admin/institutions",   label: "Institutions",       desc: "Manage the institutions list (MJPT, Rainbow Home, YCH…)",     Icon: Building,         color: "#6366F1" },
     { to: "/admin/devices",        label: "Access requests",    desc: "Approve new browser/device sign-ins",                         Icon: IdCard,            color: "#F43F5E" },
     { to: "/admin/office",         label: "Office settings",    desc: "Geofence, work hours, timezone",                              Icon: Building2,         color: "#14B8A6" },
     { to: "/admin/reports",        label: "Reports",            desc: "Hours, attendance, exports",                                  Icon: FileBarChart2,     color: "#EC4899" },
@@ -51,7 +49,7 @@ export default function AdminConsole() {
         <div className="space-y-3 mb-6">
           {otNeedsReview.total_pending > 0 && (
             <Link
-              to={`/admin/overtime?status=pending${otNeedsReview.yesterday ? `&from=${otNeedsReview.yesterday}&to=${otNeedsReview.yesterday}` : ""}`}
+              to={`/admin/approvals?tab=overtime&status=pending${otNeedsReview.yesterday ? `&from=${otNeedsReview.yesterday}&to=${otNeedsReview.yesterday}` : ""}`}
               className="block iu-card p-4 border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 transition"
               data-testid="overtime-banner"
             >
@@ -73,7 +71,7 @@ export default function AdminConsole() {
           )}
           {otNeedsReview.comp_off_pending > 0 && (
             <Link
-              to="/admin/leaves?type=comp_off"
+              to="/admin/approvals?tab=leaves&type=comp_off"
               className="block iu-card p-4 border-2 border-violet-300 bg-violet-50 hover:bg-violet-100 transition"
               data-testid="comp-off-banner"
             >
