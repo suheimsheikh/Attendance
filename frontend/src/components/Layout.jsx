@@ -11,13 +11,18 @@ import StaleSessionPrompt from "./StaleSessionPrompt";
 import InstallPrompt from "./InstallPrompt";
 import OfflineBanner from "./OfflineBanner";
 
-const NAV_MEMBER_BEFORE_MUSTER = [
-  { to: "/", label: "Check In / Out", icon: ScanLine, end: true },
-  { to: "/my-leaves", label: "Leave / Tour / Comp Off", icon: CalendarCheck2 },
+const NAV_MEMBER = [
+  { to: "/", label: "My Check In/Out", icon: ScanLine, end: true },
+  { to: "/my-leaves", label: "My Leave/Tour/C-Off", icon: CalendarCheck2 },
+  { to: "/profile", label: "My Profile", icon: UserCog },
 ];
-const NAV_MEMBER_AFTER_MUSTER = [
+
+// Coach section — visible to coaches & admins only. Presence and Muster were
+// previously visible to every signed-in user; moving them here makes it
+// explicit that they're operational tools, not member-tier features.
+const NAV_COACH = [
   { to: "/presence", label: "Presence", icon: LayoutDashboard },
-  { to: "/profile", label: "Profile", icon: UserCog },
+  { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
 ];
 
 // Members lives at the top of the ADMIN section (admin-only access). Leave
@@ -70,20 +75,17 @@ export default function Layout() {
 
       <nav className="px-3 py-4 flex-1 overflow-y-auto">
         <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Member</div>
-        {NAV_MEMBER_BEFORE_MUSTER.map((item) => (
+        {NAV_MEMBER.map((item) => (
           <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
         ))}
         {canMuster && (
-          <NavItem
-            to="/muster"
-            label="Muster Roll"
-            icon={ClipboardCheck}
-            onClick={() => setOpen(false)}
-          />
+          <>
+            <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Coach</div>
+            {NAV_COACH.map((item) => (
+              <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
+            ))}
+          </>
         )}
-        {NAV_MEMBER_AFTER_MUSTER.map((item) => (
-          <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
-        ))}
         {isAdmin && (
           <>
             <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Admin</div>
