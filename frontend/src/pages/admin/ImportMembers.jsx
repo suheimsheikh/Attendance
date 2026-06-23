@@ -170,8 +170,8 @@ function ParentImport() {
                 <h3 className="font-bold text-sm">Unmatched names — fix the source file &amp; re-run</h3>
               </div>
               <ul className="px-5 py-3 text-sm space-y-1 max-h-72 overflow-y-auto">
-                {result.unmatched.map((u, i) => (
-                  <li key={i} className="flex justify-between gap-3">
+                {result.unmatched.map((u) => (
+                  <li key={`unmatched-${u.row}-${u.sailor_name}`} className="flex justify-between gap-3">
                     <span className="text-slate-700">{u.sailor_name}</span>
                     <span className="text-slate-400 text-xs">row {u.row}</span>
                   </li>

@@ -44,6 +44,16 @@ except Exception:  # pragma: no cover — Twilio SDK should always be installed.
     TwilioRestException = Exception  # type: ignore
     _TWILIO_OK = False
 
+DEFAULT_PARENT_TEMPLATES = {
+    "late_en":     "Hello, {name} is yet to arrive at {academy}. We will update you shortly.",
+    "late_te":     "నమస్కారం, {name} ఇంకా {academy} కి రాలేదు. మీకు త్వరలో తెలియజేస్తాము.",
+    "absent_en":   "Hello, {name} has not arrived at {academy} today. Please contact the academy.",
+    "absent_te":   "నమస్కారం, {name} ఈరోజు {academy} కి రాలేదు. దయచేసి అకాడెమీని సంప్రదించండి.",
+    "voice_en":    "This is an automated call from {academy}. Your child {name} has not arrived today. Please contact the academy.",
+    "voice_te":    "ఇది {academy} నుండి ఆటోమేటెడ్ కాల్. మీ పిల్లవాడు {name} ఈరోజు రాలేదు. దయచేసి అకాడెమీని సంప్రదించండి.",
+}
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -230,9 +240,8 @@ def make_router(db, require_admin):
         # confirm WHICH token is saved without re-fetching it.
         cfg["auth_token"] = _mask_token(cfg.get("auth_token"))
         cfg["has_auth_token"] = bool(_twilio_config(office).get("auth_token"))
-        # Ensure templates have all 6 keys, even if the doc was created before
-        # templates existed.
-        from server import DEFAULT_PARENT_TEMPLATES  # avoid circular import
+        # Templates live in sms.py to avoid the previous circular import on
+        # server.py — server.py now re-exports them from there too.
         templates = dict(DEFAULT_PARENT_TEMPLATES)
         templates.update(cfg.get("templates") or {})
         cfg["templates"] = templates
@@ -280,7 +289,6 @@ def make_router(db, require_admin):
         office = await db.config.find_one({"id": "office"}, {"_id": 0}) or {}
 
         templates = (_twilio_config(office).get("templates") or {})
-        from server import DEFAULT_PARENT_TEMPLATES
         templates = {**DEFAULT_PARENT_TEMPLATES, **templates}
 
         first_name = (member.get("full_name") or "your child").split(" ")[0]

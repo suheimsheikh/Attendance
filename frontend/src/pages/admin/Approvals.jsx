@@ -40,8 +40,10 @@ export default function Approvals() {
         if (cancelled) return;
         setPendingLeaves(Array.isArray(leaves) ? leaves.length : 0);
         setPendingOt(ot?.total_pending ?? 0);
-      } catch {
-        /* ignore — leave badges as "—" */
+      } catch (err) {
+        // Don't fail the whole panel just because the badge counts couldn't
+        // be fetched — render with "—" badges and log for dev visibility.
+        console.debug("Approvals badge fetch failed:", err);
       }
     };
     refresh();

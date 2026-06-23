@@ -393,17 +393,11 @@ class GroupLeaveIn(BaseModel):
     auto_approve: bool = True
 
 
-# Default bilingual message bodies — overridable per office via the UI.
-# `{name}` and `{academy}` are simple templated placeholders, substituted at
-# send-time by `sms.py::_render_template`.
-DEFAULT_PARENT_TEMPLATES = {
-    "late_en":     "Hello, {name} is yet to arrive at {academy}. We will update you shortly.",
-    "late_te":     "నమస్కారం, {name} ఇంకా {academy} కి రాలేదు. మీకు త్వరలో తెలియజేస్తాము.",
-    "absent_en":   "Hello, {name} has not arrived at {academy} today. Please contact the academy.",
-    "absent_te":   "నమస్కారం, {name} ఈరోజు {academy} కి రాలేదు. దయచేసి అకాడెమీని సంప్రదించండి.",
-    "voice_en":    "This is an automated call from {academy}. Your child {name} has not arrived today. Please contact the academy.",
-    "voice_te":    "ఇది {academy} నుండి ఆటోమేటెడ్ కాల్. మీ పిల్లవాడు {name} ఈరోజు రాలేదు. దయచేసి అకాడెమీని సంప్రదించండి.",
-}
+# Default bilingual message bodies live in sms.py (the SMS module owns its
+# template defaults). Re-exported here so any legacy callers that did
+# `from server import DEFAULT_PARENT_TEMPLATES` keep working — no circular
+# import any more because server -> sms is a one-way module load.
+from sms import DEFAULT_PARENT_TEMPLATES  # noqa: E402, F401
 
 
 class TwilioConfig(BaseModel):
