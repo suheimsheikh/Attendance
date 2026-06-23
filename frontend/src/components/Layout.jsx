@@ -20,15 +20,11 @@ const NAV_MEMBER_AFTER_MUSTER = [
   { to: "/profile", label: "Profile", icon: UserCog },
 ];
 
-// Members is admin-only but lives in the main nav for one-tap reach — admins
-// open this many times a day. Leave Balances moved into the Admin Console grid
-// (it's not opened often enough to deserve its own permanent sidebar slot).
-const NAV_MEMBER_ADMIN_PROMOTED = [
-  { to: "/admin/members", label: "Members", icon: Users },
-];
-
+// Members lives at the top of the ADMIN section (admin-only access). Leave
+// Balances moved into the Admin Console grid since it's not opened daily.
 const NAV_ADMIN = [
   { to: "/admin", label: "Admin Console", icon: ShieldCheck, end: true },
+  { to: "/admin/members", label: "Members", icon: Users },
   { to: "/admin/overtime", label: "Overtime Approvals", icon: ClipboardCheck },
   { to: "/admin/institutions", label: "Institutions", icon: Building2 },
   { to: "/admin/camps", label: "Camps", icon: Tent },
@@ -86,9 +82,6 @@ export default function Layout() {
           />
         )}
         {NAV_MEMBER_AFTER_MUSTER.map((item) => (
-          <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
-        ))}
-        {isAdmin && NAV_MEMBER_ADMIN_PROMOTED.map((item) => (
           <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
         ))}
         {isAdmin && (
