@@ -21,8 +21,8 @@ const NAV_MEMBER = [
 // previously visible to every signed-in user; moving them here makes it
 // explicit that they're operational tools, not member-tier features.
 const NAV_COACH = [
-  { to: "/presence", label: "Presence", icon: LayoutDashboard },
   { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
+  { to: "/presence", label: "Presence", icon: LayoutDashboard },
 ];
 
 // Members lives at the top of the ADMIN section (admin-only access). Leave
