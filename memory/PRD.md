@@ -50,7 +50,6 @@
 ## Backlog / Next Steps
 | Priority | Item |
 |----------|------|
-| P1 | "Wipe attendance for today only" button (alongside existing full DB wipe). |
 | P2 | `?include_photos=0` bandwidth optimization on `/api/presence` (3-4MB → ~100KB). |
 | P2 | PWA install prompt ("Add to Home Screen") for Coaches/Staff. |
 | P2 | Add "Institution" filter pills to Muster Roll & Reports. |
