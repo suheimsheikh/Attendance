@@ -2977,10 +2977,10 @@ async def admin_wipe_attendance(admin: dict = Depends(require_admin)):
 
 @api_router.get("/admin/backup")
 async def admin_backup(admin: dict = Depends(require_admin)):
-    """Download a master-data snapshot (users, institutions, office config)
-    as a single tar.gz. Use this to bootstrap a fresh deployment on Day 1 of
-    any new term — transactional data (attendance, leaves, notifications,
-    devices) is intentionally NOT included so the new term starts clean."""
+    """Download a FULL database snapshot — every collection (users, attendance,
+    leaves, institutions, config, devices, parent_notifications, camps,
+    regattas, guests, daily_content, sms_log) as a single tar.gz. Designed
+    for moving data back and forth between prod ↔ preview environments."""
     import tarfile
     import io as _io
     import json as _json
@@ -2989,29 +2989,33 @@ async def admin_backup(admin: dict = Depends(require_admin)):
     buf = _io.BytesIO()
     tf = tarfile.open(fileobj=buf, mode="w:gz")
 
-    masters = ["users", "institutions", "config"]
+    collections = [
+        "users", "institutions", "config", "attendance", "leaves",
+        "devices", "parent_notifications", "camps", "regattas",
+        "guests", "daily_content", "sms_log",
+    ]
     manifest = {
         "created_at": _dt.now(_tz.utc).isoformat(),
-        "kind": "ych-master",
+        "kind": "ych-full",
         "collections": {},
     }
-    for name in masters:
-        docs = await db[name].find({}).to_list(10000)
+    for name in collections:
+        docs = await db[name].find({}).to_list(length=None)
         for d in docs:
             d.pop("_id", None)
         payload = _json.dumps(docs, default=str, indent=2).encode("utf-8")
-        info = tarfile.TarInfo(f"ych-master/{name}.json")
+        info = tarfile.TarInfo(f"ych-full/{name}.json")
         info.size = len(payload)
         tf.addfile(info, _io.BytesIO(payload))
         manifest["collections"][name] = len(docs)
 
     mpayload = _json.dumps(manifest, indent=2).encode("utf-8")
-    info = tarfile.TarInfo("ych-master/manifest.json")
+    info = tarfile.TarInfo("ych-full/manifest.json")
     info.size = len(mpayload)
     tf.addfile(info, _io.BytesIO(mpayload))
     tf.close()
 
-    fname = f"ych-master-{_dt.now().strftime('%Y%m%d-%H%M')}.tar.gz"
+    fname = f"ych-full-{_dt.now().strftime('%Y%m%d-%H%M')}.tar.gz"
     return Response(
         content=buf.getvalue(),
         media_type="application/gzip",
@@ -3025,11 +3029,11 @@ async def admin_restore(
     mode: str = "merge",
     admin: dict = Depends(require_admin),
 ):
-    """Restore master data from a backup tar.gz.
-    mode='merge'   → insert only new docs (existing users/institutions/config
-                     stay intact — safe default)
-    mode='replace' → wipe the master collections first (DANGEROUS — clears
-                     current admins/members)"""
+    """Restore FULL database from a backup tar.gz.
+    mode='merge'   → insert only docs whose `id` isn't already present
+                     (safe — existing records stay intact)
+    mode='replace' → wipe every restored collection first, then reload
+                     (DANGEROUS — clears current data including admins)"""
     import tarfile
     import io as _io
     import json as _json
@@ -3041,8 +3045,12 @@ async def admin_restore(
         raise HTTPException(status_code=400, detail=f"Could not open archive: {e}")
 
     counts: dict = {}
-    masters = ["users", "institutions", "config"]
-    for tname in masters:
+    collections = [
+        "users", "institutions", "config", "attendance", "leaves",
+        "devices", "parent_notifications", "camps", "regattas",
+        "guests", "daily_content", "sms_log",
+    ]
+    for tname in collections:
         member = None
         for m in tf.getmembers():
             if m.name.endswith(f"/{tname}.json") or m.name == f"{tname}.json":

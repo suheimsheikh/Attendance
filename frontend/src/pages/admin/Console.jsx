@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Users, CalendarCheck2, Plane, Clock, ShieldCheck, ArrowRight, AlertTriangle, ChevronRight, Calendar, ClipboardCheck, ClipboardList, FileSpreadsheet, Building2, IdCard, Building, FileBarChart2, Database } from "lucide-react";
+import { Users, CalendarCheck2, Plane, Clock, ShieldCheck, ArrowRight, AlertTriangle, ChevronRight, Calendar, ClipboardCheck, ClipboardList, FileSpreadsheet, Building2, IdCard, Building, FileBarChart2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
 import ActivityFeed from "../../components/ActivityFeed";
@@ -32,7 +32,6 @@ export default function AdminConsole() {
     { to: "/admin/sessions",       label: "Daily sessions",     desc: "Check-in, temp exits/returns & final check-out in one table", Icon: Calendar,         color: "#10B981" },
     { to: "/admin/leave-balances", label: "Leave balances",     desc: "Set opening balances & see consumed / pending",               Icon: CalendarCheck2,   color: "#06B6D4" },
     { to: "/admin/import",         label: "Import members",     desc: "Bulk upload via Excel template",                              Icon: FileSpreadsheet,  color: "#84CC16" },
-    { to: "/admin/backup",         label: "Backup & restore",   desc: "Download or restore master data (members, settings, institutions)", Icon: Database,    color: "#475569" },
   ];
 
   return (

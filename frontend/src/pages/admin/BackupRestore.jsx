@@ -1,14 +1,13 @@
 import React, { useState } from "react";
-import { Download, Upload, Loader2, AlertTriangle, CheckCircle2, Database, Trash2 } from "lucide-react";
+import { Download, Upload, Loader2, AlertTriangle, CheckCircle2, Database } from "lucide-react";
 import { toast } from "sonner";
 import { getToken } from "../../api";
 
 /**
- * Master-only backup & restore. Downloads / uploads a tar.gz containing
- * users + institutions + office config — the bare minimum to bootstrap
- * a fresh deployment on Day 1 of a new term. Attendance, leaves and
- * device tokens are intentionally NOT included so each new term starts
- * with clean transactional history.
+ * Full-database backup & restore. Downloads / uploads a tar.gz containing
+ * EVERY collection (users, attendance, leaves, institutions, config, devices,
+ * parent_notifications, camps, regattas, guests, daily_content, sms_log).
+ * Designed for moving data back and forth between prod ↔ preview deployments.
  */
 export default function BackupRestore() {
   const [downloading, setDownloading] = useState(false);
@@ -16,27 +15,12 @@ export default function BackupRestore() {
   const [mode, setMode] = useState("merge");
   const [file, setFile] = useState(null);
   const [report, setReport] = useState(null);
-  const [wiping, setWiping] = useState(false);
 
-  const wipeAttendance = async () => {
-    if (!window.confirm("This will delete ALL attendance records (every check-in, check-out, and temp-exit history). Members, leaves, institutions and settings stay intact. Proceed?")) return;
-    if (!window.confirm("Last check — are you sure you want to wipe every attendance record?")) return;
-    setWiping(true);
-    try {
-      const token = getToken();
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/admin/attendance/wipe`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
-      toast.success(`Deleted ${json.deleted} attendance records`);
-    } catch (err) {
-      toast.error(err?.message || "Wipe failed");
-    } finally {
-      setWiping(false);
-    }
-  };
+  // Safety guard: forbid Replace mode on the production host. Replace wipes
+  // every collection before loading — a slip of the click here would erase
+  // live data. Preview/dev hosts keep the option available.
+  const isProduction = typeof window !== "undefined" &&
+    /(^|\.)i-showed-up\.ychyderabad\.com$/i.test(window.location.hostname);
 
   const downloadBackup = async () => {
     setDownloading(true);
@@ -46,10 +30,9 @@ export default function BackupRestore() {
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
-      // Pull filename from server header if present
       const disp = res.headers.get("Content-Disposition") || "";
       const m = disp.match(/filename="?([^"]+)"?/);
-      const fname = m ? m[1] : `ych-master-${new Date().toISOString().slice(0,10)}.tar.gz`;
+      const fname = m ? m[1] : `ych-full-${new Date().toISOString().slice(0,10)}.tar.gz`;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = fname;
@@ -57,7 +40,7 @@ export default function BackupRestore() {
       a.click();
       a.remove();
       URL.revokeObjectURL(a.href);
-      toast.success("Backup downloaded");
+      toast.success("Full backup downloaded");
     } catch (err) {
       toast.error(err?.message || "Backup failed");
     } finally {
@@ -67,7 +50,11 @@ export default function BackupRestore() {
 
   const upload = async () => {
     if (!file) { toast.error("Choose a backup file first"); return; }
-    if (mode === "replace" && !window.confirm("REPLACE mode wipes ALL current users, institutions, and office settings before loading the backup. This includes admin accounts. Are you absolutely sure?")) return;
+    if (mode === "replace" && isProduction) {
+      toast.error("Replace mode is disabled on production. Use Merge, or run Replace on the preview environment.");
+      return;
+    }
+    if (mode === "replace" && !window.confirm("REPLACE mode wipes EVERY collection (users, attendance, leaves, devices, settings, …) before loading the backup. This includes admin accounts. Are you absolutely sure?")) return;
     setUploading(true);
     setReport(null);
     try {
@@ -97,8 +84,8 @@ export default function BackupRestore() {
       <div className="flex items-center gap-3 mb-6">
         <Database className="text-indigo-600" size={28} />
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Backup & Restore</h1>
-          <p className="text-sm text-slate-500">Master data only — users, institutions, office settings.</p>
+          <h1 className="text-2xl font-extrabold tracking-tight">Full Data Backup &amp; Restore</h1>
+          <p className="text-sm text-slate-500">Move the entire database between production and preview.</p>
         </div>
       </div>
 
@@ -108,11 +95,12 @@ export default function BackupRestore() {
             <Download size={20} />
           </div>
           <div className="flex-1">
-            <div className="font-bold text-slate-900 mb-1">Download backup</div>
+            <div className="font-bold text-slate-900 mb-1">Download full backup</div>
             <p className="text-sm text-slate-600 mb-3">
-              Saves a single <code className="text-xs bg-white px-1.5 py-0.5 rounded border">.tar.gz</code> with every member (with their photos &amp; parent contacts),
-              every institution, and the office settings. Attendance / leaves are NOT included &mdash; this is
-              meant to bootstrap a fresh term with a clean slate of transactional data.
+              Saves a single <code className="text-xs bg-white px-1.5 py-0.5 rounded border">.tar.gz</code>
+              containing every collection &mdash; members (with photos &amp; parent contacts), institutions,
+              office settings, devices, attendance, leaves, camps, regattas, guests, daily content, SMS log,
+              and parent notifications. Suitable for cloning the entire deployment to another environment.
             </p>
             <button
               onClick={downloadBackup}
@@ -121,7 +109,7 @@ export default function BackupRestore() {
               className="iu-btn-primary !bg-emerald-600 hover:!bg-emerald-700"
             >
               {downloading ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-              {downloading ? "Preparing…" : "Download backup"}
+              {downloading ? "Preparing…" : "Download full backup"}
             </button>
           </div>
         </div>
@@ -133,10 +121,11 @@ export default function BackupRestore() {
             <Upload size={20} />
           </div>
           <div className="flex-1">
-            <div className="font-bold text-slate-900 mb-1">Restore from backup</div>
+            <div className="font-bold text-slate-900 mb-1">Restore from full backup</div>
             <p className="text-sm text-slate-600 mb-3">
               Upload a <code className="text-xs bg-white px-1.5 py-0.5 rounded border">.tar.gz</code> created by this page.
-              Use <b>Merge</b> on a live deployment (safest); use <b>Replace</b> only when you really mean to wipe everything first.
+              Use <b>Merge</b> on a live deployment (safest &mdash; only new docs are added).
+              Use <b>Replace</b> to make this environment an exact mirror of the source (wipes every collection first).
             </p>
             <div className="space-y-3">
               <input
@@ -152,16 +141,30 @@ export default function BackupRestore() {
                   <span className="font-semibold">Merge</span>
                   <span className="text-slate-500">(insert only new docs)</span>
                 </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer text-rose-700">
-                  <input type="radio" name="mode" value="replace" checked={mode === "replace"} onChange={() => setMode("replace")} data-testid="br-mode-replace" />
+                <label className={`flex items-center gap-2 text-sm ${isProduction ? "cursor-not-allowed opacity-50" : "cursor-pointer text-rose-700"}`}>
+                  <input
+                    type="radio"
+                    name="mode"
+                    value="replace"
+                    checked={mode === "replace"}
+                    onChange={() => setMode("replace")}
+                    disabled={isProduction}
+                    data-testid="br-mode-replace"
+                  />
                   <span className="font-semibold">Replace</span>
-                  <span className="opacity-80">(wipe + reload)</span>
+                  <span className="opacity-80">(wipe + reload everything)</span>
                 </label>
               </div>
+              {isProduction && (
+                <div className="flex gap-2 items-start p-3 rounded-lg bg-amber-50 border border-amber-300 text-sm text-amber-900" data-testid="br-prod-guard">
+                  <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                  <span><b>Production safety guard:</b> Replace mode is disabled on this host (<code>i-showed-up.ychyderabad.com</code>) to prevent an accidental wipe. To use Replace, run it on the preview environment.</span>
+                </div>
+              )}
               {mode === "replace" && (
                 <div className="flex gap-2 items-start p-3 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-900">
                   <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                  <span>Replace mode <b>deletes all current users, institutions and office settings</b> before loading the backup. Make sure the file you&apos;re uploading really is the source of truth.</span>
+                  <span>Replace mode <b>deletes every collection in this database</b> (users, attendance, leaves, devices, settings, &hellip;) before loading the backup. Make absolutely sure the file you&apos;re uploading is the source of truth.</span>
                 </div>
               )}
               <button
@@ -194,31 +197,6 @@ export default function BackupRestore() {
           </ul>
         </div>
       )}
-
-      {/* Danger zone — wipe every attendance record for a clean slate. */}
-      <div className="iu-card p-5 mt-6 border-2 border-rose-300" style={{ background: "#FFF1F2" }}>
-        <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-rose-600 text-white shrink-0 shadow-sm">
-            <Trash2 size={20} />
-          </div>
-          <div className="flex-1">
-            <div className="font-bold text-rose-900 mb-1">Danger zone — wipe attendance</div>
-            <p className="text-sm text-rose-800 mb-3">
-              Deletes <b>every</b> attendance record (check-ins, check-outs, temp-exits). Members, leaves, institutions and settings are NOT touched.
-              Useful when starting a fresh term or after restoring master data on a new deployment.
-            </p>
-            <button
-              onClick={wipeAttendance}
-              disabled={wiping}
-              data-testid="br-wipe-attendance"
-              className="iu-btn-primary !bg-rose-600 hover:!bg-rose-700"
-            >
-              {wiping ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-              {wiping ? "Wiping…" : "Wipe all attendance"}
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

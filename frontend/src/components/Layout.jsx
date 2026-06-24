@@ -4,7 +4,7 @@ import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, QrCode, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, ClipboardList, Building2, IdCard, FileSpreadsheet,
-  ShieldCheck, LogOut, Menu, X, ListTree, ClipboardCheck, Tent, CalendarDays, Settings, MessageSquare
+  ShieldCheck, LogOut, Menu, X, ListTree, ClipboardCheck, Tent, CalendarDays, Settings, MessageSquare, Database
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -39,6 +39,7 @@ const NAV_ADMIN = [
   { to: "/admin/camps", label: "Camps", icon: Tent },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/admin/payroll", label: "Monthly Payroll", icon: FileSpreadsheet },
+  { to: "/admin/backup", label: "Backup & Restore", icon: Database },
   // Hidden / disabled tools (kept in routes but pushed to the bottom of the menu).
   { to: "/admin/office-qr", label: "Office QR", icon: QrCode, disabled: true, disabledReason: "QR scanning is disabled for now" },
   { to: "/admin/cards", label: "Member Cards", icon: IdCard, disabled: true, disabledReason: "QR scanning is disabled for now" },
