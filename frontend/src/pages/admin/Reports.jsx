@@ -11,6 +11,22 @@ function nDaysAgo(n) {
   return d.toISOString().slice(0, 10);
 }
 
+function firstOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+}
+function lastOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+}
+function thisMonth() {
+  const d = new Date();
+  return { start: firstOfMonth(d), end: todayIso() };
+}
+function lastMonth() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  return { start: firstOfMonth(d), end: lastOfMonth(d) };
+}
+
 const CATEGORY_FILTERS = [
   { key: "all", label: "All" },
   { key: "athlete", label: "Athletes" },
@@ -94,6 +110,29 @@ export default function Reports() {
               <label className="iu-label">To</label>
               <input data-testid="rep-end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="iu-input !w-44" />
             </div>
+            <div className="flex flex-col gap-1">
+              <label className="iu-label">Quick pick</label>
+              <div className="flex gap-1.5" data-testid="quick-pick-row">
+                <button
+                  type="button"
+                  data-testid="qp-this-month"
+                  onClick={() => { const r = thisMonth(); setStart(r.start); setEnd(r.end); }}
+                  className="iu-chip"
+                >This month</button>
+                <button
+                  type="button"
+                  data-testid="qp-last-month"
+                  onClick={() => { const r = lastMonth(); setStart(r.start); setEnd(r.end); }}
+                  className="iu-chip"
+                >Last month</button>
+                <button
+                  type="button"
+                  data-testid="qp-7d"
+                  onClick={() => { setStart(nDaysAgo(7)); setEnd(todayIso()); }}
+                  className="iu-chip"
+                >Last 7 days</button>
+              </div>
+            </div>
             <button data-testid="rep-run" onClick={loadHours} disabled={loading} className="iu-btn-primary">
               {loading ? <Loader2 className="animate-spin" size={14}/> : <RefreshCw size={14}/>} Run report
             </button>
@@ -143,14 +182,16 @@ export default function Reports() {
                     <th className="iu-table-th">Attendance</th>
                     <th className="iu-table-th">Member</th>
                     <th className="iu-table-th hidden md:table-cell">Category</th>
-                    <th className="iu-table-th hidden md:table-cell">Weekly off</th>
-                    <th className="iu-table-th">Total hrs</th>
-                    <th className="iu-table-th">OT hrs</th>
-                    <th className="iu-table-th">Days</th>
-                    <th className="iu-table-th hidden md:table-cell">Late days</th>
-                    <th className="iu-table-th">Leave days</th>
-                    <th className="iu-table-th">Comp-Off (E/U/P)</th>
-                    <th className="iu-table-th hidden lg:table-cell">Overstays</th>
+                    <th className="iu-table-th">Present</th>
+                    <th className="iu-table-th">Leave</th>
+                    <th className="iu-table-th">Tour</th>
+                    <th className="iu-table-th">Comp-Off</th>
+                    <th className="iu-table-th">Absent</th>
+                    <th className="iu-table-th font-extrabold">Total</th>
+                    <th className="iu-table-th hidden md:table-cell">Total hrs</th>
+                    <th className="iu-table-th hidden lg:table-cell">OT hrs</th>
+                    <th className="iu-table-th hidden lg:table-cell">Late days</th>
+                    <th className="iu-table-th hidden xl:table-cell">Overstays</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -165,30 +206,26 @@ export default function Reports() {
                         <div className="text-xs text-slate-400">{r.rank || ""}</div>
                       </td>
                       <td className="iu-table-td hidden md:table-cell">{categoryLabel(r.category)}</td>
-                      <td className="iu-table-td hidden md:table-cell capitalize text-xs text-slate-600">{r.weekly_off || "monday"}</td>
-                      <td className="iu-table-td">{r.total_hours}h</td>
-                      <td className="iu-table-td">
+                      <td className="iu-table-td font-semibold text-emerald-700" data-testid={`days-present-${r.member_id}`}>{r.days_present}</td>
+                      <td className="iu-table-td text-amber-700" data-testid={`days-leave-${r.member_id}`}>{(r.days_leave || 0) + (r.days_break || 0)}</td>
+                      <td className="iu-table-td text-orange-700" data-testid={`days-tour-${r.member_id}`}>{r.days_tour || 0}</td>
+                      <td className="iu-table-td text-violet-700" data-testid={`days-comp-off-${r.member_id}`}>{r.comp_off_used || 0}</td>
+                      <td className={`iu-table-td ${(r.days_absent || 0) > 0 ? "text-red-600 font-semibold" : "text-slate-400"}`} data-testid={`days-absent-${r.member_id}`}>{r.days_absent || 0}</td>
+                      <td className="iu-table-td font-extrabold text-slate-900" data-testid={`days-total-${r.member_id}`}>
+                        {r.days_accounted || 0}<span className="text-xs text-slate-400 font-normal"> / {r.span_days}</span>
+                      </td>
+                      <td className="iu-table-td hidden md:table-cell">{r.total_hours}h</td>
+                      <td className="iu-table-td hidden lg:table-cell">
                         <span className="font-semibold text-emerald-700">{r.overtime_hours_approved || 0}h</span>
                         {r.overtime_hours_pending > 0 && (
                           <span className="ml-1 text-amber-600 text-xs">(+{r.overtime_hours_pending}h pending)</span>
                         )}
                       </td>
-                      <td className="iu-table-td">{r.days_present}/{r.span_days}</td>
-                      <td className="iu-table-td hidden md:table-cell">{r.late_days}</td>
-                      <td className="iu-table-td">{r.days_on_leave || 0}</td>
-                      <td className="iu-table-td">
-                        <span className="text-xs">
-                          <span className="text-slate-700 font-semibold">{r.comp_off_earned || 0}</span>
-                          <span className="text-slate-400"> · </span>
-                          <span className="text-emerald-700">{r.comp_off_used || 0}</span>
-                          <span className="text-slate-400"> · </span>
-                          <span className={(r.comp_off_pending || 0) > 0 ? "text-violet-700 font-semibold" : "text-slate-400"}>{r.comp_off_pending || 0}</span>
-                        </span>
-                      </td>
-                      <td className={`iu-table-td hidden lg:table-cell font-semibold ${(r.overstays || 0) > 0 ? "text-red-600" : "text-slate-400"}`}>{r.overstays || 0}</td>
+                      <td className="iu-table-td hidden lg:table-cell">{r.late_days}</td>
+                      <td className={`iu-table-td hidden xl:table-cell font-semibold ${(r.overstays || 0) > 0 ? "text-red-600" : "text-slate-400"}`}>{r.overstays || 0}</td>
                     </tr>
                   ))}
-                  {displayedRows.length === 0 && !loading && <tr><td colSpan={11} className="text-center py-10 text-slate-500">No data for this range.</td></tr>}
+                  {displayedRows.length === 0 && !loading && <tr><td colSpan={13} className="text-center py-10 text-slate-500">No data for this range.</td></tr>}
                 </tbody>
               </table>
             </div>

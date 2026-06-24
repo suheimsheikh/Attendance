@@ -3408,21 +3408,47 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "start_date": {"$lte": end},
             "end_date": {"$gte": start},
         },
-        {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1},
+        {"_id": 0, "user_id": 1, "type": 1, "start_date": 1, "end_date": 1},
     ).to_list(10000)
-    leaves_by_user: dict = {}
+    leaves_by_user_typed: dict = {}
     for leave in leaves:
-        leaves_by_user.setdefault(leave["user_id"], []).append(leave)
+        leaves_by_user_typed.setdefault(leave["user_id"], {}) \
+            .setdefault(leave.get("type") or "leave", []).append(leave)
 
-    def _count_leave_days(user_leaves: List[dict]) -> int:
+    # Breaks that overlap the report window — folded into the leave column
+    # since on the Presence Board breaks already render as on_leave.
+    breaks_window = await db.breaks.find(
+        {"start_date": {"$lte": end}, "end_date": {"$gte": start}},
+        {"_id": 0},
+    ).to_list(500)
+
+    def _days_overlap(ls_str: str, le_str: str) -> set:
+        """Return the set of YYYY-MM-DD strings where [ls,le] overlaps the
+        report window [sd,ed]."""
+        try:
+            ls = max(date.fromisoformat(ls_str), sd)
+            le = min(date.fromisoformat(le_str), ed)
+        except Exception:
+            return set()
         days = set()
-        for leave in user_leaves:
-            ls = max(date.fromisoformat(leave["start_date"]), sd)
-            le = min(date.fromisoformat(leave["end_date"]), ed)
-            cur = ls
-            while cur <= le:
-                days.add(cur.isoformat())
-                cur += timedelta(days=1)
+        cur = ls
+        while cur <= le:
+            days.add(cur.isoformat())
+            cur += timedelta(days=1)
+        return days
+
+    def _count_days_of_type(user_id: str, ltype: str) -> int:
+        days: set = set()
+        for leave in leaves_by_user_typed.get(user_id, {}).get(ltype, []):
+            days |= _days_overlap(leave["start_date"], leave["end_date"])
+        return len(days)
+
+    def _count_break_days(member: dict) -> int:
+        days: set = set()
+        for b in breaks_window:
+            if not _breaks_module.break_applies_to(b, member):
+                continue
+            days |= _days_overlap(b["start_date"], b["end_date"])
         return len(days)
 
     WEEKDAY_NAME = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
@@ -3445,7 +3471,11 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         total_hours = round(sum(s.get("hours") or 0 for s in sessions), 2)
         days_present = len({s["date"] for s in sessions})
         late_days = len({s["date"] for s in sessions if s.get("late")})
-        days_on_leave = _count_leave_days(leaves_by_user.get(u["id"], []))
+        days_leave = _count_days_of_type(u["id"], "leave")
+        days_tour = _count_days_of_type(u["id"], "tour")
+        days_break = _count_break_days(u)
+        # Combined "time-off" column for backward-compat with older clients.
+        days_on_leave = days_leave + days_tour + days_break
         overstays = _overstays(sessions)
         approved_ot_min = sum(int(s.get("overtime_total_min") or 0)
                               for s in sessions
@@ -3455,17 +3485,12 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
                              if s.get("overtime_status") == "pending")
         # Compensatory off bookkeeping (within this report's date range)
         co_earned = _comp_off_earned(u, sessions)
-        co_used = 0
-        for leave in (leaves_by_user.get(u["id"]) or []):
-            if leave.get("type") != "comp_off":
-                continue
-            ls = max(date.fromisoformat(leave["start_date"]), sd)
-            le = min(date.fromisoformat(leave["end_date"]), ed)
-            cur = ls
-            while cur <= le:
-                co_used += 1
-                cur += timedelta(days=1)
+        co_used = _count_days_of_type(u["id"], "comp_off")
         co_pending = max(0, co_earned - co_used)
+        # Days the member is "accounted for" — present, leave, tour, break,
+        # or comp-off. Anything else in the span is absent.
+        days_accounted = days_present + days_leave + days_tour + days_break + co_used
+        days_absent = max(0, span_days - days_accounted)
         attendance_pct = round((days_present / span_days) * 100, 1)
         rows.append({
             "member_id": u["id"],
@@ -3476,6 +3501,11 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "total_hours": total_hours,
             "days_present": days_present,
             "late_days": late_days,
+            "days_leave": days_leave,
+            "days_tour": days_tour,
+            "days_break": days_break,
+            "days_absent": days_absent,
+            "days_accounted": days_accounted,
             "days_on_leave": days_on_leave,
             "overstays": overstays,
             "overtime_hours_approved": round(approved_ot_min / 60.0, 2),
@@ -3594,18 +3624,22 @@ def _csv_response(headers: List[str], rows: List[List], filename: str) -> Respon
 @api_router.get("/reports/hours/export")
 async def export_hours(start: str, end: str, fmt: str = "csv", admin: dict = Depends(require_admin)):
     rows = await compute_hours_report(start, end)
-    headers = ["Attendance %", "Name", "Category", "Rank", "Weekly off", "Hours",
-               "OT Hours (approved)", "OT Hours (pending)",
-               "Days Present", "Late Days", "Leave Days", "Overstays",
+    headers = ["Attendance %", "Name", "Category", "Rank", "Weekly off",
+               "Present", "Leave", "Tour", "Comp-Off", "Absent", "Total accounted", "Span",
+               "Total hrs", "OT hrs (approved)", "OT hrs (pending)",
+               "Late Days", "Overstays",
                "Comp-Off Earned", "Comp-Off Used", "Comp-Off Pending"]
     table = [[f"{r['attendance_pct']}%", r["member_name"], r["category"], r.get("rank") or "-",
               (r.get("weekly_off") or "monday").title(),
+              r["days_present"],
+              (r.get("days_leave", 0) + r.get("days_break", 0)),
+              r.get("days_tour", 0), r.get("comp_off_used", 0),
+              r.get("days_absent", 0), r.get("days_accounted", 0), r.get("span_days", 0),
               r["total_hours"], r.get("overtime_hours_approved", 0), r.get("overtime_hours_pending", 0),
-              r["days_present"], r.get("late_days", 0), r.get("days_on_leave", 0),
-              r.get("overstays", 0),
+              r.get("late_days", 0), r.get("overstays", 0),
               r.get("comp_off_earned", 0), r.get("comp_off_used", 0), r.get("comp_off_pending", 0)] for r in rows]
     if fmt == "pdf":
-        pdf = _pdf_from_table("Attendance & Hours Report", headers, table, f"{start} to {end}")
+        pdf = _pdf_from_table("Monthly Attendance Report", headers, table, f"{start} to {end}")
         return Response(content=pdf, media_type="application/pdf",
                         headers={"Content-Disposition": f"attachment; filename=hours_{start}_{end}.pdf"})
     return _csv_response(headers, table, f"hours_{start}_{end}.csv")
