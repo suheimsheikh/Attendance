@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, ChevronLeft, ChevronRight, Plus, Trash2, Edit3, Tent, Sailboat, CalendarDays, Globe, Download } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Plus, Trash2, Edit3, Tent, Sailboat, CalendarDays, Globe, Download, Coffee } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { useEscape } from "../../hooks/useEscape";
+import { CampForm } from "./Camps";
 
 const LEVEL_STYLE = {
   international: { chip: "bg-violet-100 text-violet-700",   dot: "#7C3AED", label: "International" },
@@ -29,13 +30,18 @@ export default function Calendar() {
   const [cursor, setCursor] = useState(startOfMonth(new Date()));
   const [camps, setCamps] = useState([]);
   const [regattas, setRegattas] = useState([]);
+  const [breaks, setBreaks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingRegatta, setEditingRegatta] = useState(null);
+  const [editingCamp, setEditingCamp] = useState(null);
+  const [editingBreak, setEditingBreak] = useState(null);
   const [activeDay, setActiveDay] = useState(null);     // YYYY-MM-DD
   const [members, setMembers] = useState([]);
+  const [institutions, setInstitutions] = useState([]);
 
   useEffect(() => {
     api.get("/members").then(setMembers).catch(() => {});
+    api.get("/institutions").then(setInstitutions).catch(() => {});
   }, []);
 
   const monthStart = useMemo(() => startOfMonth(cursor), [cursor]);
@@ -44,22 +50,24 @@ export default function Calendar() {
   const load = async () => {
     setLoading(true);
     try {
-      const [c, r] = await Promise.all([
+      const [c, r, b] = await Promise.all([
         api.get("/camps").catch(() => []),
         api.get("/regattas").catch(() => []),
+        api.get("/breaks").catch(() => []),
       ]);
       setCamps(c || []);
       setRegattas(r || []);
+      setBreaks(b || []);
     } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
 
-  // Map: 'YYYY-MM-DD' → { camps: [...], regattas: [...] }
+  // Map: 'YYYY-MM-DD' → { camps: [...], regattas: [...], breaks: [...] }
   const byDay = useMemo(() => {
     const days = {};
     for (let dt = new Date(monthStart); dt <= monthEnd; dt.setDate(dt.getDate() + 1)) {
       const key = ymd(dt);
-      days[key] = { camps: [], regattas: [] };
+      days[key] = { camps: [], regattas: [], breaks: [] };
     }
     for (const c of camps) {
       if (c.end_date < ymd(monthStart) || c.start_date > ymd(monthEnd)) continue;
@@ -79,8 +87,16 @@ export default function Calendar() {
         days[ymd(dt)]?.regattas.push(r);
       }
     }
+    for (const b of breaks) {
+      if (b.end_date < ymd(monthStart) || b.start_date > ymd(monthEnd)) continue;
+      const start = new Date(Math.max(new Date(b.start_date + "T00:00:00"), monthStart));
+      const end = new Date(Math.min(new Date(b.end_date + "T00:00:00"), monthEnd));
+      for (let dt = new Date(start); dt <= end; dt.setDate(dt.getDate() + 1)) {
+        days[ymd(dt)]?.breaks.push(b);
+      }
+    }
     return days;
-  }, [camps, regattas, monthStart, monthEnd]);
+  }, [camps, regattas, breaks, monthStart, monthEnd]);
 
   // Build the 6-row grid (Mon-Sun). Start on the Monday on or before monthStart.
   const gridDays = useMemo(() => {
@@ -103,6 +119,18 @@ export default function Calendar() {
   const removeRegatta = async (r) => {
     if (!window.confirm(`Delete regatta "${r.name}"?`)) return;
     try { await api.del(`/regattas/${r.id}`); toast.success("Deleted"); load(); }
+    catch (err) { toast.error(err?.message || "Failed"); }
+  };
+
+  const removeCamp = async (c) => {
+    if (!window.confirm(`Delete camp "${c.name}"?`)) return;
+    try { await api.del(`/camps/${c.id}`); toast.success("Deleted"); load(); }
+    catch (err) { toast.error(err?.message || "Failed"); }
+  };
+
+  const removeBreak = async (b) => {
+    if (!window.confirm(`Delete break "${b.name}"?`)) return;
+    try { await api.del(`/breaks/${b.id}`); toast.success("Deleted"); load(); }
     catch (err) { toast.error(err?.message || "Failed"); }
   };
 
@@ -134,6 +162,20 @@ export default function Calendar() {
             <Download size={16} /> Import from YAI
           </button>
           <button
+            onClick={() => setEditingCamp({})}
+            data-testid="camp-add"
+            className="iu-btn-secondary !bg-emerald-50 !text-emerald-700 hover:!bg-emerald-100 !border-emerald-200"
+          >
+            <Tent size={16} /> New camp
+          </button>
+          <button
+            onClick={() => setEditingBreak({})}
+            data-testid="break-add"
+            className="iu-btn-secondary !bg-amber-50 !text-amber-800 hover:!bg-amber-100 !border-amber-200"
+          >
+            <Coffee size={16} /> Apply break
+          </button>
+          <button
             onClick={() => setEditingRegatta({})}
             data-testid="regatta-add"
             className="iu-btn-primary"
@@ -146,6 +188,7 @@ export default function Calendar() {
       {/* Legend */}
       <div className="flex flex-wrap gap-3 mb-3 text-xs">
         <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded bg-emerald-200" /> Camp</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded bg-amber-200" /> Break</span>
         {LEVELS.map((l) => (
           <span key={l} className="inline-flex items-center gap-1.5">
             <span className="inline-block w-3 h-3 rounded" style={{ background: LEVEL_STYLE[l].dot }} />
@@ -180,7 +223,8 @@ export default function Calendar() {
               const dayData = byDay[key];
               const camps_ = dayData?.camps || [];
               const regs_  = dayData?.regattas || [];
-              const hasEntries = camps_.length + regs_.length > 0;
+              const breaks_ = dayData?.breaks || [];
+              const hasEntries = camps_.length + regs_.length + breaks_.length > 0;
               return (
                 <div
                   key={key + "-" + idx}
@@ -190,6 +234,18 @@ export default function Calendar() {
                 >
                   <div className={`text-[11px] font-bold mb-1 ${isToday ? "text-sky-700" : ""}`}>{d.getDate()}</div>
                   <div className="space-y-0.5">
+                    {breaks_.slice(0, 2).map((b) => (
+                      <div
+                        key={"b-" + b.id}
+                        title={`Break: ${b.name}`}
+                        className="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-800 truncate font-semibold inline-flex items-center gap-1 w-full"
+                      >
+                        <Coffee size={9} /> <span className="truncate">{b.name}</span>
+                      </div>
+                    ))}
+                    {breaks_.length > 2 && (
+                      <div className="text-[10px] text-amber-700 font-bold">+{breaks_.length - 2} more</div>
+                    )}
                     {camps_.slice(0, 2).map((c) => (
                       <div
                         key={"c-" + c.id}
@@ -224,6 +280,67 @@ export default function Calendar() {
           </div>
         </div>
       )}
+
+      {/* Camps list */}
+      <section className="mt-8">
+        <h2 className="text-lg font-bold mb-3 flex items-center gap-2"><Tent size={16} className="text-emerald-600" /> Camps</h2>
+        {camps.length === 0 ? (
+          <div className="iu-card p-6 text-center text-sm text-slate-400">
+            No camps yet. Tap <b>New camp</b> at the top to add one.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {camps.map((c) => (
+              <div key={c.id} data-testid={`camp-row-${c.id}`} className="iu-card p-3 flex items-center gap-3">
+                <span className="inline-flex items-center px-2 h-5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                  <Tent size={9} className="mr-1" /> Camp
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-slate-900 truncate">{c.name}</div>
+                  <div className="text-xs text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5">
+                    <span>{c.start_date} → {c.end_date}</span>
+                    <span>{c.start_time} – {c.end_time}</span>
+                    {c.institution && <span className="italic">{c.institution}</span>}
+                    <span>{c.member_ids?.length ? `${c.member_ids.length} enrolled` : (c.institution ? `all ${c.institution}` : "0 enrolled")}</span>
+                  </div>
+                </div>
+                <button onClick={() => setEditingCamp(c)} data-testid={`camp-edit-${c.id}`} className="iu-btn-secondary !px-3 !h-9"><Edit3 size={14} /></button>
+                <button onClick={() => removeCamp(c)} data-testid={`camp-delete-${c.id}`} className="iu-btn-secondary !px-3 !h-9 hover:!bg-rose-50 hover:!text-rose-700"><Trash2 size={14} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Breaks list */}
+      <section className="mt-8">
+        <h2 className="text-lg font-bold mb-3 flex items-center gap-2"><Coffee size={16} className="text-amber-600" /> Breaks &amp; Holidays</h2>
+        {breaks.length === 0 ? (
+          <div className="iu-card p-6 text-center text-sm text-slate-400">
+            No breaks yet. Tap <b>Apply break</b> at the top to mark a rest day or holiday.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {breaks.map((b) => (
+              <div key={b.id} data-testid={`break-row-${b.id}`} className="iu-card p-3 flex items-center gap-3">
+                <span className="inline-flex items-center px-2 h-5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                  <Coffee size={9} className="mr-1" /> {scopeLabel(b)}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-slate-900 truncate">{b.name}</div>
+                  <div className="text-xs text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5">
+                    <span>{b.start_date} → {b.end_date}</span>
+                    {b.scope === "institution" && b.institution && <span className="italic">{b.institution}</span>}
+                    {b.scope === "selected" && <span>{(b.member_ids || []).length} members</span>}
+                  </div>
+                </div>
+                <button onClick={() => setEditingBreak(b)} data-testid={`break-edit-${b.id}`} className="iu-btn-secondary !px-3 !h-9"><Edit3 size={14} /></button>
+                <button onClick={() => removeBreak(b)} data-testid={`break-delete-${b.id}`} className="iu-btn-secondary !px-3 !h-9 hover:!bg-rose-50 hover:!text-rose-700"><Trash2 size={14} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Regatta list */}
       <section className="mt-8">
@@ -263,6 +380,22 @@ export default function Calendar() {
           onSaved={() => { setEditingRegatta(null); load(); }}
         />
       )}
+      {editingCamp && (
+        <CampForm
+          initial={editingCamp}
+          onClose={() => setEditingCamp(null)}
+          onSaved={() => { setEditingCamp(null); load(); }}
+        />
+      )}
+      {editingBreak && (
+        <BreakForm
+          initial={editingBreak}
+          members={members}
+          institutions={institutions}
+          onClose={() => setEditingBreak(null)}
+          onSaved={() => { setEditingBreak(null); load(); }}
+        />
+      )}
       {activeDay && (
         <DayDetailModal
           dateKey={activeDay}
@@ -270,16 +403,32 @@ export default function Calendar() {
           members={members}
           onClose={() => setActiveDay(null)}
           onEditRegatta={(r) => { setActiveDay(null); setEditingRegatta(r); }}
+          onEditCamp={(c) => { setActiveDay(null); setEditingCamp(c); }}
+          onEditBreak={(b) => { setActiveDay(null); setEditingBreak(b); }}
         />
       )}
     </div>
   );
 }
 
-function DayDetailModal({ dateKey, dayData, members, onClose, onEditRegatta }) {
+// Human-readable scope label for break list rows.
+function scopeLabel(b) {
+  switch (b.scope) {
+    case "all": return "Everyone";
+    case "athletes": return "All athletes";
+    case "coaches": return "All coaches";
+    case "staff": return "All staff";
+    case "institution": return b.institution || "Institution";
+    case "selected": return "Selected";
+    default: return "Break";
+  }
+}
+
+function DayDetailModal({ dateKey, dayData, members, onClose, onEditRegatta, onEditCamp, onEditBreak }) {
   useEscape(onClose);
   const camps_ = dayData?.camps || [];
   const regs_  = dayData?.regattas || [];
+  const breaks_ = dayData?.breaks || [];
   const memberById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members]);
 
   const headerDate = new Date(dateKey + "T00:00:00").toLocaleDateString(undefined, {
@@ -314,11 +463,40 @@ function DayDetailModal({ dateKey, dayData, members, onClose, onEditRegatta }) {
           <div>
             <h2 className="text-xl font-extrabold">{headerDate}</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              {camps_.length} camp{camps_.length === 1 ? "" : "s"} · {regs_.length} regatta{regs_.length === 1 ? "" : "s"} active
+              {camps_.length} camp{camps_.length === 1 ? "" : "s"} · {breaks_.length} break{breaks_.length === 1 ? "" : "s"} · {regs_.length} regatta{regs_.length === 1 ? "" : "s"} active
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
         </header>
+
+        {breaks_.length > 0 && (
+          <section className="mb-6">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-2 flex items-center gap-1">
+              <Coffee size={11} /> Breaks &amp; Holidays
+            </h3>
+            <div className="space-y-2">
+              {breaks_.map((b) => (
+                <div key={b.id} data-testid={`day-break-${b.id}`} className="border border-amber-200 bg-amber-50/40 rounded-lg p-3 flex items-center gap-3">
+                  <span className="inline-flex items-center px-2 h-5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">{scopeLabel(b)}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-slate-900 truncate">{b.name}</div>
+                    <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3">
+                      <span>{b.start_date} → {b.end_date}</span>
+                      {b.scope === "selected" && <span>{(b.member_ids || []).length} members</span>}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onEditBreak(b)}
+                    data-testid={`day-break-edit-${b.id}`}
+                    className="iu-btn-secondary !px-3 !h-8 text-xs"
+                  >
+                    Edit
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {camps_.length > 0 && (
           <section className="mb-6">
@@ -333,9 +511,18 @@ function DayDetailModal({ dateKey, dayData, members, onClose, onEditRegatta }) {
                   <div key={c.id} data-testid={`day-camp-${c.id}`} className="border border-emerald-200 bg-emerald-50/40 rounded-lg p-3">
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-bold text-slate-900">{c.name}</div>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-                        {count} enrolled
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                          {count} enrolled
+                        </span>
+                        <button
+                          onClick={() => onEditCamp(c)}
+                          data-testid={`day-camp-edit-${c.id}`}
+                          className="iu-btn-secondary !px-3 !h-8 text-xs"
+                        >
+                          Edit
+                        </button>
+                      </div>
                     </div>
                     <div className="text-xs text-slate-600 mt-1 flex flex-wrap gap-x-3">
                       <span>{c.start_time} – {c.end_time}</span>
@@ -388,7 +575,7 @@ function DayDetailModal({ dateKey, dayData, members, onClose, onEditRegatta }) {
           </section>
         )}
 
-        {camps_.length === 0 && regs_.length === 0 && (
+        {camps_.length === 0 && regs_.length === 0 && breaks_.length === 0 && (
           <div className="py-8 text-center text-sm text-slate-400">Nothing scheduled for this day.</div>
         )}
       </div>
@@ -479,6 +666,201 @@ function RegattaForm({ initial, onClose, onSaved }) {
           <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
           <button type="submit" disabled={saving} data-testid="rf-save" className="iu-btn-primary">
             {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save" : "Create")}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+
+const SCOPES = [
+  { key: "all",         label: "Holiday for everyone",     hint: "Office-wide day off — every member is on break" },
+  { key: "athletes",    label: "Rest day · all athletes",  hint: "Every athlete, regardless of institution" },
+  { key: "coaches",     label: "All coaches",              hint: "Every coach on the roster" },
+  { key: "staff",       label: "All staff",                hint: "Every staff member" },
+  { key: "institution", label: "One institution",          hint: "Every athlete in the chosen institution" },
+  { key: "selected",    label: "Selected members",         hint: "Pick the exact members below" },
+];
+
+function BreakForm({ initial, members, institutions, onClose, onSaved }) {
+  useEscape(onClose);
+  const isEdit = !!initial?.id;
+  const today = ymd(new Date());
+  const [form, setForm] = useState({
+    name:        initial?.name || "",
+    scope:       initial?.scope || "all",
+    start_date:  initial?.start_date || today,
+    end_date:    initial?.end_date || today,
+    institution: initial?.institution || "",
+    member_ids:  initial?.member_ids || [],
+    notes:       initial?.notes || "",
+  });
+  const [memberSearch, setMemberSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const toggleMember = (id) => set("member_ids",
+    form.member_ids.includes(id)
+      ? form.member_ids.filter((x) => x !== id)
+      : [...form.member_ids, id]
+  );
+
+  const filteredMembers = useMemo(() => {
+    const q = memberSearch.trim().toLowerCase();
+    return (members || []).filter((m) => !q || (m.full_name || "").toLowerCase().includes(q));
+  }, [members, memberSearch]);
+
+  const submit = async (e) => {
+    e?.preventDefault?.();
+    if (!form.name.trim()) { toast.error("Name is required"); return; }
+    if (form.start_date > form.end_date) { toast.error("Start must be on or before end"); return; }
+    if (form.scope === "institution" && !form.institution) { toast.error("Pick an institution"); return; }
+    if (form.scope === "selected" && form.member_ids.length === 0) { toast.error("Pick at least one member"); return; }
+    const payload = { ...form };
+    if (payload.scope !== "institution") delete payload.institution;
+    if (payload.scope !== "selected") payload.member_ids = [];
+    if (!payload.notes) delete payload.notes;
+    setSaving(true);
+    try {
+      if (isEdit) await api.patch(`/breaks/${initial.id}`, payload);
+      else        await api.post("/breaks", payload);
+      toast.success(isEdit ? "Break updated" : "Break applied");
+      onSaved?.();
+    } catch (err) {
+      toast.error(err?.message || "Save failed");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={onClose}>
+      <form
+        onSubmit={submit}
+        onClick={(e) => e.stopPropagation()}
+        data-testid="break-form"
+        className="bg-white w-full md:max-w-2xl rounded-t-2xl md:rounded-2xl p-6 space-y-4 max-h-[92vh] overflow-y-auto"
+      >
+        <header className="flex items-center justify-between">
+          <h2 className="text-xl font-extrabold flex items-center gap-2">
+            <Coffee size={18} className="text-amber-600" /> {isEdit ? "Edit break" : "Apply break"}
+          </h2>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
+        </header>
+
+        <div>
+          <label className="iu-label">What is this break?</label>
+          <input
+            data-testid="bf-name"
+            value={form.name}
+            onChange={(e) => set("name", e.target.value)}
+            className="iu-input"
+            placeholder="e.g. Diwali holiday, MJPT rest week, Coaches off-day"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="iu-label">From</label>
+            <input data-testid="bf-start" type="date" value={form.start_date} onChange={(e) => set("start_date", e.target.value)} className="iu-input" />
+          </div>
+          <div>
+            <label className="iu-label">To</label>
+            <input data-testid="bf-end" type="date" value={form.end_date} onChange={(e) => set("end_date", e.target.value)} className="iu-input" />
+          </div>
+        </div>
+
+        <div>
+          <label className="iu-label">Who is on break?</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {SCOPES.map((s) => {
+              const on = form.scope === s.key;
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  data-testid={`bf-scope-${s.key}`}
+                  onClick={() => set("scope", s.key)}
+                  className={`text-left px-3 py-2 rounded-lg border transition ${on ? "border-amber-400 bg-amber-50 ring-1 ring-amber-300" : "border-slate-200 hover:bg-slate-50"}`}
+                >
+                  <div className={`font-semibold text-sm ${on ? "text-amber-800" : "text-slate-800"}`}>{s.label}</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">{s.hint}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {form.scope === "institution" && (
+          <div>
+            <label className="iu-label">Institution</label>
+            <select
+              data-testid="bf-institution"
+              value={form.institution}
+              onChange={(e) => set("institution", e.target.value)}
+              className="iu-input"
+            >
+              <option value="">— Pick one —</option>
+              {institutions.map((i) => (
+                <option key={i.id || i.name} value={i.name}>{i.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {form.scope === "selected" && (
+          <div>
+            <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
+              <label className="iu-label !m-0">Members on break ({form.member_ids.length})</label>
+              <input
+                data-testid="bf-member-search"
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder="Search by name…"
+                className="iu-input !h-8 !text-xs !py-1 !w-44"
+              />
+            </div>
+            <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto divide-y divide-slate-100">
+              {filteredMembers.length === 0 ? (
+                <div className="px-3 py-6 text-center text-xs text-slate-400">No members match.</div>
+              ) : (
+                filteredMembers.map((m) => {
+                  const on = form.member_ids.includes(m.id);
+                  return (
+                    <label
+                      key={m.id}
+                      className={`px-3 py-2 flex items-center gap-2 cursor-pointer ${on ? "bg-amber-50" : "hover:bg-slate-50"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => toggleMember(m.id)}
+                        data-testid={`bf-member-${m.id}`}
+                      />
+                      <span className="text-sm font-medium flex-1 truncate">{m.full_name}</span>
+                      {m.institution && <span className="text-[10px] px-1.5 rounded bg-slate-100 text-slate-600">{m.institution}</span>}
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="iu-label">Notes (optional)</label>
+          <textarea
+            data-testid="bf-notes"
+            rows={2}
+            value={form.notes}
+            onChange={(e) => set("notes", e.target.value)}
+            className="iu-input"
+            placeholder="Context, reason, source…"
+          />
+        </div>
+
+        <footer className="flex gap-2 justify-end pt-2 border-t border-slate-200">
+          <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
+          <button type="submit" disabled={saving} data-testid="bf-save" className="iu-btn-primary !bg-amber-600 hover:!bg-amber-700">
+            {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save changes" : "Apply break")}
           </button>
         </footer>
       </form>

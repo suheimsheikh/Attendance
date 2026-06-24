@@ -135,7 +135,7 @@ export default function Camps() {
   );
 }
 
-function CampForm({ initial, onClose, onSaved }) {
+export function CampForm({ initial, onClose, onSaved }) {
   useEscape(onClose);
   const isEdit = !!initial?.id;
   const [form, setForm] = useState({

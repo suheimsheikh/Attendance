@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 # handling for check-in late computation) can reference them.
 import camps as _camps_module
 import regattas as _regattas_module
+import breaks as _breaks_module
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -2338,6 +2339,12 @@ async def presence(user: dict = Depends(get_current_user)):
     def _camp_for(u: dict) -> Optional[dict]:
         return _camps_module.resolve_member_camp(u, camps_today, today_weekday, today)
 
+    # Breaks overlay — like an approved leave but applied to whole categories /
+    # institutions / arbitrary member groups. Bulk-fetch, resolve per-member.
+    breaks_today = await _breaks_module.fetch_breaks_active_on(db, today)
+    def _break_for(u: dict) -> Optional[dict]:
+        return _breaks_module.resolve_member_break(u, breaks_today)
+
     # Admin contacts to surface as the "call the academy" numbers in the SMS body.
     admin_docs = await db.users.find(
         {"role": "admin"},
@@ -2357,6 +2364,7 @@ async def presence(user: dict = Depends(get_current_user)):
         u_thumb = u.get("photo_thumb") or u.get("photo")
         sess = sess_map.get(u["id"])
         leave = leave_map.get(u["id"])
+        brk = _break_for(u)
         # Geo info for whichever session is "current" (open session for on-campus/temp-out;
         # last-completed session for exited members).
         geo_in: dict = {}
@@ -2370,6 +2378,14 @@ async def presence(user: dict = Depends(get_current_user)):
             status_v = "on_leave"
             detail = f"Till {leave['end_date']}"
             since = leave["start_date"]
+            photo = u_thumb
+        elif brk:
+            # On break — same precedence as an approved leave. Surfaces under
+            # the Leave column with an "On break" tag so coaches can distinguish
+            # group breaks from individual leaves at a glance.
+            status_v = "on_leave"
+            detail = f"On break · {brk.get('name', '')}".rstrip(" ·")
+            since = brk.get("start_date")
             photo = u_thumb
         elif sess:
             open_exc = _open_excursion(sess)
@@ -2992,7 +3008,7 @@ async def admin_backup(admin: dict = Depends(require_admin)):
     collections = [
         "users", "institutions", "config", "attendance", "leaves",
         "devices", "parent_notifications", "camps", "regattas",
-        "guests", "daily_content", "sms_log",
+        "guests", "daily_content", "sms_log", "breaks",
     ]
     manifest = {
         "created_at": _dt.now(_tz.utc).isoformat(),
@@ -3048,7 +3064,7 @@ async def admin_restore(
     collections = [
         "users", "institutions", "config", "attendance", "leaves",
         "devices", "parent_notifications", "camps", "regattas",
-        "guests", "daily_content", "sms_log",
+        "guests", "daily_content", "sms_log", "breaks",
     ]
     for tname in collections:
         member = None
@@ -3635,6 +3651,11 @@ app.include_router(_camps_module.make_router(db, require_admin))
 # Regattas — national / international sailing events. Shown alongside camps on
 # the unified Calendar view.
 app.include_router(_regattas_module.make_router(db, require_admin))
+
+# Breaks — holiday / rest-day overlay. While active, the covered members
+# show up under Leave on the Presence Board (not Absent) and skip
+# late-notification dispatches for the day.
+app.include_router(_breaks_module.make_router(db, require_admin))
 
 
 # Twilio SMS + Voice — parent notifications, per-institution sender numbers.
