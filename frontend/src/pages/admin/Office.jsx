@@ -60,6 +60,9 @@ export default function OfficeSettings() {
         timezone: form.timezone || "Asia/Kolkata",
         late_grace_minutes: Number(form.late_grace_minutes || 0),
         parent_notify_grace_minutes: Number(form.parent_notify_grace_minutes ?? 30),
+        checkout_reminder_enabled: form.checkout_reminder_enabled !== false,
+        checkout_reminder_time: form.checkout_reminder_time || "20:00",
+        checkout_reminder_template: form.checkout_reminder_template || "Hi {name}, looks like you're still checked in at {academy}. Please check out via the app when you leave.",
       };
       const updated = await api.put("/office", body);
       setForm(updated);
@@ -138,6 +141,63 @@ export default function OfficeSettings() {
             className="iu-input"
           />
           <p className="text-[11px] text-slate-500 mt-1">How long after an athlete&apos;s work start time before the &quot;Notify parents&quot; button appears on the Presence Board. Default 30 minutes.</p>
+        </div>
+
+        <div className="border-t border-slate-200 pt-4">
+          <div className="flex items-center justify-between mb-2">
+            <label className="iu-label !m-0">Forgot-to-check-out SMS reminder</label>
+            <label className="inline-flex items-center gap-2 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                data-testid="of-checkout-reminder-enabled"
+                checked={form.checkout_reminder_enabled !== false}
+                onChange={(e) => set("checkout_reminder_enabled", e.target.checked)}
+              />
+              <span className="font-semibold">Enabled</span>
+            </label>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div>
+              <label className="iu-label">Send time</label>
+              <input
+                data-testid="of-checkout-reminder-time"
+                type="time"
+                value={form.checkout_reminder_time || "20:00"}
+                onChange={(e) => set("checkout_reminder_time", e.target.value)}
+                disabled={form.checkout_reminder_enabled === false}
+                className="iu-input"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="iu-label">Message template</label>
+              <input
+                data-testid="of-checkout-reminder-template"
+                value={form.checkout_reminder_template || ""}
+                onChange={(e) => set("checkout_reminder_template", e.target.value)}
+                disabled={form.checkout_reminder_enabled === false}
+                placeholder="Hi {name}, you're still checked in at {academy}..."
+                className="iu-input"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
+            <p className="text-[11px] text-slate-500">
+              Placeholders <code>{"{name}"}</code> and <code>{"{academy}"}</code> are filled per-member. Only sent once per day per session.
+            </p>
+            <button
+              type="button"
+              data-testid="of-checkout-reminder-test"
+              onClick={async () => {
+                try {
+                  const res = await api.post("/admin/checkout-reminder/send-now");
+                  toast.success(`Reminder batch fired — ${res.sent} SMS sent`);
+                } catch (err) { toast.error(err?.message || "Send failed"); }
+              }}
+              className="iu-btn-secondary !text-xs"
+            >
+              Send now (test)
+            </button>
+          </div>
         </div>
 
         <button data-testid="of-save" disabled={saving} className="iu-btn-primary w-full">

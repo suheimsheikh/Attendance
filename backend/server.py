@@ -428,6 +428,13 @@ class OfficeConfig(BaseModel):
     timezone: str = "Asia/Kolkata"
     late_grace_minutes: int = 0
     parent_notify_grace_minutes: int = 30
+    # Daily reminder SMS to anyone still checked-in. The cron fires at
+    # `checkout_reminder_time` (office-local HH:MM) and sends one SMS per
+    # member who has an open session for today AND hasn't already been
+    # reminded (idempotent via reminder_sent_at on the attendance doc).
+    checkout_reminder_enabled: bool = True
+    checkout_reminder_time: str = "20:00"
+    checkout_reminder_template: str = "Hi {name}, looks like you're still checked in at {academy}. Please check out via the app when you leave."
     twilio: TwilioConfig = Field(default_factory=TwilioConfig)
 
 
@@ -704,6 +711,91 @@ async def _start_midnight_scheduler():
     except Exception:
         logger.exception("startup catch-up auto-checkout failed")
     asyncio.create_task(_midnight_auto_checkout_loop())
+    asyncio.create_task(_checkout_reminder_loop())
+
+
+# ----------------------------------------------------------------------------
+# "Forgot to check out" SMS reminder
+# Daily, at the office-local `checkout_reminder_time`, send one SMS to every
+# member who has an open session for today AND hasn't already been reminded.
+# Idempotent: writes `reminder_sent_at` on the attendance doc.
+# ----------------------------------------------------------------------------
+async def _send_checkout_reminders() -> int:
+    """Find every open session for today and ping the member's own phone.
+    Returns the count of reminders actually sent."""
+    office = await db.config.find_one({"id": "office"}, {"_id": 0}) or {}
+    if not office.get("checkout_reminder_enabled", True):
+        return 0
+    today = local_date_str(office)
+    open_sessions = await db.attendance.find(
+        {"date": today, "check_out_at": None, "reminder_sent_at": None},
+        {"_id": 0, "id": 1, "user_id": 1},
+    ).to_list(2000)
+    if not open_sessions:
+        return 0
+
+    user_ids = [s["user_id"] for s in open_sessions]
+    users = await db.users.find(
+        {"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "full_name": 1, "mobile": 1, "institution": 1},
+    ).to_list(2000)
+    umap = {u["id"]: u for u in users}
+
+    template = (office.get("checkout_reminder_template")
+                or "Hi {name}, looks like you're still checked in at {academy}. Please check out via the app when you leave.")
+    academy = office.get("name") or "the academy"
+
+    # Import lazily to avoid circular imports during module load.
+    import sms as _sms
+
+    sent = 0
+    for s in open_sessions:
+        u = umap.get(s["user_id"])
+        if not u or not u.get("mobile"):
+            continue
+        body = template.format(name=u.get("full_name") or "there", academy=academy)
+        try:
+            await _sms.send_sms(db=db, to_e164=u["mobile"], body=body, institution=u.get("institution"))
+            sent += 1
+            await db.attendance.update_one(
+                {"id": s["id"]},
+                {"$set": {"reminder_sent_at": now_utc().isoformat()}},
+            )
+        except Exception:
+            logger.exception("checkout-reminder SMS failed for user %s", s["user_id"])
+    return sent
+
+
+async def _checkout_reminder_loop():
+    """Forever: sleep until the configured reminder time today (or tomorrow if
+    that's already past), fire the batch, repeat."""
+    import asyncio
+    while True:
+        try:
+            office = await db.config.find_one({"id": "office"}, {"_id": 0}) or {}
+            tz = office_tz(office)
+            now_local = datetime.now(tz)
+            t = (office.get("checkout_reminder_time") or "20:00").split(":")
+            try:
+                hh, mm = int(t[0]), int(t[1])
+            except (ValueError, IndexError):
+                hh, mm = 20, 0
+            target = now_local.replace(hour=hh, minute=mm, second=0, microsecond=0)
+            if target <= now_local:
+                target += timedelta(days=1)
+            wait = max(60, (target - now_local).total_seconds())
+            await asyncio.sleep(wait)
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception("checkout-reminder scheduler tick failed; retrying in 1h")
+            await asyncio.sleep(3600)
+            continue
+        try:
+            n = await _send_checkout_reminders()
+            if n:
+                logger.info("checkout reminder: SMS sent to %d open-session member(s)", n)
+        except Exception:
+            logger.exception("checkout-reminder job failed")
 
 
 # ----------------------------------------------------------------------------
@@ -1011,6 +1103,14 @@ async def regenerate_qr(admin: dict = Depends(require_admin)):
     new_token = "OFFICE-" + uuid.uuid4().hex[:12].upper()
     await db.config.update_one({"id": "office"}, {"$set": {"qr_token": new_token}})
     return {"qr_token": new_token}
+
+
+@api_router.post("/admin/checkout-reminder/send-now")
+async def admin_send_checkout_reminders_now(admin: dict = Depends(require_admin)):
+    """Trigger the forgot-to-checkout SMS batch immediately. Same idempotency
+    rules apply — members already pinged today won't be re-pinged."""
+    n = await _send_checkout_reminders()
+    return {"sent": n}
 
 
 # ----------------------------------------------------------------------------
@@ -2959,6 +3059,9 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
             "away_minutes": int(away_s / 60),
             "hours": hours,
             "stored_hours": s.get("hours"),
+            "auto_checkout": bool(s.get("auto_checkout")),
+            "auto_checkout_reason": s.get("auto_checkout_reason"),
+            "reminder_sent_at": s.get("reminder_sent_at"),
         })
 
     rows.sort(key=lambda r: (not r["open"], r["check_in_at"]))
@@ -2967,6 +3070,7 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
         "open": sum(1 for r in rows if r["open"]),
         "on_temp_exit": sum(1 for r in rows if r["on_temp_exit"]),
         "closed": sum(1 for r in rows if not r["open"]),
+        "auto_closed": sum(1 for r in rows if r.get("auto_checkout")),
         "total_excursions": sum(r["excursion_count"] for r in rows),
     }
     return {"date": on, "timezone": (office or {}).get("timezone") or DEFAULT_TZ, "rows": rows, "counts": counts}

@@ -49,10 +49,11 @@ export default function Sessions() {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         <StatCard label="Members today" value={counts.members || 0} color="#111827" />
         <StatCard label="Still open" value={counts.open || 0} color="#10B981" />
         <StatCard label="Stepped out now" value={counts.on_temp_exit || 0} color="#06B6D4" />
+        <StatCard label="Auto-closed" value={counts.auto_closed || 0} color="#F59E0B" />
         <StatCard label="Temp excursions" value={counts.total_excursions || 0} color="#F97316" />
       </div>
 
@@ -129,9 +130,20 @@ export default function Sessions() {
                     </td>
                     <td className="iu-table-td">
                       {r.check_out_time ? (
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <LogOutIcon size={13} className="text-slate-500"/>
-                          <span className="font-semibold">{r.check_out_time}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5 text-sm">
+                            <LogOutIcon size={13} className="text-slate-500"/>
+                            <span className="font-semibold">{r.check_out_time}</span>
+                          </div>
+                          {r.auto_checkout && (
+                            <span
+                              data-testid={`auto-checkout-badge-${r.session_id}`}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 w-fit"
+                              title={`Auto-closed by system${r.auto_checkout_reason ? ` (${r.auto_checkout_reason})` : ""} — member forgot to check out. Hours are an estimate.`}
+                            >
+                              <AlertTriangle size={9}/> Auto-closed
+                            </span>
+                          )}
                         </div>
                       ) : <span className="text-slate-400 text-sm">—</span>}
                     </td>
