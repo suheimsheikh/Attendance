@@ -1,17 +1,87 @@
-import React, { useEffect, useState } from "react";
-import { Users, CalendarCheck2, Plane, Clock, ShieldCheck, ArrowRight, AlertTriangle, ChevronRight, Calendar, ClipboardCheck, ClipboardList, FileSpreadsheet, Building2, IdCard, Building, FileBarChart2 } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Users, CalendarCheck2, Plane, Clock, ShieldCheck, ArrowRight, AlertTriangle, ChevronRight, Calendar, ClipboardCheck, ClipboardList, FileSpreadsheet, Building2, IdCard, Building, FileBarChart2, Tent, Sailboat, Coffee, CalendarDays } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
 import ActivityFeed from "../../components/ActivityFeed";
 
+// Date helpers — keep YYYY-MM-DD strings so we can compare lexicographically
+// against the backend's stored start_date / end_date.
+function ymd(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+function shortDate(s) {
+  if (!s) return "";
+  const [y, m, d] = s.split("-");
+  const dt = new Date(Number(y), Number(m) - 1, Number(d));
+  return dt.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+}
+
+const REGATTA_LEVEL_TONE = {
+  international: { chip: "bg-violet-100 text-violet-700 border-violet-200" },
+  national:      { chip: "bg-amber-100 text-amber-800 border-amber-200" },
+  state:         { chip: "bg-sky-100 text-sky-700 border-sky-200" },
+  club:          { chip: "bg-slate-100 text-slate-700 border-slate-200" },
+};
+
+const BREAK_SCOPE_LABEL = {
+  all: "Everyone",
+  athletes: "All athletes",
+  coaches: "All coaches",
+  staff: "All staff",
+  institution: "Institution",
+  selected: "Selected",
+};
+
 export default function AdminConsole() {
   const [summary, setSummary] = useState(null);
   const [otNeedsReview, setOtNeedsReview] = useState(null);
+  const [camps, setCamps] = useState([]);
+  const [breaks, setBreaks] = useState([]);
+  const [regattas, setRegattas] = useState([]);
 
   useEffect(() => {
     api.get("/admin/summary").then(setSummary).catch(() => {});
     api.get("/admin/overtime/needs-review").then(setOtNeedsReview).catch(() => {});
+    api.get("/camps").then((r) => setCamps(r || [])).catch(() => {});
+    api.get("/breaks").then((r) => setBreaks(r || [])).catch(() => {});
+    api.get("/regattas").then((r) => setRegattas(r || [])).catch(() => {});
   }, []);
+
+  // "Coming up this week" — anything that's active during today..today+7 OR
+  // starts within the next 7 days. Sort by start_date so the closest-up-next
+  // shows leftmost.
+  const upcoming = useMemo(() => {
+    const today = ymd(new Date());
+    const horizon = new Date();
+    horizon.setDate(horizon.getDate() + 7);
+    const horizonStr = ymd(horizon);
+    const inWindow = (start, end) =>
+      // Currently active (started, not yet ended)
+      (start <= today && end >= today) ||
+      // Starts in the next 7 days
+      (start > today && start <= horizonStr);
+    const items = [];
+    for (const c of camps) {
+      if (inWindow(c.start_date, c.end_date)) {
+        items.push({ kind: "camp", id: c.id, name: c.name, start: c.start_date, end: c.end_date, raw: c });
+      }
+    }
+    for (const b of breaks) {
+      if (inWindow(b.start_date, b.end_date)) {
+        items.push({ kind: "break", id: b.id, name: b.name, start: b.start_date, end: b.end_date, raw: b });
+      }
+    }
+    for (const r of regattas) {
+      if (inWindow(r.start_date, r.end_date)) {
+        items.push({ kind: "regatta", id: r.id, name: r.name, start: r.start_date, end: r.end_date, raw: r });
+      }
+    }
+    items.sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+    return items;
+  }, [camps, breaks, regattas]);
 
   // 5 summary tiles — each gets a vibrant colour to make scanning easier.
   // These remain INFO tiles (not nav duplicates) — they show live counts but
@@ -88,6 +158,32 @@ export default function AdminConsole() {
         </div>
       )}
 
+      {upcoming.length > 0 && (
+        <Link
+          to="/admin/calendar"
+          data-testid="upcoming-banner"
+          className="block iu-card p-4 mb-6 border-2 border-sky-200 bg-sky-50/40 hover:bg-sky-50 transition"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-9 h-9 rounded-lg bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <CalendarDays size={16} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-extrabold text-slate-900 text-sm leading-tight">Coming up this week</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                {upcoming.length} event{upcoming.length === 1 ? "" : "s"} active or starting in the next 7 days · tap to open the calendar
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-sky-700 shrink-0" />
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" data-testid="upcoming-strip">
+            {upcoming.map((e) => (
+              <UpcomingChip key={`${e.kind}-${e.id}`} entry={e} />
+            ))}
+          </div>
+        </Link>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8" data-testid="admin-summary-cards">
         {cards.map((c) => (
           <Link
@@ -138,6 +234,55 @@ export default function AdminConsole() {
       </div>
 
       <ActivityFeed />
+    </div>
+  );
+}
+
+
+// Compact horizontal chip for the "Coming up this week" strip. Visual tone
+// keys off `kind`; secondary line shows the date range (or scope for breaks).
+function UpcomingChip({ entry }) {
+  const { kind, name, start, end, raw } = entry;
+  const today = ymd(new Date());
+  const isLive = start <= today && end >= today;
+  const rangeLabel = start === end
+    ? shortDate(start)
+    : `${shortDate(start)} → ${shortDate(end)}`;
+
+  let Icon, toneClasses, kindLabel, extra;
+  if (kind === "camp") {
+    Icon = Tent;
+    toneClasses = "bg-emerald-50 border-emerald-200 text-emerald-900";
+    kindLabel = "Camp";
+    extra = raw.start_time ? `${raw.start_time}–${raw.end_time}` : null;
+  } else if (kind === "break") {
+    Icon = Coffee;
+    toneClasses = "bg-amber-50 border-amber-200 text-amber-900";
+    kindLabel = "Break";
+    extra = BREAK_SCOPE_LABEL[raw.scope] || null;
+  } else {
+    Icon = Sailboat;
+    const tone = REGATTA_LEVEL_TONE[raw.level]?.chip || REGATTA_LEVEL_TONE.club.chip;
+    toneClasses = `bg-white border ${tone}`;
+    kindLabel = (raw.level || "Regatta").replace(/^\w/, (c) => c.toUpperCase());
+    extra = raw.location || null;
+  }
+
+  return (
+    <div
+      className={`shrink-0 min-w-[180px] max-w-[220px] rounded-lg border px-3 py-2 ${toneClasses}`}
+      data-testid={`upcoming-${kind}-${entry.id}`}
+    >
+      <div className="flex items-center gap-1.5">
+        <Icon size={12} />
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">{kindLabel}</span>
+        {isLive && (
+          <span className="ml-auto text-[9px] font-extrabold px-1.5 rounded bg-red-600 text-white">LIVE</span>
+        )}
+      </div>
+      <div className="text-sm font-bold truncate mt-1" title={name}>{name}</div>
+      <div className="text-[10px] opacity-75 truncate">{rangeLabel}</div>
+      {extra && <div className="text-[10px] opacity-60 truncate">{extra}</div>}
     </div>
   );
 }
