@@ -3363,11 +3363,14 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
     ed = date.fromisoformat(end)
     span_days = max(1, (ed - sd).days + 1)
 
-    # Batch: all attendance in range with hours, grouped by user_id
+    # Batch: all attendance in range, grouped by user_id. Open sessions
+    # (no check-out yet) are INCLUDED — a same-day check-in counts as a
+    # "Present" day even if the member hasn't checked out yet. Hours are
+    # only added when the session has actually closed (`hours` field set).
     atts = await db.attendance.find(
-        {"date": {"$gte": start, "$lte": end}, "hours": {"$ne": None}},
+        {"date": {"$gte": start, "$lte": end}},
         {"_id": 0, "user_id": 1, "date": 1, "hours": 1, "late": 1, "excursions": 1,
-         "overtime_total_min": 1, "overtime_status": 1},
+         "overtime_total_min": 1, "overtime_status": 1, "check_out_at": 1},
     ).to_list(100000)
     by_user: dict = {}
     for a in atts:
