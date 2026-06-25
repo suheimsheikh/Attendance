@@ -11,7 +11,6 @@ import Profile from "./pages/Profile";
 import DisabledFeature from "./pages/DisabledFeature";
 import MyLeaves from "./pages/MyLeaves";
 import Muster from "./pages/Muster";
-import AdminConsole from "./pages/admin/Console";
 import Members from "./pages/admin/Members";
 import AdminLeaves from "./pages/admin/Leaves";
 import Devices from "./pages/admin/Devices";
@@ -78,7 +77,7 @@ function App() {
             <Route path="my-leaves" element={<MyLeaves />} />
             <Route path="whats-new" element={<WhatsNew />} />
             <Route path="profile" element={<Profile />} />
-            <Route path="admin" element={<RequireAdmin><AdminConsole /></RequireAdmin>} />
+            <Route path="admin" element={<Navigate to="/presence" replace />} />
             <Route path="admin/members" element={<RequireAdmin><Members /></RequireAdmin>} />
             <Route path="admin/approvals" element={<RequireAdmin><Approvals /></RequireAdmin>} />
             {/* Legacy direct links — keep deep-links working but funnel into Approvals. */}

@@ -48,6 +48,11 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ### ✨ UI polish
 
+- **Admin Console retired** — Presence Board is now the admin landing page.
+  The OT/comp-off pending banners now sit at the top of Presence (admin-only,
+  auto-hide when empty); the "Coming up this week" strip is also on Presence
+  (collapsible, default closed, visible to coaches too). The redundant
+  summary cards are gone. `/admin` redirects to `/presence`.
 - **Admin Console slimmed down** — removed the redundant "Today's Activity"
   feed (same info is now in the Presence Board's expandable timelines and
   the Approvals / Access Requests sidebar counters). Console now shows just

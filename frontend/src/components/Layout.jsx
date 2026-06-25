@@ -4,7 +4,7 @@ import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, QrCode, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, ClipboardList, Building2, IdCard, FileSpreadsheet,
-  ShieldCheck, LogOut, Menu, X, ListTree, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles
+  LogOut, Menu, X, ListTree, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -27,8 +27,10 @@ const NAV_COACH = [
 
 // Members lives at the top of the ADMIN section (admin-only access). Leave
 // Balances moved into the Admin Console grid since it's not opened daily.
+// Sidebar admin entries. Presence Board (in NAV_COACH above) is now the
+// landing page for admins — it carries the OT banners + "Coming up this week"
+// strip that used to live on the Admin Console.
 const NAV_ADMIN = [
-  { to: "/admin", label: "Admin Console", icon: ShieldCheck, end: true },
   { to: "/admin/members", label: "Manage Members", icon: Users },
   { to: "/admin/approvals", label: "Leave/Tour", icon: ClipboardCheck },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },

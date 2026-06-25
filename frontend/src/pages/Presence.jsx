@@ -9,6 +9,8 @@ import MemberForm from "./admin/MemberForm";
 import { useAuth } from "../auth";
 import { categoryLabel, formatDate } from "../utils";
 import { toast } from "sonner";
+import AdminOvertimeBanners from "../components/AdminOvertimeBanners";
+import UpcomingThisWeek from "../components/UpcomingThisWeek";
 
 const COLUMNS = [
   { key: "on_campus",  label: "On Campus",    icon: CheckCircle2, accent: "#10B981", soft: "bg-emerald-50",  badge: "bg-emerald-100 text-emerald-700" },
@@ -206,6 +208,8 @@ export default function Presence() {
 
   return (
     <div className="p-4 md:p-6 max-w-[1500px] mx-auto">
+      {!isHistorical && isAdmin && <AdminOvertimeBanners />}
+      {!isHistorical && <UpcomingThisWeek />}
       <header className="flex flex-wrap items-end justify-between gap-3 mb-5">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight" data-testid="presence-title">Presence Board</h1>
