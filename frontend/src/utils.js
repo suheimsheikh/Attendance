@@ -216,7 +216,7 @@ function pickIndianFemaleVoice() {
 export function speakLateMessage(minutes, memberName) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   // Stop anything already queued (avoids overlap if user taps quickly).
-  try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+  try { window.speechSynthesis.cancel(); } catch (err) { console.debug("TTS cancel failed (no-op):", err); }
 
   const speak = () => {
     const voice = pickIndianFemaleVoice();
@@ -248,7 +248,7 @@ export function speakLateMessage(minutes, memberName) {
     u.rate = 0.95;
     u.pitch = 1.05;
     u.volume = 1;
-    try { window.speechSynthesis.speak(u); } catch { /* ignore */ }
+    try { window.speechSynthesis.speak(u); } catch (err) { console.debug("TTS speak failed (no-op):", err); }
   };
 
   // Voices may not be loaded yet on first page open; wait for the event.

@@ -42,7 +42,13 @@ export default function AdminLeaves({ embedded = false }) {
           api.get("/institutions").catch(() => []),
         ]);
         setBreakDeps({ members: members || [], institutions: institutions || [] });
-      } catch {/* non-blocking */}
+      } catch (err) {
+        // Non-blocking — the inner .catch(() => []) clauses already
+        // handle network failures cleanly; this outer block only catches
+        // truly unexpected errors (e.g. setState after unmount). Log so
+        // we can spot regressions but don't surface a toast to the admin.
+        console.debug("Break modal pre-load failed (non-blocking):", err);
+      }
     }
   };
 

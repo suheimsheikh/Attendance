@@ -138,6 +138,31 @@
 
 ## Recently Added (Jun 25, 2026 — pre-launch polish round 3)
 
+- **Code-review action items (selective, freeze-respecting):**
+  - **Empty catch blocks logged** (`utils.js` TTS, `Leaves.jsx` break modal
+    pre-load) — added `console.debug` with context so silent failures
+    are diagnosable from devtools. Other empty catches in `utils.js`
+    already had inline reasoning comments; left alone.
+  - **WhatsNew bullet keys are now content-derived** (`ul-key + first
+    24 chars of bullet text`) instead of array indices, so the React
+    reconciler diffs bullets correctly across re-renders.
+  - **InlineCell refactored** — extracted `<DisplayCell>`, `<EditSelect>`
+    and `<EditInput>` helper sub-components from the original 131-line
+    monolith. Behaviour identical, complexity drops from ~31 to ~6 in
+    the main component, each helper is <40 lines and single-purpose.
+    Smoke-tested end-to-end on `/admin/members`: fleet picker select
+    still saves "Opti A" → API confirms persistence.
+  - **Skipped (legitimate false positives or scope-out):**
+    `is True/False` in tests (idiomatic Python — `True`/`False` are
+    singletons; ruff/pylint actually *prefer* `is`); hardcoded test
+    credentials (these are the documented `admin@attendance.app`
+    /`Admin@12345` fixtures from `test_credentials.md`, not real
+    secrets); localStorage tokens (explicitly deferred by user pending
+    JWT cookie migration post-launch); backend complexity refactors and
+    large-component splits (pre-launch freeze — tech debt, not bugs);
+    hook-deps (previous session already addressed; the review's line
+    numbers reference a pre-refactor state of the files).
+
 - **Members admin table is now inline-editable** — added
   `/app/frontend/src/components/InlineCell.jsx`, a reusable cell-level
   editor (text / number / tel / select). Wired into `Members.jsx` for

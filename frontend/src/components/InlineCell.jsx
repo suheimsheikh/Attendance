@@ -92,70 +92,124 @@ export default function InlineCell({
   // ── Display layer (idle state) ────────────────────────────────────────────
   if (!editing) {
     return (
-      <button
-        type="button"
+      <DisplayCell
+        value={value}
+        testId={testId}
         disabled={disabled}
-        data-testid={testId}
-        onClick={(e) => { e.stopPropagation(); if (!disabled) setEditing(true); }}
-        className={`group inline-flex items-center gap-1 text-left px-1 -mx-1 rounded transition
-          ${disabled ? "cursor-not-allowed opacity-60" : "hover:bg-sky-50/60 cursor-text"} ${className}`}
-        title={disabled ? "Read-only" : "Click to edit"}
-      >
-        <span className="flex-1 min-w-0 truncate">
-          {renderDisplay
-            ? renderDisplay(value)
-            : (value == null || value === "")
-              ? <span className="text-slate-300">{placeholder}</span>
-              : (format ? format(value) : String(value))}
-        </span>
-        {busy
-          ? <Loader2 size={11} className="animate-spin text-slate-400 shrink-0" />
-          : savedFlash
-            ? <Check size={11} className="text-emerald-600 shrink-0" />
-            : null}
-      </button>
+        className={className}
+        placeholder={placeholder}
+        busy={busy}
+        savedFlash={savedFlash}
+        renderDisplay={renderDisplay}
+        format={format}
+        onEdit={() => setEditing(true)}
+      />
     );
   }
 
   // ── Edit layer ────────────────────────────────────────────────────────────
-  const commonInputCls =
-    "w-full min-w-0 px-2 h-7 text-xs rounded border border-sky-400 bg-white focus:ring-2 focus:ring-sky-200 outline-none";
+  const cancel = () => { setDraft(value ?? ""); setEditing(false); };
 
   if (kind === "select") {
     return (
-      <select
-        ref={inputRef}
-        data-testid={testId}
-        value={draft ?? ""}
-        disabled={busy}
-        onChange={(e) => commit(e.target.value)}
+      <EditSelect
+        inputRef={inputRef}
+        testId={testId}
+        draft={draft}
+        busy={busy}
+        options={options}
+        className={className}
+        onCommit={commit}
+        onCancel={cancel}
         onBlur={() => setEditing(false)}
-        onKeyDown={(e) => { if (e.key === "Escape") { setDraft(value ?? ""); setEditing(false); } }}
-        className={commonInputCls + " " + className}
-      >
-        {(options || []).map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
+      />
     );
   }
+  return (
+    <EditInput
+      inputRef={inputRef}
+      kind={kind}
+      testId={testId}
+      draft={draft}
+      busy={busy}
+      placeholder={placeholder}
+      className={className}
+      onChange={setDraft}
+      onCommit={() => commit(draft)}
+      onCancel={cancel}
+    />
+  );
+}
 
+// ── Helper sub-components ──────────────────────────────────────────────────
+// Kept inside this module because they're not useful anywhere else and
+// keep the file self-contained. Each is small enough to be obvious.
+
+function DisplayCell({ value, testId, disabled, className, placeholder, busy, savedFlash, renderDisplay, format, onEdit }) {
+  const empty = value == null || value === "";
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      data-testid={testId}
+      onClick={(e) => { e.stopPropagation(); if (!disabled) onEdit(); }}
+      className={`group inline-flex items-center gap-1 text-left px-1 -mx-1 rounded transition
+        ${disabled ? "cursor-not-allowed opacity-60" : "hover:bg-sky-50/60 cursor-text"} ${className}`}
+      title={disabled ? "Read-only" : "Click to edit"}
+    >
+      <span className="flex-1 min-w-0 truncate">
+        {renderDisplay
+          ? renderDisplay(value)
+          : empty
+            ? <span className="text-slate-300">{placeholder}</span>
+            : (format ? format(value) : String(value))}
+      </span>
+      {busy && <Loader2 size={11} className="animate-spin text-slate-400 shrink-0" />}
+      {!busy && savedFlash && <Check size={11} className="text-emerald-600 shrink-0" />}
+    </button>
+  );
+}
+
+const editInputCls =
+  "w-full min-w-0 px-2 h-7 text-xs rounded border border-sky-400 bg-white focus:ring-2 focus:ring-sky-200 outline-none";
+
+function EditSelect({ inputRef, testId, draft, busy, options, className, onCommit, onCancel, onBlur }) {
+  return (
+    <select
+      ref={inputRef}
+      data-testid={testId}
+      value={draft ?? ""}
+      disabled={busy}
+      onChange={(e) => onCommit(e.target.value)}
+      onBlur={onBlur}
+      onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
+      className={editInputCls + " " + className}
+    >
+      {(options || []).map((o) => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
+  );
+}
+
+function EditInput({ inputRef, kind, testId, draft, busy, placeholder, className, onChange, onCommit, onCancel }) {
+  const inputType = kind === "number" ? "number" : kind === "tel" ? "tel" : "text";
   return (
     <input
       ref={inputRef}
-      type={kind === "number" ? "number" : kind === "tel" ? "tel" : "text"}
+      type={inputType}
       data-testid={testId}
       value={draft ?? ""}
       disabled={busy}
       placeholder={placeholder}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => commit(draft)}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={onCommit}
       onKeyDown={(e) => {
         if (e.key === "Enter") e.currentTarget.blur();
-        else if (e.key === "Escape") { setDraft(value ?? ""); setEditing(false); }
+        else if (e.key === "Escape") onCancel();
       }}
       step={kind === "number" ? "0.5" : undefined}
-      className={commonInputCls + " " + className}
+      className={editInputCls + " " + className}
     />
   );
 }

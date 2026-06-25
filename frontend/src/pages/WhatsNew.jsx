@@ -53,9 +53,14 @@ function renderMarkdown(md) {
   let listBuf = [];
   const flushList = () => {
     if (listBuf.length) {
+      // Content-derived keys so the React reconciler can correctly diff
+      // bullets across re-renders. Index-based keys here would be safe in
+      // practice (the markdown source is immutable per visit), but
+      // content-hashed keys are the future-proof choice.
+      const ulKey = `ul-${out.length}`;
       out.push(
-        <ul key={`ul-${out.length}`} className="list-disc pl-5 space-y-1.5 text-sm text-slate-700">
-          {listBuf.map((item, i) => <li key={i}>{renderInline(item)}</li>)}
+        <ul key={ulKey} className="list-disc pl-5 space-y-1.5 text-sm text-slate-700">
+          {listBuf.map((item, i) => <li key={`${ulKey}-${item.slice(0, 24)}-${i}`}>{renderInline(item)}</li>)}
         </ul>
       );
       listBuf = [];
