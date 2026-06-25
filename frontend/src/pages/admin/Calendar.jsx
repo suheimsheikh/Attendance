@@ -419,6 +419,7 @@ function scopeLabel(b) {
     case "coaches": return "All coaches";
     case "staff": return "All staff";
     case "institution": return b.institution || "Institution";
+    case "fleet": return b.fleet ? `Fleet: ${b.fleet}` : "Fleet";
     case "selected": return "Selected";
     default: return "Break";
   }
@@ -680,10 +681,11 @@ const SCOPES = [
   { key: "coaches",     label: "All coaches",              hint: "Every coach on the roster" },
   { key: "staff",       label: "All staff",                hint: "Every staff member" },
   { key: "institution", label: "One institution",          hint: "Every athlete in the chosen institution" },
+  { key: "fleet",       label: "One fleet",                hint: "Every athlete in the chosen boat class" },
   { key: "selected",    label: "Selected members",         hint: "Pick the exact members below" },
 ];
 
-function BreakForm({ initial, members, institutions, onClose, onSaved }) {
+export function BreakForm({ initial, members, institutions, onClose, onSaved }) {
   useEscape(onClose);
   const isEdit = !!initial?.id;
   const today = ymd(new Date());
@@ -693,10 +695,15 @@ function BreakForm({ initial, members, institutions, onClose, onSaved }) {
     start_date:  initial?.start_date || today,
     end_date:    initial?.end_date || today,
     institution: initial?.institution || "",
+    fleet:       initial?.fleet || "",
     member_ids:  initial?.member_ids || [],
     notes:       initial?.notes || "",
   });
   const [memberSearch, setMemberSearch] = useState("");
+  // Optional fleet filter applied to the per-member checkbox list when
+  // scope=selected. Lets admins quickly tick e.g. all Laser athletes without
+  // needing to switch to scope=fleet.
+  const [memberFleetFilter, setMemberFleetFilter] = useState("");
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const toggleMember = (id) => set("member_ids",
@@ -705,19 +712,34 @@ function BreakForm({ initial, members, institutions, onClose, onSaved }) {
       : [...form.member_ids, id]
   );
 
+  // Distinct fleet values from members loaded into the picker — used for the
+  // fleet dropdown (scope=fleet) AND the in-list fleet filter chips (scope=selected).
+  const fleetOptions = useMemo(() => {
+    const set = new Set();
+    for (const m of members || []) { if (m.fleet) set.add(m.fleet); }
+    return Array.from(set).sort();
+  }, [members]);
+
   const filteredMembers = useMemo(() => {
     const q = memberSearch.trim().toLowerCase();
-    return (members || []).filter((m) => !q || (m.full_name || "").toLowerCase().includes(q));
-  }, [members, memberSearch]);
+    return (members || []).filter((m) => {
+      if (memberFleetFilter && (m.fleet || "") !== memberFleetFilter) return false;
+      if (!q) return true;
+      return (m.full_name || "").toLowerCase().includes(q)
+          || (m.fleet || "").toLowerCase().includes(q);
+    });
+  }, [members, memberSearch, memberFleetFilter]);
 
   const submit = async (e) => {
     e?.preventDefault?.();
     if (!form.name.trim()) { toast.error("Name is required"); return; }
     if (form.start_date > form.end_date) { toast.error("Start must be on or before end"); return; }
     if (form.scope === "institution" && !form.institution) { toast.error("Pick an institution"); return; }
+    if (form.scope === "fleet" && !form.fleet) { toast.error("Pick a fleet"); return; }
     if (form.scope === "selected" && form.member_ids.length === 0) { toast.error("Pick at least one member"); return; }
     const payload = { ...form };
     if (payload.scope !== "institution") delete payload.institution;
+    if (payload.scope !== "fleet") delete payload.fleet;
     if (payload.scope !== "selected") payload.member_ids = [];
     if (!payload.notes) delete payload.notes;
     setSaving(true);
@@ -806,6 +828,27 @@ function BreakForm({ initial, members, institutions, onClose, onSaved }) {
           </div>
         )}
 
+        {form.scope === "fleet" && (
+          <div>
+            <label className="iu-label">Fleet</label>
+            {fleetOptions.length === 0 ? (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
+                No athletes have a fleet set yet. Edit some athletes from Manage Members and add a fleet (e.g. Optimist, ILCA 6), then try again.
+              </p>
+            ) : (
+              <select
+                data-testid="bf-fleet"
+                value={form.fleet}
+                onChange={(e) => set("fleet", e.target.value)}
+                className="iu-input"
+              >
+                <option value="">— Pick one —</option>
+                {fleetOptions.map((f) => <option key={f} value={f}>{f}</option>)}
+              </select>
+            )}
+          </div>
+        )}
+
         {form.scope === "selected" && (
           <div>
             <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
@@ -818,6 +861,49 @@ function BreakForm({ initial, members, institutions, onClose, onSaved }) {
                 className="iu-input !h-8 !text-xs !py-1 !w-44"
               />
             </div>
+            {fleetOptions.length > 0 && (
+              <div className="flex items-center gap-1 mb-1.5 flex-wrap">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Filter</span>
+                <button
+                  type="button"
+                  data-testid="bf-fleet-filter-all"
+                  onClick={() => setMemberFleetFilter("")}
+                  className={`px-2 h-6 rounded-full text-[10px] font-bold transition border ${
+                    memberFleetFilter === "" ? "bg-amber-600 text-white border-transparent" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  All fleets
+                </button>
+                {fleetOptions.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    data-testid={`bf-fleet-filter-${f}`}
+                    onClick={() => setMemberFleetFilter(f)}
+                    className={`px-2 h-6 rounded-full text-[10px] font-bold transition border ${
+                      memberFleetFilter === f ? "bg-amber-600 text-white border-transparent" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+                {memberFleetFilter && (
+                  <button
+                    type="button"
+                    data-testid="bf-select-all-filtered"
+                    onClick={() => {
+                      const ids = filteredMembers.map((m) => m.id);
+                      const merged = Array.from(new Set([...form.member_ids, ...ids]));
+                      set("member_ids", merged);
+                    }}
+                    className="ml-1 px-2 h-6 rounded-full text-[10px] font-bold border border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100"
+                    title="Tick everyone in this fleet"
+                  >
+                    + Add all {filteredMembers.length}
+                  </button>
+                )}
+              </div>
+            )}
             <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto divide-y divide-slate-100">
               {filteredMembers.length === 0 ? (
                 <div className="px-3 py-6 text-center text-xs text-slate-400">No members match.</div>

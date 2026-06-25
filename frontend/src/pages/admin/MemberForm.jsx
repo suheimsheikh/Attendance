@@ -21,6 +21,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     work_end: initial?.work_end || "",
     institution: initial?.institution || "",
     gender: initial?.gender || "",
+    fleet: initial?.fleet || "",
     photo: initial?.photo || "",
     weekly_off: initial?.weekly_off || "monday",
     father_mobile: initial?.father_mobile || "",
@@ -169,6 +170,19 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               )}
             </select>
           </div>
+          {form.category === "athlete" && (
+            <div>
+              <label className="iu-label">Fleet <span className="text-slate-400 font-normal text-[10px]">(boat class)</span></label>
+              <input
+                data-testid="mf-fleet"
+                value={form.fleet || ""}
+                onChange={(e) => set("fleet", e.target.value)}
+                className="iu-input"
+                placeholder="e.g. Optimist, ILCA 6, 420, 29er"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">Used for filtering and bulk break application. Free-text — pick whatever naming your academy uses.</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="iu-label">Work start</label>

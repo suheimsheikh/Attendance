@@ -36,7 +36,7 @@ router = APIRouter(prefix="/api", tags=["breaks"])
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-ScopeT = Literal["all", "athletes", "coaches", "staff", "institution", "selected"]
+ScopeT = Literal["all", "athletes", "coaches", "staff", "institution", "fleet", "selected"]
 
 
 # ---------------------------------------------------------------------------
@@ -48,6 +48,7 @@ class BreakIn(BaseModel):
     start_date: str
     end_date: str
     institution: Optional[str] = None  # required when scope == "institution"
+    fleet: Optional[str] = None        # required when scope == "fleet"
     member_ids: List[str] = Field(default_factory=list)  # required when scope == "selected"
     notes: Optional[str] = None
 
@@ -65,6 +66,7 @@ class BreakPatch(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     institution: Optional[str] = None
+    fleet: Optional[str] = None
     member_ids: Optional[List[str]] = None
     notes: Optional[str] = None
 
@@ -98,6 +100,11 @@ def break_applies_to(brk: dict, member: dict) -> bool:
         if not inst:
             return False
         return (member.get("institution") or "") == inst
+    if scope == "fleet":
+        fl = brk.get("fleet")
+        if not fl:
+            return False
+        return (member.get("fleet") or "") == fl
     if scope == "selected":
         return member.get("id") in (brk.get("member_ids") or [])
     return False
@@ -119,7 +126,7 @@ def resolve_member_break(member: dict, breaks_today: List[dict]) -> Optional[dic
     matches = [b for b in breaks_today if break_applies_to(b, member)]
     if not matches:
         return None
-    priority = {"selected": 0, "institution": 1, "athletes": 2, "coaches": 2, "staff": 2, "all": 3}
+    priority = {"selected": 0, "institution": 1, "fleet": 1, "athletes": 2, "coaches": 2, "staff": 2, "all": 3}
     matches.sort(key=lambda b: priority.get(b.get("scope"), 9))
     return matches[0]
 
@@ -140,6 +147,8 @@ def make_router(db, require_admin) -> APIRouter:
             raise HTTPException(status_code=400, detail="start_date must be on or before end_date")
         if body.scope == "institution" and not body.institution:
             raise HTTPException(status_code=400, detail="institution is required when scope is 'institution'")
+        if body.scope == "fleet" and not body.fleet:
+            raise HTTPException(status_code=400, detail="fleet is required when scope is 'fleet'")
         if body.scope == "selected" and not body.member_ids:
             raise HTTPException(status_code=400, detail="At least one member must be selected")
         doc = body.model_dump()
@@ -172,6 +181,8 @@ def make_router(db, require_admin) -> APIRouter:
         scope = payload.get("scope", existing.get("scope"))
         if scope == "institution" and not (payload.get("institution") or existing.get("institution")):
             raise HTTPException(status_code=400, detail="institution is required when scope is 'institution'")
+        if scope == "fleet" and not (payload.get("fleet") or existing.get("fleet")):
+            raise HTTPException(status_code=400, detail="fleet is required when scope is 'fleet'")
         if scope == "selected" and not (payload.get("member_ids") or existing.get("member_ids")):
             raise HTTPException(status_code=400, detail="At least one member must be selected")
         payload["updated_at"] = datetime.now(timezone.utc).isoformat()

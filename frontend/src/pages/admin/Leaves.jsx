@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Check, X, Bed, Plane, AlertTriangle, Plus } from "lucide-react";
+import { Loader2, Check, X, Bed, Plane, AlertTriangle, Plus, Coffee } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { shortDate } from "../../utils";
 import { ApplyForm } from "../MyLeaves";
+import { BreakForm } from "./Calendar";
 
 const FILTERS = [
   { key: "pending", label: "Pending" },
@@ -18,6 +19,8 @@ export default function AdminLeaves({ embedded = false }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showOnBehalf, setShowOnBehalf] = useState(false);
+  const [showBreak, setShowBreak] = useState(false);
+  const [breakDeps, setBreakDeps] = useState({ members: [], institutions: [] });
 
   const load = async () => {
     setLoading(true);
@@ -27,6 +30,21 @@ export default function AdminLeaves({ embedded = false }) {
     } finally { setLoading(false); }
   };
   useEffect(() => { load();   }, [filter]);
+
+  // Lazy-load members + institutions only when admin opens the Apply Break
+  // modal — keeps the leaves list snappy on every page entry.
+  const openBreakModal = async () => {
+    setShowBreak(true);
+    if (breakDeps.members.length === 0) {
+      try {
+        const [members, institutions] = await Promise.all([
+          api.get("/members").catch(() => []),
+          api.get("/institutions").catch(() => []),
+        ]);
+        setBreakDeps({ members: members || [], institutions: institutions || [] });
+      } catch {/* non-blocking */}
+    }
+  };
 
   const decide = async (id, status) => {
     try {
@@ -47,9 +65,14 @@ export default function AdminLeaves({ embedded = false }) {
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Leave Approvals</h1>
             <p className="text-slate-500 text-sm mt-1">Review and decide on leave & tour requests.</p>
           </div>
-          <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} className="iu-btn-primary">
-            <Plus size={16}/> Apply on behalf
-          </button>
+          <div className="flex gap-2 flex-wrap">
+            <button data-testid="apply-break" onClick={openBreakModal} className="iu-btn-secondary !bg-amber-50 !text-amber-800 hover:!bg-amber-100 !border-amber-200">
+              <Coffee size={16}/> Apply break
+            </button>
+            <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} className="iu-btn-primary">
+              <Plus size={16}/> Apply on behalf
+            </button>
+          </div>
         </header>
       )}
 
@@ -65,9 +88,14 @@ export default function AdminLeaves({ embedded = false }) {
           ))}
         </div>
         {embedded && (
-          <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} className="iu-btn-primary !h-9 !px-3 shrink-0">
-            <Plus size={14}/> Apply on behalf
-          </button>
+          <div className="flex gap-2 shrink-0">
+            <button data-testid="apply-break" onClick={openBreakModal} className="iu-btn-secondary !h-9 !px-3 !bg-amber-50 !text-amber-800 hover:!bg-amber-100 !border-amber-200">
+              <Coffee size={14}/> Apply break
+            </button>
+            <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} className="iu-btn-primary !h-9 !px-3">
+              <Plus size={14}/> Apply on behalf
+            </button>
+          </div>
         )}
       </div>
 
@@ -117,6 +145,14 @@ export default function AdminLeaves({ embedded = false }) {
           asAdmin
           onClose={() => setShowOnBehalf(false)}
           onCreated={() => { setShowOnBehalf(false); load(); }}
+        />
+      )}
+      {showBreak && (
+        <BreakForm
+          members={breakDeps.members}
+          institutions={breakDeps.institutions}
+          onClose={() => setShowBreak(false)}
+          onSaved={() => { setShowBreak(false); toast.success("Break applied"); }}
         />
       )}
     </div>

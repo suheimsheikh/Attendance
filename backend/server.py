@@ -312,6 +312,7 @@ class UserPublic(BaseModel):
     photo_captured_at: Optional[str] = None
     institution: Optional[str] = None
     gender: Optional[str] = None
+    fleet: Optional[str] = None
     father_mobile: Optional[str] = None
     father_name: Optional[str] = None
     mother_mobile: Optional[str] = None
@@ -332,6 +333,10 @@ class MemberCreate(BaseModel):
     role: Literal["admin", "member"] = "member"
     institution: Optional[str] = None
     gender: Optional[Literal["M", "F", "O"]] = None
+    # Fleet = which boat class this athlete trains in (e.g. Optimist,
+    # Laser 4.7, ILCA 6, 420). Free-text so academies can name fleets
+    # however they like; used for filtering & bulk actions.
+    fleet: Optional[str] = None
     weekly_off: Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"] = "monday"
     father_mobile: Optional[str] = None
     father_name: Optional[str] = None
@@ -353,6 +358,7 @@ class MemberUpdate(BaseModel):
     role: Optional[Literal["admin", "member"]] = None
     institution: Optional[str] = None
     gender: Optional[Literal["M", "F", "O"]] = None
+    fleet: Optional[str] = None
     weekly_off: Optional[Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]] = None
     leave_balance_opening: Optional[float] = None
     father_mobile: Optional[str] = None
@@ -2801,6 +2807,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             "category": u["category"],
             "rank": u.get("rank"),
             "institution": u.get("institution"),
+            "fleet": u.get("fleet"),
             "status": status_v,
             "detail": detail,
             "since": since,
@@ -3831,6 +3838,10 @@ async def payroll_report(month: Optional[str] = None, admin: dict = Depends(requ
         end_d = date(y, m + 1, 1) - timedelta(days=1)
     start_iso, end_iso = start_d.isoformat(), end_d.isoformat()
     rows = await compute_hours_report(start_iso, end_iso)
+    # Payroll applies only to STAFF and COACHES — athletes / executives don't
+    # draw a monthly salary, so they're excluded from the payroll listing.
+    PAYROLL_CATS = {"staff", "coach"}
+    rows = [r for r in rows if r.get("category") in PAYROLL_CATS]
     # Attach leave balance (annual taken vs opening, computed from full year-to-date)
     users = await db.users.find({}, {"_id": 0, "id": 1, "leave_balance_opening": 1}).to_list(2000)
     opening_map = {u["id"]: float(u.get("leave_balance_opening") or 0) for u in users}

@@ -9,7 +9,6 @@ import MemberForm from "./admin/MemberForm";
 import { useAuth } from "../auth";
 import { categoryLabel, formatDate } from "../utils";
 import { toast } from "sonner";
-import AdminOvertimeBanners from "../components/AdminOvertimeBanners";
 import UpcomingThisWeek from "../components/UpcomingThisWeek";
 
 const COLUMNS = [
@@ -35,6 +34,7 @@ export default function Presence() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [lateOnly, setLateOnly] = useState(false);
+  const [fleetFilter, setFleetFilter] = useState("");  // "" = all fleets
   const [query, setQuery] = useState("");
   const [guests, setGuests] = useState({ active: [], completed: [], active_count: 0 });
   const [showGuestModal, setShowGuestModal] = useState(false);
@@ -162,11 +162,13 @@ export default function Presence() {
     const q = query.trim().toLowerCase();
     const members = (data?.members || []).filter((m) => {
       if (lateOnly && !m.late) return false;
+      if (fleetFilter && (m.fleet || "") !== fleetFilter) return false;
       if (!q) return true;
       return (m.full_name || "").toLowerCase().includes(q)
         || (m.rank || "").toLowerCase().includes(q)
         || (m.category || "").toLowerCase().includes(q)
-        || (m.institution || "").toLowerCase().includes(q);
+        || (m.institution || "").toLowerCase().includes(q)
+        || (m.fleet || "").toLowerCase().includes(q);
     });
     for (const m of members) {
       if (buckets[m.status]) buckets[m.status].push(m);
@@ -180,7 +182,17 @@ export default function Presence() {
       });
     }
     return buckets;
-  }, [data, lateOnly, query]);
+  }, [data, lateOnly, fleetFilter, query]);
+
+  // Distinct fleet labels present across loaded members — used to render the
+  // filter pill row. Athletes without a fleet set are not surfaced here.
+  const fleetOptions = useMemo(() => {
+    const set = new Set();
+    for (const m of data?.members || []) {
+      if (m.fleet) set.add(m.fleet);
+    }
+    return Array.from(set).sort();
+  }, [data]);
 
   // Build the paired (vertically-aligned) display lists for the
   // Stepped Out + Checked Out pair. Each entry is `{member, visible}` — when
@@ -208,7 +220,6 @@ export default function Presence() {
 
   return (
     <div className="p-4 md:p-6 max-w-[1500px] mx-auto">
-      {!isHistorical && isAdmin && <AdminOvertimeBanners />}
       {!isHistorical && <UpcomingThisWeek />}
       <header className="flex flex-wrap items-end justify-between gap-3 mb-5">
         <div>
@@ -316,6 +327,35 @@ export default function Presence() {
           </button>
         </div>
       </header>
+
+      {fleetOptions.length > 0 && (
+        <div className="flex items-center gap-1.5 mb-3 flex-wrap" data-testid="fleet-filter-row">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Fleet</span>
+          <button
+            type="button"
+            data-testid="fleet-filter-all"
+            onClick={() => setFleetFilter("")}
+            className={`px-2.5 h-7 rounded-full text-[11px] font-bold transition border ${
+              fleetFilter === "" ? "bg-sky-600 text-white border-transparent" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            All
+          </button>
+          {fleetOptions.map((f) => (
+            <button
+              key={f}
+              type="button"
+              data-testid={`fleet-filter-${f}`}
+              onClick={() => setFleetFilter(f)}
+              className={`px-2.5 h-7 rounded-full text-[11px] font-bold transition border ${
+                fleetFilter === f ? "bg-sky-600 text-white border-transparent" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="iu-card mb-4 px-3 py-2 flex items-center gap-3" data-testid="presence-search-wrap">
         <Search size={16} className="text-sky-500 shrink-0" />

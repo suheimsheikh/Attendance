@@ -35,7 +35,7 @@ const BREAK_SCOPE_LABEL = {
  * keep the Presence Board lean; opens when the admin or coach wants context.
  */
 export default function UpcomingThisWeek() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [camps, setCamps] = useState([]);
   const [breaks, setBreaks] = useState([]);
   const [regattas, setRegattas] = useState([]);

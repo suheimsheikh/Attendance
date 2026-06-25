@@ -10,6 +10,14 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ### 🆕 New features
 
+- **Fleet field for athletes** — Manage Members → athlete edit form now has a
+  free-text Fleet field (e.g. Optimist, ILCA 6, 420). Used as filter pills on
+  the Presence Board, surfaced inside the **Apply Break** form (new scope
+  "One fleet" + filter chips when picking selected members), and visible
+  throughout the app.
+- **Apply Break in Leave/Tour admin** — the Leave/Tour page now has an
+  "Apply break" button next to "Apply on behalf". Same modal as the Calendar,
+  so admins don't need to leave the approvals flow to apply a rest day.
 - **Daily Sessions merged into Presence Board** — Presence now has a date
   picker (with **‹ ›** prev/next-day arrows) so you can browse any past day,
   and every row has a chevron to expand an inline timeline (check-in →
@@ -80,6 +88,9 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ### 🛠 Reports / data accuracy
 
+- **Monthly Payroll restricted to staff & coaches** — athletes & executives
+  don't draw a salary and are filtered out of `/api/reports/payroll`. Drops
+  the listing from 132 rows to 41.
 - **Leave Balances** is now **staff-only**. Athletes, coaches and executives
   don't consume a numeric leave quota, so they're hidden from the list (and
   the `/api/leave-balances` endpoint). Subtitle on the page clarifies the
