@@ -1,6 +1,18 @@
 import os
+import sys
 import pytest
 import requests
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Make `services/`, `parents_import_utils`, and the other top-level backend
+# modules importable when pytest runs from `/app/backend`.
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BACKEND_ROOT))
+
+# Load backend/.env so unit tests can import services that read env vars at
+# module-import time (JWT_SECRET_KEY etc.).
+load_dotenv(BACKEND_ROOT / ".env")
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 if not BASE_URL:

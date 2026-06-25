@@ -1,0 +1,155 @@
+"""
+Leave & tour endpoints — split out of `server.py`. Covers individual leave
+filing (POST /api/leaves), the member's own list (GET /api/leaves/mine),
+the admin all-leaves view (GET /api/leaves), the group-leave admin tool
+(POST /api/leaves/group), and the approve / reject mutator
+(PATCH /api/leaves/{id}).
+
+The `make_router(...)` factory receives its callable dependencies so this
+module has no import-cycle with `server.py`.
+"""
+from __future__ import annotations
+
+import uuid
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from services.time_utils import now_utc, local_date_str
+
+
+# -------------------- Pydantic bodies --------------------
+class LeaveCreate(BaseModel):
+    type: str  # leave | tour | comp_off | late_coming
+    start_date: str
+    end_date: str
+    reason: Optional[str] = None
+    location: Optional[str] = None
+    expected_arrival: Optional[str] = None  # HH:MM for late_coming
+
+
+class GroupLeaveIn(BaseModel):
+    type: str
+    user_ids: List[str]
+    start_date: str
+    end_date: str
+    reason: Optional[str] = None
+    location: Optional[str] = None
+    auto_approve: bool = False
+
+
+class LeaveDecision(BaseModel):
+    status: str  # approved | rejected | pending
+
+
+def make_router(db, require_admin, get_current_user) -> APIRouter:
+    router = APIRouter(prefix="/api")
+
+    async def enrich_leaves(leaves: List[dict]) -> List[dict]:
+        """Attach member name/category/rank for each leave row. Used by the
+        admin views and the exported reports — extracted here so callers
+        outside this module can re-use it via the returned helper below."""
+        user_ids = list({leave["user_id"] for leave in leaves})
+        users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0}).to_list(2000)
+        umap = {u["id"]: u for u in users}
+        for leave in leaves:
+            u = umap.get(leave["user_id"], {})
+            leave["member_name"] = u.get("full_name", "Unknown")
+            leave["member_category"] = u.get("category")
+            leave["member_rank"] = u.get("rank")
+        return leaves
+
+    # Expose for the reports router (no longer lives in server.py).
+    router.enrich_leaves = enrich_leaves  # type: ignore[attr-defined]
+
+    @router.post("/leaves")
+    async def create_leave(body: LeaveCreate, target_user_id: Optional[str] = None,
+                          user: dict = Depends(get_current_user)):
+        """Create a leave/tour/comp-off request. Admins may pass `target_user_id`
+        to file on behalf of another member."""
+        target_user = user
+        if target_user_id and target_user_id != user["id"]:
+            if user.get("role") != "admin":
+                raise HTTPException(status_code=403, detail="Only admins may file on behalf of others")
+            target_user = await db.users.find_one({"id": target_user_id}, {"_id": 0})
+            if not target_user:
+                raise HTTPException(status_code=404, detail="Target member not found")
+        office = await db.config.find_one({"id": "office"})
+        today = local_date_str(office)
+        late_application = bool(body.start_date and body.start_date < today)
+        doc = {
+            "id": str(uuid.uuid4()),
+            "user_id": target_user["id"],
+            "type": body.type,
+            "start_date": body.start_date,
+            "end_date": body.end_date,
+            "reason": body.reason,
+            "location": body.location,
+            "expected_arrival": body.expected_arrival,
+            "status": "pending",
+            "late_application": late_application,
+            "filed_by_admin": user["id"] if target_user["id"] != user["id"] else None,
+            "filed_by_admin_name": user["full_name"] if target_user["id"] != user["id"] else None,
+            "created_at": now_utc().isoformat(),
+        }
+        await db.leaves.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
+
+    @router.get("/leaves/mine")
+    async def my_leaves(user: dict = Depends(get_current_user)):
+        leaves = await db.leaves.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+        return leaves
+
+    @router.get("/leaves")
+    async def all_leaves(status_filter: Optional[str] = None, admin: dict = Depends(require_admin)):
+        q = {}
+        if status_filter == "late":
+            q["late_application"] = True
+        elif status_filter:
+            q["status"] = status_filter
+        leaves = await db.leaves.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
+        return await enrich_leaves(leaves)
+
+    @router.patch("/leaves/{leave_id}")
+    async def decide_leave(leave_id: str, body: LeaveDecision, admin: dict = Depends(require_admin)):
+        await db.leaves.update_one({"id": leave_id}, {"$set": {"status": body.status}})
+        leave = await db.leaves.find_one({"id": leave_id}, {"_id": 0})
+        if not leave:
+            raise HTTPException(status_code=404, detail="Leave not found")
+        return leave
+
+    @router.post("/leaves/group")
+    async def group_leave(body: GroupLeaveIn, admin: dict = Depends(require_admin)):
+        if not body.user_ids:
+            raise HTTPException(status_code=400, detail="Pick at least one member")
+        office = await db.config.find_one({"id": "office"})
+        today = local_date_str(office)
+        late_application = bool(body.start_date and body.start_date < today)
+        docs = []
+        for uid in body.user_ids:
+            d = {
+                "id": str(uuid.uuid4()),
+                "user_id": uid,
+                "type": body.type,
+                "start_date": body.start_date,
+                "end_date": body.end_date,
+                "reason": body.reason,
+                "location": body.location,
+                "status": "approved" if body.auto_approve else "pending",
+                "late_application": late_application,
+                "filed_by_admin": admin["id"],
+                "filed_by_admin_name": admin["full_name"],
+                "group_leave": True,
+                "created_at": now_utc().isoformat(),
+            }
+            if body.auto_approve:
+                d["decided_by"] = admin["full_name"]
+                d["decided_at"] = now_utc().isoformat()
+            docs.append(d)
+        if docs:
+            await db.leaves.insert_many(docs)
+        return {"ok": True, "created": len(docs), "status": "approved" if body.auto_approve else "pending"}
+
+    return router

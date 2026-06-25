@@ -136,6 +136,46 @@
 
   Still deferred (separate planning sessions): rotate production secrets, JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, expanded pytest coverage for camps/regattas/guests/thumbnails.
 
+## Recently Added (Feb 2026 — refactor pass #1)
+
+Pre-launch (July 1) refactor to split the two largest monoliths and grow
+test coverage. Zero behavioural change.
+
+- **Presence.jsx** 924 → 444 lines. Extracted into 7 files under
+  `/app/frontend/src/components/presence/`: `constants.js`, `GeoLine.jsx`,
+  `SessionTimeline.jsx`, `MemberCard.jsx`, `Column.jsx`, `GuestStrip.jsx`,
+  `SkeletonBoard.jsx`. Verified rendering 132 members across 6 columns,
+  all chips/badges/expand-buttons intact.
+- **Backend `services/`** (new package). 7 modules with pure helpers:
+  - `time_utils.py` — tz-aware now / iso / office_tz / local_*
+  - `geo.py` — `haversine_m`
+  - `phone.py` — `normalize_phone`, `phone_key`
+  - `photo.py` — `check_photo_size`, `make_thumbnail` (+ PIL bomb guard)
+  - `auth_utils.py` — `hash_password`, `verify_password`, `create_token`
+  - `attendance_calc.py` — `compute_late`, `compute_overtime_in/out`,
+    `excursion_seconds`, `open_excursion`, `parse_expected_return`
+  All re-exported from `server.py` so callers don't break.
+- **`parents_import_utils.py`** (already moved last session) gained 17 unit tests.
+- **`server.py` 4093 → 3611 lines** after extracting:
+  - `routes/leaves.py` — `POST/GET/PATCH /api/leaves`, `/leaves/mine`, `/leaves/group`. Exposes `enrich_leaves` for the reports router.
+  - `routes/reports.py` — `/reports/hours`, `/reports/payroll`, `/reports/daily`, plus the CSV/PDF exports. `_pdf_from_table` + `_csv_response` helpers moved here too. `reportlab` and `csv` imports dropped from `server.py`.
+- **`/api/presence`** got `# GATHER` / `# RESOLVE` / `# RENDER` banner comments so the 440-line function is navigable without full extraction. Behaviour identical.
+- **Test coverage**:
+  - 81 unit tests covering `services/*` + `parents_import_utils` — **97%** line coverage.
+  - 9 smoke tests in `tests/test_smoke_flows.py` exercise admin login → presence → muster → leave approval → reports CSV.
+  - **90/90 tests pass in 3.5 s**.
+  - Added `pytest.ini` + `.coveragerc` for repeatable `pytest --cov` runs.
+- **Verified**: backend healthy, frontend renders Presence/Muster/Members, all extracted routes return correct shapes.
+
+### Refactor backlog (deferred, lower-risk batches)
+- Split the other 60 routes in `server.py` (auth, members, devices, attendance,
+  presence, overtime, admin/* — into `routes/auth.py`, `routes/members.py`,
+  `routes/devices.py`, `routes/attendance.py`, `routes/presence.py`,
+  `routes/admin_backup.py`, etc.). Same factory pattern, ~3-4 hours.
+- Full extraction of `/api/presence` into `_gather_presence_data() → _resolve_member() → _render_response()` (currently just has phase-banner comments).
+- Migrate `compute_hours_report` and `_send_checkout_reminders` to a
+  `services/reports_compute.py` + `services/notifications.py`.
+
 ## Recently Added (Feb 2026 — code review pass #2)
 - **P0 correctness fixes**
   - Deleted stale QR routes left over from the QR retirement: `POST /api/attendance/checkin`, `POST /api/attendance/checkout`, `POST /api/office/regenerate-qr`. Stripped `qr_token` from `/api/office` and `office_qr`/`office_name` from `/api/admin/cards`.

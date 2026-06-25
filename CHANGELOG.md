@@ -8,6 +8,30 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ## 🚧 Unreleased — pending deploy to `i-showed-up.ychyderabad.com`
 
+### 🧱 Refactor (zero user-visible change, big maintainability win)
+
+Pre-launch tidy-up — splits the monolith files so each one can be opened,
+read, and fixed without scrolling for a minute. The app behaves identically;
+this just makes future bug fixes faster and safer.
+
+- **Presence Board page** split into 7 focused files (was a single 924-line
+  React file). The page logic stays in `Presence.jsx` (now 444 lines); the
+  member card, column, session timeline, guest strip, geo line and
+  skeleton-loader each live in their own file under `components/presence/`.
+- **Backend helpers** moved into a new `services/` package — time/timezone,
+  geo math, phone normalisation, photo thumbnailing, password + JWT,
+  late/overtime/excursion computation. 81 unit tests cover these helpers
+  with **97% line coverage**.
+- **Leave + Reports routes** moved out of `server.py` into `routes/leaves.py`
+  and `routes/reports.py` (same factory pattern as the existing camps,
+  breaks, sms modules). `server.py` shrank from 4093 → 3611 lines.
+- **9 critical-flow smoke tests** added (`tests/test_smoke_flows.py`) that
+  exercise admin login → presence → muster check-in / check-out → leave
+  filing + approval → reports CSV download. Runs in 1.8 s; the test
+  whichever runs after every deploy.
+- **Presence Board endpoint** got navigation banners (`# GATHER` → `# RESOLVE`
+  → `# RENDER`) so the 440-line function is easier to read end-to-end.
+
 ### 🛠 Performance & hardening (code-review pass)
 
 - **Faster Presence Board** — the bigger your absent list, the bigger the win:

@@ -7,7 +7,6 @@ from pymongo.errors import DuplicateKeyError
 from fastapi.security import OAuth2PasswordBearer
 import os
 import io
-import csv
 import math
 import uuid
 import logging
@@ -18,10 +17,6 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 import base64
 from PIL import Image
-# Decompression-bomb guard: refuse to decode any image with more than ~8M
-# pixels (8000×1000 — way larger than any selfie we store). Without this
-# a malicious 50 KB PNG could expand to multiple GB in RAM.
-Image.MAX_IMAGE_PIXELS = 8_000_000
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal, Tuple, Dict
@@ -37,12 +32,6 @@ import breaks as _breaks_module
 # Re-export shared SMS template constants from the SMS module so any legacy
 # `from server import DEFAULT_PARENT_TEMPLATES` callers keep working.
 from sms import DEFAULT_PARENT_TEMPLATES  # noqa: F401
-
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -85,67 +74,34 @@ MAX_DEVICES = 2000
 MAX_LOG_ROWS = 200
 
 
-def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def iso(dt: Optional[datetime]) -> Optional[str]:
-    return dt.isoformat() if dt else None
-
-
 # ----------------------------------------------------------------------------
-# Office timezone + late-arrival helpers
+# Pure helpers (time, geo, photo, phone, auth, attendance math) live in
+# `services/`. Re-exported from `server.py` so existing handlers continue to
+# work unchanged, and so external imports (`from server import compute_late`)
+# remain valid until callers are migrated to the new locations.
 # ----------------------------------------------------------------------------
-DEFAULT_TZ = "Asia/Kolkata"
-
-
-def office_tz(office: Optional[dict]) -> ZoneInfo:
-    name = (office or {}).get("timezone") or DEFAULT_TZ
-    try:
-        return ZoneInfo(name)
-    except Exception:
-        return ZoneInfo(DEFAULT_TZ)
-
-
-def local_now(office: Optional[dict]) -> datetime:
-    """Current time in the office's local timezone."""
-    return now_utc().astimezone(office_tz(office))
-
-
-def local_date_str(office: Optional[dict], dt: Optional[datetime] = None) -> str:
-    """The calendar date (YYYY-MM-DD) in the office timezone for the given instant."""
-    dt = dt or now_utc()
-    return dt.astimezone(office_tz(office)).date().isoformat()
-
-
-def local_hm(office: Optional[dict], iso_str: Optional[str]) -> str:
-    """Format a stored UTC ISO timestamp as HH:MM in office local time."""
-    if not iso_str:
-        return ""
-    return datetime.fromisoformat(iso_str).astimezone(office_tz(office)).strftime("%H:%M")
-
-
-def compute_late(office: dict, target: dict, ts: datetime, camp: Optional[dict] = None) -> tuple[bool, int]:
-    """Returns (is_late, minutes_late) comparing the check-in local time against
-    the effective work_start + grace. If `camp` is provided, its `start_time`
-    and (optional) `late_grace_minutes` override the member's defaults — this
-    is how institutional camps replace a member's normal schedule."""
-    if camp:
-        ws = camp.get("start_time") or "09:00"
-        cg = camp.get("late_grace_minutes")
-        grace = int(cg if cg is not None else (office.get("late_grace_minutes") or 0))
-    else:
-        ws = (target.get("work_start") or office.get("default_work_start") or "09:00")
-        grace = int(office.get("late_grace_minutes") or 0)
-    try:
-        h, m = (int(x) for x in ws.split(":")[:2])
-    except Exception:
-        return False, 0
-    local = ts.astimezone(office_tz(office))
-    threshold = local.replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(minutes=grace)
-    if local > threshold:
-        return True, int((local - threshold).total_seconds() // 60)
-    return False, 0
+from services.time_utils import (  # noqa: E402
+    DEFAULT_TZ, now_utc, iso, office_tz, local_now, local_date_str, local_hm,
+)
+from services.geo import haversine_m  # noqa: E402
+from services.phone import normalize_phone, phone_key  # noqa: E402
+from services.photo import (  # noqa: E402
+    MAX_PHOTO_BYTES, THUMB_MAX_PX, THUMB_QUALITY,
+    check_photo_size as _check_photo_size,
+    make_thumbnail as _make_thumbnail,
+)
+from services.auth_utils import (  # noqa: E402
+    hash_password, verify_password, create_token,
+)
+from services.attendance_calc import (  # noqa: E402
+    OVERTIME_THRESHOLD_MIN, OVERTIME_CATEGORIES,
+    compute_late,
+    hm_to_minutes as _hm_to_minutes,
+    compute_overtime_in, compute_overtime_out,
+    excursion_seconds as _excursion_seconds,
+    open_excursion as _open_excursion,
+    parse_expected_return as _parse_expected_return,
+)
 
 
 async def _active_camp_for(target: dict, ts: datetime, office: dict) -> Optional[dict]:
@@ -157,131 +113,8 @@ async def _active_camp_for(target: dict, ts: datetime, office: dict) -> Optional
     return _camps_module.resolve_member_camp(target, camps_today, weekday, today_str)
 
 
-
-# ----------------------------------------------------------------------------
-# Security helpers
-# ----------------------------------------------------------------------------
-def hash_password(plain: str) -> str:
-    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    try:
-        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
-    except Exception:
-        return False
-
-
-def create_token(user_id: str, role: str, device_id: Optional[str] = None,
-                 expires_minutes: Optional[int] = None) -> str:
-    exp_minutes = expires_minutes if expires_minutes is not None else JWT_EXPIRES_MINUTES
-    payload = {
-        "sub": user_id,
-        "role": role,
-        "exp": now_utc() + timedelta(minutes=exp_minutes),
-    }
-    if device_id:
-        payload["device_id"] = device_id
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
-
-
-# Cap any photo POSTed to the API. Frontend resizes to 320 px (~30 KB), so
-# 250 KB is generous and still rejects obvious abuse / accidental uploads.
-MAX_PHOTO_BYTES = 250_000
-
-def _check_photo_size(photo: Optional[str]):
-    if photo and len(photo) > MAX_PHOTO_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"Photo too large ({len(photo)} bytes; max {MAX_PHOTO_BYTES})",
-        )
-
-
-# Thumbnail size for list views (presence board, muster, sessions, timeline).
-# 96 px keeps avatars crisp on retina while landing ~2-4 KB per photo —
-# bringing /api/presence from ~3 MB to <200 KB for a 60-member academy.
-THUMB_MAX_PX = 96
-THUMB_QUALITY = 70
-
-def _make_thumbnail(photo: Optional[str]) -> Optional[str]:
-    """Take a `data:image/...;base64,...` string and return a tiny JPEG data URL.
-    Returns None if `photo` is falsy or cannot be decoded — the caller should
-    keep the original photo as the only source in that case."""
-    if not photo or not isinstance(photo, str):
-        return None
-    try:
-        # Strip the data-URL prefix if present
-        b64 = photo.split(",", 1)[1] if photo.startswith("data:") else photo
-        raw = base64.b64decode(b64)
-        with Image.open(io.BytesIO(raw)) as im:
-            im = im.convert("RGB")
-            im.thumbnail((THUMB_MAX_PX, THUMB_MAX_PX))
-            buf = io.BytesIO()
-            im.save(buf, format="JPEG", quality=THUMB_QUALITY, optimize=True)
-            enc = base64.b64encode(buf.getvalue()).decode("ascii")
-            return f"data:image/jpeg;base64,{enc}"
-    except Image.DecompressionBombError as e:
-        logger.warning("Rejected oversized image (decompression bomb guard): %s", e)
-        return None
-    except Exception as e:
-        logger.warning("Failed to build thumbnail: %s", e)
-        return None
-
-
 # Long-lived tokens for approved devices (passwordless phone login)
 DEVICE_TOKEN_MINUTES = 60 * 24 * 365 * 2  # ~2 years
-
-
-def normalize_phone(raw: str) -> str:
-    """Keep digits only; drop a leading country code's plus. Used to match mobile numbers."""
-    return re.sub(r"[^0-9]", "", raw or "")
-
-
-def phone_key(raw: str) -> str:
-    """Comparable key: last 10 digits, so +91-99911 10001 == 9991110001."""
-    d = normalize_phone(raw)
-    return d[-10:] if len(d) >= 10 else d
-
-
-OVERTIME_THRESHOLD_MIN = 30  # only flag OT when delta >= this many minutes
-OVERTIME_CATEGORIES = {"staff"}  # OT policy: ONLY staff accrue OT. Athletes,
-                                 # coaches and executives never accumulate OT
-                                 # minutes regardless of their check-in time.
-
-
-def _hm_to_minutes(hm: Optional[str]) -> Optional[int]:
-    if not hm or not re.match(r"^\d{1,2}:\d{2}$", hm):
-        return None
-    h, m = (int(x) for x in hm.split(":"))
-    return h * 60 + m
-
-
-def compute_overtime_in(office: Optional[dict], member: dict, ts: datetime) -> Tuple[int, str]:
-    """Returns (early_minutes, work_start_hm). 0 if not applicable."""
-    if member.get("category") not in OVERTIME_CATEGORIES:
-        return 0, ""
-    work_start = member.get("work_start")
-    ws_min = _hm_to_minutes(work_start)
-    if ws_min is None:
-        return 0, ""
-    local = ts.astimezone(office_tz(office))
-    ts_min = local.hour * 60 + local.minute
-    diff = ws_min - ts_min
-    return (diff if diff >= OVERTIME_THRESHOLD_MIN else 0), work_start
-
-
-def compute_overtime_out(office: Optional[dict], member: dict, ts: datetime) -> Tuple[int, str]:
-    """Returns (late_minutes, work_end_hm). 0 if not applicable."""
-    if member.get("category") not in OVERTIME_CATEGORIES:
-        return 0, ""
-    work_end = member.get("work_end")
-    we_min = _hm_to_minutes(work_end)
-    if we_min is None:
-        return 0, ""
-    local = ts.astimezone(office_tz(office))
-    ts_min = local.hour * 60 + local.minute
-    diff = ts_min - we_min
-    return (diff if diff >= OVERTIME_THRESHOLD_MIN else 0), work_end
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
@@ -431,21 +264,6 @@ class FleetIn(BaseModel):
     active: bool = True
 
 
-class GroupLeaveIn(BaseModel):
-    user_ids: List[str]
-    type: Literal["leave", "tour", "comp_off", "late_coming"]
-    start_date: str
-    end_date: str
-    reason: str
-    location: Optional[str] = None
-    auto_approve: bool = True
-
-
-# Default bilingual message bodies live in sms.py (the SMS module owns its
-# template defaults). Now re-exported from the top-of-file import; this
-# comment block is kept as a breadcrumb for code-search.
-
-
 class TwilioConfig(BaseModel):
     """Stored in the office config doc — NOT in .env — so admins can rotate
     credentials from the UI without a deploy. The auth token is masked in
@@ -505,19 +323,6 @@ class ScanCardIn(BaseModel):
     reason: Optional[str] = None
 
 
-class LeaveCreate(BaseModel):
-    type: Literal["leave", "tour", "comp_off", "late_coming"]
-    start_date: str  # YYYY-MM-DD
-    end_date: str
-    reason: str
-    location: Optional[str] = None  # for tour
-    expected_arrival: Optional[str] = None  # HH:MM for late_coming
-
-
-class LeaveDecision(BaseModel):
-    status: Literal["approved", "rejected"]
-
-
 class PhoneLoginIn(BaseModel):
     phone: str
     device_id: str
@@ -553,16 +358,8 @@ class TempReturnIn(BaseModel):
 
 
 
-# ----------------------------------------------------------------------------
-# Geo helpers
-# ----------------------------------------------------------------------------
-def haversine_m(lat1, lon1, lat2, lon2) -> float:
-    R = 6371000.0
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlmb = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
-    return 2 * R * math.asin(min(1.0, math.sqrt(a)))
+# Geo helpers — see services/geo.py (re-exported above).
+# (PIL bomb guard is set in services/photo.py at import time.)
 
 
 # ----------------------------------------------------------------------------
@@ -1506,40 +1303,6 @@ async def assign_fleet(body: FleetAssignIn, admin: dict = Depends(require_admin)
 # ----------------------------------------------------------------------------
 # Group leave — file the same leave for many members in one shot
 # ----------------------------------------------------------------------------
-@api_router.post("/leaves/group")
-async def group_leave(body: GroupLeaveIn, admin: dict = Depends(require_admin)):
-    if not body.user_ids:
-        raise HTTPException(status_code=400, detail="Pick at least one member")
-    office = await db.config.find_one({"id": "office"})
-    today = local_date_str(office)
-    late_application = bool(body.start_date and body.start_date < today)
-    docs = []
-    for uid in body.user_ids:
-        d = {
-            "id": str(uuid.uuid4()),
-            "user_id": uid,
-            "type": body.type,
-            "start_date": body.start_date,
-            "end_date": body.end_date,
-            "reason": body.reason,
-            "location": body.location,
-            "status": "approved" if body.auto_approve else "pending",
-            "late_application": late_application,
-            "filed_by_admin": admin["id"],
-            "filed_by_admin_name": admin["full_name"],
-            "group_leave": True,
-            "created_at": now_utc().isoformat(),
-        }
-        if body.auto_approve:
-            d["decided_by"] = admin["full_name"]
-            d["decided_at"] = now_utc().isoformat()
-        docs.append(d)
-    if docs:
-        await db.leaves.insert_many(docs)
-    return {"ok": True, "created": len(docs), "status": "approved" if body.auto_approve else "pending"}
-
-
-
 @api_router.get("/members/{member_id}/card")
 async def member_card(member_id: str, admin: dict = Depends(require_admin)):
     u = await db.users.find_one({"id": member_id}, {"_id": 0})
@@ -1949,38 +1712,6 @@ async def open_session_for(user_id: str) -> Optional[dict]:
     return await db.attendance.find_one({"user_id": user_id, "check_out_at": None}, {"_id": 0})
 
 
-def _excursion_seconds(excursions: List[dict], up_to: Optional[datetime] = None) -> float:
-    """Total away-seconds across closed excursions. If `up_to` is given, any still-open
-    excursion is treated as closing at that moment (used at final check-out)."""
-    total = 0.0
-    for e in (excursions or []):
-        if not e.get("out_at"):
-            continue
-        try:
-            o = datetime.fromisoformat(e["out_at"])
-        except Exception:
-            continue
-        end = None
-        if e.get("in_at"):
-            try:
-                end = datetime.fromisoformat(e["in_at"])
-            except Exception:
-                end = None
-        elif up_to is not None:
-            end = up_to
-        if end:
-            total += max(0.0, (end - o).total_seconds())
-    return total
-
-
-def _open_excursion(sess: dict) -> Optional[dict]:
-    for e in reversed(sess.get("excursions") or []):
-        if e.get("out_at") and not e.get("in_at"):
-            return e
-    return None
-
-
-
 @api_router.get("/attendance/status")
 async def my_attendance_status(user: dict = Depends(get_current_user)):
     sess = await open_session_for(user["id"])
@@ -2076,32 +1807,6 @@ async def resolve_stale(body: ResolveStaleIn, user: dict = Depends(get_current_u
         "checked_out_by": user["full_name"],
     }})
     return {"ok": True, "action": "closed", "hours": hours, "close_at": close_utc.isoformat()}
-
-
-def _parse_expected_return(raw: Optional[str], office: Optional[dict], now: datetime) -> Optional[str]:
-    """Accept either an HH:MM (today, office-local) or a full ISO datetime. Returns ISO/UTC."""
-    if not raw:
-        return None
-    raw = raw.strip()
-    # HH:MM short form -> today @ HH:MM in office tz
-    if re.match(r"^\d{1,2}:\d{2}$", raw):
-        try:
-            h, m = (int(x) for x in raw.split(":"))
-            local_now_v = now.astimezone(office_tz(office))
-            cand = local_now_v.replace(hour=h, minute=m, second=0, microsecond=0)
-            if cand <= local_now_v:
-                cand = cand + timedelta(days=1)
-            return cand.astimezone(timezone.utc).isoformat()
-        except Exception:
-            return None
-    # Full ISO
-    try:
-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=office_tz(office))
-        return dt.astimezone(timezone.utc).isoformat()
-    except Exception:
-        return None
 
 
 @api_router.post("/attendance/temp-exit")
@@ -2531,7 +2236,19 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
     Pass `?on=YYYY-MM-DD` to view a past day. On past days everything
     "live" (overdue, notify_due, late recompute, late SMS dispatch) is
     suppressed — the view is read-only. Today is the default.
+
+    Implementation phases (search for the banner comments below):
+      1. **GATHER** — bulk-read users, sessions, leaves, late-coming
+         notices, parent-notification log, camps, breaks, admin contacts,
+         and 30-day lookback for absent-streak.
+      2. **RESOLVE** — single pass over users that determines each
+         member's status (on_campus / exited / temp_out / on_tour /
+         on_leave / absent / not_due) plus chips (late, days_remaining,
+         excursion_count, days_absent_streak, notify_due, geo).
+      3. **RENDER** — assemble counts, attach the active camps strip,
+         and return the JSON shape consumed by the Presence Board.
     """
+    # ================== 1. GATHER =====================================
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
     is_historical = bool(on and on != today)
@@ -2676,6 +2393,10 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             d -= timedelta(days=1)
         return n
 
+    # ================== 2. RESOLVE ====================================
+    # Single pass over the roster. Each iteration consumes the bulk-fetched
+    # maps from the GATHER phase, applies the camp/break overlays, and
+    # emits one fully-populated row for the RENDER phase below.
     result = []
     for u in users:
         # Use a small thumbnail in list responses so the Presence Board payload
@@ -2950,6 +2671,9 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             "auto_checkout_reason": (primary_session or {}).get("auto_checkout_reason"),
             "late_minutes": (primary_session or {}).get("late_minutes") or 0,
         })
+    # ================== 3. RENDER =====================================
+    # Sort, count, and ship. Counts feed the column-header pills on the
+    # Presence Board; admin_contacts powers the parent-notify SMS body.
     order = {"on_campus": 0, "temp_out": 1, "on_tour": 2, "on_leave": 3, "absent": 4, "exited": 5, "not_due": 6}
     result.sort(key=lambda r: (order.get(r["status"], 9), r["full_name"]))
     counts = {"on_campus": 0, "temp_out": 0, "exited": 0, "on_tour": 0, "on_leave": 0,
@@ -3015,79 +2739,9 @@ async def parent_notify_dispatch(body: ParentNotifyDispatchIn, user: dict = Depe
 
 
 # ----------------------------------------------------------------------------
-# Leave / Tour
+# Leave / Tour endpoints moved to routes/leaves.py — see app.include_router
+# call near the bottom of this file.
 # ----------------------------------------------------------------------------
-@api_router.post("/leaves")
-async def create_leave(body: LeaveCreate, target_user_id: Optional[str] = None,
-                      user: dict = Depends(get_current_user)):
-    """Create a leave/tour/comp-off request. Admins may pass `target_user_id`
-    to file on behalf of another member."""
-    target_user = user
-    if target_user_id and target_user_id != user["id"]:
-        if user.get("role") != "admin":
-            raise HTTPException(status_code=403, detail="Only admins may file on behalf of others")
-        target_user = await db.users.find_one({"id": target_user_id}, {"_id": 0})
-        if not target_user:
-            raise HTTPException(status_code=404, detail="Target member not found")
-    office = await db.config.find_one({"id": "office"})
-    today = local_date_str(office)
-    late_application = bool(body.start_date and body.start_date < today)
-    doc = {
-        "id": str(uuid.uuid4()),
-        "user_id": target_user["id"],
-        "type": body.type,
-        "start_date": body.start_date,
-        "end_date": body.end_date,
-        "reason": body.reason,
-        "location": body.location,
-        "expected_arrival": body.expected_arrival,
-        "status": "pending",
-        "late_application": late_application,
-        "filed_by_admin": user["id"] if target_user["id"] != user["id"] else None,
-        "filed_by_admin_name": user["full_name"] if target_user["id"] != user["id"] else None,
-        "created_at": now_utc().isoformat(),
-    }
-    await db.leaves.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-
-async def enrich_leaves(leaves: List[dict]) -> List[dict]:
-    user_ids = list({leave["user_id"] for leave in leaves})
-    users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0}).to_list(2000)
-    umap = {u["id"]: u for u in users}
-    for leave in leaves:
-        u = umap.get(leave["user_id"], {})
-        leave["member_name"] = u.get("full_name", "Unknown")
-        leave["member_category"] = u.get("category")
-        leave["member_rank"] = u.get("rank")
-    return leaves
-
-
-@api_router.get("/leaves/mine")
-async def my_leaves(user: dict = Depends(get_current_user)):
-    leaves = await db.leaves.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return leaves
-
-
-@api_router.get("/leaves")
-async def all_leaves(status_filter: Optional[str] = None, admin: dict = Depends(require_admin)):
-    q = {}
-    if status_filter == "late":
-        q["late_application"] = True
-    elif status_filter:
-        q["status"] = status_filter
-    leaves = await db.leaves.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return await enrich_leaves(leaves)
-
-
-@api_router.patch("/leaves/{leave_id}")
-async def decide_leave(leave_id: str, body: LeaveDecision, admin: dict = Depends(require_admin)):
-    await db.leaves.update_one({"id": leave_id}, {"$set": {"status": body.status}})
-    leave = await db.leaves.find_one({"id": leave_id}, {"_id": 0})
-    if not leave:
-        raise HTTPException(status_code=404, detail="Leave not found")
-    return leave
 
 
 # ----------------------------------------------------------------------------
@@ -3892,159 +3546,30 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
     return rows
 
 
-@api_router.get("/reports/hours")
-async def hours_report(start: str, end: str, admin: dict = Depends(require_admin)):
-    rows = await compute_hours_report(start, end)
-    return {"start": start, "end": end, "rows": rows}
-
-
-@api_router.get("/reports/payroll")
-async def payroll_report(month: Optional[str] = None, admin: dict = Depends(require_admin)):
-    """Monthly payroll report. `month` = YYYY-MM (defaults to the previous
-    calendar month so a 1st-of-month run pulls last month's numbers)."""
-    office = await db.config.find_one({"id": "office"})
-    today = date.fromisoformat(local_date_str(office))
-    if not month:
-        first_this = today.replace(day=1)
-        last_prev = first_this - timedelta(days=1)
-        month = f"{last_prev.year:04d}-{last_prev.month:02d}"
-    y, m = (int(x) for x in month.split("-"))
-    start_d = date(y, m, 1)
-    if m == 12:
-        end_d = date(y + 1, 1, 1) - timedelta(days=1)
-    else:
-        end_d = date(y, m + 1, 1) - timedelta(days=1)
-    start_iso, end_iso = start_d.isoformat(), end_d.isoformat()
-    rows = await compute_hours_report(start_iso, end_iso)
-    # Payroll applies only to STAFF and COACHES — athletes / executives don't
-    # draw a monthly salary, so they're excluded from the payroll listing.
-    PAYROLL_CATS = {"staff", "coach"}
-    rows = [r for r in rows if r.get("category") in PAYROLL_CATS]
-    # Attach leave balance (annual taken vs opening, computed from full year-to-date)
-    users = await db.users.find({}, {"_id": 0, "id": 1, "leave_balance_opening": 1}).to_list(2000)
-    opening_map = {u["id"]: float(u.get("leave_balance_opening") or 0) for u in users}
-    leaves = await db.leaves.find({
-        "status": "approved", "type": "leave",
-        "start_date": {"$gte": f"{y}-01-01", "$lte": f"{y}-12-31"},
-    }, {"_id": 0}).to_list(20000)
-    ytd_taken: dict = {}
-    for leave in leaves:
-        try:
-            n = (date.fromisoformat(leave["end_date"]) - date.fromisoformat(leave["start_date"])).days + 1
-        except Exception:
-            n = 1
-        ytd_taken[leave["user_id"]] = ytd_taken.get(leave["user_id"], 0) + n
-    for r in rows:
-        opening = opening_map.get(r["member_id"], 0.0)
-        taken = float(ytd_taken.get(r["member_id"], 0))
-        r["leave_balance_opening"] = opening
-        r["leave_balance_taken_ytd"] = taken
-        r["leave_balance_remaining"] = round(opening - taken, 1)
-    return {"month": month, "start": start_iso, "end": end_iso, "rows": rows}
-
-
-@api_router.get("/reports/daily")
-async def daily_report(on: Optional[str] = None, user: dict = Depends(get_current_user)):
-    """Daily leave & tour report for a given date (default today)."""
-    if not on:
-        office = await db.config.find_one({"id": "office"})
-        on = local_date_str(office)
-    leaves = await db.leaves.find({
-        "status": "approved",
-        "start_date": {"$lte": on},
-        "end_date": {"$gte": on},
-    }, {"_id": 0}).to_list(1000)
-    leaves = await enrich_leaves(leaves)
-    on_leave = [leave for leave in leaves if leave["type"] == "leave"]
-    on_tour = [leave for leave in leaves if leave["type"] == "tour"]
-    return {"date": on, "on_leave": on_leave, "on_tour": on_tour}
-
-
-# ----------- Exports (CSV / PDF) -----------
-def _pdf_from_table(title: str, headers: List[str], data: List[List[str]], subtitle: str = "") -> bytes:
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=20 * mm, bottomMargin=15 * mm)
-    styles = getSampleStyleSheet()
-    elems = [Paragraph(title, styles["Title"])]
-    if subtitle:
-        elems.append(Paragraph(subtitle, styles["Normal"]))
-    elems.append(Spacer(1, 8 * mm))
-    table_data = [headers] + (data if data else [["No records"] + [""] * (len(headers) - 1)])
-    t = Table(table_data, repeatRows=1)
-    t.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F2937")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D1D5DB")),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F3F4F6")]),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]))
-    elems.append(t)
-    doc.build(elems)
-    return buf.getvalue()
-
-
-def _csv_response(headers: List[str], rows: List[List], filename: str) -> Response:
-    out = io.StringIO()
-    w = csv.writer(out)
-    w.writerow(headers)
-    for r in rows:
-        w.writerow(r)
-    return Response(
-        content=out.getvalue(),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
-
-
-@api_router.get("/reports/hours/export")
-async def export_hours(start: str, end: str, fmt: str = "csv", admin: dict = Depends(require_admin)):
-    rows = await compute_hours_report(start, end)
-    headers = ["Attendance %", "Name", "Category", "Rank", "Weekly off",
-               "Present", "Leave", "Tour", "Comp-Off", "Absent", "Total accounted", "Span",
-               "Total hrs", "OT hrs (approved)", "OT hrs (pending)",
-               "Late Days", "Overstays",
-               "Comp-Off Earned", "Comp-Off Used", "Comp-Off Pending"]
-    table = [[f"{r['attendance_pct']}%", r["member_name"], r["category"], r.get("rank") or "-",
-              (r.get("weekly_off") or "monday").title(),
-              r["days_present"],
-              (r.get("days_leave", 0) + r.get("days_break", 0)),
-              r.get("days_tour", 0), r.get("comp_off_used", 0),
-              r.get("days_absent", 0), r.get("days_accounted", 0), r.get("span_days", 0),
-              r["total_hours"], r.get("overtime_hours_approved", 0), r.get("overtime_hours_pending", 0),
-              r.get("late_days", 0), r.get("overstays", 0),
-              r.get("comp_off_earned", 0), r.get("comp_off_used", 0), r.get("comp_off_pending", 0)] for r in rows]
-    if fmt == "pdf":
-        pdf = _pdf_from_table("Monthly Attendance Report", headers, table, f"{start} to {end}")
-        return Response(content=pdf, media_type="application/pdf",
-                        headers={"Content-Disposition": f"attachment; filename=hours_{start}_{end}.pdf"})
-    return _csv_response(headers, table, f"hours_{start}_{end}.csv")
-
-
-@api_router.get("/reports/daily/export")
-async def export_daily(on: Optional[str] = None, fmt: str = "csv", user: dict = Depends(get_current_user)):
-    if not on:
-        office = await db.config.find_one({"id": "office"})
-        on = local_date_str(office)
-    leaves = await db.leaves.find({
-        "status": "approved",
-        "start_date": {"$lte": on},
-        "end_date": {"$gte": on},
-    }, {"_id": 0}).to_list(1000)
-    leaves = await enrich_leaves(leaves)
-    headers = ["Name", "Type", "Location", "From", "Till", "Reason"]
-    table = [[leave["member_name"], leave["type"].title(), leave.get("location") or "-",
-              leave["start_date"], leave["end_date"], leave.get("reason") or "-"] for leave in leaves]
-    if fmt == "pdf":
-        pdf = _pdf_from_table("Daily Leave & Tour Report", headers, table, f"Date: {on}")
-        return Response(content=pdf, media_type="application/pdf",
-                        headers={"Content-Disposition": f"attachment; filename=daily_{on}.pdf"})
-    return _csv_response(headers, table, f"daily_{on}.csv")
+# ----------------------------------------------------------------------------
+# Reports endpoints moved to routes/reports.py — see app.include_router call
+# near the bottom of this file. `compute_hours_report` stays here and is
+# passed into the factory.
+# ----------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------
 app.include_router(api_router)
+
+# Leave / Tour routes — split out 06/2026 during the server.py refactor.
+from routes.leaves import make_router as _leaves_router  # noqa: E402
+_leaves = _leaves_router(db, require_admin, get_current_user)
+app.include_router(_leaves)
+# Routes/reports needs enrich_leaves; the leaves router exposes it as an
+# attribute for re-use without re-implementing.
+enrich_leaves = _leaves.enrich_leaves  # type: ignore[attr-defined]
+
+# Reports — heavy aggregation lives in `compute_hours_report` (still in
+# server.py for now); the router file owns the HTTP shape + exports.
+from routes.reports import make_router as _reports_router  # noqa: E402
+app.include_router(_reports_router(
+    db, require_admin, get_current_user, compute_hours_report, enrich_leaves,
+))
 
 # Daily bilingual content (motivational quote / English-Telugu word-of-the-day)
 # generated once per day with Gemini and cached in MongoDB.

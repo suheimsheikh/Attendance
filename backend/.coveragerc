@@ -1,0 +1,17 @@
+# Coverage config for `pytest --cov=services --cov=parents_import_utils`.
+# Targets the pure-helper modules we have full test coverage for; the
+# monolith server.py + the per-domain routes still rely on the smoke
+# pytest in `tests/test_smoke_flows.py` for end-to-end coverage.
+[run]
+branch = True
+source =
+    services
+    parents_import_utils
+
+[report]
+show_missing = True
+skip_covered = False
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:
