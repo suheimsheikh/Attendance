@@ -245,6 +245,18 @@ class LeaveBalanceBulkIn(BaseModel):
     rows: List[LeaveBalanceBulkRow]
 
 
+# Bulk admin edit on the Members page: cohort-level fields applied to many
+# members in one network round-trip. The allowlist is deliberately narrow —
+# fields like `full_name`, `mobile`, `email`, `photo`, `password`, and
+# `leave_balance_opening` are per-individual and never make sense in bulk.
+BULK_MEMBER_ALLOWED_FIELDS = {"category", "role", "institution", "fleet", "weekly_off", "gender"}
+
+
+class BulkMemberUpdateIn(BaseModel):
+    member_ids: List[str]
+    updates: MemberUpdate
+
+
 class InstitutionIn(BaseModel):
     name: str
     short_name: Optional[str] = None
@@ -1080,6 +1092,33 @@ async def list_members(user: dict = Depends(get_current_user)):
         }
         out.append(UserPublic(**{k: u_swapped.get(k) for k in UserPublic.model_fields}))
     return out
+
+
+@api_router.post("/members/bulk-update")
+async def bulk_update_members(body: BulkMemberUpdateIn, admin: dict = Depends(require_admin)):
+    """Apply a small set of cohort-level fields to many members at once.
+
+    Used by the Members admin table's bulk-edit toolbar so an admin can,
+    e.g., reshuffle 30 athletes into a new fleet at season start with a
+    single click. Per-individual fields (name, mobile, email, photo,
+    password, opening leave balance) are intentionally NOT supported —
+    they don't have a sensible "apply to all" value.
+    """
+    if not body.member_ids:
+        raise HTTPException(status_code=400, detail="No members selected")
+    submitted = body.updates.model_dump(exclude_unset=True)
+    # Narrow allowlist — anything outside this set is rejected so a future
+    # accidental UI bug can't blast e.g. everyone's password to the same
+    # value via this endpoint.
+    update = {k: v for k, v in submitted.items() if k in BULK_MEMBER_ALLOWED_FIELDS}
+    if not update:
+        raise HTTPException(status_code=400, detail="No valid fields to update — pick one of: " + ", ".join(sorted(BULK_MEMBER_ALLOWED_FIELDS)))
+    # Self-protection: prevent the signed-in admin from accidentally
+    # demoting themselves to "member" via a bulk role change.
+    if update.get("role") == "member" and admin["id"] in body.member_ids:
+        raise HTTPException(status_code=400, detail="You cannot remove your own admin access via a bulk update")
+    res = await db.users.update_many({"id": {"$in": body.member_ids}}, {"$set": update})
+    return {"updated": int(res.modified_count), "matched": int(res.matched_count), "fields": list(update.keys())}
 
 
 @api_router.patch("/members/{member_id}", response_model=UserPublic)

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { Loader2, Plus, Search, Edit3, Trash2, LogIn, LogOut as LogOutIcon, Check, FileSpreadsheet, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -7,6 +7,7 @@ import InlinePhotoAvatar from "../../components/InlinePhotoAvatar";
 import ParentContact from "../../components/ParentContact";
 import StatusBadge from "../../components/StatusBadge";
 import InlineCell from "../../components/InlineCell";
+import BulkEditBar from "../../components/BulkEditBar";
 import MemberForm from "./MemberForm";
 import { categoryLabel } from "../../utils";
 
@@ -90,6 +91,18 @@ export default function Members() {
   // free-text + any distinct fleets actually assigned (defensive: handles
   // historic athletes whose fleet label was deleted from the master).
   const [fleets, setFleets] = useState([]);
+  // Bulk-edit selection. `selectedIds` is a Set of member ids (Set is fine
+  // here — React just needs object identity to change to re-render, so we
+  // replace it on mutation). `lastClickedIdx` tracks the most recent
+  // checkbox click so shift+click extends a range. `bulkBusy` disables
+  // the toolbar while a `/members/bulk-update` round-trip is in flight.
+  // `shiftHeldRef` tracks the Shift key state globally — `change` events on
+  // checkboxes don't carry modifier flags reliably (browser quirk), so we
+  // mirror Shift via window-level keydown/keyup listeners instead.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const lastClickedIdx = useRef(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const shiftHeldRef = useRef(false);
   // Today in local YYYY-MM-DD — used by the Last-seen column to compute
   // "Today / Yesterday / N days ago". Memoised so the date string is stable
   // across re-renders within the same calendar day.
@@ -231,6 +244,68 @@ export default function Members() {
   // with the same (id, field, value) signature.
   const patchParent = patchMember;
 
+  // ── Bulk-edit selection ───────────────────────────────────────────────────
+  // Toggle a single member id. Supports shift+click to extend a range
+  // across the currently visible (`filtered`) list — Excel-style.
+  const toggleRow = (memberId, idx, shiftKey) => {
+    // Snapshot `lastClickedIdx.current` BEFORE scheduling the state update.
+    // React batches updater functions in event handlers, so by the time
+    // the updater runs the `lastClickedIdx.current = idx` line below has
+    // already executed and the range condition would never match.
+    const lastIdx = lastClickedIdx.current;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const isAdding = !next.has(memberId);
+      if (shiftKey && lastIdx != null && lastIdx !== idx) {
+        const [a, b] = [lastIdx, idx].sort((x, y) => x - y);
+        for (let i = a; i <= b; i++) {
+          const id = filtered[i]?.id;
+          if (!id) continue;
+          if (isAdding) next.add(id);
+          else next.delete(id);
+        }
+      } else {
+        if (isAdding) next.add(memberId);
+        else next.delete(memberId);
+      }
+      return next;
+    });
+    lastClickedIdx.current = idx;
+  };
+
+  // Master checkbox in the table header — toggles every member in the
+  // current filtered view. Selecting across pages of filters is intentional;
+  // the bulk apply uses the actual selectedIds set, not the visible rows.
+  const toggleAll = () => {
+    setSelectedIds((prev) => {
+      const visibleIds = filtered.map((m) => m.id);
+      const allSelected = visibleIds.length > 0 && visibleIds.every((id) => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) visibleIds.forEach((id) => next.delete(id));
+      else visibleIds.forEach((id) => next.add(id));
+      return next;
+    });
+    lastClickedIdx.current = null;
+  };
+
+  const clearSelection = () => { setSelectedIds(new Set()); lastClickedIdx.current = null; };
+
+  const applyBulk = async (field, value) => {
+    if (selectedIds.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await api.post("/members/bulk-update", { member_ids: ids, updates: { [field]: value } });
+      toast.success(`Updated ${res.updated} member${res.updated === 1 ? "" : "s"}`);
+      clearSelection();
+      load();
+    } catch (err) {
+      showApiError(err, "Bulk update failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const toggleAttendance = async (m) => {
     setBusyId(m.id);
     try {
@@ -242,7 +317,9 @@ export default function Members() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-[1600px] mx-auto">
+    <div className="p-4 md:p-8 max-w-[1600px] mx-auto pb-24">
+      {/* `pb-24` bottom padding leaves room for the sticky BulkEditBar so
+          the last table row isn't hidden behind it when ≥1 row is selected. */}
       <header className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Members</h1>
@@ -331,6 +408,24 @@ export default function Members() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 sticky top-0 z-10">
                 <tr>
+                  <th className="iu-table-th w-10 text-center">
+                    <input
+                      type="checkbox"
+                      data-testid="bulk-select-all"
+                      checked={filtered.length > 0 && filtered.every((m) => selectedIds.has(m.id))}
+                      // `indeterminate` isn't a React prop — set it imperatively via ref callback
+                      // so the master-checkbox shows the dash glyph when only some rows are picked.
+                      ref={(el) => {
+                        if (!el) return;
+                        const some = filtered.some((m) => selectedIds.has(m.id));
+                        const all = filtered.length > 0 && filtered.every((m) => selectedIds.has(m.id));
+                        el.indeterminate = some && !all;
+                      }}
+                      onChange={toggleAll}
+                      title="Select all visible (shift+click any row to extend a range)"
+                      className="w-4 h-4 cursor-pointer accent-sky-600"
+                    />
+                  </th>
                   <th className="iu-table-th w-10 text-center">Edit</th>
                   <th className="iu-table-th">Member</th>
                   <th className="iu-table-th">Role / Category</th>
@@ -349,17 +444,35 @@ export default function Members() {
                 </tr>
               </thead>
               <tbody data-testid="members-table">
-                {filtered.map((m) => {
+                {filtered.map((m, rowIdx) => {
                   const p = presence[m.id];
                   const b = BUCKET_BY_KEY[bucketOf(m)] || BUCKET_BY_KEY.athlete;
+                  const isSelected = selectedIds.has(m.id);
                   return (
                     <tr
                       key={m.id}
-                      className={`transition cursor-pointer ${b.rowHover}`}
+                      className={`transition cursor-pointer ${isSelected ? "bg-sky-50/80" : b.rowHover}`}
                       data-testid={`member-row-${m.id}`}
                       onDoubleClick={(e) => { if (!isInteractive(e.target)) setEditing(m); }}
-                      title="Double-click to edit"
+                      title="Double-click to edit · click checkbox + shift-click for bulk select"
                     >
+                      {/* Selection checkbox. Shift state is captured via a
+                          synchronous `onMouseDown` handler (fires BEFORE
+                          both click and change events, regardless of
+                          synthetic-event ordering quirks). The wrapper td's
+                          onClick deliberately swallows propagation so the
+                          row's double-click-to-edit doesn't trigger. */}
+                      <td className="iu-table-td text-center" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          data-testid={`bulk-select-${m.id}`}
+                          checked={isSelected}
+                          onMouseDown={(e) => { shiftHeldRef.current = !!e.shiftKey; }}
+                          onKeyDown={(e) => { shiftHeldRef.current = !!e.shiftKey; }}
+                          onChange={() => toggleRow(m.id, rowIdx, shiftHeldRef.current)}
+                          className="w-4 h-4 cursor-pointer accent-sky-600"
+                        />
+                      </td>
                       {/* Edit pencil — extreme left, always visible */}
                       <td className="iu-table-td text-center relative pl-2 pr-1">
                         <span className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r ${b.stripe}`} aria-hidden="true" />
@@ -543,7 +656,7 @@ export default function Members() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={15} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
+                  <tr><td colSpan={16} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
                 )}
               </tbody>
             </table>
@@ -558,6 +671,18 @@ export default function Members() {
           onSaved={() => { setEditing(null); load(); }}
         />
       )}
+
+      <BulkEditBar
+        selectedCount={selectedIds.size}
+        onClear={clearSelection}
+        onApply={applyBulk}
+        fleetOptions={FLEET_OPTS}
+        institutionOptions={INSTITUTION_OPTS}
+        categoryOptions={CATEGORY_OPTS}
+        roleOptions={ROLE_OPTS}
+        weeklyOffOptions={WEEKLY_OFF_OPTS}
+        genderOptions={GENDER_OPTS}
+      />
     </div>
   );
 }

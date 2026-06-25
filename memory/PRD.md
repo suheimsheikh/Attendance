@@ -138,6 +138,28 @@
 
 ## Recently Added (Jun 25, 2026 — pre-launch polish round 3)
 
+- **Bulk-edit on the Members admin table** — end-of-season fleet
+  reshuffles, role grants, institution changes etc. that used to take
+  hundreds of clicks now take one. Backend gets a new
+  `POST /api/members/bulk-update` endpoint backed by a strict allowlist
+  (`category` / `role` / `institution` / `fleet` / `weekly_off` /
+  `gender` — per-individual fields like name / mobile / opening leave
+  balance / photo / password are intentionally rejected). The endpoint
+  also self-protects: refuses to demote the signed-in admin via a bulk
+  role change.
+  Frontend adds a new `BulkEditBar` component (sticky bottom toolbar)
+  plus a checkbox column on the Members table. Selection supports
+  click-to-tick, **shift-click for Excel-style range select** across the
+  currently filtered view, a master checkbox in the header (indeterminate
+  state when only some visible rows are picked), and a Clear button. One
+  Apply round-trip, optimistic toast, auto-clears the selection. The
+  shift-range had a subtle React closure-vs-mutation gotcha: the
+  `setSelectedIds` updater is batched and reads `lastClickedIdx.current`
+  AFTER the post-set assignment runs, so we snapshot the ref before the
+  state update. Verified end-to-end on `/admin/members`: click row 0 →
+  shift-click row 5 → 6 selected → Fleet = Opti C → Apply → API confirms
+  6 rows updated. 190/190 pytest green.
+
 - **Code-review action items (selective, freeze-respecting):**
   - **Empty catch blocks logged** (`utils.js` TTS, `Leaves.jsx` break modal
     pre-load) — added `console.debug` with context so silent failures
