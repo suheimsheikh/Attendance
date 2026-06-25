@@ -3626,8 +3626,15 @@ _req_logger = logging.getLogger("ishowedup.access")
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
+    # Cap the echoed Request-ID at 64 chars and strip anything that isn't
+    # an ASCII letter / digit / dash / underscore — a malicious client could
+    # otherwise inject newlines into our access log line ("log injection").
+    _ALLOWED = re.compile(r"[^A-Za-z0-9_-]")
+
     async def dispatch(self, request, call_next):
-        rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+        client_rid = request.headers.get("x-request-id") or ""
+        client_rid = self._ALLOWED.sub("", client_rid)[:64]
+        rid = client_rid or uuid.uuid4().hex[:12]
         request.state.request_id = rid
         started = _time.perf_counter()
         try:

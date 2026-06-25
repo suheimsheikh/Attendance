@@ -8,6 +8,23 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ## 🚧 Unreleased — pending deploy to `i-showed-up.ychyderabad.com`
 
+### 🪟 Final pre-launch polish (June 25, 2026)
+
+- **Trace every coach complaint to logs.** Every API response now carries
+  an `X-Request-ID` header. If a coach reports "the board froze at 9:14",
+  you (or support) can ask them to read the request ID off the network panel
+  / error toast and grep server logs straight to the offending request line.
+  Log lines look like `rid=1ff8c2e321bc GET /api/presence -> 200 28ms`.
+  Health-check pings are intentionally excluded from the access log to
+  keep it readable.
+- **React Hook dependency cleanup.** Fixed 6 stale-closure warnings across
+  Devices, Leaves, Overtime, Payroll, and Reports admin pages. Filter
+  pills + month pickers + tab switches all use `useCallback` + `useEffect`
+  with correct deps now — no more risk of a filter ignoring the most
+  recent state in production.
+- **Full regression pass.** 24/24 backend + 10/10 frontend tests pass.
+  No behavioural regressions.
+
 ### 🧱 Refactor (zero user-visible change, big maintainability win)
 
 Pre-launch tidy-up — splits the monolith files so each one can be opened,

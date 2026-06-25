@@ -136,6 +136,23 @@
 
   Still deferred (separate planning sessions): rotate production secrets, JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, expanded pytest coverage for camps/regattas/guests/thumbnails.
 
+## Recently Added (Jun 25, 2026 — pre-launch polish)
+
+Final touch-up before July 1 launch. No structural changes (refactor frozen).
+
+- **Request-ID middleware** — every API response carries `X-Request-ID`;
+  every server log line is tagged `rid=<12-hex>`. Client may supply its
+  own (hardened against log-injection: 64-char cap, `[A-Za-z0-9_-]` only).
+  Health-check (`/api/health`) is excluded from the access log.
+- **`api.js` ApiError** now exposes `requestId` pulled from the response
+  header — frontend can surface it in error toasts for support hand-off.
+- **React Hook dependency cleanup** (P2 from review #1 — finally done).
+  Fixed 6 stale-closure warnings via `useCallback` + correct `useEffect`
+  deps in: `Devices.jsx`, `Leaves.jsx`, `Overtime.jsx`, `Payroll.jsx`,
+  `Reports.jsx`.
+- **Regression**: 90/90 pytest pass; testing agent ran 24/24 backend + 10/10
+  frontend smoke = 100 % green.
+
 ## Recently Added (Feb 2026 — refactor pass #1)
 
 Pre-launch (July 1) refactor to split the two largest monoliths and grow
