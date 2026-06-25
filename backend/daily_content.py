@@ -45,23 +45,42 @@ DEFAULT_TZ = "Asia/Kolkata"
 # ---------------------------------------------------------------------------
 # Static fallback pool — used when LLM is unreachable or rate-limited.
 # Keeps the UI useful even if the AI service is down.
+#
+# Curated to be simple + powerful — action-oriented wisdom about showing up,
+# discipline, and daily habits. Broader than just sailing so it resonates
+# with athletes, coaches, support staff and parents alike.
 # ---------------------------------------------------------------------------
 FALLBACK_QUOTES = [
-    {"en": "Smooth seas do not make skillful sailors.",
-     "te": "ప్రశాంతమైన సముద్రాలు నేర్పుగల నావికులను తయారు చేయవు.",
-     "author": "African proverb"},
     {"en": "Show up. Show up. Show up. After a while the muse shows up too.",
      "te": "హాజరవ్వండి. హాజరవ్వండి. హాజరవ్వండి. కొంత కాలానికి స్ఫూర్తి కూడా హాజరవుతుంది.",
      "author": "Isabel Allende"},
+    {"en": "Discipline equals freedom.",
+     "te": "క్రమశిక్షణే స్వేచ్ఛ.",
+     "author": "Jocko Willink"},
     {"en": "Discipline is choosing between what you want now and what you want most.",
      "te": "క్రమశిక్షణ అంటే ఇప్పుడు కావాల్సినదానికీ చివరికి కావాల్సినదానికీ మధ్య ఎంపిక చేసుకోవడం.",
      "author": "Abraham Lincoln"},
-    {"en": "Adapt your sails to the winds you meet, never the other way around.",
-     "te": "ఎదురయ్యే గాలులకు మీ తెరచాపలను సర్దుబాటు చేయండి — గాలులు మిమ్మల్ని కాదు.",
-     "author": "Yacht Club of Hyderabad"},
     {"en": "Energy and persistence conquer all things.",
      "te": "శక్తీ, పట్టుదలా అన్నింటినీ జయిస్తాయి.",
      "author": "Benjamin Franklin"},
+    {"en": "The secret of getting ahead is getting started.",
+     "te": "ముందుకు సాగడానికి రహస్యం — మొదలుపెట్టడమే.",
+     "author": "Mark Twain"},
+    {"en": "Small daily improvements are the key to staggering long-term results.",
+     "te": "ప్రతిరోజూ చేసే చిన్న మెరుగుదలలే దీర్ఘకాలంలో అద్భుత ఫలితాలను తెస్తాయి.",
+     "author": "Robin Sharma"},
+    {"en": "You don't have to be great to start, but you have to start to be great.",
+     "te": "మొదలుపెట్టడానికి గొప్పగా ఉండాల్సిన అవసరం లేదు, కానీ గొప్పగా ఉండాలంటే మొదలుపెట్టాలి.",
+     "author": "Zig Ziglar"},
+    {"en": "Do something today that your future self will thank you for.",
+     "te": "మీ భవిష్యత్ స్వరూపం మీకు కృతజ్ఞతలు చెప్పేలా ఈ రోజే ఏదైనా చేయండి.",
+     "author": "Sean Patrick Flanery"},
+    {"en": "You don't rise to the level of your goals. You fall to the level of your systems.",
+     "te": "మీరు మీ లక్ష్యాల స్థాయికి ఎదగరు — మీ అలవాట్ల స్థాయికి దిగిపోతారు.",
+     "author": "James Clear"},
+    {"en": "Smooth seas do not make skillful sailors.",
+     "te": "ప్రశాంతమైన సముద్రాలు నేర్పుగల నావికులను తయారు చేయవు.",
+     "author": "African proverb"},
 ]
 
 FALLBACK_WORDS = [
@@ -113,17 +132,19 @@ async def _generate_quote_with_llm(today: str) -> Optional[Dict[str, Any]]:
         return None
 
     system = (
-        "You write short bilingual motivational quotes for a competitive youth "
-        "sailing academy in Hyderabad, India. Audience: athletes aged 10-25, "
-        "their coaches, and admin staff. Tone: simple, energetic, encouraging. "
-        "Sailing / sports / discipline / showing-up themes preferred but not required."
+        "You write short bilingual motivational quotes for a youth academy "
+        "in Hyderabad, India. Audience: athletes (10-25), their coaches, "
+        "and admin staff. Tone: simple, powerful, energetic, encouraging. "
+        "Themes welcome: discipline, showing up, daily habits, perseverance, "
+        "growth, focus. Broader life wisdom is preferred over nautical "
+        "clichés — keep it universal, not sailing-specific."
     )
     prompt = (
         "Reply with ONLY a JSON object (no markdown, no commentary) with these keys:\n"
-        "  en       — string, the quote in English (max 15 words)\n"
+        "  en       — string, the quote in English (max 15 words, prefer 8-12)\n"
         "  te       — string, the same quote translated to Telugu (script తెలుగు)\n"
-        "  author   — string, attribution (real author or 'Yacht Club of Hyderabad' if you wrote it)\n"
-        "Be specific — avoid generic clichés. No quotes around the values inside the JSON values themselves."
+        "  author   — string, attribution (real author, public-domain proverb, or 'Yacht Club of Hyderabad' if you wrote it)\n"
+        "Be specific and punchy — avoid generic clichés and avoid sailing/sea/wind metaphors unless they are genuinely fresh."
     )
     try:
         chat = LlmChat(
