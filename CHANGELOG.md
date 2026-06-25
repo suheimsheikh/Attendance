@@ -42,6 +42,10 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ### ✨ UI polish
 
+- **Presence Board cards** — institution chip moved off the name line so long
+  names like "ESWA SURAGAJYOTHI" / "PREETHI KONDAKARI" no longer get clipped
+  by the institution badge. Name + parent-phone icons sit on row 1; rank ·
+  category · institution chip sit on row 2.
 - **Members page** — Parents/Guardian column widened; full parent names like
   "SHIVA SHANKAR GUNDLANARUA" now display without truncation. When no parent
   name is set, compact **F / M / G** square badges show instead of the long

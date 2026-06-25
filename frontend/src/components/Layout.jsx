@@ -4,7 +4,7 @@ import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, QrCode, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, ClipboardList, Building2, IdCard, FileSpreadsheet,
-  ShieldCheck, LogOut, Menu, X, ListTree, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database
+  ShieldCheck, LogOut, Menu, X, ListTree, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -101,6 +101,18 @@ export default function Layout() {
       </nav>
 
       <div className="p-3 border-t border-slate-800">
+        <NavLink
+          to="/whats-new"
+          onClick={() => setOpen(false)}
+          data-testid="nav-whats-new"
+          className={({ isActive }) =>
+            `flex items-center gap-2 px-3 h-9 rounded-lg text-xs font-semibold transition mb-2 ${
+              isActive ? "bg-sky-500/20 text-sky-300" : "text-slate-400 hover:bg-white/5 hover:text-sky-300"
+            }`
+          }
+        >
+          <Sparkles size={14} /> What&apos;s new
+        </NavLink>
         <div className="flex items-center gap-3 px-2 py-2">
           <Avatar name={user?.full_name} photo={user?.photo} size={36} />
           <div className="flex-1 min-w-0">

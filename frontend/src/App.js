@@ -28,6 +28,7 @@ import Calendar from "./pages/admin/Calendar";
 import BackupRestore from "./pages/admin/BackupRestore";
 import ImportMembers from "./pages/admin/ImportMembers";
 import SmsLog from "./pages/admin/SmsLog";
+import WhatsNew from "./pages/WhatsNew";
 import Cards from "./pages/admin/Cards";
 import { Loader2 } from "lucide-react";
 
@@ -76,6 +77,7 @@ function App() {
             <Route path="presence" element={<RequireMuster><Presence /></RequireMuster>} />
             <Route path="muster" element={<RequireMuster><Muster /></RequireMuster>} />
             <Route path="my-leaves" element={<MyLeaves />} />
+            <Route path="whats-new" element={<WhatsNew />} />
             <Route path="profile" element={<Profile />} />
             <Route path="admin" element={<RequireAdmin><AdminConsole /></RequireAdmin>} />
             <Route path="admin/members" element={<RequireAdmin><Members /></RequireAdmin>} />

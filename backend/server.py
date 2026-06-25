@@ -1113,6 +1113,18 @@ async def admin_send_checkout_reminders_now(admin: dict = Depends(require_admin)
     return {"sent": n}
 
 
+@api_router.get("/changelog")
+async def get_changelog():
+    """Read the repo CHANGELOG.md so the in-app "What's new" page can render
+    it. Available to anyone who can reach the API — coaches and athletes get
+    to see what's new too. Returns plain markdown text."""
+    import pathlib
+    path = pathlib.Path(__file__).resolve().parent.parent / "CHANGELOG.md"
+    if not path.exists():
+        return {"markdown": "# Changelog\n\n_Not available yet._"}
+    return {"markdown": path.read_text(encoding="utf-8")}
+
+
 # ----------------------------------------------------------------------------
 # Member management (admin)
 # ----------------------------------------------------------------------------
