@@ -2273,6 +2273,12 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
         all_sessions = await db.attendance.find({"date": target_date}, {"_id": 0}).to_list(5000)
         sess_map = {s["user_id"]: s for s in all_sessions if not s.get("check_out_at")}
         last_map = {s["user_id"]: s for s in all_sessions if s.get("check_out_at")}
+        # Per-member session count for the day — surfaced as a chip on the
+        # Presence Board so admins can spot members who logged a 2nd session
+        # (split shift, or accidental double check-in to investigate).
+        sessions_count_map: dict = {}
+        for s in all_sessions:
+            sessions_count_map[s["user_id"]] = sessions_count_map.get(s["user_id"], 0) + 1
     else:
         sessions = await db.attendance.find({"check_out_at": None}, {"_id": 0}).to_list(5000)
         sess_map = {s["user_id"]: s for s in sessions}
@@ -2282,6 +2288,12 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             {"$group": {"_id": "$user_id", "doc": {"$first": "$$ROOT"}}},
         ]).to_list(5000)
         last_map = {d["_id"]: d["doc"] for d in last_outs}
+        # Count today's attendance rows per member (live view). One agg call.
+        sessions_count_cursor = await db.attendance.aggregate([
+            {"$match": {"date": target_date}},
+            {"$group": {"_id": "$user_id", "n": {"$sum": 1}}},
+        ]).to_list(5000)
+        sessions_count_map = {d["_id"]: d["n"] for d in sessions_count_cursor}
 
     leaves = await db.leaves.find({
         "status": "approved", "start_date": {"$lte": target_date}, "end_date": {"$gte": target_date},
@@ -2666,6 +2678,10 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             },
             "excursion_count": excursion_count,
             "excursions": excs_detailed,
+            # Count of attendance docs for this member on the target date.
+            # >1 means the member ended a session and started a new one
+            # (split shift OR an accidental double check-in worth a glance).
+            "sessions_today_count": sessions_count_map.get(u["id"], 0),
             "days_remaining": days_remaining,
             "days_absent_streak": days_absent_streak,
             "check_in_at": primary_session.get("check_in_at") if primary_session else None,

@@ -1,27 +1,30 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { Loader2, Plus, Search, Edit3, Trash2, LogIn, LogOut as LogOutIcon, Check, FileSpreadsheet } from "lucide-react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
+import { Loader2, Plus, Search, Edit3, Trash2, LogIn, LogOut as LogOutIcon, Check, FileSpreadsheet, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { api } from "../../api";
+import { api, showApiError } from "../../api";
 import InlinePhotoAvatar from "../../components/InlinePhotoAvatar";
 import ParentContact from "../../components/ParentContact";
 import StatusBadge from "../../components/StatusBadge";
 import MemberForm from "./MemberForm";
 import { categoryLabel } from "../../utils";
 
-// Each member bucket has a designated color used on its filter pill,
-// the colored side-stripe on the row, and the row hover tint.
+// Category buckets — these match the `category` field on the user doc.
+// `admin` is intentionally absent: it's a ROLE (orthogonal to category) and is
+// rendered as its own toggle further down + as a badge on each row. A coach
+// who is also an admin appears under "Coaches" AND lights up the Admin chip.
 const BUCKETS = [
-  { key: "all",     label: "All",      dotBg: "bg-slate-400",   activeBg: "bg-slate-900",   activeText: "text-white", inactiveBg: "bg-slate-100",  inactiveText: "text-slate-700",  inactiveBorder: "border-slate-200",  stripe: "",                rowHover: "" },
-  { key: "admin",   label: "Admins",   dotBg: "bg-indigo-500",  activeBg: "bg-indigo-600",  activeText: "text-white", inactiveBg: "bg-indigo-50",  inactiveText: "text-indigo-700", inactiveBorder: "border-indigo-200", stripe: "bg-indigo-500",   rowHover: "hover:bg-indigo-50/60" },
-  { key: "coach",     label: "Coaches",    dotBg: "bg-emerald-500", activeBg: "bg-emerald-600", activeText: "text-white", inactiveBg: "bg-emerald-50", inactiveText: "text-emerald-700",inactiveBorder: "border-emerald-200",stripe: "bg-emerald-500",  rowHover: "hover:bg-emerald-50/60" },
-  { key: "staff",     label: "Staff",      dotBg: "bg-amber-500",   activeBg: "bg-amber-600",   activeText: "text-white", inactiveBg: "bg-amber-50",   inactiveText: "text-amber-700",  inactiveBorder: "border-amber-200",  stripe: "bg-amber-500",    rowHover: "hover:bg-amber-50/60" },
-  { key: "executive", label: "Executives", dotBg: "bg-violet-500",  activeBg: "bg-violet-600",  activeText: "text-white", inactiveBg: "bg-violet-50",  inactiveText: "text-violet-700", inactiveBorder: "border-violet-200", stripe: "bg-violet-500",   rowHover: "hover:bg-violet-50/60" },
-  { key: "athlete",   label: "Athletes",   dotBg: "bg-sky-500",     activeBg: "bg-sky-600",     activeText: "text-white", inactiveBg: "bg-sky-50",     inactiveText: "text-sky-700",    inactiveBorder: "border-sky-200",    stripe: "bg-sky-500",      rowHover: "hover:bg-sky-50/60" },
+  { key: "all",       label: "All",        dotBg: "bg-slate-400",   activeBg: "bg-slate-900",   activeText: "text-white", inactiveBg: "bg-slate-100",  inactiveText: "text-slate-700",   inactiveBorder: "border-slate-200",  stripe: "",               rowHover: "" },
+  { key: "coach",     label: "Coaches",    dotBg: "bg-emerald-500", activeBg: "bg-emerald-600", activeText: "text-white", inactiveBg: "bg-emerald-50", inactiveText: "text-emerald-700", inactiveBorder: "border-emerald-200",stripe: "bg-emerald-500", rowHover: "hover:bg-emerald-50/60" },
+  { key: "staff",     label: "Staff",      dotBg: "bg-amber-500",   activeBg: "bg-amber-600",   activeText: "text-white", inactiveBg: "bg-amber-50",   inactiveText: "text-amber-700",   inactiveBorder: "border-amber-200",  stripe: "bg-amber-500",   rowHover: "hover:bg-amber-50/60" },
+  { key: "executive", label: "Executives", dotBg: "bg-violet-500",  activeBg: "bg-violet-600",  activeText: "text-white", inactiveBg: "bg-violet-50",  inactiveText: "text-violet-700",  inactiveBorder: "border-violet-200", stripe: "bg-violet-500",  rowHover: "hover:bg-violet-50/60" },
+  { key: "athlete",   label: "Athletes",   dotBg: "bg-sky-500",     activeBg: "bg-sky-600",     activeText: "text-white", inactiveBg: "bg-sky-50",     inactiveText: "text-sky-700",     inactiveBorder: "border-sky-200",    stripe: "bg-sky-500",     rowHover: "hover:bg-sky-50/60" },
 ];
 const BUCKET_BY_KEY = Object.fromEntries(BUCKETS.map((b) => [b.key, b]));
 
-const bucketOf = (m) => (m.role === "admin" ? "admin" : (m.category || "athlete"));
+// Returns the CATEGORY bucket — never "admin". Admin is rendered separately as
+// a badge on the row and as an orthogonal filter toggle above the table.
+const bucketOf = (m) => m.category || "athlete";
 const GENDER_LABEL = { M: "Male", F: "Female", O: "Other" };
 
 // Open the edit modal when a row is double-clicked — but only when the click
@@ -41,10 +44,14 @@ export default function Members() {
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState(null);
   const [bucket, setBucket] = useState("all");
+  // Orthogonal "Admin role" filter. Independent of `bucket` because admin is
+  // a ROLE, not a category — a coach who is also an admin is BOTH a coach
+  // and an admin and should appear under either filter.
+  const [onlyAdmins, setOnlyAdmins] = useState(false);
   const [instFilter, setInstFilter] = useState("");
   const [institutions, setInstitutions] = useState([]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [m, p, i] = await Promise.all([api.get("/members"), api.get("/presence"), api.get("/institutions")]);
       setMembers(m);
@@ -53,15 +60,18 @@ export default function Members() {
       setPresence(map);
       setInstitutions(i || []);
     } finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, []);
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
   const counts = useMemo(() => {
-    const c = { all: members.length, admin: 0, coach: 0, staff: 0, executive: 0, athlete: 0 };
+    const c = { all: members.length, coach: 0, staff: 0, executive: 0, athlete: 0 };
+    let adminCount = 0;
     for (const m of members) {
       const b = bucketOf(m);
       if (c[b] !== undefined) c[b] += 1;
+      if (m.role === "admin") adminCount += 1;
     }
+    c.admin = adminCount;  // orthogonal — sums across categories, not exclusive
     return c;
   }, [members]);
 
@@ -69,6 +79,7 @@ export default function Members() {
     const q = search.trim().toLowerCase();
     let list = members;
     if (bucket !== "all") list = list.filter((m) => bucketOf(m) === bucket);
+    if (onlyAdmins) list = list.filter((m) => m.role === "admin");
     if (instFilter) list = list.filter((m) => m.institution === instFilter);
     if (!q) return list;
     return list.filter((m) =>
@@ -78,7 +89,7 @@ export default function Members() {
       (m.mobile || "").includes(q) ||
       (m.institution || "").toLowerCase().includes(q)
     );
-  }, [members, search, bucket, instFilter]);
+  }, [members, search, bucket, onlyAdmins, instFilter]);
 
   const remove = async (m) => {
     if (!window.confirm(`Delete ${m.full_name}? This also removes their attendance & leaves.`)) return;
@@ -86,7 +97,7 @@ export default function Members() {
       await api.del(`/members/${m.id}`);
       toast.success("Member deleted");
       load();
-    } catch (err) { toast.error(err?.message || "Failed"); }
+    } catch (err) { showApiError(err, "Failed"); }
   };
 
   // Inline patch — update parent_mobile fields locally + persist to API on blur,
@@ -97,7 +108,7 @@ export default function Members() {
     try {
       await api.patch(`/members/${memberId}`, { [field]: trimmed });
     } catch (err) {
-      toast.error(err?.message || "Save failed");
+      showApiError(err, "Save failed");
       throw err;
     }
   };
@@ -108,7 +119,7 @@ export default function Members() {
       const res = await api.post(`/admin/attendance/toggle/${m.id}`, { reason: "Admin console override" });
       toast.success(res.action === "checkin" ? `${m.full_name} checked in` : `${m.full_name} checked out (${res.hours}h)`);
       load();
-    } catch (err) { toast.error(err?.message || "Failed"); }
+    } catch (err) { showApiError(err, "Failed"); }
     finally { setBusyId(null); }
   };
 
@@ -163,6 +174,24 @@ export default function Members() {
             </button>
           );
         })}
+        {/* Orthogonal "Admin role" toggle. Combines with the category filter
+            above — e.g. Coaches + Admins shows only coaches who are admins. */}
+        <button
+          data-testid="bucket-admin"
+          onClick={() => setOnlyAdmins((v) => !v)}
+          className={`inline-flex items-center gap-2 px-3 h-8 rounded-full text-xs font-semibold border transition ${
+            onlyAdmins
+              ? "bg-indigo-600 text-white border-transparent"
+              : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+          }`}
+          title="Filter to members with the admin role (orthogonal — combines with category)"
+        >
+          <ShieldCheck size={13} />
+          Admin role
+          <span className={`min-w-[22px] h-5 px-1.5 rounded-full text-[10px] flex items-center justify-center ${onlyAdmins ? "bg-white/20 text-white" : "bg-white border border-indigo-200 text-indigo-700"}`}>
+            {counts.admin}
+          </span>
+        </button>
         {institutions.length > 0 && (
           <select
             data-testid="member-inst-filter"
@@ -239,13 +268,24 @@ export default function Members() {
                           </div>
                         </div>
                       </td>
-                      {/* Role / category pill */}
+                      {/* Role / category — category pill + orthogonal Admin badge */}
                       <td className="iu-table-td">
-                        <span className={`inline-flex items-center gap-1.5 px-2 h-6 rounded-full text-[11px] font-semibold border ${b.inactiveBg} ${b.inactiveText} ${b.inactiveBorder}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${b.dotBg}`} />
-                          {b.label.replace(/s$/, "")}
-                        </span>
-                        <div className="text-xs text-slate-500 mt-1">{m.role === "admin" ? "Admin" : categoryLabel(m.category)}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`inline-flex items-center gap-1.5 px-2 h-6 rounded-full text-[11px] font-semibold border ${b.inactiveBg} ${b.inactiveText} ${b.inactiveBorder}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${b.dotBg}`} />
+                            {b.label.replace(/s$/, "")}
+                          </span>
+                          {m.role === "admin" && (
+                            <span
+                              data-testid={`admin-badge-${m.id}`}
+                              className="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[11px] font-bold border bg-indigo-50 text-indigo-700 border-indigo-200"
+                              title="Has admin role — independent of category"
+                            >
+                              <ShieldCheck size={11} /> Admin
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">{categoryLabel(m.category)}</div>
                       </td>
                       <td className="iu-table-td text-slate-700">{m.rank || "—"}</td>
                       <td className="iu-table-td text-slate-700">{GENDER_LABEL[m.gender] || "—"}</td>

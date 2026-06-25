@@ -8,6 +8,21 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ## 🚧 Unreleased — pending deploy to `i-showed-up.ychyderabad.com`
 
+### 🛠 Fixes & visibility (June 25, 2026 — round 3)
+
+- **Members page now treats "Admin" as a role, not a category.** Previously
+  a coach who was also an admin disappeared from the "Coaches" bucket and
+  was double-counted in "Admins". Fixed: category pills (Coaches / Staff /
+  Executives / Athletes) sum to the total, and a separate "Admin role"
+  chip filters across all categories. An admin-coach now appears under
+  "Coaches" AND lights up the Admin chip. Each member row also carries an
+  "Admin" badge next to their category pill.
+- **Multi-session chip on the Presence Board.** If a member checks in,
+  checks out, then checks in again later the same day, you'll see a
+  small indigo "🔄 N sessions" chip on their card. Helps you spot
+  legitimate split shifts vs accidental double check-ins at a glance,
+  without changing the existing allow-multiple-sessions behaviour.
+
 ### 🔬 Safer launch (June 25, 2026 — round 2)
 
 - **Pre-launch checklist on tap.** Hit `/api/admin/preflight` (admin-only)

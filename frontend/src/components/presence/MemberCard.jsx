@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, Clock, Coffee, ChevronDown, ChevronRight } from "lucide-react";
+import { AlertTriangle, Clock, Coffee, ChevronDown, ChevronRight, Repeat } from "lucide-react";
 import Avatar from "../Avatar";
 import ParentContact from "../ParentContact";
 import NotifyParentsButton from "../NotifyParentsButton";
@@ -74,6 +74,15 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
               title={`${m.excursion_count} excursion${m.excursion_count === 1 ? "" : "s"} today (stepped out and returned)`}
             >
               <Coffee size={9}/> {m.excursion_count}×
+            </span>
+          )}
+          {m.sessions_today_count > 1 && (
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold"
+              data-testid={`sessions-today-${m.id}`}
+              title={`${m.sessions_today_count} separate sessions today — split shift, or an accidental double check-in worth a glance.`}
+            >
+              <Repeat size={9}/> {m.sessions_today_count} sessions
             </span>
           )}
           {m.days_remaining != null && m.days_remaining > 0 && (m.status === "on_leave" || m.status === "on_tour") && (
