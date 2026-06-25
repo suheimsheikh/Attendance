@@ -716,23 +716,38 @@ export function BreakForm({ initial, members, institutions, fleets, onClose, onS
   );
 
   // Distinct fleet values — prefer the fleet master (if passed in by the
-  // caller), otherwise fall back to scanning members for fleet labels.
+  // caller), otherwise fall back to scanning ATHLETES for fleet labels.
+  // Fleet is an athlete-only concept; using the unfiltered roster here used
+  // to surface stale labels from non-athlete rows.
   const fleetOptions = useMemo(() => {
     if (fleets && fleets.length) return fleets.map((f) => f.name);
     const set = new Set();
-    for (const m of members || []) { if (m.fleet) set.add(m.fleet); }
+    for (const m of members || []) {
+      if ((m.category || "athlete") !== "athlete") continue;
+      if (m.fleet) set.add(m.fleet);
+    }
     return Array.from(set).sort();
   }, [fleets, members]);
 
+  // Breaks are an athlete concept (rest days, fleet-wide pauses, regatta
+  // turnarounds). Coach/staff time-off goes through the regular leave
+  // workflow ("Apply on behalf") or the blanket scopes ("All coaches" /
+  // "All staff"). So the per-member picker is restricted to athletes only,
+  // which also keeps the fleet filter meaningful — fleet is assigned to
+  // athletes, never to coaches/staff/executives.
+  const athleteMembers = useMemo(
+    () => (members || []).filter((m) => (m.category || "athlete") === "athlete"),
+    [members]
+  );
   const filteredMembers = useMemo(() => {
     const q = memberSearch.trim().toLowerCase();
-    return (members || []).filter((m) => {
+    return athleteMembers.filter((m) => {
       if (memberFleetFilter && (m.fleet || "") !== memberFleetFilter) return false;
       if (!q) return true;
       return (m.full_name || "").toLowerCase().includes(q)
           || (m.fleet || "").toLowerCase().includes(q);
     });
-  }, [members, memberSearch, memberFleetFilter]);
+  }, [athleteMembers, memberSearch, memberFleetFilter]);
 
   const submit = async (e) => {
     e?.preventDefault?.();
@@ -856,12 +871,12 @@ export function BreakForm({ initial, members, institutions, fleets, onClose, onS
         {form.scope === "selected" && (
           <div>
             <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
-              <label className="iu-label !m-0">Members on break ({form.member_ids.length})</label>
+              <label className="iu-label !m-0">Athletes on break ({form.member_ids.length})</label>
               <input
                 data-testid="bf-member-search"
                 value={memberSearch}
                 onChange={(e) => setMemberSearch(e.target.value)}
-                placeholder="Search by name…"
+                placeholder="Search athletes by name…"
                 className="iu-input !h-8 !text-xs !py-1 !w-44"
               />
             </div>
@@ -910,7 +925,7 @@ export function BreakForm({ initial, members, institutions, fleets, onClose, onS
             )}
             <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto divide-y divide-slate-100">
               {filteredMembers.length === 0 ? (
-                <div className="px-3 py-6 text-center text-xs text-slate-400">No members match.</div>
+                <div className="px-3 py-6 text-center text-xs text-slate-400">No athletes match.</div>
               ) : (
                 filteredMembers.map((m) => {
                   const on = form.member_ids.includes(m.id);
