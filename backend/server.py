@@ -799,7 +799,19 @@ async def phone_login(body: PhoneLoginIn):
         await db.devices.update_one({"device_id": body.device_id}, {"$set": upd})
         device = await db.devices.find_one({"device_id": body.device_id}, {"_id": 0})
 
-    if device["status"] == "revoked":
+    # Admin self-recovery: if this revoked device belongs to (or matches by
+    # phone) an admin user, allow the trusted-phone bypass to silently
+    # re-approve it. Admins are commonly testing the revoke flow on their
+    # own browser and shouldn't get perma-locked out of preview/staging.
+    # Non-admins (regular members) stay blocked — the audit trail matters
+    # for them and admin re-enable is the documented path.
+    revoked_admin_self = (
+        device["status"] == "revoked"
+        and matched
+        and matched.get("role") == "admin"
+        and (not device.get("user_id") or device.get("user_id") == matched["id"])
+    )
+    if device["status"] == "revoked" and not revoked_admin_self:
         raise HTTPException(status_code=403, detail="This device was revoked. Contact your admin.")
 
     # Already approved & linked -> straight in
@@ -809,12 +821,23 @@ async def phone_login(body: PhoneLoginIn):
             await db.devices.update_one({"device_id": body.device_id}, {"$set": {"last_login_at": now}})
             return _device_token_response(u, body.device_id)
 
-    # Pre-designated admin -> instant approve + login (the original "cinch")
+    # Pre-designated admin -> instant approve + login (the original "cinch").
+    # Also handles admin self-recovery: if their own browser was previously
+    # revoked (e.g. while testing the revoke flow), we silently bring it
+    # back to approved and stamp a "recovered" audit note.
     if matched and matched.get("role") == "admin":
-        await db.devices.update_one({"device_id": body.device_id}, {"$set": {
+        was_revoked = device.get("status") == "revoked"
+        update = {
             "status": "approved", "user_id": matched["id"],
             "approved_by": "auto-admin", "approved_at": now, "last_login_at": now,
-        }})
+        }
+        if was_revoked:
+            update["last_action"] = "auto-recovered-by-admin-phone"
+            update["last_action_by"] = matched["id"]
+            update["last_action_at"] = now
+            logger.info("Admin self-recovery: re-approved revoked device %s for %s",
+                        body.device_id, matched.get("full_name"))
+        await db.devices.update_one({"device_id": body.device_id}, {"$set": update})
         return _device_token_response(matched, body.device_id)
 
     # Trusted-phone cinch: if the matched member ALREADY has another approved
@@ -822,7 +845,12 @@ async def phone_login(body: PhoneLoginIn):
     # case where a member's browser cache / PWA install creates a fresh
     # device_id — without this they'd be stuck on "Awaiting approval" forever
     # while their phone is shown as already approved in the admin queue.
-    if matched and device["status"] != "approved":
+    #
+    # Important: this branch must NOT auto-recover an explicitly revoked
+    # device for non-admin members. Admin self-recovery is handled above
+    # by the role==admin branch; for everyone else, revoked stays revoked
+    # and they must contact their admin.
+    if matched and device["status"] not in ("approved", "revoked"):
         prior = await db.devices.find_one({
             "user_id": matched["id"],
             "status": "approved",
