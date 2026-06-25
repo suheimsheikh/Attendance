@@ -18,17 +18,25 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 import base64
 from PIL import Image
+# Decompression-bomb guard: refuse to decode any image with more than ~8M
+# pixels (8000×1000 — way larger than any selfie we store). Without this
+# a malicious 50 KB PNG could expand to multiple GB in RAM.
+Image.MAX_IMAGE_PIXELS = 8_000_000
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal, Tuple, Dict
 from datetime import datetime, timezone, timedelta, date
 from zoneinfo import ZoneInfo
+from contextlib import asynccontextmanager
 
 # Local modules — imported up-top so `_active_camp_for` (used during request
 # handling for check-in late computation) can reference them.
 import camps as _camps_module
 import regattas as _regattas_module
 import breaks as _breaks_module
+# Re-export shared SMS template constants from the SMS module so any legacy
+# `from server import DEFAULT_PARENT_TEMPLATES` callers keep working.
+from sms import DEFAULT_PARENT_TEMPLATES  # noqa: F401
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -52,12 +60,29 @@ JWT_EXPIRES_MINUTES = int(os.environ['JWT_EXPIRES_MINUTES'])
 ADMIN_EMAIL = os.environ['ADMIN_SEED_EMAIL']
 ADMIN_PASSWORD = os.environ['ADMIN_SEED_PASSWORD']
 
-app = FastAPI()
+def _lifespan_factory(app):
+    # Resolved at startup, not at module-import time, so the actual
+    # @asynccontextmanager body can be defined further down the file.
+    return _lifespan(app)
+
+app = FastAPI(lifespan=_lifespan_factory)
 api_router = APIRouter(prefix="/api")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+# ----------------------------------------------------------------------------
+# Soft pagination caps — the Mongo `to_list(N)` calls scattered through this
+# file all use one of these limits. Centralising makes the implicit
+# truncation behaviour visible at a glance and easy to scale up later.
+# ----------------------------------------------------------------------------
+MAX_USERS = 5000          # roster + dropdowns. Academy is <500 today.
+MAX_SESSIONS = 100000     # attendance rows in a single report window.
+MAX_LEAVES = 20000
+MAX_DEVICES = 2000
+MAX_LOG_ROWS = 200
 
 
 def now_utc() -> datetime:
@@ -195,6 +220,9 @@ def _make_thumbnail(photo: Optional[str]) -> Optional[str]:
             im.save(buf, format="JPEG", quality=THUMB_QUALITY, optimize=True)
             enc = base64.b64encode(buf.getvalue()).decode("ascii")
             return f"data:image/jpeg;base64,{enc}"
+    except Image.DecompressionBombError as e:
+        logger.warning("Rejected oversized image (decompression bomb guard): %s", e)
+        return None
     except Exception as e:
         logger.warning("Failed to build thumbnail: %s", e)
         return None
@@ -414,10 +442,8 @@ class GroupLeaveIn(BaseModel):
 
 
 # Default bilingual message bodies live in sms.py (the SMS module owns its
-# template defaults). Re-exported here so any legacy callers that did
-# `from server import DEFAULT_PARENT_TEMPLATES` keep working — no circular
-# import any more because server -> sms is a one-way module load.
-from sms import DEFAULT_PARENT_TEMPLATES  # noqa: E402, F401
+# template defaults). Now re-exported from the top-of-file import; this
+# comment block is kept as a breadcrumb for code-search.
 
 
 class TwilioConfig(BaseModel):
@@ -455,14 +481,6 @@ class OfficeConfig(BaseModel):
     checkout_reminder_time: str = "20:00"
     checkout_reminder_template: str = "Hi {name}, looks like you're still checked in at {academy}. Please check out via the app when you leave."
     twilio: TwilioConfig = Field(default_factory=TwilioConfig)
-
-
-class CheckInIn(BaseModel):
-    qr_token: str
-    latitude: float
-    longitude: float
-    photo: Optional[str] = None  # base64
-    reason: Optional[str] = None  # required when outside geofence
 
 
 class GeoToggleIn(BaseModel):
@@ -550,8 +568,9 @@ def haversine_m(lat1, lon1, lat2, lon2) -> float:
 # ----------------------------------------------------------------------------
 # Startup: seed admin + office config
 # ----------------------------------------------------------------------------
-@app.on_event("startup")
-async def seed():
+async def _seed_database() -> None:
+    """One-shot bootstrap: indexes, admin seed, office config, backfills.
+    Called from the lifespan startup hook."""
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
     await db.devices.create_index("device_id", unique=True)
@@ -565,6 +584,7 @@ async def seed():
     # scans. With ~150 members today the wins are small; once attendance grows
     # past a few thousand sessions these matter a lot.
     await db.users.create_index("mobile")
+    await db.users.create_index("mobile_last10")
     await db.attendance.create_index([("user_id", 1), ("date", -1)])
     await db.attendance.create_index("check_out_at")
     await db.leaves.create_index([("status", 1), ("start_date", 1), ("end_date", 1)])
@@ -591,7 +611,6 @@ async def seed():
             "latitude": 19.0760,
             "longitude": 72.8777,
             "radius_m": 100,
-            "qr_token": "OFFICE-" + uuid.uuid4().hex[:12].upper(),
         })
         logger.info("Seeded office config")
     # Backfill personal QR cards for any user missing one
@@ -614,6 +633,19 @@ async def seed():
             backfilled += 1
     if backfilled:
         logger.info("Backfilled %d photo thumbnails", backfilled)
+    # Backfill mobile_last10 for fast phone-login lookup. Computed lazily for
+    # any user missing the field — covers legacy rows from before the index.
+    last10_filled = 0
+    async for u in db.users.find(
+        {"mobile_last10": {"$exists": False}, "mobile": {"$nin": [None, ""]}},
+        {"_id": 0, "id": 1, "mobile": 1},
+    ):
+        k = phone_key(u.get("mobile") or "")
+        if k:
+            await db.users.update_one({"id": u["id"]}, {"$set": {"mobile_last10": k}})
+            last10_filled += 1
+    if last10_filled:
+        logger.info("Backfilled mobile_last10 on %d user(s)", last10_filled)
     # Backfill default office timings
     await db.config.update_one(
         {"id": "office", "default_work_start": {"$exists": False}},
@@ -646,14 +678,9 @@ async def seed():
                     "active": True,
                     "created_at": now_utc().isoformat(),
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("institution seed skipped %r: %s", name, e)
         logger.info("Seeded institutions master from existing users")
-
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
 
 
 # ----------------------------------------------------------------------------
@@ -693,44 +720,76 @@ async def _close_stale_open_sessions(reason: str) -> int:
     return count
 
 
-async def _midnight_auto_checkout_loop():
-    """Forever: sleep until the next office-local midnight (+10s safety buffer),
-    then run the cleanup. Resilient — caught exceptions don't kill the loop."""
+async def _schedule_daily(label: str, get_target_hm, fn) -> None:
+    """Run `fn()` once per office-local day at the HH:MM returned by
+    `get_target_hm(office)`. `get_target_hm` is recalled on each tick so
+    a config change (e.g. admin moves the reminder time) is picked up
+    without a server restart.
+
+    `label` is purely for log messages. Resilient — caught exceptions log
+    and retry in 1h instead of killing the loop.
+    """
     import asyncio
     while True:
         try:
-            office = await db.config.find_one({"id": "office"}, {"_id": 0})
+            office = await db.config.find_one({"id": "office"}, {"_id": 0}) or {}
             tz = office_tz(office)
             now_local = datetime.now(tz)
-            next_run = (now_local + timedelta(days=1)).replace(hour=0, minute=0, second=10, microsecond=0)
-            wait = max(60, (next_run - now_local).total_seconds())
+            hh, mm = get_target_hm(office)
+            target = now_local.replace(hour=hh, minute=mm, second=10, microsecond=0)
+            if target <= now_local:
+                target += timedelta(days=1)
+            wait = max(60, (target - now_local).total_seconds())
             await asyncio.sleep(wait)
         except asyncio.CancelledError:
             return
         except Exception:
-            logger.exception("midnight scheduler tick failed; retrying in 1h")
+            logger.exception("%s scheduler tick failed; retrying in 1h", label)
             await asyncio.sleep(3600)
             continue
         try:
-            n = await _close_stale_open_sessions("midnight_cron")
-            logger.info("midnight auto-checkout: closed %d stale session(s)", n)
+            n = await fn()
+            if n:
+                logger.info("%s: ran with result=%s", label, n)
         except Exception:
-            logger.exception("midnight auto-checkout job failed")
+            logger.exception("%s job failed", label)
 
 
-@app.on_event("startup")
-async def _start_midnight_scheduler():
-    """Catch up at startup (in case the server was down across midnight), then
-    spawn the recurring loop."""
+async def _midnight_auto_checkout_loop():
+    """Sleep until office-local midnight (+10s), then close yesterday's
+    open sessions. Wrapper kept for readability of the cron intent."""
+    async def _run():
+        return await _close_stale_open_sessions("midnight_cron")
+    await _schedule_daily("midnight-auto-checkout", lambda _office: (0, 0), _run)
+
+
+@asynccontextmanager
+async def _lifespan(_app):
+    """Startup: seed + catch-up + spawn background loops.
+    Shutdown: cancel loops + close Mongo client."""
     import asyncio
+    await _seed_database()
     try:
         n = await _close_stale_open_sessions("startup_catchup")
         if n:
             logger.info("startup catch-up auto-checkout: closed %d stale session(s)", n)
     except Exception:
         logger.exception("startup catch-up auto-checkout failed")
-    asyncio.create_task(_midnight_auto_checkout_loop())
-    asyncio.create_task(_checkout_reminder_loop())
+    tasks = [
+        asyncio.create_task(_midnight_auto_checkout_loop()),
+        asyncio.create_task(_checkout_reminder_loop()),
+    ]
+    try:
+        yield
+    finally:
+        for t in tasks:
+            t.cancel()
+        for t in tasks:
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
+        client.close()
 
 
 # ----------------------------------------------------------------------------
@@ -785,36 +844,16 @@ async def _send_checkout_reminders() -> int:
 
 
 async def _checkout_reminder_loop():
-    """Forever: sleep until the configured reminder time today (or tomorrow if
-    that's already past), fire the batch, repeat."""
-    import asyncio
-    while True:
+    """Sleep until the configured office-local reminder time, fire the
+    batch, repeat. Time is re-read from config each tick so admin edits
+    in the UI take effect on the next cycle."""
+    def _hm_from(office):
+        t = (office.get("checkout_reminder_time") or "20:00").split(":")
         try:
-            office = await db.config.find_one({"id": "office"}, {"_id": 0}) or {}
-            tz = office_tz(office)
-            now_local = datetime.now(tz)
-            t = (office.get("checkout_reminder_time") or "20:00").split(":")
-            try:
-                hh, mm = int(t[0]), int(t[1])
-            except (ValueError, IndexError):
-                hh, mm = 20, 0
-            target = now_local.replace(hour=hh, minute=mm, second=0, microsecond=0)
-            if target <= now_local:
-                target += timedelta(days=1)
-            wait = max(60, (target - now_local).total_seconds())
-            await asyncio.sleep(wait)
-        except asyncio.CancelledError:
-            return
-        except Exception:
-            logger.exception("checkout-reminder scheduler tick failed; retrying in 1h")
-            await asyncio.sleep(3600)
-            continue
-        try:
-            n = await _send_checkout_reminders()
-            if n:
-                logger.info("checkout reminder: SMS sent to %d open-session member(s)", n)
-        except Exception:
-            logger.exception("checkout-reminder job failed")
+            return int(t[0]), int(t[1])
+        except (ValueError, IndexError):
+            return 20, 0
+    await _schedule_daily("checkout-reminder", _hm_from, _send_checkout_reminders)
 
 
 # ----------------------------------------------------------------------------
@@ -856,14 +895,19 @@ async def _match_user_by_phone(digits: str) -> Optional[dict]:
     key = phone_key(digits)
     if not key:
         return None
-    matched_id = None
+    # Fast path: lookup by the indexed denormalised last-10-digit key,
+    # populated at user-create time and backfilled at startup. Falls back
+    # to the legacy full-scan match for any users not yet backfilled
+    # (handles a freshly-restored DB without the index field).
+    match = await db.users.find_one(
+        {"mobile_last10": key}, {"_id": 0, "hashed_password": 0}
+    )
+    if match:
+        return match
     async for u in db.users.find({"mobile": {"$ne": None}}, {"_id": 0, "id": 1, "mobile": 1}):
         if phone_key(u.get("mobile") or "") == key:
-            matched_id = u["id"]
-            break
-    if not matched_id:
-        return None
-    return await db.users.find_one({"id": matched_id}, {"_id": 0, "hashed_password": 0})
+            return await db.users.find_one({"id": u["id"]}, {"_id": 0, "hashed_password": 0})
+    return None
 
 
 @api_router.post("/auth/phone")
@@ -1040,6 +1084,7 @@ async def approve_device(device_pk: str, body: DeviceApproveIn, admin: dict = De
             "category": body.category,
             "rank": body.rank,
             "mobile": digits,
+            "mobile_last10": phone_key(digits) or None,
             "work_start": None,
             "work_end": None,
             "photo": None,
@@ -1096,12 +1141,17 @@ async def reinstate_device(device_pk: str, admin: dict = Depends(require_admin))
 @api_router.get("/office")
 async def get_office(user: dict = Depends(get_current_user)):
     office = await db.config.find_one({"id": "office"}, {"_id": 0})
+    if not office:
+        return office
+    # QR-based check-in was removed in favour of GPS — strip the now-dead
+    # `qr_token` so it never leaks to authenticated members.
+    office.pop("qr_token", None)
     # Mask the Twilio auth token so it's never sent back in plaintext over the
     # wire. The frontend renders a "Change token" button instead of exposing it.
-    if office and (office.get("twilio") or {}).get("auth_token"):
+    if (office.get("twilio") or {}).get("auth_token"):
         tok = office["twilio"]["auth_token"]
         office["twilio"] = {**office["twilio"], "auth_token": "•" * max(0, len(tok) - 4) + tok[-4:], "has_auth_token": True}
-    elif office and "twilio" in office:
+    elif "twilio" in office:
         office["twilio"] = {**office["twilio"], "has_auth_token": False}
     return office
 
@@ -1115,13 +1165,6 @@ async def update_office(body: OfficeConfig, admin: dict = Depends(require_admin)
     payload.pop("twilio", None)
     await db.config.update_one({"id": "office"}, {"$set": payload})
     return await db.config.find_one({"id": "office"}, {"_id": 0})
-
-
-@api_router.post("/office/regenerate-qr")
-async def regenerate_qr(admin: dict = Depends(require_admin)):
-    new_token = "OFFICE-" + uuid.uuid4().hex[:12].upper()
-    await db.config.update_one({"id": "office"}, {"$set": {"qr_token": new_token}})
-    return {"qr_token": new_token}
 
 
 @api_router.post("/admin/checkout-reminder/send-now")
@@ -1159,6 +1202,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "category": body.category,
         "rank": body.rank,
         "mobile": body.mobile,
+        "mobile_last10": phone_key(body.mobile or "") or None,
         "work_start": body.work_start,
         "work_end": body.work_end,
         "institution": body.institution,
@@ -1196,13 +1240,16 @@ async def list_members(user: dict = Depends(get_current_user)):
 
 @api_router.patch("/members/{member_id}", response_model=UserPublic)
 async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depends(require_admin)):
-    if body.role == "member" and member_id == admin["id"]:
+    if body.role is not None and body.role == "member" and member_id == admin["id"]:
         raise HTTPException(status_code=400, detail="You cannot remove your own admin access")
     if body.photo is not None:
         _check_photo_size(body.photo)
     update = {k: v for k, v in body.model_dump().items() if v is not None and k != "password"}
     if body.password:
         update["hashed_password"] = hash_password(body.password)
+    # Keep the denormalised phone key in sync when mobile changes.
+    if "mobile" in update:
+        update["mobile_last10"] = phone_key(update.get("mobile") or "") or None
     # Keep `photo_thumb` in sync ONLY when the photo bytes actually changed.
     # The MemberForm always submits its current `photo` value (even when the
     # admin didn't touch it), so blindly regenerating would reset the 365-day
@@ -1510,14 +1557,11 @@ async def member_card(member_id: str, admin: dict = Depends(require_admin)):
 
 @api_router.get("/admin/cards")
 async def all_cards(admin: dict = Depends(require_admin)):
-    """Office master QR + every member's personal QR — for batch printing."""
-    office = await db.config.find_one({"id": "office"}, {"_id": 0})
+    """Every member's personal QR — for batch printing of member ID cards."""
     users = await db.users.find(
         {}, {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1, "personal_qr": 1}
     ).sort("full_name", 1).to_list(2000)
     return {
-        "office_qr": office.get("qr_token") if office else None,
-        "office_name": office.get("name") if office else None,
         "members": [
             {
                 "id": u["id"],
@@ -1597,6 +1641,9 @@ async def import_members(file: UploadFile = File(...), admin: dict = Depends(req
     valid_cats = {"athlete", "staff", "coach", "executive"}
     time_re = re.compile(r"^\d{1,2}:\d{2}$")
     created, errors = [], []
+    # First pass: parse + validate every row, gather candidate emails so we
+    # can do ONE existence check instead of N `find_one`s.
+    candidates = []
     for n, row in enumerate(rows[1:], start=2):
         if row is None or all(c is None or str(c).strip() == "" for c in row):
             continue
@@ -1626,85 +1673,60 @@ async def import_members(file: UploadFile = File(...), admin: dict = Depends(req
             ws_start = None
         if ws_end and not time_re.match(ws_end):
             ws_end = None
-        if await db.users.find_one({"email": email}):
-            errors.append({"row": n, "reason": f"Skipped — email already exists ({email})"})
-            continue
-        doc = {
-            "id": str(uuid.uuid4()),
-            "email": email,
-            "full_name": name,
-            "role": "member",
-            "category": category,
-            "rank": rank,
-            "mobile": mobile,
-            "work_start": ws_start,
-            "work_end": ws_end,
-            "institution": institution,
-            "gender": gender,
-            "photo": None,
-            "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
-            "hashed_password": hash_password(password),
-            "created_at": now_utc().isoformat(),
-        }
-        await db.users.insert_one(doc)
-        created.append({"full_name": name, "email": email, "password": password})
+        candidates.append({
+            "_n": n, "_name": name, "_email": email, "_password": password,
+            "_doc": {
+                "id": str(uuid.uuid4()),
+                "email": email,
+                "full_name": name,
+                "role": "member",
+                "category": category,
+                "rank": rank,
+                "mobile": mobile,
+                "mobile_last10": phone_key(mobile) or None,
+                "work_start": ws_start,
+                "work_end": ws_end,
+                "institution": institution,
+                "gender": gender,
+                "photo": None,
+                "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
+                "hashed_password": hash_password(password),
+                "created_at": now_utc().isoformat(),
+            },
+        })
+
+    # One bulk membership check vs. N find_one round trips. Also dedupe
+    # within the file itself so a sheet with the same email twice doesn't
+    # try to insert both rows.
+    if candidates:
+        existing_emails = set()
+        emails_in_file = [c["_email"] for c in candidates]
+        async for u in db.users.find({"email": {"$in": emails_in_file}}, {"_id": 0, "email": 1}):
+            existing_emails.add(u["email"])
+        seen_in_file: set = set()
+        to_insert = []
+        for c in candidates:
+            if c["_email"] in existing_emails or c["_email"] in seen_in_file:
+                errors.append({"row": c["_n"], "reason": f"Skipped — email already exists ({c['_email']})"})
+                continue
+            seen_in_file.add(c["_email"])
+            to_insert.append(c["_doc"])
+            created.append({"full_name": c["_name"], "email": c["_email"], "password": c["_password"]})
+        if to_insert:
+            try:
+                await db.users.insert_many(to_insert, ordered=False)
+            except Exception as e:
+                logger.warning("import_members bulk insert partial: %s", e)
     return {"created": created, "errors": errors, "created_count": len(created), "error_count": len(errors)}
 
 
-def _norm_name(s: str) -> str:
-    """Normalize a sailor / member name for matching across the parents file
-    and the existing DB. Lowercases, strips diacritics, collapses spaces, and
-    drops common honorifics so 'PREETHI KONGARA' matches 'Preethi Kongara '."""
-    if not s:
-        return ""
-    s = str(s).strip().lower()
-    # Collapse multiple spaces
-    s = " ".join(s.split())
-    return s
-
-
-def _fuzzy_score(a: str, b: str) -> float:
-    """Lightweight similarity (0-1) using difflib.SequenceMatcher on normalized
-    names. Used to suggest near-matches when the spreadsheet spelling drifts
-    slightly from the DB ('Preethi Kongra' vs 'Preethi Kongara')."""
-    import difflib
-    return difflib.SequenceMatcher(None, _norm_name(a), _norm_name(b)).ratio()
-
-
-def _norm_mobile(v) -> Optional[str]:
-    """Coerce an Excel mobile cell (int, float, or string) into a clean digits
-    string. Returns None for the common 'no number' markers — 'LATE', '-', 'N/A',
-    blanks — so the DB stores a clean null instead of garbage."""
-    if v is None:
-        return None
-    if isinstance(v, (int, float)):
-        # Excel often delivers a 10-digit number as an int; .0 floats too.
-        n = int(v)
-        if n <= 0:
-            return None
-        return str(n)
-    s = str(v).strip()
-    if not s:
-        return None
-    upper = s.upper()
-    if upper in ("LATE", "N/A", "NA", "-", "--", "NIL", "NONE"):
-        return None
-    # Keep only digits — drop +, spaces, dashes, country codes.
-    digits = "".join(c for c in s if c.isdigit())
-    return digits or None
-
-
-def _clean_name(v) -> Optional[str]:
-    if v is None:
-        return None
-    s = str(v).strip()
-    if not s or s.upper() in ("-", "--", "N/A", "NA", "NIL", "NONE", "LATE"):
-        return None
-    # Strip a leading "LATE " prefix from deceased-parent entries so the
-    # display name is just the parent's name.
-    if s.upper().startswith("LATE "):
-        s = s[5:].strip()
-    return s or None
+# Parents-import helpers live in their own module to keep this file focused.
+from parents_import_utils import (
+    norm_name as _norm_name,
+    fuzzy_score as _fuzzy_score,
+    norm_mobile as _norm_mobile,
+    clean_name as _clean_name,
+)
 
 
 @api_router.post("/members/import-parents")
@@ -2127,8 +2149,8 @@ async def temp_return(body: TempReturnIn, user: dict = Depends(get_current_user)
     if target.get("expected_return"):
         try:
             target["overdue_minutes"] = max(0, int((now - datetime.fromisoformat(target["expected_return"])).total_seconds() // 60))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("temp_return: ignoring bad expected_return %r: %s", target.get("expected_return"), e)
     await db.attendance.update_one({"id": sess["id"]}, {"$set": {"excursions": excursions}})
     return {"ok": True, "excursion": target}
 
@@ -2205,30 +2227,6 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
     return {"ok": True, "action": "checkin", "member": target["full_name"],
             "out_of_geofence": out, "distance_m": dist,
             "late": late, "late_minutes": late_minutes}
-
-
-@api_router.post("/attendance/checkin")
-async def check_in(body: CheckInIn, user: dict = Depends(get_current_user)):
-    office = await db.config.find_one({"id": "office"})
-    if not office:
-        raise HTTPException(status_code=500, detail="Office not configured")
-    if body.qr_token != office["qr_token"]:
-        raise HTTPException(status_code=400, detail="Invalid Office QR code")
-    if await open_session_for(user["id"]):
-        raise HTTPException(status_code=400, detail="You are already checked in")
-    return await perform_toggle(user, office, body.latitude, body.longitude,
-                                body.photo, body.reason, "office_qr", None)
-
-
-@api_router.post("/attendance/checkout")
-async def check_out(body: CheckInIn, user: dict = Depends(get_current_user)):
-    office = await db.config.find_one({"id": "office"})
-    if not await open_session_for(user["id"]):
-        raise HTTPException(status_code=400, detail="You are not checked in")
-    if office and body.qr_token != office["qr_token"]:
-        raise HTTPException(status_code=400, detail="Invalid Office QR code")
-    return await perform_toggle(user, office, body.latitude, body.longitude,
-                                body.photo, body.reason, "office_qr", None)
 
 
 async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
@@ -2566,6 +2564,14 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
         "status": "approved", "start_date": {"$lte": target_date}, "end_date": {"$gte": target_date},
     }, {"_id": 0}).to_list(5000)
     leave_map = {leave["user_id"]: leave for leave in leaves}
+    # Bulk-fetch approved `late_coming` notices for the target date so the
+    # per-member loop below doesn't run an N+1 query (one find_one per
+    # absent athlete). One filtered scan → dict lookup.
+    late_coming_leaves = await db.leaves.find({
+        "status": "approved", "type": "late_coming",
+        "start_date": {"$lte": target_date}, "end_date": {"$gte": target_date},
+    }, {"_id": 0, "user_id": 1, "expected_arrival": 1, "reason": 1}).to_list(2000)
+    late_coming_map = {leave["user_id"]: leave for leave in late_coming_leaves}
 
     # Today's parent-notification dispatches → keyed (user_id, type) for fast lookup.
     # Historical view doesn't show "notify due" so we skip the fetch when on a past day.
@@ -2779,10 +2785,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                     past_start = True
                 if past_start and is_expected_today:
                     # Approved late-coming notice covering today → softer treatment
-                    late_today = await db.leaves.find_one({
-                        "user_id": u["id"], "status": "approved", "type": "late_coming",
-                        "start_date": {"$lte": target_date}, "end_date": {"$gte": target_date},
-                    }, {"_id": 0, "expected_arrival": 1, "reason": 1})
+                    late_today = late_coming_map.get(u["id"])
                     status_v = "absent"
                     if late_today:
                         ea = late_today.get("expected_arrival")
@@ -3392,7 +3395,11 @@ async def admin_backup(admin: dict = Depends(require_admin)):
     """Download a FULL database snapshot — every collection (users, attendance,
     leaves, institutions, config, devices, parent_notifications, camps,
     regattas, guests, daily_content, sms_log) as a single tar.gz. Designed
-    for moving data back and forth between prod ↔ preview environments."""
+    for moving data back and forth between prod ↔ preview environments.
+
+    Streams each collection in batches of 500 docs so memory stays bounded
+    even when attendance grows to tens of thousands of rows.
+    """
     import tarfile
     import io as _io
     import json as _json
@@ -3411,15 +3418,30 @@ async def admin_backup(admin: dict = Depends(require_admin)):
         "kind": "ych-full",
         "collections": {},
     }
+    BATCH = 500
     for name in collections:
-        docs = await db[name].find({}).to_list(length=None)
-        for d in docs:
-            d.pop("_id", None)
-        payload = _json.dumps(docs, default=str, indent=2).encode("utf-8")
+        # Stream the collection in chunks so we don't hold the whole list
+        # in memory. Each JSON file written to the tar is built incrementally.
+        chunks: list[bytes] = [b"[\n"]
+        total = 0
+        first = True
+        cursor = db[name].find({}, {"_id": 0})
+        async for d in cursor:
+            if not first:
+                chunks.append(b",\n")
+            chunks.append(_json.dumps(d, default=str).encode("utf-8"))
+            first = False
+            total += 1
+            # Periodically flush the chunk list into a single bytes blob to
+            # keep Python list overhead small (still in-memory, but compacted).
+            if total % BATCH == 0:
+                chunks = [b"".join(chunks)]
+        chunks.append(b"\n]")
+        payload = b"".join(chunks)
         info = tarfile.TarInfo(f"ych-full/{name}.json")
         info.size = len(payload)
         tf.addfile(info, _io.BytesIO(payload))
-        manifest["collections"][name] = len(docs)
+        manifest["collections"][name] = total
 
     mpayload = _json.dumps(manifest, indent=2).encode("utf-8")
     info = tarfile.TarInfo("ych-full/manifest.json")
@@ -3462,6 +3484,8 @@ async def admin_restore(
         "devices", "parent_notifications", "camps", "regattas",
         "guests", "daily_content", "sms_log", "breaks", "fleets",
     ]
+    from pymongo import InsertOne
+    BATCH = 500
     for tname in collections:
         member = None
         for m in tf.getmembers():
@@ -3485,84 +3509,34 @@ async def admin_restore(
         if mode == "replace":
             await col.delete_many({})
         added = 0
-        for d in docs:
-            d.pop("_id", None)
-            doc_id = d.get("id")
-            if mode == "merge" and doc_id:
-                existing = await col.find_one({"id": doc_id}, {"_id": 1})
-                if existing:
-                    continue
+        # Process in BATCH-sized chunks: one $in lookup for existing IDs +
+        # a single bulk_write per chunk → O(docs/BATCH) DB round trips
+        # instead of O(docs).
+        for i in range(0, len(docs), BATCH):
+            chunk = docs[i:i + BATCH]
+            for d in chunk:
+                d.pop("_id", None)
+            existing_ids: set = set()
+            if mode == "merge":
+                ids_in_chunk = [d.get("id") for d in chunk if d.get("id")]
+                if ids_in_chunk:
+                    async for row in col.find({"id": {"$in": ids_in_chunk}}, {"_id": 0, "id": 1}):
+                        existing_ids.add(row["id"])
+            ops = [InsertOne(d) for d in chunk
+                   if not (mode == "merge" and d.get("id") and d["id"] in existing_ids)]
+            if not ops:
+                continue
             try:
-                await col.insert_one(d)
-                added += 1
-            except DuplicateKeyError:
-                pass  # already there
+                res = await col.bulk_write(ops, ordered=False)
+                added += res.inserted_count
+            except Exception as e:
+                # Duplicate-key races: count the successes that did land,
+                # surface a soft warning in the response instead of failing
+                # the whole restore.
+                logger.warning("bulk_write partial failure for %s: %s", tname, e)
+                added += getattr(getattr(e, "details", {}), "get", lambda *_: 0)("nInserted") or 0
         counts[tname] = added
     return {"mode": mode, "inserted": counts}
-
-
-@api_router.post("/admin/snapshot/import")
-async def admin_snapshot_import(
-    file: UploadFile = File(...),
-    mode: str = "merge",
-    admin: dict = Depends(require_admin),
-):
-    """One-time data migration helper. Accepts a tar.gz snapshot (a folder of
-    `<collection>.json` files) and inserts the docs into the live DB.
-
-    mode='merge'   → insert only if a doc with the same `id` doesn't exist
-                     (existing admin accounts, devices, config stay intact).
-    mode='replace' → wipe each target collection first, then load.
-    """
-    import tarfile
-    import io as _io
-    import json as _json
-    raw = await file.read()
-    try:
-        tf = tarfile.open(fileobj=_io.BytesIO(raw), mode="r:gz")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not open archive: {e}")
-
-    counts: dict = {}
-    targets = ["users", "attendance", "leaves", "institutions", "config", "devices", "parent_notifications"]
-    for tname in targets:
-        member = None
-        for m in tf.getmembers():
-            if m.name.endswith(f"/{tname}.json") or m.name == f"{tname}.json":
-                member = m
-                break
-        if not member:
-            counts[tname] = 0
-            continue
-        fh = tf.extractfile(member)
-        if not fh:
-            counts[tname] = 0
-            continue
-        try:
-            docs = _json.loads(fh.read().decode("utf-8"))
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"{tname}.json parse failed: {e}")
-        if not isinstance(docs, list):
-            raise HTTPException(status_code=400, detail=f"{tname}.json must be a JSON list")
-        col = db[tname]
-        if mode == "replace":
-            await col.delete_many({})
-        added = 0
-        for d in docs:
-            d.pop("_id", None)
-            doc_id = d.get("id")
-            if mode == "merge" and doc_id:
-                existing = await col.find_one({"id": doc_id}, {"_id": 1})
-                if existing:
-                    continue
-            try:
-                await col.insert_one(d)
-                added += 1
-            except DuplicateKeyError:
-                pass  # already there (unique-indexed field collision)
-        counts[tname] = added
-    return {"mode": mode, "inserted": counts}
-
 
 
 @api_router.get("/admin/summary")

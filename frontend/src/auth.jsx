@@ -14,16 +14,25 @@ function rememberLastUser(u) {
       full_name: u.full_name || "",
       photo: u.photo || "",
     }));
-  } catch { /* quota or private mode */ }
+  } catch (err) {
+    // Quota exceeded or private-mode block — fall back to no caching, the
+    // Login page just won't show the "Welcome back" banner next visit.
+    console.debug("rememberLastUser skipped:", err?.message);
+  }
 }
 export function getRememberedUser() {
   try {
     const raw = localStorage.getItem(LAST_USER_KEY);
     return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+  } catch (err) {
+    console.debug("getRememberedUser parse failed:", err?.message);
+    return null;
+  }
 }
 export function forgetRememberedUser() {
-  try { localStorage.removeItem(LAST_USER_KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(LAST_USER_KEY); } catch (err) {
+    console.debug("forgetRememberedUser ignored:", err?.message);
+  }
 }
 
 export function AuthProvider({ children }) {
@@ -73,6 +82,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const refreshMe = useCallback(async () => {
+    if (!getToken()) {
+      // Already logged out elsewhere — avoid a stray request that just
+      // returns 401 and pollutes the network panel.
+      return;
+    }
     try {
       const me = await api.get("/auth/me");
       setUser(me);

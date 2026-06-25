@@ -1,33 +1,36 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./auth";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
-import Presence from "./pages/Presence";
 import SelfCheckIn from "./pages/SelfCheckIn";
-import Profile from "./pages/Profile";
-import MyLeaves from "./pages/MyLeaves";
-import Muster from "./pages/Muster";
-import Members from "./pages/admin/Members";
-import AdminLeaves from "./pages/admin/Leaves";
-import Devices from "./pages/admin/Devices";
-import OfficeSettings from "./pages/admin/Office";
-import Reports from "./pages/admin/Reports";
-import Overtime from "./pages/admin/Overtime";
-import Approvals from "./pages/admin/Approvals";
-import LeaveBalances from "./pages/admin/LeaveBalances";
-import Payroll from "./pages/admin/Payroll";
-import Institutions from "./pages/admin/Institutions";
-import Fleets from "./pages/admin/Fleets";
-import Calendar from "./pages/admin/Calendar";
-import BackupRestore from "./pages/admin/BackupRestore";
-import ImportMembers from "./pages/admin/ImportMembers";
-import SmsLog from "./pages/admin/SmsLog";
-import WhatsNew from "./pages/WhatsNew";
-import Cards from "./pages/admin/Cards";
 import { Loader2 } from "lucide-react";
+
+// Admin and seldom-used routes are code-split — keeps the athlete bundle
+// (login + self check-in) trim. The chunks are fetched on first navigation.
+const Presence = lazy(() => import("./pages/Presence"));
+const Profile = lazy(() => import("./pages/Profile"));
+const MyLeaves = lazy(() => import("./pages/MyLeaves"));
+const Muster = lazy(() => import("./pages/Muster"));
+const Members = lazy(() => import("./pages/admin/Members"));
+const AdminLeaves = lazy(() => import("./pages/admin/Leaves"));
+const Devices = lazy(() => import("./pages/admin/Devices"));
+const OfficeSettings = lazy(() => import("./pages/admin/Office"));
+const Reports = lazy(() => import("./pages/admin/Reports"));
+const Overtime = lazy(() => import("./pages/admin/Overtime"));
+const Approvals = lazy(() => import("./pages/admin/Approvals"));
+const LeaveBalances = lazy(() => import("./pages/admin/LeaveBalances"));
+const Payroll = lazy(() => import("./pages/admin/Payroll"));
+const Institutions = lazy(() => import("./pages/admin/Institutions"));
+const Fleets = lazy(() => import("./pages/admin/Fleets"));
+const Calendar = lazy(() => import("./pages/admin/Calendar"));
+const BackupRestore = lazy(() => import("./pages/admin/BackupRestore"));
+const ImportMembers = lazy(() => import("./pages/admin/ImportMembers"));
+const SmsLog = lazy(() => import("./pages/admin/SmsLog"));
+const WhatsNew = lazy(() => import("./pages/WhatsNew"));
+const Cards = lazy(() => import("./pages/admin/Cards"));
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -66,6 +69,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
         <Toaster position="top-center" richColors closeButton />
+        <Suspense fallback={<FullPageSpinner />}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
@@ -95,6 +99,7 @@ function App() {
             <Route path="admin/group-leave" element={<Navigate to="/admin/leaves" replace />} />
             <Route path="admin/institutions" element={<RequireAdmin><Institutions /></RequireAdmin>} />
             <Route path="admin/fleets" element={<RequireAdmin><Fleets /></RequireAdmin>} />
+            <Route path="admin/cards" element={<RequireAdmin><Cards /></RequireAdmin>} />
             <Route path="admin/camps" element={<Navigate to="/admin/calendar" replace />} />
             <Route path="admin/calendar" element={<RequireAdmin><Calendar /></RequireAdmin>} />
             <Route path="admin/backup" element={<RequireAdmin><BackupRestore /></RequireAdmin>} />
@@ -102,6 +107,7 @@ function App() {
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
     </ErrorBoundary>

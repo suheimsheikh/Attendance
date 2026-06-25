@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 2 validated all P0/P2/P3 review-fix items. 19/19 backend tests pass on the public preview URL. Removed endpoints (/api/attendance/checkin, /api/attendance/checkout, /api/office/regenerate-qr, /api/admin/snapshot/import) all return 404. /api/office no longer leaks qr_token. /api/admin/cards now returns only {members:[...]} with no office_qr/office_name. mobile_last10 is set on member create AND refreshed on PATCH mobile. Phone-login admin bypass (9849002111) returns an approved token instantly. Phone matcher resolves members via the new mobile_last10 indexed field. Bulk member import accepts 2 valid + reports 1 duplicate error. /api/admin/backup streams a tar.gz with manifest.json + per-collection files; /api/admin/restore in merge mode reports 0 inserted across all non-drift collections. /api/sms/test does not crash with Twilio disabled. Frontend smoke: all 7 listed routes (/presence, /muster, /admin/members, /admin/calendar, /admin/fleets, /whats-new, /admin/cards) render with the correct heading and no error widgets after admin token is set; /admin/cards renders only member QR cards (no office card), confirming the P0 fix end-to-end.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/admin/restore (merge)", "issue": "daily_content collection always reports 4 inserted because the app auto-seeds today's content during the test request between backup → restore. Not a bug, but the restore response would be confusing to operators expecting truly 0. Consider excluding daily_content from snapshot or skipping seeding when an active restore is in progress."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter2.py",
+    "/app/backend/tests/test_ishowedup_api.py",
+    "/app/test_reports/pytest/iter2_results.xml"
+  ],
+  "action_items": [
+    "(Optional, minor) Either exclude daily_content from backup/restore counts, or skip its daily-seeding when a restore is in flight, so merge-mode restore reports a true 0-inserted state.",
+    "(Pre-existing) /app/backend/server.py is 4092 lines — past iteration_1 also flagged this; consider splitting into routers."
+  ],
+  "critical_code_review_comments": [
+    "lifespan-based startup: backfill of mobile_last10 + index creation runs on app boot — clean.",
+    "Phone matcher uses last-10-digit index (mobile_last10). Indexed in users; the lookup is one keyed find_one — solid fix for the prior N regex scan.",
+    "Backup streams JSON-encoded chunks per collection into a single in-memory BytesIO tar.gz. For an existing ~5k row demo DB this is fine, but for >100k attendance rows the tar.gz buffer will balloon. Future enhancement: tempfile-backed stream + StreamingResponse.",
+    "/api/admin/cards intentionally trims fields with projection {id, full_name, rank, category, personal_qr} — good.",
+    "/api/office strips qr_token via dict.pop, and Twilio auth_token is masked — secrets boundary respected."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter2.py (new — 19 tests)"
+  ],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "100% smoke (7/7 routes render)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 confirmed working. Admin mobile is 9849002111 → phone-login auto-approves (verified).",
+  "seed_data_creation": "Created and DELETED: 1 test member (TEST_iter2_a@iso.app, mobile 9000077001 → patched to 9000077999), 2 bulk-import members (test_iter2_bulk1/2), 2 test phone-login devices. Cleanup is in test_99_cleanup + per-test inline cleanup; verified members listing returns no TEST_iter2_* rows post-run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Two test files now live under /app/backend/tests/: test_ishowedup_api.py (iter1, 21 legacy scenarios — note its test_06_regenerate_qr will FAIL on current server because /office/regenerate-qr is intentionally removed; keep it skipped or delete that test) and test_review_iter2.py (iter2, 19 review-fix scenarios — ALL pass). Recommended next run: `cd /app && python -m pytest backend/tests/test_review_iter2.py -v`. Frontend was smoke-tested by injecting the admin token into localStorage keys (token, access_token, ishowedup_token, user, ishowedup_user) then visiting each route — works because no separate refresh-me redirect kicks in.",
+  "rca of the issue": "N/A — no regressions detected."
+}

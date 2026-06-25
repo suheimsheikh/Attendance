@@ -46,6 +46,16 @@ export const api = {
 // Download blob (CSV / PDF / XLSX) keeping auth header
 export async function downloadBlob(path, filename, params) {
   const res = await client.get(path, { params, responseType: "blob" });
+  // Backend errors come back as JSON or HTML with the wrong status — axios
+  // happily wraps them as a blob, so we'd silently save an "error page" as
+  // the user's CSV/PDF. Detect the mismatch and surface it.
+  const ct = (res.headers?.["content-type"] || "").toLowerCase();
+  if (ct.includes("application/json") || ct.includes("text/html")) {
+    const text = await res.data.text();
+    let msg = text;
+    try { msg = JSON.parse(text)?.detail || text; } catch { /* keep raw text */ }
+    throw new ApiError(res.status || 0, typeof msg === "string" ? msg : "Download failed");
+  }
   const url = window.URL.createObjectURL(res.data);
   const a = document.createElement("a");
   a.href = url;

@@ -20,7 +20,11 @@ export default function Login() {
   const deviceIdRef = useRef("");
 
   useEffect(() => { if (user) nav("/", { replace: true }); }, [user, nav]);
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   const enter = (token, u) => {
     if (pollRef.current) clearInterval(pollRef.current);

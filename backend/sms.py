@@ -28,6 +28,7 @@ This module exposes two HTTP routers:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Optional
@@ -156,7 +157,9 @@ async def send_sms(*, db, to_e164: str, body: str, institution: Optional[str] = 
         kwargs["from_"] = from_number
 
     try:
-        sent = client.messages.create(**kwargs)
+        # Twilio's SDK is sync — offload to a worker thread so we don't
+        # block FastAPI's event loop for the ~300-800 ms of network IO.
+        sent = await asyncio.to_thread(client.messages.create, **kwargs)
     except TwilioRestException as exc:
         logger.warning("Twilio SMS error to %s: %s", to_e164, exc)
         raise HTTPException(status_code=502, detail=f"Twilio error: {exc.msg}")
@@ -201,7 +204,7 @@ async def make_voice_call(*, db, to_e164: str, body_en: str, body_te: str, insti
         f"</Response>"
     )
     try:
-        call = client.calls.create(to=to_e164, from_=from_number, twiml=twiml)
+        call = await asyncio.to_thread(client.calls.create, to=to_e164, from_=from_number, twiml=twiml)
     except TwilioRestException as exc:
         logger.warning("Twilio voice error to %s: %s", to_e164, exc)
         raise HTTPException(status_code=502, detail=f"Twilio error: {exc.msg}")

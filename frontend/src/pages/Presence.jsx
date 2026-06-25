@@ -43,18 +43,19 @@ export default function Presence() {
   // the board to a read-only historical view (no auto-refresh, no notify).
   // Use LOCAL date — `toISOString()` would give UTC and trip the next-day
   // logic across IST midnight (off-by-one between UTC and Asia/Kolkata).
-  const todayIso = () => new Date().toLocaleDateString("sv-SE");
+  const todayIso = useCallback(() => new Date().toLocaleDateString("sv-SE"), []);
   // Add `delta` days to a YYYY-MM-DD string, returning a YYYY-MM-DD string
   // in the *local* calendar (toISOString would silently convert to UTC and
   // break the right-arrow advance in IST).
-  const shiftIso = (iso, delta) => {
+  const shiftIso = useCallback((iso, delta) => {
     const d = new Date(iso + "T12:00:00");  // noon avoids DST edge cases
     d.setDate(d.getDate() + delta);
     return d.toLocaleDateString("sv-SE");
-  };
+  }, []);
   const [viewDate, setViewDate] = useState("");
   const [expandedRows, setExpandedRows] = useState(() => new Set());
-  const isHistorical = !!viewDate && viewDate !== todayIso();
+  const today = todayIso();
+  const isHistorical = !!viewDate && viewDate !== today;
 
   const load = useCallback(async () => {
     try {
@@ -153,8 +154,30 @@ export default function Presence() {
     load();
     // Historical view: read-only, no auto-refresh.
     if (isHistorical) return;
-    const t = setInterval(load, 15000);
-    return () => clearInterval(t);
+    // Gate polling on tab visibility — a backgrounded tab doesn't need
+    // a fresh roster every 15 s and 60+ coaches all polling at once
+    // hammers the API for nothing.
+    let t = null;
+    const start = () => {
+      if (t == null) t = setInterval(load, 15000);
+    };
+    const stop = () => {
+      if (t != null) { clearInterval(t); t = null; }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        load();    // catch up immediately on tab focus
+        start();
+      } else {
+        stop();
+      }
+    };
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [load, isHistorical]);
 
   const byColumn = useMemo(() => {
@@ -235,9 +258,9 @@ export default function Presence() {
               type="button"
               data-testid="presence-date-prev"
               onClick={() => {
-                const cur = viewDate || todayIso();
+                const cur = viewDate || today;
                 const next = shiftIso(cur, -1);
-                setViewDate(next === todayIso() ? "" : next);
+                setViewDate(next === today ? "" : next);
                 setExpandedRows(new Set());
               }}
               className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200 transition"
@@ -249,9 +272,9 @@ export default function Presence() {
             <input
               type="date"
               data-testid="presence-date-picker"
-              value={viewDate || todayIso()}
-              max={todayIso()}
-              onChange={(e) => { setViewDate(e.target.value === todayIso() ? "" : e.target.value); setExpandedRows(new Set()); }}
+              value={viewDate || today}
+              max={today}
+              onChange={(e) => { setViewDate(e.target.value === today ? "" : e.target.value); setExpandedRows(new Set()); }}
               className="bg-transparent border-0 outline-none text-sm font-bold w-[130px] text-center"
               aria-label="View presence for a specific date"
             />
@@ -259,10 +282,10 @@ export default function Presence() {
               type="button"
               data-testid="presence-date-next"
               onClick={() => {
-                const cur = viewDate || todayIso();
-                if (cur >= todayIso()) return;
+                const cur = viewDate || today;
+                if (cur >= today) return;
                 const next = shiftIso(cur, 1);
-                setViewDate(next >= todayIso() ? "" : next);
+                setViewDate(next >= today ? "" : next);
                 setExpandedRows(new Set());
               }}
               disabled={!isHistorical}

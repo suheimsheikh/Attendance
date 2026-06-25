@@ -252,20 +252,22 @@ export function speakLateMessage(minutes, memberName) {
   };
 
   // Voices may not be loaded yet on first page open; wait for the event.
+  // A `done` latch prevents speak() from firing twice if voiceschanged fires
+  // after our 800 ms safety timeout has already triggered it.
   const voices = window.speechSynthesis.getVoices();
   if (voices && voices.length > 0) {
     speak();
   } else {
-    const onReady = () => {
-      window.speechSynthesis.removeEventListener("voiceschanged", onReady);
+    let done = false;
+    const fire = () => {
+      if (done) return;
+      done = true;
+      window.speechSynthesis.removeEventListener("voiceschanged", fire);
       speak();
     };
-    window.speechSynthesis.addEventListener("voiceschanged", onReady);
+    window.speechSynthesis.addEventListener("voiceschanged", fire);
     // Safety timeout in case voiceschanged never fires
-    setTimeout(() => {
-      window.speechSynthesis.removeEventListener("voiceschanged", onReady);
-      speak();
-    }, 800);
+    setTimeout(fire, 800);
   }
 }
 
