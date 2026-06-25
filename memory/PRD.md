@@ -136,6 +136,26 @@
 
   Still deferred (separate planning sessions): rotate production secrets, JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, expanded pytest coverage for camps/regattas/guests/thumbnails.
 
+## Recently Added (Jun 25, 2026 — pre-launch polish round 3)
+
+- **Members admin table: 3 new at-a-glance columns** — added `Fleet`,
+  `Last seen`, and `Leave balance` columns to `/admin/members`. Backend
+  `UserPublic` now exposes `last_seen_date` (max attendance.date per user,
+  bulk-aggregated), `leave_balance_opening`, and `leave_balance_remaining`
+  (opening − YTD-approved-leave-days). Frontend `Members.jsx` renders:
+  - **Fleet** — sky pill when assigned, em-dash otherwise.
+  - **Last seen** — friendly relative labels (Today emerald / Yesterday / N
+    days ago / N≥30 days as absolute date in red / Never in slate-400),
+    `today` memoised per render.
+  - **Leave balance** — only meaningful for staff + coaches (payroll
+    cohort); athletes/executives show em-dash. Numeric `remaining/opening`
+    with tone bands (red <0, amber <3, slate otherwise) and a tooltip
+    breaking down opening − YTD-taken = remaining.
+  - Verified end-to-end: curl confirms all 132 rows carry the 4 fields
+    across all 4 categories; screenshot confirms headers + 132 cells
+    render without React errors, bucket pills/counts still intact (All
+    132 · Coaches 12 · Staff 27 · Executives 3 · Athletes 90 · Admin 4).
+
 ## Recently Added (Jun 25, 2026 — pre-launch polish round 2)
 
 Added on top of round 1 (Request-ID, hook deps, etc.).
