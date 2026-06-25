@@ -10,11 +10,16 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ### 🆕 New features
 
+- **Fleet master** — new admin page at `/admin/fleets` (sidebar → **Fleets**).
+  Create / edit / rename / archive boat classes. Renaming cascades to every
+  athlete in that fleet and to any breaks that target the fleet. Includes a
+  bulk "Assign athletes" modal so an admin can populate a fleet's roster
+  with checkboxes instead of editing each athlete one-by-one.
 - **Fleet field for athletes** — Manage Members → athlete edit form now has a
-  free-text Fleet field (e.g. Optimist, ILCA 6, 420). Used as filter pills on
-  the Presence Board, surfaced inside the **Apply Break** form (new scope
-  "One fleet" + filter chips when picking selected members), and visible
-  throughout the app.
+  Fleet dropdown sourced from the Fleet master (free-text fallback for legacy
+  values). Used as filter pills on the Presence Board, surfaced inside the
+  **Apply Break** form (new scope "One fleet" + filter chips when picking
+  selected members), and visible throughout the app.
 - **Apply Break in Leave/Tour admin** — the Leave/Tour page now has an
   "Apply break" button next to "Apply on behalf". Same modal as the Calendar,
   so admins don't need to leave the approvals flow to apply a rest day.

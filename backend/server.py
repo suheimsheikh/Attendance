@@ -390,6 +390,19 @@ class InstitutionIn(BaseModel):
     voice_from_number: Optional[str] = None
 
 
+class FleetIn(BaseModel):
+    # A "fleet" is a sailing boat class (e.g. Optimist, ILCA 6, 420). Stored
+    # as a master so admins get a clean dropdown when editing athletes
+    # instead of free-text drift ("420", "Four-twenty", "Dinghy 420"). The
+    # `name` is the canonical label and is what's actually written onto
+    # each athlete's `fleet` field — renaming the fleet master row
+    # cascades the rename through every athlete record.
+    name: str
+    short_name: Optional[str] = None
+    notes: Optional[str] = None
+    active: bool = True
+
+
 class GroupLeaveIn(BaseModel):
     user_ids: List[str]
     type: Literal["leave", "tour", "comp_off", "late_coming"]
@@ -1350,6 +1363,97 @@ async def delete_institution(inst_id: str, admin: dict = Depends(require_admin))
         raise HTTPException(status_code=409, detail=f"{in_use} members still use this institution — reassign first.")
     await db.institutions.delete_one({"id": inst_id})
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Fleet master (boat classes). Same shape & lifecycle as Institutions —
+# every athlete's `fleet` field points to one of these names.
+# ---------------------------------------------------------------------------
+@api_router.get("/fleets")
+async def list_fleets(user: dict = Depends(get_current_user)):
+    rows = await db.fleets.find({}, {"_id": 0}).sort("name", 1).to_list(500)
+    pipeline = [{"$group": {"_id": "$fleet", "n": {"$sum": 1}}}]
+    counts = {c["_id"]: c["n"] async for c in db.users.aggregate(pipeline) if c["_id"]}
+    for r in rows:
+        r["athlete_count"] = counts.get(r["name"], 0)
+    return rows
+
+
+@api_router.post("/fleets")
+async def create_fleet(body: FleetIn, admin: dict = Depends(require_admin)):
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name required")
+    if await db.fleets.find_one({"name": name}):
+        raise HTTPException(status_code=409, detail="Fleet already exists")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "short_name": (body.short_name or "").strip() or None,
+        "notes": (body.notes or "").strip() or None,
+        "active": body.active,
+        "created_at": now_utc().isoformat(),
+    }
+    await db.fleets.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.patch("/fleets/{fleet_id}")
+async def update_fleet(fleet_id: str, body: FleetIn, admin: dict = Depends(require_admin)):
+    fleet = await db.fleets.find_one({"id": fleet_id}, {"_id": 0})
+    if not fleet:
+        raise HTTPException(status_code=404, detail="Not found")
+    old_name = fleet["name"]
+    new_name = body.name.strip()
+    await db.fleets.update_one({"id": fleet_id}, {"$set": {
+        "name": new_name,
+        "short_name": (body.short_name or "").strip() or None,
+        "notes": (body.notes or "").strip() or None,
+        "active": body.active,
+    }})
+    # Cascade rename: every athlete with the old fleet name gets retagged.
+    if new_name != old_name:
+        await db.users.update_many({"fleet": old_name}, {"$set": {"fleet": new_name}})
+        # Also retag any breaks that target the old fleet.
+        await db.breaks.update_many({"fleet": old_name}, {"$set": {"fleet": new_name}})
+    return {"ok": True}
+
+
+@api_router.delete("/fleets/{fleet_id}")
+async def delete_fleet(fleet_id: str, admin: dict = Depends(require_admin)):
+    fleet = await db.fleets.find_one({"id": fleet_id}, {"_id": 0})
+    if not fleet:
+        raise HTTPException(status_code=404, detail="Not found")
+    in_use = await db.users.count_documents({"fleet": fleet["name"]})
+    if in_use > 0:
+        raise HTTPException(status_code=409, detail=f"{in_use} athlete(s) still in this fleet — reassign first.")
+    await db.fleets.delete_one({"id": fleet_id})
+    return {"ok": True}
+
+
+class FleetAssignIn(BaseModel):
+    fleet: Optional[str] = None       # None / "" clears the fleet for the listed athletes
+    member_ids: List[str]
+
+
+@api_router.post("/fleets/assign")
+async def assign_fleet(body: FleetAssignIn, admin: dict = Depends(require_admin)):
+    """Bulk-set the fleet on a group of athletes from the Fleet master page.
+    Pass `fleet: null` (or empty string) to UN-assign the picked athletes."""
+    if not body.member_ids:
+        raise HTTPException(status_code=400, detail="member_ids required")
+    target = (body.fleet or "").strip() or None
+    if target is not None:
+        # Sanity check: the fleet must exist in master.
+        exists = await db.fleets.find_one({"name": target}, {"_id": 1})
+        if not exists:
+            raise HTTPException(status_code=404, detail=f"Fleet '{target}' not in master — create it first.")
+    res = await db.users.update_many(
+        {"id": {"$in": body.member_ids}, "category": "athlete"},
+        {"$set": {"fleet": target}},
+    )
+    return {"modified": res.modified_count}
 
 
 # ----------------------------------------------------------------------------
@@ -3300,7 +3404,7 @@ async def admin_backup(admin: dict = Depends(require_admin)):
     collections = [
         "users", "institutions", "config", "attendance", "leaves",
         "devices", "parent_notifications", "camps", "regattas",
-        "guests", "daily_content", "sms_log", "breaks",
+        "guests", "daily_content", "sms_log", "breaks", "fleets",
     ]
     manifest = {
         "created_at": _dt.now(_tz.utc).isoformat(),
@@ -3356,7 +3460,7 @@ async def admin_restore(
     collections = [
         "users", "institutions", "config", "attendance", "leaves",
         "devices", "parent_notifications", "camps", "regattas",
-        "guests", "daily_content", "sms_log", "breaks",
+        "guests", "daily_content", "sms_log", "breaks", "fleets",
     ]
     for tname in collections:
         member = None

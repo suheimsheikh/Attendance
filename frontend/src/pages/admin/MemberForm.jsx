@@ -34,9 +34,11 @@ export default function MemberForm({ initial, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [institutions, setInstitutions] = useState([]);
+  const [fleets, setFleets] = useState([]);
 
   useEffect(() => {
     api.get("/institutions").then((rows) => setInstitutions((rows || []).filter((r) => r.active))).catch(() => {});
+    api.get("/fleets").then((rows) => setFleets((rows || []).filter((r) => r.active))).catch(() => {});
   }, []);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -173,14 +175,23 @@ export default function MemberForm({ initial, onClose, onSaved }) {
           {form.category === "athlete" && (
             <div>
               <label className="iu-label">Fleet <span className="text-slate-400 font-normal text-[10px]">(boat class)</span></label>
-              <input
+              <select
                 data-testid="mf-fleet"
                 value={form.fleet || ""}
                 onChange={(e) => set("fleet", e.target.value)}
                 className="iu-input"
-                placeholder="e.g. Optimist, ILCA 6, 420, 29er"
-              />
-              <p className="text-[11px] text-slate-500 mt-1">Used for filtering and bulk break application. Free-text — pick whatever naming your academy uses.</p>
+              >
+                <option value="">— None / not yet assigned —</option>
+                {fleets.map((f) => (
+                  <option key={f.id} value={f.name}>{f.name}{f.short_name ? ` (${f.short_name})` : ""}</option>
+                ))}
+                {form.fleet && !fleets.some((f) => f.name === form.fleet) && (
+                  <option value={form.fleet}>{form.fleet} (legacy)</option>
+                )}
+              </select>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Manage the list under <b>Admin → Fleets</b>. Used for break-on-fleet, filtering and bulk actions.
+              </p>
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">

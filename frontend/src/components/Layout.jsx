@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, QrCode, FileBarChart2, ScanLine, UserCog,
-  CalendarCheck2, ClipboardList, Building2, IdCard, FileSpreadsheet,
+  CalendarCheck2, ClipboardList, Building2, IdCard, FileSpreadsheet, Sailboat,
   LogOut, Menu, X, ListTree, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles
 } from "lucide-react";
 import Avatar from "./Avatar";
@@ -38,6 +38,7 @@ const NAV_ADMIN = [
   { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
   { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare },
   { to: "/admin/institutions", label: "Institutions", icon: Building2 },
+  { to: "/admin/fleets", label: "Fleets", icon: Sailboat },
   { to: "/admin/office", label: "Office Settings", icon: Settings },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/admin/payroll", label: "Monthly Payroll", icon: FileSpreadsheet },

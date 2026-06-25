@@ -38,10 +38,12 @@ export default function Calendar() {
   const [activeDay, setActiveDay] = useState(null);     // YYYY-MM-DD
   const [members, setMembers] = useState([]);
   const [institutions, setInstitutions] = useState([]);
+  const [fleets, setFleets] = useState([]);
 
   useEffect(() => {
     api.get("/members").then(setMembers).catch(() => {});
     api.get("/institutions").then(setInstitutions).catch(() => {});
+    api.get("/fleets").then((rows) => setFleets((rows || []).filter((r) => r.active))).catch(() => {});
   }, []);
 
   const monthStart = useMemo(() => startOfMonth(cursor), [cursor]);
@@ -392,6 +394,7 @@ export default function Calendar() {
           initial={editingBreak}
           members={members}
           institutions={institutions}
+          fleets={fleets}
           onClose={() => setEditingBreak(null)}
           onSaved={() => { setEditingBreak(null); load(); }}
         />
@@ -685,7 +688,7 @@ const SCOPES = [
   { key: "selected",    label: "Selected members",         hint: "Pick the exact members below" },
 ];
 
-export function BreakForm({ initial, members, institutions, onClose, onSaved }) {
+export function BreakForm({ initial, members, institutions, fleets, onClose, onSaved }) {
   useEscape(onClose);
   const isEdit = !!initial?.id;
   const today = ymd(new Date());
@@ -712,13 +715,14 @@ export function BreakForm({ initial, members, institutions, onClose, onSaved }) 
       : [...form.member_ids, id]
   );
 
-  // Distinct fleet values from members loaded into the picker — used for the
-  // fleet dropdown (scope=fleet) AND the in-list fleet filter chips (scope=selected).
+  // Distinct fleet values — prefer the fleet master (if passed in by the
+  // caller), otherwise fall back to scanning members for fleet labels.
   const fleetOptions = useMemo(() => {
+    if (fleets && fleets.length) return fleets.map((f) => f.name);
     const set = new Set();
     for (const m of members || []) { if (m.fleet) set.add(m.fleet); }
     return Array.from(set).sort();
-  }, [members]);
+  }, [fleets, members]);
 
   const filteredMembers = useMemo(() => {
     const q = memberSearch.trim().toLowerCase();
