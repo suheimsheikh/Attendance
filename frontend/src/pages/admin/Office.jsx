@@ -254,9 +254,14 @@ function TwilioPanel() {
         voice_voice_te: cfg.voice_voice_te || "Polly.Aditi",
         templates: cfg.templates || {},
       };
-      // Only include auth_token if the admin actually typed a fresh one —
-      // otherwise we'd overwrite the stored token with the masked string.
-      if (editToken && newToken.trim()) body.auth_token = newToken.trim();
+      // Send the auth token whenever the input is currently being shown AND
+      // the admin typed something in it. The input is shown either when the
+      // admin clicked "Change token" (editToken=true) OR during first-time
+      // setup when no token is saved yet (has_auth_token=false) — in the
+      // latter case `editToken` is still false even though the user is
+      // clearly entering a fresh token, so we must accept that path too.
+      const tokenInputVisible = editToken || !cfg.has_auth_token;
+      if (tokenInputVisible && newToken.trim()) body.auth_token = newToken.trim();
       await api.put("/sms/config", body);
       toast.success("Twilio settings saved");
       setEditToken(false); setNewToken("");

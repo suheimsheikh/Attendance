@@ -138,6 +138,29 @@
 
 ## Recently Added (Jun 25, 2026 — pre-launch polish round 3)
 
+- **🐛 Twilio first-time-setup auth-token save bug** — `Office.jsx` was
+  dropping `auth_token` from the PUT payload on the very first save
+  because the gate `editToken && newToken.trim()` required clicking the
+  "Change token" button, which only renders once a token is already saved.
+  First-time admins typed the token, hit Save, every other field landed
+  in the DB, the token silently didn't, and the field rendered empty on
+  reload — looked like "the token disappeared". Fix: treat
+  `!cfg.has_auth_token` (no saved token yet) as implicit edit mode so the
+  input's contents are submitted. Verified end-to-end: cleared
+  `office.twilio`, entered fresh creds, save → `has_auth_token: true` +
+  masked tail visible + "Change token" button now appears.
+- **Apply Break modal is now athletes-only** — the per-member checkbox
+  list in `BreakForm` (`/admin/leaves` → "Apply break", scope=Selected
+  members) used to mix athletes + coaches + staff + executives. Fleet is
+  an athlete-only concept, so the list now filters
+  `category === "athlete"` before rendering, the fleet-options derivation
+  drops non-athlete fleet leakage, and the labels read "Athletes on break
+  (N)" / "Search athletes by name…". Bulk scopes ("All coaches", "All
+  staff", "Holiday for everyone") still cover non-athlete breaks, and
+  individual coach/staff time-off goes through "Apply on behalf".
+  Verified: picker now shows 91 athletes (was 132), fleet pills All / Opti
+  A / Opti B / Opti D render from the athlete roster.
+
 - **Members admin table: 3 new at-a-glance columns** — added `Fleet`,
   `Last seen`, and `Leave balance` columns to `/admin/members`. Backend
   `UserPublic` now exposes `last_seen_date` (max attendance.date per user,
