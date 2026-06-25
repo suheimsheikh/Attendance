@@ -2405,6 +2405,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
     users = await db.users.find(
         {}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1,
              "photo_thumb": 1, "photo": 1, "work_start": 1, "work_end": 1, "institution": 1,
+             "fleet": 1,  # NOTE: needed by break_applies_to() for scope=fleet breaks
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1}
     ).sort("full_name", 1).to_list(2000)
 
