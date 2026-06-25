@@ -180,6 +180,12 @@ class UserPublic(BaseModel):
     mother_name: Optional[str] = None
     guardian_mobile: Optional[str] = None
     guardian_name: Optional[str] = None
+    # Optional decorated fields — populated by GET /members for the admin
+    # Members page (Fleet / Last seen / Leave balance columns). Other
+    # endpoints that return UserPublic just leave these as None.
+    last_seen_date: Optional[str] = None
+    leave_balance_opening: Optional[float] = None
+    leave_balance_remaining: Optional[float] = None
 
 
 class MemberCreate(BaseModel):
@@ -1024,13 +1030,54 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
 async def list_members(user: dict = Depends(get_current_user)):
     """List all members. For bandwidth reasons we substitute the small
     `photo_thumb` into the `photo` field — callers needing the full original
-    fetch `/members/{id}` (admin) or `/members/{id}/card` (printable)."""
+    fetch `/members/{id}` (admin) or `/members/{id}/card` (printable).
+
+    Decorates each row with:
+      - `last_seen_date`: ISO date of the member's most recent check-in
+        (or None if they've never checked in).
+      - `leave_balance_opening`: from the user doc, as-is.
+      - `leave_balance_remaining`: opening − YTD-approved-leave-days.
+    Two bulk aggregations keep this O(2) round trips regardless of roster size.
+    """
     users = await db.users.find({}, {"_id": 0, "hashed_password": 0}).sort("full_name", 1).to_list(2000)
+
+    # Bulk: latest check-in per user.
+    last_seen_rows = await db.attendance.aggregate([
+        {"$group": {"_id": "$user_id", "last": {"$max": "$check_in_at"}}},
+    ]).to_list(5000)
+    last_seen_map = {r["_id"]: r["last"] for r in last_seen_rows if r.get("last")}
+
+    # Bulk: approved leave days YTD per user.
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+    year = today[:4]
+    leaves_ytd = await db.leaves.find({
+        "status": "approved", "type": "leave",
+        "start_date": {"$gte": f"{year}-01-01", "$lte": f"{year}-12-31"},
+    }, {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1}).to_list(20000)
+    ytd_map: dict = {}
+    for leave in leaves_ytd:
+        try:
+            n = (date.fromisoformat(leave["end_date"]) - date.fromisoformat(leave["start_date"])).days + 1
+        except Exception:
+            n = 1
+        ytd_map[leave["user_id"]] = ytd_map.get(leave["user_id"], 0) + n
+
     out: List[UserPublic] = []
     for u in users:
         thumb = u.get("photo_thumb") or u.get("photo")
+        last_seen_iso = last_seen_map.get(u["id"])
+        opening = float(u.get("leave_balance_opening") or 0) if u.get("leave_balance_opening") is not None else None
+        taken = float(ytd_map.get(u["id"], 0))
+        remaining = None if opening is None else round(opening - taken, 1)
         # Swap photo → thumb just on the way out so DB stays the source of truth.
-        u_swapped = {**u, "photo": thumb}
+        u_swapped = {
+            **u,
+            "photo": thumb,
+            "last_seen_date": last_seen_iso[:10] if last_seen_iso else None,
+            "leave_balance_opening": opening,
+            "leave_balance_remaining": remaining,
+        }
         out.append(UserPublic(**{k: u_swapped.get(k) for k in UserPublic.model_fields}))
     return out
 

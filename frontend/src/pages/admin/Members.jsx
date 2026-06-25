@@ -27,6 +27,40 @@ const BUCKET_BY_KEY = Object.fromEntries(BUCKETS.map((b) => [b.key, b]));
 const bucketOf = (m) => m.category || "athlete";
 const GENDER_LABEL = { M: "Male", F: "Female", O: "Other" };
 
+// Render the "Last seen" column. Friendly relative labels for the common
+// cases (today / yesterday / N days ago), absolute date if older than a
+// month so the value stays meaningful at any scale.
+function lastSeenLabel(iso, today) {
+  if (!iso) return <span className="text-slate-400">Never</span>;
+  if (iso === today) return <span className="text-emerald-700 font-semibold">Today</span>;
+  // YYYY-MM-DD diff in days. Both inputs are local-date strings (no TZ).
+  const d1 = new Date(iso + "T12:00:00");
+  const d2 = new Date(today + "T12:00:00");
+  const diff = Math.round((d2 - d1) / 86400000);
+  if (diff === 1) return <span className="text-slate-700">Yesterday</span>;
+  if (diff < 7) return <span className="text-slate-700">{diff} days ago</span>;
+  if (diff < 30) return <span className="text-amber-700">{diff} days ago</span>;
+  // Absolute date for anything ≥ 30 days — easier to interpret than "127 days ago".
+  return <span className="text-red-700 font-semibold">
+    {new Date(iso + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+  </span>;
+}
+
+// Render the "Leave balance" column. Only meaningful for staff + coaches (the
+// payroll cohort); athletes / executives get a friendly em-dash.
+function leaveBalanceLabel(m) {
+  if (!["staff", "coach"].includes(m.category)) return <span className="text-slate-300">—</span>;
+  const opening = m.leave_balance_opening;
+  const remaining = m.leave_balance_remaining;
+  if (opening == null) return <span className="text-slate-400" title="No opening balance set">—</span>;
+  const tone = remaining < 0 ? "text-red-700" : remaining < 3 ? "text-amber-700" : "text-slate-700";
+  return (
+    <span className={`font-mono ${tone}`} title={`Opening ${opening} − YTD taken ${(opening - remaining).toFixed(1)} = ${remaining}`}>
+      {remaining}<span className="text-slate-400">/{opening}</span>
+    </span>
+  );
+}
+
 // Open the edit modal when a row is double-clicked — but only when the click
 // didn't originate from an interactive element (inputs / buttons / labels for
 // photo upload), otherwise the parent-mobile editor double-click-to-select
@@ -50,6 +84,10 @@ export default function Members() {
   const [onlyAdmins, setOnlyAdmins] = useState(false);
   const [instFilter, setInstFilter] = useState("");
   const [institutions, setInstitutions] = useState([]);
+  // Today in local YYYY-MM-DD — used by the Last-seen column to compute
+  // "Today / Yesterday / N days ago". Memoised so the date string is stable
+  // across re-renders within the same calendar day.
+  const today = useMemo(() => new Date().toLocaleDateString("sv-SE"), []);
 
   const load = useCallback(async () => {
     try {
@@ -220,6 +258,9 @@ export default function Members() {
                   <th className="iu-table-th">Gender</th>
                   <th className="iu-table-th">Mobile</th>
                   <th className="iu-table-th">Institution</th>
+                  <th className="iu-table-th">Fleet</th>
+                  <th className="iu-table-th">Last seen</th>
+                  <th className="iu-table-th">Leave balance</th>
                   <th className="iu-table-th">Hours</th>
                   <th className="iu-table-th">Weekly off</th>
                   <th className="iu-table-th">Parents / Guardian</th>
@@ -291,6 +332,15 @@ export default function Members() {
                       <td className="iu-table-td text-slate-700">{GENDER_LABEL[m.gender] || "—"}</td>
                       <td className="iu-table-td text-slate-700 font-mono text-xs">{m.mobile || "—"}</td>
                       <td className="iu-table-td text-slate-700">{m.institution || "—"}</td>
+                      <td className="iu-table-td text-slate-700">{m.fleet ? (
+                        <span className="inline-flex items-center px-2 h-5 rounded text-[11px] font-bold bg-sky-100 text-sky-700">{m.fleet}</span>
+                      ) : "—"}</td>
+                      <td className="iu-table-td text-slate-700 text-xs whitespace-nowrap" data-testid={`last-seen-${m.id}`}>
+                        {lastSeenLabel(m.last_seen_date, today)}
+                      </td>
+                      <td className="iu-table-td text-slate-700 text-xs whitespace-nowrap" data-testid={`leave-balance-${m.id}`}>
+                        {leaveBalanceLabel(m)}
+                      </td>
                       <td className="iu-table-td text-slate-700 text-xs whitespace-nowrap">
                         {m.work_start || "—"}{m.work_end ? <> – {m.work_end}</> : null}
                       </td>
@@ -328,7 +378,7 @@ export default function Members() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={12} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
+                  <tr><td colSpan={15} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
                 )}
               </tbody>
             </table>
