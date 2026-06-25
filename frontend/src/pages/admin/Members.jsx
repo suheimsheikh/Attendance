@@ -47,10 +47,11 @@ function lastSeenLabel(iso, today) {
   </span>;
 }
 
-// Render the "Leave balance" column. Only meaningful for staff + coaches (the
-// payroll cohort); athletes / executives get a friendly em-dash.
+// Render the "Leave balance" column. Only meaningful for non-athletes
+// (the leave-tracked cohort = coach + staff + executive). Athletes use the
+// Breaks workflow instead so we deliberately show em-dash for them.
 function leaveBalanceLabel(m) {
-  if (!["staff", "coach"].includes(m.category)) return <span className="text-slate-300">—</span>;
+  if (m.category === "athlete") return <span className="text-slate-300">—</span>;
   const opening = m.leave_balance_opening;
   const remaining = m.leave_balance_remaining;
   if (opening == null) return <span className="text-slate-400" title="No opening balance set">—</span>;
@@ -495,7 +496,7 @@ export default function Members() {
                         {lastSeenLabel(m.last_seen_date, today)}
                       </td>
                       <td className="iu-table-td text-slate-700 text-xs whitespace-nowrap" data-testid={`leave-balance-${m.id}`}>
-                        {["staff", "coach"].includes(m.category) ? (
+                        {m.category !== "athlete" ? (
                           <InlineCell
                             kind="number"
                             value={m.leave_balance_opening}

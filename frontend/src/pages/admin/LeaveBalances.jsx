@@ -55,8 +55,8 @@ export default function LeaveBalances() {
       <header className="mb-5">
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Leave Balances</h1>
         <p className="text-slate-500 text-sm mt-1">
-          Staff-only — set each staff member&apos;s opening leave balance for {data?.year || "this year"}.
-          Edit any cell, then Save. Athletes &amp; coaches don&apos;t consume a numeric quota and aren&apos;t listed here.
+          Coaches, staff &amp; executives — set each member&apos;s opening leave balance for {data?.year || "this year"}.
+          Edit any cell, then Save. Athletes don&apos;t consume a numeric quota (their time-off is tracked via Breaks) and aren&apos;t listed here.
         </p>
       </header>
 
