@@ -8,7 +8,41 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ## 🚧 Unreleased — pending deploy to `i-showed-up.ychyderabad.com`
 
-### 🪟 Final pre-launch polish (June 25, 2026)
+### 🔬 Safer launch (June 25, 2026 — round 2)
+
+- **Pre-launch checklist on tap.** Hit `/api/admin/preflight` (admin-only)
+  and get a ✅ / ⚠️ breakdown of office geofence, work hours, Twilio
+  credentials, admin count, recent backup, roster size, timezone — so the
+  Deploy button is never pressed with something missing.
+- **Build identity probe.** `/api/version` (no auth) returns git SHA,
+  branch, container start time, and uptime. Useful for "what's actually
+  live right now?" — paste it into a status page or check after Deploy.
+- **Cleaner error toasts.** When an API call fails, the red toast now
+  shows the matching Request ID underneath, e.g. `Request ID: 1ff8c2e321bc`.
+  Read it back to support over the phone and we can grep server logs
+  straight to your exact request.
+- **Friendlier "photo too large" message.** Instead of `413 photo too
+  large (256000 bytes; max 250000)`, you get
+  *"That photo is too big (250 KB). Try retaking it — the limit is 244 KB.
+  Most modern phone cameras will work if you crop or use the front camera."*
+- **Routing fix.** `/api/members/import-template` was being captured by
+  `/members/{member_id}` (registration order) and returning 404 instead
+  of the template Excel. Fixed — literal route now wins.
+
+### 📋 Test suite tripled (104 new tests this session)
+
+- `tests/test_services_*` — 81 unit tests (97 % coverage) on the helpers
+  extracted to `services/`.
+- `tests/test_routes_leaves.py` — 18 end-to-end tests for the new leaves
+  router (create / approve / reject / group / file-on-behalf).
+- `tests/test_routes_reports.py` — 18 tests for hours / payroll / daily
+  + CSV / PDF export shapes.
+- `tests/test_smoke_flows.py` — 9 critical-flow tests.
+- `tests/test_ishowedup_api.py` — 21 legacy tests, brought back to green
+  by fixing `sailor → athlete` literal mismatch.
+- **190/190 pass in ~17 s.**
+
+### 🪟 Final pre-launch polish (June 25, 2026 — round 1)
 
 - **Trace every coach complaint to logs.** Every API response now carries
   an `X-Request-ID` header. If a coach reports "the board froze at 9:14",

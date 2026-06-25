@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { MapPin, Loader2, LogIn, LogOut as LogOutIcon, AlertTriangle, RotateCcw, CheckCircle2, Navigation, Coffee, ArrowLeftRight, Clock } from "lucide-react";
-import { api } from "../api";
+import { api, showApiError } from "../api";
 import { getLocation } from "../utils";
 
 export default function CheckIn() {
@@ -49,7 +49,7 @@ export default function CheckIn() {
         toast.warning(`About ${dist} m off-site — add a reason to continue.`);
       } else {
         console.error("Check-in failed:", err);
-        toast.error(msg || "Check-in failed");
+        showApiError(err, "Check-in failed");
       }
     } finally {
       setWorking(false);
@@ -81,7 +81,7 @@ export default function CheckIn() {
       setReason("");
       refresh();
     } catch (err) {
-      toast.error(err?.message || "Failed");
+      showApiError(err, "Failed");
     } finally {
       setWorking(false);
       setLocating("");
@@ -104,7 +104,7 @@ export default function CheckIn() {
       setLastFix({ lat: loc.latitude, lng: loc.longitude, acc: loc.accuracy });
       toast.success(`Got fix: ${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)} (±${Math.round(loc.accuracy || 0)} m)`);
     } catch (err) {
-      toast.error(err?.message || "Could not get location");
+      showApiError(err, "Could not get location");
     } finally {
       setLocating("");
     }
@@ -126,7 +126,7 @@ export default function CheckIn() {
       toast.success("Welcome back!");
       refresh();
     } catch (err) {
-      toast.error(err?.message || "Failed");
+      showApiError(err, "Failed");
     } finally {
       setWorking(false);
     }
@@ -368,7 +368,7 @@ function TempExitCard({ onCreated }) {
       setExpectedReturn("");
       onCreated?.();
     } catch (err) {
-      toast.error(err?.message || "Failed");
+      showApiError(err, "Failed");
     } finally {
       setBusy(false);
     }

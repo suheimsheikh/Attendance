@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Phone, Mail, Lock, ArrowRight, Loader2, ChevronDown, ChevronUp, Hourglass, RefreshCw, User, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, getRememberedUser, forgetRememberedUser } from "../auth";
-import { api, ApiError, setToken } from "../api";
+import { api, ApiError, setToken, showApiError } from "../api";
 import { getDeviceId, getDeviceInfo } from "../utils";
 import Avatar from "../components/Avatar";
 
@@ -58,7 +58,7 @@ export default function Login() {
         }
       }
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not connect");
+      showApiError(err, "Could not connect");
     } finally {
       setLoading(false);
     }

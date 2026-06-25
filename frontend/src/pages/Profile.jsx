@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Clock, Calendar, AlertCircle, Loader2, Camera, Save } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "../api";
+import { api, showApiError } from "../api";
 import { useAuth } from "../auth";
 import Avatar from "../components/Avatar";
 import { formatTime, formatDate, categoryLabel } from "../utils";
@@ -22,7 +22,7 @@ export default function Profile() {
   const handlePhotoSelected = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { toast.error("Photo too large (max 2 MB)"); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error("Your photo is too big. Try retaking it or pick a smaller image (max 2 MB)."); return; }
     setUploading(true);
     try {
       const dataUrl = await new Promise((resolve, reject) => {
@@ -35,7 +35,7 @@ export default function Profile() {
       await refreshMe();
       toast.success("Profile photo updated");
     } catch (err) {
-      toast.error(err?.message || "Could not upload");
+      showApiError(err, "Could not upload");
     } finally {
       setUploading(false);
     }

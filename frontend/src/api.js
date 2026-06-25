@@ -1,4 +1,5 @@
 import axios from "axios";
+import { toast } from "sonner";
 
 const BASE = process.env.REACT_APP_BACKEND_URL;
 const TOKEN_KEY = "ishowedup_token";
@@ -70,6 +71,21 @@ export async function downloadBlob(path, filename, params) {
   a.remove();
   window.URL.revokeObjectURL(url);
 }
+
+// Surface an ApiError (or any thrown error) as a toast, with the server's
+// Request-ID attached as a description so coaches can read it back to
+// support when they hit anything weird. Drop-in replacement for
+// `toast.error(err?.message || "...")`.
+export function showApiError(err, fallback) {
+  const msg = err?.message || fallback || "Something went wrong";
+  const rid = err?.requestId;
+  if (rid) {
+    toast.error(msg, { description: `Request ID: ${rid}` });
+  } else {
+    toast.error(msg);
+  }
+}
+
 
 export async function uploadFile(path, file) {
   const form = new FormData();

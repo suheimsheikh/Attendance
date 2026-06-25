@@ -118,7 +118,7 @@ def test_07_create_member(admin_client, base_url, shared_state):
         "email": TEST_MEMBER_EMAIL,
         "password": TEST_MEMBER_PASSWORD,
         "full_name": "Test Sailor",
-        "category": "sailor",
+        "category": "athlete",
         "rank": "Seaman",
         "mobile": TEST_MEMBER_MOBILE,
         "role": "member",
@@ -129,7 +129,7 @@ def test_07_create_member(admin_client, base_url, shared_state):
     assert u["email"] == TEST_MEMBER_EMAIL
     assert u["full_name"] == "Test Sailor"
     assert u["role"] == "member"
-    assert u["category"] == "sailor"
+    assert u["category"] == "athlete"
     assert "id" in u
     shared_state["member_id"] = u["id"]
 
@@ -261,7 +261,7 @@ def test_16_phone_login_pending_approve_and_status(admin_client, base_url, share
     # Step 3: admin approve
     r3 = admin_client.post(f"{base_url}/api/admin/devices/{device_pk}/approve",
                            json={"full_name": "TEST Phone User",
-                                 "role": "member", "category": "sailor"},
+                                 "role": "member", "category": "athlete"},
                            timeout=30)
     assert r3.status_code == 200, r3.text
     assert r3.json()["ok"] is True
@@ -295,7 +295,7 @@ def test_18_reports_hours_export(admin_client, base_url):
                          timeout=60)
     assert rc.status_code == 200, rc.text[:200]
     assert "text/csv" in rc.headers.get("content-type", ""), rc.headers
-    assert rc.content.startswith(b"Name,Category,Rank")
+    assert rc.content.startswith(b"Attendance %,Name,Category,Rank")
 
     rp = admin_client.get(f"{base_url}/api/reports/hours/export",
                          params={"start": "2026-01-01", "end": "2026-01-31", "fmt": "pdf"},

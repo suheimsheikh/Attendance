@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw, Clock, Search, Check } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "../api";
+import { api, showApiError } from "../api";
 import Avatar from "../components/Avatar";
 import { shortDate, todayIso } from "../utils";
 import { useEscape } from "../hooks/useEscape";
@@ -174,7 +174,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
       }
       onCreated();
     } catch (err) {
-      toast.error(err?.message || "Failed");
+      showApiError(err, "Failed");
     } finally {
       setBusy(false);
     }

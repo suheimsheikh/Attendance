@@ -32,6 +32,9 @@ def test_check_photo_size_rejects_oversized_photo():
     with pytest.raises(HTTPException) as ei:
         check_photo_size("x" * (MAX_PHOTO_BYTES + 1))
     assert ei.value.status_code == 413
+    # Friendly message should reference KB and "too big".
+    assert "too big" in ei.value.detail.lower()
+    assert "kb" in ei.value.detail.lower()
 
 
 def test_make_thumbnail_returns_none_for_empty():

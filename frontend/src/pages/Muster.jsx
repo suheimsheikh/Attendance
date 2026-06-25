@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Loader2, Search, RefreshCw, CheckSquare, Square, LogIn, LogOut as LogOutIcon, Users, Camera } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "../api";
+import { api, showApiError } from "../api";
 import Avatar from "../components/Avatar";
 import ParentContact from "../components/ParentContact";
 import { useAuth } from "../auth";
@@ -35,7 +35,7 @@ export default function Muster() {
       setData(res);
       setPicked(new Set());
     } catch (err) {
-      toast.error(err?.message || "Couldn't load roster");
+      showApiError(err, "Couldn't load roster");
     } finally {
       setLoading(false);
     }
@@ -63,7 +63,7 @@ export default function Muster() {
       setPicked(new Set());
       load();
     } catch (err) {
-      toast.error(err?.message || "Save failed");
+      showApiError(err, "Save failed");
     } finally {
       setSaving(false);
     }
@@ -95,7 +95,7 @@ export default function Muster() {
         athletes: d.athletes.map((a) => a.id === photoTarget.id ? { ...a, photo: dataUrl } : a),
       } : d);
     } catch (err) {
-      toast.error(err?.message || "Failed to save photo");
+      showApiError(err, "Failed to save photo");
       return;
     }
     if (photoTarget.queued) {

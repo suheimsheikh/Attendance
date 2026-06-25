@@ -29,9 +29,17 @@ THUMB_QUALITY = 70
 
 def check_photo_size(photo: Optional[str]) -> None:
     if photo and len(photo) > MAX_PHOTO_BYTES:
+        # Human-friendly KB sizes — coaches don't need to count bytes.
+        # Backend log can be re-derived from the X-Request-ID if needed.
+        kb_max = MAX_PHOTO_BYTES // 1024
+        kb_got = len(photo) // 1024
         raise HTTPException(
             status_code=413,
-            detail=f"Photo too large ({len(photo)} bytes; max {MAX_PHOTO_BYTES})",
+            detail=(
+                f"That photo is too big ({kb_got} KB). "
+                f"Try retaking it — the limit is {kb_max} KB. "
+                "Most modern phone cameras will work if you crop or use the front camera."
+            ),
         )
 
 

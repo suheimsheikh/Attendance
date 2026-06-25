@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Clock, RefreshCw, UserPlus, UserX, Search, ChevronLeft, ChevronRight } from "lucide-react";
-import { api } from "../api";
+import { api, showApiError } from "../api";
 import GuestCheckInModal from "../components/GuestCheckInModal";
 import MemberForm from "./admin/MemberForm";
 import { useAuth } from "../auth";
@@ -78,7 +78,7 @@ export default function Presence() {
       const full = await api.get(`/members/${memberId}`);
       setEditingMember(full);
     } catch (err) {
-      toast.error(err?.message || "Couldn't load member");
+      showApiError(err, "Couldn't load member");
     }
   }, [isAdmin]);
 
@@ -99,7 +99,7 @@ export default function Presence() {
       toast.success(`${memberName} removed from On Campus`);
       load();
     } catch (err) {
-      toast.error(err?.message || "Couldn't remove — they may have already checked out");
+      showApiError(err, "Couldn't remove — they may have already checked out");
     }
   }, [isAdmin, load]);
 
@@ -122,7 +122,7 @@ export default function Presence() {
       toast.success(`${name} checked out`);
       load();
     } catch (err) {
-      toast.error(err?.message || "Failed");
+      showApiError(err, "Failed");
     }
   };
 
@@ -133,7 +133,7 @@ export default function Presence() {
       toast.success("Guest entry removed");
       load();
     } catch (err) {
-      toast.error(err?.message || "Failed");
+      showApiError(err, "Failed");
     }
   };
 

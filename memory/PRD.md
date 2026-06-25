@@ -136,6 +136,30 @@
 
   Still deferred (separate planning sessions): rotate production secrets, JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, expanded pytest coverage for camps/regattas/guests/thumbnails.
 
+## Recently Added (Jun 25, 2026 — pre-launch polish round 2)
+
+Added on top of round 1 (Request-ID, hook deps, etc.).
+
+- **`/api/admin/preflight`** — admin-only readiness check. Returns 7 items
+  (office geofence, work hours, Twilio, admin count, recent backup, roster
+  size, timezone) with pass/warn/fail severities. Helps confirm everything
+  is configured before pushing Deploy.
+- **`/api/version`** — no-auth probe returning git SHA, branch, started_at,
+  uptime_seconds. Useful for status pages and post-deploy verification.
+- **`showApiError(err, fallback)`** helper in `api.js` — surfaces the
+  server's `X-Request-ID` as a toast description. Threaded through Login,
+  Self check-in, Muster, MyLeaves, Profile, Presence (admin double-click,
+  guest check-out). Less-used callsites can opt in later.
+- **Friendly photo-too-large message** — KB-based, instructs the user to
+  retake the photo. Backend response + frontend client-side check both updated.
+- **Routing bugfix**: `/api/members/import-template` now resolves correctly
+  (was being captured by `/members/{member_id}` due to registration order;
+  returned 404 with "Member not found").
+- **Test coverage: 90 → 190 tests** (+18 leaves router, +18 reports router,
+  +24 legacy iteration_1 brought back to green after `sailor→athlete`
+  rename). 190/190 pass in ~17 s. `last_backup_at` now stamped on
+  /admin/backup so preflight can verify backup recency.
+
 ## Recently Added (Jun 25, 2026 — pre-launch polish)
 
 Final touch-up before July 1 launch. No structural changes (refactor frozen).

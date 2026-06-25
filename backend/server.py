@@ -1067,6 +1067,51 @@ async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depend
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
 
 
+@api_router.get("/members/import-template")
+async def import_template(admin: dict = Depends(require_admin)):
+    """Download a starter Excel template for /members/import.
+
+    NOTE: This route MUST stay before `/members/{member_id}` in route
+    registration order — FastAPI matches by registration order and a
+    parametric route would otherwise capture "import-template" as a member id.
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Members"
+    headers = ["full_name", "mobile", "email", "password", "rank", "category", "gender", "work_start", "work_end", "institution"]
+    ws.append(headers)
+    ws.append(["Arjun Nair", "9876543210", "arjun@academy.in", "secret123", "Petty Officer", "athlete", "M", "08:00", "17:00", "INS Hamla"])
+    ws.append(["Meera Kapoor", "9876500001", "", "", "Leading Seaman", "athlete", "F", "", "", "Naval Sailing Academy"])
+    ws.append(["Rohit Verma", "9876500002", "", "", "Head Coach", "coach", "M", "06:00", "14:00", "YCH Hyderabad"])
+    for i in range(1, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 18
+    # Notes sheet
+    notes = wb.create_sheet("Instructions")
+    for line in [
+        ["Column", "Required?", "Notes"],
+        ["full_name", "YES", "Person's full name"],
+        ["mobile", "YES", "Mobile number (also used as login if email is blank)"],
+        ["email", "No", "Login email. If blank, auto-generated as <mobile>@attendance.app"],
+        ["password", "No", "If blank, the mobile number is used as the password"],
+        ["rank", "No", "Rank / title, e.g. Petty Officer"],
+        ["category", "No", "athlete | staff | coach  (default: athlete)"],
+        ["gender", "No", "M | F | O   (Male / Female / Other)"],
+        ["work_start", "No", "Custom start time HH:MM (blank = office default)"],
+        ["work_end", "No", "Custom end time HH:MM (blank = office default)"],
+        ["institution", "No", "School / unit / academy name"],
+    ]:
+        notes.append(line)
+    for i in range(1, 4):
+        notes.column_dimensions[get_column_letter(i)].width = 40
+    buf = io.BytesIO()
+    wb.save(buf)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=members_template.xlsx"},
+    )
+
+
 @api_router.get("/members/{member_id}", response_model=UserPublic)
 async def get_member(member_id: str, admin: dict = Depends(require_admin)):
     """Single-member fetch used by double-click edit on the Presence Board."""
@@ -1336,45 +1381,6 @@ async def all_cards(admin: dict = Depends(require_admin)):
             for u in users
         ],
     }
-
-
-@api_router.get("/members/import-template")
-async def import_template(admin: dict = Depends(require_admin)):
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Members"
-    headers = ["full_name", "mobile", "email", "password", "rank", "category", "gender", "work_start", "work_end", "institution"]
-    ws.append(headers)
-    ws.append(["Arjun Nair", "9876543210", "arjun@academy.in", "secret123", "Petty Officer", "athlete", "M", "08:00", "17:00", "INS Hamla"])
-    ws.append(["Meera Kapoor", "9876500001", "", "", "Leading Seaman", "athlete", "F", "", "", "Naval Sailing Academy"])
-    ws.append(["Rohit Verma", "9876500002", "", "", "Head Coach", "coach", "M", "06:00", "14:00", "YCH Hyderabad"])
-    for i in range(1, len(headers) + 1):
-        ws.column_dimensions[get_column_letter(i)].width = 18
-    # Notes sheet
-    notes = wb.create_sheet("Instructions")
-    for line in [
-        ["Column", "Required?", "Notes"],
-        ["full_name", "YES", "Person's full name"],
-        ["mobile", "YES", "Mobile number (also used as login if email is blank)"],
-        ["email", "No", "Login email. If blank, auto-generated as <mobile>@attendance.app"],
-        ["password", "No", "If blank, the mobile number is used as the password"],
-        ["rank", "No", "Rank / title, e.g. Petty Officer"],
-        ["category", "No", "athlete | staff | coach  (default: athlete)"],
-        ["gender", "No", "M | F | O   (Male / Female / Other)"],
-        ["work_start", "No", "Custom start time HH:MM (blank = office default)"],
-        ["work_end", "No", "Custom end time HH:MM (blank = office default)"],
-        ["institution", "No", "School / unit / academy name"],
-    ]:
-        notes.append(line)
-    for i in range(1, 4):
-        notes.column_dimensions[get_column_letter(i)].width = 40
-    buf = io.BytesIO()
-    wb.save(buf)
-    return Response(
-        content=buf.getvalue(),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=members_template.xlsx"},
-    )
 
 
 @api_router.post("/members/import")
@@ -3104,6 +3110,14 @@ async def admin_backup(admin: dict = Depends(require_admin)):
     tf.close()
 
     fname = f"ych-full-{_dt.now().strftime('%Y%m%d-%H%M')}.tar.gz"
+    # Stamp last_backup_at so /api/admin/preflight can confirm a recent backup
+    # exists without the admin having to remember when they ran it.
+    await db.config.update_one(
+        {"id": "last_backup_at"},
+        {"$set": {"id": "last_backup_at", "when": _dt.now(_tz.utc).isoformat(),
+                  "by": admin["full_name"]}},
+        upsert=True,
+    )
     return Response(
         content=buf.getvalue(),
         media_type="application/gzip",
@@ -3191,6 +3205,118 @@ async def admin_restore(
                 added += getattr(getattr(e, "details", {}), "get", lambda *_: 0)("nInserted") or 0
         counts[tname] = added
     return {"mode": mode, "inserted": counts}
+
+
+@api_router.get("/admin/preflight")
+async def admin_preflight(admin: dict = Depends(require_admin)):
+    """Pre-deploy / pre-shift checklist — one call returns ✅ / ⚠️ on the
+    handful of things that *must* be configured for the app to behave well.
+    Designed for an admin to glance at before pushing Deploy or before
+    morning shift, not as a security audit.
+    """
+    items = []
+    office = await db.config.find_one({"id": "office"}, {"_id": 0}) or {}
+
+    has_geo = bool(office.get("latitude") and office.get("longitude") and (office.get("radius_m") or 0) > 0)
+    items.append({
+        "key": "office_geofence",
+        "label": "Office geofence",
+        "ok": has_geo,
+        "severity": "pass" if has_geo else "fail",
+        "detail": (
+            f"{office.get('name','Office')} — {office.get('radius_m')}m radius"
+            if has_geo else "Set latitude / longitude / radius in Office settings"
+        ),
+    })
+
+    has_hours = bool(office.get("default_work_start") and office.get("default_work_end"))
+    items.append({
+        "key": "default_work_hours",
+        "label": "Default work hours",
+        "ok": has_hours,
+        "severity": "pass" if has_hours else "warn",
+        "detail": (
+            f"{office.get('default_work_start')} – {office.get('default_work_end')}"
+            if has_hours else "Athletes will fall back to 09:00 → 17:00"
+        ),
+    })
+
+    tw = office.get("twilio") or {}
+    tw_enabled = bool(tw.get("enabled"))
+    tw_ready = bool(
+        tw_enabled and tw.get("account_sid") and tw.get("auth_token")
+        and (tw.get("messaging_service_sid") or tw.get("default_from_number"))
+    )
+    items.append({
+        "key": "twilio",
+        "label": "Twilio SMS / voice",
+        "ok": tw_ready,
+        "severity": "pass" if tw_ready else "warn",
+        "detail": (
+            "Enabled and configured" if tw_ready else (
+                "Enabled but missing credentials" if tw_enabled
+                else "Disabled — parent-notify SMS and 8 PM reminder will not send"
+            )
+        ),
+    })
+
+    admin_count = await db.users.count_documents({"role": "admin"})
+    items.append({
+        "key": "admins",
+        "label": "Admin users",
+        "ok": admin_count >= 1,
+        "severity": "pass" if admin_count >= 1 else "fail",
+        "detail": f"{admin_count} admin(s) configured",
+    })
+
+    # Backup recency. The /admin/backup endpoint now stamps last_backup_at
+    # on the config doc — preflight reads it without making the admin run
+    # the actual download.
+    last_backup_at = None
+    backup_doc = await db.config.find_one({"id": "last_backup_at"}, {"_id": 0})
+    if backup_doc and backup_doc.get("when"):
+        last_backup_at = backup_doc["when"]
+    week_ago = (now_utc() - timedelta(days=7)).isoformat()
+    backup_fresh = bool(last_backup_at and last_backup_at >= week_ago)
+    items.append({
+        "key": "backup",
+        "label": "Recent backup",
+        "ok": backup_fresh,
+        "severity": "pass" if backup_fresh else "warn",
+        "detail": (
+            f"Last backup: {last_backup_at}" if last_backup_at
+            else "No backup recorded — run Backup & Restore once before launch"
+        ),
+    })
+
+    member_count = await db.users.count_documents({})
+    items.append({
+        "key": "roster",
+        "label": "Roster loaded",
+        "ok": member_count > 0,
+        "severity": "pass" if member_count >= 5 else "warn",
+        "detail": f"{member_count} member(s)",
+    })
+
+    has_tz = bool(office.get("timezone"))
+    items.append({
+        "key": "timezone",
+        "label": "Office timezone",
+        "ok": has_tz,
+        "severity": "pass" if has_tz else "warn",
+        "detail": office.get("timezone") or "Defaults to Asia/Kolkata",
+    })
+
+    fails = sum(1 for i in items if i["severity"] == "fail")
+    warns = sum(1 for i in items if i["severity"] == "warn")
+    overall = "ready" if fails == 0 and warns == 0 else ("blocked" if fails > 0 else "warnings")
+    return {
+        "overall": overall,
+        "fails": fails,
+        "warns": warns,
+        "checked_at": now_utc().isoformat(),
+        "items": items,
+    }
 
 
 @api_router.get("/admin/summary")
@@ -3605,6 +3731,40 @@ app.include_router(_sms_router(db, require_admin))
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "service": "i-showed-up"}
+
+
+# Build / version probe — read once at module import so the value doesn't
+# drift if the working tree changes after deploy (the deployed container is
+# immutable anyway). Useful to answer "what's actually live right now?" and
+# to confirm a Deploy click actually rolled out.
+_STARTED_AT_ISO = now_utc().isoformat()
+try:
+    import subprocess as _sp  # noqa: E402
+    _GIT_SHA = _sp.check_output(["git", "rev-parse", "--short", "HEAD"],
+                                cwd=ROOT_DIR, stderr=_sp.DEVNULL, timeout=2).decode().strip()
+except Exception:
+    _GIT_SHA = "unknown"
+try:
+    _GIT_BRANCH = _sp.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                                   cwd=ROOT_DIR, stderr=_sp.DEVNULL, timeout=2).decode().strip()
+except Exception:
+    _GIT_BRANCH = "unknown"
+
+
+@app.get("/api/version")
+async def version():
+    """Build + runtime identity. Safe for unauthenticated calls — no secrets."""
+    now = now_utc()
+    started = datetime.fromisoformat(_STARTED_AT_ISO)
+    uptime_seconds = int((now - started).total_seconds())
+    return {
+        "service": "i-showed-up",
+        "git_sha": _GIT_SHA,
+        "git_branch": _GIT_BRANCH,
+        "started_at": _STARTED_AT_ISO,
+        "uptime_seconds": uptime_seconds,
+        "now": now.isoformat(),
+    }
 
 
 # ----------------------------------------------------------------------------
