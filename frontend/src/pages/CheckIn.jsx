@@ -1,19 +1,16 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { ScanLine, MapPin, Loader2, LogIn, LogOut as LogOutIcon, AlertTriangle, RotateCcw, CheckCircle2, Navigation, Coffee, ArrowLeftRight, Clock, Keyboard } from "lucide-react";
-import { api, ApiError } from "../api";
-import QrScanner from "../components/QrScanner";
+import { MapPin, Loader2, LogIn, LogOut as LogOutIcon, AlertTriangle, RotateCcw, CheckCircle2, Navigation, Coffee, ArrowLeftRight, Clock } from "lucide-react";
+import { api } from "../api";
 import { getLocation } from "../utils";
 
 export default function CheckIn() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [office, setOffice] = useState(null);
-  const [mode, setMode] = useState("qr"); // "qr" or "gps"
   const [working, setWorking] = useState(false);
-  const [scanning, setScanning] = useState(false);
   const [reason, setReason] = useState("");
-  const [pendingScan, setPendingScan] = useState(null); // { qr_token } awaiting reason
+  const [pendingScan, setPendingScan] = useState(null); // { distance } awaiting off-site reason
   const [lastFix, setLastFix] = useState(null); // {lat, lng, acc} for diagnostics
   const [locating, setLocating] = useState(""); // live "Improving fix… ±N m" text
 
@@ -32,27 +29,26 @@ export default function CheckIn() {
   const action = status?.checked_in ? "checkout" : "checkin";
   const actionLabel = status?.checked_in ? "Check Out" : "Check In";
 
-  const handleQrScan = async (qrToken, overrideReason) => {
+  // Single check-in path — GPS only. Provides an off-site override (with reason)
+  // when the user is outside the configured geofence.
+  const handleGpsCheckin = async (overrideReason) => {
     setWorking(true);
-    setScanning(false);
     try {
       const loc = await getLocation();
-      const body = { qr_token: qrToken, latitude: loc.latitude, longitude: loc.longitude, reason: overrideReason || undefined };
+      const body = { latitude: loc.latitude, longitude: loc.longitude, reason: overrideReason || undefined };
       const res = await api.post(`/attendance/${action}`, body);
       toast.success(res.action === "checkin" ? `Checked in — welcome, ${res.member}!` : `Checked out — ${res.member} (${res.hours}h)`);
       setReason("");
       setPendingScan(null);
       refresh();
     } catch (err) {
-      // Note: don't use `instanceof ApiError` — bundlers can duplicate the
-      // class across chunks, making the check unreliable in production.
       const msg = err?.message || "";
       if (typeof msg === "string" && msg.startsWith("OUT_OF_GEOFENCE:")) {
         const dist = msg.split(":")[1];
-        setPendingScan({ qr_token: qrToken, distance: dist });
+        setPendingScan({ distance: dist });
         toast.warning(`About ${dist} m off-site — add a reason to continue.`);
       } else {
-        console.error("Check-in via QR failed:", err);
+        console.error("Check-in failed:", err);
         toast.error(msg || "Check-in failed");
       }
     } finally {
@@ -77,7 +73,7 @@ export default function CheckIn() {
       // Guard: refuse to check in if the fix can't possibly resolve the geofence.
       const radius = office?.radius_m || 80;
       if ((loc.accuracy || 0) > radius * 2) {
-        toast.error(`GPS is too imprecise (±${Math.round(loc.accuracy)} m). Step outdoors with a clear view of the sky, wait 30 s and retry — or use QR check-in.`);
+        toast.error(`GPS is too imprecise (±${Math.round(loc.accuracy)} m). Step outdoors with a clear view of the sky, wait 30 s and retry.`);
         return;
       }
       const res = await api.post("/attendance/geo-toggle", { latitude: loc.latitude, longitude: loc.longitude, reason: reason || undefined });
@@ -114,8 +110,6 @@ export default function CheckIn() {
     }
   };
 
-  const startScan = () => { setPendingScan(null); setScanning(true); };
-
   const onTempOut = !!status?.on_temp_exit;
   const currentExcursion = status?.current_excursion;
 
@@ -150,8 +144,8 @@ export default function CheckIn() {
           {onTempOut
             ? "You're currently stepped out. Tap Return when you're back on campus."
             : status?.checked_in
-              ? "You're currently checked in. Scan the Office QR or use GPS to check out — or step out temporarily."
-              : "Scan the Office QR code or use GPS within the geofence to check in."}
+              ? "You're currently checked in. Tap below to check out — or step out temporarily."
+              : "Make sure you're inside the campus geofence, then tap to check in."}
         </p>
       </header>
 
@@ -201,26 +195,6 @@ export default function CheckIn() {
         <TempExitCard onCreated={refresh} />
       )}
 
-      {/* Mode tabs (hide while temp-out — only the "I'm back" card matters then) */}
-      {!onTempOut && (
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          <button
-            data-testid="mode-qr"
-            onClick={() => setMode("qr")}
-            className={`iu-btn ${mode === "qr" ? "iu-btn-primary" : "iu-btn-secondary"}`}
-          >
-            <ScanLine size={16} /> QR scan
-          </button>
-          <button
-            data-testid="mode-gps"
-            onClick={() => setMode("gps")}
-            className={`iu-btn ${mode === "gps" ? "iu-btn-primary" : "iu-btn-secondary"}`}
-          >
-            <Navigation size={16} /> GPS only
-          </button>
-        </div>
-      )}
-
       {/* Off-site reason prompt */}
       {pendingScan && (
         <div className="iu-card p-4 mb-4 border-amber-300 bg-amber-50" data-testid="offsite-prompt">
@@ -240,7 +214,7 @@ export default function CheckIn() {
             <button
               data-testid="confirm-offsite-button"
               disabled={!reason.trim() || working}
-              onClick={() => handleQrScan(pendingScan.qr_token, reason)}
+              onClick={() => handleGpsCheckin(reason)}
               className="iu-btn-primary flex-1"
             >
               {working ? <Loader2 className="animate-spin" size={16} /> : `Confirm ${actionLabel}`}
@@ -250,49 +224,12 @@ export default function CheckIn() {
         </div>
       )}
 
-      {/* Mode body — hidden while temp-out */}
-      {!onTempOut && mode === "qr" && (
-        <div className="iu-card p-4">
-          {scanning ? (
-            <>
-              <QrScanner
-                onScan={(text) => handleQrScan(text)}
-                onError={() => setScanning(false)}
-                height={320}
-              />
-              <div className="mt-3 flex justify-between items-center">
-                <p className="text-xs text-slate-500">Point the camera at the Office QR.</p>
-                <button onClick={() => setScanning(false)} className="iu-btn-ghost !h-9">Cancel</button>
-              </div>
-              <ManualCodeEntry onSubmit={(code) => { setScanning(false); handleQrScan(code); }} working={working} />
-            </>
-          ) : (
-            <div className="py-10 text-center">
-              <div className="w-16 h-16 mx-auto rounded-full bg-slate-900 text-white flex items-center justify-center mb-4">
-                <ScanLine size={26} />
-              </div>
-              <h3 className="font-extrabold text-lg">Scan Office QR</h3>
-              <p className="text-sm text-slate-500 mt-1">We&apos;ll verify your location automatically.</p>
-              <button
-                data-testid="start-scan-button"
-                onClick={startScan}
-                disabled={working}
-                className="iu-btn-primary mt-5 mx-auto"
-              >
-                {action === "checkin" ? <LogIn size={16} /> : <LogOutIcon size={16} />} {actionLabel}
-              </button>
-              <ManualCodeEntry onSubmit={handleQrScan} working={working} />
-            </div>
-          )}
-        </div>
-      )}
-
-      {!onTempOut && mode === "gps" && (
+      {!onTempOut && (
         <div className="iu-card p-6 text-center">
           <div className="w-16 h-16 mx-auto rounded-full bg-slate-900 text-white flex items-center justify-center mb-4">
             <MapPin size={26} />
           </div>
-          <h3 className="font-extrabold text-lg">GPS {actionLabel}</h3>
+          <h3 className="font-extrabold text-lg">{actionLabel}</h3>
           <p className="text-sm text-slate-500 mt-1 max-w-xs mx-auto">
             {action === "checkin"
               ? `Stand within ${office?.radius_m ?? 100} m of the office geofence.`
@@ -400,63 +337,6 @@ function GeoDiagnostic({ office, fix }) {
         </p>
       )}
     </div>
-  );
-}
-
-function ManualCodeEntry({ onSubmit, working }) {
-  const [open, setOpen] = useState(false);
-  const [code, setCode] = useState("");
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        data-testid="manual-code-toggle"
-        onClick={() => setOpen(true)}
-        className="block mx-auto mt-4 text-xs font-semibold text-slate-500 underline hover:text-slate-900 inline-flex items-center gap-1.5"
-      >
-        <Keyboard size={12} /> Camera not working? Enter office code instead
-      </button>
-    );
-  }
-
-  const submit = (e) => {
-    e.preventDefault();
-    const trimmed = code.trim();
-    if (!trimmed) return;
-    onSubmit(trimmed);
-    setOpen(false);
-    setCode("");
-  };
-
-  return (
-    <form onSubmit={submit} className="mt-4 p-3 rounded-lg bg-slate-50 border border-slate-200 text-left" data-testid="manual-code-form">
-      <label className="iu-label">Office code</label>
-      <p className="text-[11px] text-slate-500 -mt-1 mb-2">
-        Get it from your admin (Office QR page shows the text under the code, e.g. <code>OFFICE-XXXXXXXX</code>)
-      </p>
-      <div className="flex gap-2">
-        <input
-          data-testid="manual-code-input"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="OFFICE-…"
-          className="iu-input flex-1 !h-10 font-mono uppercase"
-          autoFocus
-          autoCapitalize="characters"
-          autoCorrect="off"
-          spellCheck={false}
-        />
-        <button
-          type="submit"
-          data-testid="manual-code-submit"
-          disabled={working || !code.trim()}
-          className="iu-btn-primary !h-10 !px-4"
-        >
-          {working ? <Loader2 className="animate-spin" size={14}/> : "Use"}
-        </button>
-      </div>
-    </form>
   );
 }
 

@@ -8,14 +8,12 @@ import Login from "./pages/Login";
 import Presence from "./pages/Presence";
 import SelfCheckIn from "./pages/SelfCheckIn";
 import Profile from "./pages/Profile";
-import DisabledFeature from "./pages/DisabledFeature";
 import MyLeaves from "./pages/MyLeaves";
 import Muster from "./pages/Muster";
 import Members from "./pages/admin/Members";
 import AdminLeaves from "./pages/admin/Leaves";
 import Devices from "./pages/admin/Devices";
 import OfficeSettings from "./pages/admin/Office";
-import OfficeQR from "./pages/admin/OfficeQR";
 import Reports from "./pages/admin/Reports";
 import Overtime from "./pages/admin/Overtime";
 import Approvals from "./pages/admin/Approvals";
@@ -90,7 +88,6 @@ function App() {
             <Route path="admin/devices" element={<RequireAdmin><Devices /></RequireAdmin>} />
             <Route path="admin/office" element={<RequireAdmin><OfficeSettings /></RequireAdmin>} />
             <Route path="admin/sms-log" element={<RequireAdmin><SmsLog /></RequireAdmin>} />
-            <Route path="admin/office-qr" element={<RequireAdmin><DisabledFeature title="Office QR disabled" reason="QR scanning is turned off — use Muster Roll." /></RequireAdmin>} />
             <Route path="admin/reports" element={<RequireAdmin><Reports /></RequireAdmin>} />
             <Route path="admin/payroll" element={<RequireAdmin><Payroll /></RequireAdmin>} />
             <Route path="admin/sessions" element={<Navigate to="/presence" replace />} />
@@ -102,7 +99,6 @@ function App() {
             <Route path="admin/calendar" element={<RequireAdmin><Calendar /></RequireAdmin>} />
             <Route path="admin/backup" element={<RequireAdmin><BackupRestore /></RequireAdmin>} />
             <Route path="admin/import" element={<RequireAdmin><ImportMembers /></RequireAdmin>} />
-            <Route path="admin/cards" element={<RequireAdmin><DisabledFeature title="Member Cards disabled" reason="Personal QR cards are turned off for now — Muster Roll handles attendance." /></RequireAdmin>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
