@@ -18,7 +18,6 @@ import Devices from "./pages/admin/Devices";
 import OfficeSettings from "./pages/admin/Office";
 import OfficeQR from "./pages/admin/OfficeQR";
 import Reports from "./pages/admin/Reports";
-import Sessions from "./pages/admin/Sessions";
 import Overtime from "./pages/admin/Overtime";
 import Approvals from "./pages/admin/Approvals";
 import LeaveBalances from "./pages/admin/LeaveBalances";
@@ -94,7 +93,7 @@ function App() {
             <Route path="admin/office-qr" element={<RequireAdmin><DisabledFeature title="Office QR disabled" reason="QR scanning is turned off — use Muster Roll." /></RequireAdmin>} />
             <Route path="admin/reports" element={<RequireAdmin><Reports /></RequireAdmin>} />
             <Route path="admin/payroll" element={<RequireAdmin><Payroll /></RequireAdmin>} />
-            <Route path="admin/sessions" element={<RequireAdmin><Sessions /></RequireAdmin>} />
+            <Route path="admin/sessions" element={<Navigate to="/presence" replace />} />
             <Route path="admin/leave-balances" element={<RequireAdmin><LeaveBalances /></RequireAdmin>} />
             <Route path="admin/group-leave" element={<Navigate to="/admin/leaves" replace />} />
             <Route path="admin/institutions" element={<RequireAdmin><Institutions /></RequireAdmin>} />

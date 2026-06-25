@@ -2411,49 +2411,67 @@ async def active_leave_for(user_id: str, on: str) -> Optional[dict]:
 
 
 @api_router.get("/presence")
-async def presence(user: dict = Depends(get_current_user)):
+async def presence(on: Optional[str] = None, user: dict = Depends(get_current_user)):
+    """Live presence (live=today, view-only=historical).
+
+    Pass `?on=YYYY-MM-DD` to view a past day. On past days everything
+    "live" (overdue, notify_due, late recompute, late SMS dispatch) is
+    suppressed — the view is read-only. Today is the default.
+    """
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
+    is_historical = bool(on and on != today)
+    target_date = on if on else today
     users = await db.users.find(
         {}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1,
              "photo_thumb": 1, "photo": 1, "work_start": 1, "work_end": 1, "institution": 1,
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1}
     ).sort("full_name", 1).to_list(2000)
 
-    # Batch: open sessions, active leaves for today, and last checkout per user
-    sessions = await db.attendance.find({"check_out_at": None}, {"_id": 0}).to_list(5000)
-    sess_map = {s["user_id"]: s for s in sessions}
+    # Batch: sessions / leaves / last-checkout for the target date.
+    # On historical views, all sessions are completed (midnight cron closes
+    # them), so we route them through the "exited" path. On today, open
+    # sessions go to sess_map; closed ones to last_map.
+    if is_historical:
+        all_sessions = await db.attendance.find({"date": target_date}, {"_id": 0}).to_list(5000)
+        sess_map = {s["user_id"]: s for s in all_sessions if not s.get("check_out_at")}
+        last_map = {s["user_id"]: s for s in all_sessions if s.get("check_out_at")}
+    else:
+        sessions = await db.attendance.find({"check_out_at": None}, {"_id": 0}).to_list(5000)
+        sess_map = {s["user_id"]: s for s in sessions}
+        last_outs = await db.attendance.aggregate([
+            {"$match": {"check_out_at": {"$ne": None}, "date": target_date}},
+            {"$sort": {"check_out_at": -1}},
+            {"$group": {"_id": "$user_id", "doc": {"$first": "$$ROOT"}}},
+        ]).to_list(5000)
+        last_map = {d["_id"]: d["doc"] for d in last_outs}
 
     leaves = await db.leaves.find({
-        "status": "approved", "start_date": {"$lte": today}, "end_date": {"$gte": today},
+        "status": "approved", "start_date": {"$lte": target_date}, "end_date": {"$gte": target_date},
     }, {"_id": 0}).to_list(5000)
     leave_map = {leave["user_id"]: leave for leave in leaves}
 
-    last_outs = await db.attendance.aggregate([
-        {"$match": {"check_out_at": {"$ne": None}}},
-        {"$sort": {"check_out_at": -1}},
-        {"$group": {"_id": "$user_id", "doc": {"$first": "$$ROOT"}}},
-    ]).to_list(5000)
-    last_map = {d["_id"]: d["doc"] for d in last_outs}
-
     # Today's parent-notification dispatches → keyed (user_id, type) for fast lookup.
-    notified_today = await db.parent_notifications.find(
-        {"date": today}, {"_id": 0, "user_id": 1, "type": 1}
-    ).to_list(5000)
+    # Historical view doesn't show "notify due" so we skip the fetch when on a past day.
     notify_map: dict = {}
-    for n in notified_today:
-        notify_map.setdefault(n["user_id"], set()).add(n["type"])
+    if not is_historical:
+        notified_today = await db.parent_notifications.find(
+            {"date": target_date}, {"_id": 0, "user_id": 1, "type": 1}
+        ).to_list(5000)
+        for n in notified_today:
+            notify_map.setdefault(n["user_id"], set()).add(n["type"])
 
-    # Camps overlay — fetch all camps whose date range covers today in a single
-    # query, then resolve per-member at the loop level. Cheaper than per-user.
-    camps_today = await _camps_module.fetch_camps_active_on(db, today)
-    today_weekday = _camps_module.weekday_key(now_utc().astimezone(office_tz(office)))
+    # Camps overlay — fetch all camps whose date range covers the target date.
+    camps_today = await _camps_module.fetch_camps_active_on(db, target_date)
+    target_dt = date.fromisoformat(target_date)
+    DOW_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    today_weekday = DOW_KEYS[target_dt.weekday()]
     def _camp_for(u: dict) -> Optional[dict]:
-        return _camps_module.resolve_member_camp(u, camps_today, today_weekday, today)
+        return _camps_module.resolve_member_camp(u, camps_today, today_weekday, target_date)
 
     # Breaks overlay — like an approved leave but applied to whole categories /
     # institutions / arbitrary member groups. Bulk-fetch, resolve per-member.
-    breaks_today = await _breaks_module.fetch_breaks_active_on(db, today)
+    breaks_today = await _breaks_module.fetch_breaks_active_on(db, target_date)
     def _break_for(u: dict) -> Optional[dict]:
         return _breaks_module.resolve_member_break(u, breaks_today)
 
@@ -2588,12 +2606,12 @@ async def presence(user: dict = Depends(get_current_user)):
             }
         else:
             last = last_map.get(u["id"])
-            # Has the member shown any session today? `last` could be from a
-            # previous day. Decide between "exited" (closed session today),
-            # "absent" (no session today, past work_start), or "not_due"
-            # (no session today, not yet past work_start).
-            today = local_date_str(office)
-            last_today = last and (last.get("date") == today)
+            # Has the member shown any session on the target date? `last`
+            # could be from a previous day for live views (now scoped to
+            # today's checkouts via the aggregate `$match: date`). Decide
+            # between "exited" (closed session today), "absent" (no session,
+            # past work_start), or "not_due" (not yet past work_start).
+            last_today = bool(last)
             if last_today:
                 status_v = "exited"
                 detail = "Left " + local_hm(office, last["check_out_at"])
@@ -2633,16 +2651,21 @@ async def presence(user: dict = Depends(get_current_user)):
                     is_expected_today = bool(u.get("work_start")) or u.get("category") != "athlete"
                 try:
                     ws_h, ws_m = (int(x) for x in ws_hm.split(":")[:2])
-                    local_now = now_utc().astimezone(office_tz(office))
-                    threshold = local_now.replace(hour=ws_h, minute=ws_m, second=0, microsecond=0) + timedelta(minutes=grace)
-                    past_start = local_now > threshold
+                    if is_historical:
+                        # Past day: the workday is fully over; absent decision
+                        # doesn't depend on "now". Default past_start=True.
+                        past_start = True
+                    else:
+                        local_now = now_utc().astimezone(office_tz(office))
+                        threshold = local_now.replace(hour=ws_h, minute=ws_m, second=0, microsecond=0) + timedelta(minutes=grace)
+                        past_start = local_now > threshold
                 except Exception:
                     past_start = True
                 if past_start and is_expected_today:
                     # Approved late-coming notice covering today → softer treatment
                     late_today = await db.leaves.find_one({
                         "user_id": u["id"], "status": "approved", "type": "late_coming",
-                        "start_date": {"$lte": today}, "end_date": {"$gte": today},
+                        "start_date": {"$lte": target_date}, "end_date": {"$gte": target_date},
                     }, {"_id": 0, "expected_arrival": 1, "reason": 1})
                     status_v = "absent"
                     if late_today:
@@ -2663,7 +2686,8 @@ async def presence(user: dict = Depends(get_current_user)):
                 since = None
                 photo = u_thumb
         # Open excursion: how many minutes overdue (if expected_return is in the past)?
-        open_exc_v = _open_excursion(sess) if sess else None
+        # Historical view: no live overdue tracking.
+        open_exc_v = _open_excursion(sess) if (sess and not is_historical) else None
         overdue_minutes = 0
         if open_exc_v and open_exc_v.get("expected_return"):
             try:
@@ -2675,10 +2699,11 @@ async def presence(user: dict = Depends(get_current_user)):
         # Parent-notification eligibility: "not_arrived" if athlete is absent AND
         # now is past their work_start + notify_grace; "late" if they've checked
         # in late today. Either is suppressed once already dispatched.
+        # Suppressed entirely for historical views (no live "notify" action).
         sent_types = notify_map.get(u["id"], set())
         notify_due_not_arrived = False
         notify_due_late = False
-        if u.get("category") == "athlete":
+        if u.get("category") == "athlete" and not is_historical:
             if status_v == "absent":
                 ws_hm2 = u.get("work_start") or office.get("default_work_start") or "09:00"
                 try:
@@ -2708,8 +2733,44 @@ async def presence(user: dict = Depends(get_current_user)):
 
         # Extras requested for the Presence Board: excursion count for today's
         # session, days remaining on leave/tour, and consecutive absent streak.
-        excursions_today = (sess or last_today or {}).get("excursions") or []
+        primary_session = sess or last_map.get(u["id"])
+        excursions_today = (primary_session or {}).get("excursions") or []
         excursion_count = len(excursions_today)
+        # Detailed timeline for the expand-on-click panel. Each excursion is
+        # decorated with derived duration / overdue minutes so the frontend
+        # can render without further math.
+        ts_now = now_utc()
+        excs_detailed = []
+        for e in excursions_today:
+            out_iso = e.get("out_at")
+            in_iso = e.get("in_at")
+            duration_min = None
+            if out_iso and in_iso:
+                try:
+                    duration_min = max(0, int((datetime.fromisoformat(in_iso) - datetime.fromisoformat(out_iso)).total_seconds() // 60))
+                except Exception:
+                    pass
+            overdue_min = None
+            if e.get("expected_return"):
+                try:
+                    er = datetime.fromisoformat(e["expected_return"])
+                    ref = datetime.fromisoformat(in_iso) if in_iso else ts_now
+                    overdue_min = max(0, int((ref - er).total_seconds() // 60))
+                except Exception:
+                    pass
+            excs_detailed.append({
+                "id": e.get("id"),
+                "out_at": out_iso,
+                "out_time": local_hm(office, out_iso) if out_iso else "",
+                "in_at": in_iso,
+                "in_time": local_hm(office, in_iso) if in_iso else "",
+                "reason": e.get("reason"),
+                "expected_return": e.get("expected_return"),
+                "expected_return_time": local_hm(office, e.get("expected_return")) if e.get("expected_return") else "",
+                "duration_min": duration_min,
+                "overdue_min": overdue_min,
+                "open": not bool(in_iso),
+            })
         days_remaining = None
         if status_v in ("on_leave", "on_tour") and leave and leave.get("end_date"):
             try:
@@ -2725,7 +2786,7 @@ async def presence(user: dict = Depends(get_current_user)):
                 days_remaining = max(0, (end_d - today_d).days + 1)
             except Exception:
                 days_remaining = None
-        days_absent_streak = _consecutive_absent_days(u) if status_v == "absent" else 0
+        days_absent_streak = _consecutive_absent_days(u) if (status_v == "absent" and not is_historical) else 0
 
         result.append({
             "id": u["id"],
@@ -2757,8 +2818,17 @@ async def presence(user: dict = Depends(get_current_user)):
                 "late": notify_due_late and has_parent,
             },
             "excursion_count": excursion_count,
+            "excursions": excs_detailed,
             "days_remaining": days_remaining,
             "days_absent_streak": days_absent_streak,
+            "check_in_at": primary_session.get("check_in_at") if primary_session else None,
+            "check_in_time": local_hm(office, primary_session["check_in_at"]) if primary_session and primary_session.get("check_in_at") else "",
+            "check_out_at": primary_session.get("check_out_at") if primary_session else None,
+            "check_out_time": local_hm(office, primary_session["check_out_at"]) if primary_session and primary_session.get("check_out_at") else "",
+            "stored_hours": (primary_session or {}).get("hours"),
+            "auto_checkout": bool((primary_session or {}).get("auto_checkout")),
+            "auto_checkout_reason": (primary_session or {}).get("auto_checkout_reason"),
+            "late_minutes": (primary_session or {}).get("late_minutes") or 0,
         })
     order = {"on_campus": 0, "temp_out": 1, "on_tour": 2, "on_leave": 3, "absent": 4, "exited": 5, "not_due": 6}
     result.sort(key=lambda r: (order.get(r["status"], 9), r["full_name"]))
@@ -2771,7 +2841,8 @@ async def presence(user: dict = Depends(get_current_user)):
     return {
         "members": result,
         "counts": counts,
-        "date": today,
+        "date": target_date,
+        "is_historical": is_historical,
         "admin_contacts": admin_contacts,
         "notify_grace_minutes": notify_grace,
     }

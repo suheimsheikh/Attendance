@@ -99,7 +99,6 @@ export default function AdminConsole() {
   // the sidebar (Manage Members, Approvals, Monthly Payroll, Institutions,
   // Camps, Calendar) are deliberately excluded.
   const links = [
-    { to: "/admin/sessions",       label: "Daily sessions",     desc: "Check-in, temp exits/returns & final check-out in one table", Icon: Calendar,         color: "#10B981" },
     { to: "/admin/leave-balances", label: "Leave balances",     desc: "Set opening balances & see consumed / pending",               Icon: CalendarCheck2,   color: "#06B6D4" },
   ];
 

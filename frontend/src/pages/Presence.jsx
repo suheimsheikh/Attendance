@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin, UserX, Search, UserPlus, X } from "lucide-react";
+import { CheckCircle2, Plane, Bed, LogOut as ExitIcon, AlertTriangle, Clock, RefreshCw, Coffee, MapPin, UserX, Search, UserPlus, X, ChevronDown, ChevronRight, LogIn } from "lucide-react";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
 import ParentContact from "../components/ParentContact";
@@ -37,13 +37,20 @@ export default function Presence() {
   const [guests, setGuests] = useState({ active: [], completed: [], active_count: 0 });
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  // YYYY-MM-DD or "" for "today" (live mode). Picking a past date switches
+  // the board to a read-only historical view (no auto-refresh, no notify).
+  const todayIso = () => new Date().toISOString().slice(0, 10);
+  const [viewDate, setViewDate] = useState("");
+  const [expandedRows, setExpandedRows] = useState(() => new Set());
+  const isHistorical = !!viewDate && viewDate !== todayIso();
 
   const load = useCallback(async () => {
     try {
       setError(false);
+      const qs = isHistorical ? `?on=${viewDate}` : "";
       const [res, gRes] = await Promise.all([
-        api.get("/presence"),
-        canManageGuests ? api.get("/guests/today").catch(() => null) : Promise.resolve(null),
+        api.get(`/presence${qs}`),
+        canManageGuests && !isHistorical ? api.get("/guests/today").catch(() => null) : Promise.resolve(null),
       ]);
       setData(res);
       if (gRes) setGuests(gRes);
@@ -52,7 +59,16 @@ export default function Presence() {
     } finally {
       setLoading(false);
     }
-  }, [canManageGuests]);
+  }, [canManageGuests, viewDate, isHistorical]);
+
+  const toggleRow = useCallback((memberId) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(memberId)) next.delete(memberId);
+      else next.add(memberId);
+      return next;
+    });
+  }, []);
 
   // Open the Members edit modal by fetching the full doc (Presence rows only
   // carry a subset of fields). Admin-only — coaches don't see the option.
@@ -123,9 +139,11 @@ export default function Presence() {
 
   useEffect(() => {
     load();
+    // Historical view: read-only, no auto-refresh.
+    if (isHistorical) return;
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, isHistorical]);
 
   const byColumn = useMemo(() => {
     const buckets = Object.fromEntries(COLUMNS.map((c) => [c.key, []]));
@@ -181,9 +199,33 @@ export default function Presence() {
       <header className="flex flex-wrap items-end justify-between gap-3 mb-5">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight" data-testid="presence-title">Presence Board</h1>
-          <p className="text-slate-500 mt-1 text-sm">{data ? formatDate(data.date) : "Live campus roster"}</p>
+          <p className="text-slate-500 mt-1 text-sm">
+            {data ? formatDate(data.date) : "Live campus roster"}
+            {isHistorical && <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">Read-only history</span>}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="inline-flex items-center gap-1.5 bg-white border border-slate-200 px-2 h-9 rounded-full text-xs font-semibold text-slate-700">
+            <input
+              type="date"
+              data-testid="presence-date-picker"
+              value={viewDate || todayIso()}
+              max={todayIso()}
+              onChange={(e) => { setViewDate(e.target.value === todayIso() ? "" : e.target.value); setExpandedRows(new Set()); }}
+              className="bg-transparent border-0 outline-none text-xs font-semibold"
+              aria-label="View presence for a specific date"
+            />
+            {isHistorical && (
+              <button
+                onClick={() => { setViewDate(""); setExpandedRows(new Set()); }}
+                data-testid="presence-back-to-today"
+                className="ml-1 text-sky-700 hover:text-sky-900 text-[10px] font-bold uppercase tracking-wider"
+                title="Switch back to live today view"
+              >
+                Today
+              </button>
+            )}
+          </div>
           <button
             data-testid="late-only-toggle"
             onClick={() => setLateOnly((v) => !v)}
@@ -281,6 +323,8 @@ export default function Presence() {
               coachMobile={currentUser?.mobile}
               onSent={load}
               onRowDoubleClick={isAdmin ? handleMemberDoubleClick : null}
+              expandedRows={expandedRows}
+              toggleRow={toggleRow}
             />
           ))}
         </div>
@@ -303,7 +347,7 @@ export default function Presence() {
   );
 }
 
-function Column({ col, members, displayList, adminContacts, coachMobile, onSent, onRowDoubleClick }) {
+function Column({ col, members, displayList, adminContacts, coachMobile, onSent, onRowDoubleClick, expandedRows, toggleRow }) {
   const Icon = col.icon;
   // Per-category breakdown shown under the column label so coaches can see
   // "how many Athletes / Coaches / Staff" in each presence bucket at a glance.
@@ -374,6 +418,8 @@ function Column({ col, members, displayList, adminContacts, coachMobile, onSent,
                 onSent={onSent}
                 onDoubleClick={entry.visible ? onRowDoubleClick : null}
                 hidden={!entry.visible}
+                expanded={entry.visible && expandedRows && expandedRows.has(entry.member.id)}
+                onToggleExpand={entry.visible && toggleRow ? () => toggleRow(entry.member.id) : null}
               />
             ))
           )
@@ -390,6 +436,8 @@ function Column({ col, members, displayList, adminContacts, coachMobile, onSent,
               coachMobile={coachMobile}
               onSent={onSent}
               onDoubleClick={onRowDoubleClick}
+              expanded={expandedRows && expandedRows.has(m.id)}
+              onToggleExpand={toggleRow ? () => toggleRow(m.id) : null}
             />
           ))
         )}
@@ -398,7 +446,7 @@ function Column({ col, members, displayList, adminContacts, coachMobile, onSent,
   );
 }
 
-function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick, hidden }) {
+function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick, hidden, expanded, onToggleExpand }) {
   const lateBg = m.late ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50";
   const notifyDueType = m.notify_due?.not_arrived
     ? "not_arrived"
@@ -411,7 +459,12 @@ function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, 
   // paired column at this index — guarantees pixel-aligned rows across the
   // Stepped Out / Checked Out pair without measurement hacks.
   const hiddenStyle = hidden ? { visibility: "hidden", pointerEvents: "none" } : undefined;
+  // The timeline panel is only meaningful when there's actually a session
+  // (check-in or excursions) to show — so the chevron is suppressed for
+  // statuses like on_leave, on_tour, absent, not_due.
+  const hasTimeline = !hidden && (m.check_in_at || (m.excursions && m.excursions.length > 0));
   return (
+    <>
     <div
       className={`px-3 py-2.5 flex gap-2.5 items-start transition ${hidden ? "" : lateBg} ${!hidden && onDoubleClick ? "cursor-pointer select-none" : ""}`}
       data-testid={hidden ? `presence-blank-${columnKey}-${m.id}` : `presence-row-${m.id}`}
@@ -425,6 +478,18 @@ function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, 
         <div className="flex items-start gap-1.5">
           <div className={`text-[13px] font-semibold leading-tight truncate flex-1 ${m.late ? "text-red-700" : "text-slate-900"}`}>{m.full_name}</div>
           <ParentContact father={m.father_mobile} mother={m.mother_mobile} guardian={m.guardian_mobile} />
+          {hasTimeline && onToggleExpand && (
+            <button
+              type="button"
+              data-testid={`presence-expand-${m.id}`}
+              onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+              className={`shrink-0 w-5 h-5 rounded-md flex items-center justify-center transition ${expanded ? "bg-slate-200 text-slate-700" : "text-slate-400 hover:bg-slate-100"}`}
+              title={expanded ? "Hide session timeline" : "Show full check-in / check-out timeline"}
+              aria-label="Toggle timeline"
+            >
+              {expanded ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}
+            </button>
+          )}
         </div>
         <div className="text-[11px] text-slate-500 leading-tight mt-0.5 flex items-center gap-1.5 flex-wrap">
           <span className="truncate">{m.rank ? `${m.rank} · ` : ""}{categoryLabel(m.category)}</span>
@@ -499,6 +564,92 @@ function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, 
         </div>
         <GeoLine geoIn={m.geo_in} geoOut={m.geo_out} status={m.status} />
       </div>
+    </div>
+    {expanded && hasTimeline && <SessionTimeline m={m} />}
+    </>
+  );
+}
+
+/**
+ * Compact session timeline shown when a Presence row is expanded.
+ * Lays out check-in → step-outs → returns → check-out as a vertical stripe,
+ * mirroring the old Daily Sessions page so the merger is lossless.
+ */
+function SessionTimeline({ m }) {
+  const items = [];
+  if (m.check_in_at) {
+    items.push({
+      key: `in-${m.check_in_at}`,
+      icon: <LogIn size={11}/>,
+      color: "#10B981",
+      title: "Checked in",
+      time: m.check_in_time,
+      note: m.late ? `Late ${m.late_minutes || ""}m` : (m.geo_in?.out_of_geofence ? "Off-site" : ""),
+    });
+  }
+  (m.excursions || []).forEach((e) => {
+    items.push({
+      key: `out-${e.id}`,
+      icon: <Coffee size={11}/>,
+      color: "#06B6D4",
+      title: `Stepped out${e.reason ? " · " + e.reason : ""}`,
+      time: e.out_time,
+      note: e.expected_return_time ? `Expected back ${e.expected_return_time}` : "",
+    });
+    if (e.in_time) {
+      items.push({
+        key: `back-${e.id}`,
+        icon: <LogIn size={11}/>,
+        color: "#0EA5E9",
+        title: "Returned",
+        time: e.in_time,
+        note: (e.duration_min != null ? `${e.duration_min}m away` : "")
+              + (e.overdue_min ? ` · ${e.overdue_min}m overdue` : ""),
+        overdue: !!e.overdue_min,
+      });
+    } else {
+      items.push({
+        key: `pending-${e.id}`,
+        icon: <AlertTriangle size={11}/>,
+        color: "#F59E0B",
+        title: "Still away",
+        time: "",
+        note: e.expected_return_time ? `Expected back ${e.expected_return_time}` : "Awaiting return",
+        overdue: !!e.overdue_min,
+      });
+    }
+  });
+  if (m.check_out_at) {
+    items.push({
+      key: `co-${m.check_out_at}`,
+      icon: <ExitIcon size={11}/>,
+      color: "#6B7280",
+      title: m.auto_checkout ? "Auto-closed at midnight" : "Checked out",
+      time: m.check_out_time,
+      note: m.stored_hours != null ? `${m.stored_hours}h logged` : "",
+    });
+  }
+  if (items.length === 0) return null;
+  return (
+    <div
+      className="px-3 pb-3 pl-12 bg-slate-50/70 border-t border-slate-100"
+      data-testid={`presence-timeline-${m.id}`}
+    >
+      <ol className="relative pl-4 pt-2">
+        <span className="absolute left-[5px] top-3 bottom-1 w-px bg-slate-200" />
+        {items.map((it) => (
+          <li key={it.key} className="relative pb-2 last:pb-0">
+            <span className="absolute -left-[11px] top-0.5 w-[14px] h-[14px] rounded-full flex items-center justify-center text-white" style={{ background: it.color }}>
+              {it.icon}
+            </span>
+            <div className="flex items-baseline gap-1.5 flex-wrap pl-2">
+              <span className="text-[11px] font-semibold text-slate-900">{it.title}</span>
+              {it.time && <span className="text-[10px] font-mono text-slate-500">{it.time}</span>}
+              {it.note && <span className={`text-[10px] ${it.overdue ? "text-amber-700 font-semibold" : "text-slate-500"}`}>· {it.note}</span>}
+            </div>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
