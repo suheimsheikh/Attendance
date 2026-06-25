@@ -205,7 +205,7 @@ export default function Presence() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="inline-flex items-center gap-0.5 bg-white border border-slate-200 px-1 h-9 rounded-full text-xs font-semibold text-slate-700">
+          <div className="inline-flex items-center gap-1 bg-white border-2 border-slate-300 px-1.5 h-11 rounded-xl text-sm font-bold text-slate-800 shadow-sm">
             <button
               type="button"
               data-testid="presence-date-prev"
@@ -217,11 +217,11 @@ export default function Presence() {
                 setViewDate(next === todayIso() ? "" : next);
                 setExpandedRows(new Set());
               }}
-              className="w-7 h-7 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition"
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200 transition"
               title="Previous day"
               aria-label="Previous day"
             >
-              <ChevronLeft size={14} />
+              <ChevronLeft size={18} strokeWidth={2.5} />
             </button>
             <input
               type="date"
@@ -229,7 +229,7 @@ export default function Presence() {
               value={viewDate || todayIso()}
               max={todayIso()}
               onChange={(e) => { setViewDate(e.target.value === todayIso() ? "" : e.target.value); setExpandedRows(new Set()); }}
-              className="bg-transparent border-0 outline-none text-xs font-semibold w-[120px]"
+              className="bg-transparent border-0 outline-none text-sm font-bold w-[130px] text-center"
               aria-label="View presence for a specific date"
             />
             <button
@@ -237,25 +237,25 @@ export default function Presence() {
               data-testid="presence-date-next"
               onClick={() => {
                 const cur = viewDate || todayIso();
-                if (cur === todayIso()) return;
+                if (cur >= todayIso()) return;
                 const d = new Date(cur + "T00:00:00");
                 d.setDate(d.getDate() + 1);
                 const next = d.toISOString().slice(0, 10);
-                setViewDate(next === todayIso() ? "" : next);
+                setViewDate(next >= todayIso() ? "" : next);
                 setExpandedRows(new Set());
               }}
-              disabled={(viewDate || todayIso()) === todayIso()}
-              className="w-7 h-7 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-              title={(viewDate || todayIso()) === todayIso() ? "Already on today" : "Next day"}
+              disabled={!isHistorical}
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200 transition disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              title={isHistorical ? "Next day" : "Already on today"}
               aria-label="Next day"
             >
-              <ChevronRight size={14} />
+              <ChevronRight size={18} strokeWidth={2.5} />
             </button>
             {isHistorical && (
               <button
                 onClick={() => { setViewDate(""); setExpandedRows(new Set()); }}
                 data-testid="presence-back-to-today"
-                className="ml-0.5 px-2 h-7 rounded-full bg-sky-100 hover:bg-sky-200 text-sky-700 text-[10px] font-extrabold uppercase tracking-wider transition"
+                className="ml-1 px-2.5 h-7 rounded-md bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-extrabold uppercase tracking-wider transition"
                 title="Jump back to live today view"
               >
                 Today

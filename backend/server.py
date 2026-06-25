@@ -1226,12 +1226,18 @@ async def delete_member(member_id: str, admin: dict = Depends(require_admin)):
 
 @api_router.get("/leave-balances")
 async def list_leave_balances(admin: dict = Depends(require_admin)):
-    """Return every member with their opening leave balance and current usage,
-    used by the spreadsheet-style admin editor."""
-    users = await db.users.find({}, {"_id": 0, "id": 1, "full_name": 1, "category": 1,
-                                      "rank": 1, "institution": 1,
-                                      "leave_balance_opening": 1, "weekly_off": 1}
-                                ).sort("full_name", 1).to_list(2000)
+    """Return every STAFF member with their opening leave balance and current
+    usage, used by the spreadsheet-style admin editor.
+
+    Leave-balance tracking applies only to staff — athletes / coaches /
+    executives don't accrue or consume a numeric leave quota, so they're
+    excluded from the listing."""
+    users = await db.users.find(
+        {"category": "staff"},
+        {"_id": 0, "id": 1, "full_name": 1, "category": 1,
+         "rank": 1, "institution": 1,
+         "leave_balance_opening": 1, "weekly_off": 1},
+    ).sort("full_name", 1).to_list(2000)
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
     year = today[:4]

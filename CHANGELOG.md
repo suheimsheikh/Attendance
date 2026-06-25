@@ -67,6 +67,10 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ### 🛠 Reports / data accuracy
 
+- **Leave Balances** is now **staff-only**. Athletes, coaches and executives
+  don't consume a numeric leave quota, so they're hidden from the list (and
+  the `/api/leave-balances` endpoint). Subtitle on the page clarifies the
+  scope.
 - Hours & Attendance now counts an **open** session (still checked-in, no
   check-out yet) as a Present day for today, so the afternoon report no longer
   looks like nobody showed up. Hours total still only includes closed sessions
