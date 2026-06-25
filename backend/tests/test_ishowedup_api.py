@@ -100,11 +100,10 @@ def test_05_put_office_roundtrip(admin_client, base_url, shared_state):
 
 
 def test_06_regenerate_qr(admin_client, base_url, shared_state):
+    # Office QR check-in was retired (now GPS-only). The endpoint was
+    # removed in the post-review cleanup — assert it stays gone.
     r = admin_client.post(f"{base_url}/api/office/regenerate-qr", timeout=30)
-    assert r.status_code == 200, r.text
-    d = r.json()
-    assert d["qr_token"].startswith("OFFICE-")
-    shared_state["qr_token"] = d["qr_token"]
+    assert r.status_code == 404, f"Expected 404 for retired endpoint, got {r.status_code}"
 
 
 # ---------- (7)/(8) Create + list members ----------

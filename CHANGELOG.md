@@ -8,6 +8,38 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ## 🚧 Unreleased — pending deploy to `i-showed-up.ychyderabad.com`
 
+### 🛠 Performance & hardening (code-review pass)
+
+- **Faster Presence Board** — the bigger your absent list, the bigger the win:
+  the "late-coming notice" lookup used to run one Mongo query per absent
+  athlete; now it's a single batched read.
+- **Faster phone login** — the matcher now uses an indexed last-10-digit
+  field instead of scanning every user. Imperceptible at <500 members,
+  pays off the day the academy grows.
+- **Faster member imports** — the Excel/CSV import path does one bulk
+  insert per file instead of one round-trip per row.
+- **Backup safety** — `/admin/backup` and `/admin/restore` now stream rows
+  in batches of 500 and use bulk-writes on restore, so the container won't
+  OOM if attendance grows to tens of thousands of rows.
+- **Background SMS** — Twilio sends are now offloaded to a worker thread,
+  so a slow Twilio response no longer freezes other requests for everyone.
+- **Image safety** — added a decompression-bomb guard so a malicious 50 KB
+  PNG can't expand into multi-GB memory during thumbnail generation.
+- **Smaller athlete bundle** — admin-only pages (Reports, Backup, Members,
+  Calendar…) are now code-split and downloaded on demand, so athletes who
+  only ever open Self Check-In get a smaller payload.
+- **Quieter background tabs** — the Presence Board polls every 15 s only
+  while the tab is visible. Hidden tabs pause and refresh on focus.
+
+### 🧹 Removed (cleanup after QR retirement)
+
+- Stale routes `POST /api/attendance/checkin`, `POST /api/attendance/checkout`,
+  `POST /api/office/regenerate-qr`, and `POST /api/admin/snapshot/import`
+  (a duplicate of `/admin/restore`) are gone. `qr_token` no longer appears
+  in `/api/office`. The "Office master" QR card on `/admin/cards` is gone.
+- Personal member QR cards stay — those are used by the proxy
+  "scan-card" check-in flow and were never tied to the office QR.
+
 ### 🆕 New features
 
 - **Fleet master** — new admin page at `/admin/fleets` (sidebar → **Fleets**).

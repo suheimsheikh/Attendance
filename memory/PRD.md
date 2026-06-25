@@ -136,5 +136,32 @@
 
   Still deferred (separate planning sessions): rotate production secrets, JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, expanded pytest coverage for camps/regattas/guests/thumbnails.
 
+## Recently Added (Feb 2026 — code review pass #2)
+- **P0 correctness fixes**
+  - Deleted stale QR routes left over from the QR retirement: `POST /api/attendance/checkin`, `POST /api/attendance/checkout`, `POST /api/office/regenerate-qr`. Stripped `qr_token` from `/api/office` and `office_qr`/`office_name` from `/api/admin/cards`.
+  - Removed duplicate `/api/admin/snapshot/import` (was a stale copy of `/admin/restore` missing `breaks`+`fleets`).
+  - Fixed N+1 in `/api/presence`: `late_coming` leaves are now bulk-fetched once and looked up via dict, not queried per absent member.
+  - Phone-login matcher now uses a denormalised `mobile_last10` indexed field — one keyed `find_one` instead of a full collection scan + Python-side suffix match. Backfilled at startup; stamped on member create + on mobile change.
+  - Twilio SMS / Voice calls are now `await asyncio.to_thread(...)` so the sync SDK no longer blocks the event loop for 300-800 ms per send.
+  - `/api/admin/backup` now streams JSON in 500-row chunks per collection; `/api/admin/restore` uses chunked `$in` lookups + `bulk_write` instead of per-doc `find_one`+`insert_one`. Removes the OOM ceiling.
+  - `_make_thumbnail` now guards against PIL decompression bombs (`Image.MAX_IMAGE_PIXELS = 8M` + explicit catch).
+  - `update_member` Optional-role demote check no longer silently bypasses when `body.role is None`.
+- **P2 perf**
+  - Member Excel import switched from per-row `find_one` + `insert_one` to a single `$in` existence check + `insert_many`. Big wins for 100+ row imports.
+  - Presence Board polling now gated on `document.visibilityState`: backgrounded tabs pause, focused tabs catch up instantly.
+  - Admin pages (Reports, Backup, Members, Calendar, Devices, Leaves, etc.) lazy-loaded via `React.lazy + Suspense` — athlete bundle (login + self check-in) is now noticeably smaller.
+- **P3 quality**
+  - Migrated startup/shutdown to FastAPI **lifespan context manager** (`@app.on_event` is deprecated).
+  - Extracted a `_schedule_daily(label, get_hm, fn)` helper; the midnight auto-checkout and 8 PM checkout-reminder loops are now one-liner wrappers.
+  - Moved parents-import helpers (`norm_name`, `fuzzy_score`, `norm_mobile`, `clean_name`) to a new `parents_import_utils.py` module.
+  - Moved `from sms import DEFAULT_PARENT_TEMPLATES` to the top of `server.py`.
+  - `downloadBlob` validates `content-type` so a 401/500 doesn't silently save an HTML error page as CSV.
+  - `refreshMe` no-ops when no token is present (avoids 401 noise after a cross-tab logout).
+  - `speakLateMessage` race fixed (no more double-call when `voiceschanged` fires after the safety timeout).
+  - Presence Board memoises `today` once per render; the date stepper handlers reuse it.
+  - All silent `try/except: pass` blocks now `logger.debug(...)` or `console.debug(...)`.
+- **Verification**: testing agent ran 19/19 backend + 7/7 frontend smoke tests — **100% pass**, no regressions.
+- **Still deferred** (separate planning sessions): JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, `Presence.jsx` split into `components/presence/`, splitting the 437-line `/api/presence` endpoint into gather/resolve/render phases.
+
 ## Test Credentials
 See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or phone `9849002111` for OTP-bypass).
