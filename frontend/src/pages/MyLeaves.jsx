@@ -3,6 +3,7 @@ import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw, C
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
 import Avatar from "../components/Avatar";
+import LeaveBalanceNotice from "../components/LeaveBalanceNotice";
 import { shortDate, todayIso } from "../utils";
 import { useEscape } from "../hooks/useEscape";
 
@@ -103,6 +104,14 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   const [picked, setPicked] = useState(new Set());
   const [autoApprove, setAutoApprove] = useState(true);
 
+  // Self path needs the current user's live balance for the notice block.
+  // (Admin path already loads /members, which carries balances per row.)
+  const [me, setMe] = useState(null);
+  useEffect(() => {
+    if (asAdmin) return;
+    api.get("/auth/me").then(setMe).catch(() => {});
+  }, [asAdmin]);
+
   useEffect(() => {
     if (!asAdmin) return;
     api.get("/members").then((m) => setMembers(m || [])).catch(() => {});
@@ -129,6 +138,45 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   });
   const pickAllFiltered = () => setPicked(new Set(filteredMembers.map((m) => m.id)));
   const clearPicked = () => setPicked(new Set());
+
+  // ── Leave-balance preview (for the notice block) ─────────────────────────
+  // Calendar days inclusive — matches the backend formula (`end - start + 1`).
+  const requestedDays = useMemo(() => {
+    try {
+      const s = new Date(start + "T00:00:00");
+      const e = new Date(end + "T00:00:00");
+      if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return 0;
+      return Math.floor((e - s) / 86400000) + 1;
+    } catch {
+      return 0;
+    }
+  }, [start, end]);
+
+  // Build the per-member row(s) the notice expects. Self path = 1 row from
+  // /auth/me. Admin path = one row per picked member from /members.
+  const noticeMembers = useMemo(() => {
+    if (asAdmin) {
+      return Array.from(picked).map((id) => {
+        const m = members.find((x) => x.id === id);
+        if (!m) return null;
+        return {
+          id: m.id,
+          full_name: m.full_name,
+          category: m.category,
+          opening: m.leave_balance_opening,
+          remaining: m.leave_balance_remaining,
+        };
+      }).filter(Boolean);
+    }
+    if (!me) return [];
+    return [{
+      id: me.id,
+      full_name: me.full_name,
+      category: me.category,
+      opening: me.leave_balance_opening,
+      remaining: me.leave_balance_remaining,
+    }];
+  }, [asAdmin, picked, members, me]);
 
   // Late-coming is single-day & today
   useEffect(() => {
@@ -324,6 +372,19 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
             <label className="iu-label">Reason</label>
             <textarea data-testid="leave-reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Tell your admin why…" className="iu-input !h-auto py-2" />
           </div>
+          {/* Balance preview + LOP warning + "subject to approval" line.
+              Always rendered (with content adapted by leave type), so the
+              approval policy stays visible across self-apply and
+              apply-on-behalf paths. */}
+          {(noticeMembers.length > 0 || !asAdmin) && (
+            <LeaveBalanceNotice
+              requestedDays={Math.max(1, requestedDays || 1)}
+              leaveType={type}
+              members={noticeMembers}
+              autoApprove={autoApprove}
+              asAdmin={asAdmin}
+            />
+          )}
           <button data-testid="leave-submit" type="submit" disabled={busy} className="iu-btn-primary w-full">
             {busy ? <Loader2 className="animate-spin" size={16}/> : "Submit"}
           </button>

@@ -689,7 +689,30 @@ async def login(body: LoginIn):
 
 @api_router.get("/auth/me", response_model=UserPublic)
 async def me(user: dict = Depends(get_current_user)):
-    return UserPublic(**{k: user.get(k) for k in UserPublic.model_fields})
+    # Enrich the response with the LIVE leave balance (opening − YTD-approved
+    # leave days). This mirrors the computation in `GET /members` so the
+    # leave-application form on `/my-leaves` can show "you have N days left"
+    # without an additional round-trip. We only run the YTD aggregation for
+    # non-athletes who have an opening balance set — saves work for athletes
+    # (who use the Breaks workflow) and for newly-onboarded staff whose
+    # opening balance hasn't been seeded yet.
+    enriched = dict(user)
+    if user.get("category") != "athlete" and user.get("leave_balance_opening") is not None:
+        office = await db.config.find_one({"id": "office"})
+        year = local_date_str(office)[:4]
+        rows = await db.leaves.find({
+            "user_id": user["id"], "status": "approved", "type": "leave",
+            "start_date": {"$gte": f"{year}-01-01", "$lte": f"{year}-12-31"},
+        }, {"_id": 0, "start_date": 1, "end_date": 1}).to_list(500)
+        taken = 0
+        for leave in rows:
+            try:
+                taken += (date.fromisoformat(leave["end_date"]) - date.fromisoformat(leave["start_date"])).days + 1
+            except Exception:
+                taken += 1
+        opening = float(user["leave_balance_opening"])
+        enriched["leave_balance_remaining"] = round(opening - taken, 1)
+    return UserPublic(**{k: enriched.get(k) for k in UserPublic.model_fields})
 
 
 # ----------------------------------------------------------------------------

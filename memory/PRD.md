@@ -138,6 +138,38 @@
 
 ## Recently Added (Jun 25, 2026 — pre-launch polish round 3)
 
+- **Leave-balance preview + LOP warning in the apply-leave form** —
+  every leave application path (self-apply on `/my-leaves`, admin
+  "Apply on behalf" with single OR multi member pick) now shows a
+  contextual notice block right above Submit. For `type=leave` the
+  block renders the live balance (opening − YTD-approved-leave-days)
+  vs the requested calendar-day count and flags excess days as
+  **"N days will be Loss of Pay (LOP)"** in a red panel. Multi-pick
+  renders a per-member table with Remaining + LOP columns. For
+  Tour / Comp Off / Late Coming the same slot renders a small blue
+  info note (those types don't draw from the balance). Every variant
+  closes with **"All leave is subject to admin approval"** — UNLESS
+  the admin has toggled Auto-approve, in which case the line becomes
+  *"Will be auto-approved on submit (admin override)"*. Backend
+  enriches `/api/auth/me` with the live `leave_balance_remaining`
+  (was a stored-only field returning null) for the self path; admin
+  path reuses the already-loaded `/members` payload.
+  New component: `LeaveBalanceNotice.jsx`. Verified e2e with three
+  Playwright flows: self-LOP (6 left, applied 8 → 2 LOP), admin
+  multi-pick (3 staff, mixed balances → per-row LOP correct), all
+  non-leave types render the right contextual copy.
+
+- **Daily-content quotes broadened — no longer sailing-only** —
+  replaced `FALLBACK_QUOTES` with 10 universally-resonant picks
+  (Jocko, James Clear, Mark Twain, Robin Sharma, Zig Ziglar etc.,
+  retaining Isabel Allende's "Show up. Show up. Show up." and one
+  sailing proverb for variety). Updated the Gemini system+user prompt
+  to drop the sailing/sports bias: "Broader life wisdom preferred
+  over nautical clichés; keep it universal, not sailing-specific."
+  Dev DB cache cleared so the new style appears immediately on next
+  visit. Fresh sample: *"Champions are built through the quiet
+  discipline of daily practice."*
+
 - **Bulk-edit on the Members admin table** — end-of-season fleet
   reshuffles, role grants, institution changes etc. that used to take
   hundreds of clicks now take one. Backend gets a new
