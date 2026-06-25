@@ -2468,6 +2468,74 @@ async def presence(user: dict = Depends(get_current_user)):
     ]
     notify_grace = int(office.get("parent_notify_grace_minutes") or 30)
 
+    # --- 30-day lookback for "consecutive days absent" counter ----------------
+    # We pre-fetch attendance + approved leave dates for the past 30 days
+    # in two bulk queries, then walk backwards per absent member to find their
+    # last covered day. Days falling on the member's weekly_off don't count.
+    today_d = date.fromisoformat(today)
+    lookback_start = (today_d - timedelta(days=30)).isoformat()
+    recent_atts = await db.attendance.find(
+        {"date": {"$gte": lookback_start, "$lt": today}},
+        {"_id": 0, "user_id": 1, "date": 1},
+    ).to_list(50000)
+    att_dates_by_user: dict = {}
+    for a in recent_atts:
+        att_dates_by_user.setdefault(a["user_id"], set()).add(a["date"])
+
+    recent_leaves = await db.leaves.find(
+        {"status": "approved",
+         "start_date": {"$lte": today},
+         "end_date":   {"$gte": lookback_start}},
+        {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1},
+    ).to_list(5000)
+    leave_dates_by_user: dict = {}
+    for L in recent_leaves:
+        try:
+            ls = max(date.fromisoformat(L["start_date"]), today_d - timedelta(days=30))
+            le = min(date.fromisoformat(L["end_date"]), today_d)
+        except Exception:
+            continue
+        cur = ls
+        while cur <= le:
+            leave_dates_by_user.setdefault(L["user_id"], set()).add(cur.isoformat())
+            cur += timedelta(days=1)
+
+    recent_breaks = await db.breaks.find(
+        {"start_date": {"$lte": today},
+         "end_date":   {"$gte": lookback_start}},
+        {"_id": 0},
+    ).to_list(500)
+
+    WEEKDAY_KEY = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+    def _consecutive_absent_days(u: dict) -> int:
+        """Count consecutive days (max 30) before today where the member had
+        no attendance, no approved leave/tour, no covering break, and the day
+        is not their weekly_off. Stops at the first 'covered' day."""
+        atts_set = att_dates_by_user.get(u["id"], set())
+        leaves_set = leave_dates_by_user.get(u["id"], set())
+        weekly_off = (u.get("weekly_off") or "").lower()
+        n = 0
+        d = today_d - timedelta(days=1)
+        for _ in range(30):
+            ds = d.isoformat()
+            if ds in atts_set or ds in leaves_set:
+                break
+            # Is this day covered by a break that applies to this member?
+            covered_by_break = any(
+                b.get("start_date") <= ds <= b.get("end_date")
+                and _breaks_module.break_applies_to(b, u)
+                for b in recent_breaks
+            )
+            if covered_by_break:
+                break
+            # Weekly off doesn't COUNT as absent but doesn't BREAK the streak —
+            # skip it (move further back).
+            if WEEKDAY_KEY[d.weekday()] != weekly_off:
+                n += 1
+            d -= timedelta(days=1)
+        return n
+
     result = []
     for u in users:
         # Use a small thumbnail in list responses so the Presence Board payload
@@ -2638,6 +2706,27 @@ async def presence(user: dict = Depends(get_current_user)):
             except Exception:
                 recomputed_late = bool(sess.get("late"))
 
+        # Extras requested for the Presence Board: excursion count for today's
+        # session, days remaining on leave/tour, and consecutive absent streak.
+        excursions_today = (sess or last_today or {}).get("excursions") or []
+        excursion_count = len(excursions_today)
+        days_remaining = None
+        if status_v in ("on_leave", "on_tour") and leave and leave.get("end_date"):
+            try:
+                end_d = date.fromisoformat(leave["end_date"])
+                days_remaining = max(0, (end_d - today_d).days + 1)
+            except Exception:
+                days_remaining = None
+        elif status_v == "on_leave" and brk and brk.get("end_date"):
+            # Member is "on break" (not an individual leave) — show how many
+            # more days the break covers them.
+            try:
+                end_d = date.fromisoformat(brk["end_date"])
+                days_remaining = max(0, (end_d - today_d).days + 1)
+            except Exception:
+                days_remaining = None
+        days_absent_streak = _consecutive_absent_days(u) if status_v == "absent" else 0
+
         result.append({
             "id": u["id"],
             "full_name": u["full_name"],
@@ -2667,6 +2756,9 @@ async def presence(user: dict = Depends(get_current_user)):
                 "not_arrived": notify_due_not_arrived and has_parent,
                 "late": notify_due_late and has_parent,
             },
+            "excursion_count": excursion_count,
+            "days_remaining": days_remaining,
+            "days_absent_streak": days_absent_streak,
         })
     order = {"on_campus": 0, "temp_out": 1, "on_tour": 2, "on_leave": 3, "absent": 4, "exited": 5, "not_due": 6}
     result.sort(key=lambda r: (order.get(r["status"], 9), r["full_name"]))

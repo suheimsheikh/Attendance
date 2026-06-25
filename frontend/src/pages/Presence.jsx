@@ -442,6 +442,33 @@ function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, 
           <div className="text-[11px] text-slate-500 truncate mt-0.5">{m.detail}</div>
         )}
         <div className="flex flex-wrap gap-1 mt-1">
+          {m.excursion_count > 0 && (
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-200 text-[10px] font-bold"
+              data-testid={`excursion-count-${m.id}`}
+              title={`${m.excursion_count} excursion${m.excursion_count === 1 ? "" : "s"} today (stepped out and returned)`}
+            >
+              <Coffee size={9}/> {m.excursion_count}×
+            </span>
+          )}
+          {m.days_remaining != null && m.days_remaining > 0 && (m.status === "on_leave" || m.status === "on_tour") && (
+            <span
+              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${m.status === "on_tour" ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800"}`}
+              data-testid={`days-remaining-${m.id}`}
+              title={`Returns after ${m.days_remaining} day${m.days_remaining === 1 ? "" : "s"}`}
+            >
+              {m.days_remaining}d more
+            </span>
+          )}
+          {m.status === "absent" && m.days_absent_streak > 1 && (
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold"
+              data-testid={`days-absent-${m.id}`}
+              title={`Absent for ${m.days_absent_streak} consecutive days${m.days_absent_streak >= 30 ? " (max lookback)" : ""}`}
+            >
+              {m.days_absent_streak}{m.days_absent_streak >= 30 ? "+" : ""}d absent
+            </span>
+          )}
           {m.flagged && (
             <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
               <AlertTriangle size={9} /> Off-site

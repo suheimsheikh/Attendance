@@ -42,6 +42,10 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ### ✨ UI polish
 
+- **Presence Board — context chips on every card**: how many step-outs the
+  member did today (`N×`), how many more days left on leave/tour (`Nd more`),
+  and how many consecutive days they've been absent (`Nd absent`, max 30-day
+  lookback). Weekly-off days are skipped in the absent streak counter.
 - **Presence Board cards** — institution chip moved off the name line so long
   names like "ESWA SURAGAJYOTHI" / "PREETHI KONDAKARI" no longer get clipped
   by the institution badge. Name + parent-phone icons sit on row 1; rank ·
