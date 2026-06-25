@@ -39,7 +39,17 @@ export default function Presence() {
   const [editingMember, setEditingMember] = useState(null);
   // YYYY-MM-DD or "" for "today" (live mode). Picking a past date switches
   // the board to a read-only historical view (no auto-refresh, no notify).
-  const todayIso = () => new Date().toISOString().slice(0, 10);
+  // Use LOCAL date — `toISOString()` would give UTC and trip the next-day
+  // logic across IST midnight (off-by-one between UTC and Asia/Kolkata).
+  const todayIso = () => new Date().toLocaleDateString("sv-SE");
+  // Add `delta` days to a YYYY-MM-DD string, returning a YYYY-MM-DD string
+  // in the *local* calendar (toISOString would silently convert to UTC and
+  // break the right-arrow advance in IST).
+  const shiftIso = (iso, delta) => {
+    const d = new Date(iso + "T12:00:00");  // noon avoids DST edge cases
+    d.setDate(d.getDate() + delta);
+    return d.toLocaleDateString("sv-SE");
+  };
   const [viewDate, setViewDate] = useState("");
   const [expandedRows, setExpandedRows] = useState(() => new Set());
   const isHistorical = !!viewDate && viewDate !== todayIso();
@@ -211,9 +221,7 @@ export default function Presence() {
               data-testid="presence-date-prev"
               onClick={() => {
                 const cur = viewDate || todayIso();
-                const d = new Date(cur + "T00:00:00");
-                d.setDate(d.getDate() - 1);
-                const next = d.toISOString().slice(0, 10);
+                const next = shiftIso(cur, -1);
                 setViewDate(next === todayIso() ? "" : next);
                 setExpandedRows(new Set());
               }}
@@ -238,9 +246,7 @@ export default function Presence() {
               onClick={() => {
                 const cur = viewDate || todayIso();
                 if (cur >= todayIso()) return;
-                const d = new Date(cur + "T00:00:00");
-                d.setDate(d.getDate() + 1);
-                const next = d.toISOString().slice(0, 10);
+                const next = shiftIso(cur, 1);
                 setViewDate(next >= todayIso() ? "" : next);
                 setExpandedRows(new Set());
               }}
