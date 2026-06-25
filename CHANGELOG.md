@@ -11,10 +11,11 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 ### 🆕 New features
 
 - **Daily Sessions merged into Presence Board** — Presence now has a date
-  picker so you can browse any past day, and every row has a chevron to expand
-  an inline timeline (check-in → step-outs → returns → check-out → hours
-  logged, with the auto-closed badge if midnight cron closed it). The separate
-  Admin Console "Daily sessions" tile is retired; the old URL redirects.
+  picker (with **‹ ›** prev/next-day arrows) so you can browse any past day,
+  and every row has a chevron to expand an inline timeline (check-in →
+  step-outs → returns → check-out → hours logged, with the auto-closed badge
+  if midnight cron closed it). The separate Admin Console "Daily sessions"
+  tile is retired; the old URL redirects.
 - **Breaks & Holidays** — new collection + Calendar action "Apply break". Mark a
   day off for everyone, all athletes / coaches / staff, one institution, or a
   hand-picked group. Affected members render under the **Leave** column on the
