@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Check, X, AlertTriangle } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -38,7 +38,7 @@ export default function Overtime({ embedded = false }) {
   const [notes, setNotes] = useState({});
   const [busyId, setBusyId] = useState(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const q = { status };
@@ -51,19 +51,21 @@ export default function Overtime({ embedded = false }) {
         setTo(r.date_to);
       }
     } finally { setLoading(false); }
-  };
-  useEffect(() => { load();   }, [status, from, to]);
+  }, [status, from, to]);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     // Preserve the parent `?tab=overtime` param when this page is embedded in
     // the unified Approvals view — otherwise the tab gets dropped on every
-    // filter change.
+    // filter change. `params` and `setParams` come from useSearchParams and
+    // are stable across renders for ESLint's exhaustive-deps purposes, but
+    // we declare them explicitly to satisfy the rule.
     const next = new URLSearchParams(params);
     if (status) next.set("status", status); else next.delete("status");
     if (from) next.set("from", from); else next.delete("from");
     if (to) next.set("to", to); else next.delete("to");
     setParams(next, { replace: true });
-  }, [status, from, to]);
+  }, [status, from, to, params, setParams]);
 
   const decide = async (row, decision) => {
     setBusyId(row.session_id);

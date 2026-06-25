@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Loader2, RefreshCw, FileDown, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob } from "../../api";
@@ -16,13 +16,13 @@ export default function Payroll() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try { setData(await api.get("/reports/payroll", { month })); }
     catch (err) { toast.error(err?.message || "Failed"); }
     finally { setLoading(false); }
-  };
-  useEffect(() => { load();   }, [month]);
+  }, [month]);
+  useEffect(() => { load(); }, [load]);
 
   const exportFmt = (fmt) => {
     if (!data) return;

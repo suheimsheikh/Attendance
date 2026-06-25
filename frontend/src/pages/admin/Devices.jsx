@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Loader2, Check, X, Ban, Smartphone, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
@@ -24,12 +24,12 @@ export default function Devices() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try { setItems(await api.get("/admin/devices", { status_filter: filter })); }
     finally { setLoading(false); }
-  };
-  useEffect(() => { load();   }, [filter]);
+  }, [filter]);
+  useEffect(() => { load(); }, [load]);
 
   const reject = async (d) => {
     try { await api.post(`/admin/devices/${d.id}/reject`); toast.success("Rejected"); load(); }

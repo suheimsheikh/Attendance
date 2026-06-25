@@ -3606,6 +3606,51 @@ app.include_router(_sms_router(db, require_admin))
 async def health():
     return {"status": "ok", "service": "i-showed-up"}
 
+
+# ----------------------------------------------------------------------------
+# Request-ID middleware — added pre-launch (06/2026) so any coach complaint
+# ("the page froze at 9:14 AM") can be traced back to exact server-log lines.
+#
+# Behaviour:
+#   • Accepts X-Request-ID from the client (lets the frontend correlate
+#     across multiple chained calls). Falls back to a fresh UUID4.
+#   • Echoes it back in the response header so the browser network panel /
+#     curl shows it for free.
+#   • Stuffs it onto `request.state.request_id` so any handler can access it.
+#   • Logs one structured line per request with status + duration_ms.
+# ----------------------------------------------------------------------------
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
+import time as _time  # noqa: E402
+
+_req_logger = logging.getLogger("ishowedup.access")
+
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+        request.state.request_id = rid
+        started = _time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            duration_ms = int((_time.perf_counter() - started) * 1000)
+            _req_logger.exception(
+                "rid=%s %s %s -> EXC %dms", rid, request.method, request.url.path, duration_ms,
+            )
+            raise
+        duration_ms = int((_time.perf_counter() - started) * 1000)
+        response.headers["X-Request-ID"] = rid
+        # Skip noisy health-check pings in the access log.
+        if request.url.path != "/api/health":
+            _req_logger.info(
+                "rid=%s %s %s -> %d %dms",
+                rid, request.method, request.url.path, response.status_code, duration_ms,
+            )
+        return response
+
+
+app.add_middleware(RequestIDMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=False,
@@ -3614,4 +3659,5 @@ app.add_middleware(
     ] or ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
 )

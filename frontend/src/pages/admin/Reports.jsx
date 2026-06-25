@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, FileDown, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob } from "../../api";
@@ -51,23 +51,23 @@ export default function Reports() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortBy, setSortBy] = useState("alpha");
 
-  const loadHours = async () => {
+  const loadHours = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get("/reports/hours", { start, end });
       setRows(res.rows || []);
     } catch (err) { toast.error(err?.message || "Failed"); }
     finally { setLoading(false); }
-  };
+  }, [start, end]);
 
-  const loadDaily = async () => {
+  const loadDaily = useCallback(async () => {
     setLoading(true);
     try { setDaily(await api.get("/reports/daily", { on: day })); }
     catch (err) { toast.error(err?.message || "Failed"); }
     finally { setLoading(false); }
-  };
+  }, [day]);
 
-  useEffect(() => { if (tab === "hours") loadHours(); else loadDaily();   }, [tab]);
+  useEffect(() => { if (tab === "hours") loadHours(); else loadDaily(); }, [tab, loadHours, loadDaily]);
 
   const exportHours = (fmt) => downloadBlob("/reports/hours/export", `hours_${start}_${end}.${fmt}`, { start, end, fmt });
   const exportDaily = (fmt) => downloadBlob("/reports/daily/export", `daily_${day}.${fmt}`, { on: day, fmt });

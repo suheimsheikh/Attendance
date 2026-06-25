@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Loader2, Check, X, Bed, Plane, AlertTriangle, Plus, Coffee } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
@@ -22,14 +22,14 @@ export default function AdminLeaves({ embedded = false }) {
   const [showBreak, setShowBreak] = useState(false);
   const [breakDeps, setBreakDeps] = useState({ members: [], institutions: [] });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = filter === "all" ? undefined : { status_filter: filter };
       setItems(await api.get("/leaves", params));
     } finally { setLoading(false); }
-  };
-  useEffect(() => { load();   }, [filter]);
+  }, [filter]);
+  useEffect(() => { load(); }, [load]);
 
   // Lazy-load members + institutions only when admin opens the Apply Break
   // modal — keeps the leaves list snappy on every page entry.

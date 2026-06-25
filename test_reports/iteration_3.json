@@ -1,0 +1,37 @@
+{
+  "summary": "Pre-launch regression for I-showed-up (live July 1, today June 25). 24/24 backend pytest pass against the public preview URL. All 5 admin pages with useCallback dependency-array fixes (Devices, Leaves, Overtime, Payroll, Reports) verified end-to-end by observing real network calls per filter/tab/picker interaction. Request-ID middleware confirmed: client-supplied X-Request-ID echoes back unchanged, auto-generated rids are 12-char lowercase hex, every response (incl. /api/health) carries X-Request-ID, /api/health is correctly excluded from access logs. CORS expose_headers includes X-Request-ID so api.js can pull it into ApiError.requestId. No regressions on /api/presence (130+ rows), /api/office (qr_token still stripped), phone-admin bypass (9849002111 → token), geo-toggle, muster bulk in/out, leave create-on-behalf + approve, reports CSV export, daily report shape.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter3.py",
+    "/app/test_reports/pytest/iter3_results.xml"
+  ],
+  "action_items": [
+    "(P3, deferred — explicitly excluded per problem statement) JWT-in-localStorage, missing CSRF, 4-char min password — DO NOT flag; user said skip.",
+    "(P3 leftover from iter2) /app/backend/server.py is 3664 lines — still worth splitting into routers (already partially done with /routes/leaves.py and /routes/reports.py)."
+  ],
+  "critical_code_review_comments": [
+    "RequestIDMiddleware (server.py 3628-3649) — correctly placed BEFORE CORSMiddleware in add_middleware order (Starlette runs LIFO, so CORS runs first on the request, RequestID runs last → outermost), so X-Request-ID lands on the final response after CORS. Verified.",
+    "RID auto-gen uses uuid.uuid4().hex[:12] — collisions are vanishingly rare at expected QPS but not theoretically impossible; if support workflows require globally-unique trace ids consider full uuid4.hex.",
+    "Middleware echoes client-supplied X-Request-ID without length/charset validation. Acceptable for an internal app but if exposed publicly a malicious client could inject log-injection sequences (newlines) into the access log line. Consider stripping non-hex chars or capping length to 64.",
+    "Devices/Leaves/Overtime/Payroll/Reports useCallback fix verified end-to-end: filter pill click → useCallback ref changes → useEffect([load]) re-runs → backend call with the new status_filter / status / from / to / month. No stale-closure bugs observed.",
+    "Overtime page also writes status/from/to into URL query string AND reads them back — bidirectional sync working without infinite loops (deps [status,from,to,params,setParams] are stable thanks to params being a memo from useSearchParams)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter3.py (NEW — 24 tests, 100% pass)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "100% (10/10 routes render + all 5 admin-page interaction loops fire correct backend calls)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 working; phone-bypass 9849002111 returns access_token instantly with role=admin.",
+  "seed_data_creation": "Per test only: 1 leave-on-behalf (auto-deleted in test_99_cleanup if delete route exists; otherwise persists as 'approved' with filed_by_admin set — harmless), 2 phone-login test devices (deleted directly via pymongo).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Three test files now under /app/backend/tests: test_ishowedup_api.py (iter1 legacy), test_review_iter2.py (iter2 P0 fixes), test_review_iter3.py (iter3 RequestID + useCallback regression). For future runs: `cd /app && python -m pytest backend/tests/test_review_iter3.py -v`. Key API contract gotchas: /api/admin/devices uses query name `status_filter` (not `status`); /api/leaves uses `status_filter`; /api/admin/overtime uses `status_filter` aliased to `status` plus `date_from`/`date_to`; leave create body uses `type`/`start_date`/`end_date` with `target_user_id` as a QUERY param; /api/reports/hours uses `start`/`end`; CSV export is /api/reports/hours/export?fmt=csv; daily uses `on`.",
+  "rca of the issue": "N/A — no regressions found. Both this-session items (Request-ID middleware + 5 useCallback dependency-array fixes) verified working end-to-end."
+}

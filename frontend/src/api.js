@@ -18,9 +18,13 @@ client.interceptors.request.use((cfg) => {
 });
 
 export class ApiError extends Error {
-  constructor(status, message) {
+  constructor(status, message, requestId) {
     super(message);
     this.status = status;
+    // The server echoes the X-Request-ID it logged this call under. Show it
+    // in error toasts so coaches can read it back to support over the phone
+    // and ops can pull the matching log lines.
+    this.requestId = requestId || null;
   }
 }
 
@@ -31,7 +35,8 @@ const unwrap = async (p) => {
   } catch (err) {
     const status = err?.response?.status || 0;
     const msg = err?.response?.data?.detail || err?.message || "Request failed";
-    throw new ApiError(status, typeof msg === "string" ? msg : "Request failed");
+    const requestId = err?.response?.headers?.["x-request-id"] || null;
+    throw new ApiError(status, typeof msg === "string" ? msg : "Request failed", requestId);
   }
 };
 
