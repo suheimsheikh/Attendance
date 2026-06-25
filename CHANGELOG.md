@@ -48,6 +48,14 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ### ✨ UI polish
 
+- **Admin Console slimmed down** — removed the redundant "Today's Activity"
+  feed (same info is now in the Presence Board's expandable timelines and
+  the Approvals / Access Requests sidebar counters). Console now shows just
+  the OT/Comp-off banners, the "Coming up this week" strip, and the summary
+  cards.
+- **Sidebar reshuffle** — "Approvals" renamed to **"Leave/Tour"** (clearer
+  for non-tech staff). **Leave Balances** moved out of Admin Console into
+  the main sidebar alongside Leave/Tour.
 - **Admin Console** — "Import members" tile removed (was a one-time setup
   shortcut). Parent/Guardian Excel import moved to a small **"Import parents"**
   button on the Members page header where it lives alongside the data it edits.

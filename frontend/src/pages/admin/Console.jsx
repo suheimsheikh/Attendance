@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Users, CalendarCheck2, Plane, Clock, ShieldCheck, ArrowRight, AlertTriangle, ChevronRight, Calendar, ClipboardCheck, ClipboardList, Building2, IdCard, Building, FileBarChart2, Tent, Sailboat, Coffee, CalendarDays } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
-import ActivityFeed from "../../components/ActivityFeed";
 
 // Date helpers — keep YYYY-MM-DD strings so we can compare lexicographically
 // against the backend's stored start_date / end_date.
@@ -96,10 +95,9 @@ export default function AdminConsole() {
 
   // Quick actions only show items NOT already reachable from the sidebar —
   // single point of access keeps the admin's mental model clean. Items now in
-  // the sidebar (Manage Members, Approvals, Monthly Payroll, Institutions,
-  // Camps, Calendar) are deliberately excluded.
+  // the sidebar (Manage Members, Leave/Tour, Leave balances, Monthly Payroll,
+  // Institutions, Calendar, Backup & Restore) are deliberately excluded.
   const links = [
-    { to: "/admin/leave-balances", label: "Leave balances",     desc: "Set opening balances & see consumed / pending",               Icon: CalendarCheck2,   color: "#06B6D4" },
   ];
 
   return (
@@ -203,9 +201,11 @@ export default function AdminConsole() {
         ))}
       </div>
 
-      <h2 className="font-extrabold tracking-tight mb-3">Quick actions</h2>
+      <h2 className="font-extrabold tracking-tight mb-3">Coming up</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
-        {links.map((l) => (
+        {links.length === 0 ? (
+          <p className="text-sm text-slate-500 col-span-2">Everything is reachable from the sidebar — pick a section on the left.</p>
+        ) : links.map((l) => (
           <Link
             key={l.to}
             to={l.to}
@@ -230,8 +230,6 @@ export default function AdminConsole() {
           </Link>
         ))}
       </div>
-
-      <ActivityFeed />
     </div>
   );
 }

@@ -30,7 +30,8 @@ const NAV_COACH = [
 const NAV_ADMIN = [
   { to: "/admin", label: "Admin Console", icon: ShieldCheck, end: true },
   { to: "/admin/members", label: "Manage Members", icon: Users },
-  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck },
+  { to: "/admin/approvals", label: "Leave/Tour", icon: ClipboardCheck },
+  { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
   { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare },
