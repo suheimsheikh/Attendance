@@ -138,6 +138,45 @@
 
 ## Recently Added (Jun 25, 2026 — pre-launch polish round 3)
 
+- **Members admin table is now inline-editable** — added
+  `/app/frontend/src/components/InlineCell.jsx`, a reusable cell-level
+  editor (text / number / tel / select). Wired into `Members.jsx` for
+  the common edits: **Name** (required), **Category** (renders the
+  coloured pill, dropdown picks athlete/coach/staff/executive), **Admin
+  role** (renders shield badge, dropdown picks admin/member), **Rank**,
+  **Gender**, **Mobile**, **Institution**, **Fleet** (dropdown sourced
+  from the fleets master + any in-use labels), and **Leave balance
+  opening** (numeric, only for staff + coach since athletes/executives
+  show em-dash). Auto-saves on blur (text/number) or change (select);
+  Enter commits, Esc cancels. Optimistic local update + revert on error
+  + checkmark flash on success. Header now reads "click any cell to edit
+  · double-click a row for the full form" — the existing `MemberForm`
+  modal stays available for power edits (email, password, photo,
+  parent names, work hours, weekly-off). Verified end-to-end with
+  curl-driven Playwright: typing into rank persists, dropdown picking
+  for category/role updates the row pill, and editing
+  `leave_balance_opening` to 14 immediately recomputes
+  `leave_balance_remaining` and persists both fields.
+- **🐛 Backend: PATCH /members couldn't clear fields** — the handler used
+  `{k:v for ... if v is not None}` so explicit nulls in the request body
+  were silently dropped. That meant inline-edit cells could SET values
+  but never CLEAR them ("blank out the rank" did nothing). Switched to
+  `model_dump(exclude_unset=True)` so absent fields stay untouched but
+  explicit nulls clear. Modal `MemberForm` is unaffected — it already
+  strips empty strings before sending and only retains explicit nulls
+  for fields that were already null. All 190 pytest still green.
+
+- **🐛 Twilio "origin returned invalid response" Cloudflare-style toast**
+  — `sms.py` was deliberately returning **502** on Twilio API rejections
+  (bad creds, unverified number, DLT missing). The k8s ingress / edge
+  proxy replaces any 502 from origin with its own generic HTML "origin
+  overloaded" page, so the admin never saw the real Twilio error
+  ("Unable to create record: Authenticate", "Trial mode — recipient not
+  verified", etc.). Switched to **400** for `TwilioRestException`
+  (genuinely a client-config error from FastAPI's perspective) and kept
+  500 for truly unexpected failures. Now the admin sees Twilio's exact
+  rejection message in the red toast.
+
 - **🐛 Twilio first-time-setup auth-token save bug** — `Office.jsx` was
   dropping `auth_token` from the PUT payload on the very first save
   because the gate `editToken && newToken.trim()` required clicking the

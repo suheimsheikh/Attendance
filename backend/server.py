@@ -1088,7 +1088,12 @@ async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depend
         raise HTTPException(status_code=400, detail="You cannot remove your own admin access")
     if body.photo is not None:
         _check_photo_size(body.photo)
-    update = {k: v for k, v in body.model_dump().items() if v is not None and k != "password"}
+    # NOTE: `exclude_unset=True` distinguishes between "field omitted from
+    # request" (leave unchanged) and "field explicitly set to null" (clear
+    # it). Without this, inline-edit cells in the Members admin table can
+    # SET values but never CLEAR them, because Pydantic defaults all
+    # unspecified Optional fields to None and we used to filter all Nones.
+    update = {k: v for k, v in body.model_dump(exclude_unset=True).items() if k != "password"}
     if body.password:
         update["hashed_password"] = hash_password(body.password)
     # Keep the denormalised phone key in sync when mobile changes.

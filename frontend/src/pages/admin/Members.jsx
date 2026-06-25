@@ -6,6 +6,7 @@ import { api, showApiError } from "../../api";
 import InlinePhotoAvatar from "../../components/InlinePhotoAvatar";
 import ParentContact from "../../components/ParentContact";
 import StatusBadge from "../../components/StatusBadge";
+import InlineCell from "../../components/InlineCell";
 import MemberForm from "./MemberForm";
 import { categoryLabel } from "../../utils";
 
@@ -84,19 +85,70 @@ export default function Members() {
   const [onlyAdmins, setOnlyAdmins] = useState(false);
   const [instFilter, setInstFilter] = useState("");
   const [institutions, setInstitutions] = useState([]);
+  // Fleet master — used to render the inline Fleet dropdown. Falls back to
+  // free-text + any distinct fleets actually assigned (defensive: handles
+  // historic athletes whose fleet label was deleted from the master).
+  const [fleets, setFleets] = useState([]);
   // Today in local YYYY-MM-DD — used by the Last-seen column to compute
   // "Today / Yesterday / N days ago". Memoised so the date string is stable
   // across re-renders within the same calendar day.
   const today = useMemo(() => new Date().toLocaleDateString("sv-SE"), []);
 
+  // Static option lists for the inline selects. Keep these in sync with the
+  // backend `MemberUpdate` Literal types — out-of-list values would be
+  // rejected with a 422.
+  const CATEGORY_OPTS = useMemo(() => [
+    { value: "athlete",   label: "Athlete" },
+    { value: "coach",     label: "Coach" },
+    { value: "staff",     label: "Staff" },
+    { value: "executive", label: "Executive" },
+  ], []);
+  const ROLE_OPTS = useMemo(() => [
+    { value: "member", label: "Member" },
+    { value: "admin",  label: "Admin" },
+  ], []);
+  const GENDER_OPTS = useMemo(() => [
+    { value: "",  label: "—" },
+    { value: "M", label: "Male" },
+    { value: "F", label: "Female" },
+    { value: "O", label: "Other" },
+  ], []);
+  const WEEKLY_OFF_OPTS = useMemo(() => [
+    { value: "",          label: "—" },
+    { value: "sunday",    label: "Sunday" },
+    { value: "monday",    label: "Monday" },
+    { value: "tuesday",   label: "Tuesday" },
+    { value: "wednesday", label: "Wednesday" },
+    { value: "thursday",  label: "Thursday" },
+    { value: "friday",    label: "Friday" },
+    { value: "saturday",  label: "Saturday" },
+  ], []);
+  const FLEET_OPTS = useMemo(() => {
+    // Union of fleet-master entries + any distinct fleet labels already in
+    // use (defensive: an athlete may have been assigned to a fleet that was
+    // later renamed/removed from the master). Empty option clears the fleet.
+    const set = new Set((fleets || []).map((f) => f.name));
+    for (const m of members) { if (m.fleet) set.add(m.fleet); }
+    return [{ value: "", label: "—" }, ...Array.from(set).sort().map((v) => ({ value: v, label: v }))];
+  }, [fleets, members]);
+  const INSTITUTION_OPTS = useMemo(() => (
+    [{ value: "", label: "—" }, ...institutions.map((i) => ({ value: i.name, label: i.name }))]
+  ), [institutions]);
+
   const load = useCallback(async () => {
     try {
-      const [m, p, i] = await Promise.all([api.get("/members"), api.get("/presence"), api.get("/institutions")]);
+      const [m, p, i, f] = await Promise.all([
+        api.get("/members"),
+        api.get("/presence"),
+        api.get("/institutions"),
+        api.get("/fleets"),
+      ]);
       setMembers(m);
       const map = {};
       (p.members || []).forEach((x) => { map[x.id] = x; });
       setPresence(map);
       setInstitutions(i || []);
+      setFleets(f || []);
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -138,18 +190,45 @@ export default function Members() {
     } catch (err) { showApiError(err, "Failed"); }
   };
 
-  // Inline patch — update parent_mobile fields locally + persist to API on blur,
-  // without triggering a full reload (which would interrupt other open inputs).
-  const patchParent = async (memberId, field, value) => {
-    const trimmed = (value || "").trim();
-    setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, [field]: trimmed } : m)));
+  // Inline patch — apply update locally first (optimistic) + persist to API,
+  // without triggering a full reload (which would interrupt other open
+  // inputs). Used by both the parent-mobile cells and the new InlineCell
+  // editors for name/category/role/rank/mobile/gender/fleet/leave-balance.
+  const patchMember = async (memberId, field, value) => {
+    // Normalise: trim strings, coerce numbers, empty string → null.
+    let normalised = value;
+    if (typeof value === "string") normalised = value.trim() === "" ? null : value.trim();
+    if (field === "leave_balance_opening") {
+      normalised = value === "" || value == null ? null : Number(value);
+      if (Number.isNaN(normalised)) normalised = null;
+    }
+    setMembers((prev) => prev.map((m) => {
+      if (m.id !== memberId) return m;
+      const next = { ...m, [field]: normalised };
+      // Re-derive `leave_balance_remaining` so the displayed "X/Y" stays
+      // consistent until the next full reload picks up the canonical value.
+      if (field === "leave_balance_opening" && normalised != null && m.leave_balance_opening != null) {
+        const taken = m.leave_balance_opening - (m.leave_balance_remaining ?? m.leave_balance_opening);
+        next.leave_balance_remaining = normalised - taken;
+      } else if (field === "leave_balance_opening" && normalised != null) {
+        next.leave_balance_remaining = normalised;
+      } else if (field === "leave_balance_opening") {
+        next.leave_balance_remaining = null;
+      }
+      return next;
+    }));
     try {
-      await api.patch(`/members/${memberId}`, { [field]: trimmed });
+      await api.patch(`/members/${memberId}`, { [field]: normalised });
     } catch (err) {
       showApiError(err, "Save failed");
+      // Re-load to get back to canonical server state.
+      load();
       throw err;
     }
   };
+  // Backwards-compat alias: the parent-mobile editor calls `patchParent`
+  // with the same (id, field, value) signature.
+  const patchParent = patchMember;
 
   const toggleAttendance = async (m) => {
     setBusyId(m.id);
@@ -166,7 +245,7 @@ export default function Members() {
       <header className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Members</h1>
-          <p className="text-slate-500 text-sm mt-1">{members.length} total · double-click any row to edit</p>
+          <p className="text-slate-500 text-sm mt-1">{members.length} total · click any cell to edit · double-click a row for the full form</p>
         </div>
         <div className="flex gap-2">
           <Link
@@ -300,46 +379,131 @@ export default function Members() {
                             size={40}
                             onUpdated={(u) => setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, photo: u.photo } : x)))}
                           />
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <div className="font-semibold text-slate-900 truncate flex items-center gap-2">
-                              <span className="truncate">{m.full_name}</span>
+                              <InlineCell
+                                kind="text"
+                                value={m.full_name}
+                                required
+                                testId={`inline-full_name-${m.id}`}
+                                onSave={(v) => patchMember(m.id, "full_name", v)}
+                                className="text-sm font-semibold"
+                              />
                               <ParentContact father={m.father_mobile} mother={m.mother_mobile} guardian={m.guardian_mobile} />
                             </div>
                             <div className="text-xs text-slate-500 truncate">{m.email}</div>
                           </div>
                         </div>
                       </td>
-                      {/* Role / category — category pill + orthogonal Admin badge */}
+                      {/* Role / category — both inline-editable. Category is
+                          a select that renders the colored pill; admin role
+                          is a select that renders the indigo shield badge. */}
                       <td className="iu-table-td">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`inline-flex items-center gap-1.5 px-2 h-6 rounded-full text-[11px] font-semibold border ${b.inactiveBg} ${b.inactiveText} ${b.inactiveBorder}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${b.dotBg}`} />
-                            {b.label.replace(/s$/, "")}
-                          </span>
-                          {m.role === "admin" && (
-                            <span
-                              data-testid={`admin-badge-${m.id}`}
-                              className="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[11px] font-bold border bg-indigo-50 text-indigo-700 border-indigo-200"
-                              title="Has admin role — independent of category"
-                            >
-                              <ShieldCheck size={11} /> Admin
-                            </span>
-                          )}
+                          <InlineCell
+                            kind="select"
+                            value={m.category || "athlete"}
+                            options={CATEGORY_OPTS}
+                            testId={`inline-category-${m.id}`}
+                            onSave={(v) => patchMember(m.id, "category", v)}
+                            renderDisplay={(v) => {
+                              const cat = v || "athlete";
+                              const meta = BUCKET_BY_KEY[cat] || BUCKET_BY_KEY.athlete;
+                              return (
+                                <span className={`inline-flex items-center gap-1.5 px-2 h-6 rounded-full text-[11px] font-semibold border ${meta.inactiveBg} ${meta.inactiveText} ${meta.inactiveBorder}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${meta.dotBg}`} />
+                                  {meta.label.replace(/s$/, "")}
+                                </span>
+                              );
+                            }}
+                          />
+                          <InlineCell
+                            kind="select"
+                            value={m.role || "member"}
+                            options={ROLE_OPTS}
+                            testId={`inline-role-${m.id}`}
+                            onSave={(v) => patchMember(m.id, "role", v)}
+                            renderDisplay={(v) => (
+                              v === "admin" ? (
+                                <span
+                                  data-testid={`admin-badge-${m.id}`}
+                                  className="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[11px] font-bold border bg-indigo-50 text-indigo-700 border-indigo-200"
+                                  title="Has admin role — independent of category"
+                                >
+                                  <ShieldCheck size={11} /> Admin
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[10px] font-semibold border bg-slate-50 text-slate-400 border-dashed border-slate-300" title="Click to grant admin">
+                                  <ShieldCheck size={10} /> Member
+                                </span>
+                              )
+                            )}
+                          />
                         </div>
                         <div className="text-xs text-slate-500 mt-1">{categoryLabel(m.category)}</div>
                       </td>
-                      <td className="iu-table-td text-slate-700">{m.rank || "—"}</td>
-                      <td className="iu-table-td text-slate-700">{GENDER_LABEL[m.gender] || "—"}</td>
-                      <td className="iu-table-td text-slate-700 font-mono text-xs">{m.mobile || "—"}</td>
-                      <td className="iu-table-td text-slate-700">{m.institution || "—"}</td>
-                      <td className="iu-table-td text-slate-700">{m.fleet ? (
-                        <span className="inline-flex items-center px-2 h-5 rounded text-[11px] font-bold bg-sky-100 text-sky-700">{m.fleet}</span>
-                      ) : "—"}</td>
+                      <td className="iu-table-td text-slate-700">
+                        <InlineCell
+                          kind="text"
+                          value={m.rank}
+                          testId={`inline-rank-${m.id}`}
+                          onSave={(v) => patchMember(m.id, "rank", v)}
+                        />
+                      </td>
+                      <td className="iu-table-td text-slate-700">
+                        <InlineCell
+                          kind="select"
+                          value={m.gender || ""}
+                          options={GENDER_OPTS}
+                          testId={`inline-gender-${m.id}`}
+                          onSave={(v) => patchMember(m.id, "gender", v)}
+                          renderDisplay={(v) => v ? GENDER_LABEL[v] : <span className="text-slate-300">—</span>}
+                        />
+                      </td>
+                      <td className="iu-table-td text-slate-700 font-mono text-xs">
+                        <InlineCell
+                          kind="tel"
+                          value={m.mobile}
+                          testId={`inline-mobile-${m.id}`}
+                          onSave={(v) => patchMember(m.id, "mobile", v)}
+                          className="font-mono"
+                        />
+                      </td>
+                      <td className="iu-table-td text-slate-700">
+                        <InlineCell
+                          kind="select"
+                          value={m.institution || ""}
+                          options={INSTITUTION_OPTS}
+                          testId={`inline-institution-${m.id}`}
+                          onSave={(v) => patchMember(m.id, "institution", v)}
+                          renderDisplay={(v) => v || <span className="text-slate-300">—</span>}
+                        />
+                      </td>
+                      <td className="iu-table-td text-slate-700">
+                        <InlineCell
+                          kind="select"
+                          value={m.fleet || ""}
+                          options={FLEET_OPTS}
+                          testId={`inline-fleet-${m.id}`}
+                          onSave={(v) => patchMember(m.id, "fleet", v)}
+                          renderDisplay={(v) => v ? (
+                            <span className="inline-flex items-center px-2 h-5 rounded text-[11px] font-bold bg-sky-100 text-sky-700">{v}</span>
+                          ) : <span className="text-slate-300">—</span>}
+                        />
+                      </td>
                       <td className="iu-table-td text-slate-700 text-xs whitespace-nowrap" data-testid={`last-seen-${m.id}`}>
                         {lastSeenLabel(m.last_seen_date, today)}
                       </td>
                       <td className="iu-table-td text-slate-700 text-xs whitespace-nowrap" data-testid={`leave-balance-${m.id}`}>
-                        {leaveBalanceLabel(m)}
+                        {["staff", "coach"].includes(m.category) ? (
+                          <InlineCell
+                            kind="number"
+                            value={m.leave_balance_opening}
+                            testId={`inline-leave_balance_opening-${m.id}`}
+                            onSave={(v) => patchMember(m.id, "leave_balance_opening", v)}
+                            renderDisplay={() => leaveBalanceLabel(m)}
+                          />
+                        ) : leaveBalanceLabel(m)}
                       </td>
                       <td className="iu-table-td text-slate-700 text-xs whitespace-nowrap">
                         {m.work_start || "—"}{m.work_end ? <> – {m.work_end}</> : null}
