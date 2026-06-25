@@ -42,6 +42,9 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ### ✨ UI polish
 
+- **Admin Console** — "Import members" tile removed (was a one-time setup
+  shortcut). Parent/Guardian Excel import moved to a small **"Import parents"**
+  button on the Members page header where it lives alongside the data it edits.
 - **Presence Board — context chips on every card**: how many step-outs the
   member did today (`N×`), how many more days left on leave/tour (`Nd more`),
   and how many consecutive days they've been absent (`Nd absent`, max 30-day

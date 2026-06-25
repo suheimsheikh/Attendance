@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { Loader2, Plus, Search, Edit3, Trash2, LogIn, LogOut as LogOutIcon, Check } from "lucide-react";
+import { Loader2, Plus, Search, Edit3, Trash2, LogIn, LogOut as LogOutIcon, Check, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import { api } from "../../api";
 import InlinePhotoAvatar from "../../components/InlinePhotoAvatar";
 import ParentContact from "../../components/ParentContact";
@@ -118,7 +119,17 @@ export default function Members() {
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Members</h1>
           <p className="text-slate-500 text-sm mt-1">{members.length} total · double-click any row to edit</p>
         </div>
-        <button data-testid="new-member-button" onClick={() => setEditing("new")} className="iu-btn-primary"><Plus size={16}/> Add member</button>
+        <div className="flex gap-2">
+          <Link
+            to="/admin/import"
+            data-testid="members-import-parents"
+            className="iu-btn-secondary"
+            title="Upload an Excel sheet of parent / guardian contacts. Members are matched by name (spelling-tolerant)."
+          >
+            <FileSpreadsheet size={16}/> Import parents
+          </Link>
+          <button data-testid="new-member-button" onClick={() => setEditing("new")} className="iu-btn-primary"><Plus size={16}/> Add member</button>
+        </div>
       </header>
 
       <div className="iu-card p-4 mb-4 flex items-center gap-3">
