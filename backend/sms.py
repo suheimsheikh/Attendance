@@ -161,11 +161,17 @@ async def send_sms(*, db, to_e164: str, body: str, institution: Optional[str] = 
         # block FastAPI's event loop for the ~300-800 ms of network IO.
         sent = await asyncio.to_thread(client.messages.create, **kwargs)
     except TwilioRestException as exc:
+        # NOTE: we deliberately use 400 (not 502) for Twilio API rejections.
+        # 502 responses get replaced by the k8s ingress / Cloudflare with a
+        # generic "origin returned invalid response" HTML page, so the real
+        # Twilio error message (e.g. "unverified number on trial account",
+        # "DLT registration missing", "auth token invalid") never reached
+        # the admin. With 400 the JSON body passes through unmodified.
         logger.warning("Twilio SMS error to %s: %s", to_e164, exc)
-        raise HTTPException(status_code=502, detail=f"Twilio error: {exc.msg}")
+        raise HTTPException(status_code=400, detail=f"Twilio rejected the SMS: {exc.msg}")
     except Exception as exc:  # noqa: BLE001
         logger.exception("Unexpected Twilio failure")
-        raise HTTPException(status_code=502, detail=f"Twilio failure: {exc}")
+        raise HTTPException(status_code=500, detail=f"Twilio failure: {exc}")
 
     audit = {
         "kind": "sms",
@@ -206,8 +212,10 @@ async def make_voice_call(*, db, to_e164: str, body_en: str, body_te: str, insti
     try:
         call = await asyncio.to_thread(client.calls.create, to=to_e164, from_=from_number, twiml=twiml)
     except TwilioRestException as exc:
+        # Same reasoning as send_sms — use 400 so the ingress doesn't
+        # swallow the real Twilio error message behind a generic 502 page.
         logger.warning("Twilio voice error to %s: %s", to_e164, exc)
-        raise HTTPException(status_code=502, detail=f"Twilio error: {exc.msg}")
+        raise HTTPException(status_code=400, detail=f"Twilio rejected the call: {exc.msg}")
 
     audit = {
         "kind": "voice",
