@@ -147,19 +147,27 @@ export default function AdminLeaves({ embedded = false }) {
       ) : visible.length === 0 ? (
         <div className="iu-card p-10 text-center text-slate-500">No {filter === "all" ? "" : filter} requests.</div>
       ) : (
-        <div className="iu-card !p-0 overflow-x-auto" data-testid="admin-leaves-list">
-          <table className="w-full text-sm min-w-[1080px]">
+        <div
+          data-testid="admin-leaves-list"
+          className="iu-card !p-0 overflow-auto rounded-lg"
+          // Cap the height so the table itself scrolls (with the header
+          // staying stuck at the top via `sticky top-0`). The cap subtracts
+          // the page-header + filter chip row + outer padding so the
+          // bottom edge sits roughly at the viewport baseline.
+          style={{ maxHeight: "calc(100vh - 220px)" }}
+        >
+          <table className="w-full text-sm min-w-[1080px] border-separate border-spacing-0">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 text-xs">
-                <th className="iu-table-th !text-left">Member</th>
-                <th className="iu-table-th !text-left">Type</th>
-                <th className="iu-table-th !text-left">From → To</th>
-                <th className="iu-table-th !text-right w-16">Days</th>
-                <th className="iu-table-th !text-left w-28">Applied</th>
-                <th className="iu-table-th !text-left">Reason</th>
-                <th className="iu-table-th !text-left w-24">Status</th>
-                <th className="iu-table-th !text-left">Decided by</th>
-                <th className="iu-table-th !text-right w-44">Actions</th>
+              <tr className="bg-slate-50 text-slate-500 text-xs sticky top-0 z-10 shadow-[0_1px_0_0_rgb(226,232,240)]">
+                <th className="iu-table-th !text-left bg-slate-50">Member</th>
+                <th className="iu-table-th !text-left bg-slate-50">Type</th>
+                <th className="iu-table-th !text-left bg-slate-50">From → To</th>
+                <th className="iu-table-th !text-right w-16 bg-slate-50">Days</th>
+                <th className="iu-table-th !text-left w-28 bg-slate-50">Applied</th>
+                <th className="iu-table-th !text-left bg-slate-50">Reason</th>
+                <th className="iu-table-th !text-left w-24 bg-slate-50">Status</th>
+                <th className="iu-table-th !text-left bg-slate-50">Decided by</th>
+                <th className="iu-table-th !text-right w-44 bg-slate-50">Actions</th>
               </tr>
             </thead>
             <tbody>
