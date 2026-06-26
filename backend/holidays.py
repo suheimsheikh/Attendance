@@ -25,6 +25,69 @@ def _days_inclusive(start_iso: str, end_iso: str) -> int:
         return 1
 
 
+async def compute_balance_summary(db, user: dict, year: Optional[str] = None) -> dict:
+    """One-shot summary of every balance an apply-leave form needs.
+
+    Returns the live values for both pools — comp-off (accrued via
+    weekly-off attendance) and paid leave (opening − used) — plus the
+    combined total. Used by the unified Leave application UX where comp-off
+    drains first and the leave balance second.
+
+    Output shape:
+        {
+            "comp_off": {"accrued", "used", "available"},
+            "paid_leave": {"opening", "used", "available", "tracked": bool},
+            "total_available": int,
+        }
+    """
+    co = await compute_comp_off_balance(db, user, year=year)
+    if not year:
+        year = str(date.today().year)
+    yr_start, yr_end = f"{year}-01-01", f"{year}-12-31"
+    opening = user.get("leave_balance_opening")
+    tracked = (user.get("category") != "athlete") and (opening is not None)
+    paid_used = 0
+    if tracked:
+        approved = await db.leaves.find({
+            "user_id": user["id"], "status": "approved", "type": "leave",
+            "start_date": {"$gte": yr_start, "$lte": yr_end},
+        }, {"_id": 0, "start_date": 1, "end_date": 1, "paid_leave_used": 1}).to_list(500)
+        for L in approved:
+            if "paid_leave_used" in L and L["paid_leave_used"] is not None:
+                paid_used += float(L["paid_leave_used"])
+            else:
+                # Legacy row created before the ladder-stamp landed. Treat
+                # the whole leave window as paid days (the old behaviour).
+                paid_used += _days_inclusive(L["start_date"], L["end_date"])
+    paid_avail = max(0.0, float(opening) - paid_used) if tracked else 0
+    return {
+        "comp_off": {"accrued": co["accrued"], "used": co["used"], "available": co["available"]},
+        "paid_leave": {
+            "opening": opening,
+            "used": paid_used,
+            "available": paid_avail,
+            "tracked": tracked,
+        },
+        "total_available": int(co["available"]) + int(paid_avail),
+        "weekly_off": co["weekly_off"],
+        "weekly_off_source": co["weekly_off_source"],
+    }
+
+
+def split_leave_days(requested: int, comp_off_avail: int, paid_avail: float) -> dict:
+    """Split a requested leave (calendar days) across the deduction ladder.
+
+    Order: comp-off first, paid leave second, anything left = LOP.
+    Returns a dict ready to stamp on the leave document — callers can
+    spread this onto the create payload.
+    """
+    requested = max(0, int(requested))
+    co = min(requested, max(0, int(comp_off_avail)))
+    paid = min(requested - co, max(0.0, float(paid_avail)))
+    lop = max(0, requested - co - int(paid))
+    return {"comp_off_used": co, "paid_leave_used": paid, "lop_days": lop}
+
+
 async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -> dict:
     """Live comp-off balance for `user`.
 
@@ -73,12 +136,22 @@ async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -
 
     used_leaves = await db.leaves.find({
         "user_id": user["id"],
-        "type": "comp_off",
         "status": "approved",
         "start_date": {"$lte": yr_end},
         "end_date": {"$gte": yr_start},
-    }, {"_id": 0, "start_date": 1, "end_date": 1}).to_list(500)
-    used = sum(_days_inclusive(L["start_date"], L["end_date"]) for L in used_leaves)
+        # Two shapes count toward comp-off consumption:
+        #  - NEW: any leave row carrying a non-zero `comp_off_used` stamp
+        #         (the unified Leave application path, comp-off-first ladder).
+        #  - LEGACY: rows of the now-deprecated `type=comp_off` application,
+        #         which had no stamp — the whole window counts as used.
+        "$or": [{"comp_off_used": {"$gt": 0}}, {"type": "comp_off"}],
+    }, {"_id": 0, "type": 1, "start_date": 1, "end_date": 1, "comp_off_used": 1}).to_list(500)
+    used = 0
+    for L in used_leaves:
+        if "comp_off_used" in L and L["comp_off_used"] is not None:
+            used += int(L["comp_off_used"])
+        elif L.get("type") == "comp_off":
+            used += _days_inclusive(L["start_date"], L["end_date"])
 
     return {
         "year": year,
@@ -107,6 +180,19 @@ def make_router(*_args, **_kwargs):
     @router.get("/me/comp-off-balance")
     async def my_comp_off_balance(user: dict = Depends(get_current_user)):
         return await compute_comp_off_balance(db, user)
+
+    @router.get("/me/leave-summary")
+    async def my_leave_summary(user: dict = Depends(get_current_user)):
+        """Unified balance summary — comp-off + paid leave — for the apply
+        Leave form's deduction-ladder preview."""
+        return await compute_balance_summary(db, user)
+
+    @router.get("/members/{member_id}/leave-summary")
+    async def member_leave_summary(member_id: str, _admin: dict = Depends(require_admin)):
+        u = await db.users.find_one({"id": member_id}, {"_id": 0})
+        if not u:
+            raise HTTPException(status_code=404, detail="Member not found")
+        return await compute_balance_summary(db, u)
 
     @router.get("/members/{member_id}/comp-off-balance")
     async def member_comp_off_balance(member_id: str, _admin: dict = Depends(require_admin)):

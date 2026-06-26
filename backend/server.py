@@ -708,13 +708,18 @@ async def me(user: dict = Depends(get_current_user)):
         rows = await db.leaves.find({
             "user_id": user["id"], "status": "approved", "type": "leave",
             "start_date": {"$gte": f"{year}-01-01", "$lte": f"{year}-12-31"},
-        }, {"_id": 0, "start_date": 1, "end_date": 1}).to_list(500)
-        taken = 0
+        }, {"_id": 0, "start_date": 1, "end_date": 1, "paid_leave_used": 1}).to_list(500)
+        taken = 0.0
         for leave in rows:
-            try:
-                taken += (date.fromisoformat(leave["end_date"]) - date.fromisoformat(leave["start_date"])).days + 1
-            except Exception:
-                taken += 1
+            # New ladder rows carry `paid_leave_used` — only that slice draws
+            # from the paid pool. Legacy rows (pre-ladder) count fully.
+            if "paid_leave_used" in leave and leave["paid_leave_used"] is not None:
+                taken += float(leave["paid_leave_used"])
+            else:
+                try:
+                    taken += (date.fromisoformat(leave["end_date"]) - date.fromisoformat(leave["start_date"])).days + 1
+                except Exception:
+                    taken += 1
         opening = float(user["leave_balance_opening"])
         enriched["leave_balance_remaining"] = round(opening - taken, 1)
     return UserPublic(**{k: enriched.get(k) for k in UserPublic.model_fields})
@@ -3849,8 +3854,15 @@ app.include_router(api_router)
 
 # Leave / Tour routes — split out 06/2026 during the server.py refactor.
 from routes.leaves import make_router as _leaves_router  # noqa: E402
-from holidays import compute_comp_off_balance as _compute_comp_off_balance  # noqa: E402
-_leaves = _leaves_router(db, require_admin, get_current_user, _compute_comp_off_balance)
+from holidays import (
+    compute_comp_off_balance as _compute_comp_off_balance,
+    compute_balance_summary as _compute_balance_summary,
+    split_leave_days as _split_leave_days,
+)  # noqa: E402
+_leaves = _leaves_router(
+    db, require_admin, get_current_user,
+    _compute_comp_off_balance, _compute_balance_summary, _split_leave_days,
+)
 app.include_router(_leaves)
 # Routes/reports needs enrich_leaves; the leaves router exposes it as an
 # attribute for re-use without re-implementing.

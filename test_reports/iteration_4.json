@@ -1,0 +1,36 @@
+{
+  "summary": "Iter4 — Frontend close-out for the Unified Leave System (Comp-Off + Paid Leave waterfall). Both backend and frontend validated end-to-end against the public preview URL. 10/10 new backend tests pass; existing /backend/tests/test_routes_leaves.py (18 tests) still green — no regressions. Frontend self-apply modal at /my-leaves shows exactly 3 leave-type buttons (leave / tour / late-coming) — Comp Off button removed as required. waterfall-preview, pool-comp-off, pool-paid-leave testids render correctly with live values from /api/me/leave-summary, including the 'X from Comp-Off + Y from Paid Leave + Z LOP' line and the 'All leave is subject to admin approval' line. Switching to Tour / Late-Coming swaps the block to leave-balance-info-nonleave. Admin /admin/approvals → 'Apply on behalf' modal also drops Comp Off, supports both single-pick (waterfall OR athlete-block depending on category) and multi-pick (leave-balance-multi table). Backend POST /api/leaves with target_user_id stamps comp_off_used/paid_leave_used/lop_days correctly — verified a 3-day leave on a 0-balance member yields lop_days=3 and zero usage on both pools; Tour rows do NOT carry the ladder stamps. Group endpoint still creates one row per picked member; /api/leaves listing remains enriched with member_name/member_category.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "MyLeaves Apply modal", "issues": ["Minor: existing 'Re-open' button in Approvals table is shown next to admin-decided rows (Approved/Rejected) but not for Pending — appears working but visual contrast of the 'Re-open' link could be stronger. Non-blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_unified_leave_iter4.py",
+    "/app/test_reports/pytest/iter4_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/leaves.py: create_leave correctly imports _days_inclusive from holidays and conditionally invokes split_leave_days only when type=='leave' AND both helpers are wired. Tour / Late Coming do NOT get ladder stamps — matches PRD intent.",
+    "holidays.compute_balance_summary: legacy leave rows (pre-stamp) fall back to counting the full window as paid days — sensible backward-compat. Worth a note in PRD that comp_off accrual still consumes from leaves with comp_off_used>0 OR legacy type='comp_off'.",
+    "LeaveBalanceNotice.jsx: athlete short-circuit (line 122) requires BOTH category=='athlete' AND !pl.tracked. If an admin ever sets leave_balance_opening on an athlete user they would see the waterfall preview instead of the athlete info — likely intentional (admin override), but worth documenting.",
+    "MyLeaves ApplyForm: useEffect on [asAdmin, picked] fetches /members/{id}/leave-summary on every pick change. Picked is a Set instance recreated on toggle, so the dep array works. With large clubs (133 members) picking 50 would fire 50 fetches in series — not a real issue at human-click speed but a debounce would be cleaner. Non-blocking.",
+    "routes/leaves.py POST /leaves response includes ladder fields only for type=leave; older clients reading these fields by attribute will continue to work via .get() — verified by GET /leaves listing path."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_unified_leave_iter4.py (NEW — 10 tests, 100% pass)"
+  ],
+  "success_rate": {"backend": "100% (10/10 new + 18/18 existing route tests)", "frontend": "100% (self-apply modal + admin Apply-on-behalf modal both verified, all testids resolve)"},
+  "test_credentials": "Phone bypass 9849002111 → admin. admin@attendance.app / Admin@12345 still valid.",
+  "seed_data_creation": "1 TEST coach member ('TEST Waterfall …') created and immediately deleted via DELETE /api/members/{id}. 1 leave + 1 tour + 1 group-leave row created on the test member, each rejected as cleanup. Production data untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Unified Leave System is fully validated. Key contract: POST /api/leaves with type='leave' returns {comp_off_used, paid_leave_used, lop_days} stamped fields. type='tour' or 'late_coming' does NOT carry these. Admin filing uses target_user_id as a QUERY param. Frontend testids: leave-type-leave/tour/late-coming (no comp-off!), waterfall-preview, pool-comp-off, pool-paid-leave, leave-balance-info-nonleave, leave-balance-multi, leave-balance-athlete, leave-balance-loading. Run: `cd /app/backend && python -m pytest tests/test_unified_leave_iter4.py tests/test_routes_leaves.py -v`.",
+  "rca of the issue": "N/A — pre-launch validation, all features behave as specified."
+}

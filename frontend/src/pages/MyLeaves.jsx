@@ -10,7 +10,7 @@ import { useEscape } from "../hooks/useEscape";
 const TYPE_LABELS = {
   leave:        { label: "Leave",        color: "#F59E0B", Icon: Bed },
   tour:         { label: "Tour",         color: "#F97316", Icon: Plane },
-  comp_off:     { label: "Comp Off",     color: "#8B5CF6", Icon: RefreshCw },
+  comp_off:     { label: "Comp Off",     color: "#8B5CF6", Icon: RefreshCw }, // legacy rows only — no longer applicable
   late_coming:  { label: "Late Coming",  color: "#DC2626", Icon: Clock },
 };
 const STATUS_COLORS = {
@@ -107,40 +107,34 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   // Self path needs the current user's live balance for the notice block.
   // (Admin path already loads /members, which carries balances per row.)
   const [me, setMe] = useState(null);
-  const [compOffBalance, setCompOffBalance] = useState(null);
+  // Unified balance summary: { comp_off:{accrued,used,available}, paid_leave:{opening,used,available,tracked}, total_available }
+  // For self path: fetched from /api/me/leave-summary on mount.
+  // For admin path single-pick: fetched from /api/members/{id}/leave-summary.
+  // For admin multi-pick: null (per-member balances differ — Notice falls back to per-member rows).
+  const [balanceSummary, setBalanceSummary] = useState(null);
   useEffect(() => {
     if (asAdmin) return;
     api.get("/auth/me").then(setMe).catch(() => {});
+    api.get("/me/leave-summary").then(setBalanceSummary).catch(() => {});
   }, [asAdmin]);
 
-  // Comp-off balance: refetch whenever type=comp_off and either the picked
-  // target changes (admin path) or the form opens (self path). Single API
-  // hit per relevant interaction — small, cached server-side per request.
+  // Admin single-pick: refetch unified summary whenever the picked target
+  // changes. Multi-pick clears the summary (per-member balances differ).
   useEffect(() => {
-    if (type !== "comp_off") { setCompOffBalance(null); return; }
+    if (!asAdmin) return;
     let cancelled = false;
+    const ids = Array.from(picked);
+    if (ids.length !== 1) { setBalanceSummary(null); return; }
     (async () => {
       try {
-        if (asAdmin) {
-          const ids = Array.from(picked);
-          if (ids.length !== 1) {
-            // For multi-pick the form already discourages comp_off (per-member balances differ);
-            // we surface a sentinel so the notice can warn without faking numbers.
-            if (!cancelled) setCompOffBalance({ multi: ids.length, accrued: 0, used: 0, available: 0 });
-            return;
-          }
-          const r = await api.get(`/members/${ids[0]}/comp-off-balance`);
-          if (!cancelled) setCompOffBalance(r);
-        } else {
-          const r = await api.get("/me/comp-off-balance");
-          if (!cancelled) setCompOffBalance(r);
-        }
+        const r = await api.get(`/members/${ids[0]}/leave-summary`);
+        if (!cancelled) setBalanceSummary(r);
       } catch {
-        if (!cancelled) setCompOffBalance(null);
+        if (!cancelled) setBalanceSummary(null);
       }
     })();
     return () => { cancelled = true; };
-  }, [type, asAdmin, picked]);
+  }, [asAdmin, picked]);
 
   useEffect(() => {
     if (!asAdmin) return;
@@ -349,14 +343,13 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           )}
           <div>
             <label className="iu-label">Type</label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button data-testid="leave-type-leave" type="button" onClick={() => setType("leave")} className={`iu-btn ${type === "leave" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Bed size={16}/> Leave</button>
               <button data-testid="leave-type-tour" type="button" onClick={() => setType("tour")} className={`iu-btn ${type === "tour" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Plane size={16}/> Tour</button>
-              <button data-testid="leave-type-comp-off" type="button" onClick={() => setType("comp_off")} className={`iu-btn ${type === "comp_off" ? "iu-btn-primary" : "iu-btn-secondary"}`}><RefreshCw size={16}/> Comp Off</button>
               <button data-testid="leave-type-late-coming" type="button" onClick={() => setType("late_coming")} className={`iu-btn ${type === "late_coming" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Clock size={16}/> Late Coming</button>
             </div>
-            {type === "comp_off" && (
-              <p className="text-[11px] text-slate-500 mt-1.5">Claim a comp-off against a weekly-off day you worked. Admin will verify.</p>
+            {type === "leave" && (
+              <p className="text-[11px] text-slate-500 mt-1.5">Days are deducted from your Comp-Off balance first, then your Paid Leave. Anything left is treated as Loss of Pay.</p>
             )}
             {type === "late_coming" && (
               <p className="text-[11px] text-slate-500 mt-1.5">Use this when you&apos;ll arrive late today. Admin gets pinged so you&apos;re not flagged as absent.</p>
@@ -413,13 +406,10 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
               members={noticeMembers}
               autoApprove={autoApprove}
               asAdmin={asAdmin}
-              compOffBalance={compOffBalance}
+              balanceSummary={balanceSummary}
             />
           )}
-          {/* Hard-block submit when comp_off requested exceeds available balance.
-              Backend would reject anyway (returns 400 with a friendly detail);
-              we mirror the rule client-side so the button can't even fire. */}
-          <button data-testid="leave-submit" type="submit" disabled={busy || (type === "comp_off" && compOffBalance && Math.max(1, requestedDays || 1) > (compOffBalance.available ?? 0))} className="iu-btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed">
+          <button data-testid="leave-submit" type="submit" disabled={busy} className="iu-btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed">
             {busy ? <Loader2 className="animate-spin" size={16}/> : "Submit"}
           </button>
         </form>

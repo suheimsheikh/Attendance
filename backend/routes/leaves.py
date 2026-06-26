@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from services.time_utils import now_utc, local_date_str
+from holidays import _days_inclusive
 
 
 # -------------------- Pydantic bodies --------------------
@@ -43,7 +44,7 @@ class LeaveDecision(BaseModel):
     status: str  # approved | rejected | pending
 
 
-def make_router(db, require_admin, get_current_user, compute_comp_off_balance=None) -> APIRouter:
+def make_router(db, require_admin, get_current_user, compute_comp_off_balance=None, compute_balance_summary=None, split_leave_days=None) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     async def _comp_off_guard(target_user: dict, start_date: str, end_date: str, is_auto_approve: bool = False) -> None:
@@ -110,6 +111,10 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
                 raise HTTPException(status_code=404, detail="Target member not found")
         # Comp-off: enforce balance ceiling before persisting the row.
         if body.type == "comp_off":
+            # Legacy guard kept for direct API hits — the UI no longer
+            # surfaces "Comp Off" as an application type (deductions are
+            # automatic on `type=leave` now), but old clients/scripts may
+            # still POST it. Block over-application same as before.
             await _comp_off_guard(target_user, body.start_date, body.end_date)
         office = await db.config.find_one({"id": "office"})
         today = local_date_str(office)
@@ -129,6 +134,21 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
             "filed_by_admin_name": user["full_name"] if target_user["id"] != user["id"] else None,
             "created_at": now_utc().isoformat(),
         }
+        # ── Unified Leave: stamp the deduction ladder at apply time ─────
+        # Order: comp-off first, paid leave second, anything left is LOP.
+        # Only `type=leave` runs the ladder — Tour is paid in full and
+        # Late Coming doesn't touch any balance. Stamps are persisted on
+        # the doc so the helpers can sum them without re-deriving from
+        # business logic each time.
+        if body.type == "leave" and compute_balance_summary and split_leave_days:
+            summary = await compute_balance_summary(db, target_user)
+            requested = _days_inclusive(body.start_date, body.end_date)
+            split = split_leave_days(
+                requested,
+                summary["comp_off"]["available"],
+                summary["paid_leave"]["available"],
+            )
+            doc.update(split)
         await db.leaves.insert_one(doc)
         doc.pop("_id", None)
         return doc
