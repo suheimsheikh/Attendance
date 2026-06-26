@@ -5,6 +5,8 @@ import { api } from "../../api";
 import { useEscape } from "../../hooks/useEscape";
 import { fileToResizedDataUrl } from "../../utils";
 import Avatar from "../../components/Avatar";
+import FormErrorBanner from "../../components/FormErrorBanner";
+import { useFormError } from "../../hooks/useFormError";
 
 export default function MemberForm({ initial, onClose, onSaved }) {
   useEscape(onClose);
@@ -35,6 +37,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [institutions, setInstitutions] = useState([]);
   const [fleets, setFleets] = useState([]);
+  const formErr = useFormError();
 
   useEffect(() => {
     api.get("/institutions").then((rows) => setInstitutions((rows || []).filter((r) => r.active))).catch(() => {});
@@ -59,9 +62,10 @@ export default function MemberForm({ initial, onClose, onSaved }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.full_name.trim()) { toast.error("Name is required"); return; }
-    if (!isEdit && !form.email.trim()) { toast.error("Email is required"); return; }
-    if (!isEdit && (form.password || "").length < 4) { toast.error("Password must be ≥ 4 chars"); return; }
+    formErr.clear();
+    if (!form.full_name.trim()) { formErr.setMessage("Name is required"); return; }
+    if (!isEdit && !form.email.trim()) { formErr.setMessage("Email is required"); return; }
+    if (!isEdit && (form.password || "").length < 4) { formErr.setMessage("Password must be ≥ 4 chars"); return; }
     setBusy(true);
     try {
       if (isEdit) {
@@ -81,7 +85,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
       }
       onSaved();
     } catch (err) {
-      toast.error(err?.message || "Failed");
+      formErr.setFromApi(err, "Failed to save member");
     } finally {
       setBusy(false);
     }
@@ -257,6 +261,12 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               </div>
             </div>
           </div>
+          <FormErrorBanner
+            error={formErr.error}
+            requestId={formErr.requestId}
+            onDismiss={formErr.clear}
+            testId="mf-submit-error"
+          />
           <button data-testid="mf-submit" type="submit" disabled={busy} className="iu-btn-primary w-full">
             {busy ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save changes" : "Create member")}
           </button>

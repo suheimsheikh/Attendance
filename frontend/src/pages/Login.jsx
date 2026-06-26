@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { Phone, Mail, Lock, ArrowRight, Loader2, ChevronDown, ChevronUp, Hourglass, RefreshCw, User, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, getRememberedUser, forgetRememberedUser } from "../auth";
-import { api, ApiError, setToken, showApiError } from "../api";
+import { api, setToken } from "../api";
 import { getDeviceId, getDeviceInfo } from "../utils";
 import Avatar from "../components/Avatar";
+import FormErrorBanner from "../components/FormErrorBanner";
+import { useFormError } from "../hooks/useFormError";
 
 export default function Login() {
   const nav = useNavigate();
@@ -18,6 +20,7 @@ export default function Login() {
   const [showAdmin, setShowAdmin] = useState(false);
   const pollRef = useRef(null);
   const deviceIdRef = useRef("");
+  const formErr = useFormError();
 
   useEffect(() => { if (user) nav("/", { replace: true }); }, [user, nav]);
   useEffect(() => {
@@ -35,8 +38,9 @@ export default function Login() {
 
   const submitPhone = async (e) => {
     e?.preventDefault?.();
+    formErr.clear();
     if (phone.replace(/[^0-9]/g, "").length < 6) {
-      toast.error("Enter a valid phone number");
+      formErr.setMessage("Enter a valid phone number");
       return;
     }
     setLoading(true);
@@ -58,7 +62,7 @@ export default function Login() {
         }
       }
     } catch (err) {
-      showApiError(err, "Could not connect");
+      formErr.setFromApi(err, "Could not connect");
     } finally {
       setLoading(false);
     }
@@ -201,6 +205,12 @@ export default function Login() {
               />
             </div>
           </div>
+          <FormErrorBanner
+            error={formErr.error}
+            requestId={formErr.requestId}
+            onDismiss={formErr.clear}
+            testId="login-phone-error"
+          />
           <button
             type="submit"
             data-testid="phone-continue-button"
@@ -252,15 +262,17 @@ function AdminEmailForm({ onLogin, onDone }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const formErr = useFormError();
 
   const submit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    formErr.clear();
     try {
       await onLogin(email.trim().toLowerCase(), password);
       onDone();
     } catch (err) {
-      toast.error(err?.message || "Login failed");
+      formErr.setFromApi(err, "Login failed");
     } finally {
       setLoading(false);
     }
@@ -298,6 +310,12 @@ function AdminEmailForm({ onLogin, onDone }) {
           />
         </div>
       </div>
+      <FormErrorBanner
+        error={formErr.error}
+        requestId={formErr.requestId}
+        onDismiss={formErr.clear}
+        testId="login-email-error"
+      />
       <button data-testid="login-submit-button" type="submit" disabled={loading} className="iu-btn-primary w-full">
         {loading ? <Loader2 className="animate-spin" size={16} /> : "Sign in"}
       </button>
@@ -310,15 +328,18 @@ function ProfileIntroForm({ phone, onSubmit, onBack }) {
   const [rank, setRank] = useState("");
   const [category, setCategory] = useState("athlete");
   const [busy, setBusy] = useState(false);
+  const formErr = useFormError();
 
   const submit = async (e) => {
     e.preventDefault();
+    formErr.clear();
     if (fullName.trim().length < 2) {
-      toast.error("Please enter your full name");
+      formErr.setMessage("Please enter your full name");
       return;
     }
     setBusy(true);
     try { await onSubmit({ full_name: fullName.trim(), rank: rank.trim(), category }); }
+    catch (err) { formErr.setFromApi(err, "Could not send request"); }
     finally { setBusy(false); }
   };
 
@@ -375,6 +396,12 @@ function ProfileIntroForm({ phone, onSubmit, onBack }) {
           </div>
         </div>
 
+        <FormErrorBanner
+          error={formErr.error}
+          requestId={formErr.requestId}
+          onDismiss={formErr.clear}
+          testId="profile-intro-error"
+        />
         <div className="flex gap-2 pt-2">
           <button type="button" onClick={onBack} className="iu-btn-secondary flex-1" data-testid="profile-back-button">
             Back

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Loader2, Plus, Trash2, Edit3, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
+import FormErrorBanner from "../../components/FormErrorBanner";
+import { useFormError } from "../../hooks/useFormError";
 
 export default function Institutions() {
   const [rows, setRows] = useState([]);
@@ -89,10 +91,12 @@ function InstForm({ initial, onClose, onSaved }) {
   const [voiceFrom, setVoiceFrom] = useState(initial?.voice_from_number || "");
   const [busy, setBusy] = useState(false);
   const isEdit = !!initial;
+  const formErr = useFormError();
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!name.trim()) { toast.error("Name required"); return; }
+    formErr.clear();
+    if (!name.trim()) { formErr.setMessage("Name required"); return; }
     setBusy(true);
     try {
       const payload = {
@@ -109,7 +113,7 @@ function InstForm({ initial, onClose, onSaved }) {
       }
       toast.success("Saved");
       onSaved();
-    } catch (err) { toast.error(err?.message || "Failed"); }
+    } catch (err) { formErr.setFromApi(err, "Save failed"); }
     finally { setBusy(false); }
   };
 
@@ -164,6 +168,12 @@ function InstForm({ initial, onClose, onSaved }) {
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
           Active (show in onboarding dropdown)
         </label>
+        <FormErrorBanner
+          error={formErr.error}
+          requestId={formErr.requestId}
+          onDismiss={formErr.clear}
+          testId="inst-save-error"
+        />
         <div className="flex gap-2 pt-2">
           <button type="button" onClick={onClose} className="iu-btn-secondary flex-1">Cancel</button>
           <button type="submit" disabled={busy} className="iu-btn-primary flex-1">{busy ? <Loader2 className="animate-spin" size={14}/> : "Save"}</button>

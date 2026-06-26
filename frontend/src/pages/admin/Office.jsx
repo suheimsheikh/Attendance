@@ -3,6 +3,8 @@ import { Loader2, Save, MapPin, MessageSquare, Phone, KeyRound, RefreshCw } from
 import { toast } from "sonner";
 import { api } from "../../api";
 import { getLocation } from "../../utils";
+import FormErrorBanner from "../../components/FormErrorBanner";
+import { useFormError } from "../../hooks/useFormError";
 
 const TZS = ["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Australia/Sydney"];
 
@@ -25,6 +27,7 @@ export default function OfficeSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
+  const formErr = useFormError();
 
   useEffect(() => {
     (async () => {
@@ -49,6 +52,7 @@ export default function OfficeSettings() {
   const save = async (e) => {
     e.preventDefault();
     setSaving(true);
+    formErr.clear();
     try {
       const body = {
         name: form.name || "Campus Office",
@@ -68,7 +72,7 @@ export default function OfficeSettings() {
       const updated = await api.put("/office", body);
       setForm(updated);
       toast.success("Office settings saved");
-    } catch (err) { toast.error(err?.message || "Failed"); }
+    } catch (err) { formErr.setFromApi(err, "Failed to save office settings"); }
     finally { setSaving(false); }
   };
 
@@ -224,6 +228,12 @@ export default function OfficeSettings() {
           </div>
         </div>
 
+        <FormErrorBanner
+          error={formErr.error}
+          requestId={formErr.requestId}
+          onDismiss={formErr.clear}
+          testId="of-save-error"
+        />
         <button data-testid="of-save" disabled={saving} className="iu-btn-primary w-full">
           {saving ? <Loader2 className="animate-spin" size={16}/> : <><Save size={16}/> Save settings</>}
         </button>
@@ -252,6 +262,10 @@ function TwilioPanel() {
   const [newToken, setNewToken] = useState("");
   const [testTo, setTestTo] = useState("");
   const [busyTest, setBusyTest] = useState(null);
+  // Single banner above the Save row so any Twilio failure (save, send-test
+  // SMS, send-test voice) lands within the user's line of sight, instead
+  // of as a top-of-screen toast they have to scroll up to see.
+  const formErr = useFormError();
 
   const load = async () => {
     setLoading(true);
@@ -266,6 +280,7 @@ function TwilioPanel() {
 
   const save = async () => {
     setSaving(true);
+    formErr.clear();
     try {
       const body = {
         enabled: !!cfg.enabled,
@@ -290,29 +305,31 @@ function TwilioPanel() {
       toast.success("Twilio settings saved");
       setEditToken(false); setNewToken("");
       load();
-    } catch (err) { toast.error(err?.message || "Failed"); }
+    } catch (err) { formErr.setFromApi(err, "Failed to save Twilio settings"); }
     finally { setSaving(false); }
   };
 
   const sendTestSms = async () => {
     const to = (testTo || "").trim();
-    if (!to.startsWith("+")) { toast.error("Use E.164 format, e.g. +91XXXXXXXXXX"); return; }
+    if (!to.startsWith("+")) { formErr.setMessage("Use E.164 format, e.g. +91XXXXXXXXXX"); return; }
     setBusyTest("sms");
+    formErr.clear();
     try {
       const res = await api.post("/sms/test", { to });
       toast.success(`SMS queued (sid: ${res.twilio_sid?.slice(-6)})`);
-    } catch (err) { toast.error(err?.message || "Failed"); }
+    } catch (err) { formErr.setFromApi(err, "Test SMS failed"); }
     finally { setBusyTest(null); }
   };
 
   const sendTestVoice = async () => {
     const to = (testTo || "").trim();
-    if (!to.startsWith("+")) { toast.error("Use E.164 format, e.g. +91XXXXXXXXXX"); return; }
+    if (!to.startsWith("+")) { formErr.setMessage("Use E.164 format, e.g. +91XXXXXXXXXX"); return; }
     setBusyTest("voice");
+    formErr.clear();
     try {
       const res = await api.post("/sms/voice/test", { to });
       toast.success(`Voice call queued (sid: ${res.twilio_sid?.slice(-6)})`);
-    } catch (err) { toast.error(err?.message || "Failed"); }
+    } catch (err) { formErr.setFromApi(err, "Test voice call failed"); }
     finally { setBusyTest(null); }
   };
 
@@ -492,13 +509,21 @@ function TwilioPanel() {
         {!cfg.enabled && <p className="text-[11px] text-amber-700">Twilio is currently disabled — enable above and save before sending tests.</p>}
       </div>
 
-      <div className="flex gap-2 pt-3 border-t border-slate-200">
-        <button data-testid="tw-save" onClick={save} disabled={saving} className="iu-btn-primary">
-          {saving ? <Loader2 className="animate-spin" size={16}/> : <><Save size={16}/> Save Twilio settings</>}
-        </button>
-        <button type="button" onClick={load} className="inline-flex items-center gap-2 px-3 h-10 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50" title="Reload from server">
-          <RefreshCw size={14}/> Reload
-        </button>
+      <div className="flex flex-col gap-2 pt-3 border-t border-slate-200">
+        <FormErrorBanner
+          error={formErr.error}
+          requestId={formErr.requestId}
+          onDismiss={formErr.clear}
+          testId="tw-save-error"
+        />
+        <div className="flex gap-2">
+          <button data-testid="tw-save" onClick={save} disabled={saving} className="iu-btn-primary">
+            {saving ? <Loader2 className="animate-spin" size={16}/> : <><Save size={16}/> Save Twilio settings</>}
+          </button>
+          <button type="button" onClick={load} className="inline-flex items-center gap-2 px-3 h-10 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50" title="Reload from server">
+            <RefreshCw size={14}/> Reload
+          </button>
+        </div>
       </div>
     </div>
   );

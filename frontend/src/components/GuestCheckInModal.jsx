@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { api } from "../api";
 import { useEscape } from "../hooks/useEscape";
 import SelfieCapture from "./SelfieCapture";
+import FormErrorBanner from "./FormErrorBanner";
+import { useFormError } from "../hooks/useFormError";
 
 /**
  * GuestCheckInModal — coaches & admins use this to log a non-member visitor.
@@ -16,11 +18,13 @@ export default function GuestCheckInModal({ onClose, onCheckedIn }) {
   const [photo, setPhoto] = useState("");
   const [showCamera, setShowCamera] = useState(false);
   const [busy, setBusy] = useState(false);
+  const formErr = useFormError();
 
   const submit = async (e) => {
     e?.preventDefault?.();
-    if (!name.trim()) { toast.error("Enter the guest's name"); return; }
-    if (!photo) { toast.error("Capture a photo first"); return; }
+    formErr.clear();
+    if (!name.trim()) { formErr.setMessage("Enter the guest's name"); return; }
+    if (!photo) { formErr.setMessage("Capture a photo first"); return; }
     setBusy(true);
     try {
       await api.post("/guests/checkin", { name: name.trim(), photo });
@@ -28,7 +32,7 @@ export default function GuestCheckInModal({ onClose, onCheckedIn }) {
       onCheckedIn?.();
       onClose?.();
     } catch (err) {
-      toast.error(err?.message || "Failed");
+      formErr.setFromApi(err, "Failed to check in guest");
     } finally {
       setBusy(false);
     }
@@ -104,6 +108,12 @@ export default function GuestCheckInModal({ onClose, onCheckedIn }) {
             <p className="text-[11px] text-slate-500 mt-1.5">A photo is required — it helps the muster log match the visitor later.</p>
           </div>
 
+          <FormErrorBanner
+            error={formErr.error}
+            requestId={formErr.requestId}
+            onDismiss={formErr.clear}
+            testId="guest-submit-error"
+          />
           <button
             data-testid="guest-submit"
             type="submit"

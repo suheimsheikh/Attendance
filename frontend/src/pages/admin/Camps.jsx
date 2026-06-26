@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { api } from "../../api";
 import { useEscape } from "../../hooks/useEscape";
 import { formatDate } from "../../utils";
+import FormErrorBanner from "../../components/FormErrorBanner";
+import { useFormError } from "../../hooks/useFormError";
 
 const WEEKDAYS = [
   { key: "mon", label: "Mon" }, { key: "tue", label: "Tue" }, { key: "wed", label: "Wed" },
@@ -154,6 +156,7 @@ export function CampForm({ initial, onClose, onSaved }) {
   const [institutions, setInstitutions] = useState([]);
   const [memberSearch, setMemberSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const formErr = useFormError();
 
   useEffect(() => {
     Promise.all([api.get("/members"), api.get("/institutions").catch(() => [])])
@@ -183,9 +186,10 @@ export function CampForm({ initial, onClose, onSaved }) {
 
   const submit = async (e) => {
     e?.preventDefault?.();
-    if (!form.name.trim()) { toast.error("Name is required"); return; }
-    if (form.start_date > form.end_date) { toast.error("Start date must be on or before end date"); return; }
-    if (form.start_time >= form.end_time) { toast.error("Start time must be before end time"); return; }
+    formErr.clear();
+    if (!form.name.trim()) { formErr.setMessage("Name is required"); return; }
+    if (form.start_date > form.end_date) { formErr.setMessage("Start date must be on or before end date"); return; }
+    if (form.start_time >= form.end_time) { formErr.setMessage("Start time must be before end time"); return; }
     const payload = { ...form };
     // strip empty optional fields so Pydantic validators don't 422
     if (!payload.institution) delete payload.institution;
@@ -202,7 +206,7 @@ export function CampForm({ initial, onClose, onSaved }) {
       toast.success(isEdit ? "Camp updated" : "Camp created");
       onSaved?.();
     } catch (err) {
-      toast.error(err?.message || "Save failed");
+      formErr.setFromApi(err, "Save failed");
     } finally {
       setSaving(false);
     }
@@ -368,11 +372,19 @@ export function CampForm({ initial, onClose, onSaved }) {
           />
         </div>
 
-        <footer className="flex gap-2 justify-end pt-2 border-t border-slate-200">
-          <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
-          <button type="submit" disabled={saving} data-testid="cf-save" className="iu-btn-primary">
-            {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save changes" : "Create camp")}
-          </button>
+        <footer className="flex flex-col gap-2 pt-2 border-t border-slate-200">
+          <FormErrorBanner
+            error={formErr.error}
+            requestId={formErr.requestId}
+            onDismiss={formErr.clear}
+            testId="cf-save-error"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving} data-testid="cf-save" className="iu-btn-primary">
+              {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save changes" : "Create camp")}
+            </button>
+          </div>
         </footer>
       </form>
     </div>

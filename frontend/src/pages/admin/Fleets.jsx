@@ -3,6 +3,8 @@ import { Loader2, Plus, Edit3, Trash2, Sailboat, X, UserPlus, Users as UsersIcon
 import { toast } from "sonner";
 import { api } from "../../api";
 import { useEscape } from "../../hooks/useEscape";
+import FormErrorBanner from "../../components/FormErrorBanner";
+import { useFormError } from "../../hooks/useFormError";
 
 /**
  * Fleet master CRUD. Stores boat-classes (Optimist, ILCA 6, 420, etc.) so
@@ -115,17 +117,19 @@ function FleetForm({ initial, onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const formErr = useFormError();
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) { toast.error("Name required"); return; }
+    formErr.clear();
+    if (!form.name.trim()) { formErr.setMessage("Name required"); return; }
     setSaving(true);
     try {
       if (isEdit) await api.patch(`/fleets/${initial.id}`, form);
       else        await api.post("/fleets", form);
       toast.success(isEdit ? "Fleet updated" : "Fleet created");
       onSaved?.();
-    } catch (err) { toast.error(err?.message || "Save failed"); }
+    } catch (err) { formErr.setFromApi(err, "Save failed"); }
     finally { setSaving(false); }
   };
 
@@ -153,11 +157,19 @@ function FleetForm({ initial, onClose, onSaved }) {
           <span className="font-semibold">Active</span>
           <span className="text-slate-500 text-xs">(inactive fleets are hidden from dropdowns)</span>
         </label>
-        <footer className="flex gap-2 justify-end pt-2 border-t border-slate-200">
-          <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
-          <button type="submit" disabled={saving} data-testid="ff-save" className="iu-btn-primary">
-            {saving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Save
-          </button>
+        <footer className="flex flex-col gap-2 pt-2 border-t border-slate-200">
+          <FormErrorBanner
+            error={formErr.error}
+            requestId={formErr.requestId}
+            onDismiss={formErr.clear}
+            testId="ff-save-error"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving} data-testid="ff-save" className="iu-btn-primary">
+              {saving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Save
+            </button>
+          </div>
         </footer>
       </form>
     </div>
@@ -170,6 +182,7 @@ function AssignAthletes({ fleet, athletes, onClose, onSaved }) {
   const [picked, setPicked] = useState(initialIds);
   const [q, setQ] = useState("");
   const [saving, setSaving] = useState(false);
+  const formErr = useFormError();
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -195,12 +208,13 @@ function AssignAthletes({ fleet, athletes, onClose, onSaved }) {
     const toAssign = Array.from(picked).filter((id) => !initialIds.has(id));
     const toClear  = Array.from(initialIds).filter((id) => !picked.has(id));
     setSaving(true);
+    formErr.clear();
     try {
       if (toAssign.length) await api.post("/fleets/assign", { fleet: fleet.name, member_ids: toAssign });
       if (toClear.length)  await api.post("/fleets/assign", { fleet: null,        member_ids: toClear  });
       toast.success(`Updated · +${toAssign.length} added, -${toClear.length} removed`);
       onSaved?.();
-    } catch (err) { toast.error(err?.message || "Save failed"); }
+    } catch (err) { formErr.setFromApi(err, "Save failed"); }
     finally { setSaving(false); }
   };
 
@@ -250,11 +264,19 @@ function AssignAthletes({ fleet, athletes, onClose, onSaved }) {
           )}
         </div>
 
-        <footer className="flex gap-2 justify-end pt-3 border-t border-slate-200 mt-3">
-          <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
-          <button type="button" onClick={save} disabled={saving} data-testid="assign-save" className="iu-btn-primary">
-            {saving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Save
-          </button>
+        <footer className="flex flex-col gap-2 pt-3 border-t border-slate-200 mt-3">
+          <FormErrorBanner
+            error={formErr.error}
+            requestId={formErr.requestId}
+            onDismiss={formErr.clear}
+            testId="assign-save-error"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
+            <button type="button" onClick={save} disabled={saving} data-testid="assign-save" className="iu-btn-primary">
+              {saving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Save
+            </button>
+          </div>
         </footer>
       </div>
     </div>

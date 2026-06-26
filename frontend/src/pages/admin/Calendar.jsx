@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { api } from "../../api";
 import { useEscape } from "../../hooks/useEscape";
 import { CampForm } from "./Camps";
+import FormErrorBanner from "../../components/FormErrorBanner";
+import { useFormError } from "../../hooks/useFormError";
 
 const LEVEL_STYLE = {
   international: { chip: "bg-violet-100 text-violet-700",   dot: "#7C3AED", label: "International" },
@@ -603,11 +605,13 @@ function RegattaForm({ initial, onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const formErr = useFormError();
 
   const submit = async (e) => {
     e?.preventDefault?.();
-    if (!form.name.trim()) { toast.error("Name is required"); return; }
-    if (form.start_date > form.end_date) { toast.error("Start must be on or before end"); return; }
+    formErr.clear();
+    if (!form.name.trim()) { formErr.setMessage("Name is required"); return; }
+    if (form.start_date > form.end_date) { formErr.setMessage("Start must be on or before end"); return; }
     const payload = { ...form };
     Object.keys(payload).forEach((k) => { if (payload[k] === "") delete payload[k]; });
     setSaving(true);
@@ -617,7 +621,7 @@ function RegattaForm({ initial, onClose, onSaved }) {
       toast.success(isEdit ? "Updated" : "Created");
       onSaved?.();
     } catch (err) {
-      toast.error(err?.message || "Save failed");
+      formErr.setFromApi(err, "Save failed");
     } finally { setSaving(false); }
   };
 
@@ -666,11 +670,19 @@ function RegattaForm({ initial, onClose, onSaved }) {
           <label className="iu-label">Notes (optional)</label>
           <textarea data-testid="rf-notes" rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} className="iu-input" placeholder="Travel info, points of contact…" />
         </div>
-        <footer className="flex gap-2 justify-end pt-2 border-t border-slate-200">
-          <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
-          <button type="submit" disabled={saving} data-testid="rf-save" className="iu-btn-primary">
-            {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save" : "Create")}
-          </button>
+        <footer className="flex flex-col gap-2 pt-2 border-t border-slate-200">
+          <FormErrorBanner
+            error={formErr.error}
+            requestId={formErr.requestId}
+            onDismiss={formErr.clear}
+            testId="rf-save-error"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving} data-testid="rf-save" className="iu-btn-primary">
+              {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save" : "Create")}
+            </button>
+          </div>
         </footer>
       </form>
     </div>
@@ -708,6 +720,7 @@ export function BreakForm({ initial, members, institutions, fleets, onClose, onS
   // needing to switch to scope=fleet.
   const [memberFleetFilter, setMemberFleetFilter] = useState("");
   const [saving, setSaving] = useState(false);
+  const formErr = useFormError();
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const toggleMember = (id) => set("member_ids",
     form.member_ids.includes(id)
@@ -751,11 +764,12 @@ export function BreakForm({ initial, members, institutions, fleets, onClose, onS
 
   const submit = async (e) => {
     e?.preventDefault?.();
-    if (!form.name.trim()) { toast.error("Name is required"); return; }
-    if (form.start_date > form.end_date) { toast.error("Start must be on or before end"); return; }
-    if (form.scope === "institution" && !form.institution) { toast.error("Pick an institution"); return; }
-    if (form.scope === "fleet" && !form.fleet) { toast.error("Pick a fleet"); return; }
-    if (form.scope === "selected" && form.member_ids.length === 0) { toast.error("Pick at least one member"); return; }
+    formErr.clear();
+    if (!form.name.trim()) { formErr.setMessage("Name is required"); return; }
+    if (form.start_date > form.end_date) { formErr.setMessage("Start must be on or before end"); return; }
+    if (form.scope === "institution" && !form.institution) { formErr.setMessage("Pick an institution"); return; }
+    if (form.scope === "fleet" && !form.fleet) { formErr.setMessage("Pick a fleet"); return; }
+    if (form.scope === "selected" && form.member_ids.length === 0) { formErr.setMessage("Pick at least one member"); return; }
     const payload = { ...form };
     if (payload.scope !== "institution") delete payload.institution;
     if (payload.scope !== "fleet") delete payload.fleet;
@@ -768,7 +782,7 @@ export function BreakForm({ initial, members, institutions, fleets, onClose, onS
       toast.success(isEdit ? "Break updated" : "Break applied");
       onSaved?.();
     } catch (err) {
-      toast.error(err?.message || "Save failed");
+      formErr.setFromApi(err, "Save failed");
     } finally { setSaving(false); }
   };
 
@@ -962,11 +976,19 @@ export function BreakForm({ initial, members, institutions, fleets, onClose, onS
           />
         </div>
 
-        <footer className="flex gap-2 justify-end pt-2 border-t border-slate-200">
-          <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
-          <button type="submit" disabled={saving} data-testid="bf-save" className="iu-btn-primary !bg-amber-600 hover:!bg-amber-700">
-            {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save changes" : "Apply break")}
-          </button>
+        <footer className="flex flex-col gap-2 pt-2 border-t border-slate-200">
+          <FormErrorBanner
+            error={formErr.error}
+            requestId={formErr.requestId}
+            onDismiss={formErr.clear}
+            testId="bf-save-error"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving} data-testid="bf-save" className="iu-btn-primary !bg-amber-600 hover:!bg-amber-700">
+              {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save changes" : "Apply break")}
+            </button>
+          </div>
         </footer>
       </form>
     </div>

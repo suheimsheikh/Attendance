@@ -8,6 +8,34 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ## 🚧 Unreleased — pending deploy to `i-showed-up.ychyderabad.com`
 
+### 🩹 Inline error banners above Save buttons (June 26, 2026)
+
+Errors on form submissions used to surface as a top-of-screen red toast
+that fades in ~4s — easy to miss when you're staring at the Save button.
+Every primary action now also shows a **persistent inline red banner
+directly above the Save / Submit button**, so the failure message stays
+in your line of sight until you fix it or dismiss it. The banner shows
+the full server message (incl. verbatim Twilio rejection text), the
+matching X-Request-ID for support, and an **X** to dismiss.
+
+Wired into:
+- **Office Settings** — main settings save + **Twilio panel** (save, test SMS, test voice). The Twilio rejection seen in production (*"Trial accounts cannot send messages to unverified numbers…"*) now sits right above the Save row.
+- **Leave / Tour / Comp-off apply form** (self & admin "Apply on behalf").
+- **Login** — phone-continue, admin-email login, new-user profile form.
+- **Member add/edit** form.
+- **Calendar** — Regatta form + Break form.
+- **Camps** add/edit form.
+- **Fleets** — fleet edit form + Assign-athletes bulk modal.
+- **Institutions** add/edit form.
+- **Guest check-in** modal.
+
+Row-level quick actions (Approve / Reject / Delete) keep the existing
+toast pattern — they're fire-and-forget and don't have a Save target.
+
+New building blocks for future forms:
+- `components/FormErrorBanner.jsx` — drop-in red banner component.
+- `hooks/useFormError.js` — `{ error, requestId, clear, setMessage, setFromApi }` hook.
+
 ### 🛠 Fixes & visibility (June 25, 2026 — round 3)
 
 - **Members page now treats "Admin" as a role, not a category.** Previously

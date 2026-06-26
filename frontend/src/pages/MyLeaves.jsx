@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw, Clock, Search, Check } from "lucide-react";
 import { toast } from "sonner";
-import { api, showApiError } from "../api";
+import { api } from "../api";
 import Avatar from "../components/Avatar";
 import LeaveBalanceNotice from "../components/LeaveBalanceNotice";
+import FormErrorBanner from "../components/FormErrorBanner";
+import { useFormError } from "../hooks/useFormError";
 import { shortDate, todayIso } from "../utils";
 import { useEscape } from "../hooks/useEscape";
 
@@ -103,6 +105,9 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState(new Set());
   const [autoApprove, setAutoApprove] = useState(true);
+  // Inline submit-error banner (sits above the Submit button, replaces
+  // the easily-missed top-of-screen toast on POST /leaves failures).
+  const formErr = useFormError();
 
   // Self path needs the current user's live balance for the notice block.
   // (Admin path already loads /members, which carries balances per row.)
@@ -212,10 +217,11 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (asAdmin && picked.size === 0) { toast.error("Pick at least one member"); return; }
-    if (!reason.trim()) { toast.error("Enter a reason"); return; }
-    if (type === "late_coming" && !expectedArrival) { toast.error("Tell us when you'll arrive"); return; }
-    if (end < start) { toast.error("End date must be after start"); return; }
+    formErr.clear();
+    if (asAdmin && picked.size === 0) { formErr.setMessage("Pick at least one member"); return; }
+    if (!reason.trim()) { formErr.setMessage("Enter a reason"); return; }
+    if (type === "late_coming" && !expectedArrival) { formErr.setMessage("Tell us when you'll arrive"); return; }
+    if (end < start) { formErr.setMessage("End date must be after start"); return; }
     setBusy(true);
     try {
       if (asAdmin) {
@@ -246,7 +252,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
       }
       onCreated();
     } catch (err) {
-      showApiError(err, "Failed");
+      formErr.setFromApi(err, "Failed to submit request");
     } finally {
       setBusy(false);
     }
@@ -409,6 +415,12 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
               balanceSummary={balanceSummary}
             />
           )}
+          <FormErrorBanner
+            error={formErr.error}
+            requestId={formErr.requestId}
+            onDismiss={formErr.clear}
+            testId="leave-submit-error"
+          />
           <button data-testid="leave-submit" type="submit" disabled={busy} className="iu-btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed">
             {busy ? <Loader2 className="animate-spin" size={16}/> : "Submit"}
           </button>
