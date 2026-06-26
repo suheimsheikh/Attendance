@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Loader2, Check, X, Bed, Plane, AlertTriangle, Plus, Coffee } from "lucide-react";
+import { Loader2, Check, X, AlertTriangle, Plus, Coffee } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { shortDate } from "../../utils";
@@ -7,15 +7,36 @@ import { ApplyForm } from "../MyLeaves";
 import { BreakForm } from "./Calendar";
 
 const FILTERS = [
+  { key: "all", label: "All" },
   { key: "pending", label: "Pending" },
   { key: "approved", label: "Approved" },
   { key: "rejected", label: "Rejected" },
   { key: "late", label: "Late applications" },
-  { key: "all", label: "All" },
 ];
 
+// Visual mapping for the Type column. Keeps row JSX terse.
+const TYPE_META = {
+  leave:       { label: "Leave",       cls: "bg-amber-100 text-amber-800" },
+  tour:        { label: "Tour",        cls: "bg-orange-100 text-orange-800" },
+  comp_off:    { label: "Comp Off",    cls: "bg-violet-100 text-violet-800" },
+  late_coming: { label: "Late",        cls: "bg-rose-100 text-rose-800" },
+};
+const STATUS_META = {
+  pending:  { label: "Pending",  cls: "bg-amber-100 text-amber-800",   order: 0 },
+  approved: { label: "Approved", cls: "bg-emerald-100 text-emerald-800", order: 1 },
+  rejected: { label: "Rejected", cls: "bg-slate-200 text-slate-700",   order: 2 },
+};
+
+function daysInclusive(start, end) {
+  try {
+    const s = new Date(start + "T00:00:00");
+    const e = new Date(end + "T00:00:00");
+    return Math.max(1, Math.floor((e - s) / 86400000) + 1);
+  } catch { return 1; }
+}
+
 export default function AdminLeaves({ embedded = false }) {
-  const [filter, setFilter] = useState("pending");
+  const [filter, setFilter] = useState("all");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showOnBehalf, setShowOnBehalf] = useState(false);
@@ -25,11 +46,27 @@ export default function AdminLeaves({ embedded = false }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = filter === "all" ? undefined : { status_filter: filter };
-      setItems(await api.get("/leaves", params));
+      // Always fetch ALL — sort + filter client-side so we can group by
+      // status (Pending first) WITHOUT a round-trip on every filter chip.
+      setItems(await api.get("/leaves"));
     } finally { setLoading(false); }
-  }, [filter]);
+  }, []);
   useEffect(() => { load(); }, [load]);
+
+  // Apply the active chip + the group-by-status priority sort.
+  const visible = (items || [])
+    .filter((l) => {
+      if (filter === "all") return true;
+      if (filter === "late") return l.late_application;
+      return l.status === filter;
+    })
+    .sort((a, b) => {
+      const sa = STATUS_META[a.status]?.order ?? 9;
+      const sb = STATUS_META[b.status]?.order ?? 9;
+      if (sa !== sb) return sa - sb;
+      // Newest application first within each status bucket.
+      return (b.created_at || "").localeCompare(a.created_at || "");
+    });
 
   // Lazy-load members + institutions only when admin opens the Apply Break
   // modal — keeps the leaves list snappy on every page entry.
@@ -107,42 +144,97 @@ export default function AdminLeaves({ embedded = false }) {
 
       {loading ? (
         <div className="text-center py-10"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
-      ) : items.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="iu-card p-10 text-center text-slate-500">No {filter === "all" ? "" : filter} requests.</div>
       ) : (
-        <div className="space-y-3" data-testid="admin-leaves-list">
-          {items.map((l) => (
-            <div key={l.id} className={`iu-card p-4 flex flex-wrap items-center gap-4 ${l.late_application ? "ring-2 ring-red-200 bg-red-50/50" : ""}`} data-testid={`leave-row-${l.id}`}>
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${l.type === "tour" ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700"}`}>
-                {l.type === "tour" ? <Plane size={18}/> : <Bed size={18}/>}
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="font-semibold">{l.member_name}</div>
-                  {l.late_application && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-extrabold uppercase tracking-wide" data-testid={`late-chip-${l.id}`}>
-                      <AlertTriangle size={10} /> Late application
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-slate-500">{l.member_rank ? `${l.member_rank} · ` : ""}{l.member_category}</div>
-                <div className="text-xs text-slate-600 mt-1">
-                  {shortDate(l.start_date)} – {shortDate(l.end_date)}{l.location ? ` · ${l.location}` : ""}
-                </div>
-                <div className="text-sm text-slate-700 mt-1">{l.reason}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                {l.status === "pending" ? (
-                  <>
-                    <button data-testid={`approve-${l.id}`} onClick={() => decide(l.id, "approved")} className="iu-btn-primary !h-9 !px-3"><Check size={14}/> Approve</button>
-                    <button data-testid={`reject-${l.id}`} onClick={() => decide(l.id, "rejected")} className="iu-btn-secondary !h-9 !px-3"><X size={14}/> Reject</button>
-                  </>
-                ) : (
-                  <span className="iu-chip capitalize">{l.status}</span>
-                )}
-              </div>
-            </div>
-          ))}
+        <div className="iu-card !p-0 overflow-x-auto" data-testid="admin-leaves-list">
+          <table className="w-full text-sm min-w-[1080px]">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-xs">
+                <th className="iu-table-th !text-left">Member</th>
+                <th className="iu-table-th !text-left">Type</th>
+                <th className="iu-table-th !text-left">From → To</th>
+                <th className="iu-table-th !text-right w-16">Days</th>
+                <th className="iu-table-th !text-left w-28">Applied</th>
+                <th className="iu-table-th !text-left">Reason</th>
+                <th className="iu-table-th !text-left w-24">Status</th>
+                <th className="iu-table-th !text-left">Decided by</th>
+                <th className="iu-table-th !text-right w-44">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((l) => {
+                const typeMeta = TYPE_META[l.type] || { label: l.type, cls: "bg-slate-100 text-slate-700" };
+                const statusMeta = STATUS_META[l.status] || { label: l.status, cls: "bg-slate-100 text-slate-700" };
+                const days = daysInclusive(l.start_date, l.end_date);
+                return (
+                  <tr
+                    key={l.id}
+                    data-testid={`leave-row-${l.id}`}
+                    className={`border-t border-slate-100 hover:bg-sky-50/40 ${l.late_application ? "bg-red-50/40" : ""}`}
+                  >
+                    <td className="iu-table-td">
+                      <div className="font-semibold text-slate-800">{l.member_name}</div>
+                      <div className="text-xs text-slate-500">{l.member_rank ? `${l.member_rank} · ` : ""}{l.member_category}</div>
+                    </td>
+                    <td className="iu-table-td">
+                      <span className={`inline-flex items-center px-2 h-5 rounded text-[10px] font-bold uppercase ${typeMeta.cls}`}>
+                        {typeMeta.label}
+                      </span>
+                      {l.late_application && (
+                        <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[9px] font-extrabold uppercase tracking-wide" data-testid={`late-chip-${l.id}`}>
+                          <AlertTriangle size={9} /> Late
+                        </div>
+                      )}
+                    </td>
+                    <td className="iu-table-td whitespace-nowrap text-slate-700">
+                      <div className="font-mono text-xs">{shortDate(l.start_date)} → {shortDate(l.end_date)}</div>
+                      {l.location && <div className="text-[11px] text-slate-500">{l.location}</div>}
+                    </td>
+                    <td className="iu-table-td text-right font-mono font-semibold">{days}</td>
+                    <td className="iu-table-td text-xs text-slate-600 whitespace-nowrap">{shortDate(l.created_at)}</td>
+                    <td className="iu-table-td text-slate-700 text-xs max-w-[260px]">
+                      <div className="line-clamp-2" title={l.reason}>{l.reason || <span className="text-slate-300">—</span>}</div>
+                    </td>
+                    <td className="iu-table-td">
+                      <span className={`inline-flex items-center px-2 h-5 rounded-full text-[11px] font-bold ${statusMeta.cls}`} data-testid={`status-pill-${l.id}`}>
+                        {statusMeta.label}
+                      </span>
+                    </td>
+                    <td className="iu-table-td text-xs">
+                      {l.decided_by ? (
+                        <div data-testid={`decided-by-${l.id}`}>
+                          <div className="font-semibold text-slate-700">{l.decided_by}</div>
+                          {l.decided_at && <div className="text-[10px] text-slate-500">{shortDate(l.decided_at)}</div>}
+                        </div>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                    <td className="iu-table-td">
+                      <div className="flex items-center gap-1.5 justify-end flex-nowrap">
+                        {l.status === "pending" ? (
+                          <>
+                            <button data-testid={`approve-${l.id}`} onClick={() => decide(l.id, "approved")} className="iu-btn-primary !h-8 !px-2.5 !text-xs"><Check size={12}/> Approve</button>
+                            <button data-testid={`reject-${l.id}`} onClick={() => decide(l.id, "rejected")} className="iu-btn-secondary !h-8 !px-2.5 !text-xs"><X size={12}/> Reject</button>
+                          </>
+                        ) : (
+                          <button
+                            data-testid={`reopen-${l.id}`}
+                            onClick={() => decide(l.id, "pending")}
+                            className="text-[11px] text-slate-500 hover:text-slate-800 hover:underline"
+                            title="Re-open: move back to Pending for re-decision"
+                          >
+                            Re-open
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 

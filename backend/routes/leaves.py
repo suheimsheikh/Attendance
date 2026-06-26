@@ -150,7 +150,20 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
 
     @router.patch("/leaves/{leave_id}")
     async def decide_leave(leave_id: str, body: LeaveDecision, admin: dict = Depends(require_admin)):
-        await db.leaves.update_one({"id": leave_id}, {"$set": {"status": body.status}})
+        # Stamp the decision audit fields so the admin Approvals table can
+        # show "approved by Jane Doe on 25 Jun" alongside the status pill.
+        update = {"status": body.status}
+        if body.status in ("approved", "rejected"):
+            update["decided_by"] = admin["full_name"]
+            update["decided_by_id"] = admin["id"]
+            update["decided_at"] = now_utc().isoformat()
+        else:
+            # Re-opening a request back to pending wipes the prior decision
+            # stamp so the audit trail doesn't lie about a stale approver.
+            update["decided_by"] = None
+            update["decided_by_id"] = None
+            update["decided_at"] = None
+        await db.leaves.update_one({"id": leave_id}, {"$set": update})
         leave = await db.leaves.find_one({"id": leave_id}, {"_id": 0})
         if not leave:
             raise HTTPException(status_code=404, detail="Leave not found")
