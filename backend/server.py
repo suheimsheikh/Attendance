@@ -309,6 +309,11 @@ class OfficeConfig(BaseModel):
     timezone: str = "Asia/Kolkata"
     late_grace_minutes: int = 0
     parent_notify_grace_minutes: int = 30
+    # Org-wide default weekly off. Used by comp-off accrual when a member's
+    # own `weekly_off` field is blank — saves the admin from having to fill
+    # in the same Sunday/Monday choice on every single member profile.
+    # Member-level `weekly_off` (if set) always overrides this fallback.
+    default_weekly_off: Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"] = "sunday"
     # Daily reminder SMS to anyone still checked-in. The cron fires at
     # `checkout_reminder_time` (office-local HH:MM) and sends one SMS per
     # member who has an open session for today AND hasn't already been

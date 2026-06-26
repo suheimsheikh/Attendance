@@ -60,6 +60,7 @@ export default function OfficeSettings() {
         timezone: form.timezone || "Asia/Kolkata",
         late_grace_minutes: Number(form.late_grace_minutes || 0),
         parent_notify_grace_minutes: Number(form.parent_notify_grace_minutes ?? 30),
+        default_weekly_off: form.default_weekly_off || "sunday",
         checkout_reminder_enabled: form.checkout_reminder_enabled !== false,
         checkout_reminder_time: form.checkout_reminder_time || "20:00",
         checkout_reminder_template: form.checkout_reminder_template || "Hi {name}, looks like you're still checked in at {academy}. Please check out via the app when you leave.",
@@ -141,6 +142,29 @@ export default function OfficeSettings() {
             className="iu-input"
           />
           <p className="text-[11px] text-slate-500 mt-1">How long after an athlete&apos;s work start time before the &quot;Notify parents&quot; button appears on the Presence Board. Default 30 minutes.</p>
+        </div>
+
+        <div>
+          <label className="iu-label">Default weekly off</label>
+          <select
+            data-testid="of-default-weekly-off"
+            value={form.default_weekly_off || "sunday"}
+            onChange={(e) => set("default_weekly_off", e.target.value)}
+            className="iu-input"
+          >
+            <option value="monday">Monday</option>
+            <option value="tuesday">Tuesday</option>
+            <option value="wednesday">Wednesday</option>
+            <option value="thursday">Thursday</option>
+            <option value="friday">Friday</option>
+            <option value="saturday">Saturday</option>
+            <option value="sunday">Sunday</option>
+          </select>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Used as the fallback when a member&apos;s own weekly off isn&apos;t set on their profile. Drives
+            comp-off accrual: attending on this day earns +1 comp-off credit, which they can later spend
+            via the Comp Off leave type. Member-level weekly off (if set) always overrides this default.
+          </p>
         </div>
 
         <div className="border-t border-slate-200 pt-4">

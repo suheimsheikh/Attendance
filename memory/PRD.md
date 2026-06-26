@@ -136,7 +136,27 @@
 
   Still deferred (separate planning sessions): rotate production secrets, JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, expanded pytest coverage for camps/regattas/guests/thumbnails.
 
-## Recently Added (Jun 25, 2026 — pre-launch polish round 3)
+## Recently Added (Jun 26, 2026)
+
+- **Removed Holidays system; Comp-Off now keyed off weekly-off only** —
+  per user decision (and an honest cost/benefit walk-through), the
+  public-holiday master list was retired. Comp-off accrual now relies
+  solely on attendance on the member's weekly off — either their own
+  `weekly_off` (if set on the profile), or the new org-wide
+  **Default weekly off** field on Office Settings (default Sunday). The
+  fallback means admins don't have to fill `weekly_off` on 42+ profiles
+  before comp-off can work. The `compute_comp_off_balance` helper now
+  also returns `weekly_off_source: "member" | "office_default"` so the
+  UI can later surface that signal.
+  Files: deleted `/admin/holidays` page + route + nav entry; rewrote
+  `backend/holidays.py` to keep only the comp-off math + read endpoints
+  (CRUD/model gone); added `default_weekly_off` to `OfficeConfig`;
+  Office Settings page renders the new dropdown with explainer copy.
+  Dropped `holidays` collection on dev DB. 190/190 pytest still green.
+  Compensating a member who worked on a public holiday is now a manual
+  `leave_balance_opening` adjustment (admin's call, no system tracking).
+
+- **Approvals page → unified scrollable table** — `/admin/approvals` now
 
 - **Leave-balance preview + LOP warning in the apply-leave form** —
   every leave application path (self-apply on `/my-leaves`, admin

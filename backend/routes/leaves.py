@@ -74,8 +74,8 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
                     f"{'' if bal['available'] == 1 else 's'} "
                     f"(accrued {bal['accrued']} − used {bal['used']}). "
                     f"This application is for {requested} day{'' if requested == 1 else 's'}, "
-                    f"short by {short}. Accrue more comp-off (attend on a holiday "
-                    f"or your weekly off) or shorten the request."
+                    f"short by {short}. Accrue more comp-off by attending "
+                    f"on your weekly off, or shorten the request."
                 ),
             )
 

@@ -22,7 +22,6 @@ const Reports = lazy(() => import("./pages/admin/Reports"));
 const Overtime = lazy(() => import("./pages/admin/Overtime"));
 const Approvals = lazy(() => import("./pages/admin/Approvals"));
 const LeaveBalances = lazy(() => import("./pages/admin/LeaveBalances"));
-const Holidays = lazy(() => import("./pages/admin/Holidays"));
 const Payroll = lazy(() => import("./pages/admin/Payroll"));
 const Institutions = lazy(() => import("./pages/admin/Institutions"));
 const Fleets = lazy(() => import("./pages/admin/Fleets"));
@@ -97,7 +96,6 @@ function App() {
             <Route path="admin/payroll" element={<RequireAdmin><Payroll /></RequireAdmin>} />
             <Route path="admin/sessions" element={<Navigate to="/presence" replace />} />
             <Route path="admin/leave-balances" element={<RequireAdmin><LeaveBalances /></RequireAdmin>} />
-            <Route path="admin/holidays" element={<RequireAdmin><Holidays /></RequireAdmin>} />
             <Route path="admin/group-leave" element={<Navigate to="/admin/leaves" replace />} />
             <Route path="admin/institutions" element={<RequireAdmin><Institutions /></RequireAdmin>} />
             <Route path="admin/fleets" element={<RequireAdmin><Fleets /></RequireAdmin>} />
