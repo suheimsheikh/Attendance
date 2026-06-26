@@ -3844,7 +3844,8 @@ app.include_router(api_router)
 
 # Leave / Tour routes — split out 06/2026 during the server.py refactor.
 from routes.leaves import make_router as _leaves_router  # noqa: E402
-_leaves = _leaves_router(db, require_admin, get_current_user)
+from holidays import compute_comp_off_balance as _compute_comp_off_balance  # noqa: E402
+_leaves = _leaves_router(db, require_admin, get_current_user, _compute_comp_off_balance)
 app.include_router(_leaves)
 # Routes/reports needs enrich_leaves; the leaves router exposes it as an
 # attribute for re-use without re-implementing.
@@ -3878,6 +3879,12 @@ app.include_router(_regattas_module.make_router(db, require_admin))
 # show up under Leave on the Presence Board (not Absent) and skip
 # late-notification dispatches for the day.
 app.include_router(_breaks_module.make_router(db, require_admin))
+
+# Holidays — public-holiday master list. Drives comp-off accrual: any
+# attendance on a holiday OR the member's weekly_off accrues +1 comp-off
+# credit. Holidays and Breaks are managed separately (no auto-create).
+from holidays import make_router as _holidays_router, compute_comp_off_balance  # noqa: E402
+app.include_router(_holidays_router(db, require_admin, get_current_user))
 
 
 # Twilio SMS + Voice — parent notifications, per-institution sender numbers.

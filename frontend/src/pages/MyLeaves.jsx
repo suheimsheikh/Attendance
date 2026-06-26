@@ -107,10 +107,40 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   // Self path needs the current user's live balance for the notice block.
   // (Admin path already loads /members, which carries balances per row.)
   const [me, setMe] = useState(null);
+  const [compOffBalance, setCompOffBalance] = useState(null);
   useEffect(() => {
     if (asAdmin) return;
     api.get("/auth/me").then(setMe).catch(() => {});
   }, [asAdmin]);
+
+  // Comp-off balance: refetch whenever type=comp_off and either the picked
+  // target changes (admin path) or the form opens (self path). Single API
+  // hit per relevant interaction — small, cached server-side per request.
+  useEffect(() => {
+    if (type !== "comp_off") { setCompOffBalance(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        if (asAdmin) {
+          const ids = Array.from(picked);
+          if (ids.length !== 1) {
+            // For multi-pick the form already discourages comp_off (per-member balances differ);
+            // we surface a sentinel so the notice can warn without faking numbers.
+            if (!cancelled) setCompOffBalance({ multi: ids.length, accrued: 0, used: 0, available: 0 });
+            return;
+          }
+          const r = await api.get(`/members/${ids[0]}/comp-off-balance`);
+          if (!cancelled) setCompOffBalance(r);
+        } else {
+          const r = await api.get("/me/comp-off-balance");
+          if (!cancelled) setCompOffBalance(r);
+        }
+      } catch {
+        if (!cancelled) setCompOffBalance(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [type, asAdmin, picked]);
 
   useEffect(() => {
     if (!asAdmin) return;
@@ -383,9 +413,13 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
               members={noticeMembers}
               autoApprove={autoApprove}
               asAdmin={asAdmin}
+              compOffBalance={compOffBalance}
             />
           )}
-          <button data-testid="leave-submit" type="submit" disabled={busy} className="iu-btn-primary w-full">
+          {/* Hard-block submit when comp_off requested exceeds available balance.
+              Backend would reject anyway (returns 400 with a friendly detail);
+              we mirror the rule client-side so the button can't even fire. */}
+          <button data-testid="leave-submit" type="submit" disabled={busy || (type === "comp_off" && compOffBalance && Math.max(1, requestedDays || 1) > (compOffBalance.available ?? 0))} className="iu-btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed">
             {busy ? <Loader2 className="animate-spin" size={16}/> : "Submit"}
           </button>
         </form>

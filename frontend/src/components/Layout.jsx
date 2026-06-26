@@ -34,6 +34,7 @@ const NAV_ADMIN = [
   { to: "/admin/members", label: "Manage Members", icon: Users },
   { to: "/admin/approvals", label: "Leave/Tour", icon: ClipboardCheck },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
+  { to: "/admin/holidays", label: "Holidays", icon: CalendarDays },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
   { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare },

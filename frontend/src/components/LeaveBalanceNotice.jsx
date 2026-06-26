@@ -30,17 +30,53 @@ export default function LeaveBalanceNotice({
   members,
   autoApprove = false,
   asAdmin = false,
+  compOffBalance = null,
 }) {
   // Tours / comp-off / late-coming don't draw from the leave balance.
   // Show a slim informational note (still mention approval policy) so the
   // applicant understands their balance won't change.
+  if (leaveType === "comp_off") {
+    // Comp-off has its OWN balance pool (accrued from holiday/weekly-off
+    // attendance). Render a dedicated panel mirroring the leave layout —
+    // green when affordable, red when the request exceeds available.
+    const bal = compOffBalance || { accrued: 0, used: 0, available: 0 };
+    const short = Math.max(0, requestedDays - bal.available);
+    const overdraft = short > 0;
+    return (
+      <div
+        data-testid="comp-off-balance-notice"
+        className={`rounded-lg border px-3 py-2.5 ${overdraft ? "border-red-300 bg-red-50/70" : "border-emerald-200 bg-emerald-50/60"}`}
+      >
+        <div className="flex items-start gap-2">
+          {overdraft
+            ? <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" />
+            : <ShieldCheck size={14} className="text-emerald-700 mt-0.5 shrink-0" />}
+          <div className={`text-xs leading-snug flex-1 min-w-0 ${overdraft ? "text-red-800" : "text-emerald-900"}`}>
+            <div>
+              Comp-off balance: <strong>{bal.available}</strong> day{bal.available === 1 ? "" : "s"} available
+              <span className="opacity-75"> (accrued {bal.accrued} − used {bal.used})</span>.
+              {" "}
+              Applying for <strong>{requestedDays}</strong> day{requestedDays === 1 ? "" : "s"}.
+            </div>
+            {overdraft && (
+              <div className="mt-1 font-extrabold uppercase tracking-wide text-red-700" data-testid="comp-off-overdraft">
+                Cannot exceed your comp-off balance — short by {short} day{short === 1 ? "" : "s"}. Submit will be blocked.
+              </div>
+            )}
+            <div className="pt-1.5 mt-1.5 border-t border-current/15 text-[11px] font-medium">
+              <ApprovalLine autoApprove={autoApprove} asAdmin={asAdmin} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (leaveType !== "leave") {
     return (
       <div className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5 flex items-start gap-2" data-testid="leave-balance-info-nonleave">
         <Info size={14} className="text-sky-600 mt-0.5 shrink-0" />
         <div className="text-xs text-sky-900 leading-snug">
           {leaveType === "tour" && "Tours don't count against the leave balance."}
-          {leaveType === "comp_off" && "Comp-off claims a worked weekly-off day — it adds to (not subtracts from) the balance once approved."}
           {leaveType === "late_coming" && "Late-coming is for the same day only and doesn't consume any leave."}
           {" "}
           <ApprovalLine autoApprove={autoApprove} asAdmin={asAdmin} />

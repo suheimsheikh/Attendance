@@ -43,8 +43,41 @@ class LeaveDecision(BaseModel):
     status: str  # approved | rejected | pending
 
 
-def make_router(db, require_admin, get_current_user) -> APIRouter:
+def make_router(db, require_admin, get_current_user, compute_comp_off_balance=None) -> APIRouter:
     router = APIRouter(prefix="/api")
+
+    async def _comp_off_guard(target_user: dict, start_date: str, end_date: str, is_auto_approve: bool = False) -> None:
+        """Hard-block comp-off applications that exceed the member's available
+        balance. Admins filing on behalf with `auto_approve=true` are also
+        gated — the user decision was explicit: NO silent over-draw. If an
+        admin needs to grant extra paid-leave, they can adjust the opening
+        leave balance instead.
+        """
+        if compute_comp_off_balance is None:
+            return  # Helper not wired (older test harnesses) — fail open.
+        try:
+            requested = (
+                __import__("datetime").date.fromisoformat(end_date)
+                - __import__("datetime").date.fromisoformat(start_date)
+            ).days + 1
+        except Exception:
+            requested = 1
+        if requested <= 0:
+            return
+        bal = await compute_comp_off_balance(db, target_user)
+        if requested > bal["available"]:
+            short = requested - bal["available"]
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Comp-off balance is {bal['available']} day"
+                    f"{'' if bal['available'] == 1 else 's'} "
+                    f"(accrued {bal['accrued']} − used {bal['used']}). "
+                    f"This application is for {requested} day{'' if requested == 1 else 's'}, "
+                    f"short by {short}. Accrue more comp-off (attend on a holiday "
+                    f"or your weekly off) or shorten the request."
+                ),
+            )
 
     async def enrich_leaves(leaves: List[dict]) -> List[dict]:
         """Attach member name/category/rank for each leave row. Used by the
@@ -75,6 +108,9 @@ def make_router(db, require_admin, get_current_user) -> APIRouter:
             target_user = await db.users.find_one({"id": target_user_id}, {"_id": 0})
             if not target_user:
                 raise HTTPException(status_code=404, detail="Target member not found")
+        # Comp-off: enforce balance ceiling before persisting the row.
+        if body.type == "comp_off":
+            await _comp_off_guard(target_user, body.start_date, body.end_date)
         office = await db.config.find_one({"id": "office"})
         today = local_date_str(office)
         late_application = bool(body.start_date and body.start_date < today)
@@ -124,6 +160,20 @@ def make_router(db, require_admin, get_current_user) -> APIRouter:
     async def group_leave(body: GroupLeaveIn, admin: dict = Depends(require_admin)):
         if not body.user_ids:
             raise HTTPException(status_code=400, detail="Pick at least one member")
+        # Comp-off: validate every member's balance up-front, so we never
+        # half-insert (partial success would be hard for an admin to reconcile).
+        if body.type == "comp_off":
+            short_list = []
+            for uid in body.user_ids:
+                u = await db.users.find_one({"id": uid}, {"_id": 0})
+                if not u:
+                    continue
+                try:
+                    await _comp_off_guard(u, body.start_date, body.end_date)
+                except HTTPException as exc:
+                    short_list.append(f"{u.get('full_name', uid)}: {exc.detail}")
+            if short_list:
+                raise HTTPException(status_code=400, detail=" • ".join(short_list))
         office = await db.config.find_one({"id": "office"})
         today = local_date_str(office)
         late_application = bool(body.start_date and body.start_date < today)
