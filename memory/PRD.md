@@ -156,6 +156,38 @@
   Compensating a member who worked on a public holiday is now a manual
   `leave_balance_opening` adjustment (admin's call, no system tracking).
 
+- **Unified Leave system — Comp-Off + Paid Leave waterfall** (26 Jun 2026) —
+  members no longer pick between "Leave" and "Comp Off" when applying.
+  They apply once for **Leave** and the backend deducts in a fixed
+  ladder: Comp-Off balance first → Paid Leave second → anything left
+  recorded as **LOP**. The leave document carries the stamped split
+  (`comp_off_used`, `paid_leave_used`, `lop_days`) so balances stay in
+  sync without re-deriving from business logic on every read.
+  - Backend (already in place from prior fork): `holidays.compute_balance_summary`
+    + `holidays.split_leave_days`; `routes/leaves.create_leave` stamps
+    the split when `type=="leave"`. New endpoints
+    `GET /api/me/leave-summary` and `GET /api/members/{id}/leave-summary`
+    return the unified shape `{comp_off, paid_leave, total_available, weekly_off, weekly_off_source}`.
+  - Frontend (this iteration): `MyLeaves.jsx` ApplyForm dropped the
+    "Comp Off" button — type grid is now 3-col (Leave / Tour / Late
+    Coming). The form fetches the unified summary on open and on
+    admin single-pick. `LeaveBalanceNotice.jsx` rewritten to render
+    two pool pills (Comp-Off available, Paid Leave available) + a
+    waterfall preview line ("This request will deduct **X** from
+    Comp-Off + **Y** from Paid Leave + **Z LOP**") + LOP banner +
+    the approval-policy line. Admin multi-pick falls back to the
+    legacy per-member LOP table. Athlete category renders the
+    "Breaks workflow" info block. Testids:
+    `waterfall-preview`, `pool-comp-off`, `pool-paid-leave`,
+    `leave-balance-info-nonleave`, `leave-balance-multi`,
+    `leave-balance-athlete`, `leave-balance-loading`.
+  - Verified end-to-end by iter4 testing agent (10/10 new backend
+    tests + 18/18 existing route tests + UI smoke on self-apply
+    and admin Apply-on-behalf). Pytest suite still 190/190 green.
+  - Also fixed a latent NameError: `routes/leaves.py` referenced
+    `_days_inclusive` without importing it from `holidays`.
+
+
 - **Approvals page → unified scrollable table** — `/admin/approvals` now
 
 - **Leave-balance preview + LOP warning in the apply-leave form** —
