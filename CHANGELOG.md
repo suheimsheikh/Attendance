@@ -8,6 +8,16 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ## 🚧 Unreleased — pending deploy to `i-showed-up.ychyderabad.com`
 
+### 🆕 Overlap visibility + Comp-Off & Tour columns on Leave Balances (June 26, 2026)
+
+- **Sidebar** — `Leave/Tour` renamed to **`Leave Tour Approvals`**.
+- **Apply Leave form** — whenever Leave or Tour is selected and dates are picked, a new collapsible *Overlap* notice shows who else is on Leave / Tour during the same window (grouped by type, pending rows tagged `P`). The applicant sees this **before** submitting so two coaches don't accidentally request the same week off.
+- **Approvals table** — every Leave/Tour/Comp-Off row now has a chevron expander. Opening it reveals a side-by-side detail row with **(a) the same Overlap notice** and **(b) the applicant's live Comp-Off + Paid Leave pools** plus the waterfall ladder the approval will draw on (e.g. "Approving will draw 2 from Comp-Off + 3 from Paid Leave + 1 LOP"). Balance fetches lazy — only when the row is opened — and cache per applicant so re-expanding is instant.
+- **Leave Balances** admin page — table rebuilt with three column groups: **Paid Leave** (Opening / Used / Balance), **Comp-Off** (Accrued / Used / Available — year-to-date, computed from attendance ∩ weekly-off), and **Tour Days** (year-to-date). Plus a totals strip across the top with three colour-coded cards that respect the active search filter.
+- New backend endpoint **`GET /api/leaves/overlap`** — accepts `start_date`, `end_date`, optional `exclude_user_id`, optional `leave_id`. Returns a safe summary (no reasons). Available to any authenticated user.
+- Backend **`GET /api/leave-balances`** extended with `comp_off_accrued`, `comp_off_used`, `comp_off_available`, `tour_days` per row.
+- Verified by iter5 testing agent: **210/210 pytest green** + 4/4 UI flows confirmed end-to-end.
+
 ### 🩹 Inline error banners above Save buttons (June 26, 2026)
 
 Errors on form submissions used to surface as a top-of-screen red toast
