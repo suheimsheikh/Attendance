@@ -181,33 +181,26 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
         target = await db.users.find_one({"id": target_id}, {"_id": 0})
         if not target:
             return {"camps": [], "regattas": []}
-        # Camps overlap + roster match
+        # Camps overlap — surfaced as INFORMATIONAL only (the admin /
+        # applicant gets the heads-up without any roster gating).
+        # Earlier iterations matched by institution + member_ids roster,
+        # but per product call (Jun 27 2026) camps are now shown like
+        # regattas — overlap means "FYI, this is happening", and the
+        # admin decides whether to factor it in.
         camps_raw = await db.camps.find({
             "start_date": {"$lte": end_date},
             "end_date":   {"$gte": start_date},
         }, {"_id": 0, "id": 1, "name": 1, "institution": 1, "start_date": 1,
-            "end_date": 1, "member_ids": 1, "days_of_week": 1, "notes": 1}).to_list(200)
-        my_inst = (target.get("institution") or "").strip()
-        camps_out = []
-        for c in camps_raw:
-            same_inst = (c.get("institution") or "").strip() == my_inst and my_inst != ""
-            on_roster = (c.get("member_ids") or [])
-            # Match rule: same institution, AND either no explicit roster
-            # (camp covers the whole institution) OR member is on it.
-            if not same_inst:
-                continue
-            if on_roster and target["id"] not in on_roster:
-                continue
-            camps_out.append({
-                "id": c["id"],
-                "name": c["name"],
-                "institution": c.get("institution"),
-                "start_date": c["start_date"],
-                "end_date": c["end_date"],
-                "days_of_week": c.get("days_of_week") or [],
-                "notes": c.get("notes"),
-                "match": "roster" if on_roster else "institution",
-            })
+            "end_date": 1, "days_of_week": 1, "notes": 1}).to_list(200)
+        camps_out = [{
+            "id": c["id"],
+            "name": c["name"],
+            "institution": c.get("institution"),
+            "start_date": c["start_date"],
+            "end_date": c["end_date"],
+            "days_of_week": c.get("days_of_week") or [],
+            "notes": c.get("notes"),
+        } for c in camps_raw]
         # Regattas overlap (org-wide; no roster filter)
         regattas_raw = await db.regattas.find({
             "start_date": {"$lte": end_date},

@@ -1,0 +1,35 @@
+{
+  "summary": "Iter8 verified: (a) Camps converted to informational-only in /api/leaves/event-conflicts (no institution/roster gating, 'match' field removed); (b) EventConflictNotice now uses single amber palette always with new summary 'Camps & regattas during this period · N camps · M regattas', camp-conflict-{id}/regatta-conflict-{id} chips render correctly (verified on Apply form: amber palette, 1 camp chip = Agape Sat Sun Camp); (c) Step-out TempExitCard fully revamped — 30/60/120/custom chips, default 1h selected, auto-computed ETA preview that updates on every chip-tap, custom time fallback with type=time input, submit disabled when reason empty OR (custom mode + empty time), toast reads 'Stepped out — see you by HH:MM 👋' verbatim, POST /api/attendance/temp-exit body confirmed via post-submit state transition to 'Stepped out — Lunch quickie · back by …'. Backend: 221/221 pytest pass. Frontend: All testids resolve and chip-tap → ETA reactive update works.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "SelfCheckIn — post step-out summary card", "issues": ["After submitting Step-out with computed ETA '00:35' (local browser time, container clock UTC-ish), the persistent summary card displayed 'back by 07:05 PM'. The submitted toast and the in-form ETA correctly showed 00:35, but the post-submit screen renders a different HH:MM (likely a timezone conversion to Asia/Kolkata of an already-local time string). Out of strict iter8 scope (spec only required the toast text), but worth a follow-up — the server stores HH:MM as a naive string and the display layer should either treat it consistently as local time or send an ISO timestamp with TZ."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter7.py",
+    "/app/test_reports/pytest/iter8_results.xml"
+  ],
+  "action_items": [
+    "(Optional / out-of-scope for iter8) Reconcile timezone handling on the 'back by …' display in the post-step-out summary card — the toast and form ETA agree on the local time, but the persisted summary appears to apply an extra TZ offset."
+  ],
+  "critical_code_review_comments": [
+    "leaves.py:190-210 — Camps query simplified to pure date-overlap (no institution / member_ids gating). Returned dict no longer carries 'match' field. Clean diff vs iter7. Both /camps and /regattas use the same MongoDB inverse-overlap pattern, consistent.",
+    "EventConflictNotice.jsx — Single amber palette is now baked in (no more red branching on camps.length). Summary line builds 'N camp(s) · M regatta(s)' with correct pluralisation. Both sections cap at 8 chips with '+N more' overflow, matching spec. data-testid scheme is symmetrical (camp-conflict-{id} / regatta-conflict-{id}).",
+    "SelfCheckIn.jsx TempExitCard (lines 318-465) — Clean implementation: STEP_OUT_DURATIONS array drives chips, computedReturn is recomputed each render (cheap, no useEffect needed), customTime fallback toggled by durationMin === null, submit disabled rule '!reason.trim() || (durationMin == null && !customTime)' covers both required-field cases. Default state durationMin=60 matches spec. fmtHmLocal helper handles HH:MM padding correctly. Submit POSTs {reason, expected_return, latitude, longitude} per spec.",
+    "Iter7 tests (test_review_iter7.py) correctly rewritten to assert informational-mode camps: test_camps_returned_for_any_user_when_overlap_exists explicitly asserts 'match' NOT in response, and test_camp_with_explicit_roster_still_returned_for_non_roster_member confirms the roster gate was removed."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (221/221 pytest, 8/8 iter7 contract tests for the now-informational event-conflicts endpoint)",
+    "frontend": "100% — EventConflictNotice renders amber-only with correct summary and chips on Apply form; TempExitCard chips/ETA/custom-time/submit-disabled/toast all behave per spec"
+  },
+  "test_credentials": "Phone OTP bypass 9849002111 — works (auto-logs in admin without OTP step in preview).",
+  "seed_data_creation": "None — read-only against existing seeded camps/regattas. Created one transient temp-exit excursion via UI submit; non-destructive.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter8 closed clean. Step-out UX is now the home-page card when attendance.status.checked_in === true. Useful selectors: temp-exit-prompt, temp-exit-open, temp-exit-form, temp-exit-reason, temp-exit-durations, temp-exit-dur-30, temp-exit-dur-60, temp-exit-dur-120, temp-exit-dur-custom, temp-exit-custom-time, temp-exit-eta, temp-exit-submit. EventConflictNotice testids unchanged from iter7 (event-conflicts-notice, -toggle, -details, -camps, -regattas, camp-conflict-{id}, regatta-conflict-{id}). To exercise Step-out: phone-login 9849002111 → click 'I showed up 😊' → temp-exit-prompt appears → click temp-exit-open → form expands with chips. Backend regression test command: `cd /app/backend && python -m pytest tests/ -q` (~80s, 221 tests).",
+  "rca of the issue": "N/A — all iter8 specs satisfied. One out-of-scope observation logged on the post-submit 'back by HH:MM' display timezone, which is not part of the iter8 acceptance criteria."
+}

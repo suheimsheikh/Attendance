@@ -312,15 +312,40 @@ export default function SelfCheckIn() {
 }
 
 
+// Quick-pick durations for the one-tap Step-out card. The "return-by"
+// time is auto-computed as now + the selected minutes — saves the user
+// fiddling with a time picker just to log a lunch break.
+const STEP_OUT_DURATIONS = [
+  { min: 30,  label: "30 min" },
+  { min: 60,  label: "1 hour" },   // default
+  { min: 120, label: "2 hours" },
+];
+
+function fmtHmLocal(d) {
+  const h = d.getHours().toString().padStart(2, "0");
+  const m = d.getMinutes().toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
 function TempExitCard({ onCreated }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
-  const [expectedReturn, setExpectedReturn] = useState("");
+  const [durationMin, setDurationMin] = useState(60); // default 1 hour
+  const [customTime, setCustomTime] = useState("");   // active when durationMin === null
   const [busy, setBusy] = useState(false);
+
+  // Computed return time → shown inline so the user can sanity-check
+  // before tapping Step out. Recomputed every render — cheap.
+  const computedReturn = (() => {
+    if (durationMin == null) return customTime || "";
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + durationMin);
+    return fmtHmLocal(now);
+  })();
 
   const submit = async (e) => {
     e?.preventDefault?.();
-    if (!reason.trim()) { toast.error("Tell us why"); return; }
+    if (!reason.trim()) { toast.error("Tell us where you're headed"); return; }
     setBusy(true);
     try {
       let coords = {};
@@ -328,13 +353,14 @@ function TempExitCard({ onCreated }) {
       catch (err) { console.debug("temp-exit geolocation skipped:", err?.message); }
       await api.post("/attendance/temp-exit", {
         reason: reason.trim(),
-        expected_return: expectedReturn || null,
+        expected_return: computedReturn || null,
         ...coords,
       });
-      toast.success("Stepped out — enjoy!");
+      toast.success(`Stepped out — see you by ${computedReturn || "later"} 👋`);
       setOpen(false);
       setReason("");
-      setExpectedReturn("");
+      setDurationMin(60);
+      setCustomTime("");
       onCreated?.();
     } catch (err) {
       toast.error(err?.message || "Failed");
@@ -349,10 +375,10 @@ function TempExitCard({ onCreated }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-slate-900 text-sm">Stepping out for a bit?</div>
-          <div className="text-xs text-slate-600">Log a temporary exit (lunch, errand, etc.). You remain on office hours.</div>
+          <div className="text-xs text-slate-600">Quick lunch, errand, meeting — one tap and you&apos;re out.</div>
         </div>
         <button data-testid="temp-exit-open" onClick={() => setOpen(true)} className="iu-btn-secondary !h-9 !px-3 shrink-0">
-          <ArrowLeftRight size={14} /> Temp exit
+          <ArrowLeftRight size={14} /> Step out
         </button>
       </div>
     );
@@ -362,35 +388,75 @@ function TempExitCard({ onCreated }) {
     <form onSubmit={submit} className="iu-card p-4 mb-4 space-y-3" data-testid="temp-exit-form">
       <div className="flex items-center gap-2">
         <div className="w-9 h-9 rounded-lg bg-cyan-500/15 text-cyan-700 flex items-center justify-center"><Coffee size={16}/></div>
-        <h3 className="font-extrabold">Step out temporarily</h3>
+        <h3 className="font-extrabold">Step out</h3>
       </div>
+
       <div>
-        <label className="iu-label">Reason</label>
+        <label className="iu-label">Where are you headed?</label>
         <input
           data-testid="temp-exit-reason"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Lunch · medical · personal errand…"
+          placeholder="Lunch · clinic · errand…"
           className="iu-input"
           autoFocus
         />
       </div>
+
+      {/* Quick-pick duration chips + Custom return time fallback */}
       <div>
-        <label className="iu-label">Expected return <span className="text-slate-400 normal-case font-normal">(optional)</span></label>
-        <div className="relative">
-          <Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            data-testid="temp-exit-expected"
-            type="time"
-            value={expectedReturn}
-            onChange={(e) => setExpectedReturn(e.target.value)}
-            className="iu-input pl-10"
-          />
+        <label className="iu-label">How long?</label>
+        <div className="grid grid-cols-4 gap-2" data-testid="temp-exit-durations">
+          {STEP_OUT_DURATIONS.map((d) => (
+            <button
+              key={d.min}
+              type="button"
+              onClick={() => setDurationMin(d.min)}
+              data-testid={`temp-exit-dur-${d.min}`}
+              className={`iu-btn ${durationMin === d.min ? "iu-btn-primary" : "iu-btn-secondary"} !h-10`}
+            >
+              {d.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setDurationMin(null)}
+            data-testid="temp-exit-dur-custom"
+            className={`iu-btn ${durationMin === null ? "iu-btn-primary" : "iu-btn-secondary"} !h-10`}
+            title="Pick a specific return time"
+          >
+            Custom
+          </button>
         </div>
+        {durationMin === null && (
+          <div className="relative mt-2">
+            <Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              data-testid="temp-exit-custom-time"
+              type="time"
+              value={customTime}
+              onChange={(e) => setCustomTime(e.target.value)}
+              className="iu-input pl-10"
+              autoFocus
+            />
+          </div>
+        )}
       </div>
+
+      {/* Inline ETA preview — single source of truth, mirrors the value
+          that will be sent to the backend. Mounts only when we have a
+          valid time to display. */}
+      {computedReturn && (
+        <div className="rounded-lg bg-cyan-50/70 border border-cyan-200 px-3 py-2 flex items-center gap-2 text-xs text-cyan-900" data-testid="temp-exit-eta">
+          <Clock size={13} className="text-cyan-600 shrink-0" />
+          You&apos;ll be back by <strong className="font-extrabold">{computedReturn}</strong>
+          {durationMin != null && <span className="opacity-60">· {STEP_OUT_DURATIONS.find((x) => x.min === durationMin)?.label}</span>}
+        </div>
+      )}
+
       <div className="flex gap-2">
-        <button type="button" onClick={() => { setOpen(false); setReason(""); setExpectedReturn(""); }} className="iu-btn-secondary flex-1">Cancel</button>
-        <button data-testid="temp-exit-submit" type="submit" disabled={busy || !reason.trim()} className="iu-btn-primary flex-1">
+        <button type="button" onClick={() => { setOpen(false); setReason(""); setDurationMin(60); setCustomTime(""); }} className="iu-btn-secondary flex-1">Cancel</button>
+        <button data-testid="temp-exit-submit" type="submit" disabled={busy || !reason.trim() || (durationMin == null && !customTime)} className="iu-btn-primary flex-1">
           {busy ? <Loader2 className="animate-spin" size={16} /> : <><ArrowLeftRight size={14}/> Step out</>}
         </button>
       </div>

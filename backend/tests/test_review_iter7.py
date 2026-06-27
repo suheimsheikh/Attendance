@@ -45,71 +45,71 @@ class TestEventConflictsContract:
         for f in ("level", "location", "country", "host_org"):
             assert f in sample, f"regatta missing optional {f!r}"
 
-    def test_camp_roster_match_for_agape_member(self, admin_client, api):
-        """If 'Agape Sat Sun Camp' has member_ids, pick one and confirm
-        the endpoint returns it with match='roster'. If no rostered member
-        exists, skip rather than fail."""
-        # Try to load camps directly via admin to find the Agape camp
+    def test_camps_returned_for_any_user_when_overlap_exists(self, admin_client, api):
+        """Per Jun-27 product call, camps are surfaced as informational only
+        — no roster gate. Any camp overlapping the window is returned,
+        regardless of the target user's institution / membership."""
         camps_resp = admin_client.get(f"{api}/camps")
         if camps_resp.status_code != 200:
             pytest.skip(f"/api/camps not reachable: {camps_resp.status_code}")
         camps = camps_resp.json()
-        agape = next((c for c in camps
-                      if (c.get("name") or "").lower().startswith("agape")), None)
-        if not agape or not agape.get("member_ids"):
-            pytest.skip("Agape Sat Sun Camp with roster not seeded")
-        member_id = agape["member_ids"][0]
-        # Pick a window that overlaps the camp
-        start = agape["start_date"]
-        end = agape["end_date"]
-        # Trim to a 7-day window inside the camp
-        d0 = datetime.date.fromisoformat(start)
-        d1 = min(d0 + datetime.timedelta(days=6),
-                 datetime.date.fromisoformat(end))
-        r = admin_client.get(f"{api}/leaves/event-conflicts", params={
-            "start_date": d0.isoformat(), "end_date": d1.isoformat(),
-            "user_id": member_id,
-        })
-        assert r.status_code == 200, r.text
-        camps_out = r.json()["camps"]
-        ids = [c["id"] for c in camps_out]
-        assert agape["id"] in ids, (
-            f"Expected agape camp {agape['id']} in conflict result, got {ids}"
-        )
-        match = next(c for c in camps_out if c["id"] == agape["id"])
-        assert match.get("match") == "roster"
-        for f in ("id", "name", "institution", "start_date", "end_date",
-                 "days_of_week", "notes", "match"):
-            assert f in match, f"camp row missing {f!r}"
-
-    def test_camp_excluded_for_different_institution_member(self, admin_client, api):
-        """Pick a member whose institution is NOT 'Agape Home' and confirm
-        the Agape camp does NOT appear in their conflicts."""
-        camps_resp = admin_client.get(f"{api}/camps")
-        if camps_resp.status_code != 200:
-            pytest.skip(f"/api/camps not reachable: {camps_resp.status_code}")
-        camps = camps_resp.json()
-        agape = next((c for c in camps
-                      if (c.get("name") or "").lower().startswith("agape")), None)
-        if not agape:
-            pytest.skip("Agape camp not seeded")
+        if not camps:
+            pytest.skip("No camps seeded")
+        c0 = camps[0]
         members = admin_client.get(f"{api}/members").json()
+        # Pick a member from a DIFFERENT institution than c0 — they should
+        # still see the camp in the response now.
         other = next(
             (m for m in members
-             if (m.get("institution") or "") != (agape.get("institution") or "")
-             and (m.get("institution") or "").strip()),
+             if (m.get("institution") or "") != (c0.get("institution") or "")),
             None,
         )
         if not other:
-            pytest.skip("No member in a different institution seeded")
+            pytest.skip("Could not find a member in a different institution")
         r = admin_client.get(f"{api}/leaves/event-conflicts", params={
-            "start_date": agape["start_date"], "end_date": agape["end_date"],
+            "start_date": c0["start_date"], "end_date": c0["end_date"],
             "user_id": other["id"],
         })
-        assert r.status_code == 200
+        assert r.status_code == 200, r.text
         camps_out = r.json()["camps"]
-        assert agape["id"] not in [c["id"] for c in camps_out], (
-            f"Agape camp leaked into out-of-institution member {other['id']}"
+        assert c0["id"] in [c["id"] for c in camps_out], (
+            f"Expected camp {c0['id']} (informational mode) — got {[c['id'] for c in camps_out]}"
+        )
+        match = next(c for c in camps_out if c["id"] == c0["id"])
+        # `match` field is gone now — assert the informational fields stayed.
+        for f in ("id", "name", "institution", "start_date", "end_date",
+                 "days_of_week", "notes"):
+            assert f in match, f"camp row missing {f!r}"
+        assert "match" not in match, "Roster gate was removed; 'match' field should be gone"
+
+    def test_camp_with_explicit_roster_still_returned_for_non_roster_member(self, admin_client, api):
+        """The Agape Sat Sun Camp has an explicit member_ids roster. Even
+        members NOT on that roster should now see the camp in their
+        conflict response (informational only — no gating)."""
+        camps_resp = admin_client.get(f"{api}/camps")
+        if camps_resp.status_code != 200:
+            pytest.skip(f"/api/camps not reachable: {camps_resp.status_code}")
+        camps = camps_resp.json()
+        rostered_camp = next(
+            (c for c in camps if c.get("member_ids")), None,
+        )
+        if not rostered_camp:
+            pytest.skip("No camp with explicit roster seeded")
+        roster = set(rostered_camp["member_ids"] or [])
+        members = admin_client.get(f"{api}/members").json()
+        non_roster = next((m for m in members if m["id"] not in roster), None)
+        if not non_roster:
+            pytest.skip("Could not find a non-roster member")
+        r = admin_client.get(f"{api}/leaves/event-conflicts", params={
+            "start_date": rostered_camp["start_date"],
+            "end_date": rostered_camp["end_date"],
+            "user_id": non_roster["id"],
+        })
+        assert r.status_code == 200
+        ids = [c["id"] for c in r.json()["camps"]]
+        assert rostered_camp["id"] in ids, (
+            "Camp with explicit roster should still show for non-roster member "
+            "in informational mode"
         )
 
     def test_non_admin_cannot_query_other_user(self, base_url, api):
