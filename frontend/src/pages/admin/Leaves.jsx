@@ -6,6 +6,7 @@ import { shortDate } from "../../utils";
 import { ApplyForm } from "../MyLeaves";
 import { BreakForm } from "./Calendar";
 import OverlapNotice from "../../components/OverlapNotice";
+import EventConflictNotice from "../../components/EventConflictNotice";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -306,6 +307,16 @@ export default function AdminLeaves({ embedded = false }) {
                             memberName={l.member_name}
                             requestedDays={days}
                             leaveType={l.type}
+                          />
+                        </div>
+                        {/* Camp/Regatta conflict — spans full width on the
+                            next line so the chip text stays readable. */}
+                        <div className="mt-3">
+                          <EventConflictNotice
+                            startDate={l.start_date}
+                            endDate={l.end_date}
+                            userId={l.user_id}
+                            defaultOpen
                           />
                         </div>
                       </td>

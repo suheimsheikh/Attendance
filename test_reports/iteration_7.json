@@ -1,0 +1,32 @@
+{
+  "summary": "Iter7 — Validated (a) ITER6 bug fixes (stat-tour-days-ytd no trailing dash + zero React key-spread warnings on /my-leaves), and (b) NEW /api/leaves/event-conflicts endpoint with frontend EventConflictNotice wired into both /my-leaves Apply form and /admin/leaves Approvals detail row. Backend: 221/221 pytest pass (213 prior + 8 new iter7). Frontend: all 8 StatCard testids resolve, ZERO React 'key prop' warnings on /my-leaves load. EventConflictNotice renders correctly: amber tone with 'Regatta overlap · N regattas during this window' summary when only regattas overlap, expanded details show camps + regattas sections, admin Approvals detail row shows it full-width below Overlap+Balance grid (verified — first expanded row shows 'Regatta overlap · 2 regattas during this window' with 40th International Hyderabad Sailing Week + Cadet Championship chips).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter7.py",
+    "/app/test_reports/pytest/iter7_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend /api/leaves/event-conflicts (leaves.py:156–217) cleanly implements the spec: camps gated by (institution match) AND (member_ids empty OR target in roster), regattas org-wide. Match label correctly distinguishes 'roster' vs 'institution'. Authorization guard at line 178-180 correctly returns 403 when a non-admin asks for someone else's user_id; no auth → 401 from get_current_user dependency. MongoDB overlap query uses standard inverse-overlap formula (start<=end_date AND end>=start_date) — same pattern as the existing /leaves/overlap, good consistency.",
+    "MyLeaves.jsx line 171 destructures `{ key, ...rest }` before spread — clean fix for the React key-via-spread warning. Line 191 regex now appends `.replace(/^-+|-+$/g, '')` to strip trailing/leading dashes from the auto-generated testid — fixes 'Tour days (YTD)' → 'stat-tour-days-ytd' correctly without affecting the other 7 tiles. Future-proofs labels that end with non-alpha chars.",
+    "EventConflictNotice.jsx is a clean reusable component: amber palette for regatta-only, red palette when camps present, capped at 8 visible chips with overflow, suppressed when both arrays empty. Multi-pick admin 'Apply on behalf' correctly suppresses the notice since roster differs across members. Solid abstraction mirroring OverlapNotice's collapsible pattern."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter7.py (NEW — 8 tests, 100% pass)"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 new iter7 + 221/221 full suite)",
+    "frontend": "100% — both iter6 bug fixes confirmed, EventConflictNotice renders in both Apply form (amber, regatta-only window) and admin Approvals detail row (amber, 2 regattas chip list visible)"
+  },
+  "test_credentials": "Phone OTP bypass 9849002111 — works; auto-logs in without OTP step in preview env. admin@attendance.app / Admin@12345 also valid for backend.",
+  "seed_data_creation": "None — only read-only queries against existing seeded camps/regattas/leaves.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter7 closed clean: bug fixes A+B verified, new event-conflicts endpoint passes all contract tests (camps roster gate, institution gate, 403 for non-admin cross-user, regatta org-wide overlap), frontend renders the notice in both Apply form and admin Approvals row. Run `cd /app/backend && python -m pytest tests/ -q` for full 221-test regression. Useful test selectors going forward: event-conflicts-notice, event-conflicts-toggle, event-conflicts-details, event-conflicts-camps, event-conflicts-regattas, camp-conflict-{id}. To trigger a CAMP-conflict (red palette with 'Possible camp/regatta conflict') in admin view, use admin 'Apply on behalf' for an Agape Home member who is in the Agape Sat Sun Camp roster with dates inside that camp's window.",
+  "rca of the issue": "N/A — no defects found in iter7."
+}

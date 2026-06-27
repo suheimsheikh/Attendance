@@ -153,6 +153,69 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
         doc.pop("_id", None)
         return doc
 
+    @router.get("/leaves/event-conflicts")
+    async def event_conflicts(
+        start_date: str,
+        end_date: str,
+        user_id: Optional[str] = None,
+        user: dict = Depends(get_current_user),
+    ):
+        """Camps the applicant is rostered into + Regattas active during the
+        requested leave window. Used by the apply form and the Approvals
+        detail row so admins (and applicants) can catch the "sailor wants
+        leave in the middle of their own regatta" foot-gun.
+
+        Camps are user-scoped: matched by `institution` and (when set) the
+        explicit `member_ids` roster. Regattas have no per-user attribution
+        in the current schema (org-wide events), so they're returned as
+        informational only — the admin can eyeball who's on them.
+
+        Args:
+          user_id: when admin is querying for another member; defaults to
+            the calling user. Non-admins can only query their own.
+        """
+        target_id = user_id or user["id"]
+        if target_id != user["id"] and user.get("role") != "admin":
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="Admins only when querying for another member")
+        target = await db.users.find_one({"id": target_id}, {"_id": 0})
+        if not target:
+            return {"camps": [], "regattas": []}
+        # Camps overlap + roster match
+        camps_raw = await db.camps.find({
+            "start_date": {"$lte": end_date},
+            "end_date":   {"$gte": start_date},
+        }, {"_id": 0, "id": 1, "name": 1, "institution": 1, "start_date": 1,
+            "end_date": 1, "member_ids": 1, "days_of_week": 1, "notes": 1}).to_list(200)
+        my_inst = (target.get("institution") or "").strip()
+        camps_out = []
+        for c in camps_raw:
+            same_inst = (c.get("institution") or "").strip() == my_inst and my_inst != ""
+            on_roster = (c.get("member_ids") or [])
+            # Match rule: same institution, AND either no explicit roster
+            # (camp covers the whole institution) OR member is on it.
+            if not same_inst:
+                continue
+            if on_roster and target["id"] not in on_roster:
+                continue
+            camps_out.append({
+                "id": c["id"],
+                "name": c["name"],
+                "institution": c.get("institution"),
+                "start_date": c["start_date"],
+                "end_date": c["end_date"],
+                "days_of_week": c.get("days_of_week") or [],
+                "notes": c.get("notes"),
+                "match": "roster" if on_roster else "institution",
+            })
+        # Regattas overlap (org-wide; no roster filter)
+        regattas_raw = await db.regattas.find({
+            "start_date": {"$lte": end_date},
+            "end_date":   {"$gte": start_date},
+        }, {"_id": 0, "id": 1, "name": 1, "start_date": 1, "end_date": 1,
+            "level": 1, "location": 1, "country": 1, "host_org": 1}).to_list(200)
+        return {"camps": camps_out, "regattas": regattas_raw}
+
     @router.get("/leaves/mine")
     async def my_leaves(user: dict = Depends(get_current_user)):
         leaves = await db.leaves.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)

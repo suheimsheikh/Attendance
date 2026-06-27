@@ -5,6 +5,7 @@ import { api } from "../api";
 import Avatar from "../components/Avatar";
 import LeaveBalanceNotice from "../components/LeaveBalanceNotice";
 import OverlapNotice from "../components/OverlapNotice";
+import EventConflictNotice from "../components/EventConflictNotice";
 import FormErrorBanner from "../components/FormErrorBanner";
 import { useFormError } from "../hooks/useFormError";
 import { shortDate, todayIso } from "../utils";
@@ -167,7 +168,7 @@ function StatsDashboard({ summary }) {
   ];
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5" data-testid="myleaves-stats">
-      {stats.map((s) => <StatCard key={s.key} {...s} />)}
+      {stats.map(({ key, ...rest }) => <StatCard key={key} {...rest} />)}
     </div>
   );
 }
@@ -182,12 +183,12 @@ const TONE = {
   slate:   { border: "border-slate-200",   bg: "bg-white",         text: "text-slate-500",   value: "text-slate-900",   icon: "text-slate-400"   },
 };
 
-function StatCard({ label, value, hint, tone = "slate", Icon, emphasis, key: _k }) {
+function StatCard({ label, value, hint, tone = "slate", Icon, emphasis }) {
   const t = TONE[tone] || TONE.slate;
   return (
     <div
       className={`iu-card !p-3 border ${t.border} ${t.bg} ${emphasis ? "ring-2 ring-emerald-200/60" : ""}`}
-      data-testid={`stat-${label.toLowerCase().replace(/[^a-z]+/g, "-")}`}
+      data-testid={`stat-${label.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-+|-+$/g, "")}`}
     >
       <div className={`flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold ${t.text}`}>
         {Icon && <Icon size={12} className={t.icon} />}
@@ -612,13 +613,26 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           {/* Conflict guard — only relevant for multi-day absences.
               Late-coming is a same-day notice with no overlap value. */}
           {start && end && (type === "leave" || type === "tour") && (
-            <OverlapNotice
-              startDate={start}
-              endDate={end}
-              excludeUserId={asAdmin ? undefined : me?.id}
-              title="Who else is on leave/tour during this period?"
-              defaultOpen={false}
-            />
+            <>
+              <OverlapNotice
+                startDate={start}
+                endDate={end}
+                excludeUserId={asAdmin ? undefined : me?.id}
+                title="Who else is on leave/tour during this period?"
+                defaultOpen={false}
+              />
+              {/* Camp/Regatta conflict — only meaningful for self-apply or
+                  admin single-pick. Multi-pick involves per-member rosters
+                  so the chip would be ambiguous. */}
+              {(!asAdmin || picked.size === 1) && (
+                <EventConflictNotice
+                  startDate={start}
+                  endDate={end}
+                  userId={asAdmin ? Array.from(picked)[0] : null}
+                  defaultOpen={false}
+                />
+              )}
+            </>
           )}
 
           <FormErrorBanner
