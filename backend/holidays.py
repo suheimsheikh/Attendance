@@ -33,11 +33,24 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
     combined total. Used by the unified Leave application UX where comp-off
     drains first and the leave balance second.
 
+    Also surfaces a small set of YTD aggregates that the member's
+    "My Leave & Tour" header dashboard needs so they have full context
+    BEFORE applying for more leave (pending + future-approved that
+    haven't started yet, total tour days, total LOP, approximate
+    absent days).
+
     Output shape:
         {
-            "comp_off": {"accrued", "used", "available"},
-            "paid_leave": {"opening", "used", "available", "tracked": bool},
+            "comp_off":   {accrued, used, available},
+            "paid_leave": {opening, used, available, tracked},
             "total_available": int,
+            "pending_leave_days":           float,  # leave still awaiting decision
+            "future_approved_leave_days":   float,  # approved but start_date > today
+            "tour_ytd_days":                int,    # approved tours YTD
+            "pending_tour_days":            int,
+            "lop_ytd_days":                 float,  # sum of lop_days from approved leaves YTD
+            "absent_ytd_days":              int,    # working days with no attendance/leave/tour/break
+            ...
         }
     """
     co = await compute_comp_off_balance(db, user, year=year)
@@ -46,20 +59,68 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
     yr_start, yr_end = f"{year}-01-01", f"{year}-12-31"
     opening = user.get("leave_balance_opening")
     tracked = (user.get("category") != "athlete") and (opening is not None)
-    paid_used = 0
+
+    # Pull every leave/tour row for the user this year ONCE → bucket below.
+    # We need approved + pending so the "applied not yet taken" metric is
+    # correct, and we need lop_days for the YTD LOP counter.
+    rows = await db.leaves.find({
+        "user_id": user["id"],
+        "start_date": {"$gte": yr_start, "$lte": yr_end},
+        "type": {"$in": ["leave", "tour", "comp_off"]},
+    }, {"_id": 0, "type": 1, "status": 1, "start_date": 1, "end_date": 1,
+        "paid_leave_used": 1, "lop_days": 1, "comp_off_used": 1}).to_list(2000)
+
+    today = date.today().isoformat()
+    paid_used = 0.0
+    pending_leave_days = 0.0
+    future_approved_leave_days = 0.0
+    tour_ytd_days = 0
+    pending_tour_days = 0
+    lop_ytd_days = 0.0
+    for L in rows:
+        n = _days_inclusive(L["start_date"], L["end_date"])
+        if L["type"] == "leave":
+            if L["status"] == "approved":
+                # Paid-leave used — prefer the ladder-stamped value, fall
+                # back to the whole window for legacy rows.
+                if L.get("paid_leave_used") is not None:
+                    paid_used += float(L["paid_leave_used"])
+                else:
+                    paid_used += n
+                # LOP YTD — only from approved rows
+                if L.get("lop_days") is not None:
+                    lop_ytd_days += float(L["lop_days"])
+                # Future-approved (starts after today) still counts as a
+                # commitment the member should see — they've "applied for
+                # and not yet taken" this leave.
+                if L["start_date"] > today:
+                    future_approved_leave_days += n
+            elif L["status"] == "pending":
+                pending_leave_days += n
+        elif L["type"] == "tour":
+            if L["status"] == "approved":
+                tour_ytd_days += n
+            elif L["status"] == "pending":
+                pending_tour_days += n
+        elif L["type"] == "comp_off" and L["status"] == "approved":
+            # Legacy direct comp-off rows still consume the comp-off pool
+            # (already accounted in compute_comp_off_balance) but don't
+            # touch paid_used.
+            continue
+
     if tracked:
-        approved = await db.leaves.find({
-            "user_id": user["id"], "status": "approved", "type": "leave",
-            "start_date": {"$gte": yr_start, "$lte": yr_end},
-        }, {"_id": 0, "start_date": 1, "end_date": 1, "paid_leave_used": 1}).to_list(500)
-        for L in approved:
-            if "paid_leave_used" in L and L["paid_leave_used"] is not None:
-                paid_used += float(L["paid_leave_used"])
-            else:
-                # Legacy row created before the ladder-stamp landed. Treat
-                # the whole leave window as paid days (the old behaviour).
-                paid_used += _days_inclusive(L["start_date"], L["end_date"])
-    paid_avail = max(0.0, float(opening) - paid_used) if tracked else 0
+        paid_avail = max(0.0, float(opening) - paid_used)
+    else:
+        paid_avail = 0
+
+    # Approximate absent-days YTD: working days from year start → today
+    # where the member has no attendance, no approved leave/tour, and the
+    # day isn't their weekly-off. We compute this conservatively for the
+    # non-athlete category only — athletes don't have an absent count.
+    absent_ytd_days = 0
+    if user.get("category") != "athlete":
+        absent_ytd_days = await _absent_days_ytd(db, user, co["weekly_off"])
+
     return {
         "comp_off": {"accrued": co["accrued"], "used": co["used"], "available": co["available"]},
         "paid_leave": {
@@ -69,9 +130,105 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
             "tracked": tracked,
         },
         "total_available": int(co["available"]) + int(paid_avail),
+        "pending_leave_days": pending_leave_days,
+        "future_approved_leave_days": future_approved_leave_days,
+        "tour_ytd_days": tour_ytd_days,
+        "pending_tour_days": pending_tour_days,
+        "lop_ytd_days": lop_ytd_days,
+        "absent_ytd_days": absent_ytd_days,
         "weekly_off": co["weekly_off"],
         "weekly_off_source": co["weekly_off_source"],
     }
+
+
+async def _absent_days_ytd(db, user: dict, weekly_off: str) -> int:
+    """Cheap-ish approximation of "absent days YTD" for the member dashboard.
+
+    Iterates Jan 1 → today and counts each weekday where the member has
+    no attendance record AND no approved leave/tour/break covers the day
+    AND the day isn't their effective weekly off.
+
+    Notes:
+      - We treat join date as Jan 1; rejoiners early in the year may see
+        an inflated count for their first few days. Acceptable for a
+        dashboard signal — the source of truth remains the daily report.
+      - Breaks are checked via the same model the Presence Board uses
+        (scope = "all" | "category" | "institution" | "selected").
+    """
+    today_d = date.today()
+    yr_start = date(today_d.year, 1, 1)
+    if today_d < yr_start:
+        return 0
+    # Pull the small data sets once.
+    atts = await db.attendance.find(
+        {"user_id": user["id"],
+         "date": {"$gte": yr_start.isoformat(), "$lte": today_d.isoformat()}},
+        {"_id": 0, "date": 1},
+    ).to_list(500)
+    att_set = {a["date"] for a in atts}
+    leaves_approved = await db.leaves.find({
+        "user_id": user["id"], "status": "approved",
+        "type": {"$in": ["leave", "tour"]},
+        "start_date": {"$lte": today_d.isoformat()},
+        "end_date":   {"$gte": yr_start.isoformat()},
+    }, {"_id": 0, "start_date": 1, "end_date": 1}).to_list(500)
+    leave_set: set = set()
+    for L in leaves_approved:
+        try:
+            sd = date.fromisoformat(L["start_date"])
+            ed = date.fromisoformat(L["end_date"])
+        except Exception:
+            continue
+        d = max(sd, yr_start)
+        while d <= min(ed, today_d):
+            leave_set.add(d.isoformat())
+            d = d.fromordinal(d.toordinal() + 1)
+    # Breaks — fetched matching the member's scope.
+    breaks = await db.breaks.find({
+        "start_date": {"$lte": today_d.isoformat()},
+        "end_date":   {"$gte": yr_start.isoformat()},
+    }, {"_id": 0, "scope": 1, "start_date": 1, "end_date": 1, "institution": 1,
+        "fleet": 1, "category": 1, "member_ids": 1}).to_list(500)
+    break_set: set = set()
+    for B in breaks:
+        if not _break_covers_user(B, user):
+            continue
+        try:
+            sd = date.fromisoformat(B["start_date"])
+            ed = date.fromisoformat(B["end_date"])
+        except Exception:
+            continue
+        d = max(sd, yr_start)
+        while d <= min(ed, today_d):
+            break_set.add(d.isoformat())
+            d = d.fromordinal(d.toordinal() + 1)
+    wo = (weekly_off or "sunday").lower()
+    absent = 0
+    d = yr_start
+    while d <= today_d:
+        if WEEKDAY_KEY[d.weekday()] != wo:
+            iso = d.isoformat()
+            if iso not in att_set and iso not in leave_set and iso not in break_set:
+                absent += 1
+        d = d.fromordinal(d.toordinal() + 1)
+    return absent
+
+
+def _break_covers_user(b: dict, user: dict) -> bool:
+    """Mirrors the scope rules used elsewhere in the app — kept inline so
+    this helper doesn't pull in the presence module."""
+    scope = b.get("scope") or "all"
+    if scope == "all":
+        return True
+    if scope == "institution":
+        return (b.get("institution") or "") == (user.get("institution") or "")
+    if scope == "fleet":
+        return (b.get("fleet") or "") == (user.get("fleet") or "")
+    if scope == "category":
+        return (b.get("category") or "") == (user.get("category") or "")
+    if scope == "selected":
+        return user["id"] in (b.get("member_ids") or [])
+    return False
 
 
 def split_leave_days(requested: int, comp_off_avail: int, paid_avail: float) -> dict:

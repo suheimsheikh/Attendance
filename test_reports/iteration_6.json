@@ -1,0 +1,54 @@
+{
+  "summary": "Iter6 — Validated GET /api/me/leave-summary aggregator + new MyLeaves StatsDashboard + per-row reason/decision-audit/ladder chips. Backend: 213/213 pytest pass (210 prior + 3 new in test_review_iter6.py). All 11 expected fields (comp_off block, paid_leave block, total_available, pending_leave_days, future_approved_leave_days, tour_ytd_days, pending_tour_days, lop_ytd_days, absent_ytd_days, weekly_off, weekly_off_source) confirmed on both /me/leave-summary and /members/{id}/leave-summary. Aggregator correctly increments pending bucket when a new pending leave is filed within the current year (verified end-to-end via POST → re-GET → cleanup PATCH). NOTE: aggregator scopes to current calendar year (start_date BETWEEN yr_start AND yr_end) — future-year leaves are intentionally NOT counted in pending_leave_days. Frontend: /my-leaves renders the 8-tile dashboard with data-testid='myleaves-stats' in a `grid-cols-2 sm:grid-cols-4` grid, emerald ring on Total leave available, correct numeric values bound to /me/leave-summary. 52 leave rows render with reason+status+date testids; 40 historical rows show 'Rejected/Approved by Campus Administrator · DD/MM' decision audit. TWO BUGS FOUND in MyLeaves.jsx StatsDashboard.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "MyLeaves.jsx → StatsDashboard / StatCard",
+        "issue": "Auto-generated testid for the Tour-days tile is 'stat-tour-days-ytd-' (trailing dash) instead of the spec'd 'stat-tour-days-ytd'. Root cause: label 'Tour days (YTD)' → toLowerCase() → 'tour days (ytd)' → replace(/[^a-z]+/g, '-') leaves a trailing '-' because the label ends with ')'. All seven other tiles happen to end with an alpha char so they resolve cleanly; only this one is affected. Spec, automated tests, and downstream consumers expecting 'stat-tour-days-ytd' will not find the element.",
+        "selector": "[data-testid='stat-tour-days-ytd']",
+        "priority": "HIGH"
+      },
+      {
+        "component": "MyLeaves.jsx → StatsDashboard",
+        "issue": "React warning on every render: \"A props object containing a 'key' prop is being spread into JSX\" and \"'key' is not a prop ... StatCard\". Caused by `<StatCard key={s.key} {...s} />` where the stat objects also carry a `key` field which gets spread. Two console errors per StatCard mount (twice, in DEV). Functionally harmless but pollutes the console and violates React's key-via-spread rule.",
+        "selector": "MyLeaves.jsx line ~170",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter6.py",
+    "/app/test_reports/pytest/iter6_results.xml",
+    "/app/test_reports/pytest/iter6_full_results.xml"
+  ],
+  "action_items": [
+    "Fix testid generation in StatCard: append `.replace(/^-+|-+$/g, '')` to the regex, OR use the explicit `s.key` (which is already correct as 'tour-total' → would change spec) — simplest is `data-testid={`stat-${label.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-+|-+$/g, '')}`}`. This restores stat-tour-days-ytd and future-proofs other labels.",
+    "Fix React key-via-spread warning in StatsDashboard: destructure key out before spread, e.g. `{stats.map(({ key, ...rest }) => <StatCard key={key} {...rest} />)}`.",
+    "Optional: extend backend pending_leave_days/future_approved_leave_days to include leaves with start_date beyond yr_end (rolled forward) — current year scoping means a member who files a Jan-2027 leave in Dec-2026 won't see it on the dashboard. Confirm with PM whether this is intentional."
+  ],
+  "critical_code_review_comments": [
+    "holidays.py compute_balance_summary: single bulk fetch of leaves filtered to current year + types in (leave,tour,comp_off). Correctly buckets approved vs pending and uses ladder-stamped paid_leave_used / lop_days when present, falling back to window-length for legacy rows — good.",
+    "holidays.py _absent_days_ytd: skipped entirely for category=='athlete' (correctly, since athletes use Breaks workflow). Iterates Jan 1 → today, single in-memory pass after one attendance + leave + breaks fetch; O(days) which is at most ~365 — acceptable for a member dashboard. Acknowledged in comments that the value is approximate and join-date isn't honoured.",
+    "MyLeaves.jsx isAthlete predicate (`!paid_leave.tracked && comp_off.accrued===0 && comp_off.used===0 && paid_leave.opening==null`) reliably distinguishes athletes from non-athletes-with-zero-balance. Good — non-athletes always have either an opening number or some comp-off accrual eventually.",
+    "MyLeaveRow.showLadder gate correctly hides the chip row on rejected/pending rows AND on type=tour rows. The three chips render only when their respective stamp value is truthy (non-zero), so an approved leave that consumed only comp-off shows just the violet chip — matches spec.",
+    "Decision-audit line is rendered for both approved AND rejected statuses but only when decided_by is present — this guards against legacy rows without an audit trail, and tells the maker who acted on the request. Solid.",
+    "Bug (HIGH): StatCard testid auto-generator trims non-alpha runs to '-' but doesn't trim trailing dashes — see frontend_issues. One-line fix.",
+    "Bug (MEDIUM): StatsDashboard spreads `s` (which still contains the `key` field) into <StatCard>, triggering React's key-via-spread warning. The StatCard signature `function StatCard({ label, value, hint, tone, Icon, emphasis, key: _k })` confirms the author was aware enough to alias it, but the warning fires at the JSX call site, not the function body."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter6.py (NEW — 3 tests, 100% pass)"
+  ],
+  "success_rate": {
+    "backend": "100% (3/3 new iter6 + 213/213 total pytest)",
+    "frontend": "75% — 7 of 8 stat testids match spec; dashboard+rows+decision-audit work; 1 testid mismatch + 1 React warning"
+  },
+  "test_credentials": "Phone OTP bypass 9849002111 (admin) — works, OTP 123456 accepted. admin@attendance.app / Admin@12345 (email login) also works.",
+  "seed_data_creation": "One TEST_iter6_pending_count leave created & immediately rejected for cleanup, one TEST_iter6_probe leave created & rejected during manual probe. Production data untouched. Visible in the rejected rows in the screenshot.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter6 backend contract verified; aggregator scopes to current calendar year (yr_start..yr_end on start_date) and that's intentional. Two frontend defects to retest after E1 fixes: (1) data-testid='stat-tour-days-ytd' must resolve to a DOM element (currently 'stat-tour-days-ytd-' with trailing dash); (2) zero React console warnings on /my-leaves page load. Useful testids: myleaves-stats, myleaves-list, myleaves-empty, myleaves-athlete-note, stat-{leave-availed|paid-leave-balance|comp-off-eligibility|total-leave-available|applied-not-yet-taken|tour-days-ytd|absent-days|lop-this-year}, myleave-{reason|decided|ladder|status|dates}-{id}. Run `cd /app/backend && python -m pytest tests/test_review_iter6.py tests/test_unified_leave_iter4.py tests/test_review_iter5.py -v` for focused regression.",
+  "rca of the issue": "Both frontend bugs trace to MyLeaves.jsx StatsDashboard. Bug 1 — testid mismatch — the regex `label.toLowerCase().replace(/[^a-z]+/g, '-')` does not strip trailing dashes; labels ending with ')' or any non-alpha char (here 'Tour days (YTD)') yield a trailing-dash testid. Add `.replace(/^-+|-+$/g, '')` to the chain. Bug 2 — `<StatCard key={s.key} {...s} />` includes `key` in the spread. React 19 explicitly forbids spreading `key`; destructure it out: `{stats.map(({ key, ...rest }) => <StatCard key={key} {...rest} />)}`. No backend change needed for either."
+}

@@ -26,24 +26,49 @@ export default function MyLeaves() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  // Header dashboard fuel: every metric the member would want to know
+  // BEFORE applying for more leave — comp-off, paid leave, pending,
+  // future-approved, tour totals, LOP and approx absent days.
+  const [summary, setSummary] = useState(null);
 
   const load = async () => {
-    try { setItems(await api.get("/leaves/mine")); }
+    try {
+      const [list, s] = await Promise.all([
+        api.get("/leaves/mine"),
+        api.get("/me/leave-summary").catch(() => null),
+      ]);
+      setItems(list);
+      setSummary(s);
+    }
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
 
+  const isAthlete = summary && !summary.paid_leave?.tracked && summary.comp_off?.accrued === 0 && summary.comp_off?.used === 0 && summary.paid_leave?.opening == null;
+
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
-      <header className="flex flex-wrap items-end justify-between gap-3 mb-6">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+      <header className="flex flex-wrap items-end justify-between gap-3 mb-5">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">My Leave and Tour</h1>
-          <p className="text-slate-500 text-sm mt-1">Track your leave and tour requests.</p>
+          <p className="text-slate-500 text-sm mt-1">Your balances, applied requests and history — all in one place.</p>
         </div>
         <button data-testid="apply-leave-button" onClick={() => setShowForm(true)} className="iu-btn-primary">
           <Plus size={16} /> Apply
         </button>
       </header>
+
+      {/* Stats dashboard — renders only when the summary is available and
+          the user has any tracked balances. Athletes get a softer blurb. */}
+      {summary && !isAthlete && (
+        <StatsDashboard summary={summary} />
+      )}
+      {summary && isAthlete && (
+        <div className="iu-card !p-3 mb-5 text-sm text-sky-900 bg-sky-50/60 border-sky-200" data-testid="myleaves-athlete-note">
+          You don&apos;t use a numeric leave quota — your time-off is tracked via the team Breaks workflow.
+          Tours and individual leave still appear here for your record.
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-10"><Loader2 className="mx-auto animate-spin text-slate-400" /></div>
@@ -55,38 +80,205 @@ export default function MyLeaves() {
         </div>
       ) : (
         <div className="space-y-3" data-testid="myleaves-list">
-          {items.map((l) => {
-            const t = TYPE_LABELS[l.type] || TYPE_LABELS.leave;
-            const s = STATUS_COLORS[l.status] || STATUS_COLORS.pending;
-            return (
-              <div key={l.id} className={`iu-card p-4 flex items-center gap-4 ${l.late_application ? "ring-2 ring-red-200 bg-red-50/50" : ""}`} data-testid={`myleave-${l.id}`}>
-                <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: t.color + "22", color: t.color }}>
-                  <t.Icon size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="font-semibold">{t.label}{l.location ? ` · ${l.location}` : ""}</div>
-                    {l.late_application && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-extrabold uppercase tracking-wide">
-                        <AlertTriangle size={10} /> Late
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-500">{shortDate(l.start_date)} – {shortDate(l.end_date)}</div>
-                  <div className="text-xs text-slate-600 mt-1 line-clamp-2">{l.reason}</div>
-                </div>
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold capitalize" style={{ background: s.bg, color: s.color }}>
-                  {l.status}
-                </span>
-              </div>
-            );
-          })}
+          {items.map((l) => <MyLeaveRow key={l.id} l={l} />)}
         </div>
       )}
 
       {showForm && <ApplyForm onClose={() => setShowForm(false)} onCreated={() => { setShowForm(false); load(); }} />}
     </div>
   );
+}
+
+/**
+ * StatsDashboard — eight-tile grid summarising every relevant leave
+ * number for the logged-in member. Drives directly from the unified
+ * /me/leave-summary endpoint so the values stay consistent with what
+ * the apply form's waterfall preview shows.
+ */
+function StatsDashboard({ summary }) {
+  const co = summary.comp_off || { accrued: 0, used: 0, available: 0 };
+  const pl = summary.paid_leave || { opening: null, used: 0, available: 0, tracked: false };
+  const stats = [
+    {
+      key: "leave-availed",
+      label: "Leave availed",
+      value: pl.tracked ? round1(pl.used) : "—",
+      hint: pl.tracked ? "Paid leave taken this year" : "Not tracked",
+      tone: "amber",
+      Icon: Bed,
+    },
+    {
+      key: "leave-balance",
+      label: "Paid Leave balance",
+      value: pl.tracked ? round1(pl.available) : "—",
+      hint: pl.tracked ? `Opening ${round1(pl.opening) || 0}` : "No opening balance",
+      tone: pl.tracked && pl.available <= 0 ? "red" : "amber",
+      Icon: Bed,
+    },
+    {
+      key: "compoff-eligibility",
+      label: "Comp-Off eligibility",
+      value: co.available,
+      hint: `Accrued ${co.accrued} − used ${co.used}`,
+      tone: "violet",
+      Icon: RefreshCw,
+    },
+    {
+      key: "total-available",
+      label: "Total leave available",
+      value: pl.tracked ? round1(summary.total_available) : co.available,
+      hint: "Comp-Off + Paid Leave",
+      tone: "emerald",
+      Icon: Check,
+      emphasis: true,
+    },
+    {
+      key: "applied-pending",
+      label: "Applied, not yet taken",
+      value: round1((summary.pending_leave_days || 0) + (summary.future_approved_leave_days || 0)),
+      hint: `${round1(summary.pending_leave_days || 0)} pending · ${round1(summary.future_approved_leave_days || 0)} future approved`,
+      tone: "sky",
+      Icon: Clock,
+    },
+    {
+      key: "tour-total",
+      label: "Tour days (YTD)",
+      value: summary.tour_ytd_days || 0,
+      hint: summary.pending_tour_days ? `${summary.pending_tour_days} pending` : "Doesn't consume balance",
+      tone: "orange",
+      Icon: Plane,
+    },
+    {
+      key: "absent",
+      label: "Absent days",
+      value: summary.absent_ytd_days || 0,
+      hint: "Working days with no record",
+      tone: summary.absent_ytd_days > 5 ? "red" : "slate",
+      Icon: AlertTriangle,
+    },
+    {
+      key: "lop",
+      label: "LOP this year",
+      value: round1(summary.lop_ytd_days || 0),
+      hint: "Loss of Pay days",
+      tone: summary.lop_ytd_days > 0 ? "red" : "slate",
+      Icon: AlertTriangle,
+    },
+  ];
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5" data-testid="myleaves-stats">
+      {stats.map((s) => <StatCard key={s.key} {...s} />)}
+    </div>
+  );
+}
+
+const TONE = {
+  amber:   { border: "border-amber-200",   bg: "bg-amber-50/60",   text: "text-amber-700",   value: "text-amber-900",   icon: "text-amber-600"   },
+  violet:  { border: "border-violet-200",  bg: "bg-violet-50/60",  text: "text-violet-700",  value: "text-violet-900",  icon: "text-violet-600"  },
+  emerald: { border: "border-emerald-300", bg: "bg-emerald-50/80", text: "text-emerald-700", value: "text-emerald-900", icon: "text-emerald-700" },
+  sky:     { border: "border-sky-200",     bg: "bg-sky-50/60",     text: "text-sky-700",     value: "text-sky-900",     icon: "text-sky-600"     },
+  orange:  { border: "border-orange-200",  bg: "bg-orange-50/60",  text: "text-orange-700",  value: "text-orange-900",  icon: "text-orange-600"  },
+  red:     { border: "border-red-300",     bg: "bg-red-50/70",     text: "text-red-700",     value: "text-red-900",     icon: "text-red-600"     },
+  slate:   { border: "border-slate-200",   bg: "bg-white",         text: "text-slate-500",   value: "text-slate-900",   icon: "text-slate-400"   },
+};
+
+function StatCard({ label, value, hint, tone = "slate", Icon, emphasis, key: _k }) {
+  const t = TONE[tone] || TONE.slate;
+  return (
+    <div
+      className={`iu-card !p-3 border ${t.border} ${t.bg} ${emphasis ? "ring-2 ring-emerald-200/60" : ""}`}
+      data-testid={`stat-${label.toLowerCase().replace(/[^a-z]+/g, "-")}`}
+    >
+      <div className={`flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold ${t.text}`}>
+        {Icon && <Icon size={12} className={t.icon} />}
+        <span className="truncate">{label}</span>
+      </div>
+      <div className={`font-extrabold text-2xl leading-tight mt-1 ${t.value}`}>{value}</div>
+      <div className={`text-[10px] mt-0.5 ${t.text} opacity-80 line-clamp-1`} title={hint}>{hint}</div>
+    </div>
+  );
+}
+
+/**
+ * MyLeaveRow — historical/active row in My Leave & Tour.
+ *
+ * Always shows: type pill · date range · status pill · reason.
+ * On approved rows: who decided + decided-at + (for type=leave) the
+ * ladder split that landed (Comp-Off used / Paid used / LOP).
+ * On pending rows: nothing extra — the row is awaiting decision.
+ * On rejected rows: who rejected + when.
+ */
+function MyLeaveRow({ l }) {
+  const t = TYPE_LABELS[l.type] || TYPE_LABELS.leave;
+  const s = STATUS_COLORS[l.status] || STATUS_COLORS.pending;
+  const showLadder = l.status === "approved" && l.type === "leave"
+    && (l.comp_off_used != null || l.paid_leave_used != null || l.lop_days != null);
+  return (
+    <div className={`iu-card p-4 ${l.late_application ? "ring-2 ring-red-200 bg-red-50/50" : ""}`} data-testid={`myleave-${l.id}`}>
+      <div className="flex items-start gap-4">
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: t.color + "22", color: t.color }}>
+          <t.Icon size={18} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="font-semibold">{t.label}{l.location ? ` · ${l.location}` : ""}</div>
+            {l.late_application && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-extrabold uppercase tracking-wide">
+                <AlertTriangle size={10} /> Late
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-slate-500" data-testid={`myleave-dates-${l.id}`}>
+            {shortDate(l.start_date)} – {shortDate(l.end_date)}
+            {l.expected_arrival ? ` · arrival ${l.expected_arrival}` : ""}
+          </div>
+          {l.reason && (
+            <div className="text-xs text-slate-700 mt-1.5" data-testid={`myleave-reason-${l.id}`}>
+              <span className="text-slate-400 text-[10px] uppercase tracking-wider font-bold mr-1">Reason</span>
+              {l.reason}
+            </div>
+          )}
+          {/* Decision audit — visible on approved/rejected rows */}
+          {(l.status === "approved" || l.status === "rejected") && l.decided_by && (
+            <div className="text-[11px] text-slate-500 mt-1.5" data-testid={`myleave-decided-${l.id}`}>
+              {l.status === "approved" ? "Approved" : "Rejected"} by <span className="font-semibold text-slate-700">{l.decided_by}</span>
+              {l.decided_at ? ` · ${shortDate(l.decided_at)}` : ""}
+            </div>
+          )}
+          {/* Ladder split — shown only when the backend stamped the row. */}
+          {showLadder && (
+            <div className="mt-2 flex flex-wrap gap-1.5" data-testid={`myleave-ladder-${l.id}`}>
+              {l.comp_off_used ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-800 border border-violet-200">
+                  <RefreshCw size={9}/> {l.comp_off_used} Comp-Off
+                </span>
+              ) : null}
+              {l.paid_leave_used ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                  <Bed size={9}/> {round1(l.paid_leave_used)} Paid Leave
+                </span>
+              ) : null}
+              {l.lop_days ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-red-100 text-red-800 border border-red-200">
+                  <AlertTriangle size={9}/> {l.lop_days} LOP
+                </span>
+              ) : null}
+            </div>
+          )}
+        </div>
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold capitalize" style={{ background: s.bg, color: s.color }} data-testid={`myleave-status-${l.id}`}>
+          {l.status}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function round1(v) {
+  if (v == null) return 0;
+  const n = Number(v);
+  if (Number.isNaN(n)) return 0;
+  return Math.round(n * 10) / 10;
 }
 
 export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
