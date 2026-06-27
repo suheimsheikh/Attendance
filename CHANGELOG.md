@@ -8,6 +8,24 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ## 🚧 Unreleased — pending deploy to `i-showed-up.ychyderabad.com`
 
+### ⚠️ Camp/Regatta conflict chip on Approvals + Apply (June 27, 2026)
+
+Approving (or applying for) leave during your own camp or regatta is now caught at the point of decision.
+
+- New backend endpoint **`GET /api/leaves/event-conflicts`** — returns `{camps, regattas}` overlapping the date window. Camps are gated by **institution match AND member-roster** (when roster is set), so a sailor on the Agape Sat-Sun roster requesting leave during that camp's window is flagged. Regattas are org-wide (no per-user roster in the current schema) and returned as informational. Non-admins can only query for themselves; admins can pass `user_id=...`.
+- New frontend component **`<EventConflictNotice />`** — collapsible card with two-tone palette:
+  - 🟥 **Red** when a camp roster conflict is detected (e.g. *"⚠ Possible camp/regatta conflict · 1 camp they're rostered into · 2 regattas during this window"*) — admin should think twice.
+  - 🟧 **Amber** when only regattas overlap (informational only — confirm with the applicant).
+- Wired into:
+  - **MyLeaves Apply form** — shows below the Overlap notice so the applicant catches their own foot-gun before submitting.
+  - **Admin Approvals detail row** — renders full-width on a new line below the Overlap + Balance grid, expanded by default for high visibility.
+- Multi-pick admin "Apply on behalf" suppresses the notice (rosters differ across members).
+- Iter6 polish:
+  - `data-testid="stat-tour-days-ytd"` (no trailing dash) now resolves on the My Leave dashboard.
+  - Cleared the React "key spread on `<StatCard>`" console warning.
+- Verified by iter7 testing agent: **221/221 pytest** (213 + 8 new) — zero issues found.
+
+
 ### 🆕 Overlap visibility + Comp-Off & Tour columns on Leave Balances (June 26, 2026)
 
 - **Sidebar** — `Leave/Tour` renamed to **`Leave Tour Approvals`**.
