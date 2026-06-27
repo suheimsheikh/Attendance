@@ -192,7 +192,7 @@ export default function SelfCheckIn() {
           </div>
           <div className="text-sm font-semibold text-slate-900 truncate">
             {onTempOut
-              ? `${currentExcursion?.reason || ""}${currentExcursion?.expected_return ? ` · back by ${new Date(currentExcursion.expected_return).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}`
+              ? `${currentExcursion?.reason || ""}${currentExcursion?.expected_return ? ` · back by ${currentExcursion.expected_return}` : ""}`
               : status?.checked_in
                 ? `Since ${new Date(status.session.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
                 : "Tap the button below to check in"}

@@ -8,6 +8,21 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ## 🚧 Unreleased — pending deploy to `i-showed-up.ychyderabad.com`
 
+### 🚶 Step-Out: one-tap UX + Camps go informational (June 27, 2026)
+
+**Step-out** (the home-page card when checked in) was a two-field form (reason + free time picker). Redesigned around the 99% case:
+- **Where are you headed?** — single text input.
+- **How long?** — quick-pick chips: `30 min` · **1 hour (default)** · `2 hours` · `Custom`. Custom flips to a time-picker.
+- **Live ETA preview** — *"You'll be back by 14:35 · 1 hour"* recomputed from `now + duration` on every chip-tap.
+- Submit toast — *"Stepped out — see you by 14:35 👋"*. The currently-stepped-out status banner now also reads *"… · back by 14:35"* directly from the stored HH:MM (no more browser TZ mangling).
+
+**Camps & Regattas in the conflict notice** are now both **purely informational (amber)** — no roster gating, no red warning. Every camp/regatta overlapping the leave window is surfaced as a chip so admins can eyeball it and decide.
+- Backend: `/api/leaves/event-conflicts` no longer filters camps by institution or `member_ids` roster; the `match` field is gone from the response.
+- Frontend: `<EventConflictNotice />` now uses a single amber palette regardless of camp count.
+
+Verified by iter8 testing agent: **221/221 pytest** + UI flows green; one observed TZ display bug on the post-step-out summary card patched in same iteration.
+
+
 ### ⚠️ Camp/Regatta conflict chip on Approvals + Apply (June 27, 2026)
 
 Approving (or applying for) leave during your own camp or regatta is now caught at the point of decision.
