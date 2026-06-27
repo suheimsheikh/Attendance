@@ -12,6 +12,10 @@ export default function LeaveBalances() {
   const [search, setSearch] = useState("");
   const [edits, setEdits] = useState({}); // member_id -> opening value
   const [saving, setSaving] = useState(false);
+  // Row the user is hovering / focused on. The header strip mirrors this
+  // row's balances rather than showing org-wide totals — summing leave
+  // across employees was misleading (leave is per-person, not a pool).
+  const [activeId, setActiveId] = useState(null);
   const formErr = useFormError();
 
   const load = async () => {
@@ -36,21 +40,24 @@ export default function LeaveBalances() {
 
   const dirtyCount = Object.keys(edits).length;
 
-  // Totals strip across the top — fast at-a-glance audit. We sum on the
-  // filtered rows so the search box also narrows the headline numbers
-  // (e.g. show me totals for just "coach").
-  const totals = useMemo(() => {
-    return filtered.reduce((acc, r) => {
-      acc.opening += Number(r.opening || 0);
-      acc.taken += Number(r.taken_this_year || 0);
-      acc.balance += Number(r.balance || 0);
-      acc.co_accrued += Number(r.comp_off_accrued || 0);
-      acc.co_used += Number(r.comp_off_used || 0);
-      acc.co_avail += Number(r.comp_off_available || 0);
-      acc.tour += Number(r.tour_days || 0);
-      return acc;
-    }, { opening: 0, taken: 0, balance: 0, co_accrued: 0, co_used: 0, co_avail: 0, tour: 0 });
-  }, [filtered]);
+  // The active member is the one the cursor is on (or last focused via
+  // keyboard). Falls back to the first visible row so the header is
+  // populated immediately on first paint — gives admins a useful preview
+  // before they even hover.
+  const activeRow = useMemo(() => {
+    if (!filtered.length) return null;
+    return filtered.find((r) => r.id === activeId) || filtered[0];
+  }, [filtered, activeId]);
+
+  // Reflect any unsaved edit in the header so what the admin sees in the
+  // strip matches what they just typed (live opening → live balance).
+  const activeDisplay = useMemo(() => {
+    if (!activeRow) return null;
+    const openingRaw = edits[activeRow.id] !== undefined ? edits[activeRow.id] : activeRow.opening;
+    const opening = Number(openingRaw) || 0;
+    const balance = opening - Number(activeRow.taken_this_year || 0);
+    return { ...activeRow, opening, balance, _dirty: edits[activeRow.id] !== undefined };
+  }, [activeRow, edits]);
 
   const saveAll = async () => {
     const rows = Object.entries(edits).map(([member_id, opening]) => ({
@@ -85,40 +92,54 @@ export default function LeaveBalances() {
         </button>
       </header>
 
-      {/* Totals header strip — three coloured cards: Paid Leave, Comp-Off, Tour.
-          Sums respect the active search filter so admins can audit slices. */}
-      {!loading && data && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4" data-testid="lb-totals">
-          <div className="iu-card !p-3 border-l-4 border-amber-400" data-testid="lb-total-paid">
-            <div className="flex items-center gap-2 mb-1">
-              <Bed size={14} className="text-amber-600"/>
-              <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500">Paid Leave</span>
-            </div>
-            <div className="text-xs text-slate-600">
-              Opening <span className="font-extrabold text-slate-900">{round1(totals.opening)}</span> ·
-              Used <span className="font-extrabold text-slate-900">{round1(totals.taken)}</span> ·
-              Balance <span className={`font-extrabold ${totals.balance < 0 ? "text-red-600" : "text-emerald-700"}`}>{round1(totals.balance)}</span>
-            </div>
+      {/* Header strip — mirrors the MEMBER under the cursor (or the first
+          visible row on first paint). Hovering / focusing a different row
+          updates this preview live; editing the opening cell also reflects
+          immediately so admins can scrub adjustments without committing. */}
+      {!loading && data && activeDisplay && (
+        <div data-testid="lb-active-strip" className="mb-4">
+          <div className="flex items-center gap-2 mb-2 text-xs text-slate-500">
+            <span className="uppercase tracking-wider font-bold text-slate-600" data-testid="lb-active-name">
+              {activeDisplay.full_name}
+            </span>
+            {activeDisplay.rank && <span className="text-slate-400">· {activeDisplay.rank}</span>}
+            {activeDisplay.institution && <span className="text-slate-400 hidden sm:inline">· {activeDisplay.institution}</span>}
+            {activeDisplay._dirty && (
+              <span className="ml-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-extrabold uppercase tracking-wide">Unsaved edit</span>
+            )}
           </div>
-          <div className="iu-card !p-3 border-l-4 border-violet-400" data-testid="lb-total-comp">
-            <div className="flex items-center gap-2 mb-1">
-              <RefreshCw size={14} className="text-violet-600"/>
-              <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500">Comp-Off (YTD)</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="iu-card !p-3 border-l-4 border-amber-400" data-testid="lb-active-paid">
+              <div className="flex items-center gap-2 mb-1">
+                <Bed size={14} className="text-amber-600"/>
+                <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500">Paid Leave</span>
+              </div>
+              <div className="text-xs text-slate-600">
+                Opening <span className="font-extrabold text-slate-900">{round1(activeDisplay.opening)}</span> ·
+                Used <span className="font-extrabold text-slate-900">{round1(activeDisplay.taken_this_year)}</span> ·
+                Balance <span className={`font-extrabold ${activeDisplay.balance < 0 ? "text-red-600" : "text-emerald-700"}`}>{round1(activeDisplay.balance)}</span>
+              </div>
             </div>
-            <div className="text-xs text-slate-600">
-              Accrued <span className="font-extrabold text-slate-900">{totals.co_accrued}</span> ·
-              Used <span className="font-extrabold text-slate-900">{totals.co_used}</span> ·
-              Available <span className="font-extrabold text-violet-700">{totals.co_avail}</span>
+            <div className="iu-card !p-3 border-l-4 border-violet-400" data-testid="lb-active-comp">
+              <div className="flex items-center gap-2 mb-1">
+                <RefreshCw size={14} className="text-violet-600"/>
+                <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500">Comp-Off (YTD)</span>
+              </div>
+              <div className="text-xs text-slate-600">
+                Accrued <span className="font-extrabold text-slate-900">{activeDisplay.comp_off_accrued || 0}</span> ·
+                Used <span className="font-extrabold text-slate-900">{activeDisplay.comp_off_used || 0}</span> ·
+                Available <span className="font-extrabold text-violet-700">{activeDisplay.comp_off_available || 0}</span>
+              </div>
             </div>
-          </div>
-          <div className="iu-card !p-3 border-l-4 border-orange-400" data-testid="lb-total-tour">
-            <div className="flex items-center gap-2 mb-1">
-              <Plane size={14} className="text-orange-600"/>
-              <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500">Tour Days (YTD)</span>
-            </div>
-            <div className="text-xs text-slate-600">
-              Total <span className="font-extrabold text-orange-700">{totals.tour}</span>
-              <span className="text-slate-400 ml-2 text-[11px]">(does not consume balance)</span>
+            <div className="iu-card !p-3 border-l-4 border-orange-400" data-testid="lb-active-tour">
+              <div className="flex items-center gap-2 mb-1">
+                <Plane size={14} className="text-orange-600"/>
+                <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500">Tour Days (YTD)</span>
+              </div>
+              <div className="text-xs text-slate-600">
+                Total <span className="font-extrabold text-orange-700">{activeDisplay.tour_days || 0}</span>
+                <span className="text-slate-400 ml-2 text-[11px]">(does not consume balance)</span>
+              </div>
             </div>
           </div>
         </div>
@@ -187,7 +208,13 @@ export default function LeaveBalances() {
                   const opening = dirty ? edits[r.id] : r.opening;
                   const balance = (Number(opening) || 0) - r.taken_this_year;
                   return (
-                    <tr key={r.id} className={dirty ? "bg-amber-50" : "hover:bg-slate-50"} data-testid={`lb-row-${r.id}`}>
+                    <tr
+                      key={r.id}
+                      className={`${dirty ? "bg-amber-50" : activeId === r.id ? "bg-sky-50" : "hover:bg-slate-50"} cursor-pointer transition-colors`}
+                      data-testid={`lb-row-${r.id}`}
+                      onMouseEnter={() => setActiveId(r.id)}
+                      onFocus={() => setActiveId(r.id)}
+                    >
                       <td className="iu-table-td font-semibold">{r.full_name}<div className="text-xs text-slate-400">{r.rank || ""}</div></td>
                       <td className="iu-table-td hidden md:table-cell">{categoryLabel(r.category)}</td>
                       <td className="iu-table-td hidden lg:table-cell text-xs text-slate-500">{r.institution || "—"}</td>
