@@ -32,7 +32,7 @@ const NAV_COACH = [
 // strip that used to live on the Admin Console.
 const NAV_ADMIN = [
   { to: "/admin/members", label: "Manage Members", icon: Users },
-  { to: "/admin/approvals", label: "Leave/Tour", icon: ClipboardCheck },
+  { to: "/admin/approvals", label: "Leave Tour Approvals", icon: ClipboardCheck },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },

@@ -158,6 +158,81 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
         leaves = await db.leaves.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
         return leaves
 
+    @router.get("/leaves/overlap")
+    async def overlap_during(
+        start_date: str,
+        end_date: str,
+        exclude_user_id: Optional[str] = None,
+        leave_id: Optional[str] = None,
+        user: dict = Depends(get_current_user),
+    ):
+        """Who else is on Leave / Tour during [start_date, end_date]?
+
+        Visible to any logged-in user — the apply-leave form shows it on
+        date pick, and the Approvals table shows it next to a pending row.
+        Returns ONLY a safe summary (name, category, type, dates, status)
+        — no reasons, no internal IDs beyond what the UI needs.
+
+        Filters in MongoDB on the date range using the inverse-overlap
+        formula `start_date <= range.end AND end_date >= range.start`.
+        Includes `pending` and `approved` rows; rejected rows are excluded
+        because they no longer represent real absences.
+
+        Args:
+          exclude_user_id: when set, drops rows for that user from the
+            result. Used during the apply form so the applicant doesn't
+            see their own pending row as a "conflict".
+          leave_id: when set, drops the row with that exact id — useful
+            so the Approvals view doesn't list the very row being decided.
+        """
+        # MongoDB overlap query: A overlaps B iff A.start <= B.end and A.end >= B.start.
+        q: dict = {
+            "start_date": {"$lte": end_date},
+            "end_date": {"$gte": start_date},
+            "status": {"$in": ["pending", "approved"]},
+            # Comp-off rows are deprecated as an application type, but we
+            # still surface legacy ones so admins reviewing historic data
+            # see the full picture. `late_coming` is intentionally excluded
+            # — it's a same-day notice, not a multi-day absence.
+            "type": {"$in": ["leave", "tour", "comp_off"]},
+        }
+        if exclude_user_id:
+            q["user_id"] = {"$ne": exclude_user_id}
+        if leave_id:
+            q["id"] = {"$ne": leave_id}
+        rows = await db.leaves.find(
+            q,
+            {"_id": 0, "id": 1, "user_id": 1, "type": 1, "status": 1,
+             "start_date": 1, "end_date": 1, "location": 1},
+        ).sort("start_date", 1).to_list(500)
+        if not rows:
+            return []
+        user_ids = list({r["user_id"] for r in rows})
+        users = await db.users.find(
+            {"id": {"$in": user_ids}},
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1,
+             "institution": 1, "fleet": 1},
+        ).to_list(len(user_ids))
+        ulookup = {u["id"]: u for u in users}
+        out = []
+        for r in rows:
+            u = ulookup.get(r["user_id"], {})
+            out.append({
+                "id": r["id"],
+                "user_id": r["user_id"],
+                "full_name": u.get("full_name") or "(deleted)",
+                "category": u.get("category"),
+                "rank": u.get("rank"),
+                "institution": u.get("institution"),
+                "fleet": u.get("fleet"),
+                "type": r["type"],
+                "status": r["status"],
+                "start_date": r["start_date"],
+                "end_date": r["end_date"],
+                "location": r.get("location"),
+            })
+        return out
+
     @router.get("/leaves")
     async def all_leaves(status_filter: Optional[str] = None, admin: dict = Depends(require_admin)):
         q = {}

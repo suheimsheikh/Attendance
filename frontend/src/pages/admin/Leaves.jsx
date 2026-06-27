@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Loader2, Check, X, AlertTriangle, Plus, Coffee } from "lucide-react";
+import { Loader2, Check, X, AlertTriangle, Plus, Coffee, ChevronDown, ChevronUp, Users, RefreshCw, Bed } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { shortDate } from "../../utils";
 import { ApplyForm } from "../MyLeaves";
 import { BreakForm } from "./Calendar";
+import OverlapNotice from "../../components/OverlapNotice";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -42,6 +43,11 @@ export default function AdminLeaves({ embedded = false }) {
   const [showOnBehalf, setShowOnBehalf] = useState(false);
   const [showBreak, setShowBreak] = useState(false);
   const [breakDeps, setBreakDeps] = useState({ members: [], institutions: [] });
+  // Per-row expansion: shows overlap (who else is on leave) + the
+  // applicant's live leave-balance pools. Lazy — we don't fetch a
+  // balance until the row is opened.
+  const [expandedId, setExpandedId] = useState(null);
+  const [balanceMap, setBalanceMap] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,6 +101,30 @@ export default function AdminLeaves({ embedded = false }) {
       toast.success(`Request ${status}`);
       load();
     } catch (err) { toast.error(err?.message || "Failed"); }
+  };
+
+  // Lazily fetch the unified balance summary (comp-off + paid leave) for a
+  // single applicant — only when the admin clicks Details on their row.
+  // The summary is cached client-side under member_id so reopening is
+  // instant and re-decisions don't re-hit the API.
+  const fetchBalance = useCallback(async (userId) => {
+    if (!userId || balanceMap[userId]) return;
+    try {
+      const r = await api.get(`/members/${userId}/leave-summary`);
+      setBalanceMap((m) => ({ ...m, [userId]: r }));
+    } catch (err) {
+      console.debug("balance fetch failed", err);
+      setBalanceMap((m) => ({ ...m, [userId]: { error: true } }));
+    }
+  }, [balanceMap]);
+
+  const toggleExpand = (leave) => {
+    if (expandedId === leave.id) {
+      setExpandedId(null);
+    } else {
+      setExpandedId(leave.id);
+      fetchBalance(leave.user_id);
+    }
   };
 
   // When mounted inside the Approvals tab container, drop the page padding +
@@ -159,6 +189,7 @@ export default function AdminLeaves({ embedded = false }) {
           <table className="w-full text-sm min-w-[1080px] border-separate border-spacing-0">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs sticky top-0 z-10 shadow-[0_1px_0_0_rgb(226,232,240)]">
+                <th className="iu-table-th !text-left bg-slate-50 w-8"></th>
                 <th className="iu-table-th !text-left bg-slate-50">Member</th>
                 <th className="iu-table-th !text-left bg-slate-50">Type</th>
                 <th className="iu-table-th !text-left bg-slate-50">From → To</th>
@@ -175,12 +206,28 @@ export default function AdminLeaves({ embedded = false }) {
                 const typeMeta = TYPE_META[l.type] || { label: l.type, cls: "bg-slate-100 text-slate-700" };
                 const statusMeta = STATUS_META[l.status] || { label: l.status, cls: "bg-slate-100 text-slate-700" };
                 const days = daysInclusive(l.start_date, l.end_date);
+                const isExpanded = expandedId === l.id;
+                const showExpander = l.type === "leave" || l.type === "tour" || l.type === "comp_off";
                 return (
+                  <React.Fragment key={l.id}>
                   <tr
-                    key={l.id}
                     data-testid={`leave-row-${l.id}`}
                     className={`border-t border-slate-100 hover:bg-sky-50/40 ${l.late_application ? "bg-red-50/40" : ""}`}
                   >
+                    <td className="iu-table-td">
+                      {showExpander && (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(l)}
+                          data-testid={`expand-${l.id}`}
+                          aria-expanded={isExpanded}
+                          title={isExpanded ? "Hide details" : "Show overlap & balance"}
+                          className="p-1 rounded hover:bg-slate-200 text-slate-500"
+                        >
+                          {isExpanded ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                        </button>
+                      )}
+                    </td>
                     <td className="iu-table-td">
                       <div className="font-semibold text-slate-800">{l.member_name}</div>
                       <div className="text-xs text-slate-500">{l.member_rank ? `${l.member_rank} · ` : ""}{l.member_category}</div>
@@ -239,6 +286,32 @@ export default function AdminLeaves({ embedded = false }) {
                       </div>
                     </td>
                   </tr>
+                  {/* Detail row: overlap + applicant's live balances. Renders
+                      only when the chevron is open and limited to applicable
+                      multi-day types (leave / tour / legacy comp-off). */}
+                  {isExpanded && showExpander && (
+                    <tr data-testid={`detail-row-${l.id}`} className="border-t border-slate-100">
+                      <td colSpan={10} className="bg-slate-50/70 px-4 py-3">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                          <OverlapNotice
+                            startDate={l.start_date}
+                            endDate={l.end_date}
+                            excludeUserId={l.user_id}
+                            excludeLeaveId={l.id}
+                            title="Others on leave / tour during this period"
+                            defaultOpen
+                          />
+                          <BalanceSummaryCard
+                            data={balanceMap[l.user_id]}
+                            memberName={l.member_name}
+                            requestedDays={days}
+                            leaveType={l.type}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -263,4 +336,82 @@ export default function AdminLeaves({ embedded = false }) {
       )}
     </div>
   );
+}
+
+/**
+ * BalanceSummaryCard — small inline card shown in the Approvals detail row
+ * so admins see the applicant's live Comp-Off and Paid-Leave pools at the
+ * point of decision. The numbers come from `/api/members/{id}/leave-summary`
+ * (the same unified summary the apply form uses), so this stays in sync
+ * with the waterfall deduction logic in `holidays.split_leave_days`.
+ */
+function BalanceSummaryCard({ data, memberName, requestedDays, leaveType }) {
+  if (!data) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-500 flex items-center gap-2" data-testid="balance-loading">
+        <Loader2 size={12} className="animate-spin"/> Loading {memberName}&apos;s balance…
+      </div>
+    );
+  }
+  if (data.error) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-500" data-testid="balance-error">
+        Couldn&apos;t load balance for {memberName}.
+      </div>
+    );
+  }
+  const co = data.comp_off || { accrued: 0, used: 0, available: 0 };
+  const pl = data.paid_leave || { opening: null, used: 0, available: 0, tracked: false };
+  // Mirror backend `split_leave_days` so the admin sees the same ladder
+  // the apply form previewed for the applicant.
+  const coUsed = Math.min(requestedDays, Math.max(0, co.available));
+  const plUsed = Math.min(requestedDays - coUsed, Math.max(0, pl.available));
+  const lop = Math.max(0, requestedDays - coUsed - plUsed);
+  const showLadder = leaveType === "leave";
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5" data-testid="balance-card">
+      <div className="flex items-center gap-2 mb-2">
+        <Users size={12} className="text-slate-500"/>
+        <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500">{memberName}&apos;s balance</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-md bg-violet-50/70 border border-violet-100 px-2 py-1.5" data-testid="balance-comp-off">
+          <div className="text-[10px] uppercase tracking-wide font-bold text-violet-700 inline-flex items-center gap-1">
+            <RefreshCw size={9}/> Comp-Off available
+          </div>
+          <div className="font-extrabold text-base leading-tight text-violet-800">{co.available}</div>
+          <div className="text-[10px] text-violet-700/70">accrued {co.accrued} − used {co.used}</div>
+        </div>
+        <div className="rounded-md bg-amber-50/70 border border-amber-100 px-2 py-1.5" data-testid="balance-paid-leave">
+          <div className="text-[10px] uppercase tracking-wide font-bold text-amber-700 inline-flex items-center gap-1">
+            <Bed size={9}/> Paid Leave available
+          </div>
+          <div className="font-extrabold text-base leading-tight text-amber-800">
+            {pl.tracked ? round1(pl.available) : "—"}
+          </div>
+          <div className="text-[10px] text-amber-700/70">
+            {pl.tracked ? `opening ${round1(pl.opening) || 0} − used ${round1(pl.used) || 0}` : "no opening balance"}
+          </div>
+        </div>
+      </div>
+      {showLadder && (
+        <div className="mt-2 text-[11px] text-slate-700" data-testid="balance-ladder">
+          Approving will draw <strong>{coUsed}</strong> from Comp-Off + <strong>{round1(plUsed)}</strong> from Paid Leave
+          {lop > 0 && <> + <strong className="text-red-700 uppercase">{lop} LOP</strong></>}.
+        </div>
+      )}
+      {leaveType === "tour" && (
+        <div className="mt-2 text-[11px] text-slate-500" data-testid="balance-tour-note">
+          Tours don&apos;t consume Comp-Off or Paid Leave.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function round1(v) {
+  if (v == null) return 0;
+  const n = Number(v);
+  if (Number.isNaN(n)) return 0;
+  return Math.round(n * 10) / 10;
 }

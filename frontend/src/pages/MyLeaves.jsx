@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
 import LeaveBalanceNotice from "../components/LeaveBalanceNotice";
+import OverlapNotice from "../components/OverlapNotice";
 import FormErrorBanner from "../components/FormErrorBanner";
 import { useFormError } from "../hooks/useFormError";
 import { shortDate, todayIso } from "../utils";
@@ -415,6 +416,19 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
               balanceSummary={balanceSummary}
             />
           )}
+
+          {/* Conflict guard — only relevant for multi-day absences.
+              Late-coming is a same-day notice with no overlap value. */}
+          {start && end && (type === "leave" || type === "tour") && (
+            <OverlapNotice
+              startDate={start}
+              endDate={end}
+              excludeUserId={asAdmin ? undefined : me?.id}
+              title="Who else is on leave/tour during this period?"
+              defaultOpen={false}
+            />
+          )}
+
           <FormErrorBanner
             error={formErr.error}
             requestId={formErr.requestId}

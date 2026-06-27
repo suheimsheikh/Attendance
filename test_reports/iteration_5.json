@@ -1,0 +1,37 @@
+{
+  "summary": "Iter5 — Reviewed and validated all four asks: (1) /api/leaves/overlap, (2) extended /api/leave-balances, (3) sidebar rename to 'Leave Tour Approvals', (4) per-row chevron expander on Approvals with OverlapNotice + BalanceSummaryCard side-by-side, (5) LeaveBalances revamp with 3 column groups + totals strip. Backend: 10/10 new iter5 tests pass; 210/210 total pytest still green (no regressions). Frontend (public preview URL): admin login via phone bypass 9849002111 works. Sidebar item renders as 'Leave Tour Approvals' with data-testid='nav-leave-tour-approvals'. Apply modal on /my-leaves shows overlap notice once start+end dates are picked (overlap-empty for far-future window, overlap-notice with chips for current window) and HIDES the notice for Late-Coming type (confirmed: all three overlap testids absent). Admin Approvals: 125 leave rows render, 122 have expand chevrons, 3 late_coming-type rows correctly have no expander. Clicking expand reveals detail-row with both OverlapNotice + balance-card; lazy-load verified — exactly 1 hit to /api/members/{uid}/leave-summary on first expand, 0 additional hits on subsequent collapse/re-expand. Admin LeaveBalances: lb-total-paid, lb-total-comp, lb-total-tour cards render with live sums (Opening 592.5 · Used 47 · Balance 545.5; Accrued 1 · Used 5 · Available 1; Total 28); per-row testids lb-paid-used/balance, lb-co-accrued/used/avail, lb-tour all present and numeric; totals strip respects search filter (filtered to zero rows → all totals show 0). Waterfall regression intact: POST /api/leaves type='leave' still stamps comp_off_used/paid_leave_used/lop_days summing to window length; type='tour' does NOT stamp.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "MyLeaves Apply modal date pickers", "issues": ["Pre-existing: native HTML <input type=date> used instead of the shadcn Calendar component — same as prior iterations, NOT introduced by this iteration. Non-blocking and out of scope for current asks."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter5.py",
+    "/app/test_reports/pytest/iter5_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/leaves.py /leaves/overlap: correct use of inverse-overlap formula (start_date <= end AND end_date >= start), excludes 'rejected' and 'late_coming' as specified, accepts optional exclude_user_id + leave_id. Available to any authenticated user (only get_current_user dependency, no admin gate) — matches PRD. Returns a denormalised safe summary excluding reason/internal fields — good.",
+    "server.py /leave-balances extension: comp-off accrual is computed from this year's attendance ∩ user's weekly_off; uses a single bulk fetch of attendance + leaves (not per-user) — efficient for ~133 members. Invariant comp_off_available = max(0, accrued - used) holds.",
+    "Lazy-loading on Approvals balance card verified at the network level: subsequent expand/collapse does NOT re-fetch /leave-summary — implementation correctly memoises per leave_id.",
+    "OverlapNotice.jsx: three render states (loading/empty/notice) are mutually exclusive with distinct testids — testable. Header is the toggle (data-testid='overlap-toggle'), details only mount on expand — good for tab-order and accessibility.",
+    "LeaveBalances.jsx totals strip subscribes to the same filtered rowset that feeds the table — both update together when search changes. The 'no opening balance set' fallback string still shows when opening=0 in the per-row Paid Available card; verify with PM if this should also dash-out instead of showing literal 0.",
+    "Minor observation (non-blocking): on Approvals, the late_application=true badge ('late-chip') is rendered for late-submission leaves of any type, while expander absence is gated only on type='late_coming'. This is the intended distinction (a late-applied leave still has multi-day overlap value) but worth documenting so future maintainers don't conflate the two."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter5.py (NEW — 10 tests, 100% pass)"
+  ],
+  "success_rate": {"backend": "100% (10/10 new iter5 + 210/210 total pytest)", "frontend": "100% — all 4 asks verified: sidebar rename, OverlapNotice in apply form, Approvals expander with balance+overlap cards, LeaveBalances 3-column-group table + totals strip"},
+  "test_credentials": "Phone OTP bypass 9849002111 (admin) — confirmed working. admin@attendance.app / Admin@12345 also valid.",
+  "seed_data_creation": "Two TEST leaves created (1 leave + 1 tour) on a coach member during the waterfall-stamping regression test — both immediately rejected via PATCH to remove from active sets. Production data untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter5 contract verified end-to-end. Key testids to remember: nav-leave-tour-approvals (sidebar), overlap-notice / overlap-empty / overlap-loading / overlap-toggle / overlap-details / overlap-group-{kind} / overlap-chip-{id} (OverlapNotice), expand-{leaveId} / detail-row-{leaveId} / balance-card / balance-loading / balance-comp-off / balance-paid-leave / balance-ladder / balance-tour-note (Approvals row expander), lb-total-paid / lb-total-comp / lb-total-tour, lb-row-{id}, lb-paid-used-{id}, lb-paid-balance-{id}, lb-co-accrued-{id}, lb-co-used-{id}, lb-co-avail-{id}, lb-tour-{id} (LeaveBalances). Backend contract: GET /api/leaves/overlap?start_date=&end_date=&exclude_user_id=&leave_id= returns list of {id, user_id, full_name, category, rank, institution, fleet, type, status, start_date, end_date, location}. Late-coming rows correctly excluded from this endpoint. Run: `cd /app/backend && python -m pytest tests/test_review_iter5.py tests/test_unified_leave_iter4.py tests/test_routes_leaves.py -v`.",
+  "rca of the issue": "N/A — all four iter5 asks behave as specified, no defects found."
+}

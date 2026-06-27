@@ -1292,7 +1292,13 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
     Leave-balance tracking applies to coaches / staff / executives but NOT
     athletes — athletes don't accrue or consume a numeric leave quota
     (their breaks are tracked via the Breaks workflow, fleet-wide), so
-    they're excluded from the listing."""
+    they're excluded from the listing.
+
+    The row shape carries three pools so admins can audit Paid Leave AND
+    Comp-Off side-by-side without opening individual member pages, plus
+    a Tour-days counter for the year (tours are independent of any pool
+    — they don't consume balance — but admins still want visibility).
+    """
     users = await db.users.find(
         {"category": {"$ne": "athlete"}},
         {"_id": 0, "id": 1, "full_name": 1, "category": 1,
@@ -1302,25 +1308,69 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
     year = today[:4]
-    leaves = await db.leaves.find({
-        "status": "approved", "type": "leave",
-        "start_date": {"$gte": f"{year}-01-01", "$lte": f"{year}-12-31"},
-    }, {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1}).to_list(20000)
-    used: dict = {}
-    for leave in leaves:
-        try:
-            sd = date.fromisoformat(leave["start_date"])
-            ed = date.fromisoformat(leave["end_date"])
-            n = (ed - sd).days + 1
-        except Exception:
-            n = 1
-        used[leave["user_id"]] = used.get(leave["user_id"], 0) + n
+    yr_start, yr_end = f"{year}-01-01", f"{year}-12-31"
+    # Pull every approved leave/tour row for the year ONCE and bucket by
+    # user_id+type → avoids N queries per member.
+    approved = await db.leaves.find({
+        "status": "approved",
+        "start_date": {"$lte": yr_end},
+        "end_date":   {"$gte": yr_start},
+        "type": {"$in": ["leave", "tour", "comp_off"]},
+    }, {"_id": 0, "user_id": 1, "type": 1, "start_date": 1, "end_date": 1,
+        "comp_off_used": 1, "paid_leave_used": 1, "lop_days": 1}).to_list(20000)
+    paid_used: dict = {}
+    comp_used: dict = {}
+    tour_days: dict = {}
+    for L in approved:
+        uid = L["user_id"]
+        n = _days_inclusive_safe(L["start_date"], L["end_date"])
+        if L["type"] == "leave":
+            # Prefer the explicit stamps; fall back to the whole window as
+            # paid days for legacy pre-Jun-2026 rows that don't have them.
+            if L.get("paid_leave_used") is not None:
+                paid_used[uid] = paid_used.get(uid, 0.0) + float(L["paid_leave_used"])
+            else:
+                paid_used[uid] = paid_used.get(uid, 0.0) + n
+            if L.get("comp_off_used") is not None:
+                comp_used[uid] = comp_used.get(uid, 0) + int(L["comp_off_used"])
+        elif L["type"] == "comp_off":
+            # Legacy direct comp-off application — whole window counts.
+            comp_used[uid] = comp_used.get(uid, 0) + n
+        elif L["type"] == "tour":
+            tour_days[uid] = tour_days.get(uid, 0) + n
+    # Comp-off accrual is per-member and depends on attendance ∩ weekly-off.
+    # Cache the office default to avoid hitting db.config inside the loop.
+    default_weekly_off = (office or {}).get("default_weekly_off") or "sunday"
+    # Pull this year's attendance dates once, group by user — cheaper than
+    # one query per user for academies with ~100 staff.
+    atts = await db.attendance.find(
+        {"date": {"$gte": yr_start, "$lte": yr_end}},
+        {"_id": 0, "user_id": 1, "date": 1},
+    ).to_list(50000)
+    att_dates: dict = {}
+    for a in atts:
+        att_dates.setdefault(a["user_id"], set()).add(a["date"])
+
+    from holidays import WEEKDAY_KEY  # local import — keeps top-of-file clean
     out = []
     for u in users:
+        uid = u["id"]
         opening = float(u.get("leave_balance_opening") or 0)
-        taken = float(used.get(u["id"], 0))
+        taken = float(paid_used.get(uid, 0))
+        # Comp-off accrual = days the user attended that fell on their
+        # effective weekly off.
+        wo = (u.get("weekly_off") or default_weekly_off).lower()
+        accrued = 0
+        for ds in att_dates.get(uid, ()):
+            try:
+                if WEEKDAY_KEY[date.fromisoformat(ds).weekday()] == wo:
+                    accrued += 1
+            except Exception:
+                continue
+        co_used = int(comp_used.get(uid, 0))
+        co_avail = max(0, accrued - co_used)
         out.append({
-            "id": u["id"],
+            "id": uid,
             "full_name": u["full_name"],
             "category": u.get("category"),
             "rank": u.get("rank"),
@@ -1328,8 +1378,21 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
             "opening": opening,
             "taken_this_year": taken,
             "balance": round(opening - taken, 1),
+            # Comp-off pool (year-to-date)
+            "comp_off_accrued": accrued,
+            "comp_off_used": co_used,
+            "comp_off_available": co_avail,
+            # Tour days (year-to-date; informational only)
+            "tour_days": int(tour_days.get(uid, 0)),
         })
     return {"year": int(year), "rows": out}
+
+
+def _days_inclusive_safe(start_iso: str, end_iso: str) -> int:
+    try:
+        return (date.fromisoformat(end_iso) - date.fromisoformat(start_iso)).days + 1
+    except Exception:
+        return 1
 
 
 @api_router.post("/leave-balances/bulk")
