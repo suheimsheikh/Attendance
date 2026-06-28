@@ -428,6 +428,31 @@ test coverage. Zero behavioural change.
 - **Verification**: testing agent ran 19/19 backend + 7/7 frontend smoke tests — **100% pass**, no regressions.
 - **Still deferred** (separate planning sessions): JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, `Presence.jsx` split into `components/presence/`, splitting the 437-line `/api/presence` endpoint into gather/resolve/render phases.
 
+## Recently Added (Feb 2026 — Calendar.jsx extraction)
+
+- **Calendar.jsx 4-file extraction** (29 Jun 2026, 997 → 379 lines, -62%)
+  - `calendar/helpers.js` (49 lines) — LEVEL_STYLE, LEVELS, DOW_KEYS,
+    SCOPES, ymd, startOfMonth, endOfMonth, addMonths, scopeLabel.
+  - `calendar/DayDetailModal.jsx` (173 lines) — bottom-sheet/modal
+    listing all events for one clicked day.
+  - `calendar/RegattaForm.jsx` (112 lines) — modal for create/edit
+    regatta.
+  - `calendar/BreakForm.jsx` (305 lines) — adaptive break-scope picker
+    with institution / fleet / per-member sub-forms.
+  - Parent `Calendar.jsx` now owns: data fetch, month grid composition
+    (camps + regattas + breaks per day), the bottom CRUD lists, the
+    "Import from YAI" CTA. Re-exports `BreakForm` for `Leaves.jsx`
+    which imports it cross-page.
+  - Verified end-to-end: all 7 page testids present (yai-import,
+    camp-add, break-add, regatta-add, cal-prev, cal-next,
+    calendar-grid), 42 cells rendering, RegattaForm + BreakForm
+    modals open with full scope picker, backend regression
+    39/39 (iter11-14 + smoke) green.
+
+- **Three big-component extractions complete** — Members ✓ Presence ✓
+  Calendar ✓. Total lines reduced: 2228 → 1156 (-48%) across the
+  three pages.
+
 ## Recently Added (Feb 2026 — Presence.jsx extraction)
 
 - **Presence.jsx slimmed via 2-file extraction** (29 Jun 2026,
