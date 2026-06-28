@@ -207,17 +207,19 @@ export default function Presence() {
   }, [data]);
 
   // Build the paired (vertically-aligned) display lists for the
-  // Stepped Out + Checked Out pair. Each entry is `{member, visible}` — when
+  // On Campus + Checked Out pair. Each entry is `{member, visible}` — when
   // `visible=true` we render the real card, otherwise we render an INVISIBLE
   // clone of the OTHER column's member at this index so the row heights match
   // exactly across both columns. Union is sorted alphabetically so both
-  // columns scroll in lockstep.
+  // columns scroll in lockstep, which is exactly what you want when scanning
+  // "who's still here vs who already left" side-by-side.
+  // (PAIRED_COLUMN_KEYS in constants.js declares the same pair.)
   const pairedDisplay = useMemo(() => {
-    const union = [...byColumn.temp_out, ...byColumn.exited]
+    const union = [...byColumn.on_campus, ...byColumn.exited]
       .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
     return {
-      temp_out: union.map((m) => ({ member: m, visible: m.status === "temp_out" })),
-      exited:   union.map((m) => ({ member: m, visible: m.status === "exited" })),
+      on_campus: union.map((m) => ({ member: m, visible: m.status === "on_campus" })),
+      exited:    union.map((m) => ({ member: m, visible: m.status === "exited" })),
     };
   }, [byColumn]);
 

@@ -1,0 +1,48 @@
+{
+  "summary": "Iter15 validates the three changes shipped: (1) Presence pairedDisplay swap from temp_out+exited to on_campus+exited, (2) Muster sticky breakdown bar, (3) Members.jsx 5-file refactor. Backend: 39/39 regression tests pass (iter11-iter14 + smoke) in 46s — no regression from the frontend-only iter15 changes. Frontend (Playwright via JWT-injected admin session on the live preview URL with the seeded 133-member roster):\n\nPRESENCE (✓): On Campus and Exited columns now correctly share a sorted union — OC column shows 5 invisible placeholders + visible on_campus rows; Exited column shows 1 invisible placeholder + visible exited rows. The two columns' total row count matches (|on_campus|+|exited|=6 in both). Stepped Out has 0 invisible rows → confirmed NOT paired. Escort sub-sections still render: column-escorts-on_campus (2 escort rows) and column-escorts-exited (1 escort row) — the iter14 fix is intact. Strip count = 2 (filters out exited). Column counts: OC=3, Exited=6, Stepped Out=0 (seed currently empty for temp_out — couldn't verify temp_out escort sub-section because no temp_out entities exist right now; not a regression, just data state).\n\nMUSTER (✓): muster-breakdown bar renders above the list with classes 'sticky top-0 z-10 ... bg-white/95 backdrop-blur border-y'. Chips: B 52, G 32, ◇ 1 — sum 85 == filtered row count. Picked chip (☑ N) appears on tick. Impossible search ('ZZZZIMPOSSIBLEXYZ123') correctly hides the breakdown bar and shows muster-empty card. Sticky CSS verified in computed style. Locked chip was null because no athletes are already-checked-in in the current state (mode=checkin default) — code path is correct, just no data to trigger it.\n\nMEMBERS REFACTOR (✓): 133 member-row-* nodes rendered. All testIds preserved at full cardinality: edit-member-{id}=133, delete-member-{id}=133, bulk-select-{id}=133, toggle-attendance-{id}=133, inline-{field}-{id}=1857 (~14/row across name/category/role/rank/gender/mobile/institution/fleet/leave_balance + parent mobiles). Bucket filters work (athlete=90, matches chip count). member-search works (search 'admin' → 2 rows). bulk-select-all, member-inst-filter, members-import-parents, new-member-button, member-bucket-filters, bucket-all/coach/staff/executive/athlete all present.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Members admin — inline category/role/gender selects (likely MemberRow.jsx)",
+        "issues": [
+          "React hydration warning in console: 'In HTML, <span> cannot be a child of <option>. This will cause a hydration error.' One of the inline <select> components is rendering a <span> inside an <option> element, which is invalid HTML. Browsers strip the <span> on hydration causing React to fall back to client-side rendering for that subtree. Functionally invisible (selects still work) but noisy in console and a real spec violation. Likely culprit: an icon or styled label wrapped in <span> inside <option> in one of the rowOptions arrays. Easy fix: render only plain text inside <option>."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/pytest/iter15_results.xml",
+    "/app/backend/tests/test_review_iter11.py",
+    "/app/backend/tests/test_review_iter12.py",
+    "/app/backend/tests/test_review_iter13.py",
+    "/app/backend/tests/test_review_iter14.py",
+    "/app/backend/tests/test_smoke_flows.py"
+  ],
+  "action_items": [
+    "MINOR: Clean up the '<span> as child of <option>' hydration warning in one of the MemberRow inline selects (CATEGORY_OPTS / ROLE_OPTS / GENDER_OPTS / FLEET_OPTS / INSTITUTION_OPTS option renderers). Replace any <span> inside <option> with plain text."
+  ],
+  "critical_code_review_comments": [
+    "Presence.jsx lines 217-224 — pairedDisplay swap is clean and aligns with PAIRED_COLUMN_KEYS in constants.js. The keys {on_campus, exited} now match. Good.",
+    "Muster.jsx lines 174-184 — breakdown memo iterates filtered list once per render; cheap. Gender case normalisation handles 'male/M/boy' etc. The chips have correct conditional rendering (>0 only) and respect mode for locked chip.",
+    "Members.jsx 411 lines — well below the 700-line threshold now. The orchestration kept `patchMember`, `toggleRow`, `toggleAll`, `applyBulk`, `toggleAttendance`, `onPhotoUpdated`, `load` here; row template fully extracted. Sound split.",
+    "members/MemberRow.jsx — verified by 133-row × ~14-testid rendering with all testIds preserved. The shiftHeldRef pass-through is correct.",
+    "Hydration warning noted in design_issues — single source-of-truth review needed on the inline select option markup."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_15.json",
+    "/app/test_reports/pytest/iter15_results.xml"
+  ],
+  "success_rate": {
+    "backend": "100% (39/39 regression — iter11/12/13/14 + smoke)",
+    "frontend": "~98% — all three iter15 changes verified end-to-end. Single console-level hydration warning on Members select markup (cosmetic)."
+  },
+  "test_credentials": "admin@attendance.app / Admin@12345 — POST /api/auth/login returns {access_token, token_type, user}. Token injected into localStorage.ishowedup_token to bypass login form.",
+  "seed_data_creation": "None. Used the existing 133-member roster + presence data. Could not verify temp_out escort sub-section because no temp_out entities exist in current seed state (Raju Saheb from iter14 seed appears to have been cleared). Not a regression — code path is structurally correct as verified by code review of Column.jsx.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter15 is GREEN. The three changes (Presence pairedDisplay key reconciliation, Muster sticky breakdown bar, Members.jsx 5-file refactor) all verified on the live preview URL with JWT-injected admin session. 39/39 backend regression tests pass. The only nit is a React hydration warning ('span cannot be a child of option') in one of the Members inline selects — purely cosmetic, functionality intact. If a follow-up iter ships seed data with at least one temp_out member or escort, the Stepped Out escort sub-section can be visually verified (currently empty count). The pytest junit lives at /app/test_reports/pytest/iter15_results.xml.",
+  "rca of the issue": "N/A — no functional bugs in iter15. The hydration warning's root cause is a <span> wrapped element inside an <option> element somewhere in MemberRow.jsx's inline-cell select rendering. Browsers strip non-text descendants of <option>, so React's server/client trees disagree, triggering the warning. Fix: ensure <option> contents are plain string only."
+}

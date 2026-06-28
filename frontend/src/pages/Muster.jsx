@@ -166,6 +166,23 @@ export default function Muster() {
     [filtered, mode],
   );
 
+  // Per-bucket breakdown over the *filtered* list — drives the sticky
+  // breakdown bar above the muster list. Mirrors Presence's column
+  // breakdown row. Athletes are a single category, so the chips here
+  // pivot on gender + status (the ones a coach actually cares about
+  // when running muster).
+  const breakdown = useMemo(() => {
+    let boys = 0, girls = 0, other = 0, lockedIn = 0;
+    for (const a of filtered) {
+      const g = (a.gender || "").toLowerCase();
+      if (g === "male" || g === "boy" || g === "m") boys += 1;
+      else if (g === "female" || g === "girl" || g === "f") girls += 1;
+      else other += 1;
+      if (mode === "checkin" && a.already_checked_in) lockedIn += 1;
+    }
+    return { boys, girls, other, lockedIn, total: filtered.length };
+  }, [filtered, mode]);
+
   const toggleAllVisible = () => {
     const next = new Set(picked);
     const allPicked = tickable.length > 0 && tickable.every((s) => next.has(s.id));
@@ -291,6 +308,67 @@ export default function Muster() {
         </p>
         <p className="text-xs text-slate-400">{data?.date}</p>
       </div>
+
+      {/* Sticky breakdown bar — mirrors the per-category chip row on
+          Presence columns. Stays visible while the list scrolls so the
+          coach always sees the gender split + locked count of the
+          currently filtered set. Hidden when the filter resolves to
+          zero athletes (the muster-empty card takes over). */}
+      {filtered.length > 0 && (
+        <div
+          className="sticky top-0 z-10 -mx-1 px-1 py-2 mb-2 bg-white/95 backdrop-blur border-y border-slate-200 flex items-center gap-1.5 flex-wrap"
+          data-testid="muster-breakdown"
+        >
+          <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500 mr-1">
+            Breakdown
+          </span>
+          {breakdown.boys > 0 && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[11px] font-bold bg-sky-100 text-sky-700"
+              data-testid="muster-breakdown-boys"
+              title={`${breakdown.boys} boys`}
+            >
+              B {breakdown.boys}
+            </span>
+          )}
+          {breakdown.girls > 0 && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[11px] font-bold bg-pink-100 text-pink-700"
+              data-testid="muster-breakdown-girls"
+              title={`${breakdown.girls} girls`}
+            >
+              G {breakdown.girls}
+            </span>
+          )}
+          {breakdown.other > 0 && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[11px] font-bold bg-slate-100 text-slate-700"
+              data-testid="muster-breakdown-other"
+              title={`${breakdown.other} unspecified gender`}
+            >
+              ◇ {breakdown.other}
+            </span>
+          )}
+          {mode === "checkin" && breakdown.lockedIn > 0 && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-700"
+              data-testid="muster-breakdown-locked"
+              title={`${breakdown.lockedIn} already checked in`}
+            >
+              ✓ {breakdown.lockedIn} in
+            </span>
+          )}
+          {picked.size > 0 && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[11px] font-bold bg-emerald-600 text-white ml-auto"
+              data-testid="muster-breakdown-picked"
+              title={`${picked.size} ticked`}
+            >
+              ☑ {picked.size}
+            </span>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-12"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
