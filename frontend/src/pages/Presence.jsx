@@ -226,6 +226,17 @@ export default function Presence() {
     [byColumn]
   );
 
+  // Escorts who are CURRENTLY on a step-out (excursion open). They render
+  // both inside the EscortsStrip (chip on the row) AND as a sub-section
+  // at the bottom of the Stepped Out column — so the coach sees a single
+  // "who is off campus right now" view that includes both members and
+  // escorts. Skipped on historical views (escort attendance isn't carried
+  // into past-day reads — backend returns []).
+  const steppedOutEscorts = useMemo(
+    () => (data?.escorts_present || []).filter((e) => e.temp_out),
+    [data]
+  );
+
   const totalMembers = data?.counts?.total ?? (data?.members?.length || 0);
   const lateCount = data?.counts?.late || 0;
   const absentCount = data?.counts?.absent || 0;
@@ -424,6 +435,7 @@ export default function Presence() {
               col={col}
               members={byColumn[col.key]}
               displayList={PAIRED_COLUMN_KEYS.has(col.key) ? pairedDisplay[col.key] : null}
+              escorts={col.key === "temp_out" ? steppedOutEscorts : null}
               adminContacts={data?.admin_contacts || []}
               coachMobile={currentUser?.mobile}
               onSent={load}

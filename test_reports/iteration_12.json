@@ -1,0 +1,36 @@
+{
+  "summary": "Iter12 verifies the NEW frontend wiring that surfaces stepped-out escorts inside the 'Stepped Out' column of the Presence Board (in addition to the existing EscortsStrip chip). Backend: 6/6 pytest cases in /app/backend/tests/test_review_iter12.py pass in 2.88s — they confirm the contract /api/presence depends on: active escort with no excursion → temp_out=false/reason=null; POST /api/escort-attendance/temp-exit flips temp_out=true with reason; POST /api/escort-attendance/return flips it back; historical ?on=<past> still returns escorts_present=[]; double step-out is 400; return-without-stepout is 400. Frontend (admin on /presence with seeded Raju Saheb stepped-out for 'Lunch run'): the temp_out column renders (a) the teal 'Escorts' sub-section [data-testid=column-escorts-temp_out], (b) the escort row [data-testid=column-escort-row-7a4c8908-…] with name+institution+since-time+cyan reason 'Lunch run', (c) the 'Es 1' breakdown chip [data-testid=column-breakdown-temp_out-escort], (d) the column-count-temp_out badge reads '1' (= 0 members + 1 escort). The other five columns (on_campus, exited, on_tour, on_leave, absent) do NOT render the Escorts sub-section nor the Es chip — confirmed for all five. On a historical view (date set to today-3), the Read-only history pill renders, the EscortsStrip is hidden, AND the column-escorts-temp_out sub-section + Es chip are also hidden — when navigated back to today via 'Today' button, the sub-section reappears. The stepped-out escort still appears in the EscortsStrip with the cyan escort-presence-stepout-{escort_id} chip (intentional double-surface: strip = roster, column = status).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter12.py",
+    "/app/test_reports/pytest/iter12_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Presence.jsx line 235-238: steppedOutEscorts memo `(data?.escorts_present || []).filter((e) => e.temp_out)` is correct — null-safe and reactive. Passed to Column ONLY when col.key === 'temp_out' (line 438) so other columns can never accidentally receive escorts. Good encapsulation.",
+    "Column.jsx line 26-31: `Es` breakdown chip pushed conditionally on `escortList.length > 0`. Combined with line 34 `totalCount = members.length + escortList.length`, this is the right shape — the badge surfaces a single combined total and the per-category chips keep the breakdown legible.",
+    "Column.jsx line 130-166 EscortRowsSection: rendered at the BOTTOM of the column after all member rows (line 113-115). Visually separated by `bg-teal-50/60 border-y border-teal-200` header. Each row has Avatar, name, institution, since-time, and the temp_out_reason in cyan (Coffee icon at 9px). No click handler — purely informational, as documented.",
+    "Column.jsx line 95: `members.length === 0 && escortList.length === 0` guards the empty-state — correct (without the escort check, an escort-only column would show 'No one here.' under the visible escort sub-section).",
+    "Presence.jsx line 418: `{!isHistorical && <EscortsStrip ... />}` correctly hides BOTH the strip and (transitively, via steppedOutEscorts being [] in historical mode since data.escorts_present=[]) the column sub-section. No extra guard needed in Column.jsx — the data plumbing already handles it.",
+    "Verified via playwright: when no escort is stepped out, the column gracefully falls back to member-only render path (because escortList.length === 0 → no 'Es' chip pushed, no EscortRowsSection rendered, totalCount === members.length). Symmetric and safe."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter12.py",
+    "/app/test_reports/iteration_12.json"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6 iter12 contract tests)",
+    "frontend": "100% — column-escorts-temp_out sub-section + Es chip + count badge + historical-view suppression + other-columns-unaffected all verified"
+  },
+  "test_credentials": "admin@attendance.app / Admin@12345 (working). Same JWT localStorage injection workaround (key=ishowedup_token) was used to bypass the login-form toggle.",
+  "seed_data_creation": "Did not create new escorts — reused the pre-seeded stepped-out escort 'Raju Saheb' (escort_id=7a4c8908-3493-4742-8620-c4738f3e93a7, institution=Agape Home, reason='Lunch run'). The iter12 pytest fixture `escort_checked_in` creates+tears-down a TEST_Iter12Esc_* escort per test (six in total) and best-effort closes excursions + checks them out + deletes the escort row. No residue verified by re-running tests cleanly.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter12 closed clean. Backend regression file: /app/backend/tests/test_review_iter12.py (6 tests, 2.88s). Key new frontend selectors confirmed: column-escorts-temp_out (sub-section wrapper, only in temp_out column), column-escort-row-{escort_id} (each escort row inside the sub-section), column-breakdown-temp_out-escort (the 'Es' chip in the per-column breakdown — only pushed when escortList.length > 0), column-count-temp_out (the column total badge, members+escorts). The seeded Raju Saheb escort is still stepped out as of report time. To regression-test the strip side: data-testid=presence-escorts-strip, escort-presence-stepout-{escort_id} (cyan chip — iter11 selector still works).",
+  "rca of the issue": "N/A — no defects found. All acceptance criteria from the iter12 review request hold: (1) regression of escort step-out + return endpoints, (2) new escorts sub-section in temp_out column, (3) count badge + breakdown reflect members+escorts, (4) other columns unaffected, (5) historical view suppresses both surfaces, (6) escort appears in BOTH strip and column (intentional)."
+}
