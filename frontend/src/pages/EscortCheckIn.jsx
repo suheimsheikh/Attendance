@@ -206,6 +206,12 @@ function EscortActionCard({ escort, att, athletes, onChange, onBack, isEscort })
   const checkedIn = !!att?.check_in_at;
   const checkedOut = !!att?.check_out_at;
   const openExcursion = (att?.excursions || []).find((x) => !x.return_at);
+  // Just-captured selfies are held locally so the post-submit transition
+  // can render the thumbnail immediately, without waiting for a
+  // re-fetch (and without the heavy base64 round-trip the `/today`
+  // strip endpoint deliberately avoids).
+  const [justCapturedIn, setJustCapturedIn] = useState("");
+  const [justCapturedOut, setJustCapturedOut] = useState("");
 
   return (
     <div className="iu-card p-5 space-y-3" data-testid="escort-action-card">
@@ -223,15 +229,24 @@ function EscortActionCard({ escort, att, athletes, onChange, onBack, isEscort })
       </header>
 
       {checkedOut ? (
-        <CheckedOutRecap att={att} />
+        <CheckedOutRecap att={att} localInSelfie={justCapturedIn} localOutSelfie={justCapturedOut} />
       ) : !checkedIn ? (
-        <EscortCheckInForm escort={escort} athletes={athletes} onChange={onChange} />
+        <EscortCheckInForm
+          escort={escort}
+          athletes={athletes}
+          onChange={async (capturedSelfie) => {
+            if (capturedSelfie) setJustCapturedIn(capturedSelfie);
+            await onChange();
+          }}
+        />
       ) : (
         <OnCampusActions
           escort={escort}
           att={att}
           athletes={athletes}
           openExcursion={openExcursion}
+          localInSelfie={justCapturedIn}
+          onCheckoutCaptured={setJustCapturedOut}
           onChange={onChange}
         />
       )}
@@ -262,7 +277,9 @@ function EscortCheckInForm({ escort, athletes, onChange }) {
         selfie: selfie || null,
       });
       toast.success(`${escort.name} checked in`);
-      await onChange();
+      // Hand the just-captured photo up so the next card can show it
+      // as a thumbnail immediately, without a separate API round-trip.
+      await onChange(selfie || "");
     } catch (err) { toast.error(err?.message || "Check-in failed"); }
     finally { setBusy(false); }
   };
@@ -298,7 +315,7 @@ function EscortCheckInForm({ escort, athletes, onChange }) {
   );
 }
 
-function OnCampusActions({ escort, att, athletes, openExcursion, onChange }) {
+function OnCampusActions({ escort, att, athletes, openExcursion, localInSelfie, onCheckoutCaptured, onChange }) {
   const [showStepOut, setShowStepOut] = useState(false);
   const [showCheckOut, setShowCheckOut] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -316,19 +333,31 @@ function OnCampusActions({ escort, att, athletes, openExcursion, onChange }) {
   return (
     <div className="space-y-3" data-testid="escort-on-campus">
       <div className="rounded-lg bg-emerald-50/70 border border-emerald-200 px-3 py-2 text-sm" data-testid="escort-status">
-        <div className="flex items-center gap-2 font-bold text-emerald-800">
-          <CheckCircle2 size={16} /> On campus since {new Date(att.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 font-bold text-emerald-800">
+              <CheckCircle2 size={16} /> On campus since {new Date(att.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </div>
+            {openExcursion && (
+              <div className="text-xs text-sky-800 mt-1">
+                Currently stepped out · {openExcursion.reason}{openExcursion.expected_return ? ` · back by ${openExcursion.expected_return}` : ""}
+              </div>
+            )}
+            {(att.check_in_athlete_ids || []).length > 0 && (
+              <div className="text-xs text-emerald-700/80 mt-1">
+                Escorting {att.check_in_athlete_ids.length} athlete{att.check_in_athlete_ids.length === 1 ? "" : "s"}
+              </div>
+            )}
+          </div>
+          <SelfieThumbnail
+            attId={att.id}
+            kind="in"
+            localDataUrl={localInSelfie}
+            hasOnServer={att.has_check_in_selfie}
+            label="Check-in photo"
+            testId="escort-checkin-thumb"
+          />
         </div>
-        {openExcursion && (
-          <div className="text-xs text-sky-800 mt-1">
-            Currently stepped out · {openExcursion.reason}{openExcursion.expected_return ? ` · back by ${openExcursion.expected_return}` : ""}
-          </div>
-        )}
-        {(att.check_in_athlete_ids || []).length > 0 && (
-          <div className="text-xs text-emerald-700/80 mt-1">
-            Escorting {att.check_in_athlete_ids.length} athlete{att.check_in_athlete_ids.length === 1 ? "" : "s"}
-          </div>
-        )}
       </div>
 
       {openExcursion ? (
@@ -356,6 +385,7 @@ function OnCampusActions({ escort, att, athletes, openExcursion, onChange }) {
           athletes={athletes}
           initialAthleteIds={att.check_in_athlete_ids || []}
           onClose={() => setShowCheckOut(false)}
+          onCaptured={onCheckoutCaptured}
           onDone={async () => { setShowCheckOut(false); await onChange(); }}
         />
       )}
@@ -363,21 +393,113 @@ function OnCampusActions({ escort, att, athletes, openExcursion, onChange }) {
   );
 }
 
-function CheckedOutRecap({ att }) {
+function CheckedOutRecap({ att, localInSelfie, localOutSelfie }) {
   return (
-    <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm space-y-1" data-testid="escort-recap">
-      <div className="font-bold text-slate-700 inline-flex items-center gap-2">
-        <CheckCircle2 size={14} className="text-emerald-600"/> Done for today
+    <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm space-y-2" data-testid="escort-recap">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-slate-700 inline-flex items-center gap-2">
+            <CheckCircle2 size={14} className="text-emerald-600"/> Done for today
+          </div>
+          <div className="text-xs text-slate-600 mt-0.5">
+            In {new Date(att.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} → Out {new Date(att.check_out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </div>
+          {(att.excursions || []).length > 0 && (
+            <div className="text-xs text-slate-500 mt-0.5">
+              {(att.excursions || []).length} step-out{att.excursions.length === 1 ? "" : "s"} during the day
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <SelfieThumbnail
+            attId={att.id}
+            kind="in"
+            localDataUrl={localInSelfie}
+            hasOnServer={att.has_check_in_selfie}
+            label="Check-in"
+            testId="escort-recap-thumb-in"
+          />
+          <SelfieThumbnail
+            attId={att.id}
+            kind="out"
+            localDataUrl={localOutSelfie}
+            hasOnServer={att.has_check_out_selfie}
+            label="Check-out"
+            testId="escort-recap-thumb-out"
+          />
+        </div>
       </div>
-      <div className="text-xs text-slate-600">
-        In {new Date(att.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} → Out {new Date(att.check_out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-      </div>
-      {(att.excursions || []).length > 0 && (
-        <div className="text-xs text-slate-500">
-          {(att.excursions || []).length} step-out{att.excursions.length === 1 ? "" : "s"} during the day
+    </div>
+  );
+}
+
+/**
+ * SelfieThumbnail — small 56×56 preview with a tap-to-zoom modal.
+ *
+ * Resolution order:
+ *   1. `localDataUrl` (just captured this session) — shown instantly.
+ *   2. `/escort-attendance/{att_id}/selfie?kind=in|out` — lazy-fetched
+ *      once when `hasOnServer` is true. The `/today` endpoint
+ *      deliberately strips the heavy base64 to keep the kiosk list
+ *      payload small, so we fetch on-demand only when the kiosk
+ *      actually needs to display.
+ * Renders nothing when no photo exists for that side.
+ */
+function SelfieThumbnail({ attId, kind, localDataUrl, hasOnServer, label, testId }) {
+  const [fetched, setFetched] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [zoom, setZoom] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (localDataUrl || !hasOnServer || !attId) return;
+    setLoading(true);
+    api.get(`/escort-attendance/${attId}/selfie`, { kind })
+      .then((res) => { if (!cancelled) setFetched(res?.data_url || ""); })
+      .catch(() => { /* swallowed — thumbnail just stays hidden on error */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [attId, kind, hasOnServer, localDataUrl]);
+
+  const src = localDataUrl || fetched;
+  if (!src && !loading) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => src && setZoom(true)}
+        title={`${label} — tap to enlarge`}
+        className="relative w-14 h-14 rounded-md overflow-hidden border border-slate-200 bg-slate-100 shrink-0 hover:ring-2 hover:ring-emerald-300 transition"
+        data-testid={testId}
+        disabled={!src}
+      >
+        {loading && !src ? (
+          <Loader2 size={14} className="absolute inset-0 m-auto animate-spin text-slate-400"/>
+        ) : (
+          <img src={src} alt={label} className="w-full h-full object-cover" />
+        )}
+        <span className="absolute bottom-0 inset-x-0 bg-black/55 text-white text-[9px] uppercase tracking-wider py-0.5 text-center font-semibold">
+          {label}
+        </span>
+      </button>
+      {zoom && src && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setZoom(false)}
+          data-testid={`${testId}-zoom`}
+        >
+          <img src={src} alt={label} className="max-w-full max-h-full rounded-lg shadow-xl" />
+          <button
+            className="absolute top-4 right-4 text-white/80 hover:text-white"
+            onClick={() => setZoom(false)}
+            data-testid={`${testId}-zoom-close`}
+          >
+            <X size={22}/>
+          </button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -463,7 +585,7 @@ function EscortStepOutForm({ escort, onClose, onDone }) {
   );
 }
 
-function EscortCheckOutForm({ escort, athletes, initialAthleteIds, onClose, onDone }) {
+function EscortCheckOutForm({ escort, athletes, initialAthleteIds, onClose, onCaptured, onDone }) {
   const sameInst = athletes.filter((a) => (a.institution || "") === (escort.institution || ""));
   const list = sameInst.length > 0 ? sameInst : athletes;
   // Default the checklist to the same athletes the escort had at check-in
@@ -483,6 +605,9 @@ function EscortCheckOutForm({ escort, athletes, initialAthleteIds, onClose, onDo
         selfie: selfie || null,
       });
       toast.success(`${escort.name} checked out`);
+      // Stash the captured photo locally so the recap screen can show
+      // it as a thumbnail straight away.
+      if (selfie) onCaptured?.(selfie);
       onDone();
     } catch (err) { toast.error(err?.message || "Failed"); }
     finally { setBusy(false); }

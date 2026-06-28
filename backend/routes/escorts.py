@@ -31,7 +31,7 @@ from __future__ import annotations
 import base64
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -385,7 +385,9 @@ def make_router(db, require_admin, get_current_user, require_coach_or_admin) -> 
         """Used by the kiosk page (to show the live status of every active
         escort) AND the Admin Console dashboard banner ("X escorts expected,
         Y not yet in"). Strips selfies — list views never need the heavy
-        base64 fields.
+        base64 fields — but surfaces `has_check_in_selfie` /
+        `has_check_out_selfie` flags so the kiosk can decide whether to
+        lazy-fetch the thumbnail for the picked escort.
         """
         office = await db.config.find_one({"id": "office"})
         today = local_date_str(office)
@@ -395,15 +397,38 @@ def make_router(db, require_admin, get_current_user, require_coach_or_admin) -> 
             {"status": "active"}, {"_id": 0}
         ).sort([("institution", 1), ("name", 1)]).to_list(500)
         rows = await db.escort_attendance.find(
-            {"date": today}, {"_id": 0,
-                              "check_in_selfie": 0,
-                              "check_out_selfie": 0}
+            {"date": today}, {"_id": 0}
         ).to_list(500)
         return {
             "date": today,
             "escorts": escorts,
-            "attendance": rows,
+            "attendance": [_strip_selfies(r) for r in rows],
         }
+
+    @router.get("/escort-attendance/{att_id}/selfie")
+    async def get_escort_attendance_selfie(
+        att_id: str,
+        kind: Literal["in", "out"] = "in",
+        user: dict = Depends(get_current_user),
+    ):
+        """Lazy-load one selfie (data URL) for an attendance row. The
+        kiosk uses this to render a thumbnail on the post-check-in screen
+        without bloating the `/today` list response. Access: admin, coach,
+        or the escort whose row this is."""
+        row = await db.escort_attendance.find_one({"id": att_id}, {"_id": 0})
+        if not row:
+            raise HTTPException(status_code=404, detail="Attendance row not found")
+        # Authorisation: admin / coach / the escort themselves.
+        is_admin = user.get("role") == "admin"
+        is_coach = user.get("category") == "coach"
+        is_owner = user.get("is_escort") and user.get("escort_id") == row.get("escort_id")
+        if not (is_admin or is_coach or is_owner):
+            raise HTTPException(status_code=403, detail="Not allowed to view this selfie")
+        field = "check_in_selfie" if kind == "in" else "check_out_selfie"
+        url = row.get(field)
+        if not url:
+            raise HTTPException(status_code=404, detail="No selfie on file for this row")
+        return {"data_url": url}
 
     @router.get("/escort-attendance")
     async def list_escort_attendance(
