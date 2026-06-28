@@ -125,13 +125,18 @@ class TestPresenceEscortsPresent:
         assert row["temp_out"] is True
         assert row["temp_out_reason"] == "coffee run"
 
-    def test_checkout_removes_from_strip(
+    def test_checkout_marks_exited_in_escorts_present(
             self, admin_client, api, fresh_escort):
+        """After iter14, checked-out escorts STAY in `escorts_present` but
+        with `status='exited'` so they can render in the Exited column on
+        the Presence Board. (Previously they were filtered out.)"""
         admin_client.post(f"{api}/escort-attendance/checkin",
                           json={"escort_id": fresh_escort["id"], "athlete_ids": []})
         # Verify present first
         pr1 = admin_client.get(f"{api}/presence").json()
-        assert _find_in_present(pr1, fresh_escort["id"]) is not None
+        row1 = _find_in_present(pr1, fresh_escort["id"])
+        assert row1 is not None
+        assert row1.get("status") == "on_campus"
 
         co = admin_client.post(f"{api}/escort-attendance/checkout",
                                json={"escort_id": fresh_escort["id"],
@@ -139,8 +144,11 @@ class TestPresenceEscortsPresent:
         assert co.status_code == 200, co.text
 
         pr2 = admin_client.get(f"{api}/presence").json()
-        assert _find_in_present(pr2, fresh_escort["id"]) is None, \
-            "escort still in escorts_present after checkout"
+        row2 = _find_in_present(pr2, fresh_escort["id"])
+        assert row2 is not None, "checked-out escort should still appear in escorts_present"
+        assert row2.get("status") == "exited"
+        assert row2.get("check_out_at") is not None
+        assert row2.get("temp_out") is False
 
     def test_historical_presence_returns_empty_escorts_present(
             self, admin_client, api, fresh_escort):

@@ -226,16 +226,20 @@ export default function Presence() {
     [byColumn]
   );
 
-  // Escorts who are CURRENTLY on a step-out (excursion open). They render
-  // both inside the EscortsStrip (chip on the row) AND as a sub-section
-  // at the bottom of the Stepped Out column — so the coach sees a single
-  // "who is off campus right now" view that includes both members and
-  // escorts. Skipped on historical views (escort attendance isn't carried
-  // into past-day reads — backend returns []).
-  const steppedOutEscorts = useMemo(
-    () => (data?.escorts_present || []).filter((e) => e.temp_out),
-    [data]
-  );
+  // Bucket escorts by status so each column gets only its own rows.
+  // Single pass keeps the strip + columns in sync (one data source).
+  // Skipped on historical views (backend returns []).
+  const escortsByStatus = useMemo(() => {
+    const buckets = { on_campus: [], temp_out: [], exited: [] };
+    for (const e of data?.escorts_present || []) {
+      const k = buckets[e.status] ? e.status : (e.temp_out ? "temp_out" : "on_campus");
+      buckets[k].push(e);
+    }
+    return buckets;
+  }, [data]);
+  // Keep `steppedOutEscorts` name for the existing testIds / messaging,
+  // but it's now derived from the bucket map.
+  const steppedOutEscorts = escortsByStatus.temp_out;
 
   const totalMembers = data?.counts?.total ?? (data?.members?.length || 0);
   const lateCount = data?.counts?.late || 0;
@@ -414,8 +418,14 @@ export default function Presence() {
       {/* Escorts checked in via /escort-checkin — non-user entities so they
           don't appear in any of the six columns. Only renders when at least
           one escort is on campus. Skipped on historical views (escort
-          attendance isn't reconciled into past-day reads). */}
-      {!isHistorical && <EscortsStrip escorts={data?.escorts_present} />}
+          attendance isn't reconciled into past-day reads). The strip shows
+          escorts who are still on campus (on_campus + temp_out) — checked-
+          out escorts surface in the Exited column directly. */}
+      {!isHistorical && (
+        <EscortsStrip
+          escorts={[...escortsByStatus.on_campus, ...escortsByStatus.temp_out]}
+        />
+      )}
 
       {loading && !data ? (
         <SkeletonBoard />
@@ -435,7 +445,7 @@ export default function Presence() {
               col={col}
               members={byColumn[col.key]}
               displayList={PAIRED_COLUMN_KEYS.has(col.key) ? pairedDisplay[col.key] : null}
-              escorts={col.key === "temp_out" ? steppedOutEscorts : null}
+              escorts={escortsByStatus[col.key] || null}
               adminContacts={data?.admin_contacts || []}
               coachMobile={currentUser?.mobile}
               onSent={load}

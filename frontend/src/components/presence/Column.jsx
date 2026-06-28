@@ -138,9 +138,15 @@ function EscortRowsSection({ escorts, accent, columnKey }) {
         </span>
       </div>
       {escorts.map((e) => {
-        const since = e.check_in_at
+        const inAt = e.check_in_at
           ? new Date(e.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
           : "—";
+        const outAt = e.check_out_at
+          ? new Date(e.check_out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : null;
+        // Exited rows show "In HH:MM → Out HH:MM"; on-campus/temp-out
+        // rows show "since HH:MM" (matches the strip wording).
+        const timeLine = outAt ? `In ${inAt} → Out ${outAt}` : `since ${inAt}`;
         return (
           <div
             key={e.attendance_id || e.escort_id}
@@ -151,7 +157,7 @@ function EscortRowsSection({ escorts, accent, columnKey }) {
             <div className="flex-1 min-w-0">
               <div className="text-[12px] font-semibold text-slate-900 truncate leading-tight">{e.name}</div>
               <div className="text-[10px] text-slate-500 truncate leading-tight">
-                {e.institution || "no institution"} · since {since}
+                {e.institution || "no institution"} · {timeLine}
               </div>
               <div className="flex flex-wrap gap-1 mt-0.5">
                 <ExpectedReturnPill

@@ -3022,9 +3022,14 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
     # attendance isn't carried into past-day reconciliation.
     escorts_present: list = []
     if not is_historical:
+        # All escort attendance for today — including checked-out rows so
+        # they surface in the "Exited" column. Status is derived below:
+        #   exited     → check_out_at set
+        #   temp_out   → open excursion (return_at unset on any excursion)
+        #   on_campus  → checked in, not stepped out, not checked out
         rows = await db.escort_attendance.find(
-            {"date": today, "check_out_at": None},
-            # Exclusion-only projection: keep all fields except the heavy
+            {"date": today},
+            # Exclusion-only projection — keep all fields except heavy
             # base64 selfies. (Mongo refuses mixed inclusion+exclusion in
             # one projection.)
             {"_id": 0, "check_in_selfie": 0, "check_out_selfie": 0},
@@ -3041,6 +3046,15 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
         for r in rows:
             ed = escort_docs.get(r["escort_id"], {})
             open_excursion = next((x for x in (r.get("excursions") or []) if not x.get("return_at")), None)
+            # Status derivation — drives which Presence column the row
+            # appears in. `exited` takes precedence over `temp_out`
+            # (a row can't be both checked-out and stepped-out).
+            if r.get("check_out_at"):
+                status = "exited"
+            elif open_excursion:
+                status = "temp_out"
+            else:
+                status = "on_campus"
             # If the escort has an open step-out, surface the same overdue
             # signal we compute for members so the frontend can render
             # a colour-coded "Due HH:MM" pill in both surfaces.
@@ -3078,8 +3092,10 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                 "institution": ed.get("institution") or r.get("institution"),
                 "photo": ed.get("photo_thumb") or ed.get("photo"),
                 "check_in_at": r["check_in_at"],
+                "check_out_at": r.get("check_out_at"),
+                "status": status,
                 "athletes_count": len(r.get("check_in_athlete_ids") or []),
-                "temp_out": bool(open_excursion),
+                "temp_out": status == "temp_out",
                 "temp_out_reason": open_excursion.get("reason") if open_excursion else None,
                 "expected_return": expected_return_iso,
                 "expected_return_time": expected_return_local,
