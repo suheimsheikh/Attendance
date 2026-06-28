@@ -46,9 +46,9 @@ if not os.environ.get("MONGO_URL"):
                 k, v = line.split("=", 1)
                 os.environ.setdefault(k.strip(), v.strip().strip('"'))
 
-ADMIN_EMAIL = "admin@attendance.app"
-ADMIN_PASSWORD = "Admin@12345"
-ADMIN_MOBILE = "9849002111"
+ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@attendance.app")
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@12345")
+ADMIN_MOBILE = os.environ.get("TEST_ADMIN_MOBILE", "9849002111")
 HEX12_RE = re.compile(r"^[0-9a-fA-F]{12}$")
 
 

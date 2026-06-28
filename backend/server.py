@@ -7,21 +7,16 @@ from pymongo.errors import DuplicateKeyError
 from fastapi.security import OAuth2PasswordBearer
 import os
 import io
-import math
 import uuid
 import logging
-import bcrypt
 import jwt
 import re
 import openpyxl
 from openpyxl.utils import get_column_letter
-import base64
-from PIL import Image
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional, Literal, Tuple, Dict
+from typing import List, Optional, Literal, Dict
 from datetime import datetime, timezone, timedelta, date
-from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 
 # Local modules — imported up-top so `_active_camp_for` (used during request
@@ -80,12 +75,12 @@ MAX_LOG_ROWS = 200
 # work unchanged, and so external imports (`from server import compute_late`)
 # remain valid until callers are migrated to the new locations.
 # ----------------------------------------------------------------------------
-from services.time_utils import (  # noqa: E402
+from services.time_utils import (  # noqa: E402, F401
     DEFAULT_TZ, now_utc, iso, office_tz, local_now, local_date_str, local_hm,
 )
 from services.geo import haversine_m  # noqa: E402
 from services.phone import normalize_phone, phone_key  # noqa: E402
-from services.photo import (  # noqa: E402
+from services.photo import (  # noqa: E402, F401
     MAX_PHOTO_BYTES, THUMB_MAX_PX, THUMB_QUALITY,
     check_photo_size as _check_photo_size,
     make_thumbnail as _make_thumbnail,
@@ -93,7 +88,7 @@ from services.photo import (  # noqa: E402
 from services.auth_utils import (  # noqa: E402
     hash_password, verify_password, create_token,
 )
-from services.attendance_calc import (  # noqa: E402
+from services.attendance_calc import (  # noqa: E402, F401
     OVERTIME_THRESHOLD_MIN, OVERTIME_CATEGORIES,
     compute_late,
     hm_to_minutes as _hm_to_minutes,
@@ -4099,7 +4094,7 @@ app.include_router(_breaks_module.make_router(db, require_admin))
 # Holidays — public-holiday master list. Drives comp-off accrual: any
 # attendance on a holiday OR the member's weekly_off accrues +1 comp-off
 # credit. Holidays and Breaks are managed separately (no auto-create).
-from holidays import make_router as _holidays_router, compute_comp_off_balance  # noqa: E402
+from holidays import make_router as _holidays_router  # noqa: E402
 app.include_router(_holidays_router(db, require_admin, get_current_user))
 
 

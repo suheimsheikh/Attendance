@@ -25,6 +25,48 @@ def _days_inclusive(start_iso: str, end_iso: str) -> int:
         return 1
 
 
+def _bucket_leave_rows(rows: list, today: str) -> dict:
+    """Walk a year's worth of leave/tour rows for one member and bucket the
+    aggregates we need for the balance summary. Single-pass so the caller
+    can stay flat. Returns paid_used, pending_leave_days, future_approved_leave_days,
+    tour_ytd_days, pending_tour_days, lop_ytd_days."""
+    paid_used = 0.0
+    pending_leave_days = 0.0
+    future_approved_leave_days = 0.0
+    tour_ytd_days = 0
+    pending_tour_days = 0
+    lop_ytd_days = 0.0
+    for L in rows:
+        n = _days_inclusive(L["start_date"], L["end_date"])
+        if L["type"] == "leave":
+            if L["status"] == "approved":
+                # Paid-leave used — prefer the ladder-stamped value, fall
+                # back to the whole window for legacy rows.
+                paid_used += float(L["paid_leave_used"]) if L.get("paid_leave_used") is not None else n
+                if L.get("lop_days") is not None:
+                    lop_ytd_days += float(L["lop_days"])
+                # Future-approved (starts after today) still counts as a
+                # commitment the member should see — applied & not yet taken.
+                if L["start_date"] > today:
+                    future_approved_leave_days += n
+            elif L["status"] == "pending":
+                pending_leave_days += n
+        elif L["type"] == "tour":
+            if L["status"] == "approved":
+                tour_ytd_days += n
+            elif L["status"] == "pending":
+                pending_tour_days += n
+        # Legacy `comp_off` rows are accounted in compute_comp_off_balance.
+    return {
+        "paid_used": paid_used,
+        "pending_leave_days": pending_leave_days,
+        "future_approved_leave_days": future_approved_leave_days,
+        "tour_ytd_days": tour_ytd_days,
+        "pending_tour_days": pending_tour_days,
+        "lop_ytd_days": lop_ytd_days,
+    }
+
+
 async def compute_balance_summary(db, user: dict, year: Optional[str] = None) -> dict:
     """One-shot summary of every balance an apply-leave form needs.
 
@@ -38,20 +80,6 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
     BEFORE applying for more leave (pending + future-approved that
     haven't started yet, total tour days, total LOP, approximate
     absent days).
-
-    Output shape:
-        {
-            "comp_off":   {accrued, used, available},
-            "paid_leave": {opening, used, available, tracked},
-            "total_available": int,
-            "pending_leave_days":           float,  # leave still awaiting decision
-            "future_approved_leave_days":   float,  # approved but start_date > today
-            "tour_ytd_days":                int,    # approved tours YTD
-            "pending_tour_days":            int,
-            "lop_ytd_days":                 float,  # sum of lop_days from approved leaves YTD
-            "absent_ytd_days":              int,    # working days with no attendance/leave/tour/break
-            ...
-        }
     """
     co = await compute_comp_off_balance(db, user, year=year)
     if not year:
@@ -60,9 +88,6 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
     opening = user.get("leave_balance_opening")
     tracked = (user.get("category") != "athlete") and (opening is not None)
 
-    # Pull every leave/tour row for the user this year ONCE → bucket below.
-    # We need approved + pending so the "applied not yet taken" metric is
-    # correct, and we need lop_days for the YTD LOP counter.
     rows = await db.leaves.find({
         "user_id": user["id"],
         "start_date": {"$gte": yr_start, "$lte": yr_end},
@@ -71,52 +96,9 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
         "paid_leave_used": 1, "lop_days": 1, "comp_off_used": 1}).to_list(2000)
 
     today = date.today().isoformat()
-    paid_used = 0.0
-    pending_leave_days = 0.0
-    future_approved_leave_days = 0.0
-    tour_ytd_days = 0
-    pending_tour_days = 0
-    lop_ytd_days = 0.0
-    for L in rows:
-        n = _days_inclusive(L["start_date"], L["end_date"])
-        if L["type"] == "leave":
-            if L["status"] == "approved":
-                # Paid-leave used — prefer the ladder-stamped value, fall
-                # back to the whole window for legacy rows.
-                if L.get("paid_leave_used") is not None:
-                    paid_used += float(L["paid_leave_used"])
-                else:
-                    paid_used += n
-                # LOP YTD — only from approved rows
-                if L.get("lop_days") is not None:
-                    lop_ytd_days += float(L["lop_days"])
-                # Future-approved (starts after today) still counts as a
-                # commitment the member should see — they've "applied for
-                # and not yet taken" this leave.
-                if L["start_date"] > today:
-                    future_approved_leave_days += n
-            elif L["status"] == "pending":
-                pending_leave_days += n
-        elif L["type"] == "tour":
-            if L["status"] == "approved":
-                tour_ytd_days += n
-            elif L["status"] == "pending":
-                pending_tour_days += n
-        elif L["type"] == "comp_off" and L["status"] == "approved":
-            # Legacy direct comp-off rows still consume the comp-off pool
-            # (already accounted in compute_comp_off_balance) but don't
-            # touch paid_used.
-            continue
+    buckets = _bucket_leave_rows(rows, today)
+    paid_avail = max(0.0, float(opening) - buckets["paid_used"]) if tracked else 0
 
-    if tracked:
-        paid_avail = max(0.0, float(opening) - paid_used)
-    else:
-        paid_avail = 0
-
-    # Approximate absent-days YTD: working days from year start → today
-    # where the member has no attendance, no approved leave/tour, and the
-    # day isn't their weekly-off. We compute this conservatively for the
-    # non-athlete category only — athletes don't have an absent count.
     absent_ytd_days = 0
     if user.get("category") != "athlete":
         absent_ytd_days = await _absent_days_ytd(db, user, co["weekly_off"])
@@ -125,16 +107,16 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
         "comp_off": {"accrued": co["accrued"], "used": co["used"], "available": co["available"]},
         "paid_leave": {
             "opening": opening,
-            "used": paid_used,
+            "used": buckets["paid_used"],
             "available": paid_avail,
             "tracked": tracked,
         },
         "total_available": int(co["available"]) + int(paid_avail),
-        "pending_leave_days": pending_leave_days,
-        "future_approved_leave_days": future_approved_leave_days,
-        "tour_ytd_days": tour_ytd_days,
-        "pending_tour_days": pending_tour_days,
-        "lop_ytd_days": lop_ytd_days,
+        "pending_leave_days": buckets["pending_leave_days"],
+        "future_approved_leave_days": buckets["future_approved_leave_days"],
+        "tour_ytd_days": buckets["tour_ytd_days"],
+        "pending_tour_days": buckets["pending_tour_days"],
+        "lop_ytd_days": buckets["lop_ytd_days"],
         "absent_ytd_days": absent_ytd_days,
         "weekly_off": co["weekly_off"],
         "weekly_off_source": co["weekly_off_source"],

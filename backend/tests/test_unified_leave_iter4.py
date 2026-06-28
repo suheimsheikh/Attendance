@@ -34,8 +34,10 @@ BASE_URL = _load_base_url()
 
 @pytest.fixture(scope="module")
 def admin_token():
+    email = os.environ.get("TEST_ADMIN_EMAIL", "admin@attendance.app")
+    password = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@12345")
     r = requests.post(f"{BASE_URL}/api/auth/login",
-                      json={"email": "admin@attendance.app", "password": "Admin@12345"},
+                      json={"email": email, "password": password},
                       timeout=20)
     assert r.status_code == 200, r.text
     return r.json()["access_token"]

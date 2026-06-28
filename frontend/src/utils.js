@@ -86,7 +86,8 @@ export async function getLocation({ targetAccuracy = 50, maxWaitMs = 25000, onPr
       if (resolved) return;
       resolved = true;
       if (watcher !== null) {
-        try { navigator.geolocation.clearWatch(watcher); } catch { /* watcher already cleared or invalid — best-effort */ }
+        try { navigator.geolocation.clearWatch(watcher); }
+        catch (err) { console.debug("clearWatch failed (already cleared?):", err?.message); }
       }
       clearTimeout(timer);
       if (result) resolve(result);
@@ -108,7 +109,8 @@ export async function getLocation({ targetAccuracy = 50, maxWaitMs = 25000, onPr
           };
           if (!best || (fix.accuracy ?? Infinity) < (best.accuracy ?? Infinity)) {
             best = fix;
-            try { onProgress?.(fix); } catch { /* swallow — caller-side progress reporter must never break the watcher */ }
+            try { onProgress?.(fix); }
+            catch (err) { console.debug("onProgress callback threw:", err?.message); }
           }
           if ((fix.accuracy ?? Infinity) <= targetAccuracy) finish(fix);
         },

@@ -27,15 +27,10 @@ def _cleanup_leave(client, base_url, leave_id):
 
 
 # ------------------ create_leave ------------------
-def test_member_can_file_their_own_leave(base_url):
-    """The member's own JWT can file a leave without supplying target_user_id."""
-    # Use the admin token because the admin is a "member" too (just with role=admin).
-    r = requests.post(f"{base_url}/api/auth/login",
-                      json={"email": "admin@attendance.app", "password": "Admin@12345"},
-                      timeout=30)
-    token = r.json()["access_token"]
-    sess = requests.Session()
-    sess.headers.update({"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+def test_member_can_file_their_own_leave(admin_client, base_url):
+    """The member's own JWT can file a leave without supplying target_user_id.
+    Re-uses the admin_client fixture (admin is a 'member' too, just role=admin)."""
+    sess = admin_client
     today = date.today().isoformat()
     body = {"type": "leave", "start_date": today, "end_date": today, "reason": "Routes/leaves self-file test"}
     r = sess.post(f"{base_url}/api/leaves", json=body, timeout=30)

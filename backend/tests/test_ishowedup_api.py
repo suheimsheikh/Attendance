@@ -25,18 +25,20 @@ TEST_MEMBER_PASSWORD = os.environ.get("TEST_MEMBER_PASSWORD", "test1234")
 TEST_MEMBER_MOBILE = os.environ.get("TEST_MEMBER_MOBILE", "9000000001")
 TEST_PHONE_NEW = os.environ.get("TEST_PHONE_NEW", "9876500099")
 TEST_DEVICE_ID = f"web-test-{uuid.uuid4().hex[:8]}"
+ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@attendance.app")
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@12345")
 
 
 # ---------- (1)/(2) Admin auth ----------
 def test_01_admin_login(base_url, shared_state):
     r = requests.post(f"{base_url}/api/auth/login",
-                      json={"email": "admin@attendance.app", "password": "Admin@12345"},
+                      json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
                       timeout=30)
     assert r.status_code == 200, r.text
     data = r.json()
     assert "access_token" in data and isinstance(data["access_token"], str)
     assert data["user"]["role"] == "admin"
-    assert data["user"]["email"] == "admin@attendance.app"
+    assert data["user"]["email"] == ADMIN_EMAIL
     shared_state["admin_token"] = data["access_token"]
     shared_state["admin_id"] = data["user"]["id"]
 
@@ -47,7 +49,7 @@ def test_02_auth_me(base_url, shared_state):
                      headers={"Authorization": f"Bearer {token}"}, timeout=30)
     assert r.status_code == 200, r.text
     u = r.json()
-    assert u["email"] == "admin@attendance.app"
+    assert u["email"] == ADMIN_EMAIL
     assert u["role"] == "admin"
 
 

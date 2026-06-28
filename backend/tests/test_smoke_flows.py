@@ -27,9 +27,11 @@ import requests
 
 # ---------- 1. Admin login ----------
 def test_admin_login_returns_token_and_role(base_url):
+    email = os.environ.get("TEST_ADMIN_EMAIL", "admin@attendance.app")
+    password = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@12345")
     r = requests.post(
         f"{base_url}/api/auth/login",
-        json={"email": "admin@attendance.app", "password": "Admin@12345"},
+        json={"email": email, "password": password},
         timeout=30,
     )
     assert r.status_code == 200, r.text

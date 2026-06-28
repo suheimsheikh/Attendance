@@ -457,6 +457,64 @@ test coverage. Zero behavioural change.
 - **Verification**: testing agent ran 19/19 backend + 7/7 frontend smoke tests — **100% pass**, no regressions.
 - **Still deferred** (separate planning sessions): JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, `Presence.jsx` split into `components/presence/`, splitting the 437-line `/api/presence` endpoint into gather/resolve/render phases.
 
+## Recently Added (Jun 28, 2026 — code review action items)
+
+- **Test credentials moved to env vars** — `test_review_iter2`, `iter3`,
+  `test_ishowedup_api`, `test_smoke_flows`, `test_routes_leaves`,
+  `test_unified_leave_iter4` now read `TEST_ADMIN_EMAIL` /
+  `TEST_ADMIN_PASSWORD` / `TEST_ADMIN_MOBILE` from the environment with
+  the documented `admin@attendance.app` / `Admin@12345` / `9849002111`
+  fallback that mirrors `conftest.py`. The login literals no longer
+  appear inline; an ops user can re-point the suite at a different
+  test pool without editing files.
+- **Dead top-level imports removed from `server.py`** — `math`, `bcrypt`
+  (used via `services.auth_utils`), `base64`, `PIL.Image` (used via
+  `services.photo`), `typing.Tuple`, `zoneinfo.ZoneInfo`, and the
+  unused `from holidays import compute_comp_off_balance` re-import.
+  The intentional re-exports from `services/*` for backwards
+  compatibility (`iso`, `MAX_PHOTO_BYTES`, `OVERTIME_THRESHOLD_MIN`,
+  `_hm_to_minutes`, etc.) are now explicitly marked `# noqa: F401`.
+- **`holidays.compute_balance_summary` extraction** — the 113-line
+  row-bucketing loop is now a `_bucket_leave_rows(rows, today)` helper
+  returning a 6-key dict. The main function drops from ~110 lines to
+  ~40, and the loop is unit-testable in isolation. Semantics unchanged
+  — 13/13 unified-leave + iter6 leave-summary tests pass.
+- **Empty catch blocks in `utils.js` now log** — the two intentional
+  swallows in the GPS `watchPosition` flow (clearWatch race + onProgress
+  callback throws) now emit `console.debug` with the error message so
+  silent failures are discoverable in devtools without polluting console.
+
+### Code review findings explicitly NOT applied (with reasoning)
+- **`is True` / `is False` in tests** — flagged as a "comparison anti-pattern"
+  in 106 instances. This is actually idiomatic Python: `True` and `False`
+  are singletons and `is` is preferred over `==` for them (both ruff
+  and pylint agree). PRD has documented this previously. Skipping.
+- **localStorage → httpOnly cookies migration** — flagged as a security
+  hardening. User has explicitly deferred this to a dedicated session
+  (PRD line item "Still deferred: JWT→httpOnly cookies migration").
+  Touching auth without a planned migration risks logging out every
+  active session. Skipping.
+- **`Members.jsx` (613 lines), `Presence.jsx` (430 lines),
+  `Calendar.jsx` (387 lines), `EventConflictNotice.jsx` (127 lines)
+  component splits** — large mechanical refactors with no behaviour
+  change; high regression risk on a live-deployed app. PRD already
+  marks Members/Presence component extraction as P3 backlog. Skipping
+  until a dedicated session.
+- **165 nested ternaries** — Tailwind class-name selection is the
+  primary offender, where nested ternaries are the standard idiom
+  (e.g. `tone === "red" ? "text-red-600" : tone === "amber" ? "text-amber-700" : "text-slate-500"`).
+  Extracting these to functions adds indirection without readability
+  gain. Skipping.
+- **`breaks.make_router` / `daily_content.make_router` complexity** —
+  these are FastAPI router factories; the closure-captured `db` +
+  `dep` arguments make extraction non-trivial (would force a module-
+  scoped state pattern). The route handlers inside them are flat.
+  Skipping the wrapper complexity score.
+- **React hook dependency warnings (114 claimed)** — ESLint `react-hooks/
+  exhaustive-deps` returns clean across all `pages/admin/*` files. These
+  were fixed in the Jun 25 pre-launch polish session (see PRD). The
+  report appears to be running against a stale snapshot.
+
 ## Test Credentials
 See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or phone `9849002111` for OTP-bypass).
 
