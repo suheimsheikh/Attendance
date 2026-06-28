@@ -1,6 +1,7 @@
 import React from "react";
 import { Shield, Coffee, Users } from "lucide-react";
 import Avatar from "../Avatar";
+import { ExpectedReturnPill } from "./ExpectedReturnPill";
 
 /**
  * EscortsStrip — small list shown above the column grid on the Presence
@@ -23,7 +24,7 @@ function EscortStripRow({ escort }) {
     >
       <Avatar name={escort.name} photo={escort.photo} size={34} ring={onStepOut ? "#06B6D4" : "#0D9488"} />
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-semibold text-slate-900 leading-tight truncate flex items-center gap-2">
+        <div className="text-[13px] font-semibold text-slate-900 leading-tight truncate flex items-center gap-2 flex-wrap">
           {escort.name}
           {onStepOut && (
             <span
@@ -33,6 +34,13 @@ function EscortStripRow({ escort }) {
             >
               <Coffee size={9}/> stepped out
             </span>
+          )}
+          {onStepOut && (
+            <ExpectedReturnPill
+              expectedReturnTime={escort.expected_return_time}
+              overdueMinutes={escort.overdue_minutes}
+              testId={`strip-escort-due-${escort.escort_id}`}
+            />
           )}
         </div>
         <div className="text-[10px] text-slate-500 mt-0.5 leading-tight truncate">

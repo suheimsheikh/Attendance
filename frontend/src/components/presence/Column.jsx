@@ -1,6 +1,7 @@
 import React from "react";
 import { Shield, Coffee } from "lucide-react";
 import { MemberCard } from "./MemberCard";
+import { ExpectedReturnPill } from "./ExpectedReturnPill";
 import Avatar from "../Avatar";
 
 export function Column({ col, members, displayList, escorts, adminContacts, coachMobile, onSent, onRowDoubleClick, expandedRows, toggleRow }) {
@@ -152,11 +153,18 @@ function EscortRowsSection({ escorts, accent, columnKey }) {
               <div className="text-[10px] text-slate-500 truncate leading-tight">
                 {e.institution || "no institution"} · since {since}
               </div>
-              {e.temp_out_reason && (
-                <div className="text-[10px] text-cyan-700 truncate leading-tight inline-flex items-center gap-1 mt-0.5">
-                  <Coffee size={9}/> {e.temp_out_reason}
-                </div>
-              )}
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                <ExpectedReturnPill
+                  expectedReturnTime={e.expected_return_time}
+                  overdueMinutes={e.overdue_minutes}
+                  testId={`column-escort-due-${e.escort_id}`}
+                />
+                {e.temp_out_reason && (
+                  <span className="text-[10px] text-cyan-700 truncate inline-flex items-center gap-1">
+                    <Coffee size={9}/> {e.temp_out_reason}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         );

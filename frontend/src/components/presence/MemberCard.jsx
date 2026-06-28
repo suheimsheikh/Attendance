@@ -6,6 +6,7 @@ import NotifyParentsButton from "../NotifyParentsButton";
 import { categoryLabel } from "../../utils";
 import { GeoLine } from "./GeoLine";
 import { SessionTimeline } from "./SessionTimeline";
+import { ExpectedReturnPill } from "./ExpectedReturnPill";
 
 export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick, hidden, expanded, onToggleExpand }) {
   const lateBg = m.late ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50";
@@ -67,6 +68,13 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
           <div className="text-[11px] text-slate-500 truncate mt-0.5">{m.detail}</div>
         )}
         <div className="flex flex-wrap gap-1 mt-1">
+          {columnKey === "temp_out" && (
+            <ExpectedReturnPill
+              expectedReturnTime={m.expected_return_time}
+              overdueMinutes={m.overdue_minutes}
+              testId={`presence-due-${m.id}`}
+            />
+          )}
           {m.excursion_count > 0 && (
             <span
               className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-200 text-[10px] font-bold"

@@ -1,0 +1,36 @@
+{
+  "summary": "Iter13 verifies the NEW expected-return-time pill across all three surfaces on /presence (member rows in temp_out column, escort sub-section rows in temp_out column, EscortsStrip rows) and the supporting backend wiring on /api/presence. Backend: 6/6 pytest cases in /app/backend/tests/test_review_iter13.py pass in 2.69s — they validate (1) all three ETA fields are null on a non-stepped-out escort row, (2) stepping an escort out with raw HH:MM populates expected_return_time=HH:MM, expected_return=ISO datetime anchored to today in office tz, and overdue_minutes as a sensible int>=0, (3) stepping out WITHOUT an expected_return leaves all three null, (4) a far-future HH:MM (23:55) gives overdue_minutes=0, (5) a deep-past HH:MM (00:01) gives overdue_minutes >> 5, (6) every member row carries the full ETA triple in the response shape. Regression: iter11+iter12+smoke (23/23) still green. Frontend (admin on /presence): seeded 3 additional stepped-out escorts to exercise all colour paths and verified via Playwright DOM inspection — RED tone (Raju Saheb, odm=36): bg-red-100 text-red-800 border-red-200, text 'Due 10:54 · 36m late' on BOTH testIds strip-escort-due-7a4c8908... and column-escort-due-7a4c8908.... AMBER (odm=3 server-authoritative): bg-amber-100 text-amber-800 border-amber-200, text 'Due 11:26 · 4m late'. GREEN (odm=0, future HH:MM): bg-emerald-100 text-emerald-800 border-emerald-200, text 'Due 11:58'. NO_ETA escort: pill absent on BOTH surfaces (component returns null). Pill location safety: exactly 3 column-escort-due-* pills on the page (one per stepped-out escort with ETA, all inside column-escorts-temp_out sub-section). Only ONE escorts sub-section exists (data-testid='column-escorts-temp_out') — no leakage into other columns. Test seed escorts cleaned up; Raju Saheb left intact as the persistent RED reference.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Presence — ExpectedReturnPill (amber-when-approaching path)", "issues": ["The 'amber when ETA is within 15 min and not yet overdue' tone depends on minutesUntilLocalHm() which uses the BROWSER's local clock (new Date().setHours). When the admin's browser tz differs from the office tz (Asia/Kolkata), the amber-approaching window can mis-trigger. The just-overdue amber path (server overdue_minutes in [1,5]) is server-authoritative and works correctly regardless of browser tz. Consider passing the office tz from /api/presence (or storing the absolute expected_return ISO and computing minutes-until-now off that) so the amber-approaching window is tz-stable. Not a blocker — admins are expected to view from IST."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter13.py",
+    "/app/test_reports/pytest/iter13_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py lines 3047-3073 — the raw-HH:MM-or-ISO parser handles both shapes and falls back gracefully on parse errors (sets overdue_minutes to None instead of raising). Good. Edge case worth considering: if `expected_return` is HH:MM and the escort steps out very late at night, anchoring to TODAY in office tz could place the ETA earlier than out_at (e.g. step out at 23:50 with ETA '00:30' → anchored to today 00:30, in the past by 23h). The current code reports a huge overdue_minutes; in practice this is a UX caveat, not a defect.",
+    "ExpectedReturnPill.jsx line 34 — minutesUntilLocalHm() uses `new Date()` (browser local clock). When the office tz != browser tz, the amber-approaching window mis-fires. Server overdue path (lines 30-33) is tz-correct. Two ways to harden: (a) compute minutesUntil from the ISO `expected_return` (now exposed by the server), or (b) accept office tz from /api/presence and project HH:MM through it. Recommend (a) as it's a one-line change.",
+    "MemberCard.jsx line 71-77 — the `columnKey === 'temp_out'` guard correctly scopes the pill. Verified via DOM inspection: pill never appears on member rows in other columns even when the row data carries expected_return_time (e.g. a member with an open excursion who is now 'exited' would still have the field populated; the guard correctly suppresses it).",
+    "EscortsStrip.jsx line 38-44 — pill is rendered ONLY when `onStepOut` is true. Confirmed: the non-stepped-out escort 'Test Escort' has no pill in the strip even though the row is rendered."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter13.py",
+    "/app/test_reports/iteration_13.json"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6 iter13 tests + 23/23 iter11+iter12+smoke regression)",
+    "frontend": "100% — RED/AMBER/GREEN tones + NO_ETA absence verified on BOTH strip-escort-due-{id} and column-escort-due-{id} surfaces; pill scoping to temp_out column only also verified"
+  },
+  "test_credentials": "admin@attendance.app / Admin@12345 (working). JWT localStorage injection (key='ishowedup_token') was again used to bypass the login-form toggle.",
+  "seed_data_creation": "Created 3 temporary TEST_Iter13_*Escort rows under Agape Home institution to exercise GREEN (future HH:MM), AMBER (3min overdue HH:MM), and NO_ETA paths. All three were returned, checked out, and deleted post-test. The persistent Raju Saheb stepped-out escort (RED path, odm now 36) was left intact as documented in the iter13 review request.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter13 closed clean. Backend regression file: /app/backend/tests/test_review_iter13.py (6 tests, 2.69s). Key new frontend selectors confirmed: presence-due-{member_id} (member temp_out row), column-escort-due-{escort_id} (escort sub-section row), strip-escort-due-{escort_id} (EscortsStrip row). ExpectedReturnPill component lives at /app/frontend/src/components/presence/ExpectedReturnPill.jsx — tone classes: bg-red-100/text-red-800/border-red-200 (>5m overdue), bg-amber-100/text-amber-800/border-amber-200 (1-5m overdue OR within 15 min future per browser-local clock), bg-emerald-100/text-emerald-800/border-emerald-200 (>15 min future per browser-local clock). Pill text format: 'Due HH:MM' (+ ' · Xm late' suffix when overdue). The seeded Raju Saheb escort is still stepped out (RED path) as of report time. ONE design note for the main agent: amber-when-approaching uses browser-local clock — consider switching to the server-provided ISO `expected_return` for tz-safety (see critical_code_review_comments).",
+  "rca of the issue": "N/A — no defects found. All acceptance criteria from the iter13 review request hold: (1) backend adds expected_return_time on escort rows and member rows, (2) raw-HH:MM-or-ISO parsing handles both storage shapes, (3) overdue_minutes is computed server-side and is correct for both shapes, (4) ExpectedReturnPill renders on all three surfaces with correct tone classes, (5) renders nothing when ETA is absent, (6) temp_out column scoping is honoured, (7) iter11+iter12 regression unaffected."
+}

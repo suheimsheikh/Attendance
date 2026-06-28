@@ -2971,6 +2971,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             "flagged": bool(sess and sess.get("out_of_geofence") and status_v == "on_campus"),
             "late": recomputed_late,
             "expected_return": open_exc_v.get("expected_return") if open_exc_v else None,
+            "expected_return_time": local_hm(office, open_exc_v["expected_return"]) if (open_exc_v and open_exc_v.get("expected_return")) else None,
             "overdue_minutes": overdue_minutes,
             "geo_in": geo_in or None,
             "geo_out": geo_out or None,
@@ -3040,6 +3041,36 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
         for r in rows:
             ed = escort_docs.get(r["escort_id"], {})
             open_excursion = next((x for x in (r.get("excursions") or []) if not x.get("return_at")), None)
+            # If the escort has an open step-out, surface the same overdue
+            # signal we compute for members so the frontend can render
+            # a colour-coded "Due HH:MM" pill in both surfaces.
+            expected_return_iso = None
+            expected_return_local = None
+            overdue_min = None
+            if open_excursion and open_excursion.get("expected_return"):
+                raw_er = open_excursion["expected_return"]
+                # Escort excursions store `expected_return` as raw HH:MM
+                # (no date — assumed same day), member excursions store
+                # it as an ISO datetime. Handle both.
+                try:
+                    if "T" in raw_er:
+                        er_dt = datetime.fromisoformat(raw_er)
+                        expected_return_local = local_hm(office, raw_er)
+                    else:
+                        # Raw HH:MM — anchor to today in office tz.
+                        hh, mm = raw_er.split(":")
+                        tz = office_tz(office)
+                        today_local = datetime.now(tz)
+                        er_dt = today_local.replace(
+                            hour=int(hh), minute=int(mm), second=0, microsecond=0,
+                        )
+                        expected_return_local = raw_er
+                    expected_return_iso = er_dt.isoformat()
+                    overdue_min = max(0, int((now_utc() - er_dt.astimezone(timezone.utc)).total_seconds() // 60))
+                except (TypeError, ValueError):
+                    expected_return_iso = raw_er
+                    expected_return_local = raw_er if ":" in (raw_er or "") and "T" not in raw_er else None
+                    overdue_min = None
             escorts_present.append({
                 "attendance_id": r["id"],
                 "escort_id": r["escort_id"],
@@ -3050,6 +3081,9 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                 "athletes_count": len(r.get("check_in_athlete_ids") or []),
                 "temp_out": bool(open_excursion),
                 "temp_out_reason": open_excursion.get("reason") if open_excursion else None,
+                "expected_return": expected_return_iso,
+                "expected_return_time": expected_return_local,
+                "overdue_minutes": overdue_min,
             })
         escorts_present.sort(key=lambda e: ((e.get("institution") or "").lower(), (e.get("name") or "").lower()))
 
