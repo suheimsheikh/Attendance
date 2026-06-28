@@ -55,7 +55,6 @@
 | P2 | Add "Institution" filter pills to Muster Roll & Reports. |
 | P2 | More inline-editable fields on the Members table (currently photo + parent mobiles only). |
 | P2 | A/C/S/E breakdown row on Muster column headers (mirroring Presence). |
-| P2 | **Consultant coaches tracking** — see "Open Design — Consultant coaches" section below. |
 | P2 | SMS OTP hardening for new-device approval (Twilio India ~₹0.30/SMS, ~₹50/yr at current scale). |
 | P2 | Selfie verification at device approval (admin compares fresh capture side-by-side with stored photo). |
 | P2 | Auto-revoke devices stale for >30 days. |
@@ -63,34 +62,6 @@
 | P3 | Migrate user emails from `@sailors.local` → `@athletes.local` (cleanup). |
 | P3 | WebP logo variants for faster loading. |
 | P3 | Split `server.py` (3000+ lines) into focused routers (`routes/devices.py`, `routes/attendance.py`, `routes/reports.py`, etc.). |
-
-## Open Design — Consultant coaches (deferred, P2)
-
-**Problem**: Consultant coaches (not employees) work on-site, off-site, and often abroad. Current `geo-toggle` enforces the YCH geofence, so consultants get marked Absent every day even though they're actively working. We need to track their attendance, hours-worked, tour days, and campus presence.
-
-**Three approaches, in order of effort**:
-
-**A. Minimal (~1 hour) — "Off-site session" toggle**
-- Add `engagement_type: "employee" | "consultant"` field on the user (default `employee`).
-- For `consultant` users, the Check-In page shows a 3-button mode picker:
-  - **On Campus** → normal GPS check-in (unchanged).
-  - **Remote** → check-in bypasses geofence; status reads "Working Remote".
-  - **Tour / Abroad** → check-in with a one-line "where" note (e.g. "Auckland NZ", "Online from Bangalore"); status reads "On Tour".
-- Each session still records `check_in_at` / `check_out_at`, so hours-worked totals work as-is.
-- Presence Board: new cyan "Remote" status + existing orange "Tour" + small "Consultant" chip.
-
-**B. Standard (~3 hours)** — everything in (A), plus:
-- Admin Reports → "Consultant hours" tab with per-consultant on-campus / remote / tour split, location notes, by week or month.
-- CSV/PDF export of any month for billing.
-- Filter on Presence Board: "Show consultants only".
-
-**C. Full (~6 hours)** — everything in (B), plus:
-- `engagement` collection: `start_date`, `end_date`, `hourly_rate_inr`, `currency`, `scope` per consultant (multiple engagements possible).
-- Invoice helper: month-end, draft an invoice line per consultant (hours × rate).
-- Approval queue: consultant submits month → admin reviews → locks records.
-- Time-off tracking (paid vs unpaid) per engagement.
-
-**Recommendation**: Start with **(A)** — covers 90% of "did my Auckland coach actually work Tuesday?". Layer (B) on later if month-end tallying becomes a pain. Data model from (A) supports (B) without migration.
 
 ## Recently Added (Feb 2026)
 - **YCH branding & color palette**: Navy / Teal / Coral / Gold / Sky CSS variables across the app.
