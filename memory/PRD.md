@@ -428,6 +428,34 @@ test coverage. Zero behavioural change.
 - **Verification**: testing agent ran 19/19 backend + 7/7 frontend smoke tests — **100% pass**, no regressions.
 - **Still deferred** (separate planning sessions): JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, `Presence.jsx` split into `components/presence/`, splitting the 437-line `/api/presence` endpoint into gather/resolve/render phases.
 
+## Recently Added (Feb 2026 — escort step-out surfaced in Presence column)
+
+- **Stepped-out escorts now appear inside the Stepped Out column**
+  (29 Jun 2026)
+  - The escort step-out facility itself (button + form + temp-exit /
+    return endpoints) already shipped earlier — this iteration only
+    adds the *second* visible surface so coaches see escorts in the
+    same column as stepped-out members.
+  - Frontend (`Presence.jsx`): new `steppedOutEscorts` memo filters
+    `data.escorts_present` by `temp_out` and is passed to the Column
+    component via the new `escorts` prop ONLY for
+    `col.key === 'temp_out'`. Other five columns can never accidentally
+    receive escorts.
+  - Frontend (`Column.jsx`): new `EscortRowsSection` sub-component
+    renders a teal-bordered "Escorts" sub-section at the bottom of
+    the column (after all member rows). Each row has avatar, name,
+    institution, since-time, and the step-out reason in cyan. An
+    additional "Es N" chip joins the per-category breakdown row
+    (only when escortList.length > 0). The column count badge sums
+    `members.length + escorts.length`.
+  - Stepped-out escorts now appear TWICE — in the EscortsStrip (roster
+    view, cyan chip) and inside the Stepped Out column (status view).
+    Intentional: the two surfaces answer different questions.
+  - Verified end-to-end by iter12 testing agent: 6/6 backend regression
+    tests for step-out + return endpoints pass; frontend Playwright
+    confirms the sub-section, Es chip, combined count, historical-view
+    suppression, and other-columns-unaffected guarantees.
+
 ## Recently Added (Feb 2026 — escort presence + muster lock)
 
 - **Escorts now visible on /presence** (29 Jun 2026)
