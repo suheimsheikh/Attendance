@@ -428,6 +428,43 @@ test coverage. Zero behavioural change.
 - **Verification**: testing agent ran 19/19 backend + 7/7 frontend smoke tests — **100% pass**, no regressions.
 - **Still deferred** (separate planning sessions): JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, `Presence.jsx` split into `components/presence/`, splitting the 437-line `/api/presence` endpoint into gather/resolve/render phases.
 
+## Recently Added (Feb 2026 — escort presence + muster lock)
+
+- **Escorts now visible on /presence** (29 Jun 2026)
+  - Backend: `/api/presence` now returns an `escorts_present` array
+    alongside the existing `members` / `counts` / `guest_*` fields. One
+    row per active escort whose `escort_attendance` row for today has
+    `check_in_at` set and `check_out_at` null. Each row carries
+    `{attendance_id, escort_id, name, institution, photo, check_in_at,
+    athletes_count, temp_out, temp_out_reason}`. Heavy base64 selfies
+    are excluded. Historical views (`?on=<past-date>`) return `[]` —
+    escort attendance isn't reconciled into past-day reads.
+  - Frontend: new teal `EscortsStrip` component (mirrors `GuestStrip`)
+    renders above the six-column grid. Header carries the institution
+    name + count badge; rows show name, institution, in-time, athletes-
+    count chip, and a cyan "stepped out" chip when an escort has an
+    open excursion. Skipped on historical views.
+
+- **Muster locks already-checked-in athletes** (29 Jun 2026)
+  - Backend: `/muster/athletes?mode=checkin` now KEEPS athletes who
+    are currently on campus (previously hidden), each marked with
+    `already_checked_in=true` and `check_in_at=<iso>`. Approved
+    leave/tour rows still filter out entirely. `mode=checkout`
+    unchanged. The `checkin-bulk` endpoint already had a defence-
+    in-depth "already checked in" skip — kept for safety.
+  - Frontend (`Muster.jsx`):
+    - Locked rows render with `bg-slate-50 opacity-60 cursor-not-
+      allowed`, a pre-ticked grey checkbox, an "In · HH:MM" pill,
+      and no "Add photo" button.
+    - `toggle()` refuses to add locked rows to the picked set; a new
+      `tickable` memo excludes them from `toggleAllVisible` and the
+      `allVisiblePicked` check.
+    - The muster-summary line now reads
+      "&lt;tickable&gt; athletes to check in · &lt;locked&gt; already in
+      · &lt;picked&gt; ticked".
+  - Verified end-to-end by iter11 testing agent: 8/8 backend contract
+    tests pass, both UI surfaces verified in headless playwright.
+
 ## Recently Added (Feb 2026 — escort selfie thumbnails)
 
 - **Captured photo now visible as a thumbnail on the kiosk** (29 Jun 2026)
