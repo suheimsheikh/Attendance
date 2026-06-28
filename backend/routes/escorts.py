@@ -488,4 +488,33 @@ def make_router(db, require_admin, get_current_user, require_coach_or_admin) -> 
         )
         return {"ok": True, "purged": int(res.modified_count)}
 
+    @router.get("/escorts/{escort_id}/recent-visits")
+    async def recent_visits(escort_id: str, limit: int = 5, user: dict = Depends(get_current_user)):
+        """Last N check-in dates for an escort. Used by the kiosk row to
+        give context ("was here last Monday too"). Visible to any logged
+        in user — the data is just dates, no selfies."""
+        rows = await db.escort_attendance.find(
+            {"escort_id": escort_id, "check_in_at": {"$ne": None}},
+            {"_id": 0, "date": 1, "check_in_at": 1, "check_out_at": 1},
+        ).sort("date", -1).limit(max(1, min(20, limit))).to_list(20)
+        return rows
+
+    @router.post("/escorts/{escort_id}/invalidate")
+    async def invalidate_escort(escort_id: str, admin: dict = Depends(require_admin)):
+        """Admin one-shot terminal action — sets status='left' and stamps
+        ended_at to today. Equivalent to a PATCH but exposed as its own
+        verb so the UI can offer a single Invalidate button without
+        opening the edit form."""
+        escort = await db.escorts.find_one({"id": escort_id}, {"_id": 0})
+        if not escort:
+            raise HTTPException(status_code=404, detail="Escort not found")
+        today = local_date_str(await db.config.find_one({"id": "office"}))
+        await db.escorts.update_one(
+            {"id": escort_id},
+            {"$set": {"status": "left", "ended_at": today,
+                      "invalidated_by": admin.get("full_name") or admin.get("email"),
+                      "invalidated_at": now_utc().isoformat()}},
+        )
+        return await db.escorts.find_one({"id": escort_id}, {"_id": 0})
+
     return router

@@ -1,18 +1,24 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Loader2, RefreshCw, FileDown, FileText } from "lucide-react";
+import { Loader2, RefreshCw, FileDown, FileText, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob } from "../../api";
 import { categoryLabel } from "../../utils";
 
-function lastMonthIso() {
-  const d = new Date();
-  d.setDate(1);
-  d.setMonth(d.getMonth() - 1);
+function isoMonth(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function thisMonthIso() { return isoMonth(new Date()); }
+function lastMonthIso() {
+  const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
+  return isoMonth(d);
 }
 
 export default function Payroll() {
-  const [month, setMonth] = useState(lastMonthIso());
+  // Default to THIS month so admins opening the page during a live
+  // payroll cycle see the running totals, not an empty "last month"
+  // that hasn't seen any attendance yet. A "Last month" chip remains
+  // for the formal 1st-of-month run.
+  const [month, setMonth] = useState(thisMonthIso());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -30,11 +36,16 @@ export default function Payroll() {
                  { start: data.start, end: data.end, fmt });
   };
 
+  const totalRows = data?.rows?.length || 0;
+  const nonZero = (data?.rows || []).filter((r) =>
+    r.days_present > 0 || r.days_leave > 0 || r.days_tour > 0 || r.total_hours > 0
+  ).length;
+
   return (
     <div className="p-4 md:p-8 max-w-[1500px] mx-auto">
       <header className="mb-5">
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Monthly Payroll Report</h1>
-        <p className="text-slate-500 text-sm mt-1">Run on the 1st of each month for the prior month. Includes hours, OT, leaves & balances.</p>
+        <p className="text-slate-500 text-sm mt-1">Hours, OT, leaves &amp; balances for the chosen month. Shows running totals when "This month" is picked mid-cycle.</p>
       </header>
 
       <div className="iu-card p-4 mb-4 flex flex-wrap items-end gap-3">
@@ -42,9 +53,31 @@ export default function Payroll() {
           <label className="iu-label">Month</label>
           <input data-testid="pr-month" type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="iu-input !w-48" />
         </div>
+        <div className="flex items-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => setMonth(thisMonthIso())}
+            className={`iu-btn ${month === thisMonthIso() ? "iu-btn-primary" : "iu-btn-secondary"} !h-9 !px-2.5 !text-xs`}
+            data-testid="pr-month-current"
+            title="Use current month"
+          ><Calendar size={12}/> This month</button>
+          <button
+            type="button"
+            onClick={() => setMonth(lastMonthIso())}
+            className={`iu-btn ${month === lastMonthIso() ? "iu-btn-primary" : "iu-btn-secondary"} !h-9 !px-2.5 !text-xs`}
+            data-testid="pr-month-prev"
+          >Last month</button>
+        </div>
         <button data-testid="pr-run" onClick={load} disabled={loading} className="iu-btn-primary">
           {loading ? <Loader2 className="animate-spin" size={14}/> : <RefreshCw size={14}/>} Run
         </button>
+        {/* Empty-data hint — common when "Last month" is selected before
+            attendance has accumulated. Helps admins self-diagnose. */}
+        {!loading && data && totalRows > 0 && nonZero === 0 && (
+          <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 max-w-md" data-testid="pr-empty-hint">
+            All {totalRows} rows are zero. Either no one was on campus this month, or the month hasn&apos;t accumulated data yet — pick a different month.
+          </div>
+        )}
         <div className="flex-1" />
         <button data-testid="pr-csv" onClick={() => exportFmt("csv")} className="iu-btn-secondary"><FileDown size={14}/> CSV</button>
         <button data-testid="pr-pdf" onClick={() => exportFmt("pdf")} className="iu-btn-secondary"><FileText size={14}/> PDF</button>
