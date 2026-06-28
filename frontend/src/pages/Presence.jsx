@@ -12,6 +12,7 @@ import EscortMissingBanner from "../components/EscortMissingBanner";
 import { COLUMNS, PAIRED_COLUMN_KEYS } from "../components/presence/constants";
 import { Column } from "../components/presence/Column";
 import { GuestStrip } from "../components/presence/GuestStrip";
+import { EscortsStrip } from "../components/presence/EscortsStrip";
 import { SkeletonBoard } from "../components/presence/SkeletonBoard";
 
 export default function Presence() {
@@ -398,6 +399,12 @@ export default function Presence() {
           onAdd={() => setShowGuestModal(true)}
         />
       )}
+
+      {/* Escorts checked in via /escort-checkin — non-user entities so they
+          don't appear in any of the six columns. Only renders when at least
+          one escort is on campus. Skipped on historical views (escort
+          attendance isn't reconciled into past-day reads). */}
+      {!isHistorical && <EscortsStrip escorts={data?.escorts_present} />}
 
       {loading && !data ? (
         <SkeletonBoard />

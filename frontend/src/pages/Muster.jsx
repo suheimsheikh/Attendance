@@ -148,16 +148,29 @@ export default function Muster() {
   }, [data, search, institutionFilter]);
 
   const toggle = (id) => {
+    // Already-checked-in athletes (mode=checkin) are read-only. Server
+    // also blocks the double check-in, but disabling the row keeps the
+    // UI honest so the coach can see who's present without accidentally
+    // re-ticking them.
+    const a = (data?.athletes || []).find((x) => x.id === id);
+    if (mode === "checkin" && a?.already_checked_in) return;
     const next = new Set(picked);
     if (next.has(id)) next.delete(id); else next.add(id);
     setPicked(next);
   };
 
+  // Helper — filter list with the "tickable" rows only (excludes the
+  // greyed-out already-checked-in rows in check-in mode).
+  const tickable = useMemo(
+    () => filtered.filter((s) => !(mode === "checkin" && s.already_checked_in)),
+    [filtered, mode],
+  );
+
   const toggleAllVisible = () => {
     const next = new Set(picked);
-    const allPicked = filtered.every((s) => next.has(s.id));
-    if (allPicked) filtered.forEach((s) => next.delete(s.id));
-    else filtered.forEach((s) => next.add(s.id));
+    const allPicked = tickable.length > 0 && tickable.every((s) => next.has(s.id));
+    if (allPicked) tickable.forEach((s) => next.delete(s.id));
+    else tickable.forEach((s) => next.add(s.id));
     setPicked(next);
   };
 
@@ -179,7 +192,7 @@ export default function Muster() {
     runBulk(Array.from(picked));
   };
 
-  const allVisiblePicked = filtered.length > 0 && filtered.every((s) => picked.has(s.id));
+  const allVisiblePicked = tickable.length > 0 && tickable.every((s) => picked.has(s.id));
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto pb-32" data-testid="muster-page">
@@ -268,7 +281,10 @@ export default function Muster() {
       {/* Summary line */}
       <div className="flex items-baseline justify-between mb-2 px-1">
         <p className="text-sm text-slate-600" data-testid="muster-summary">
-          <span className="font-bold text-slate-900">{filtered.length}</span> athlete{filtered.length === 1 ? "" : "s"} {mode === "checkin" ? "to check in" : "still on campus"}
+          <span className="font-bold text-slate-900">{tickable.length}</span> athlete{tickable.length === 1 ? "" : "s"} {mode === "checkin" ? "to check in" : "still on campus"}
+          {mode === "checkin" && (filtered.length - tickable.length) > 0 && (
+            <> · <span className="text-slate-500">{filtered.length - tickable.length} already in</span></>
+          )}
           {picked.size > 0 && (
             <> · <span className="font-bold text-emerald-700">{picked.size}</span> ticked</>
           )}
@@ -294,20 +310,49 @@ export default function Muster() {
         <ul className="iu-card divide-y divide-slate-100 overflow-hidden" data-testid="muster-list">
           {filtered.map((s) => {
             const isPicked = picked.has(s.id);
+            const isLocked = mode === "checkin" && s.already_checked_in;
+            const inAt = s.check_in_at
+              ? new Date(s.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              : null;
             return (
               <li
                 key={s.id}
                 onClick={() => toggle(s.id)}
-                className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition ${isPicked ? "bg-emerald-50" : "hover:bg-slate-50"}`}
+                className={`flex items-center gap-3 px-4 py-3 transition ${
+                  isLocked
+                    ? "bg-slate-50 opacity-60 cursor-not-allowed"
+                    : isPicked
+                      ? "bg-emerald-50 cursor-pointer"
+                      : "hover:bg-slate-50 cursor-pointer"
+                }`}
                 data-testid={`muster-row-${s.id}`}
+                aria-disabled={isLocked || undefined}
               >
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 ${isPicked ? "bg-emerald-600 border-emerald-600 text-white" : "border-slate-300"}`}>
-                  {isPicked && <CheckSquare size={14}/>}
+                <div
+                  className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 ${
+                    isLocked
+                      ? "bg-slate-200 border-slate-300 text-slate-400"
+                      : isPicked
+                        ? "bg-emerald-600 border-emerald-600 text-white"
+                        : "border-slate-300"
+                  }`}
+                  data-testid={`muster-checkbox-${s.id}`}
+                >
+                  {(isPicked || isLocked) && <CheckSquare size={14}/>}
                 </div>
-                <Avatar name={s.full_name} photo={s.photo} size={48} ring={picked.has(s.id) ? "#10B981" : null} />
+                <Avatar name={s.full_name} photo={s.photo} size={48} ring={isPicked ? "#10B981" : null} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <div className="font-semibold text-slate-900 truncate flex-1">{s.full_name}</div>
+                    {isLocked && (
+                      <span
+                        title={inAt ? `Checked in at ${inAt}` : "Already checked in"}
+                        data-testid={`muster-already-in-${s.id}`}
+                        className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[10px] font-bold bg-slate-200 text-slate-600 shrink-0"
+                      >
+                        ✓ {inAt ? `In · ${inAt}` : "Already in"}
+                      </span>
+                    )}
                     {s.institution && (
                       <span
                         title={`Institution: ${s.institution}`}
@@ -323,7 +368,7 @@ export default function Muster() {
                     <div className="text-xs text-slate-500 truncate">{s.rank}</div>
                   )}
                 </div>
-                {!s.photo && (
+                {!s.photo && !isLocked && (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setPhotoTarget({ id: s.id, full_name: s.full_name }); }}

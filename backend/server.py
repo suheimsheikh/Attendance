@@ -3014,6 +3014,45 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
         counts[r["status"]] = counts.get(r["status"], 0) + 1
         if r.get("late"):
             counts["late"] += 1
+    # Escorts who are currently on campus (checked in via /escort-checkin
+    # but not yet checked out). Surfaced as a small strip above the
+    # columns on the Presence Board — escorts aren't in `users` so they
+    # never appear in column data. Skip on historical views since escort
+    # attendance isn't carried into past-day reconciliation.
+    escorts_present: list = []
+    if not is_historical:
+        rows = await db.escort_attendance.find(
+            {"date": today, "check_out_at": None},
+            # Exclusion-only projection: keep all fields except the heavy
+            # base64 selfies. (Mongo refuses mixed inclusion+exclusion in
+            # one projection.)
+            {"_id": 0, "check_in_selfie": 0, "check_out_selfie": 0},
+        ).to_list(500)
+        # Hydrate from `escorts` collection in case the row stored a stale
+        # name (admin renamed the escort post check-in).
+        escort_ids = [r["escort_id"] for r in rows]
+        escort_docs = {
+            e["id"]: e for e in await db.escorts.find(
+                {"id": {"$in": escort_ids}},
+                {"_id": 0, "id": 1, "name": 1, "institution": 1, "photo_thumb": 1, "photo": 1},
+            ).to_list(500)
+        }
+        for r in rows:
+            ed = escort_docs.get(r["escort_id"], {})
+            open_excursion = next((x for x in (r.get("excursions") or []) if not x.get("return_at")), None)
+            escorts_present.append({
+                "attendance_id": r["id"],
+                "escort_id": r["escort_id"],
+                "name": ed.get("name") or r.get("escort_name"),
+                "institution": ed.get("institution") or r.get("institution"),
+                "photo": ed.get("photo_thumb") or ed.get("photo"),
+                "check_in_at": r["check_in_at"],
+                "athletes_count": len(r.get("check_in_athlete_ids") or []),
+                "temp_out": bool(open_excursion),
+                "temp_out_reason": open_excursion.get("reason") if open_excursion else None,
+            })
+        escorts_present.sort(key=lambda e: ((e.get("institution") or "").lower(), (e.get("name") or "").lower()))
+
     return {
         "members": result,
         "counts": counts,
@@ -3021,6 +3060,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
         "is_historical": is_historical,
         "admin_contacts": admin_contacts,
         "notify_grace_minutes": notify_grace,
+        "escorts_present": escorts_present,
     }
 
 
@@ -3161,8 +3201,16 @@ async def muster_athletes(mode: str = "checkin", user: dict = Depends(get_curren
 
     athletes = await db.users.find(athlete_query, {"_id": 0}).to_list(2000)
 
-    open_sessions = await db.attendance.find({"check_out_at": None}, {"_id": 0, "user_id": 1}).to_list(2000)
-    open_ids = {s["user_id"] for s in open_sessions}
+    # Pull today's open sessions WITH their check_in_at timestamps so the
+    # UI can show "already checked in at HH:MM" for the greyed-out rows
+    # (was: ids-only set, which forced the frontend to hide them entirely
+    # — a coach searching for an already-checked-in athlete couldn't find
+    # them at all).
+    open_sessions = await db.attendance.find(
+        {"check_out_at": None}, {"_id": 0, "user_id": 1, "check_in_at": 1}
+    ).to_list(2000)
+    open_map = {s["user_id"]: s for s in open_sessions}
+    open_ids = set(open_map.keys())
 
     on_leave = await db.leaves.find(
         {"status": "approved", "start_date": {"$lte": today}, "end_date": {"$gte": today}},
@@ -3173,14 +3221,19 @@ async def muster_athletes(mode: str = "checkin", user: dict = Depends(get_curren
     out: List[dict] = []
     for s in athletes:
         sid = s["id"]
+        already_in = sid in open_ids
         if mode == "checkin":
-            # Athlete is eligible to check in if NOT currently on-campus and NOT on leave/tour.
-            # (Athletes who already checked out today CAN check in again for a second session.)
-            if sid in open_ids or sid in on_leave_ids:
+            # On leave or tour → skip entirely (they're not eligible at all).
+            if sid in on_leave_ids:
                 continue
+            # Already on campus → keep them in the response but mark them
+            # so the frontend can render the row in a disabled / greyed
+            # state. Prevents double check-in while still giving the
+            # operator visibility into who's already present.
         else:  # checkout
-            if sid not in open_ids:
+            if not already_in:
                 continue
+        sess = open_map.get(sid)
         out.append({
             "id": sid,
             "full_name": s["full_name"],
@@ -3191,6 +3244,10 @@ async def muster_athletes(mode: str = "checkin", user: dict = Depends(get_curren
             "father_mobile": s.get("father_mobile"),
             "mother_mobile": s.get("mother_mobile"),
             "guardian_mobile": s.get("guardian_mobile"),
+            # New: the frontend uses these two to render a disabled
+            # "Already checked in · HH:MM" pill instead of a tickable row.
+            "already_checked_in": bool(already_in) if mode == "checkin" else False,
+            "check_in_at": sess.get("check_in_at") if (mode == "checkin" and sess) else None,
         })
 
     out.sort(key=lambda x: (x["full_name"] or "").lower())

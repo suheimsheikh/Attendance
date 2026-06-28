@@ -1,0 +1,35 @@
+{
+  "summary": "Iter11 verified the Presence escorts-on-campus strip + Muster greyed-out already-checked-in rows end-to-end. Backend: 8/8 new pytest cases pass in 2.78s — /api/presence now returns `escorts_present` with the full {attendance_id, escort_id, name, institution, photo, check_in_at, athletes_count, temp_out, temp_out_reason} shape; heavy base64 selfies are not leaked; open step-out (temp-exit excursion with no return_at) surfaces temp_out=true + reason; historical ?on=<past> returns []; checkout drops the row; no duplicates. /api/muster/athletes?mode=checkin now returns already-in athletes with already_checked_in=true + check_in_at iso (and free athletes with already_checked_in=false). mode=checkout always sets already_checked_in=false + check_in_at=null. /api/muster/checkin-bulk still defensively skips already-in athletes with reason='already checked in'. Frontend (admin): /presence renders the teal `presence-escorts-strip` ABOVE the six-column grid with the count badge (`strip-count-escorts`=6 matching 6 escort rows). The strip is correctly skipped on historical views (verified by code review: `{!isHistorical && <EscortsStrip ... />}`). /muster (Check-in mode) renders the already-checked-in athlete with: muted bg-slate-50 + opacity-60 row, greyed pre-ticked `muster-checkbox-{id}` (bg-slate-200 border-slate-300), `muster-already-in-{id}` pill showing '✓ In · 04:29 AM', no 'Add photo' button. Clicking the locked row is a no-op (checkbox stays slate, not emerald). 'Tick all visible' tickets 84 free athletes, leaves the 1 locked row greyed; the muster-summary line shows '84 athletes to check in · 1 already in · 84 ticked'.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter11.py",
+    "/app/test_reports/pytest/iter11_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py presence() (3017-3054): correctly skips escorts_present block on historical reads (escort_attendance isn't carried into past-day reconciliation, matching the documented behaviour). Open-excursion detection uses next((x for x in excursions if not x.get('return_at')), None) — same idiom as temp-exit endpoint, good. Exclusion-only projection {_id:0, check_in_selfie:0, check_out_selfie:0} is necessary because Mongo refuses mixed inclusion+exclusion; comment correctly documents this gotcha.",
+    "server.py muster_athletes (3209-3254): the migration from `open_ids: set` to `open_map: dict` is clean — preserves the existing `already_in = sid in open_ids` boolean check (no perf regression) while gaining check_in_at access for the disabled-row pill. Comment block at 3204-3208 explains the UX rationale clearly. Eligibility ordering is sound: leaves/tours filter FIRST (continue), then already-in stays in list with locked flag for checkin mode, or required for checkout mode.",
+    "EscortsStrip.jsx (49): `if (list.length === 0) return null` — correct null-guard. Combined with `{!isHistorical && <EscortsStrip ... />}` in Presence.jsx (407), the strip is robustly hidden on historical views AND on today-views with no active escorts. Step-out chip selector `escort-presence-stepout-{escort_id}` reads from temp_out and renders with cyan-100/700 — visually distinct from the teal default.",
+    "Muster.jsx (313): `isLocked = mode === 'checkin' && s.already_checked_in` — guards the disabled branch only on checkin mode, matching the backend contract (checkout mode never sets already_checked_in). Click handler `toggle()` (~line 150) refuses to add isLocked rows to picked set; `tickable` memo excludes locked rows; `toggleAllVisible` and `allVisiblePicked` use `tickable` not `filtered`. Confirmed by behaviour: after Tick-all, 84 ticked / 1 locked / 85 visible.",
+    "Muster.jsx (341): checkbox renders the CheckSquare icon when EITHER isPicked OR isLocked — visually communicates 'present' for locked rows too. Combined with the slate-200/slate-300/slate-400 colour stack, the locked rows read as 'accounted for, not actionable' without needing extra copy."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter11.py",
+    "/app/test_reports/iteration_11.json"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 iter11 contract tests)",
+    "frontend": "100% — Presence strip + Muster locked-row UI both verified in headless playwright"
+  },
+  "test_credentials": "admin@attendance.app / Admin@12345 (working). Same headless-login workaround as iter10: inject JWT into localStorage (key=ishowedup_token) rather than using the /login form toggle.",
+  "seed_data_creation": "Seeded one TEST_UI11_Esc_* escort under Agape Home (checked in for the day) + checked in one existing athlete (ABHIRAM GUNDLANARUA) for the muster locked-row test. Pre-existing iter9/iter10 fixtures (TEST_UI_Thumb_*, TEST_UI_NoThumb_*, Test Escort) were reused as additional strip rows — the strip displayed 6 entries total as expected.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter11 closed clean. Backend test file: /app/backend/tests/test_review_iter11.py (8 tests, 2.78s). Key selectors: presence-escorts-strip (wrapper), strip-count-escorts (count badge), escort-presence-row-{escort_id} (each row), escort-presence-stepout-{escort_id} (step-out chip — cyan), muster-row-{id} (athlete row), muster-checkbox-{id} (24x24 checkbox div), muster-already-in-{id} (locked-state pill on right). Muster summary line is found at data-testid='muster-summary' and renders three pieces: '<tickable> athletes to check in · <locked> already in · <picked> ticked'. Note: Presence.jsx isHistorical is sourced from the in-page viewDate state (set via date-picker UI), NOT URL query params — testing historical views requires interacting with the date picker, not appending ?on=YYYY-MM-DD to the URL. The /api/presence endpoint DOES accept ?on= and was verified separately (backend test). Cleanup: TEST_UI11_Esc_* attendance is naturally settled at end-of-day; the seeded escort row can be deleted via DELETE /api/escorts/{id} if needed.",
+  "rca of the issue": "N/A — no defects found; all acceptance criteria in the iter11 review request are satisfied. Initial test failures (excursion endpoint URL, bulk response key) were test-script bugs in my own iter11 tests and were fixed (temp-exit + checked_in instead of done) before the final 8/8 pass."
+}
