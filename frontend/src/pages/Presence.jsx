@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { Clock, RefreshCw, UserPlus, UserX, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search } from "lucide-react";
 import { api, showApiError } from "../api";
 import GuestCheckInModal from "../components/GuestCheckInModal";
 import MemberForm from "./admin/MemberForm";
 import { useAuth } from "../auth";
-import { formatDate } from "../utils";
 import { toast } from "sonner";
 import UpcomingThisWeek from "../components/UpcomingThisWeek";
 import EscortMissingBanner from "../components/EscortMissingBanner";
@@ -14,6 +13,8 @@ import { Column } from "../components/presence/Column";
 import { GuestStrip } from "../components/presence/GuestStrip";
 import { EscortsStrip } from "../components/presence/EscortsStrip";
 import { SkeletonBoard } from "../components/presence/SkeletonBoard";
+import { PresenceHeader } from "../components/presence/PresenceHeader";
+import { FleetFilterRow } from "../components/presence/FleetFilterRow";
 
 export default function Presence() {
   const { user: currentUser } = useAuth();
@@ -251,141 +252,29 @@ export default function Presence() {
     <div className="p-4 md:p-6 max-w-[1500px] mx-auto">
       {!isHistorical && <UpcomingThisWeek />}
       {!isHistorical && <EscortMissingBanner />}
-      <header className="flex flex-wrap items-end justify-between gap-3 mb-5">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight" data-testid="presence-title">Presence Board</h1>
-          <p className="text-slate-500 mt-1 text-sm">
-            {data ? formatDate(data.date) : "Live campus roster"}
-            {isHistorical && <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">Read-only history</span>}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="inline-flex items-center gap-1 bg-white border-2 border-slate-300 px-1.5 h-11 rounded-xl text-sm font-bold text-slate-800 shadow-sm">
-            <button
-              type="button"
-              data-testid="presence-date-prev"
-              onClick={() => {
-                const cur = viewDate || today;
-                const next = shiftIso(cur, -1);
-                setViewDate(next === today ? "" : next);
-                setExpandedRows(new Set());
-              }}
-              className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200 transition"
-              title="Previous day"
-              aria-label="Previous day"
-            >
-              <ChevronLeft size={18} strokeWidth={2.5} />
-            </button>
-            <input
-              type="date"
-              data-testid="presence-date-picker"
-              value={viewDate || today}
-              max={today}
-              onChange={(e) => { setViewDate(e.target.value === today ? "" : e.target.value); setExpandedRows(new Set()); }}
-              className="bg-transparent border-0 outline-none text-sm font-bold w-[130px] text-center"
-              aria-label="View presence for a specific date"
-            />
-            <button
-              type="button"
-              data-testid="presence-date-next"
-              onClick={() => {
-                const cur = viewDate || today;
-                if (cur >= today) return;
-                const next = shiftIso(cur, 1);
-                setViewDate(next >= today ? "" : next);
-                setExpandedRows(new Set());
-              }}
-              disabled={!isHistorical}
-              className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200 transition disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-              title={isHistorical ? "Next day" : "Already on today"}
-              aria-label="Next day"
-            >
-              <ChevronRight size={18} strokeWidth={2.5} />
-            </button>
-            {isHistorical && (
-              <button
-                onClick={() => { setViewDate(""); setExpandedRows(new Set()); }}
-                data-testid="presence-back-to-today"
-                className="ml-1 px-2.5 h-7 rounded-md bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-extrabold uppercase tracking-wider transition"
-                title="Jump back to live today view"
-              >
-                Today
-              </button>
-            )}
-          </div>
-          <button
-            data-testid="late-only-toggle"
-            onClick={() => setLateOnly((v) => !v)}
-            className={`inline-flex items-center gap-2 px-3 h-9 rounded-full text-xs font-semibold border transition ${
-              lateOnly
-                ? "bg-red-600 text-white border-transparent"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-            }`}
-            title="Show only members who are late today"
-          >
-            <Clock size={13} />
-            {lateOnly ? `Showing late (${lateCount})` : `Late today · ${lateCount}`}
-          </button>
-          {absentCount > 0 && (
-            <div className="inline-flex items-center gap-2 bg-red-50 border border-red-200 px-3 h-9 rounded-full text-xs font-semibold text-red-700">
-              <UserX size={13} />
-              {absentCount} absent
-            </div>
-          )}
-          {canManageGuests && (
-            <button
-              data-testid="presence-add-guest"
-              onClick={() => setShowGuestModal(true)}
-              className="inline-flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white px-3 h-9 rounded-full text-xs font-bold transition"
-              title="Check in a visitor (parent, prospect, dignitary)"
-            >
-              <UserPlus size={13} />
-              Guest
-              {guests.active_count > 0 && (
-                <span className="ml-1 px-1.5 h-5 rounded-full bg-white/25 text-[10px] flex items-center justify-center font-extrabold">
-                  {guests.active_count}
-                </span>
-              )}
-            </button>
-          )}
-          <div className="inline-flex items-center gap-2 bg-white border border-slate-200 px-3 h-9 rounded-full text-xs font-semibold text-slate-700">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            {totalMembers} members
-          </div>
-          <button onClick={load} className="iu-btn-secondary !h-9 !px-3" data-testid="presence-refresh-button">
-            <RefreshCw size={14} />
-          </button>
-        </div>
-      </header>
+      <PresenceHeader
+        data={data}
+        isHistorical={isHistorical}
+        today={today}
+        viewDate={viewDate}
+        shiftIso={shiftIso}
+        onViewDateChange={(next) => { setViewDate(next); setExpandedRows(new Set()); }}
+        lateOnly={lateOnly}
+        onToggleLateOnly={() => setLateOnly((v) => !v)}
+        lateCount={lateCount}
+        absentCount={absentCount}
+        canManageGuests={canManageGuests}
+        onAddGuest={() => setShowGuestModal(true)}
+        activeGuestCount={guests.active_count}
+        totalMembers={totalMembers}
+        onRefresh={load}
+      />
 
-      {fleetOptions.length > 0 && (
-        <div className="flex items-center gap-1.5 mb-3 flex-wrap" data-testid="fleet-filter-row">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Fleet</span>
-          <button
-            type="button"
-            data-testid="fleet-filter-all"
-            onClick={() => setFleetFilter("")}
-            className={`px-2.5 h-7 rounded-full text-[11px] font-bold transition border ${
-              fleetFilter === "" ? "bg-sky-600 text-white border-transparent" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-            }`}
-          >
-            All
-          </button>
-          {fleetOptions.map((f) => (
-            <button
-              key={f}
-              type="button"
-              data-testid={`fleet-filter-${f}`}
-              onClick={() => setFleetFilter(f)}
-              className={`px-2.5 h-7 rounded-full text-[11px] font-bold transition border ${
-                fleetFilter === f ? "bg-sky-600 text-white border-transparent" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-      )}
+      <FleetFilterRow
+        fleetOptions={fleetOptions}
+        fleetFilter={fleetFilter}
+        onFleetChange={setFleetFilter}
+      />
 
       <div className="iu-card mb-4 px-3 py-2 flex items-center gap-3" data-testid="presence-search-wrap">
         <Search size={16} className="text-sky-500 shrink-0" />

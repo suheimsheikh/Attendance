@@ -428,6 +428,26 @@ test coverage. Zero behavioural change.
 - **Verification**: testing agent ran 19/19 backend + 7/7 frontend smoke tests — **100% pass**, no regressions.
 - **Still deferred** (separate planning sessions): JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, `Presence.jsx` split into `components/presence/`, splitting the 437-line `/api/presence` endpoint into gather/resolve/render phases.
 
+## Recently Added (Feb 2026 — Presence.jsx extraction)
+
+- **Presence.jsx slimmed via 2-file extraction** (29 Jun 2026,
+  478 → 366 lines, -23%)
+  - `components/presence/PresenceHeader.jsx` (136 lines) — title, date
+    picker triplet (prev / picker / next / "Today" badge), late-only
+    toggle, absent chip, guest CTA, members count chip, refresh
+    button. Pure presentation; parent owns state + dispatches.
+  - `components/presence/FleetFilterRow.jsx` (38 lines) — pill row
+    for fleet filtering. Renders null when no fleet labels are
+    present among loaded members.
+  - Parent Presence.jsx now owns data-fetch, polling, byColumn
+    bucketing, pairedDisplay, escortsByStatus, and the column grid.
+  - Zero behaviour change — all 12 header/fleet testids preserved
+    and verified end-to-end (date navigation, historical mode toggle,
+    "Today" button return, refresh, guest CTA, late filter, fleet
+    chips, search input, column grid).
+  - Backend regression: 78/78 pytest pass (iter11-14 + smoke +
+    routes_leaves + ishowedup_api).
+
 ## Recently Added (Feb 2026 — iter15 P2/P3 polish)
 
 - **PAIRED_COLUMN_KEYS reconciled with implementation** (29 Jun 2026)
