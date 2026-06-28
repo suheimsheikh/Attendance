@@ -428,6 +428,51 @@ test coverage. Zero behavioural change.
 - **Verification**: testing agent ran 19/19 backend + 7/7 frontend smoke tests — **100% pass**, no regressions.
 - **Still deferred** (separate planning sessions): JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, `Presence.jsx` split into `components/presence/`, splitting the 437-line `/api/presence` endpoint into gather/resolve/render phases.
 
+## Recently Added (Feb 2026 — iter15 P2/P3 polish)
+
+- **PAIRED_COLUMN_KEYS reconciled with implementation** (29 Jun 2026)
+  - `constants.js` declared `{on_campus, exited}` as the paired pair —
+    so the same alphabetically-sorted union renders in both columns
+    with `visibility: hidden` placeholders for non-matching rows,
+    keeping the two columns scroll-locked at row-level.
+  - `Presence.jsx` had drifted to pair `temp_out + exited` instead.
+    The implementation now correctly builds `pairedDisplay` from
+    `[...byColumn.on_campus, ...byColumn.exited]`. Stepped Out is
+    no longer paired (renders only its own members + escorts).
+
+- **Muster sticky breakdown bar** (29 Jun 2026)
+  - New sticky bar above the muster list (`data-testid="muster-breakdown"`)
+    showing chips: B (boys), G (girls), ◇ (unspecified), ✓ N in
+    (already-in count — check-in mode only), ☑ N (picked, > 0 only).
+  - Chips respect the institution filter + search box live.
+  - Uses sky/pink/slate tones so it visually mirrors the Presence
+    column breakdown row.
+  - A/C/S/E literal mapping wasn't possible (Muster is athletes-only) —
+    gender pivot was the natural analogue.
+
+- **Members.jsx 5-file extraction** (29 Jun 2026, 753 → 411 lines, -45%)
+  - `members/MemberRow.jsx` (248 lines) — single-row `<tr>` template,
+    all mutations via parent callbacks.
+  - `members/MemberBucketFilters.jsx` (76 lines) — bucket chips + admin
+    toggle + institution dropdown.
+  - `members/ParentInlineInput.jsx` (68 lines) — parent mobile editor.
+  - `members/helpers.js` (64 lines) — BUCKETS / BUCKET_BY_KEY / bucketOf /
+    GENDER_LABEL / lastSeenLabel / leaveBalanceLabel / isInteractive.
+  - Parent `Members.jsx` now owns data-fetch + mutation state only.
+  - Zero behaviour change — all 14 inline-edit testids per row
+    preserved (133 rows × 14 = 1857 selectors verified by iter15).
+  - Verified end-to-end by iter15 testing agent: 39/39 backend
+    regression (iter11-14 + smoke) pass; Playwright confirms all
+    three changes work with the live 133-member roster.
+  - **Known cosmetic warning**: React hydration log warning
+    `<span> cannot be a child of <option>` surfaces somewhere on
+    Members page render. Functionality intact, browser strips the
+    span on hydration. Tagged P3 — couldn't pinpoint by grep in
+    iter15 (all `<option>` literals across the codebase use plain
+    `{o.label}` text). Likely fires from a non-Members component
+    that happens to mount alongside (Calendar/MemberForm/BulkEditBar).
+    Cleanup needs a deeper render-time inspection.
+
 ## Recently Added (Feb 2026 — escorts in all three status columns)
 
 - **Escorts now show up in On Campus + Checked Out + Stepped Out**
