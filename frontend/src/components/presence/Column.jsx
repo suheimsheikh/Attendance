@@ -74,7 +74,7 @@ export function Column({ col, members, displayList, escorts, adminContacts, coac
 
       <div className="flex-1 overflow-y-auto max-h-[calc(100vh-220px)] min-h-[120px] divide-y divide-slate-100 bg-white">
         {displayList ? (
-          displayList.length === 0 ? (
+          displayList.length === 0 && escortList.length === 0 ? (
             <div className="px-4 py-8 text-center text-xs text-slate-400">No one here.</div>
           ) : (
             displayList.map((entry, idx) => (
@@ -96,25 +96,28 @@ export function Column({ col, members, displayList, escorts, adminContacts, coac
         ) : members.length === 0 && escortList.length === 0 ? (
           <div className="px-4 py-8 text-center text-xs text-slate-400">No one here.</div>
         ) : (
-          <>
-            {members.map((m) => (
-              <MemberCard
-                key={m.id}
-                m={m}
-                accent={col.accent}
-                columnKey={col.key}
-                adminContacts={adminContacts}
-                coachMobile={coachMobile}
-                onSent={onSent}
-                onDoubleClick={onRowDoubleClick}
-                expanded={expandedRows && expandedRows.has(m.id)}
-                onToggleExpand={toggleRow ? () => toggleRow(m.id) : null}
-              />
-            ))}
-            {escortList.length > 0 && (
-              <EscortRowsSection escorts={escortList} accent={col.accent} columnKey={col.key} />
-            )}
-          </>
+          members.map((m) => (
+            <MemberCard
+              key={m.id}
+              m={m}
+              accent={col.accent}
+              columnKey={col.key}
+              adminContacts={adminContacts}
+              coachMobile={coachMobile}
+              onSent={onSent}
+              onDoubleClick={onRowDoubleClick}
+              expanded={expandedRows && expandedRows.has(m.id)}
+              onToggleExpand={toggleRow ? () => toggleRow(m.id) : null}
+            />
+          ))
+        )}
+        {/* Escort sub-section is hoisted OUT of the displayList/members
+            branching so paired columns (Exited, On Campus) also render
+            it. Previously the escort rows only showed up in the
+            non-paired branch, which silently dropped them from the
+            Exited column. */}
+        {escortList.length > 0 && (
+          <EscortRowsSection escorts={escortList} accent={col.accent} columnKey={col.key} />
         )}
       </div>
     </section>

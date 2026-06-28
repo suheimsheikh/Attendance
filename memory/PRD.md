@@ -428,6 +428,38 @@ test coverage. Zero behavioural change.
 - **Verification**: testing agent ran 19/19 backend + 7/7 frontend smoke tests — **100% pass**, no regressions.
 - **Still deferred** (separate planning sessions): JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, `Presence.jsx` split into `components/presence/`, splitting the 437-line `/api/presence` endpoint into gather/resolve/render phases.
 
+## Recently Added (Feb 2026 — escorts in all three status columns)
+
+- **Escorts now show up in On Campus + Checked Out + Stepped Out**
+  (29 Jun 2026)
+  - Backend (`/api/presence`): `escorts_present` no longer filters by
+    `check_out_at: null` — it returns EVERY escort attendance row for
+    today, tagged with a new `status` field
+    (`on_campus` / `temp_out` / `exited`) and a `check_out_at` field
+    (null when not exited). Status precedence: `exited` > `temp_out`
+    > `on_campus`.
+  - Frontend (`Presence.jsx`): new `escortsByStatus` memo buckets
+    `escorts_present` by status; each column receives only its own
+    bucket via `escorts={escortsByStatus[col.key] || null}`. Other
+    three columns (tour/leave/absent) always receive `null`.
+  - Frontend (`EscortsStrip`): now filters to `on_campus + temp_out`
+    only — exited escorts disappear from the strip (they're already
+    visible in the Exited column).
+  - Frontend (`Column.jsx` — EscortRowsSection): exited rows show
+    `In HH:MM → Out HH:MM` (both timestamps); on-campus/temp-out
+    rows show `since HH:MM` (unchanged). The escort sub-section was
+    hoisted OUT of the `displayList ? : members` branching so paired
+    columns (Exited via PAIRED_COLUMN_KEYS) also render it — was a
+    bug caught by iter14 testing agent where the Exited column's
+    breakdown chip and count badge correctly accounted for escorts
+    but no escort rows were rendered.
+  - The "Es N" breakdown chip + total column count badge (members +
+    escorts) work unchanged in all three columns.
+  - Verified end-to-end: iter14 testing agent — 30/30 backend tests
+    pass (10 new iter14 + 5 iter11 regression + 12 iter12+iter13);
+    post-fix Playwright smoke confirms all three column sub-sections
+    render (`column-escorts-on_campus`, `temp_out`, `exited` each = 1).
+
 ## Recently Added (Feb 2026 — expected-return-time badge)
 
 - **Colour-coded ETA pill on stepped-out rows** (29 Jun 2026)
