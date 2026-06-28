@@ -38,6 +38,7 @@ function EscortStripRow({ escort }) {
           {onStepOut && (
             <ExpectedReturnPill
               expectedReturnTime={escort.expected_return_time}
+              expectedReturnIso={escort.expected_return}
               overdueMinutes={escort.overdue_minutes}
               testId={`strip-escort-due-${escort.escort_id}`}
             />

@@ -7,7 +7,11 @@ import { Clock, AlertTriangle } from "lucide-react";
  * and the EscortsStrip).
  *
  * Props:
- *   expectedReturnTime  — local HH:MM string ("13:30") or "" / null
+ *   expectedReturnTime  — local HH:MM string ("13:30") for display
+ *   expectedReturnIso   — server-side absolute ISO datetime, used for
+ *                         tz-safe "amber when approaching" calculation.
+ *                         Falls back to HH:MM-against-browser-clock
+ *                         when absent (legacy callers).
  *   overdueMinutes      — integer 0+ if returned past ETA, else null/undefined
  *
  * Colour logic:
@@ -18,20 +22,21 @@ import { Clock, AlertTriangle } from "lucide-react";
  * Renders nothing if no ETA is set (escort/member stepped out without
  * specifying an expected return time).
  */
-export function ExpectedReturnPill({ expectedReturnTime, overdueMinutes, testId }) {
+export function ExpectedReturnPill({ expectedReturnTime, expectedReturnIso, overdueMinutes, testId }) {
   if (!expectedReturnTime) return null;
 
   const overdue = typeof overdueMinutes === "number" && overdueMinutes > 0;
-  // Approximate "minutes until due" from overdue: if not overdue, we
-  // don't get a precise countdown from the backend — fall back to a
-  // single green pill ("Due HH:MM"). Amber-when-approaching needs a
-  // client-side clock; we keep this lightweight and recompute below
-  // from the HH:MM string against the local clock.
   let tone;
   if (overdue) {
     tone = overdueMinutes > 5 ? "red" : "amber";
   } else {
-    const minsUntil = minutesUntilLocalHm(expectedReturnTime);
+    // Prefer the server's ISO timestamp — it carries a real tz offset
+    // so `new Date(iso) - Date.now()` is tz-safe regardless of where
+    // the admin is viewing from. Falls back to the HH:MM-against-
+    // browser-clock approximation for legacy callers without ISO.
+    const minsUntil = expectedReturnIso
+      ? minutesUntilIso(expectedReturnIso)
+      : minutesUntilLocalHm(expectedReturnTime);
     tone = minsUntil !== null && minsUntil <= 15 ? "amber" : "green";
   }
 
@@ -59,9 +64,20 @@ export function ExpectedReturnPill({ expectedReturnTime, overdueMinutes, testId 
   );
 }
 
+/** Returns minutes from now until the server-provided absolute ISO
+ * datetime. Positive = future, negative = already past. Tz-safe (both
+ * sides reduce to absolute time). null on parse failure. */
+function minutesUntilIso(iso) {
+  if (!iso || typeof iso !== "string") return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  return Math.round((t - Date.now()) / 60000);
+}
+
 /** Returns minutes from now until the next local-time HH:MM. Positive = future,
  * negative = already past (treated as overdue but the server-side
- * overdueMinutes takes precedence when present). null on parse failure. */
+ * overdueMinutes takes precedence when present). null on parse failure.
+ * Browser-clock based — only used as a fallback when no ISO is supplied. */
 function minutesUntilLocalHm(hm) {
   if (!hm || typeof hm !== "string") return null;
   const [h, m] = hm.split(":").map((x) => parseInt(x, 10));

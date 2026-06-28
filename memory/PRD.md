@@ -428,6 +428,42 @@ test coverage. Zero behavioural change.
 - **Verification**: testing agent ran 19/19 backend + 7/7 frontend smoke tests — **100% pass**, no regressions.
 - **Still deferred** (separate planning sessions): JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, `Presence.jsx` split into `components/presence/`, splitting the 437-line `/api/presence` endpoint into gather/resolve/render phases.
 
+## Recently Added (Feb 2026 — expected-return-time badge)
+
+- **Colour-coded ETA pill on stepped-out rows** (29 Jun 2026)
+  - Backend (`/api/presence`):
+    - Member rows in `temp_out` now carry `expected_return_time` (local
+      HH:MM derived from the ISO `expected_return`) in addition to the
+      pre-existing `expected_return` (ISO) and `overdue_minutes`.
+    - Escort rows in `escorts_present` now carry the full triple:
+      `expected_return` (anchored ISO), `expected_return_time` (HH:MM),
+      and `overdue_minutes`. The parser handles BOTH storage shapes —
+      escort excursions store raw HH:MM, member excursions store ISO.
+      Raw HH:MM is anchored to today in the office tz (Asia/Kolkata)
+      to compute overdue_minutes against `now_utc()`.
+  - Frontend: new shared `ExpectedReturnPill.jsx` component (renders
+    null when no ETA). Tone branching:
+    - GREEN (`bg-emerald-100`): not overdue, >15 min away
+    - AMBER (`bg-amber-100`): overdue 1–5 min OR future within 15 min
+    - RED (`bg-red-100`): >5 min overdue
+    Text format: "Due HH:MM" with optional "· Xm late" suffix.
+    Tz-safety: uses server-provided absolute ISO (`expected_return`)
+    for the amber-approaching window — Date.parse / Date.now subtract
+    is tz-stable regardless of the admin's browser tz. HH:MM fallback
+    only when no ISO is supplied.
+  - Pill renders on THREE surfaces:
+    - `MemberCard` (`presence-due-{member_id}`) — only when columnKey
+      is `temp_out`
+    - `Column.EscortRowsSection` (`column-escort-due-{escort_id}`) —
+      inside the Stepped Out column sub-section
+    - `EscortsStrip` (`strip-escort-due-{escort_id}`) — on the strip
+      row, to the right of the cyan "stepped out" chip
+  - Verified end-to-end by iter13 testing agent: 6/6 backend pytest
+    pass, RED / AMBER / GREEN / no-ETA all verified across all three
+    surfaces; iter11+iter12+smoke (23/23) regression unchanged.
+    Post-iter13 tz-safety fix: now passes ISO through all three call
+    sites; iter11+iter12+iter13 (20/20) green after the change.
+
 ## Recently Added (Feb 2026 — escort step-out surfaced in Presence column)
 
 - **Stepped-out escorts now appear inside the Stepped Out column**

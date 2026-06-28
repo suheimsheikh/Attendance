@@ -156,6 +156,7 @@ function EscortRowsSection({ escorts, accent, columnKey }) {
               <div className="flex flex-wrap gap-1 mt-0.5">
                 <ExpectedReturnPill
                   expectedReturnTime={e.expected_return_time}
+                  expectedReturnIso={e.expected_return}
                   overdueMinutes={e.overdue_minutes}
                   testId={`column-escort-due-${e.escort_id}`}
                 />

@@ -71,6 +71,7 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
           {columnKey === "temp_out" && (
             <ExpectedReturnPill
               expectedReturnTime={m.expected_return_time}
+              expectedReturnIso={m.expected_return}
               overdueMinutes={m.overdue_minutes}
               testId={`presence-due-${m.id}`}
             />
