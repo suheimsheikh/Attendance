@@ -149,13 +149,14 @@ class TestLeaveCreateWaterfall:
         # paid_leave_used may be int 0 or float 0.0
         assert (leave.get("paid_leave_used") or 0) == 0
         assert leave.get("lop_days") == 3
+        leave_id = leave["id"]
         # verify persistence via GET /leaves (admin all)
         listing = requests.get(f"{BASE_URL}/api/leaves", headers=admin_headers, timeout=15).json()
-        match = [l for l in listing if l["id"] == leave["id"]]
+        match = [item for item in listing if item["id"] == leave_id]
         assert match, "Newly created leave missing from admin listing"
-        l = match[0]
-        assert l.get("lop_days") == 3
-        assert "member_name" in l and "member_category" in l
+        found = match[0]
+        assert found.get("lop_days") == 3
+        assert "member_name" in found and "member_category" in found
         # cleanup
         requests.patch(f"{BASE_URL}/api/leaves/{leave['id']}",
                        headers=admin_headers,
@@ -202,9 +203,9 @@ class TestGroupLeave:
         # Cleanup: find the leave and delete via reject
         listing = requests.get(f"{BASE_URL}/api/leaves?status_filter=approved",
                                headers=admin_headers, timeout=15).json()
-        match = [l for l in listing if l.get("reason") == "TEST group leave" and l["user_id"] == admin_me["id"]]
-        for l in match:
-            requests.patch(f"{BASE_URL}/api/leaves/{l['id']}",
+        match = [item for item in listing if item.get("reason") == "TEST group leave" and item["user_id"] == admin_me["id"]]
+        for item in match:
+            requests.patch(f"{BASE_URL}/api/leaves/{item['id']}",
                            headers=admin_headers, json={"status": "rejected"}, timeout=10)
 
 

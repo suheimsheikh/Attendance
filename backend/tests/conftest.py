@@ -53,5 +53,27 @@ def admin_client(base_url, admin_token):
 
 
 @pytest.fixture(scope="session")
+def athlete(admin_client, base_url):
+    """Pick an existing athlete (or create one) to drive muster + leave tests.
+    Re-used across all flows so we don't litter the DB."""
+    import uuid
+    listing = admin_client.get(f"{base_url}/api/members", timeout=30).json()
+    target = next((m for m in listing if m.get("category") == "athlete"), None)
+    if target:
+        return target
+
+    body = {
+        "email": f"smoke-{uuid.uuid4().hex[:6]}@athletes.local",
+        "password": "Smoke@1234",
+        "full_name": "Smoke Test Athlete",
+        "role": "member",
+        "category": "athlete",
+    }
+    r = admin_client.post(f"{base_url}/api/members", json=body, timeout=30)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+@pytest.fixture(scope="session")
 def shared_state():
     return {}

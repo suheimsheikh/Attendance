@@ -459,3 +459,54 @@ test coverage. Zero behavioural change.
 
 ## Test Credentials
 See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or phone `9849002111` for OTP-bypass).
+
+## Recently Added (Jun 28, 2026)
+
+- **Escort module polish — 3 enhancements shipped** (28 Jun 2026):
+  1. **Recent visits strip** — each active escort row in `EscortManager`
+     (Institutions page → Escorts modal) renders a compact strip of the
+     last 5 check-in dates with friendly labels (Today / Yesterday /
+     Nd ago / "5 Jul"), hover tooltips show in/out times. Backend:
+     `GET /api/escorts/{id}/recent-visits?limit=5` (auth-required, dates
+     only, no selfies).
+  2. **One-click Invalidate** — admins get an amber Ban-icon button on
+     active escorts (`data-testid="escort-invalidate-{id}"`). Confirms,
+     then calls `POST /api/escorts/{id}/invalidate` which flips status
+     to `left` + stamps `ended_at`, `invalidated_by`, `invalidated_at`.
+     Previously-issued escort JWTs get 401'd on the very next request
+     via the `get_current_user` status gate.
+  3. **Institution-scoped Muster for escorts** — `_can_muster` now
+     permits `is_escort=true` sessions. `/muster/athletes`,
+     `/muster/checkin-bulk`, and `/muster/checkout-bulk` filter by
+     `athlete.institution == escort.institution` for escort callers.
+     Foreign-institution athletes in the bulk request are silently
+     skipped with `reason="outside your institution"`. Admin/coach
+     paths are unchanged (no institution restriction). Frontend:
+     `RequireMuster` and the sidebar now allow escorts onto `/muster`
+     (Presence still admin/coach-only).
+  - Verified end-to-end by iter9 testing agent: 14/14 new backend
+    contract tests pass, full pytest suite 233/233 green, admin UI
+    invalidate flow verified on a real institution.
+
+- **Code review pass (28 Jun 2026)** — broad cleanup, zero behaviour change:
+  - **Mongo indexes for the escort module** — added `escorts.id` (unique),
+    `escorts.mobile_last10`, compound `(status, institution)` on escorts,
+    compound `(escort_id, date)` on `escort_attendance`, and a plain
+    `date` index for the today/purge queries. These were missing since
+    the Escorts launch; the kiosk active-list + escort-token muster
+    + idempotent check-in lookups are now indexed.
+  - **Frontend lint clean** — fixed unescaped quotes on Payroll header,
+    removed 3 dead `eslint-disable-next-line` directives in
+    Institutions and EscortCheckIn. Only remaining lint warnings are
+    in the vendor `components/ui/*` shadcn files (intentional).
+  - **Backend test-suite lint clean** — moved the `athlete` pytest
+    fixture from `test_smoke_flows.py` to `tests/conftest.py` so
+    cross-file imports no longer trip ruff F811 in `test_routes_leaves`.
+    Removed dead `inserted_total` and `me` locals (F841). Renamed the
+    `l` loop variable to `item` in `test_unified_leave_iter4.py` (E741).
+    `ruff check backend/` is now silent.
+  - **Audit findings noted, deferred to dedicated sessions**:
+    rate-limit / lockout on `/auth/login`, JWT→httpOnly cookie migration,
+    `server.py` modular split (~4200 lines), `Calendar.jsx` and
+    `Members.jsx` component extraction. All P2 polish, none are
+    blockers.

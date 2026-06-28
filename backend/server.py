@@ -442,6 +442,17 @@ async def _seed_database() -> None:
     await db.attendance.create_index("check_out_at")
     await db.leaves.create_index([("status", 1), ("start_date", 1), ("end_date", 1)])
     await db.leaves.create_index([("user_id", 1), ("status", 1)])
+    # Escort module hot-paths (added 06/2026 alongside the Escorts launch):
+    # `escorts.id` is used by every escort-token request via get_current_user,
+    # `mobile_last10` by phone_login, and `status` + `institution` by the
+    # kiosk active list + the escort-scoped muster filter. The compound
+    # (escort_id, date) index makes the escort_attendance idempotency check
+    # (find one row for today) O(1) instead of a scan.
+    await db.escorts.create_index("id", unique=True)
+    await db.escorts.create_index("mobile_last10")
+    await db.escorts.create_index([("status", 1), ("institution", 1)])
+    await db.escort_attendance.create_index([("escort_id", 1), ("date", -1)])
+    await db.escort_attendance.create_index("date")
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({

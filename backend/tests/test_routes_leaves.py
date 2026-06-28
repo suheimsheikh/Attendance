@@ -14,9 +14,7 @@ from datetime import date, timedelta
 import pytest
 import requests
 
-
-# Re-use the athlete fixture from test_smoke_flows (pytest auto-discovers it).
-from tests.test_smoke_flows import athlete  # noqa: F401
+# The `athlete` fixture is registered in tests/conftest.py.
 
 
 def _cleanup_leave(client, base_url, leave_id):

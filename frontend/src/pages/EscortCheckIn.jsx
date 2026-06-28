@@ -51,7 +51,7 @@ export default function EscortCheckIn() {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { load(); }, []);
 
   // Athletes are loaded once globally; the check-in card filters them
   // by the picked escort's institution.

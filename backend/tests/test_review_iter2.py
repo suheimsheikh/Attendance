@@ -324,15 +324,6 @@ def test_14_admin_restore_merge_zero_inserted(admin_s, state):
                timeout=120)
     assert r.status_code == 200, r.text[:300]
     d = r.json()
-    # The fix means merge should report 0 inserted because every doc already exists
-    inserted_total = 0
-    if isinstance(d, dict):
-        if "inserted" in d and isinstance(d["inserted"], dict):
-            inserted_total = sum(int(v) for v in d["inserted"].values())
-        elif "inserted" in d and isinstance(d["inserted"], int):
-            inserted_total = d["inserted"]
-        elif "summary" in d and isinstance(d["summary"], dict):
-            inserted_total = sum(int(v.get("inserted", 0)) for v in d["summary"].values() if isinstance(v, dict))
     # daily_content is auto-seeded by the app on access, so a small drift (≤5
     # docs) between backup-capture and restore is expected. The real check is
     # that no user / attendance / config docs got duplicated and the bulk_write

@@ -15,34 +15,14 @@ import csv
 import io
 import os
 import re
-import uuid
 from datetime import date, timedelta
 
-import pytest
 import requests
 
 
 # ---------- session-scoped helpers ----------
-@pytest.fixture(scope="module")
-def athlete(admin_client, base_url):
-    """Pick an existing athlete (or create one) to drive muster + leave tests.
-    Re-used across all flows in this module so we don't litter the DB."""
-    listing = admin_client.get(f"{base_url}/api/members", timeout=30).json()
-    target = next((m for m in listing if m.get("category") == "athlete"), None)
-    if target:
-        return target
-
-    # No athletes — create one
-    body = {
-        "email": f"smoke-{uuid.uuid4().hex[:6]}@athletes.local",
-        "password": "Smoke@1234",
-        "full_name": "Smoke Test Athlete",
-        "role": "member",
-        "category": "athlete",
-    }
-    r = admin_client.post(f"{base_url}/api/members", json=body, timeout=30)
-    assert r.status_code == 200, r.text
-    return r.json()
+# `athlete` fixture is defined in conftest.py so it's shared across tests
+# without needing cross-file imports (which trip ruff F811).
 
 
 # ---------- 1. Admin login ----------

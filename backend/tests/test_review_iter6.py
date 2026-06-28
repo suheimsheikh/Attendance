@@ -84,7 +84,7 @@ class TestMeLeaveSummary:
         confirm pending_leave_days advances by ~1, then clean it up by
         rejecting it.  Window is far enough out to dodge overlap rules."""
         # Pick the admin themselves as target — they have an account
-        me = admin_session.get(f"{api}/auth/me").json()
+        admin_session.get(f"{api}/auth/me").json()
         before = admin_session.get(f"{api}/me/leave-summary").json()
         b_pend = float(before.get("pending_leave_days", 0))
 

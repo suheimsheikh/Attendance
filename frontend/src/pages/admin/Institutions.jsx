@@ -130,7 +130,7 @@ function EscortManager({ institution, onClose }) {
     } catch (err) { toast.error(err?.message || "Could not load escorts"); }
     finally { setLoading(false); }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [institution.id]);
+  useEffect(() => { load(); }, [institution.id]);
 
   const groups = useMemo(() => {
     const g = { active: [], replaced: [], left: [] };
@@ -219,7 +219,7 @@ function EscortRow({ escort, onEdit, onChange }) {
       setVisits([]);
     } finally { setLoadingVisits(false); }
   };
-  useEffect(() => { if (escort.status === "active") loadVisits(); /* eslint-disable-next-line */ }, [escort.id]);
+  useEffect(() => { if (escort.status === "active") loadVisits(); }, [escort.id]);
 
   const remove = async () => {
     if (!window.confirm(`Delete escort "${escort.name}"? Attendance trail will also be removed.`)) return;
