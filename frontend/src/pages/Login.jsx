@@ -22,7 +22,7 @@ export default function Login() {
   const deviceIdRef = useRef("");
   const formErr = useFormError();
 
-  useEffect(() => { if (user) nav("/", { replace: true }); }, [user, nav]);
+  useEffect(() => { if (user) nav(user.is_escort ? "/escort-checkin" : "/", { replace: true }); }, [user, nav]);
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -33,7 +33,9 @@ export default function Login() {
     if (pollRef.current) clearInterval(pollRef.current);
     setToken(token);
     loginWithToken(token, u);
-    nav("/", { replace: true });
+    // Escort tokens drop into the escort kiosk; everyone else lands on
+    // the member self-check-in home.
+    nav(u?.is_escort ? "/escort-checkin" : "/", { replace: true });
   };
 
   const submitPhone = async (e) => {

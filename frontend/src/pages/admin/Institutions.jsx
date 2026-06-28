@@ -1,14 +1,19 @@
-import React, { useEffect, useState } from "react";
-import { Loader2, Plus, Trash2, Edit3, Building2 } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Loader2, Plus, Trash2, Edit3, Building2, UserCheck, Users, X, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
+import { useEscape } from "../../hooks/useEscape";
 
 export default function Institutions() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
+  // Tracks which institution row is currently showing the escort
+  // management panel. Null = none open. Only one open at a time keeps
+  // the page compact.
+  const [escortsFor, setEscortsFor] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -65,6 +70,14 @@ export default function Institutions() {
                 )}
               </div>
               {!r.active && <span className="text-[10px] uppercase font-bold text-slate-400 mr-2">Inactive</span>}
+              <button
+                onClick={() => setEscortsFor(r)}
+                className="iu-btn-secondary !h-9 !px-2.5 !text-xs"
+                data-testid={`inst-escorts-${r.id}`}
+                title="Manage escorts"
+              >
+                <UserCheck size={14}/> Escorts
+              </button>
               <button onClick={() => setEditing(r)} className="p-2 rounded-lg hover:bg-slate-100" data-testid={`inst-edit-${r.id}`}><Edit3 size={16}/></button>
               <button onClick={() => remove(r)} className="p-2 rounded-lg hover:bg-red-50 text-red-600" data-testid={`inst-delete-${r.id}`}><Trash2 size={16}/></button>
             </div>
@@ -79,6 +92,221 @@ export default function Institutions() {
           onSaved={() => { setEditing(null); load(); }}
         />
       )}
+      {escortsFor && (
+        <EscortManager
+          institution={escortsFor}
+          onClose={() => { setEscortsFor(null); load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * EscortManager — modal opened from an Institution row. Lists every
+ * escort registered against the institution, lets admins add new ones,
+ * edit the existing roster (start_date, status, phone), and trigger
+ * substitutions (mark old as "replaced", point them at the new escort).
+ *
+ * Status semantics:
+ *   • active   — current escort, eligible to log in / be checked in.
+ *   • replaced — historical row; admin pointed `replaced_by` at the new
+ *                escort. Kept around so audit trails on attendance
+ *                point to the correct historical person.
+ *   • left     — escort stopped accompanying anyone. Same audit purpose
+ *                as `replaced` but with no incoming substitution.
+ */
+function EscortManager({ institution, onClose }) {
+  useEscape(onClose);
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingEsc, setEditingEsc] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      setRows(await api.get(`/institutions/${institution.id}/escorts`));
+    } catch (err) { toast.error(err?.message || "Could not load escorts"); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [institution.id]);
+
+  const groups = useMemo(() => {
+    const g = { active: [], replaced: [], left: [] };
+    rows.forEach((r) => { (g[r.status] || (g.active)).push(r); });
+    return g;
+  }, [rows]);
+
+  return (
+    <div className="iu-modal" onClick={(e) => e.target === e.currentTarget && onClose()} data-testid="escort-manager">
+      <div className="iu-modal-card max-w-2xl">
+        <header className="flex items-start justify-between p-4 border-b border-slate-100">
+          <div>
+            <div className="text-lg font-extrabold">Escorts · {institution.name}</div>
+            <div className="text-xs text-slate-500 mt-0.5">Many escorts can be tied to one institution. Use Substitute to bring in a replacement.</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button data-testid="add-escort" onClick={() => setShowAdd(true)} className="iu-btn-primary !h-9 !px-3 !text-xs"><Plus size={13}/> Add escort</button>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+          </div>
+        </header>
+        <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          {loading ? (
+            <div className="text-center py-8"><Loader2 className="mx-auto animate-spin text-slate-400"/></div>
+          ) : rows.length === 0 ? (
+            <div className="text-center py-8 text-sm text-slate-500">
+              No escorts yet — add the first one above.
+            </div>
+          ) : (
+            <>
+              <EscortGroup title="Active" rows={groups.active} onEdit={setEditingEsc} onChange={load} accent="emerald" />
+              {groups.replaced.length > 0 && <EscortGroup title="Replaced" rows={groups.replaced} onEdit={setEditingEsc} onChange={load} accent="slate" />}
+              {groups.left.length > 0 && <EscortGroup title="Left" rows={groups.left} onEdit={setEditingEsc} onChange={load} accent="slate" />}
+            </>
+          )}
+        </div>
+      </div>
+      {showAdd && (
+        <EscortForm
+          institutionId={institution.id}
+          onClose={() => setShowAdd(false)}
+          onSaved={() => { setShowAdd(false); load(); }}
+        />
+      )}
+      {editingEsc && (
+        <EscortForm
+          institutionId={institution.id}
+          initial={editingEsc}
+          activeRoster={groups.active}
+          onClose={() => setEditingEsc(null)}
+          onSaved={() => { setEditingEsc(null); load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EscortGroup({ title, rows, onEdit, onChange, accent }) {
+  if (!rows.length) return null;
+  const tone = accent === "emerald" ? "text-emerald-700" : "text-slate-500";
+  return (
+    <div data-testid={`escort-group-${title.toLowerCase()}`}>
+      <div className={`text-[10px] uppercase tracking-wider font-bold ${tone} mb-1.5`}>{title} ({rows.length})</div>
+      <div className="space-y-1.5">
+        {rows.map((e) => <EscortRow key={e.id} escort={e} onEdit={() => onEdit(e)} onChange={onChange} />)}
+      </div>
+    </div>
+  );
+}
+
+function EscortRow({ escort, onEdit, onChange }) {
+  const remove = async () => {
+    if (!window.confirm(`Delete escort "${escort.name}"? Attendance trail will also be removed.`)) return;
+    try {
+      await api.del(`/escorts/${escort.id}`);
+      toast.success("Deleted");
+      onChange();
+    } catch (err) { toast.error(err?.message || "Failed"); }
+  };
+  return (
+    <div className="rounded-lg border border-slate-200 px-3 py-2 flex items-center gap-3" data-testid={`escort-row-${escort.id}`}>
+      <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center"><Shield size={14}/></div>
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold truncate">{escort.name}</div>
+        <div className="text-[11px] text-slate-500 truncate">
+          {escort.phone || "no phone"} · since {escort.start_date}
+          {escort.ended_at && ` · ended ${escort.ended_at}`}
+        </div>
+      </div>
+      <button onClick={onEdit} className="p-1.5 rounded hover:bg-slate-100" data-testid={`escort-edit-${escort.id}`}><Edit3 size={14}/></button>
+      <button onClick={remove} className="p-1.5 rounded hover:bg-red-50 text-red-600" data-testid={`escort-delete-${escort.id}`}><Trash2 size={14}/></button>
+    </div>
+  );
+}
+
+function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSaved }) {
+  useEscape(onClose);
+  const isEdit = !!initial;
+  const [name, setName] = useState(initial?.name || "");
+  const [phone, setPhone] = useState(initial?.phone || "");
+  const [startDate, setStartDate] = useState(initial?.start_date || new Date().toISOString().slice(0, 10));
+  const [status, setStatus] = useState(initial?.status || "active");
+  const [replacedBy, setReplacedBy] = useState(initial?.replaced_by || "");
+  const [busy, setBusy] = useState(false);
+  const formErr = useFormError();
+
+  const submit = async (e) => {
+    e.preventDefault();
+    formErr.clear();
+    if (!name.trim()) { formErr.setMessage("Name required"); return; }
+    if (!startDate) { formErr.setMessage("Start date required"); return; }
+    setBusy(true);
+    try {
+      if (isEdit) {
+        const body = { name: name.trim(), phone: phone.trim() || null,
+                       start_date: startDate, status };
+        if (status === "replaced") body.replaced_by = replacedBy || null;
+        await api.patch(`/escorts/${initial.id}`, body);
+      } else {
+        await api.post(`/institutions/${institutionId}/escorts`, {
+          name: name.trim(), phone: phone.trim() || null, start_date: startDate,
+        });
+      }
+      toast.success(isEdit ? "Saved" : "Escort added");
+      onSaved();
+    } catch (err) { formErr.setFromApi(err, "Failed"); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="iu-modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <form onSubmit={submit} className="iu-modal-card max-w-md p-5 space-y-3" data-testid="escort-form">
+        <div className="flex items-center justify-between">
+          <div className="text-lg font-extrabold">{isEdit ? "Edit escort" : "Add escort"}</div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+        </div>
+        <div>
+          <label className="iu-label">Name</label>
+          <input data-testid="escort-form-name" value={name} onChange={(e) => setName(e.target.value)} className="iu-input" autoFocus />
+        </div>
+        <div>
+          <label className="iu-label">Phone <span className="text-slate-400 normal-case font-normal">(for self check-in via app)</span></label>
+          <input data-testid="escort-form-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91…" className="iu-input"/>
+        </div>
+        <div>
+          <label className="iu-label">Start date</label>
+          <input data-testid="escort-form-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="iu-input" />
+        </div>
+        {isEdit && (
+          <div>
+            <label className="iu-label">Status</label>
+            <select data-testid="escort-form-status" value={status} onChange={(e) => setStatus(e.target.value)} className="iu-input">
+              <option value="active">Active</option>
+              <option value="replaced">Replaced (substituted)</option>
+              <option value="left">Left</option>
+            </select>
+            {status === "replaced" && activeRoster.length > 0 && (
+              <div className="mt-2">
+                <label className="iu-label">Substituted by</label>
+                <select data-testid="escort-form-replaced-by" value={replacedBy} onChange={(e) => setReplacedBy(e.target.value)} className="iu-input">
+                  <option value="">— pick the replacement —</option>
+                  {activeRoster.filter((a) => a.id !== initial?.id).map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+        <FormErrorBanner error={formErr.error} requestId={formErr.requestId} onDismiss={formErr.clear} testId="escort-form-error" />
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} className="iu-btn-secondary flex-1">Cancel</button>
+          <button type="submit" disabled={busy} data-testid="escort-form-save" className="iu-btn-primary flex-1">
+            {busy ? <Loader2 className="animate-spin" size={14}/> : "Save"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

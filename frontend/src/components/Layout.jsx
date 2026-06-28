@@ -4,7 +4,7 @@ import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, ClipboardList, Building2, IdCard, FileSpreadsheet, Sailboat,
-  LogOut, Menu, X, ListTree, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles
+  LogOut, Menu, X, ListTree, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -14,6 +14,10 @@ import OfflineBanner from "./OfflineBanner";
 const NAV_MEMBER = [
   { to: "/", label: "My Check In/Out", icon: ScanLine, end: true },
   { to: "/my-leaves", label: "My Leave/Tour/C-Off", icon: CalendarCheck2 },
+  // Escort kiosk: visible to every signed-in user. Athletes/coaches/staff
+  // help mark escorts in/out — escorts themselves land here after phone
+  // login (auth.jsx forces the redirect when `is_escort=true`).
+  { to: "/escort-checkin", label: "Escorts Check in/Out", icon: UserCheck },
   { to: "/profile", label: "My Profile", icon: UserCog },
 ];
 
@@ -42,6 +46,7 @@ const NAV_ADMIN = [
   { to: "/admin/office", label: "Office Settings", icon: Settings },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/admin/payroll", label: "Monthly Payroll", icon: FileSpreadsheet },
+  { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera },
   { to: "/admin/backup", label: "Backup & Restore", icon: Database },
 ];
 
@@ -51,6 +56,12 @@ export default function Layout() {
   const [open, setOpen] = useState(false);
   const isAdmin = user?.role === "admin";
   const canMuster = isAdmin || user?.category === "coach";
+  // Escort sessions get a stripped-down sidebar — only the kiosk link
+  // and Sign out. They have no member/coach/admin permissions.
+  const isEscort = !!user?.is_escort;
+  const memberNav = isEscort
+    ? NAV_MEMBER.filter((n) => n.to === "/escort-checkin")
+    : NAV_MEMBER;
 
   // Lock body scroll while the mobile drawer is open so the page underneath
   // doesn't scroll behind the overlay (fixes a "scroll bleed" on iOS Safari).
@@ -80,10 +91,10 @@ export default function Layout() {
 
       <nav className="px-3 py-4 flex-1 overflow-y-auto">
         <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Member</div>
-        {NAV_MEMBER.map((item) => (
+        {memberNav.map((item) => (
           <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
         ))}
-        {canMuster && (
+        {!isEscort && canMuster && (
           <>
             <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Coach</div>
             {NAV_COACH.map((item) => (
@@ -91,7 +102,7 @@ export default function Layout() {
             ))}
           </>
         )}
-        {isAdmin && (
+        {!isEscort && isAdmin && (
           <>
             <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Admin</div>
             {NAV_ADMIN.map((item) => (

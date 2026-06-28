@@ -7,6 +7,7 @@ import { useAuth } from "../auth";
 import { formatDate } from "../utils";
 import { toast } from "sonner";
 import UpcomingThisWeek from "../components/UpcomingThisWeek";
+import EscortMissingBanner from "../components/EscortMissingBanner";
 
 import { COLUMNS, PAIRED_COLUMN_KEYS } from "../components/presence/constants";
 import { Column } from "../components/presence/Column";
@@ -231,6 +232,7 @@ export default function Presence() {
   return (
     <div className="p-4 md:p-6 max-w-[1500px] mx-auto">
       {!isHistorical && <UpcomingThisWeek />}
+      {!isHistorical && <EscortMissingBanner />}
       <header className="flex flex-wrap items-end justify-between gap-3 mb-5">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight" data-testid="presence-title">Presence Board</h1>

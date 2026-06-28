@@ -8,6 +8,29 @@ the dated "Released" header at the bottom and reset the "Unreleased" section.
 
 ## 🚧 Unreleased — pending deploy to `i-showed-up.ychyderabad.com`
 
+### 🚪 Escorts module — institutions, kiosk, self-login, photo cleanup (June 28, 2026)
+
+A self-contained escort presence sub-system. Escorts are NOT employees — no payroll, no leave, no reports — but the campus *does* need to know whether they showed up and which athletes arrived/left under their care.
+
+**Backend** (`routes/escorts.py`, ~365 lines + extensions in `server.py`):
+- New `escorts` and `escort_attendance` collections; both keyed by string `id`.
+- CRUD: `GET/POST /api/institutions/{id}/escorts`, `PATCH/DELETE /api/escorts/{id}`. Admins manage rosters per institution. Status transitions: `active → replaced → left`.
+- Active list: `GET /api/escorts/active` (any logged-in user).
+- Attendance: `POST /api/escort-attendance/checkin|checkout|temp-exit|return` with proxy support — coach/admin can file for an escort who isn't using the app, OR the escort self-logs and files their own. Selfie field is optional; size-capped to ~450 KB.
+- Today: `GET /api/escort-attendance/today` returns `{escorts, attendance}` — used by both the kiosk and the admin Presence banner.
+- Photo retention: `GET /api/escort-attendance/photos/purge-candidates` lists rows whose selfies are past the 30-day window with `purge_ready: true`. Admin curates and deletes via `DELETE /api/escort-attendance/{id}/photos` or bulk `POST /escort-attendance/photos/purge-bulk`.
+- Phone login: `_match_escort_by_phone()` matches a phone to an active escort and issues a JWT carrying `is_escort: true`. `get_current_user` resolves these tokens against the `escorts` collection and synthesises a user-shaped dict with `role=None, category=None` so admin/coach gates auto-reject.
+
+**Frontend**:
+- `/escort-checkin` — kiosk page in the **Member** menu (visible to everyone). Live stats strip (Expected · Checked-in · Stepped-out · All-in ✓). Search picker → action card with athlete-tick-off checklist + optional selfie. Mirror's the SelfCheckIn step-out chips (30 min / 1 hour / 2 hours / Custom).
+- **Institutions** admin page extended with an **Escorts** button per row → side-modal listing escorts grouped by status, with Add / Edit / Substitute / Delete actions.
+- **Presence** (admin landing) gets an `EscortMissingBanner` strip: *"⚠ 2 of 5 escorts not checked in yet — mark them in if they're here"*. Hidden when nothing's pending.
+- **Escort Photo Cleanup** admin page — Purge-ready badge, multi-select rows, bulk delete, preview thumbnails.
+- Auth routing: phone login with `is_escort: true` lands at `/escort-checkin` instead of `/`. `RequireMember` blocks escorts from member-only pages (SelfCheckIn / MyLeaves / Profile). Sidebar shows only the Escort kiosk + Sign Out for escort tokens.
+
+**Decisions locked (per user, Jun 28 2026)**: 1c (both self + proxy), 2d (athlete checklist), 3a (Member menu), 4a (dashboard banner), 5 (start_date only + substitution), 6c (PURGE-READY badge, admin curates).
+
+
 ### 🚶 Step-Out: one-tap UX + Camps go informational (June 27, 2026)
 
 **Step-out** (the home-page card when checked in) was a two-field form (reason + free time picker). Redesigned around the 99% case:

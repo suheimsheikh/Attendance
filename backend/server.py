@@ -122,10 +122,35 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
         user_id = payload.get("sub")
         device_id = payload.get("device_id")
+        is_escort = bool(payload.get("is_escort"))
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Could not validate token")
+    # Escort-bound tokens resolve to the `escorts` collection. We adapt
+    # the document to look user-shaped so the downstream code (and the
+    # admin/coach gates) treat them as an authenticated identity without
+    # accidental escalation. `is_escort=True` tells the escort endpoints
+    # to use the session escort directly (no proxy required).
+    if is_escort:
+        esc = await db.escorts.find_one({"id": user_id}, {"_id": 0})
+        if not esc:
+            raise HTTPException(status_code=401, detail="Escort no longer registered")
+        if esc.get("status") != "active":
+            raise HTTPException(status_code=401, detail=f"Escort status: {esc.get('status')}")
+        # Synthesise a minimal user-like dict. Role/category fields are
+        # intentionally None so require_admin / require_coach_or_admin
+        # reject escort tokens.
+        return {
+            "id": esc["id"],
+            "full_name": esc["name"],
+            "phone": esc.get("phone"),
+            "institution": esc.get("institution"),
+            "role": None,
+            "category": None,
+            "is_escort": True,
+            "escort_id": esc["id"],
+        }
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
@@ -161,10 +186,13 @@ class LoginIn(BaseModel):
 
 class UserPublic(BaseModel):
     id: str
-    email: str  # plain str on output — validated on input via MemberCreate.email: EmailStr
+    # `email` / `role` / `category` are required for member-style users but
+    # null for escorts — keep the schema permissive so /auth/me can return
+    # both shapes through a single response_model.
+    email: Optional[str] = None
     full_name: str
-    role: str
-    category: str
+    role: Optional[str] = None
+    category: Optional[str] = None
     rank: Optional[str] = None
     mobile: Optional[str] = None
     work_start: Optional[str] = None
@@ -186,6 +214,11 @@ class UserPublic(BaseModel):
     last_seen_date: Optional[str] = None
     leave_balance_opening: Optional[float] = None
     leave_balance_remaining: Optional[float] = None
+    # Escort-token flag — when True the frontend routes the session to
+    # /escort-checkin instead of the member self-check-in page.
+    is_escort: Optional[bool] = None
+    escort_id: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class MemberCreate(BaseModel):
@@ -758,6 +791,31 @@ async def _match_user_by_phone(digits: str) -> Optional[dict]:
     return None
 
 
+async def _match_escort_by_phone(digits: str) -> Optional[dict]:
+    """Map a phone-number to an `escorts` row, mirroring the
+    `_match_user_by_phone` strategy: try the indexed mobile_last10 key
+    first, then fall back to a full scan keyed by the normalized form.
+
+    Only active escorts match — replaced/left escorts no longer log in.
+    """
+    key = phone_key(digits)
+    if not key:
+        return None
+    # Cheap, indexed path for the steady-state case.
+    match = await db.escorts.find_one(
+        {"mobile_last10": key, "status": "active"}, {"_id": 0}
+    )
+    if match:
+        return match
+    # Backfill path — older escort rows may not have `mobile_last10`
+    # populated. Walk active escorts and normalize on the fly.
+    async for e in db.escorts.find({"status": "active"},
+                                   {"_id": 0, "id": 1, "phone": 1}):
+        if phone_key(e.get("phone") or "") == key:
+            return await db.escorts.find_one({"id": e["id"]}, {"_id": 0})
+    return None
+
+
 @api_router.post("/auth/phone")
 async def phone_login(body: PhoneLoginIn):
     digits = normalize_phone(body.phone)
@@ -765,6 +823,35 @@ async def phone_login(body: PhoneLoginIn):
         raise HTTPException(status_code=400, detail="Enter a valid phone number")
     now = now_utc().isoformat()
     matched = await _match_user_by_phone(digits)
+    # Escort phone match — runs only when no employee/user matched (so a
+    # phone listed against both a member AND an escort still routes to
+    # the member). Escorts are passwordless (no device approval gate):
+    # one phone = one escort identity. The frontend recognises the
+    # `is_escort` flag and redirects to /escort-checkin.
+    if not matched:
+        esc = await _match_escort_by_phone(digits)
+        if esc:
+            token = jwt.encode(
+                {"sub": esc["id"], "is_escort": True,
+                 "exp": now_utc() + timedelta(minutes=DEVICE_TOKEN_MINUTES)},
+                JWT_SECRET, algorithm=JWT_ALGO,
+            )
+            return {
+                "status": "approved",
+                "access_token": token,
+                "token_type": "bearer",
+                "is_escort": True,
+                "user": {
+                    "id": esc["id"],
+                    "full_name": esc["name"],
+                    "phone": esc.get("phone"),
+                    "institution": esc.get("institution"),
+                    "is_escort": True,
+                    "escort_id": esc["id"],
+                    "role": None,
+                    "category": None,
+                },
+            }
     device = await db.devices.find_one({"device_id": body.device_id}, {"_id": 0})
     meta = {
         "phone": digits,
@@ -3936,6 +4023,13 @@ enrich_leaves = _leaves.enrich_leaves  # type: ignore[attr-defined]
 from routes.reports import make_router as _reports_router  # noqa: E402
 app.include_router(_reports_router(
     db, require_admin, get_current_user, compute_hours_report, enrich_leaves,
+))
+
+# Escorts — separate entity (not employees) tracked under institutions.
+# Owns CRUD, daily attendance, temp-exit, and 30-day photo retention.
+from routes.escorts import make_router as _escorts_router  # noqa: E402
+app.include_router(_escorts_router(
+    db, require_admin, get_current_user, require_coach_or_admin,
 ))
 
 # Daily bilingual content (motivational quote / English-Telugu word-of-the-day)

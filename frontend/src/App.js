@@ -31,11 +31,27 @@ const ImportMembers = lazy(() => import("./pages/admin/ImportMembers"));
 const SmsLog = lazy(() => import("./pages/admin/SmsLog"));
 const WhatsNew = lazy(() => import("./pages/WhatsNew"));
 const Cards = lazy(() => import("./pages/admin/Cards"));
+const EscortCheckIn = lazy(() => import("./pages/EscortCheckIn"));
+const EscortPhotoCleanup = lazy(() => import("./pages/admin/EscortPhotoCleanup"));
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <FullPageSpinner />;
   if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+/**
+ * RequireMember — gates member-only routes against escort tokens.
+ * Escorts have no payroll / profile / leave entity, so we redirect them
+ * straight to their kiosk. Used for the SelfCheckIn home, MyLeaves,
+ * Profile and any other route that derives from a `users` row.
+ */
+function RequireMember({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <FullPageSpinner />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.is_escort) return <Navigate to="/escort-checkin" replace />;
   return children;
 }
 
@@ -73,13 +89,14 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
-            <Route index element={<SelfCheckIn />} />
-            <Route path="check-in" element={<SelfCheckIn />} />
+            <Route index element={<RequireMember><SelfCheckIn /></RequireMember>} />
+            <Route path="check-in" element={<RequireMember><SelfCheckIn /></RequireMember>} />
             <Route path="presence" element={<RequireMuster><Presence /></RequireMuster>} />
             <Route path="muster" element={<RequireMuster><Muster /></RequireMuster>} />
-            <Route path="my-leaves" element={<MyLeaves />} />
+            <Route path="my-leaves" element={<RequireMember><MyLeaves /></RequireMember>} />
+            <Route path="escort-checkin" element={<EscortCheckIn />} />
             <Route path="whats-new" element={<WhatsNew />} />
-            <Route path="profile" element={<Profile />} />
+            <Route path="profile" element={<RequireMember><Profile /></RequireMember>} />
             <Route path="admin" element={<Navigate to="/presence" replace />} />
             <Route path="admin/members" element={<RequireAdmin><Members /></RequireAdmin>} />
             <Route path="admin/approvals" element={<RequireAdmin><Approvals /></RequireAdmin>} />
@@ -104,6 +121,7 @@ function App() {
             <Route path="admin/calendar" element={<RequireAdmin><Calendar /></RequireAdmin>} />
             <Route path="admin/backup" element={<RequireAdmin><BackupRestore /></RequireAdmin>} />
             <Route path="admin/import" element={<RequireAdmin><ImportMembers /></RequireAdmin>} />
+            <Route path="admin/escort-photos" element={<RequireAdmin><EscortPhotoCleanup /></RequireAdmin>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
