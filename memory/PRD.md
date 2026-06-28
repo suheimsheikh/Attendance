@@ -791,3 +791,31 @@ See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or
     `server.py` modular split (~4200 lines), `Calendar.jsx` and
     `Members.jsx` component extraction. All P2 polish, none are
     blockers.
+
+- **server.py modular router refactor — Phase 1 (28 Jun 2026)** —
+  ~1280 lines carved out of `server.py` into 5 new modules under
+  `/app/backend/routes/` (server.py: 4316 → 3033 lines, ~30%
+  reduction). Pattern: each module exposes `make_router(...)` factory
+  receiving callable deps; no import cycles. Shared Pydantic model
+  `UserPublic` moved to `/app/backend/models.py`.
+  - `routes/auth.py` — `/auth/login`, `/auth/me`, `/auth/phone`,
+    `/auth/phone/status`, full `/admin/devices/*` queue
+    (approve/reject/revoke/reinstate). Trusted-phone cinch + admin
+    self-recovery logic preserved verbatim.
+  - `routes/office.py` — `/office` GET+PUT (Twilio token masking +
+    twilio sub-doc strip on PUT), `/admin/checkout-reminder/send-now`,
+    `/changelog`.
+  - `routes/masters.py` — `/institutions` (CRUD + rename cascade),
+    `/fleets` (CRUD + rename cascade to users AND breaks), and
+    `/fleets/assign` bulk reassign.
+  - `routes/muster.py` — `/muster/athletes`, `/muster/checkin-bulk`,
+    `/muster/checkout-bulk` (escort institution-scoping intact;
+    already-checked-in greying preserved).
+  - `routes/admin_tools.py` — `/admin/attendance/wipe`,
+    `/admin/backup`, `/admin/restore`, `/admin/preflight` (7-item
+    checklist), `/admin/summary`, `/admin/activity` (event feed).
+  - Iter16 testing agent: 34/34 contract tests + 75/75 broader
+    regression = 109/109 GREEN. Zero behaviour changes detected.
+    Hydration warning `<span> in <option>` no longer reproduces in
+    browser console — likely fixed by prior Members/Presence/Calendar
+    component extractions.
