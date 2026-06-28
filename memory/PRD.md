@@ -428,6 +428,35 @@ test coverage. Zero behavioural change.
 - **Verification**: testing agent ran 19/19 backend + 7/7 frontend smoke tests — **100% pass**, no regressions.
 - **Still deferred** (separate planning sessions): JWT→httpOnly cookies migration, rate-limiting on auth, full `server.py` modular refactor, `Presence.jsx` split into `components/presence/`, splitting the 437-line `/api/presence` endpoint into gather/resolve/render phases.
 
+## Recently Added (Feb 2026 — escort selfie thumbnails)
+
+- **Captured photo now visible as a thumbnail on the kiosk** (29 Jun 2026)
+  - Backend: `/escort-attendance/today` now applies the existing
+    `_strip_selfies` helper (was inline-stripping selfies), so every
+    row surfaces `has_check_in_selfie` / `has_check_out_selfie`
+    boolean flags. Selfies remain stripped from the list payload —
+    no perf regression on the kiosk list.
+  - Backend: new `GET /escort-attendance/{att_id}/selfie?kind=in|out`
+    returns `{data_url: '<base64>'}` for lazy fetch. Auth gate:
+    admin / coach / the escort whose row it is (a foreign-escort
+    token gets 403). FastAPI `Literal["in","out"]` rejects invalid
+    `kind` with 422 automatically. 404 distinguishes "row missing"
+    from "no selfie on file" via the detail string.
+  - Frontend (`EscortCheckIn.jsx`):
+    - `SelfieThumbnail` component: 56×56 preview, label badge,
+      tap-to-zoom full-screen modal. Resolution order = local
+      data URL → lazy `/selfie` fetch → null. Cancellation token
+      prevents stale state writes on unmount.
+    - `EscortActionCard` hoists `justCapturedIn` / `justCapturedOut`
+      state so the just-submitted photo shows IMMEDIATELY on the
+      next render (no API round-trip), and `OnCampusActions` /
+      `CheckedOutRecap` render the thumbnail(s) inline.
+    - Recap shows TWO thumbnails (Check-in + Check-out) when both
+      photos are on file.
+  - Verified end-to-end by iter10 testing agent: 12/12 backend
+    contract tests pass, all 3 UI surfaces (on-campus card,
+    zoom modal, recap dual thumbs, no-thumb empty state) verified.
+
 ## Recently Added (Jun 28, 2026 — code review action items)
 
 - **Test credentials moved to env vars** — `test_review_iter2`, `iter3`,
