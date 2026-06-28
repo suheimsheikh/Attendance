@@ -67,7 +67,11 @@ function RequireMuster({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <FullPageSpinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== "admin" && user.category !== "coach") return <Navigate to="/" replace />;
+  // Admins, coaches, and active escorts can run muster. Escorts are
+  // scoped to their own institution server-side (see _can_muster + the
+  // bulk endpoints) — the frontend doesn't enforce additional limits.
+  const canMuster = user.role === "admin" || user.category === "coach" || user.is_escort;
+  if (!canMuster) return <Navigate to="/" replace />;
   return children;
 }
 

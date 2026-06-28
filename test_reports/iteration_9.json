@@ -1,0 +1,33 @@
+{
+  "summary": "Iter9 verified all 3 Escort-module polish enhancements end-to-end. Backend: 14/14 new pytest cases pass in 2.04s covering (a) GET /escorts/{id}/recent-visits (admin + escort token visibility, limit honoured, shape, auth required, today's check-in surfaced), (b) POST /escorts/{id}/invalidate (admin-only 403/401 gate, status='left' + ended_at + invalidated_by + invalidated_at stamped, invalidated escort's pre-existing JWT now 401s on /auth/me, 404 for unknown id), (c) Muster institution filter for escort tokens — GET /muster/athletes scoped to escort's institution (admin sees full list), POST /muster/checkin-bulk and /muster/checkout-bulk silently skip foreign-institution athletes with reason='outside your institution' while still mustering in-institution athletes; admin path unchanged. Frontend: /admin/institutions → YCH → Escorts panel shows 2 active escorts each rendering 'No visits yet' strip + amber Invalidate button (data-testid='escort-invalidate-{id}'). Clicking Invalidate, accepting confirm → toast 'TEST_UI_Escort_A invalidated', escort moved from ACTIVE (2 → 1) into LEFT (1) group with ended date stamp, Invalidate button removed. All UI testids resolve.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter9.py",
+    "/app/test_reports/pytest/iter9_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/escorts.py recent-visits (491): clean limit-clamp max(1, min(20, limit)) prevents abusive queries; projection keeps payload tiny; auth gate is just get_current_user (any logged-in user) which matches the docstring 'just dates, no selfies'. OK.",
+    "routes/escorts.py invalidate (502): admin-only via require_admin, stamps invalidated_by/invalidated_at + ended_at + status='left' atomically. server.py get_current_user (139) re-checks esc.get('status') != 'active' → returns 401 on next request, so previously issued JWTs lose access immediately. Clean terminal action.",
+    "server.py muster_athletes (3149-3154): escort branch hard-fails with 400 if escort somehow has no institution — safe. server.py checkin/checkout-bulk (3205, 3248): escort_inst is None for non-escorts so the institution gate is a no-op for admin/coach — confirmed by regression test. Skip-vs-403 strategy is correct for forgiving UX.",
+    "server.py phone_login (831-854): when no member matches, escort phone match issues an is_escort=true token without device approval — passwordless by design (one phone = one escort). This is consistent with the docstring.",
+    "frontend Layout.jsx (62-68): memberNav for escorts is constructed as NAV_MEMBER filtered to /escort-checkin PLUS Muster Roll. canMuster variable (58) doesn't include is_escort but that variable only gates the COACH section visibility in the sidebar — escorts intentionally don't get that header, they just get their two member-nav items. Behaviour matches spec.",
+    "frontend Institutions.jsx EscortRow (203-278): RecentVisitsStrip lazy-loads on mount only for active escorts via useEffect, sets visits=null initial → loading=true while fetching → renders empty/filled. invalidate() uses window.confirm and calls onChange() which triggers parent refresh. Clean. Sample chip title attr exposes In/Out times — nice touch."
+  ],
+  "updated_files": ["/app/backend/tests/test_review_iter9.py"],
+  "success_rate": {
+    "backend": "100% (14/14 iter9 contract tests pass; full suite expected at 235/235 per prior baseline)",
+    "frontend": "100% — admin escorts UI panel + invalidate flow verified end-to-end on YCH institution with two seeded test escorts"
+  },
+  "test_credentials": "admin@attendance.app / Admin@12345 (working). Escort phone-login validated programmatically via the seeded TEST_Escort phone numbers; no UI escort-login path tested (out of scope — backend JWT routing already verified by test_invalidated_escort_token_rejected).",
+  "seed_data_creation": "Tests create transient TEST_Escort_* and TEST_UI_Escort_* records (cleaned up via DELETE in fixture teardown and a post-test cleanup script). One TEST_Inst_* institution may be created if the DB has <2 institutions (cleaned up). Mid-run check-in attendance row left on the test escort (cleaned via DELETE /escorts/{id} cascade in routes/escorts.py:212).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter9 closed clean — all 3 enhancements (recent-visits strip, one-click invalidate, escort-scoped muster) ship as specified. Key selectors used: escort-row-{id}, escort-invalidate-{id}, escort-visits-{id} | escort-visits-loading-{id} | escort-visits-empty-{id}, escort-visit-chip-{id}-{i}, escort-group-active | escort-group-left | escort-group-replaced. Backend regression command: cd /app/backend && python -m pytest tests/ -q (full suite). New iter9 file is tests/test_review_iter9.py — 14 tests, ~2s. To exercise the escort-token muster path manually: POST /api/auth/phone with an active escort's phone → token carries is_escort=true → GET /api/muster/athletes returns institution-filtered roster. To test UI invalidate: log in as admin, /admin/institutions → click 'Escorts' on any institution with an active escort → click the amber Ban icon (data-testid='escort-invalidate-{id}') → confirm dialog → escort moves to LEFT group.",
+  "rca of the issue": "N/A — no defects found; all acceptance criteria satisfied."
+}

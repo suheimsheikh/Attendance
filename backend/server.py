@@ -3110,12 +3110,20 @@ async def my_stats(user: dict = Depends(get_current_user)):
 # ticks who's present (or who's departing).
 # ----------------------------------------------------------------------------
 def _can_muster(user: dict) -> bool:
-    return user.get("role") == "admin" or user.get("category") == "coach"
+    # Active escorts (session-bound to a single institution) may also muster,
+    # but only within their own institution. The institution-scoping is
+    # enforced downstream in `muster_athletes` and the bulk endpoints —
+    # this gate only controls "can they touch the muster surface at all".
+    return (
+        user.get("role") == "admin"
+        or user.get("category") == "coach"
+        or bool(user.get("is_escort"))
+    )
 
 
 def _require_muster(user: dict) -> None:
     if not _can_muster(user):
-        raise HTTPException(status_code=403, detail="Only coaches and admins can run muster")
+        raise HTTPException(status_code=403, detail="Only coaches, admins, and active escorts can run muster")
 
 
 class MusterBulkIn(BaseModel):
@@ -3136,7 +3144,16 @@ async def muster_athletes(mode: str = "checkin", user: dict = Depends(get_curren
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
 
-    athletes = await db.users.find({"category": "athlete"}, {"_id": 0}).to_list(2000)
+    # Escorts can only muster athletes from their own institution. Coaches
+    # and admins see the full roster.
+    athlete_query: dict = {"category": "athlete"}
+    if user.get("is_escort"):
+        inst = (user.get("institution") or "").strip()
+        if not inst:
+            raise HTTPException(status_code=400, detail="Escort has no institution assigned")
+        athlete_query["institution"] = inst
+
+    athletes = await db.users.find(athlete_query, {"_id": 0}).to_list(2000)
 
     open_sessions = await db.attendance.find({"check_out_at": None}, {"_id": 0, "user_id": 1}).to_list(2000)
     open_ids = {s["user_id"] for s in open_sessions}
@@ -3181,10 +3198,19 @@ async def muster_checkin_bulk(body: MusterBulkIn, user: dict = Depends(get_curre
     today = local_date_str(office)
     now = now_utc()
     done, skipped = [], []
+    # Escorts may only muster within their assigned institution. We
+    # silently skip athletes outside that institution rather than 403
+    # the whole batch — keeps the muster UX forgiving if a stale id
+    # slips into the request.
+    escort_inst = (user.get("institution") or "").strip() if user.get("is_escort") else None
     for sid in body.athlete_ids:
         athlete = await db.users.find_one({"id": sid, "category": "athlete"}, {"_id": 0})
         if not athlete:
             skipped.append({"id": sid, "reason": "not an athlete"})
+            continue
+        if escort_inst and (athlete.get("institution") or "").strip() != escort_inst:
+            skipped.append({"id": sid, "name": athlete["full_name"],
+                            "reason": "outside your institution"})
             continue
         if await db.attendance.find_one({"user_id": sid, "check_out_at": None}):
             skipped.append({"id": sid, "name": athlete["full_name"], "reason": "already checked in"})
@@ -3219,10 +3245,15 @@ async def muster_checkout_bulk(body: MusterBulkIn, user: dict = Depends(get_curr
     _require_muster(user)
     now = now_utc()
     done, skipped = [], []
+    escort_inst = (user.get("institution") or "").strip() if user.get("is_escort") else None
     for sid in body.athlete_ids:
         athlete = await db.users.find_one({"id": sid, "category": "athlete"}, {"_id": 0})
         if not athlete:
             skipped.append({"id": sid, "reason": "not an athlete"})
+            continue
+        if escort_inst and (athlete.get("institution") or "").strip() != escort_inst:
+            skipped.append({"id": sid, "name": athlete["full_name"],
+                            "reason": "outside your institution"})
             continue
         sess = await db.attendance.find_one({"user_id": sid, "check_out_at": None}, {"_id": 0})
         if not sess:

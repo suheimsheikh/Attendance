@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Trash2, Edit3, Building2, UserCheck, Users, X, Shield } from "lucide-react";
+import { Loader2, Plus, Trash2, Edit3, Building2, UserCheck, Users, X, Shield, Ban, History } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import FormErrorBanner from "../../components/FormErrorBanner";
@@ -201,28 +201,126 @@ function EscortGroup({ title, rows, onEdit, onChange, accent }) {
 }
 
 function EscortRow({ escort, onEdit, onChange }) {
+  const [visits, setVisits] = useState(null);
+  const [loadingVisits, setLoadingVisits] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  // Lazy-load recent visits on first expand. Active escorts get a
+  // compact strip; we cap to the 5 most recent dates server-side.
+  const loadVisits = async () => {
+    if (visits !== null) return;
+    setLoadingVisits(true);
+    try {
+      const rows = await api.get(`/escorts/${escort.id}/recent-visits?limit=5`);
+      setVisits(rows || []);
+    } catch (err) {
+      // Don't toast — this is opportunistic context, not core flow.
+      console.debug("recent-visits failed", err);
+      setVisits([]);
+    } finally { setLoadingVisits(false); }
+  };
+  useEffect(() => { if (escort.status === "active") loadVisits(); /* eslint-disable-next-line */ }, [escort.id]);
+
   const remove = async () => {
     if (!window.confirm(`Delete escort "${escort.name}"? Attendance trail will also be removed.`)) return;
+    setBusy(true);
     try {
       await api.del(`/escorts/${escort.id}`);
       toast.success("Deleted");
       onChange();
     } catch (err) { toast.error(err?.message || "Failed"); }
+    finally { setBusy(false); }
   };
+
+  const invalidate = async () => {
+    if (!window.confirm(`Invalidate ${escort.name}? They can no longer log in or muster — attendance trail is preserved.`)) return;
+    setBusy(true);
+    try {
+      await api.post(`/escorts/${escort.id}/invalidate`, {});
+      toast.success(`${escort.name} invalidated`);
+      onChange();
+    } catch (err) { toast.error(err?.message || "Failed"); }
+    finally { setBusy(false); }
+  };
+
+  const isActive = escort.status === "active";
+
   return (
-    <div className="rounded-lg border border-slate-200 px-3 py-2 flex items-center gap-3" data-testid={`escort-row-${escort.id}`}>
-      <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center"><Shield size={14}/></div>
-      <div className="flex-1 min-w-0">
-        <div className="font-semibold truncate">{escort.name}</div>
-        <div className="text-[11px] text-slate-500 truncate">
-          {escort.phone || "no phone"} · since {escort.start_date}
-          {escort.ended_at && ` · ended ${escort.ended_at}`}
+    <div className="rounded-lg border border-slate-200 px-3 py-2" data-testid={`escort-row-${escort.id}`}>
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center"><Shield size={14}/></div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold truncate">{escort.name}</div>
+          <div className="text-[11px] text-slate-500 truncate">
+            {escort.phone || "no phone"} · since {escort.start_date}
+            {escort.ended_at && ` · ended ${escort.ended_at}`}
+          </div>
         </div>
+        <button onClick={onEdit} disabled={busy} className="p-1.5 rounded hover:bg-slate-100" data-testid={`escort-edit-${escort.id}`}><Edit3 size={14}/></button>
+        {isActive && (
+          <button
+            onClick={invalidate}
+            disabled={busy}
+            title="Invalidate (terminal — escort can no longer log in or muster)"
+            className="p-1.5 rounded hover:bg-amber-50 text-amber-700"
+            data-testid={`escort-invalidate-${escort.id}`}
+          >
+            <Ban size={14}/>
+          </button>
+        )}
+        <button onClick={remove} disabled={busy} className="p-1.5 rounded hover:bg-red-50 text-red-600" data-testid={`escort-delete-${escort.id}`}><Trash2 size={14}/></button>
       </div>
-      <button onClick={onEdit} className="p-1.5 rounded hover:bg-slate-100" data-testid={`escort-edit-${escort.id}`}><Edit3 size={14}/></button>
-      <button onClick={remove} className="p-1.5 rounded hover:bg-red-50 text-red-600" data-testid={`escort-delete-${escort.id}`}><Trash2 size={14}/></button>
+      {isActive && (
+        <RecentVisitsStrip visits={visits} loading={loadingVisits} escortId={escort.id} />
+      )}
     </div>
   );
+}
+
+function RecentVisitsStrip({ visits, loading, escortId }) {
+  if (loading) {
+    return (
+      <div className="mt-1.5 pl-11 text-[10px] text-slate-400 flex items-center gap-1.5" data-testid={`escort-visits-loading-${escortId}`}>
+        <Loader2 size={10} className="animate-spin"/> recent visits…
+      </div>
+    );
+  }
+  if (!visits || visits.length === 0) {
+    return (
+      <div className="mt-1.5 pl-11 text-[10px] text-slate-400 italic" data-testid={`escort-visits-empty-${escortId}`}>
+        No visits yet
+      </div>
+    );
+  }
+  return (
+    <div className="mt-1.5 pl-11 flex items-center gap-1 flex-wrap" data-testid={`escort-visits-${escortId}`}>
+      <History size={10} className="text-slate-400 shrink-0"/>
+      <span className="text-[10px] uppercase tracking-wider text-slate-400 mr-1">recent</span>
+      {visits.map((v, i) => (
+        <span
+          key={`${v.date}-${i}`}
+          title={`In ${v.check_in_at?.slice(11, 16) || "—"}${v.check_out_at ? ` · Out ${v.check_out_at.slice(11, 16)}` : " · still in"}`}
+          className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${v.check_out_at ? "bg-slate-100 text-slate-600" : "bg-emerald-100 text-emerald-800"}`}
+          data-testid={`escort-visit-chip-${escortId}-${i}`}
+        >
+          {formatVisitDate(v.date)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function formatVisitDate(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso + "T00:00:00");
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const days = Math.round((today - d) / 86400000);
+    if (days === 0) return "Today";
+    if (days === 1) return "Yesterday";
+    if (days < 7) return `${days}d ago`;
+    return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  } catch { return iso; }
 }
 
 function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSaved }) {

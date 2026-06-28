@@ -56,11 +56,15 @@ export default function Layout() {
   const [open, setOpen] = useState(false);
   const isAdmin = user?.role === "admin";
   const canMuster = isAdmin || user?.category === "coach";
-  // Escort sessions get a stripped-down sidebar — only the kiosk link
-  // and Sign out. They have no member/coach/admin permissions.
+  // Escort sessions get a stripped-down sidebar — only the kiosk link,
+  // Muster Roll (institution-scoped server-side), and Sign out. They have
+  // no member/coach/admin permissions otherwise.
   const isEscort = !!user?.is_escort;
   const memberNav = isEscort
-    ? NAV_MEMBER.filter((n) => n.to === "/escort-checkin")
+    ? [
+        ...NAV_MEMBER.filter((n) => n.to === "/escort-checkin"),
+        { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
+      ]
     : NAV_MEMBER;
 
   // Lock body scroll while the mobile drawer is open so the page underneath
