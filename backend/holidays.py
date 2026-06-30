@@ -242,45 +242,142 @@ def split_leave_days(requested: int, comp_off_avail: int, paid_avail: float) -> 
     return {"comp_off_used": co, "paid_leave_used": paid, "lop_days": lop}
 
 
+async def _resolve_weekly_off(db, user: dict) -> str:
+    """Return the effective weekly-off weekday for `user` — member-level
+    setting wins, otherwise the org default from Office Settings, finally
+    "sunday" if neither is configured."""
+    wo = (user.get("weekly_off") or "").lower()
+    if wo:
+        return wo
+    office = await db.config.find_one(
+        {"id": "office"}, {"_id": 0, "default_weekly_off": 1}
+    )
+    return (office or {}).get("default_weekly_off") or "sunday"
+
+
+def _expand_date_ranges(rows, yr_start: str, yr_end: str) -> set:
+    """Flatten a list of `{start_date, end_date}` rows into the set of
+    ISO date strings the ranges cover, clipped to [yr_start, yr_end].
+    Used to project posting windows (R2) into the day-set the accrual
+    loop tests against."""
+    out: set = set()
+    try:
+        ys = date.fromisoformat(yr_start)
+        ye = date.fromisoformat(yr_end)
+    except Exception:
+        return out
+    for r in rows:
+        try:
+            s = max(date.fromisoformat(r["start_date"]), ys)
+            e = min(date.fromisoformat(r["end_date"]), ye)
+        except Exception:
+            continue
+        cur = s
+        while cur <= e:
+            out.add(cur.isoformat())
+            cur = date.fromordinal(cur.toordinal() + 1)
+    return out
+
+
+def _accrual_from_attendance(distinct_dates, weekly_off: str,
+                             posting_dates: set):
+    """+1 per attended weekly-off date that isn't blanked by a posting
+    window. Returns (count, breakdown_rows)."""
+    count = 0
+    rows = []
+    for ds in distinct_dates:
+        try:
+            wd = WEEKDAY_KEY[date.fromisoformat(ds).weekday()]
+        except Exception:
+            continue
+        if wd != weekly_off or ds in posting_dates:
+            continue
+        count += 1
+        rows.append({"date": ds, "kind": "weekly_off"})
+    return count, rows
+
+
+def _accrual_from_tours(tour_rows, weekly_off: str, today_iso: str,
+                        att_seen: set, yr_start: str, yr_end: str):
+    """+1 per past-or-today weekly-off date inside an approved tour
+    window, deduped against the attendance set (so we don't double-count
+    a date that already accrued via on-campus attendance) and against
+    overlapping tours. Returns (count, breakdown_rows)."""
+    seen: set = set()
+    count = 0
+    rows = []
+    try:
+        ys = date.fromisoformat(yr_start)
+        ye = date.fromisoformat(yr_end)
+    except Exception:
+        return count, rows
+    for L in tour_rows:
+        try:
+            s = max(date.fromisoformat(L["start_date"]), ys)
+            e = min(date.fromisoformat(L["end_date"]), ye)
+        except Exception:
+            continue
+        cur = s
+        while cur <= e:
+            ds = cur.isoformat()
+            if (ds not in seen
+                    and ds not in att_seen
+                    and ds <= today_iso
+                    and WEEKDAY_KEY[cur.weekday()] == weekly_off):
+                count += 1
+                rows.append({"date": ds, "kind": "tour_weekly_off"})
+                seen.add(ds)
+            cur = date.fromordinal(cur.toordinal() + 1)
+    return count, rows
+
+
+def _sum_comp_off_used(used_leaves) -> int:
+    """Sum approved comp-off consumption across both row shapes:
+      • NEW: leave rows carrying a non-zero `comp_off_used` stamp.
+      • LEGACY: rows of the now-deprecated `type=comp_off` application,
+        which had no stamp — the whole window counts as used.
+    """
+    total = 0
+    for L in used_leaves:
+        if "comp_off_used" in L and L["comp_off_used"] is not None:
+            total += int(L["comp_off_used"])
+        elif L.get("type") == "comp_off":
+            total += _days_inclusive(L["start_date"], L["end_date"])
+    return total
+
+
 async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -> dict:
     """Live comp-off balance for `user`.
 
-    Accrual:
-      +1 credit per distinct calendar date the user has attendance for,
-      where the date matches the user's effective weekly off:
-        - `user.weekly_off` if set, else
-        - `office.default_weekly_off` (default "sunday").
+    Accrual sources (summed):
+      • Attendance on a weekly-off day (member-effective, see
+        `_resolve_weekly_off`). Excluded when the date falls inside an
+        approved `posting` window (R2, 30 Jun 2026).
+      • Past-or-today weekly-off date inside an approved `tour` window
+        (28 Jun 2026; coaches/executives included, athletes excluded).
+      • Admin-seeded `user.comp_off_opening` (carry-forward / Day-1 seed).
 
     Consumption:
-      -1 per day of approved `comp_off` leaves (inclusive of start..end).
+      Approved leave rows carrying a non-zero `comp_off_used` stamp
+      (unified Leave waterfall) AND legacy `type=comp_off` rows.
 
     `available = max(0, accrued - used)`.
     """
     if not year:
         year = str(date.today().year)
 
-    # Resolve the effective weekly-off day, member-level wins; otherwise the
-    # org-wide default from Office Settings (so admins don't have to fill in
-    # every member profile manually).
-    weekly_off = (user.get("weekly_off") or "").lower()
-    if not weekly_off:
-        office = await db.config.find_one({"id": "office"}, {"_id": 0, "default_weekly_off": 1})
-        weekly_off = (office or {}).get("default_weekly_off") or "sunday"
-
-    # Attendance in the target year.
+    weekly_off = await _resolve_weekly_off(db, user)
     yr_start = f"{year}-01-01"
     yr_end = f"{year}-12-31"
+
+    # Bulk-fetch the three input sets in parallel (motor returns awaitable
+    # cursors; we collect them into to_list calls below).
     atts = await db.attendance.find(
         {"user_id": user["id"], "date": {"$gte": yr_start, "$lte": yr_end}},
         {"_id": 0, "date": 1},
     ).to_list(2000)
     distinct_dates = sorted({a["date"] for a in atts})
 
-    # R2 (30 Jun 2026): A member who is on an approved `posting` does NOT
-    # accrue comp-off, even if they check in on their weekly off. The
-    # academy treats posted members as on-deputation — they're earning
-    # their salary at the host academy, not the home one, so weekly-off
-    # work there can't double-count as home-academy comp-off.
     posting_rows = await db.leaves.find({
         "user_id": user["id"],
         "type": "posting",
@@ -288,43 +385,17 @@ async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -
         "start_date": {"$lte": yr_end},
         "end_date": {"$gte": yr_start},
     }, {"_id": 0, "start_date": 1, "end_date": 1}).to_list(200)
-    posting_dates: set = set()
-    for P in posting_rows:
-        try:
-            s = max(date.fromisoformat(P["start_date"]), date.fromisoformat(yr_start))
-            e = min(date.fromisoformat(P["end_date"]), date.fromisoformat(yr_end))
-        except Exception:
-            continue
-        cur = s
-        while cur <= e:
-            posting_dates.add(cur.isoformat())
-            cur = date.fromordinal(cur.toordinal() + 1)
+    posting_dates = _expand_date_ranges(posting_rows, yr_start, yr_end)
 
+    # ── Accrual: source 1 — attended weekly-off dates ────────────────
     breakdown: List[dict] = []
-    accrued = 0
-    for ds in distinct_dates:
-        try:
-            wd = WEEKDAY_KEY[date.fromisoformat(ds).weekday()]
-        except Exception:
-            continue
-        if wd != weekly_off:
-            continue
-        # Skip accrual for any weekly-off date that falls inside an
-        # approved posting window (see comment above).
-        if ds in posting_dates:
-            continue
-        accrued += 1
-        breakdown.append({"date": ds, "kind": "weekly_off"})
+    att_accrued, att_rows = _accrual_from_attendance(
+        distinct_dates, weekly_off, posting_dates,
+    )
+    breakdown.extend(att_rows)
+    accrued = att_accrued
 
-    # Tour-day accrual (28 Jun 2026, updated to include coaches/executives;
-    # past-or-today gate added 28 Jun 2026 evening): only the weekly_off
-    # date(s) inside an approved tour window accrue, AND only after that
-    # date has actually passed. Future Sundays inside a future tour no
-    # longer pre-accrue — matches the on-campus rule where you can't earn
-    # a comp-off for a day you haven't yet worked through. Tours that are
-    # later cancelled / rejected / edited react live (the loop re-reads).
-    # Athletes are excluded because they use the Breaks workflow.
-    today_iso = date.today().isoformat()
+    # ── Accrual: source 2 — past tour weekly-off dates ───────────────
     if (user.get("category") or "").lower() != "athlete":
         tour_rows = await db.leaves.find({
             "user_id": user["id"],
@@ -333,56 +404,30 @@ async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -
             "start_date": {"$lte": yr_end},
             "end_date": {"$gte": yr_start},
         }, {"_id": 0, "start_date": 1, "end_date": 1}).to_list(500)
-        seen_tour_dates: set = set()
-        for L in tour_rows:
-            try:
-                s = max(date.fromisoformat(L["start_date"]), date.fromisoformat(yr_start))
-                e = min(date.fromisoformat(L["end_date"]), date.fromisoformat(yr_end))
-            except Exception:
-                continue
-            cur = s
-            while cur <= e:
-                ds = cur.isoformat()
-                # Deduplicate across overlapping tours AND skip dates the member
-                # ALSO has attendance for (we already credited them once above).
-                # Also gate by past-or-today so future tour Sundays don't accrue.
-                if (ds not in seen_tour_dates
-                        and ds not in distinct_dates
-                        and ds <= today_iso):
-                    if WEEKDAY_KEY[cur.weekday()] == weekly_off:
-                        accrued += 1
-                        breakdown.append({"date": ds, "kind": "tour_weekly_off"})
-                        seen_tour_dates.add(ds)
-                cur = date.fromordinal(cur.toordinal() + 1)
+        today_iso = date.today().isoformat()
+        att_seen = set(distinct_dates)
+        tour_accrued, tour_rows_out = _accrual_from_tours(
+            tour_rows, weekly_off, today_iso, att_seen, yr_start, yr_end,
+        )
+        accrued += tour_accrued
+        breakdown.extend(tour_rows_out)
 
-    # Manual opening balance (28 Jun 2026, evening): seeded by an admin on
-    # the Leave Balances page for Day-1 of a fresh deployment (or to
-    # carry-forward last-year's unused credits). Stored on the user doc
-    # as `comp_off_opening` (default 0). Treated as a third accrual
-    # source so the available pool obeys the same accrued-used arithmetic.
+    # ── Accrual: source 3 — admin-seeded opening balance ─────────────
     opening_co = int(user.get("comp_off_opening") or 0)
     if opening_co > 0:
         accrued += opening_co
         breakdown.append({"date": None, "kind": "opening", "count": opening_co})
 
+    # ── Consumption ──────────────────────────────────────────────────
     used_leaves = await db.leaves.find({
         "user_id": user["id"],
         "status": "approved",
         "start_date": {"$lte": yr_end},
         "end_date": {"$gte": yr_start},
-        # Two shapes count toward comp-off consumption:
-        #  - NEW: any leave row carrying a non-zero `comp_off_used` stamp
-        #         (the unified Leave application path, comp-off-first ladder).
-        #  - LEGACY: rows of the now-deprecated `type=comp_off` application,
-        #         which had no stamp — the whole window counts as used.
         "$or": [{"comp_off_used": {"$gt": 0}}, {"type": "comp_off"}],
-    }, {"_id": 0, "type": 1, "start_date": 1, "end_date": 1, "comp_off_used": 1}).to_list(500)
-    used = 0
-    for L in used_leaves:
-        if "comp_off_used" in L and L["comp_off_used"] is not None:
-            used += int(L["comp_off_used"])
-        elif L.get("type") == "comp_off":
-            used += _days_inclusive(L["start_date"], L["end_date"])
+    }, {"_id": 0, "type": 1, "start_date": 1, "end_date": 1,
+        "comp_off_used": 1}).to_list(500)
+    used = _sum_comp_off_used(used_leaves)
 
     return {
         "year": year,

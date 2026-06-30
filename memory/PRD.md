@@ -1075,3 +1075,74 @@ type), R3 (3-day notice rule). R1 shipped today.
 - Regatta "locked / manually edited" flag (P3)
 - SMS OTP hardening (P2)
 - `<span> in <option>` hydration warning (P3)
+
+- Component splits (P3): `Muster.jsx` (490L), `MyLeaves.jsx ApplyForm`
+  (445L), `Members.jsx` (390L), `Calendar.jsx` (353L), `Presence.jsx`
+  (348L). Pre-launch freeze.
+
+## Code review pass (30 Jun 2026, late) ✅ APPLIED + DOCUMENTED SKIPS
+
+### Applied (behaviour-preserving)
+- **`routes/leaves.py` dynamic imports removed**: the `__import__("datetime").date.fromisoformat(...)`
+  pattern in `_comp_off_guard` (2 sites) AND the inline
+  `from datetime import date as _date` inside the R3 notice-rule block
+  were both replaced with a single module-top
+  `from datetime import date as _date_cls`. No behaviour change.
+- **`holidays.compute_comp_off_balance` extracted into 5 helpers** —
+  cyclomatic complexity drops from ~31 to ~8 in the main function.
+  New module-level helpers:
+  • `_resolve_weekly_off(db, user)` — member-level override → office
+    default → "sunday" fallback.
+  • `_expand_date_ranges(rows, yr_start, yr_end)` — flattens a list of
+    `{start_date, end_date}` rows into the set of ISO dates they cover,
+    clipped to the year. Drives the posting-windows projection.
+  • `_accrual_from_attendance(distinct_dates, weekly_off, posting_dates)`
+    — +1 per attended weekly-off date that isn't blanked by a posting.
+  • `_accrual_from_tours(tour_rows, weekly_off, today_iso, att_seen, yr_start, yr_end)`
+    — +1 per past-or-today weekly-off date inside an approved tour,
+    deduped against attendance + overlapping tours.
+  • `_sum_comp_off_used(used_leaves)` — sums both stamped (new) and
+    legacy `type=comp_off` consumption shapes.
+  All 18 comp-off-touching tests still pass. Full backend suite
+  **322/322 green** after refactor.
+- **`SmsLog.jsx` `load()` wrapped in `useCallback`** — the only
+  legitimate hook-deps issue from the cited 5 lines. Wrapped to stable
+  identity + `useEffect(() => load(), [load])` so the deps array is now
+  correct without an eslint-disable.
+
+### Explicitly NOT applied (with reasoning)
+- **localStorage → httpOnly cookies (8 cited sites)** — touches the
+  auth surface 48 h before launch; would log every active session out.
+  User pre-deferred. Roadmapped P2 post-launch.
+- **Component splits: Muster (490L), MyLeaves ApplyForm (445L),
+  Members (390L), Calendar (353L), Presence (348L)** — mechanical
+  refactor, zero behaviour change, high regression risk pre-launch.
+  Pre-launch freeze. Roadmapped P3.
+- **Python `is None`/`is True`/`is False` → `==` (201 sites)** — the
+  review is **wrong** here. PEP 8 explicitly says *"Comparisons to
+  singletons like None should always be done with `is` or `is not`,
+  never the equality operators."* `ruff` (E711/E712) and `pylint`
+  (singleton-comparison) both flag the opposite direction. Changing
+  these 201 sites would introduce new lint errors. Skipping.
+- **React nested ternaries (211 sites)** — Tailwind class-name
+  selection is the standard idiom. Extracting adds indirection without
+  readability gain. Skipping.
+- **Hook-deps on the other 4 cited lines (Members:86, Reports:54,
+  Sessions:15, Office:63)** — false positives:
+  • `Members.jsx:86` — `f`, `m`, `set` are loop-locals inside the
+    `useMemo` callback, not external deps.
+  • `Reports.jsx:54`, `Sessions.jsx:15`, `Office.jsx:63` — `api` is a
+    stable module import; `setX`/`setLoading` are React `useState`
+    setters (identity-stable per React docs). Adding them would only
+    cause useless re-runs.
+  ESLint runs clean across the whole frontend (only 3 errors, all in
+  vendored shadcn `ui/calendar.jsx` and `ui/command.jsx`).
+- **`breaks.make_router` / `daily_content.daily_content` complexity** —
+  FastAPI router factories carry closure state by design. Route
+  handlers inside are flat. Documented false positive.
+- **Type hints in test files (target 70%)** — low value pure chore;
+  test names + fixtures + body are self-documenting. Skipping.
+- **`EventConflictNotice` (127L) / `InstallPrompt` (77L) /
+  `InlinePhotoAvatar` (76L) complexity** — sub-200-line components
+  with single responsibilities; extracting further reduces locality
+  of behaviour without measurable maintainability gain. Skipping.

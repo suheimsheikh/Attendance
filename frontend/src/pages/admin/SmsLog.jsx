@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, MessageSquare, Phone, RefreshCw, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
@@ -34,13 +34,13 @@ export default function SmsLog() {
   const [channel, setChannel] = useState("all"); // all | sms | voice
   const [q, setQ] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try { setRows(await api.get("/sms/log", { limit: 200 })); }
     catch (err) { toast.error(err?.message || "Failed to load SMS log"); }
     finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, []);
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
     let list = rows;

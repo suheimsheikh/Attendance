@@ -11,6 +11,7 @@ module has no import-cycle with `server.py`.
 from __future__ import annotations
 
 import uuid
+from datetime import date as _date_cls
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -58,8 +59,8 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
             return  # Helper not wired (older test harnesses) — fail open.
         try:
             requested = (
-                __import__("datetime").date.fromisoformat(end_date)
-                - __import__("datetime").date.fromisoformat(start_date)
+                _date_cls.fromisoformat(end_date)
+                - _date_cls.fromisoformat(start_date)
             ).days + 1
         except Exception:
             requested = 1
@@ -140,9 +141,8 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
                     notice_days = 3
             if notice_days > 0:
                 try:
-                    from datetime import date as _date
-                    today_d = _date.today()
-                    start_d = _date.fromisoformat(body.start_date)
+                    today_d = _date_cls.today()
+                    start_d = _date_cls.fromisoformat(body.start_date)
                     days_off = (start_d - today_d).days
                 except Exception:
                     days_off = None
