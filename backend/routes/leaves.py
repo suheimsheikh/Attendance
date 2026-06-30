@@ -117,6 +117,32 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
                 raise HTTPException(status_code=403, detail="Posting can only be filed by an admin on behalf of a member")
             if not target_user_id or target_user_id == user["id"]:
                 raise HTTPException(status_code=400, detail="Posting must target another member (apply-on-behalf only)")
+        # R3 (30 Jun 2026): 3-day (configurable) notice rule on self-applied
+        # leaves. Tours/postings/late-comings are exempt — those are by
+        # nature short-notice. Admins filing on behalf bypass the gate so
+        # last-minute family emergencies can still be recorded. Threshold
+        # comes from Office Settings (`leave_notice_days`, default 3).
+        # 0 = gate disabled.
+        if body.type == "leave" and user["id"] == target_user["id"] and user.get("role") != "admin":
+            office = await db.config.find_one({"id": "office"}, {"_id": 0, "leave_notice_days": 1})
+            notice_days = int((office or {}).get("leave_notice_days", 3) or 0)
+            if notice_days > 0:
+                try:
+                    from datetime import date as _date
+                    today_d = _date.today()
+                    start_d = _date.fromisoformat(body.start_date)
+                    days_off = (start_d - today_d).days
+                except Exception:
+                    days_off = None
+                if days_off is not None and days_off < notice_days:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"Leave requires at least {notice_days} day"
+                            f"{'' if notice_days == 1 else 's'} of advance notice. "
+                            f"Please ask an admin to file this on your behalf."
+                        ),
+                    )
         # Comp-off: enforce balance ceiling before persisting the row.
         if body.type == "comp_off":
             # Legacy guard kept for direct API hits — the UI no longer

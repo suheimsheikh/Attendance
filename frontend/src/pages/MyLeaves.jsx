@@ -338,10 +338,18 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   // For admin path single-pick: fetched from /api/members/{id}/leave-summary.
   // For admin multi-pick: null (per-member balances differ — Notice falls back to per-member rows).
   const [balanceSummary, setBalanceSummary] = useState(null);
+  // R3 (30 Jun 2026): minimum days of notice required for self-applied
+  // leaves. Pulled from Office Settings; falls back to 3 if missing.
+  // Tours / postings / late-coming are exempt.
+  const [noticeDays, setNoticeDays] = useState(3);
   useEffect(() => {
     if (asAdmin) return;
     api.get("/auth/me").then(setMe).catch(() => {});
     api.get("/me/leave-summary").then(setBalanceSummary).catch(() => {});
+    api.get("/office").then((o) => {
+      const n = Number((o || {}).leave_notice_days);
+      if (Number.isFinite(n) && n >= 0) setNoticeDays(n);
+    }).catch(() => {});
   }, [asAdmin]);
 
   // Admin single-pick: refetch unified summary whenever the picked target
@@ -402,6 +410,28 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
     }
   }, [start, end]);
 
+  // R3 — calendar days between today and `start`. Negative when start is
+  // in the past (a late application). Used to gate the Submit button on
+  // the member-side path when type=leave & notice_days > 0.
+  const daysOfNotice = useMemo(() => {
+    try {
+      const s = new Date(start + "T00:00:00");
+      const t = new Date();
+      t.setHours(0, 0, 0, 0);
+      if (Number.isNaN(s.getTime())) return null;
+      return Math.floor((s - t) / 86400000);
+    } catch {
+      return null;
+    }
+  }, [start]);
+  // The gate fires only for self-applied Leaves below the threshold.
+  // Tours, postings, late-coming and the admin on-behalf path bypass it.
+  const noticeBlocked = !asAdmin
+    && type === "leave"
+    && noticeDays > 0
+    && daysOfNotice != null
+    && daysOfNotice < noticeDays;
+
   // Build the per-member row(s) the notice expects. Self path = 1 row from
   // /auth/me. Admin path = one row per picked member from /members.
   const noticeMembers = useMemo(() => {
@@ -458,14 +488,14 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           start_date: start,
           end_date: end,
           reason: reasonOut,
-          location: type === "tour" ? location : null,
+          location: (type === "tour" || type === "posting") ? location : null,
           auto_approve: autoApprove,
         });
         toast.success(`${r.created} ${r.created === 1 ? "request" : "requests"} created (${r.status})`);
       } else {
         const payload = {
           type, start_date: start, end_date: end, reason,
-          location: type === "tour" ? location : null,
+          location: (type === "tour" || type === "posting") ? location : null,
           expected_arrival: type === "late_coming" ? expectedArrival : null,
         };
         await api.post("/leaves", payload);
@@ -678,7 +708,31 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
             onDismiss={formErr.clear}
             testId="leave-submit-error"
           />
-          <button data-testid="leave-submit" type="submit" disabled={busy} className="iu-btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed">
+          {/* R3: 3-day notice rule for self-applied Leaves. Tours,
+              postings, late-coming and the admin on-behalf path are all
+              exempt. */}
+          {noticeBlocked && (
+            <div
+              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2"
+              data-testid="leave-notice-blocked"
+            >
+              <AlertTriangle size={14} className="text-amber-700 mt-0.5 shrink-0" />
+              <div className="text-xs text-amber-900 leading-snug">
+                Leave needs at least <strong>{noticeDays} day{noticeDays === 1 ? "" : "s"}</strong> of notice
+                {daysOfNotice >= 0
+                  ? <> — your start date is only <strong>{daysOfNotice} day{daysOfNotice === 1 ? "" : "s"}</strong> away.</>
+                  : <> — your start date is in the past.</>}
+                {" "}Please ask your admin to file this on your behalf.
+              </div>
+            </div>
+          )}
+          <button
+            data-testid="leave-submit"
+            type="submit"
+            disabled={busy || noticeBlocked}
+            className="iu-btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
+            title={noticeBlocked ? `Leaves need at least ${noticeDays} day${noticeDays === 1 ? "" : "s"} of advance notice — ask an admin to file on your behalf.` : undefined}
+          >
             {busy ? <Loader2 className="animate-spin" size={16}/> : "Submit"}
           </button>
         </form>

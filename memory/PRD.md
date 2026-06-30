@@ -983,6 +983,31 @@ type), R3 (3-day notice rule). R1 shipped today.
 
 ## Pending (in priority order)
 
+### R3 — 3-day notice rule for self-applied Leaves (30 Jun 2026) ✅ COMPLETE
+- `OfficeConfig` gained `leave_notice_days: int = 3`.
+- `routes/leaves.py::create_leave`: when `type=leave` AND user is filing
+  for themselves AND `notice_days > 0`, the call is rejected with HTTP 400
+  ("Leave requires at least N day(s) of advance notice. Please ask an
+  admin to file this on your behalf.") whenever `start_date - today < notice_days`.
+- Tours / postings / late-coming are exempt (those are inherently last-minute).
+- Admin filing on-behalf (with `target_user_id`) bypasses the gate so
+  genuine emergencies can still be recorded.
+- Setting `leave_notice_days=0` disables the rule entirely.
+- Frontend:
+  - `pages/admin/Office.jsx` adds a numeric field with explainer copy.
+  - `pages/MyLeaves.jsx` fetches `/api/office`, computes
+    `daysOfNotice = start − today`, and when blocked renders an amber
+    warning banner AND disables the Submit button with a tooltip telling
+    the user to ask an admin.
+  - The admin "Apply on Behalf" path is NOT gated client-side either
+    (so a coach/admin can file last-minute on behalf without hassle).
+- Coverage: 7/7 tests in `tests/test_leave_notice_r3.py` (blocked too-close,
+  blocked past, allowed exactly-at-threshold, admin-on-behalf bypass,
+  tour bypass, late-coming bypass, notice_days=0 disables rule).
+- Also patched `tests/test_ishowedup_api.py::test_13_create_and_get_my_leave`
+  to use a future-dated leave (was hardcoded to 2026-02-01, now < today
+  and would have tripped the gate). Full suite: **318/318** passing.
+
 ### R2 — "Posting" Leave Type (30 Jun 2026) ✅ COMPLETE
 - New leave `type=posting` recognised in `routes/leaves.py`. Apply-on-behalf
   ONLY: a non-admin trying to `POST /api/leaves` with `type=posting`
@@ -1027,17 +1052,7 @@ type), R3 (3-day notice rule). R1 shipped today.
 - Hover tooltip shows the exact `valid_until` date so the on-duty
   officer knows when to chase a renewal.
 
-## Pending (in priority order)
-
-### R3 — 3-day notice rule for Leaves (P1) ⏸ PAUSED awaiting user go-ahead
-- Applies to `leave` type ONLY (not tour, not posting).
-- If `start_date - today < 3 days` (calendar), the user-side "Apply"
-  button is disabled with explanatory tooltip; admin can still apply on
-  the member's behalf via the Leave Approvals page or members table.
-- Threshold (days) lives in Office Settings as `leave_notice_days`,
-  default 3, integer ≥ 0.
-
-### Post-launch backlog
+## Post-launch backlog
 - Production data wipe / zero-out used leaves+comp-offs (P2)
 - Frontend version check / auto-reload toast (P2)
 - `server.py` Phase 2 modular refactor (P3)

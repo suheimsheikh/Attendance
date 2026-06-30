@@ -198,8 +198,14 @@ def test_12_geo_toggle_checkout(base_url, shared_state):
 # ---------- (13)/(14) Leaves ----------
 def test_13_create_and_get_my_leave(base_url, shared_state):
     token = shared_state["member_token"]
-    body = {"type": "leave", "start_date": "2026-02-01",
-            "end_date": "2026-02-02", "reason": "TEST leave for backend test"}
+    # R3 notice rule (30 Jun 2026): self-apply needs ≥ leave_notice_days
+    # of advance notice. Use a date well past the default-3 threshold so
+    # the test stays valid regardless of when the suite runs.
+    import datetime as _dt
+    start = (_dt.date.today() + _dt.timedelta(days=30)).isoformat()
+    end = (_dt.date.today() + _dt.timedelta(days=31)).isoformat()
+    body = {"type": "leave", "start_date": start,
+            "end_date": end, "reason": "TEST leave for backend test"}
     r = requests.post(f"{base_url}/api/leaves", json=body,
                       headers={"Authorization": f"Bearer {token}"}, timeout=30)
     assert r.status_code == 200, r.text

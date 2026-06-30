@@ -281,6 +281,12 @@ class OfficeConfig(BaseModel):
     # in the same Sunday/Monday choice on every single member profile.
     # Member-level `weekly_off` (if set) always overrides this fallback.
     default_weekly_off: Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"] = "sunday"
+    # R3 (30 Jun 2026): Minimum calendar-day notice before a member may
+    # self-apply for a `leave` (NOT tour/posting/late-coming, which are
+    # all naturally last-minute). Anything less and the user-side Apply
+    # button is blocked with a tooltip telling them to ask the admin to
+    # file on their behalf. Set to 0 to disable the gate entirely.
+    leave_notice_days: int = 3
     # Daily reminder SMS to anyone still checked-in. The cron fires at
     # `checkout_reminder_time` (office-local HH:MM) and sends one SMS per
     # member who has an open session for today AND hasn't already been

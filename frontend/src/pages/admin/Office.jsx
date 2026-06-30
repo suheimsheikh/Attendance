@@ -65,6 +65,7 @@ export default function OfficeSettings() {
         late_grace_minutes: Number(form.late_grace_minutes || 0),
         parent_notify_grace_minutes: Number(form.parent_notify_grace_minutes ?? 30),
         default_weekly_off: form.default_weekly_off || "sunday",
+        leave_notice_days: Number(form.leave_notice_days ?? 3),
         checkout_reminder_enabled: form.checkout_reminder_enabled !== false,
         checkout_reminder_time: form.checkout_reminder_time || "20:00",
         checkout_reminder_template: form.checkout_reminder_template || "Hi {name}, looks like you're still checked in at {academy}. Please check out via the app when you leave.",
@@ -168,6 +169,24 @@ export default function OfficeSettings() {
             Used as the fallback when a member&apos;s own weekly off isn&apos;t set on their profile. Drives
             comp-off accrual: attending on this day earns +1 comp-off credit, which they can later spend
             via the Comp Off leave type. Member-level weekly off (if set) always overrides this default.
+          </p>
+        </div>
+
+        <div>
+          <label className="iu-label">Leave notice (days)</label>
+          <input
+            data-testid="of-leave-notice-days"
+            type="number"
+            min={0}
+            max={30}
+            value={form.leave_notice_days ?? 3}
+            onChange={(e) => set("leave_notice_days", e.target.value)}
+            className="iu-input"
+          />
+          <p className="text-[11px] text-slate-500 mt-1">
+            Minimum calendar days of advance notice for a member to self-apply a <strong>Leave</strong>.
+            Tours, postings and late-coming are exempt. Admins filing on behalf of a member bypass this gate
+            (so genuine emergencies can still be recorded). Set to <strong>0</strong> to disable the rule entirely.
           </p>
         </div>
 
