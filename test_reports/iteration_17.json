@@ -1,0 +1,55 @@
+{
+  "summary": "Iter17 reviews (A) Tour→comp-off accrual rule for STAFF and (B) Multi-site geofence. Wrote /app/backend/tests/test_review_iter17.py — 11/11 PASS against the live preview URL. Re-ran iter16 + smoke + comp_off_tour_accrual + geo_multi_site + services_geo as regression: 65/65 PASS. Comp-off rule (Option A: only weekly_off days inside an approved tour) accrues +1 for staff and 0 for athlete/coach/exec; pending tours do NOT accrue; overlapping tours dedupe to +1; attendance + tour on the same Sunday gives exactly +1 (no double-count); office_default weekly_off falls back when user.weekly_off unset — all verified by the dev's own pytest at the function level. End-to-end: created a STAFF member via /api/members, filed an approved tour spanning 2026-01-04 (Sun) via POST /api/leaves?target_user_id=<id> then PATCH approve, called /api/members/<id>/comp-off-balance — accrued>=1 with kind 'tour_weekly_off' in breakdown. /api/me/comp-off-balance for the admin (non-staff) still returns the expected shape {accrued, used, available}.\n\nMulti-site geofence verified end-to-end: GET /api/sites returns array, POST creates a row, duplicate name → 409, PATCH updates radius_m, DELETE removes; no-token POST → 401/403 (no member token easily available for the 403 leg — admin path verified). GeoToggle: inside satellite radius stamps site_id+site_name and out_of_geofence=false; INSIDE office radius does NOT stamp any satellite (site_id/site_name None, out_of_geofence false — 'office wins'); OUTSIDE all geofences → out_of_geofence=true. /api/admin/activity carries site_name on the event payload and the detail string contains '· at <site_name>' — verified.\n\nFRONTEND BUG (HIGH): /admin/sites page loads cleanly and the form opens, BUT clicking 'Use my current location' (data-testid=site-use-location) immediately raises 'TypeError: setError is not a function' in Sites.jsx because `useFormError()` does NOT export `setError`. The destructuring on line 122 `const { error, setError, clear } = useFormError()` gets undefined for setError, so every error path (geolocation failure, name-empty, lat/lng invalid, radius range, API save error — lines 127, 140, 150, 152, 153, 154, 156, 166) blows up React. The webpack-dev-server error overlay subsequently intercepts pointer events and blocks the 'Create site' button. The site form still mounts and lets you fill it in, but you cannot click 'Create site' once any error path triggers the overlay (and any geolocation denial WILL trigger it the moment a user with denied/blocked geo opens the form and clicks the button — which Playwright reproduced).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "/app/frontend/src/pages/admin/Sites.jsx (SiteForm)",
+        "issue": "Uncaught TypeError: setError is not a function. The form destructures `setError` from useFormError() but the hook only exposes { error, requestId, clear, setMessage, setFromApi }. Every validation / API-error branch + the geolocation onError calls setError(...) → React unhandled rejection. The webpack dev-overlay then blocks all clicks (saw 'iframe#webpack-dev-server-client-overlay intercepts pointer events' when trying to click data-testid=site-form-save).",
+        "selector": "[data-testid=\"site-use-location\"] and any other error path in the form",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Create site via UI",
+        "issue": "Cannot finish a UI create flow once setError fires because the dev overlay intercepts the Create-site button click. API-level create works (test_sites_admin_crud_and_dup PASS).",
+        "affected_selectors": ["[data-testid=\"site-form-save\"]", "[data-testid=\"site-use-location\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter17.py",
+    "/app/test_reports/pytest/iter17_results.xml"
+  ],
+  "action_items": [
+    "Fix /app/frontend/src/pages/admin/Sites.jsx: replace `setError(...)` calls with `setMessage(...)` (which IS exported by useFormError) — or, alternatively, expose setError from useFormError.js. Quickest is the former: 9 occurrences (lines 127, 140, 150, 152, 153, 154, 156, 166) and change line 122 destructure to `const { error, setMessage, clear } = useFormError()`."
+  ],
+  "critical_code_review_comments": [
+    "compute_comp_off_balance in holidays.py:284-309 correctly gates the tour branch on category=='staff', uses the same effective weekly_off resolution (member > office.default), and dedupes across overlapping tours + skips dates already in distinct_dates from the attendance branch — additive, not replacing. Clean.",
+    "services/geo.resolve_site is a pure function with proper guards (None lat/lng, bad numeric coords, inactive sites skipped, empty config). Excellent test coverage in test_geo_multi_site.py (8 cases all PASS).",
+    "routes/sites.py is minimal & correct: admin-only mutations via Depends(require_admin), 409 on duplicate name, 404 on patch/delete of missing id, _id stripped from responses.",
+    "server.py:1529 _resolve_site_for + _geo_toggle correctly stamp site_id/site_name on check-in and exit_site_id/exit_site_name on check-out. distance_m + out_of_geofence preserved.",
+    "routes/admin_tools.py:378-413 stamps `site_name` on activity events and appends '· at <site>' to the detail string — verified live.",
+    "BUG: frontend/src/pages/admin/Sites.jsx imports setError from a hook that doesn't export it. Pure naming oversight — see action_items."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter17.py",
+    "/app/test_reports/pytest/iter17_results.xml",
+    "/app/test_reports/iteration_17.json"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 iter17 + 65/65 regression incl. 17/17 dev's own unit tests + iter16 + smoke + services_geo)",
+    "frontend": "80% — page loads, sidebar entry present, form mounts, all data-testid fields present. BLOCKED on Create-site click due to setError TypeError"
+  },
+  "test_credentials": "admin@attendance.app / Admin@12345 (email login). Phone bypass 9849002111.",
+  "seed_data_creation": "Created ephemeral TEST_iter17_site_<rand>, TEST_iter17_sat_<rand>, and TEST staff user smoke-staff-<rand>@example.com during pytest; each test cleaned up its own row (DELETE /api/sites/{id}, DELETE /api/admin/members/{id}). Verified post-run that /api/sites is empty.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All backend behaviour for the two new features is correct + regression-free (76/76 PASS combining iter17 11/11 + regression 65/65). Only blocker is the one-line Sites.jsx setError bug — once fixed, the UI create / use-location / save flow needs a quick playwright re-verification. The test file /app/backend/tests/test_review_iter17.py is reusable and runs in ~4s against the public ingress URL.",
+  "rca of the issue": "Sites.jsx line 122 destructures `setError` from useFormError() but the hook (frontend/src/hooks/useFormError.js line 58) only returns { error, requestId, clear, setMessage, setFromApi }. Every error path in the form (geolocation denial, validation failures, API save failure) calls the undefined setError, raising 'TypeError: setError is not a function'. Reproduce: open /admin/sites → click 'New site' → click 'Use my current location' (or just leave name blank and click Create) → the webpack-dev-server error overlay paints over the modal and intercepts all pointer events. Mitigation: rename setError → setMessage on Sites.jsx (8-9 occurrences) and update the destructure on line 122. ~5 min main-agent fix."
+}

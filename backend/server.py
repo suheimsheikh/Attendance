@@ -78,7 +78,7 @@ MAX_LOG_ROWS = 200
 from services.time_utils import (  # noqa: E402, F401
     DEFAULT_TZ, now_utc, iso, office_tz, local_now, local_date_str, local_hm,
 )
-from services.geo import haversine_m  # noqa: E402
+from services.geo import haversine_m, resolve_site  # noqa: E402
 from services.phone import normalize_phone, phone_key  # noqa: E402
 from services.photo import (  # noqa: E402, F401
     MAX_PHOTO_BYTES, THUMB_MAX_PX, THUMB_QUALITY,
@@ -1526,9 +1526,17 @@ def geo_check(office: dict, lat: float, lng: float, reason: Optional[str]):
     return dist, out
 
 
+async def _resolve_site_for(office: dict, lat: float, lng: float):
+    """Wrap services.geo.resolve_site by pulling the active satellite sites
+    from the DB. Returns (site_id, site_name, distance_m, out_of_geofence).
+    The main office still 'wins' when it's the closest geofence."""
+    sites = await db.sites.find({"active": True}, {"_id": 0}).to_list(200)
+    return resolve_site(office, lat, lng, sites)
+
+
 async def perform_toggle(target, office, lat, lng, photo, reason, method, scanned_by):
     """Check a member in (if no open session) or out (if open). Stores location + reason."""
-    dist, out = geo_check(office, lat, lng, reason)
+    site_id, site_name, dist, out = await _resolve_site_for(office, lat, lng)
     sess = await open_session_for(target["id"])
     ts = now_utc()
     # Build a small thumbnail of the verification photo so the Presence board
@@ -1558,11 +1566,14 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
             "exit_longitude": lng,
             "exit_distance_m": dist,
             "exit_out_of_geofence": out,
+            "exit_site_id": site_id,
+            "exit_site_name": site_name,
             "exit_reason": (reason or None),
             "checked_out_by": scanned_by,
         }})
         return {"ok": True, "action": "checkout", "member": target["full_name"],
-                "hours": hours, "out_of_geofence": out, "distance_m": dist}
+                "hours": hours, "out_of_geofence": out, "distance_m": dist,
+                "site_id": site_id, "site_name": site_name}
     late, late_minutes = compute_late(office, target, ts, camp=await _active_camp_for(target, ts, office))
     doc = {
         "id": str(uuid.uuid4()),
@@ -1579,6 +1590,8 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
         "longitude": lng,
         "distance_m": dist,
         "out_of_geofence": out,
+        "site_id": site_id,
+        "site_name": site_name,
         "geo_reason": (reason or None),
         "late": late,
         "late_minutes": late_minutes,
@@ -1588,6 +1601,7 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
     await db.attendance.insert_one(doc)
     return {"ok": True, "action": "checkin", "member": target["full_name"],
             "out_of_geofence": out, "distance_m": dist,
+            "site_id": site_id, "site_name": site_name,
             "late": late, "late_minutes": late_minutes}
 
 
@@ -1602,9 +1616,9 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         dist = None
         out = False
         stored_lat, stored_lng = None, None
+        site_id, site_name = None, None
     else:
-        dist = round(haversine_m(lat, lng, office["latitude"], office["longitude"]), 1)
-        out = dist > office["radius_m"]
+        site_id, site_name, dist, out = await _resolve_site_for(office, lat, lng)
         stored_lat, stored_lng = lat, lng
     sess = await open_session_for(target["id"])
     ts = now_utc()
@@ -1643,6 +1657,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             "excursions": excursions,
             "exit_latitude": stored_lat, "exit_longitude": stored_lng,
             "exit_distance_m": dist, "exit_out_of_geofence": out,
+            "exit_site_id": site_id, "exit_site_name": site_name,
             "exit_geo_unavailable": geo_unavailable,
             "exit_reason": (reason or None),
             "exit_method": "geo",
@@ -1652,6 +1667,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         await db.attendance.update_one({"id": sess["id"]}, {"$set": update_fields})
         return {"ok": True, "action": "checkout", "member": target["full_name"],
                 "hours": hours, "out_of_geofence": out, "distance_m": dist,
+                "site_id": site_id, "site_name": site_name,
                 "overtime_minutes": ot_updates.get("overtime_total_min", 0)}
     if out:
         # Geofence is informational only — distance is recorded on the
@@ -1670,6 +1686,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         "hours": None,
         "latitude": stored_lat, "longitude": stored_lng,
         "distance_m": dist, "out_of_geofence": out,
+        "site_id": site_id, "site_name": site_name,
         "geo_unavailable": geo_unavailable,
         "geo_reason": (reason or None) if out else None,
         "late": late,
@@ -1688,6 +1705,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
     await db.attendance.insert_one(doc)
     return {"ok": True, "action": "checkin", "member": target["full_name"],
             "out_of_geofence": out, "distance_m": dist,
+            "site_id": site_id, "site_name": site_name,
             "late": late, "late_minutes": late_minutes,
             "overtime_minutes": early_min}
 
@@ -2855,6 +2873,10 @@ app.include_router(_office_router(
 # Institutions + Fleets master CRUD — split out 06/2026.
 from routes.masters import make_router as _masters_router  # noqa: E402
 app.include_router(_masters_router(db, require_admin, get_current_user))
+
+# Satellite-site geofences (e.g. Rowing Academy) — added 28 Jun 2026.
+from routes.sites import make_router as _sites_router  # noqa: E402
+app.include_router(_sites_router(db, require_admin, get_current_user))
 
 # Muster — bulk check-in/out for coaches, admins, and active escorts.
 from routes.muster import make_router as _muster_router  # noqa: E402

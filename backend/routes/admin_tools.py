@@ -374,6 +374,11 @@ def make_router(db, require_admin) -> APIRouter:
 
         for a in all_atts:
             u = umap.get(a.get("user_id"), {})
+            # When the check-in happened at a configured satellite site
+            # (e.g. Rowing Academy) the row carries a site_name. Surface it
+            # in the activity feed so admins can tell where the session was.
+            in_site = a.get("site_name")
+            out_site = a.get("exit_site_name") or in_site
             if a.get("check_in_at"):
                 events.append({
                     "id": f"checkin-{a['id']}",
@@ -384,9 +389,12 @@ def make_router(db, require_admin) -> APIRouter:
                     "member_category": u.get("category"),
                     "member_rank": u.get("rank"),
                     "photo": u.get("photo_thumb") or u.get("photo"),
-                    "detail": "Checked in" + (f" · Late {a.get('late_minutes')}m" if a.get("late") else "")
+                    "detail": "Checked in"
+                              + (f" · Late {a.get('late_minutes')}m" if a.get("late") else "")
+                              + (f" · at {in_site}" if in_site else "")
                               + (" · Off-site" if a.get("out_of_geofence") else ""),
                     "method": a.get("method"),
+                    "site_name": in_site,
                 })
             if a.get("check_out_at"):
                 events.append({
@@ -399,8 +407,10 @@ def make_router(db, require_admin) -> APIRouter:
                     "member_rank": u.get("rank"),
                     "photo": u.get("photo_thumb") or u.get("photo"),
                     "detail": f"Checked out · {a.get('hours', '?')}h"
+                              + (f" · at {out_site}" if out_site else "")
                               + (" · Off-site" if a.get("exit_out_of_geofence") else ""),
                     "method": a.get("exit_method") or a.get("method"),
+                    "site_name": out_site,
                 })
             # Temporary excursions (lunch / errand etc.)
             for e in (a.get("excursions") or []):

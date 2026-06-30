@@ -273,6 +273,41 @@ async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -
         accrued += 1
         breakdown.append({"date": ds, "kind": "weekly_off"})
 
+    # Tour-day accrual (Staff only, 28 Jun 2026):
+    # When a staff member is on an approved tour that spans their weekly_off,
+    # they've effectively given up that off-day for work — same intent as the
+    # on-campus weekly_off accrual above. We mirror Option A: only the
+    # weekly_off date(s) inside the tour window accrue, not every tour day.
+    # Athletes/coaches/executives keep the original on-campus-only rule (athletes
+    # use the Breaks workflow for off-time anyway; coaches/execs typically don't
+    # use comp-off).
+    if (user.get("category") or "").lower() == "staff":
+        tour_rows = await db.leaves.find({
+            "user_id": user["id"],
+            "type": "tour",
+            "status": "approved",
+            "start_date": {"$lte": yr_end},
+            "end_date": {"$gte": yr_start},
+        }, {"_id": 0, "start_date": 1, "end_date": 1}).to_list(500)
+        seen_tour_dates: set = set()
+        for L in tour_rows:
+            try:
+                s = max(date.fromisoformat(L["start_date"]), date.fromisoformat(yr_start))
+                e = min(date.fromisoformat(L["end_date"]), date.fromisoformat(yr_end))
+            except Exception:
+                continue
+            cur = s
+            while cur <= e:
+                ds = cur.isoformat()
+                # Deduplicate across overlapping tours AND skip dates the member
+                # ALSO has attendance for (we already credited them once above).
+                if ds not in seen_tour_dates and ds not in distinct_dates:
+                    if WEEKDAY_KEY[cur.weekday()] == weekly_off:
+                        accrued += 1
+                        breakdown.append({"date": ds, "kind": "tour_weekly_off"})
+                        seen_tour_dates.add(ds)
+                cur = date.fromordinal(cur.toordinal() + 1)
+
     used_leaves = await db.leaves.find({
         "user_id": user["id"],
         "status": "approved",
