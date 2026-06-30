@@ -915,3 +915,25 @@ See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or
     cases: future-tour-not-yet, opening-accrues-immediately,
     opening+tour combine, opening-honoured-for-athlete). Full backend
     suite 341/341 green.
+
+- **Stale-bundle auto-detect & soft-reload (backlog, P3)** — user
+  hit the "Karthick sees old UI after deploy" issue on 28 Jun
+  evening. Root cause: a running PWA process doesn't reload itself
+  when a new build deploys; users must manually hard-refresh.
+  Designed but deferred per user choice (1c, 2b on 28 Jun) until
+  after a stable launch period. When picked up:
+  • Inject `REACT_APP_BUILD_ID=<git-sha>` at CRA build time.
+  • Backend `/api/version` returns the latest known frontend build id
+    (stamped at deploy by an Emergent post-deploy hook OR derived
+    from the live `index.html` file on disk).
+  • Frontend polls `/api/version` on startup + every 5 minutes;
+    when the returned build_id differs from its own → render a
+    **polite Sonner toast**: "New version available — refreshing
+    in 30 s…" with an immediate-reload button and a snooze. Auto
+    reloads at the deadline.
+  • Add `Cache-Control: no-cache, must-revalidate` HTTP header
+    on `/index.html` only (NOT on hashed JS/CSS) as a belt-and-
+    braces against rare CDN edge staleness.
+  • Risk: touches every device's startup path. Ship as its own
+    focused minor release with explicit smoke-test on mobile PWA +
+    desktop browser, not bundled with feature work.
