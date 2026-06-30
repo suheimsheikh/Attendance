@@ -63,7 +63,8 @@ def escort_a(admin_client, api, two_institutions, base_url):
     inst_a, _ = two_institutions
     phone = f"99{uuid.uuid4().int % 100000000:08d}"
     body = {"name": f"TEST_EscortA_{uuid.uuid4().hex[:5]}",
-            "phone": phone, "start_date": "2026-01-01"}
+            "phone": phone, "start_date": "2026-01-01",
+            "valid_until": "2099-12-31"}
     r = admin_client.post(f"{api}/institutions/{inst_a['id']}/escorts", json=body)
     assert r.status_code in (200, 201), r.text
     esc = r.json()
@@ -82,7 +83,8 @@ def escort_b(admin_client, api, two_institutions, base_url):
     _, inst_b = two_institutions
     phone = f"98{uuid.uuid4().int % 100000000:08d}"
     body = {"name": f"TEST_EscortB_{uuid.uuid4().hex[:5]}",
-            "phone": phone, "start_date": "2026-01-01"}
+            "phone": phone, "start_date": "2026-01-01",
+            "valid_until": "2099-12-31"}
     r = admin_client.post(f"{api}/institutions/{inst_b['id']}/escorts", json=body)
     assert r.status_code in (200, 201), r.text
     esc = r.json()

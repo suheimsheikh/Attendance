@@ -55,7 +55,8 @@ def fresh_escort(admin_client, api, any_institution):
     """Active escort with no attendance row yet — created per test, cleaned up after."""
     phone = f"97{uuid.uuid4().int % 100000000:08d}"
     body = {"name": f"TEST_Iter11Esc_{uuid.uuid4().hex[:5]}",
-            "phone": phone, "start_date": "2026-01-01"}
+            "phone": phone, "start_date": "2026-01-01",
+            "valid_until": "2099-12-31"}
     r = admin_client.post(f"{api}/institutions/{any_institution['id']}/escorts", json=body)
     assert r.status_code in (200, 201), r.text
     esc = r.json()

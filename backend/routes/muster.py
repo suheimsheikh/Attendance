@@ -59,6 +59,25 @@ def _require_muster(user: dict) -> None:
 def make_router(db, get_current_user, active_camp_for) -> APIRouter:
     router = APIRouter(prefix="/api")
 
+    async def _enforce_escort_window(user: dict) -> None:
+        """If the caller is an escort-token, refuse the request when the
+        underlying escort row is now outside its [valid_from, valid_until]
+        window. Catches the case where an admin revoked the validity AFTER
+        the escort signed in — the JWT is still cryptographically valid
+        but the authorisation behind it has been pulled."""
+        if not user.get("is_escort") or not user.get("escort_id"):
+            return
+        esc = await db.escorts.find_one(
+            {"id": user["escort_id"]}, {"_id": 0, "valid_from": 1, "valid_until": 1, "status": 1}
+        )
+        if not esc or esc.get("status") != "active":
+            raise HTTPException(status_code=403, detail="Your escort access has been revoked")
+        today_iso = now_utc().date().isoformat()
+        if esc.get("valid_from") and today_iso < esc["valid_from"]:
+            raise HTTPException(status_code=403, detail="Your escort access starts on " + esc["valid_from"])
+        if esc.get("valid_until") and today_iso > esc["valid_until"]:
+            raise HTTPException(status_code=403, detail="Your escort access expired on " + esc["valid_until"])
+
     @router.get("/muster/athletes")
     async def muster_athletes(mode: str = "checkin", user: dict = Depends(get_current_user)):
         """List athletes eligible for the given muster mode:
@@ -67,6 +86,7 @@ def make_router(db, get_current_user, active_camp_for) -> APIRouter:
            checkout → athletes currently checked in (open session)
         """
         _require_muster(user)
+        await _enforce_escort_window(user)
         if mode not in ("checkin", "checkout"):
             raise HTTPException(status_code=400, detail="mode must be 'checkin' or 'checkout'")
 
@@ -139,6 +159,7 @@ def make_router(db, get_current_user, active_camp_for) -> APIRouter:
     @router.post("/muster/checkin-bulk")
     async def muster_checkin_bulk(body: MusterBulkIn, user: dict = Depends(get_current_user)):
         _require_muster(user)
+        await _enforce_escort_window(user)
         office = await db.config.find_one({"id": "office"})
         today = local_date_str(office)
         now = now_utc()
@@ -190,6 +211,7 @@ def make_router(db, get_current_user, active_camp_for) -> APIRouter:
     @router.post("/muster/checkout-bulk")
     async def muster_checkout_bulk(body: MusterBulkIn, user: dict = Depends(get_current_user)):
         _require_muster(user)
+        await _enforce_escort_window(user)
         now = now_utc()
         done, skipped = [], []
         escort_inst = (user.get("institution") or "").strip() if user.get("is_escort") else None

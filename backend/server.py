@@ -422,6 +422,27 @@ async def _seed_database() -> None:
             last10_filled += 1
     if last10_filled:
         logger.info("Backfilled mobile_last10 on %d user(s)", last10_filled)
+    # Backfill escort validity-from for legacy escort rows that pre-date
+    # the 28 Jun 2026 validity-window feature. Sets `valid_from` to the
+    # escort's recorded `start_date` (or `created_at` if missing) and
+    # leaves `valid_until` as null — admins must set it the next time
+    # they edit the escort. This keeps existing escorts able to log in
+    # while nudging admins to fill in the missing end date.
+    esc_filled = 0
+    async for e in db.escorts.find(
+        {"valid_from": {"$exists": False}},
+        {"_id": 0, "id": 1, "start_date": 1, "created_at": 1},
+    ):
+        seed_from = e.get("start_date") or (e.get("created_at") or "")[:10]
+        if not seed_from:
+            continue
+        await db.escorts.update_one(
+            {"id": e["id"]},
+            {"$set": {"valid_from": seed_from, "valid_until": None}},
+        )
+        esc_filled += 1
+    if esc_filled:
+        logger.info("Backfilled valid_from on %d escort(s); valid_until left null", esc_filled)
     # Backfill default office timings
     await db.config.update_one(
         {"id": "office", "default_work_start": {"$exists": False}},

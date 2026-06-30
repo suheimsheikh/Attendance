@@ -110,21 +110,39 @@ def make_router(
     async def _match_escort_by_phone(digits: str) -> Optional[dict]:
         """Map a phone-number to an `escorts` row, mirroring the user
         matcher: indexed mobile_last10 key first, then full scan keyed by
-        the normalized form. Only active escorts match — replaced/left
-        escorts no longer log in.
+        the normalized form. Only active escorts WITHIN their validity
+        window match — replaced/left escorts no longer log in, and
+        active escorts outside [valid_from, valid_until] also can't sign
+        in (added 28 Jun 2026 with the escort dates feature).
         """
+        from services.time_utils import now_utc as _now
         key = phone_key(digits)
         if not key:
             return None
+
+        def _in_window(esc: dict) -> bool:
+            today_iso = _now().date().isoformat()
+            vf = esc.get("valid_from")
+            vu = esc.get("valid_until")
+            # Open ends are tolerated (legacy rows pre-feature). When
+            # both are set, the gate enforces vf <= today <= vu.
+            if vf and today_iso < vf:
+                return False
+            if vu and today_iso > vu:
+                return False
+            return True
+
         match = await db.escorts.find_one(
             {"mobile_last10": key, "status": "active"}, {"_id": 0}
         )
-        if match:
+        if match and _in_window(match):
             return match
         async for e in db.escorts.find({"status": "active"},
                                        {"_id": 0, "id": 1, "phone": 1}):
             if phone_key(e.get("phone") or "") == key:
-                return await db.escorts.find_one({"id": e["id"]}, {"_id": 0})
+                full = await db.escorts.find_one({"id": e["id"]}, {"_id": 0})
+                if full and _in_window(full):
+                    return full
         return None
 
     async def _enrich_devices(devices: List[dict]) -> List[dict]:

@@ -54,7 +54,11 @@ def escort_in_inst_a(admin_client, api, two_institutions):
     phone = f"99{uuid.uuid4().int % 100000000:08d}"
     body = {"name": f"TEST_Escort_{uuid.uuid4().hex[:6]}",
             "phone": phone,
-            "start_date": "2026-01-01"}
+            "start_date": "2026-01-01",
+            # Added 28 Jun 2026 — escorts now carry a required validity
+            # window. Future-dated end keeps the fixture's escort
+            # logged-in capable for the lifetime of this test session.
+            "valid_until": "2099-12-31"}
     r = admin_client.post(f"{api}/institutions/{inst_a['id']}/escorts", json=body)
     assert r.status_code in (200, 201), r.text
     esc = r.json()

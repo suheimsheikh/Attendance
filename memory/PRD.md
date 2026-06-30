@@ -937,3 +937,75 @@ See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or
   • Risk: touches every device's startup path. Ship as its own
     focused minor release with explicit smoke-test on mobile PWA +
     desktop browser, not bundled with feature work.
+
+
+## R1 — Escort Validity Dates (30 Jun 2026) ✅ COMPLETE
+
+User requested 3 features in this order: R1 (Escort dates), R2 (Posting leave
+type), R3 (3-day notice rule). R1 shipped today.
+
+### What's now live (preview)
+- **Backend models** (`routes/escorts.py`): `EscortCreate` requires
+  `valid_until` (YYYY-MM-DD). `valid_from` is optional and defaults to
+  `start_date` when omitted. `EscortUpdate` accepts both fields. Both routes
+  reject `valid_until < valid_from` with HTTP 400.
+- **Auth gate** (`routes/auth.py::_match_escort_by_phone`): a phone-login
+  request that maps to an active escort is ONLY accepted when today's
+  date falls within `[valid_from, valid_until]`. Outside the window the
+  matcher returns `None`, so the response is `pending/needs_profile` —
+  exactly the same shape a non-escort gets, which is the desired UX
+  (no information leak, no special error).
+- **Self-check-in guard** (`routes/muster.py`): an escort with a token
+  issued before their window expired still gets a 403 when they call any
+  escort attendance route after `valid_until` (or before `valid_from`),
+  with a human-readable detail string showing the relevant date.
+- **Frontend UI** (`pages/admin/Institutions.jsx`): Add/Edit Escort modal
+  now has Valid-from (defaults to start_date) and Valid-until inputs with
+  HTML `min=` cross-validation. Legacy rows (created before the feature)
+  render an amber "Legacy escort — please set Valid-until on next edit"
+  badge in the escort list, and the modal's Save button forces the admin
+  to supply Valid-until before the row can be re-saved.
+- **Test coverage**: 56/56 in iter9-iter14 review suites pass (escort
+  create now sends `valid_until: "2099-12-31"` in every fixture).
+  Full backend suite: 340 passed / 2 unrelated flakes (backup test +
+  health-check timeout in iter2/iter3 — not introduced by this work).
+- **End-to-end smoke (via curl against preview)** — verified all four
+  paths: missing valid_until → 422, valid_until<valid_from → 400,
+  expired escort → login blocked, future escort → login blocked,
+  in-window escort → login approved with `is_escort: true`.
+
+### Files touched
+- `/app/backend/routes/escorts.py` (validation + persistence)
+- `/app/backend/routes/auth.py` (phone-login window gate)
+- `/app/backend/routes/muster.py` (per-request gate for already-issued tokens)
+- `/app/frontend/src/pages/admin/Institutions.jsx` (UI)
+- `/app/backend/tests/test_review_iter{9,10,11,12,13,14}.py` (fixtures)
+
+## Pending (in priority order)
+
+### R2 — "Posting" Leave Type (P1) ⏸ PAUSED awaiting user go-ahead
+- New leave type `posting` (member is posted to another academy).
+- Apply-on-behalf ONLY (admin files it; user cannot self-apply).
+- Zero comp-off accrual on weekly-off days during a posting (DIFFERENT
+  from tours which DO accrue).
+- Zero paid-leave consumption.
+- Check-ins behave normally (off-site flagged if applicable).
+- Presence board: shows under "On Tour" column but labelled "POSTED".
+
+### R3 — 3-day notice rule for Leaves (P1) ⏸ PAUSED awaiting user go-ahead
+- Applies to `leave` type ONLY (not tour, not posting).
+- If `start_date - today < 3 days` (calendar), the user-side "Apply"
+  button is disabled with explanatory tooltip; admin can still apply on
+  the member's behalf via the Leave Approvals page or members table.
+- Threshold (days) lives in Office Settings as `leave_notice_days`,
+  default 3, integer ≥ 0.
+
+### Post-launch backlog
+- Production data wipe / zero-out used leaves+comp-offs (P2)
+- Frontend version check / auto-reload toast (P2)
+- `server.py` Phase 2 modular refactor (P3)
+- JWT → httpOnly cookies migration (P2)
+- `@sailors.local` → `@athletes.local` email migration (P3)
+- Regatta "locked / manually edited" flag (P3)
+- SMS OTP hardening (P2)
+- `<span> in <option>` hydration warning (P3)

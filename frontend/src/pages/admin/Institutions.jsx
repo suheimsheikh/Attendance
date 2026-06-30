@@ -255,6 +255,21 @@ function EscortRow({ escort, onEdit, onChange }) {
             {escort.phone || "no phone"} · since {escort.start_date}
             {escort.ended_at && ` · ended ${escort.ended_at}`}
           </div>
+          {/* Validity window — added 28 Jun 2026. Surfaces the active
+              date range so admins can spot expiring escorts at a glance.
+              Amber when no end-date is set (legacy backfilled rows). */}
+          {(escort.valid_from || escort.valid_until) && (
+            <div
+              className={`text-[10px] mt-0.5 inline-flex items-center gap-1 ${
+                !escort.valid_until ? "text-amber-700" : "text-slate-500"
+              }`}
+              data-testid={`escort-window-${escort.id}`}
+              title={!escort.valid_until ? "Legacy escort — please set Valid-until on next edit" : "Authorised window"}
+            >
+              <Shield size={9} />
+              {escort.valid_from || "?"} → {escort.valid_until || "no end date"}
+            </div>
+          )}
         </div>
         <button onClick={onEdit} disabled={busy} className="p-1.5 rounded hover:bg-slate-100" data-testid={`escort-edit-${escort.id}`}><Edit3 size={14}/></button>
         {isActive && (
@@ -329,26 +344,50 @@ function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSave
   const [name, setName] = useState(initial?.name || "");
   const [phone, setPhone] = useState(initial?.phone || "");
   const [startDate, setStartDate] = useState(initial?.start_date || new Date().toISOString().slice(0, 10));
+  // Validity window (added 28 Jun 2026). `valid_from` defaults to the
+  // start date when missing on a legacy row; `valid_until` is required
+  // on create and when next editing a backfilled escort with null.
+  const [validFrom, setValidFrom] = useState(
+    initial?.valid_from || initial?.start_date || new Date().toISOString().slice(0, 10)
+  );
+  const [validUntil, setValidUntil] = useState(initial?.valid_until || "");
   const [status, setStatus] = useState(initial?.status || "active");
   const [replacedBy, setReplacedBy] = useState(initial?.replaced_by || "");
   const [busy, setBusy] = useState(false);
   const formErr = useFormError();
+
+  // Legacy rows that pre-date the dates feature carry a null valid_until.
+  // When admin opens such a row, force them to pick an end date before
+  // they can save — matches the user choice "every escort must have an
+  // end date" (2b on 28 Jun).
+  const legacyMissingEnd = isEdit && !initial?.valid_until;
 
   const submit = async (e) => {
     e.preventDefault();
     formErr.clear();
     if (!name.trim()) { formErr.setMessage("Name required"); return; }
     if (!startDate) { formErr.setMessage("Start date required"); return; }
+    if (!validFrom) { formErr.setMessage("Valid-from date required"); return; }
+    if (!validUntil) {
+      formErr.setMessage(legacyMissingEnd
+        ? "This escort was added before the dates feature — please set the Valid-until date now."
+        : "Valid-until date required");
+      return;
+    }
+    if (validUntil < validFrom) { formErr.setMessage("Valid-until must be on or after Valid-from"); return; }
     setBusy(true);
     try {
       if (isEdit) {
         const body = { name: name.trim(), phone: phone.trim() || null,
-                       start_date: startDate, status };
+                       start_date: startDate,
+                       valid_from: validFrom, valid_until: validUntil,
+                       status };
         if (status === "replaced") body.replaced_by = replacedBy || null;
         await api.patch(`/escorts/${initial.id}`, body);
       } else {
         await api.post(`/institutions/${institutionId}/escorts`, {
           name: name.trim(), phone: phone.trim() || null, start_date: startDate,
+          valid_from: validFrom, valid_until: validUntil,
         });
       }
       toast.success(isEdit ? "Saved" : "Escort added");
@@ -375,6 +414,34 @@ function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSave
         <div>
           <label className="iu-label">Start date</label>
           <input data-testid="escort-form-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="iu-input" />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="iu-label">Valid from</label>
+            <input
+              data-testid="escort-form-valid-from"
+              type="date"
+              value={validFrom}
+              onChange={(e) => setValidFrom(e.target.value)}
+              className="iu-input"
+            />
+          </div>
+          <div>
+            <label className="iu-label">
+              Valid until {legacyMissingEnd && <span className="text-amber-600">(please set)</span>}
+            </label>
+            <input
+              data-testid="escort-form-valid-until"
+              type="date"
+              value={validUntil}
+              min={validFrom || undefined}
+              onChange={(e) => setValidUntil(e.target.value)}
+              className={`iu-input ${legacyMissingEnd ? "border-amber-400 ring-1 ring-amber-200" : ""}`}
+            />
+          </div>
+        </div>
+        <div className="text-[11px] text-slate-500 -mt-1">
+          The escort can sign in and appear on muster only between these dates. Status stays Active throughout.
         </div>
         {isEdit && (
           <div>

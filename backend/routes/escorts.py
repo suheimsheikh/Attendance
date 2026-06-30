@@ -56,6 +56,13 @@ class EscortCreate(BaseModel):
     # that want to be explicit; the path always wins.
     institution: Optional[str] = None
     start_date: str                   # YYYY-MM-DD; admin-entered
+    # Validity window — required at create time (added 28 Jun 2026 after
+    # the user asked for explicit from/to dates instead of an open-ended
+    # master record). Existing rows backfill with valid_from=created_at
+    # and valid_until=None; admins must set valid_until when next editing
+    # those rows.
+    valid_from: Optional[str] = None  # YYYY-MM-DD; defaults to start_date
+    valid_until: str                  # YYYY-MM-DD; required on create
 
 
 class EscortUpdate(BaseModel):
@@ -63,6 +70,8 @@ class EscortUpdate(BaseModel):
     phone: Optional[str] = None
     institution: Optional[str] = None
     start_date: Optional[str] = None
+    valid_from: Optional[str] = None
+    valid_until: Optional[str] = None
     status: Optional[str] = None      # active | replaced | left
     replaced_by: Optional[str] = None # escort id of the substitution
     ended_at: Optional[str] = None
@@ -156,6 +165,21 @@ def make_router(db, require_admin, get_current_user, require_coach_or_admin) -> 
             raise HTTPException(status_code=404, detail="Institution not found")
         if not body.name.strip():
             raise HTTPException(status_code=400, detail="Escort name required")
+        # `valid_until` is required at create time; `valid_from` defaults
+        # to `start_date` when not supplied (matches the common case where
+        # the escort's first authorised day is also their start day).
+        valid_from = (body.valid_from or body.start_date or "").strip()
+        valid_until = (body.valid_until or "").strip()
+        if not valid_until:
+            raise HTTPException(
+                status_code=400,
+                detail="Valid-until date is required when adding an escort",
+            )
+        if valid_from and valid_until < valid_from:
+            raise HTTPException(
+                status_code=400,
+                detail="Valid-until must be on or after valid-from",
+            )
         # Force the FK by institution NAME so it matches the members
         # collection's existing convention.
         doc = {
@@ -167,6 +191,8 @@ def make_router(db, require_admin, get_current_user, require_coach_or_admin) -> 
             "mobile_last10": (("".join(c for c in (body.phone or "") if c.isdigit())[-10:]) or None) if body.phone else None,
             "institution": inst["name"],
             "start_date": body.start_date,
+            "valid_from": valid_from,
+            "valid_until": valid_until,
             "status": "active",
             "replaced_by": None,
             "ended_at": None,
@@ -182,11 +208,20 @@ def make_router(db, require_admin, get_current_user, require_coach_or_admin) -> 
         if not escort:
             raise HTTPException(status_code=404, detail="Escort not found")
         update: dict = {}
-        for k in ("name", "phone", "institution", "start_date", "status",
+        for k in ("name", "phone", "institution", "start_date",
+                  "valid_from", "valid_until", "status",
                   "replaced_by", "ended_at"):
             v = getattr(body, k, None)
             if v is not None:
                 update[k] = v.strip() if isinstance(v, str) else v
+        # Sanity-check the window when either date is being edited.
+        new_from = update.get("valid_from", escort.get("valid_from"))
+        new_until = update.get("valid_until", escort.get("valid_until"))
+        if new_from and new_until and new_until < new_from:
+            raise HTTPException(
+                status_code=400,
+                detail="Valid-until must be on or after valid-from",
+            )
         # Re-stamp the normalised phone key whenever the phone changes.
         if "phone" in update:
             digits = "".join(c for c in (update["phone"] or "") if c.isdigit())[-10:]
