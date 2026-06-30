@@ -10,7 +10,10 @@ export default function LeaveBalances() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [edits, setEdits] = useState({}); // member_id -> opening value
+  // member_id -> { opening?, comp_off_opening? }  — only the keys the user
+  // touched land in the payload, so editing one column never clobbers the
+  // other on save.
+  const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   // Row the user is hovering / focused on. The header strip mirrors this
   // row's balances rather than showing org-wide totals — summing leave
@@ -25,7 +28,8 @@ export default function LeaveBalances() {
   };
   useEffect(() => { load(); }, []);
 
-  const setVal = (id, v) => setEdits((e) => ({ ...e, [id]: v }));
+  const setVal = (id, field, v) =>
+    setEdits((e) => ({ ...e, [id]: { ...(e[id] || {}), [field]: v } }));
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -53,17 +57,40 @@ export default function LeaveBalances() {
   // strip matches what they just typed (live opening → live balance).
   const activeDisplay = useMemo(() => {
     if (!activeRow) return null;
-    const openingRaw = edits[activeRow.id] !== undefined ? edits[activeRow.id] : activeRow.opening;
-    const opening = Number(openingRaw) || 0;
+    const ed = edits[activeRow.id] || {};
+    const opening = Number(ed.opening !== undefined ? ed.opening : activeRow.opening) || 0;
     const balance = opening - Number(activeRow.taken_this_year || 0);
-    return { ...activeRow, opening, balance, _dirty: edits[activeRow.id] !== undefined };
+    // Comp-off side — if admin is editing the Comp-Off Opening column,
+    // recompute accrued (= attendance + tours + new_opening) and available
+    // live so the strip card reflects what's pending.
+    const editedCoOpening = ed.comp_off_opening !== undefined ? Number(ed.comp_off_opening) || 0 : null;
+    const dirty = Object.keys(ed).length > 0;
+    if (editedCoOpening !== null) {
+      const fromAttn = Number(activeRow.comp_off_accrued_from_attendance || 0);
+      const fromTours = Number(activeRow.comp_off_accrued_from_tours || 0);
+      const newAccrued = fromAttn + fromTours + editedCoOpening;
+      const newAvail = Math.max(0, newAccrued - Number(activeRow.comp_off_used || 0));
+      return {
+        ...activeRow,
+        opening,
+        balance,
+        comp_off_accrued: newAccrued,
+        comp_off_available: newAvail,
+        comp_off_accrued_from_opening: editedCoOpening,
+        _dirty: dirty,
+      };
+    }
+    return { ...activeRow, opening, balance, _dirty: dirty };
   }, [activeRow, edits]);
 
   const saveAll = async () => {
-    const rows = Object.entries(edits).map(([member_id, opening]) => ({
-      member_id,
-      opening: Number(opening) || 0,
-    }));
+    const rows = Object.entries(edits).map(([member_id, fields]) => {
+      const row = { member_id };
+      if (fields.opening !== undefined) row.opening = Number(fields.opening) || 0;
+      if (fields.comp_off_opening !== undefined)
+        row.comp_off_opening = Math.max(0, parseInt(fields.comp_off_opening, 10) || 0);
+      return row;
+    }).filter((r) => "opening" in r || "comp_off_opening" in r);
     if (rows.length === 0) { toast.info("Nothing to save"); return; }
     setSaving(true);
     formErr.clear();
@@ -83,8 +110,10 @@ export default function LeaveBalances() {
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Leave Balances</h1>
           <p className="text-slate-500 text-sm mt-1">
-            Coaches, staff &amp; executives — opening Paid Leave plus live Comp-Off accrual and Tour usage for {data?.year || "this year"}.
-            Edit the Opening column then Save. Athletes don&apos;t consume a numeric quota and aren&apos;t listed.
+            Coaches, staff &amp; executives — opening Paid Leave &amp; Comp-Off balances
+            plus live accrual and Tour usage for {data?.year || "this year"}.
+            Edit the two Opening columns then Save. Athletes don&apos;t consume
+            a numeric quota and aren&apos;t listed.
           </p>
         </div>
         <button onClick={load} className="iu-btn-secondary !h-9 !px-3" data-testid="lb-reload" title="Refresh">
@@ -130,14 +159,29 @@ export default function LeaveBalances() {
                 Used <span className="font-extrabold text-slate-900">{activeDisplay.comp_off_used || 0}</span> ·
                 Available <span className="font-extrabold text-violet-700">{activeDisplay.comp_off_available || 0}</span>
               </div>
-              {(activeDisplay.comp_off_accrued_from_tours || 0) > 0 && (
-                <div
-                  className="text-[11px] text-orange-700 mt-0.5 flex items-center gap-1"
-                  data-testid="lb-active-comp-from-tours"
-                  title="Comp-off accrued because an approved tour spanned this member's weekly off"
-                >
-                  <Plane size={10}/>
-                  {activeDisplay.comp_off_accrued_from_tours} from tours
+              {((activeDisplay.comp_off_accrued_from_tours || 0) > 0
+                || (activeDisplay.comp_off_accrued_from_opening || 0) > 0) && (
+                <div className="text-[11px] mt-0.5 flex flex-wrap items-center gap-x-2" data-testid="lb-active-comp-sources">
+                  {(activeDisplay.comp_off_accrued_from_tours || 0) > 0 && (
+                    <span
+                      className="text-orange-700 flex items-center gap-1"
+                      data-testid="lb-active-comp-from-tours"
+                      title="Comp-off accrued because an approved tour spanned this member's weekly off"
+                    >
+                      <Plane size={10}/>
+                      {activeDisplay.comp_off_accrued_from_tours} from tours
+                    </span>
+                  )}
+                  {(activeDisplay.comp_off_accrued_from_opening || 0) > 0 && (
+                    <span
+                      className="text-violet-700 flex items-center gap-1"
+                      data-testid="lb-active-comp-from-opening"
+                      title="Comp-off carried forward / seeded by admin"
+                    >
+                      <RefreshCw size={10}/>
+                      {activeDisplay.comp_off_accrued_from_opening} opening
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -196,7 +240,7 @@ export default function LeaveBalances() {
                   <th className="iu-table-th !text-right bg-amber-50/60 border-l border-amber-100" colSpan={3}>
                     <span className="inline-flex items-center gap-1 text-amber-700"><Bed size={12}/> Paid Leave</span>
                   </th>
-                  <th className="iu-table-th !text-right bg-violet-50/60 border-l border-violet-100" colSpan={3}>
+                  <th className="iu-table-th !text-right bg-violet-50/60 border-l border-violet-100" colSpan={4}>
                     <span className="inline-flex items-center gap-1 text-violet-700"><RefreshCw size={12}/> Comp-Off</span>
                   </th>
                   <th className="iu-table-th !text-right bg-orange-50/60 border-l border-orange-100" rowSpan={2}>
@@ -207,16 +251,23 @@ export default function LeaveBalances() {
                   <th className="iu-table-th !text-right bg-amber-50/40 !py-1">Opening</th>
                   <th className="iu-table-th !text-right bg-amber-50/40 !py-1">Used</th>
                   <th className="iu-table-th !text-right bg-amber-50/40 !py-1">Balance</th>
-                  <th className="iu-table-th !text-right bg-violet-50/40 !py-1 border-l border-violet-100">Accrued</th>
+                  <th className="iu-table-th !text-right bg-violet-50/40 !py-1 border-l border-violet-100">Opening</th>
+                  <th className="iu-table-th !text-right bg-violet-50/40 !py-1">Accrued</th>
                   <th className="iu-table-th !text-right bg-violet-50/40 !py-1">Used</th>
                   <th className="iu-table-th !text-right bg-violet-50/40 !py-1">Available</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => {
-                  const dirty = edits[r.id] !== undefined;
-                  const opening = dirty ? edits[r.id] : r.opening;
+                  const ed = edits[r.id] || {};
+                  const openingDirty = ed.opening !== undefined;
+                  const opening = openingDirty ? ed.opening : r.opening;
                   const balance = (Number(opening) || 0) - r.taken_this_year;
+                  const coOpeningDirty = ed.comp_off_opening !== undefined;
+                  const coOpening = coOpeningDirty
+                    ? ed.comp_off_opening
+                    : (r.comp_off_opening || 0);
+                  const dirty = openingDirty || coOpeningDirty;
                   return (
                     <tr
                       key={r.id}
@@ -235,19 +286,31 @@ export default function LeaveBalances() {
                           step="0.5"
                           min="0"
                           value={opening}
-                          onChange={(e) => setVal(r.id, e.target.value)}
+                          onChange={(e) => setVal(r.id, "opening", e.target.value)}
                           className="w-20 text-right px-2 py-1 rounded-md border border-slate-200 focus:border-slate-400 outline-none bg-white"
                         />
                       </td>
                       <td className="iu-table-td text-right text-slate-600" data-testid={`lb-paid-used-${r.id}`}>{round1(r.taken_this_year)}</td>
                       <td className={`iu-table-td text-right font-bold ${balance < 0 ? "text-red-600" : "text-emerald-700"}`} data-testid={`lb-paid-balance-${r.id}`}>{round1(balance)}</td>
-                      <td className="iu-table-td text-right text-slate-700 border-l border-violet-100" data-testid={`lb-co-accrued-${r.id}`}>
+                      <td className="iu-table-td text-right border-l border-violet-100">
+                        <input
+                          data-testid={`lb-co-opening-input-${r.id}`}
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={coOpening}
+                          onChange={(e) => setVal(r.id, "comp_off_opening", e.target.value)}
+                          className="w-16 text-right px-2 py-1 rounded-md border border-violet-100 focus:border-violet-300 outline-none bg-white"
+                          title="Comp-Off carried forward / seeded by admin"
+                        />
+                      </td>
+                      <td className="iu-table-td text-right text-slate-700" data-testid={`lb-co-accrued-${r.id}`}>
                         {r.comp_off_accrued || 0}
                         {(r.comp_off_accrued_from_tours || 0) > 0 && (
                           <div
                             className="text-[10px] text-orange-700 font-semibold leading-tight"
                             data-testid={`lb-co-tour-pill-${r.id}`}
-                            title={`${r.comp_off_accrued_from_tours} accrued from tours on ${r.weekly_off ? r.weekly_off : "weekly off"} day(s)`}
+                            title={`${r.comp_off_accrued_from_tours} accrued from approved tour day(s) that landed on the weekly off`}
                           >
                             +{r.comp_off_accrued_from_tours} tour
                           </div>
@@ -260,7 +323,7 @@ export default function LeaveBalances() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={10} className="text-center py-10 text-slate-500">No members match.</td></tr>
+                  <tr><td colSpan={11} className="text-center py-10 text-slate-500">No members match.</td></tr>
                 )}
               </tbody>
             </table>

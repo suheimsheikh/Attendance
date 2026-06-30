@@ -890,3 +890,28 @@ See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or
   Verified: filed + approved a demo Sunday tour for admin, footnote
   flipped from absent to "1 from tours", then rejected the demo to
   clean up.
+
+- **Comp-Off Opening + tour past-only gate (28 Jun 2026, evening)** —
+  Added in response to user feedback right before tomorrow's go-live.
+  Two related changes:
+  1. **`comp_off_opening` field** on user docs (default 0). Treated as
+     a third accrual source alongside attendance + tours. Editable per
+     row on `/admin/leave-balances` via a new dedicated Opening input
+     in the Comp-Off block, with the same Save-all UX as Paid Leave
+     Opening. `LeaveBalanceBulkIn` accepts either or both fields per
+     row so editing one column never clobbers the other.
+  2. **Past-or-today gate on tour accrual** — `compute_comp_off_balance`
+     and the inline loop in `/leave-balances` now require the tour's
+     weekly_off date to be `<= today_iso` before crediting. Future
+     tours no longer pre-accrue (which would let a member draw against
+     credits they hadn't yet earned and would un-accrue if the tour
+     were later cancelled).
+  - Frontend surfaces the new source: header strip Comp-Off card shows
+    stacked sub-lines (`✈ Y from tours` orange + `🔃 Z opening` violet);
+    MyLeaves stat card accepts a `footnotes[]` array and stacks them
+    too. Live-recompute in the active strip reflects unsaved
+    Comp-Off-Opening edits.
+  - Coverage: 13/13 pytest in test_comp_off_tour_accrual.py (4 new
+    cases: future-tour-not-yet, opening-accrues-immediately,
+    opening+tour combine, opening-honoured-for-athlete). Full backend
+    suite 341/341 green.

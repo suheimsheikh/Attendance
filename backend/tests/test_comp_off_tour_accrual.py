@@ -11,6 +11,7 @@ to the loop it was created on; reusing a closed loop crashes) and drops
 the test DB at the end.
 """
 import asyncio
+from datetime import date
 
 import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -170,3 +171,55 @@ def test_staff_pending_tour_does_not_accrue():
         user={"id": "u-staff", "category": "staff", "weekly_off": "sunday"},
     )
     assert bal["accrued"] == 0
+
+
+def test_future_tour_sunday_does_not_accrue_yet():
+    """Updated 28 Jun 2026 — a tour Sunday in the future must NOT pre-
+    accrue. Only past-or-today weekly_off dates inside an approved tour
+    contribute. Prevents members from drawing against credits they
+    haven't yet earned."""
+    future_year = str(date.today().year + 10)
+    bal = _run_case(
+        seed_args={"user_id": "u-staff",
+                   "tour_ranges": [(f"{future_year}-01-04", f"{future_year}-01-04")]},
+        user={"id": "u-staff", "category": "staff", "weekly_off": "sunday"},
+        year=future_year,
+    )
+    assert bal["accrued"] == 0, f"future tour should NOT accrue, got {bal['accrued']}"
+
+
+def test_admin_seeded_opening_accrues_immediately():
+    """Updated 28 Jun 2026 — `comp_off_opening` on the user doc is added
+    to the accrued total as a third source. Used by admins on Day-1 of
+    a fresh deployment to carry forward last-year's unused credits."""
+    bal = _run_case(
+        seed_args={"user_id": "u-staff", "tour_ranges": []},
+        user={"id": "u-staff", "category": "staff", "weekly_off": "sunday",
+              "comp_off_opening": 3},
+    )
+    assert bal["accrued"] == 3
+    kinds = [b["kind"] for b in bal["breakdown"]]
+    assert "opening" in kinds
+
+
+def test_opening_plus_tour_combine():
+    """Opening + past tour Sunday combine cleanly into a single accrued total."""
+    bal = _run_case(
+        seed_args={"user_id": "u-staff",
+                   "tour_ranges": [("2026-01-04", "2026-01-04")]},
+        user={"id": "u-staff", "category": "staff", "weekly_off": "sunday",
+              "comp_off_opening": 2},
+    )
+    # 2 opening + 1 from past tour Sunday = 3
+    assert bal["accrued"] == 3
+
+
+def test_opening_for_athlete_also_accrues():
+    """Opening bypasses the athlete-excluded gate. If an admin grants
+    an athlete a starting pool, the system honours it."""
+    bal = _run_case(
+        seed_args={"user_id": "u-ath", "tour_ranges": []},
+        user={"id": "u-ath", "category": "athlete", "weekly_off": "sunday",
+              "comp_off_opening": 4},
+    )
+    assert bal["accrued"] == 4

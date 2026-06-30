@@ -227,7 +227,10 @@ class MemberUpdate(BaseModel):
 
 class LeaveBalanceBulkRow(BaseModel):
     member_id: str
-    opening: float
+    # Either or both may be sent — only the supplied fields are written so
+    # editing one column doesn't clobber the other.
+    opening: Optional[float] = None
+    comp_off_opening: Optional[int] = None
 
 
 class LeaveBalanceBulkIn(BaseModel):
@@ -885,7 +888,7 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
         {"category": {"$ne": "athlete"}},
         {"_id": 0, "id": 1, "full_name": 1, "category": 1,
          "rank": 1, "institution": 1,
-         "leave_balance_opening": 1, "weekly_off": 1},
+         "leave_balance_opening": 1, "comp_off_opening": 1, "weekly_off": 1},
     ).sort("full_name", 1).to_list(2000)
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
@@ -943,6 +946,7 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
         att_dates.setdefault(a["user_id"], set()).add(a["date"])
 
     from holidays import WEEKDAY_KEY  # local import — keeps top-of-file clean
+    today_iso = today  # ISO date in office-local tz; reuse for tour-past gate
     out = []
     for u in users:
         uid = u["id"]
@@ -959,11 +963,11 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
                     accrued_from_attendance += 1
             except Exception:
                 continue
-        # … PLUS approved tour days that landed on the weekly_off (added 28
-        # Jun 2026). Mirrors holidays.compute_comp_off_balance: athletes are
-        # the only category excluded (Breaks workflow); staff/coach/exec all
-        # accrue. Tour dates that also have attendance (rare — admin manually
-        # checks them in) are NOT double-counted.
+        # … PLUS approved tour days that landed on the weekly_off AND are
+        # past-or-today (28 Jun 2026 evening update — future tour Sundays
+        # no longer pre-accrue). Mirrors holidays.compute_comp_off_balance.
+        # Athletes are excluded (Breaks workflow). Tour dates that also
+        # have attendance are NOT double-counted.
         accrued_from_tours = 0
         if (u.get("category") or "").lower() != "athlete":
             seen_tour_dates: set = set()
@@ -978,11 +982,16 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
                     ds = cur.isoformat()
                     if (ds not in seen_tour_dates
                             and ds not in att_seen
+                            and ds <= today_iso
                             and WEEKDAY_KEY[cur.weekday()] == wo):
                         accrued_from_tours += 1
                         seen_tour_dates.add(ds)
                     cur = date.fromordinal(cur.toordinal() + 1)
-        accrued = accrued_from_attendance + accrued_from_tours
+        # … PLUS any admin-seeded opening balance carried forward
+        # (e.g. last-year's unused credits at fresh-deployment time).
+        # Stored on the user doc as `comp_off_opening` (default 0).
+        accrued_from_opening = int(u.get("comp_off_opening") or 0)
+        accrued = accrued_from_attendance + accrued_from_tours + accrued_from_opening
         co_used = int(comp_used.get(uid, 0))
         co_avail = max(0, accrued - co_used)
         out.append({
@@ -996,10 +1005,13 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
             "balance": round(opening - taken, 1),
             # Comp-off pool (year-to-date)
             "comp_off_accrued": accrued,
+            "comp_off_opening": accrued_from_opening,
             # Split for the admin Leave Balances UI sub-line ("Accrued X · Y
-            # from tours"). Sum of these two equals comp_off_accrued.
+            # from tours · Z opening"). Sum of these three equals
+            # comp_off_accrued.
             "comp_off_accrued_from_attendance": accrued_from_attendance,
             "comp_off_accrued_from_tours": accrued_from_tours,
+            "comp_off_accrued_from_opening": accrued_from_opening,
             "comp_off_used": co_used,
             "comp_off_available": co_avail,
             # Tour days (year-to-date; informational only)
@@ -1017,9 +1029,23 @@ def _days_inclusive_safe(start_iso: str, end_iso: str) -> int:
 
 @api_router.post("/leave-balances/bulk")
 async def bulk_set_leave_balances(body: LeaveBalanceBulkIn, admin: dict = Depends(require_admin)):
+    """Persist Paid-Leave opening and/or Comp-Off opening per member. Only the
+    fields supplied on each row are written — sending just `opening` leaves
+    `comp_off_opening` untouched and vice-versa, so the admin Leave Balances
+    page can save the two columns independently."""
     updated = 0
     for row in body.rows:
-        r = await db.users.update_one({"id": row.member_id}, {"$set": {"leave_balance_opening": float(row.opening)}})
+        patch = {}
+        if row.opening is not None:
+            patch["leave_balance_opening"] = float(row.opening)
+        if row.comp_off_opening is not None:
+            # Clamp negatives to 0 — a negative opening would silently
+            # debit the live accrual which is almost never what an admin
+            # intends and is trivially recoverable by re-saving.
+            patch["comp_off_opening"] = max(0, int(row.comp_off_opening))
+        if not patch:
+            continue
+        r = await db.users.update_one({"id": row.member_id}, {"$set": patch})
         if r.modified_count or r.matched_count:
             updated += 1
     return {"ok": True, "updated": updated}

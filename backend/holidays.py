@@ -103,11 +103,13 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
     if user.get("category") != "athlete":
         absent_ytd_days = await _absent_days_ytd(db, user, co["weekly_off"])
 
-    # Split the comp-off accrual into its two sources so the member-side
-    # "My Leave & Tour" stats card can show "X (Y from tours)" without
-    # re-walking the breakdown on the frontend. Added 28 Jun 2026.
+    # Split the comp-off accrual into its three sources so the member-side
+    # "My Leave & Tour" stats card can show "X (Y from tours, Z opening)"
+    # without re-walking the breakdown on the frontend. Added 28 Jun 2026.
     from_tours = sum(1 for b in co.get("breakdown") or [] if b.get("kind") == "tour_weekly_off")
-    from_attendance = int(co["accrued"]) - from_tours
+    from_opening = sum(int(b.get("count") or 0) for b in co.get("breakdown") or []
+                       if b.get("kind") == "opening")
+    from_attendance = int(co["accrued"]) - from_tours - from_opening
 
     return {
         "comp_off": {
@@ -116,6 +118,7 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
             "available": co["available"],
             "from_attendance": from_attendance,
             "from_tours": from_tours,
+            "from_opening": from_opening,
         },
         "paid_leave": {
             "opening": opening,
@@ -285,13 +288,15 @@ async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -
         accrued += 1
         breakdown.append({"date": ds, "kind": "weekly_off"})
 
-    # Tour-day accrual (28 Jun 2026, updated to include coaches/executives):
-    # When a member (any category EXCEPT athlete) is on an approved tour that
-    # spans their weekly_off, they've effectively given up that off-day for
-    # work — same intent as the on-campus weekly_off accrual above. We mirror
-    # Option A: only the weekly_off date(s) inside the tour window accrue,
-    # not every tour day. Athletes are excluded because they use the Breaks
-    # workflow for off-time, not the leave/comp-off pool.
+    # Tour-day accrual (28 Jun 2026, updated to include coaches/executives;
+    # past-or-today gate added 28 Jun 2026 evening): only the weekly_off
+    # date(s) inside an approved tour window accrue, AND only after that
+    # date has actually passed. Future Sundays inside a future tour no
+    # longer pre-accrue — matches the on-campus rule where you can't earn
+    # a comp-off for a day you haven't yet worked through. Tours that are
+    # later cancelled / rejected / edited react live (the loop re-reads).
+    # Athletes are excluded because they use the Breaks workflow.
+    today_iso = date.today().isoformat()
     if (user.get("category") or "").lower() != "athlete":
         tour_rows = await db.leaves.find({
             "user_id": user["id"],
@@ -312,12 +317,25 @@ async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -
                 ds = cur.isoformat()
                 # Deduplicate across overlapping tours AND skip dates the member
                 # ALSO has attendance for (we already credited them once above).
-                if ds not in seen_tour_dates and ds not in distinct_dates:
+                # Also gate by past-or-today so future tour Sundays don't accrue.
+                if (ds not in seen_tour_dates
+                        and ds not in distinct_dates
+                        and ds <= today_iso):
                     if WEEKDAY_KEY[cur.weekday()] == weekly_off:
                         accrued += 1
                         breakdown.append({"date": ds, "kind": "tour_weekly_off"})
                         seen_tour_dates.add(ds)
                 cur = date.fromordinal(cur.toordinal() + 1)
+
+    # Manual opening balance (28 Jun 2026, evening): seeded by an admin on
+    # the Leave Balances page for Day-1 of a fresh deployment (or to
+    # carry-forward last-year's unused credits). Stored on the user doc
+    # as `comp_off_opening` (default 0). Treated as a third accrual
+    # source so the available pool obeys the same accrued-used arithmetic.
+    opening_co = int(user.get("comp_off_opening") or 0)
+    if opening_co > 0:
+        accrued += opening_co
+        breakdown.append({"date": None, "kind": "opening", "count": opening_co})
 
     used_leaves = await db.leaves.find({
         "user_id": user["id"],
