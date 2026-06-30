@@ -130,6 +130,16 @@ export default function LeaveBalances() {
                 Used <span className="font-extrabold text-slate-900">{activeDisplay.comp_off_used || 0}</span> ·
                 Available <span className="font-extrabold text-violet-700">{activeDisplay.comp_off_available || 0}</span>
               </div>
+              {(activeDisplay.comp_off_accrued_from_tours || 0) > 0 && (
+                <div
+                  className="text-[11px] text-orange-700 mt-0.5 flex items-center gap-1"
+                  data-testid="lb-active-comp-from-tours"
+                  title="Comp-off accrued because an approved tour spanned this member's weekly off"
+                >
+                  <Plane size={10}/>
+                  {activeDisplay.comp_off_accrued_from_tours} from tours
+                </div>
+              )}
             </div>
             <div className="iu-card !p-3 border-l-4 border-orange-400" data-testid="lb-active-tour">
               <div className="flex items-center gap-2 mb-1">
@@ -231,7 +241,18 @@ export default function LeaveBalances() {
                       </td>
                       <td className="iu-table-td text-right text-slate-600" data-testid={`lb-paid-used-${r.id}`}>{round1(r.taken_this_year)}</td>
                       <td className={`iu-table-td text-right font-bold ${balance < 0 ? "text-red-600" : "text-emerald-700"}`} data-testid={`lb-paid-balance-${r.id}`}>{round1(balance)}</td>
-                      <td className="iu-table-td text-right text-slate-700 border-l border-violet-100" data-testid={`lb-co-accrued-${r.id}`}>{r.comp_off_accrued || 0}</td>
+                      <td className="iu-table-td text-right text-slate-700 border-l border-violet-100" data-testid={`lb-co-accrued-${r.id}`}>
+                        {r.comp_off_accrued || 0}
+                        {(r.comp_off_accrued_from_tours || 0) > 0 && (
+                          <div
+                            className="text-[10px] text-orange-700 font-semibold leading-tight"
+                            data-testid={`lb-co-tour-pill-${r.id}`}
+                            title={`${r.comp_off_accrued_from_tours} accrued from tours on ${r.weekly_off ? r.weekly_off : "weekly off"} day(s)`}
+                          >
+                            +{r.comp_off_accrued_from_tours} tour
+                          </div>
+                        )}
+                      </td>
                       <td className="iu-table-td text-right text-slate-600" data-testid={`lb-co-used-${r.id}`}>{r.comp_off_used || 0}</td>
                       <td className="iu-table-td text-right font-bold text-violet-700" data-testid={`lb-co-avail-${r.id}`}>{r.comp_off_available || 0}</td>
                       <td className="iu-table-td text-right text-orange-700 font-semibold border-l border-orange-100" data-testid={`lb-tour-${r.id}`}>{r.tour_days || 0}</td>

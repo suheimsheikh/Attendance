@@ -860,3 +860,20 @@ See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or
     (useFormError exposes setMessage not setError) — fixed in same
     session, re-screenshot confirms 0 console errors and successful
     save with validation.
+
+- **Leave Balances "X (Y from tours)" sub-line (28 Jun 2026)** —
+  `/api/leave-balances` admin endpoint now ALSO walks approved tour
+  rows and credits weekly_off dates inside them (same rule as
+  `compute_comp_off_balance`). New response fields per row:
+  `comp_off_accrued_from_attendance` and `comp_off_accrued_from_tours`
+  (which sum to `comp_off_accrued`). The admin `/admin/leave-balances`
+  page surfaces `from_tours` in two places:
+  1. Header strip Comp-Off card → orange "✈ Y from tours" sub-line
+     when > 0.
+  2. Accrued column cell → tiny orange "+Y tour" sub-pill underneath
+     the total.
+  This closes the gap between `/api/me/comp-off-balance` (which uses
+  `compute_comp_off_balance` and already showed the tour split) and the
+  admin page (which had its own inline accrual loop). Verified end-to-end:
+  4 real members in the preview DB now show tour-derived comp-off
+  correctly (2 coaches + earlier test users since cleaned up).

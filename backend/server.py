@@ -903,6 +903,12 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
     paid_used: dict = {}
     comp_used: dict = {}
     tour_days: dict = {}
+    # Per-user list of (start, end) approved tour ranges. Used downstream
+    # to compute the "tour days that landed on the user's weekly_off"
+    # slice of their comp-off accrual (added 28 Jun 2026; mirrors
+    # holidays.compute_comp_off_balance so the admin Leave Balances page
+    # matches /api/me/comp-off-balance).
+    tour_ranges_by_user: dict = {}
     for L in approved:
         uid = L["user_id"]
         n = _days_inclusive_safe(L["start_date"], L["end_date"])
@@ -920,6 +926,9 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
             comp_used[uid] = comp_used.get(uid, 0) + n
         elif L["type"] == "tour":
             tour_days[uid] = tour_days.get(uid, 0) + n
+            tour_ranges_by_user.setdefault(uid, []).append(
+                (L["start_date"], L["end_date"])
+            )
     # Comp-off accrual is per-member and depends on attendance ∩ weekly-off.
     # Cache the office default to avoid hitting db.config inside the loop.
     default_weekly_off = (office or {}).get("default_weekly_off") or "sunday"
@@ -940,15 +949,40 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
         opening = float(u.get("leave_balance_opening") or 0)
         taken = float(paid_used.get(uid, 0))
         # Comp-off accrual = days the user attended that fell on their
-        # effective weekly off.
+        # effective weekly off …
         wo = (u.get("weekly_off") or default_weekly_off).lower()
-        accrued = 0
-        for ds in att_dates.get(uid, ()):
+        accrued_from_attendance = 0
+        att_seen = att_dates.get(uid, set())
+        for ds in att_seen:
             try:
                 if WEEKDAY_KEY[date.fromisoformat(ds).weekday()] == wo:
-                    accrued += 1
+                    accrued_from_attendance += 1
             except Exception:
                 continue
+        # … PLUS approved tour days that landed on the weekly_off (added 28
+        # Jun 2026). Mirrors holidays.compute_comp_off_balance: athletes are
+        # the only category excluded (Breaks workflow); staff/coach/exec all
+        # accrue. Tour dates that also have attendance (rare — admin manually
+        # checks them in) are NOT double-counted.
+        accrued_from_tours = 0
+        if (u.get("category") or "").lower() != "athlete":
+            seen_tour_dates: set = set()
+            for s_iso, e_iso in tour_ranges_by_user.get(uid, ()):
+                try:
+                    s = max(date.fromisoformat(s_iso), date.fromisoformat(yr_start))
+                    e = min(date.fromisoformat(e_iso), date.fromisoformat(yr_end))
+                except Exception:
+                    continue
+                cur = s
+                while cur <= e:
+                    ds = cur.isoformat()
+                    if (ds not in seen_tour_dates
+                            and ds not in att_seen
+                            and WEEKDAY_KEY[cur.weekday()] == wo):
+                        accrued_from_tours += 1
+                        seen_tour_dates.add(ds)
+                    cur = date.fromordinal(cur.toordinal() + 1)
+        accrued = accrued_from_attendance + accrued_from_tours
         co_used = int(comp_used.get(uid, 0))
         co_avail = max(0, accrued - co_used)
         out.append({
@@ -962,6 +996,10 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
             "balance": round(opening - taken, 1),
             # Comp-off pool (year-to-date)
             "comp_off_accrued": accrued,
+            # Split for the admin Leave Balances UI sub-line ("Accrued X · Y
+            # from tours"). Sum of these two equals comp_off_accrued.
+            "comp_off_accrued_from_attendance": accrued_from_attendance,
+            "comp_off_accrued_from_tours": accrued_from_tours,
             "comp_off_used": co_used,
             "comp_off_available": co_avail,
             # Tour days (year-to-date; informational only)
