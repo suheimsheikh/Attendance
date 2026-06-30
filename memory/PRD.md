@@ -877,3 +877,16 @@ See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or
   admin page (which had its own inline accrual loop). Verified end-to-end:
   4 real members in the preview DB now show tour-derived comp-off
   correctly (2 coaches + earlier test users since cleaned up).
+
+- **MyLeaves "Y from tours" sub-line (28 Jun 2026)** —
+  `/api/me/leave-summary` (and `/api/members/{id}/leave-summary`) now
+  carry `comp_off.from_attendance` and `comp_off.from_tours` derived
+  from the `compute_comp_off_balance` breakdown. The member-facing
+  `/my-leaves` page renders the new fields as a small orange "✈ N
+  from tours" footnote inside the Comp-Off Eligibility stats card via
+  a generic `footnote` prop added to `StatCard`. Closes the loop with
+  the admin Leave Balances page — both surfaces now show the same
+  split.
+  Verified: filed + approved a demo Sunday tour for admin, footnote
+  flipped from absent to "1 from tours", then rejected the demo to
+  clean up.

@@ -103,8 +103,20 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
     if user.get("category") != "athlete":
         absent_ytd_days = await _absent_days_ytd(db, user, co["weekly_off"])
 
+    # Split the comp-off accrual into its two sources so the member-side
+    # "My Leave & Tour" stats card can show "X (Y from tours)" without
+    # re-walking the breakdown on the frontend. Added 28 Jun 2026.
+    from_tours = sum(1 for b in co.get("breakdown") or [] if b.get("kind") == "tour_weekly_off")
+    from_attendance = int(co["accrued"]) - from_tours
+
     return {
-        "comp_off": {"accrued": co["accrued"], "used": co["used"], "available": co["available"]},
+        "comp_off": {
+            "accrued": co["accrued"],
+            "used": co["used"],
+            "available": co["available"],
+            "from_attendance": from_attendance,
+            "from_tours": from_tours,
+        },
         "paid_leave": {
             "opening": opening,
             "used": buckets["paid_used"],

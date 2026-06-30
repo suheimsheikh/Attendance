@@ -121,6 +121,12 @@ function StatsDashboard({ summary }) {
       label: "Comp-Off eligibility",
       value: co.available,
       hint: `Accrued ${co.accrued} − used ${co.used}`,
+      // When some of the accrual came from approved tour days (added 28
+      // Jun 2026 for staff/coach/exec), surface that split as a small
+      // orange foot-note so the user knows where the credits came from.
+      footnote: (co.from_tours || 0) > 0
+        ? { icon: Plane, text: `${co.from_tours} from tours`, tone: "orange" }
+        : null,
       tone: "violet",
       Icon: RefreshCw,
     },
@@ -183,8 +189,10 @@ const TONE = {
   slate:   { border: "border-slate-200",   bg: "bg-white",         text: "text-slate-500",   value: "text-slate-900",   icon: "text-slate-400"   },
 };
 
-function StatCard({ label, value, hint, tone = "slate", Icon, emphasis }) {
+function StatCard({ label, value, hint, tone = "slate", Icon, emphasis, footnote }) {
   const t = TONE[tone] || TONE.slate;
+  const ft = footnote ? (TONE[footnote.tone] || TONE.slate) : null;
+  const FIcon = footnote?.icon;
   return (
     <div
       className={`iu-card !p-3 border ${t.border} ${t.bg} ${emphasis ? "ring-2 ring-emerald-200/60" : ""}`}
@@ -196,6 +204,15 @@ function StatCard({ label, value, hint, tone = "slate", Icon, emphasis }) {
       </div>
       <div className={`font-extrabold text-2xl leading-tight mt-1 ${t.value}`}>{value}</div>
       <div className={`text-[10px] mt-0.5 ${t.text} opacity-80 line-clamp-1`} title={hint}>{hint}</div>
+      {footnote && ft && (
+        <div
+          className={`text-[10px] mt-0.5 flex items-center gap-1 font-semibold ${ft.text}`}
+          data-testid={`stat-footnote-${label.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-+|-+$/g, "")}`}
+        >
+          {FIcon && <FIcon size={10} className={ft.icon} />}
+          <span>{footnote.text}</span>
+        </div>
+      )}
     </div>
   );
 }
