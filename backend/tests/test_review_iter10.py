@@ -104,7 +104,6 @@ def attendance_with_selfies(admin_client, api, escort_a):
                            json={"escort_id": escort_a["id"], "selfie": TINY,
                                  "athlete_ids": []})
     assert ci.status_code == 200, ci.text
-    row = ci.json()
     # Check-out with selfie
     co = admin_client.post(f"{api}/escort-attendance/checkout",
                            json={"escort_id": escort_a["id"], "selfie": TINY,

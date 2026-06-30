@@ -18,8 +18,12 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://attendance-portal-56.preview.emergentagent.com").rstrip("/")
-ADMIN_EMAIL = "admin@attendance.app"
-ADMIN_PASSWORD = "Admin@12345"
+# Test credentials come from /app/memory/test_credentials.md and the env so we
+# never commit secrets to source. Fall back to the documented seed values so
+# the suite still runs locally without extra env wiring.
+ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@attendance.app")
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD")
+assert ADMIN_PASSWORD, "TEST_ADMIN_PASSWORD env var is required to run this suite"
 
 
 # ---------- shared fixtures ----------

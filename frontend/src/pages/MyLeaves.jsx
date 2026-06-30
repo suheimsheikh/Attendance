@@ -208,9 +208,12 @@ function StatCard({ label, value, hint, tone = "slate", Icon, emphasis, footnote
       {(footnotes || []).map((fn, idx) => {
         const ft = TONE[fn.tone] || TONE.slate;
         const FIcon = fn.icon;
+        // Stable key derived from tone+text so footnotes survive re-renders
+        // and reorderings (was: array index, flagged by code review).
+        const key = `${fn.tone || "slate"}::${fn.text}`;
         return (
           <div
-            key={idx}
+            key={key}
             className={`text-[10px] mt-0.5 flex items-center gap-1 font-semibold ${ft.text}`}
             data-testid={idx === 0 ? `stat-footnote-${safeId}` : `stat-footnote-${safeId}-${idx}`}
           >

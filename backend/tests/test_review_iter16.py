@@ -24,9 +24,13 @@ if not BASE_URL:
     except FileNotFoundError:
         pass
 assert BASE_URL, "REACT_APP_BACKEND_URL is required"
-ADMIN_EMAIL = "admin@attendance.app"
-ADMIN_PASSWORD = "Admin@12345"
-ADMIN_BYPASS_PHONE = "9849002111"
+# Test credentials come from env so we never commit secrets to source. The
+# documented seed values live in /app/memory/test_credentials.md and the
+# project's local .env — pass them in when running the suite outside CI.
+ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@attendance.app")
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD")
+ADMIN_BYPASS_PHONE = os.environ.get("TEST_ADMIN_BYPASS_PHONE", "9849002111")
+assert ADMIN_PASSWORD, "TEST_ADMIN_PASSWORD env var is required to run this suite"
 
 
 # ----------------------- Fixtures -----------------------
