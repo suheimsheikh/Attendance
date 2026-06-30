@@ -248,10 +248,10 @@ export default function LeaveBalances() {
                   </th>
                 </tr>
                 <tr className="text-[10px] uppercase tracking-wider">
-                  <th className="iu-table-th !text-right bg-amber-50/40 !py-1">Opening</th>
+                  <th className="iu-table-th !text-right bg-amber-100/70 !py-1 text-amber-800">Opening</th>
                   <th className="iu-table-th !text-right bg-amber-50/40 !py-1">Used</th>
                   <th className="iu-table-th !text-right bg-amber-50/40 !py-1">Balance</th>
-                  <th className="iu-table-th !text-right bg-violet-50/40 !py-1 border-l border-violet-100">Opening</th>
+                  <th className="iu-table-th !text-right bg-violet-100/70 !py-1 border-l border-violet-100 text-violet-800">Opening</th>
                   <th className="iu-table-th !text-right bg-violet-50/40 !py-1">Accrued</th>
                   <th className="iu-table-th !text-right bg-violet-50/40 !py-1">Used</th>
                   <th className="iu-table-th !text-right bg-violet-50/40 !py-1">Available</th>
@@ -279,7 +279,7 @@ export default function LeaveBalances() {
                       <td className="iu-table-td font-semibold">{r.full_name}<div className="text-xs text-slate-400">{r.rank || ""}</div></td>
                       <td className="iu-table-td hidden md:table-cell">{categoryLabel(r.category)}</td>
                       <td className="iu-table-td hidden lg:table-cell text-xs text-slate-500">{r.institution || "—"}</td>
-                      <td className="iu-table-td text-right">
+                      <td className="iu-table-td text-right bg-amber-50/40">
                         <input
                           data-testid={`lb-input-${r.id}`}
                           type="number"
@@ -287,12 +287,12 @@ export default function LeaveBalances() {
                           min="0"
                           value={opening}
                           onChange={(e) => setVal(r.id, "opening", e.target.value)}
-                          className="w-20 text-right px-2 py-1 rounded-md border border-slate-200 focus:border-slate-400 outline-none bg-white"
+                          className="w-20 text-right px-2 py-1 rounded-md border border-amber-200 focus:border-amber-500 outline-none bg-white"
                         />
                       </td>
                       <td className="iu-table-td text-right text-slate-600" data-testid={`lb-paid-used-${r.id}`}>{round1(r.taken_this_year)}</td>
                       <td className={`iu-table-td text-right font-bold ${balance < 0 ? "text-red-600" : "text-emerald-700"}`} data-testid={`lb-paid-balance-${r.id}`}>{round1(balance)}</td>
-                      <td className="iu-table-td text-right border-l border-violet-100">
+                      <td className="iu-table-td text-right bg-violet-50/40 border-l border-violet-100">
                         <input
                           data-testid={`lb-co-opening-input-${r.id}`}
                           type="number"
@@ -300,7 +300,7 @@ export default function LeaveBalances() {
                           min="0"
                           value={coOpening}
                           onChange={(e) => setVal(r.id, "comp_off_opening", e.target.value)}
-                          className="w-16 text-right px-2 py-1 rounded-md border border-violet-100 focus:border-violet-300 outline-none bg-white"
+                          className="w-16 text-right px-2 py-1 rounded-md border border-violet-200 focus:border-violet-500 outline-none bg-white"
                           title="Comp-Off carried forward / seeded by admin"
                         />
                       </td>
