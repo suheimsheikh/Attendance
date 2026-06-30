@@ -117,15 +117,27 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
                 raise HTTPException(status_code=403, detail="Posting can only be filed by an admin on behalf of a member")
             if not target_user_id or target_user_id == user["id"]:
                 raise HTTPException(status_code=400, detail="Posting must target another member (apply-on-behalf only)")
-        # R3 (30 Jun 2026): 3-day (configurable) notice rule on self-applied
-        # leaves. Tours/postings/late-comings are exempt — those are by
-        # nature short-notice. Admins filing on behalf bypass the gate so
-        # last-minute family emergencies can still be recorded. Threshold
-        # comes from Office Settings (`leave_notice_days`, default 3).
-        # 0 = gate disabled.
+        # R3 (30 Jun 2026, per-category 30 Jun 2026 afternoon): N-day
+        # notice rule on self-applied leaves. Tours/postings/late-comings
+        # are exempt — those are by nature short-notice. Admins filing on
+        # behalf bypass the gate so last-minute family emergencies can
+        # still be recorded. Threshold comes from Office Settings
+        # (`leave_notice_days`, now a per-category dict — falls back to
+        # 3 when a category is missing). 0 = gate disabled for that
+        # category.
         if body.type == "leave" and user["id"] == target_user["id"] and user.get("role") != "admin":
             office = await db.config.find_one({"id": "office"}, {"_id": 0, "leave_notice_days": 1})
-            notice_days = int((office or {}).get("leave_notice_days", 3) or 0)
+            raw = (office or {}).get("leave_notice_days", 3)
+            target_cat = (target_user.get("category") or "").lower()
+            # Legacy single-int payload still in mongo is treated as a
+            # uniform value across categories.
+            if isinstance(raw, dict):
+                notice_days = int(raw.get(target_cat, 3) or 0)
+            else:
+                try:
+                    notice_days = int(raw or 0)
+                except (TypeError, ValueError):
+                    notice_days = 3
             if notice_days > 0:
                 try:
                     from datetime import date as _date

@@ -8,6 +8,37 @@ import { useFormError } from "../../hooks/useFormError";
 
 const TZS = ["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Australia/Sydney"];
 
+// Categories the per-category Leave-notice rule applies to. Mirrors
+// the backend OfficeConfig validator. Default to 3 days if unset.
+const LEAVE_CATS = [
+  { key: "athlete",   label: "Athlete" },
+  { key: "staff",     label: "Staff" },
+  { key: "coach",     label: "Coach" },
+  { key: "executive", label: "Executive" },
+];
+
+/**
+ * Coerce whatever shape `leave_notice_days` arrived in (legacy int,
+ * partial dict, missing, or full dict) into a safe `{cat: int}` payload
+ * with every category populated. Default per-cat is 3.
+ */
+function _normLeaveNoticeDays(v) {
+  const out = { athlete: 3, staff: 3, coach: 3, executive: 3 };
+  if (v == null) return out;
+  if (typeof v === "number") {
+    const n = Math.max(0, Math.floor(Number(v) || 0));
+    return { athlete: n, staff: n, coach: n, executive: n };
+  }
+  if (typeof v === "object") {
+    for (const c of Object.keys(out)) {
+      const raw = v[c];
+      const n = Number(raw);
+      out[c] = Number.isFinite(n) && n >= 0 ? Math.floor(n) : 3;
+    }
+  }
+  return out;
+}
+
 // Polly voices that support both en-IN and te-IN. Aditi is the safe default.
 const VOICES = ["Polly.Aditi", "Polly.Raveena", "Polly.Kajal-Neural"];
 const LANG_EN = ["en-IN", "en-US", "en-GB"];
@@ -65,7 +96,7 @@ export default function OfficeSettings() {
         late_grace_minutes: Number(form.late_grace_minutes || 0),
         parent_notify_grace_minutes: Number(form.parent_notify_grace_minutes ?? 30),
         default_weekly_off: form.default_weekly_off || "sunday",
-        leave_notice_days: Number(form.leave_notice_days ?? 3),
+        leave_notice_days: _normLeaveNoticeDays(form.leave_notice_days),
         checkout_reminder_enabled: form.checkout_reminder_enabled !== false,
         checkout_reminder_time: form.checkout_reminder_time || "20:00",
         checkout_reminder_template: form.checkout_reminder_template || "Hi {name}, looks like you're still checked in at {academy}. Please check out via the app when you leave.",
@@ -173,20 +204,37 @@ export default function OfficeSettings() {
         </div>
 
         <div>
-          <label className="iu-label">Leave notice (days)</label>
-          <input
-            data-testid="of-leave-notice-days"
-            type="number"
-            min={0}
-            max={30}
-            value={form.leave_notice_days ?? 3}
-            onChange={(e) => set("leave_notice_days", e.target.value)}
-            className="iu-input"
-          />
-          <p className="text-[11px] text-slate-500 mt-1">
-            Minimum calendar days of advance notice for a member to self-apply a <strong>Leave</strong>.
-            Tours, postings and late-coming are exempt. Admins filing on behalf of a member bypass this gate
-            (so genuine emergencies can still be recorded). Set to <strong>0</strong> to disable the rule entirely.
+          <label className="iu-label">Leave notice (days) — per category</label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {LEAVE_CATS.map((cat) => {
+              const cur = _normLeaveNoticeDays(form.leave_notice_days)[cat.key];
+              return (
+                <div key={cat.key}>
+                  <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">
+                    {cat.label}
+                  </label>
+                  <input
+                    data-testid={`of-leave-notice-${cat.key}`}
+                    type="number"
+                    min={0}
+                    max={30}
+                    value={cur}
+                    onChange={(e) => {
+                      const next = _normLeaveNoticeDays(form.leave_notice_days);
+                      next[cat.key] = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                      set("leave_notice_days", next);
+                    }}
+                    className="iu-input"
+                  />
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2">
+            Minimum calendar days of advance notice for a member to self-apply a <strong>Leave</strong>,
+            evaluated against the member&apos;s own category. Tours, postings and late-coming are exempt.
+            Admins filing on behalf bypass this gate (so genuine emergencies can still be recorded).
+            Set any category to <strong>0</strong> to disable the rule for that group. Missing values default to <strong>3</strong>.
           </p>
         </div>
 

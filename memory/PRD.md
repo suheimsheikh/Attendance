@@ -984,29 +984,43 @@ type), R3 (3-day notice rule). R1 shipped today.
 ## Pending (in priority order)
 
 ### R3 — 3-day notice rule for self-applied Leaves (30 Jun 2026) ✅ COMPLETE
-- `OfficeConfig` gained `leave_notice_days: int = 3`.
+- `OfficeConfig.leave_notice_days` is now a **per-category** dict
+  `{athlete, staff, coach, executive}` (default 3 each). A
+  `field_validator(mode="before")` coerces any legacy `int` value into
+  a uniform dict so existing prod data keeps working without a manual
+  migration.
 - `routes/leaves.py::create_leave`: when `type=leave` AND user is filing
-  for themselves AND `notice_days > 0`, the call is rejected with HTTP 400
-  ("Leave requires at least N day(s) of advance notice. Please ask an
-  admin to file this on your behalf.") whenever `start_date - today < notice_days`.
+  for themselves AND `notice_days_for_user_category > 0`, the call is
+  rejected with HTTP 400 ("Leave requires at least N day(s) of advance
+  notice. Please ask an admin to file this on your behalf.") whenever
+  `start_date - today < notice_days_for_user_category`. The threshold
+  is resolved from `target_user.category` so coaches and athletes can
+  have different rules.
 - Tours / postings / late-coming are exempt (those are inherently last-minute).
 - Admin filing on-behalf (with `target_user_id`) bypasses the gate so
   genuine emergencies can still be recorded.
-- Setting `leave_notice_days=0` disables the rule entirely.
+- Setting any category to `0` disables the rule for that category;
+  missing categories fall back to 3.
 - Frontend:
-  - `pages/admin/Office.jsx` adds a numeric field with explainer copy.
-  - `pages/MyLeaves.jsx` fetches `/api/office`, computes
-    `daysOfNotice = start − today`, and when blocked renders an amber
-    warning banner AND disables the Submit button with a tooltip telling
-    the user to ask an admin.
+  - `pages/admin/Office.jsx` renders 4 numeric inputs in a responsive
+    grid (Athlete / Staff / Coach / Executive), each defaulting to 3
+    with an explainer paragraph. A `_normLeaveNoticeDays(v)` helper
+    upgrades any legacy int / partial dict response into the full
+    4-key shape.
+  - `pages/MyLeaves.jsx` fetches `/api/office`, resolves the threshold
+    against `me.category`, computes `daysOfNotice = start − today`, and
+    when blocked renders an amber warning banner AND disables the
+    Submit button with a tooltip.
   - The admin "Apply on Behalf" path is NOT gated client-side either
     (so a coach/admin can file last-minute on behalf without hassle).
-- Coverage: 7/7 tests in `tests/test_leave_notice_r3.py` (blocked too-close,
-  blocked past, allowed exactly-at-threshold, admin-on-behalf bypass,
-  tour bypass, late-coming bypass, notice_days=0 disables rule).
-- Also patched `tests/test_ishowedup_api.py::test_13_create_and_get_my_leave`
-  to use a future-dated leave (was hardcoded to 2026-02-01, now < today
-  and would have tripped the gate). Full suite: **318/318** passing.
+- Coverage: 11/11 tests in `tests/test_leave_notice_r3.py`:
+  - Core (7): blocked-too-close, blocked-past, exactly-at-threshold,
+    admin-on-behalf bypass, tour bypass, late-coming bypass,
+    `leave_notice_days=0` (legacy int) disables.
+  - Per-category (4, new): staff-category uses staff threshold,
+    other-categories-unaffected, zero-for-one-category disables only
+    that category, missing-category-defaults-to-3.
+- Full suite: **322/322** passing.
 
 ### R2 — "Posting" Leave Type (30 Jun 2026) ✅ COMPLETE
 - New leave `type=posting` recognised in `routes/leaves.py`. Apply-on-behalf

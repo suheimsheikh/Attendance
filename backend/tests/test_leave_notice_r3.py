@@ -174,3 +174,114 @@ class TestNoticeRuleConfigurable:
                        "leave_notice_days": original}
             restore.pop("twilio", None); restore.pop("qr_token", None)
             admin_client.put(f"{api}/office", json=restore)
+
+
+
+class TestNoticeRulePerCategory:
+    """30 Jun 2026 afternoon — `leave_notice_days` is now a per-category
+    dict (athlete/staff/coach/executive), defaulting to 3 per cat. These
+    tests verify the gate resolves the threshold against the *target
+    member's* category, not the office-wide default."""
+
+    def _set_per_cat(self, admin_client, api, **per_cat):
+        before = admin_client.get(f"{api}/office").json() or {}
+        # Start from the existing dict (or whatever is there) so we don't
+        # clobber the other categories. The backend validator will
+        # normalise missing keys back to 3.
+        raw = before.get("leave_notice_days")
+        base = {"athlete": 3, "staff": 3, "coach": 3, "executive": 3}
+        if isinstance(raw, dict):
+            base.update({k: int(raw.get(k, 3)) for k in base})
+        elif isinstance(raw, (int, float)):
+            n = int(raw)
+            base = {k: n for k in base}
+        base.update(per_cat)
+        payload = {**before, "leave_notice_days": base}
+        payload.pop("twilio", None); payload.pop("qr_token", None)
+        r = admin_client.put(f"{api}/office", json=payload)
+        assert r.status_code == 200, r.text
+        return raw  # for restore
+
+    def _restore(self, admin_client, api, raw):
+        cur = admin_client.get(f"{api}/office").json() or {}
+        cur["leave_notice_days"] = raw if raw is not None else {
+            "athlete": 3, "staff": 3, "coach": 3, "executive": 3,
+        }
+        cur.pop("twilio", None); cur.pop("qr_token", None)
+        admin_client.put(f"{api}/office", json=cur)
+
+    def test_staff_category_uses_staff_threshold(
+            self, base_url, admin_client, api, member_with_session):
+        """member_with_session is category=staff. Set staff=5,
+        athlete=0 — a 3-day-away apply must FAIL because staff need 5."""
+        backup = self._set_per_cat(admin_client, api, staff=5, athlete=0)
+        try:
+            sess = _member_session(member_with_session)
+            three_away = (dt.date.today() + dt.timedelta(days=3)).isoformat()
+            r = sess.post(f"{base_url}/api/leaves",
+                          json={"type": "leave",
+                                "start_date": three_away,
+                                "end_date": three_away,
+                                "reason": "Wedding"})
+            assert r.status_code == 400, r.text
+            assert "5 day" in (r.json().get("detail") or "")
+        finally:
+            self._restore(admin_client, api, backup)
+
+    def test_other_categories_unaffected_by_staff_setting(
+            self, base_url, admin_client, api, member_with_session):
+        """member is staff. Set staff=10 but athlete=0. The staff member
+        sees the staff value, NOT the athlete value."""
+        backup = self._set_per_cat(admin_client, api, staff=10, athlete=0)
+        try:
+            sess = _member_session(member_with_session)
+            five_away = (dt.date.today() + dt.timedelta(days=5)).isoformat()
+            r = sess.post(f"{base_url}/api/leaves",
+                          json={"type": "leave",
+                                "start_date": five_away,
+                                "end_date": five_away,
+                                "reason": "Holiday"})
+            assert r.status_code == 400, r.text
+            assert "10 day" in (r.json().get("detail") or "")
+        finally:
+            self._restore(admin_client, api, backup)
+
+    def test_zero_for_one_category_disables_only_that_category(
+            self, base_url, admin_client, api, member_with_session):
+        """Set staff=0 (disabled), athlete=10. Staff member can self-apply
+        for tomorrow."""
+        backup = self._set_per_cat(admin_client, api, staff=0, athlete=10)
+        try:
+            sess = _member_session(member_with_session)
+            tomorrow = (dt.date.today() + dt.timedelta(days=1)).isoformat()
+            r = sess.post(f"{base_url}/api/leaves",
+                          json={"type": "leave",
+                                "start_date": tomorrow,
+                                "end_date": tomorrow,
+                                "reason": "Allowed because staff=0"})
+            assert r.status_code == 200, r.text
+        finally:
+            self._restore(admin_client, api, backup)
+
+    def test_missing_category_defaults_to_three(
+            self, base_url, admin_client, api, member_with_session):
+        """PUT with no `leave_notice_days` key — backend default-factory
+        seeds 3 per cat. Same effect: 2-day-away apply must FAIL for staff."""
+        before = admin_client.get(f"{api}/office").json() or {}
+        backup = before.get("leave_notice_days")
+        cleared = {**before}
+        cleared.pop("leave_notice_days", None)
+        cleared.pop("twilio", None); cleared.pop("qr_token", None)
+        admin_client.put(f"{api}/office", json=cleared)
+        try:
+            sess = _member_session(member_with_session)
+            two_away = (dt.date.today() + dt.timedelta(days=2)).isoformat()
+            r = sess.post(f"{base_url}/api/leaves",
+                          json={"type": "leave",
+                                "start_date": two_away,
+                                "end_date": two_away,
+                                "reason": "Default 3 must kick in"})
+            assert r.status_code == 400, r.text
+            assert "3 day" in (r.json().get("detail") or "")
+        finally:
+            self._restore(admin_client, api, backup)

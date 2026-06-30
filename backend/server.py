@@ -14,7 +14,7 @@ import re
 import openpyxl
 from openpyxl.utils import get_column_letter
 from pathlib import Path
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import List, Optional, Literal, Dict
 from datetime import datetime, timezone, timedelta, date
 from contextlib import asynccontextmanager
@@ -281,12 +281,41 @@ class OfficeConfig(BaseModel):
     # in the same Sunday/Monday choice on every single member profile.
     # Member-level `weekly_off` (if set) always overrides this fallback.
     default_weekly_off: Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"] = "sunday"
-    # R3 (30 Jun 2026): Minimum calendar-day notice before a member may
-    # self-apply for a `leave` (NOT tour/posting/late-coming, which are
-    # all naturally last-minute). Anything less and the user-side Apply
-    # button is blocked with a tooltip telling them to ask the admin to
-    # file on their behalf. Set to 0 to disable the gate entirely.
-    leave_notice_days: int = 3
+    # R3 (30 Jun 2026): Per-category minimum calendar-day notice before a
+    # member may self-apply for a `leave` (NOT tour/posting/late-coming,
+    # which are all naturally last-minute). Each category falls back to 3
+    # when missing. Anything less and the user-side Apply button is
+    # blocked with a tooltip telling them to ask the admin to file on
+    # their behalf. Set a category to 0 to disable the gate for that
+    # category. Legacy int values (from before the per-category split,
+    # 30 Jun 2026 morning) are coerced to a uniform-per-category dict by
+    # the validator below.
+    leave_notice_days: Dict[str, int] = Field(default_factory=lambda: {
+        "athlete": 3, "staff": 3, "coach": 3, "executive": 3,
+    })
+
+    @field_validator("leave_notice_days", mode="before")
+    @classmethod
+    def _coerce_leave_notice_days(cls, v):
+        """Migrate legacy `leave_notice_days: <int>` payloads (from the
+        single-value version, ~30 Jun 2026 morning) into the per-category
+        dict shape. Also seed any missing category with the default of 3
+        so the admin form never starts with blank cells."""
+        cats = ("athlete", "staff", "coach", "executive")
+        if v is None:
+            return {c: 3 for c in cats}
+        if isinstance(v, (int, float)):
+            n = max(0, int(v))
+            return {c: n for c in cats}
+        if isinstance(v, dict):
+            out: dict = {}
+            for c in cats:
+                try:
+                    out[c] = max(0, int(v.get(c, 3)))
+                except (TypeError, ValueError):
+                    out[c] = 3
+            return out
+        return {c: 3 for c in cats}
     # Daily reminder SMS to anyone still checked-in. The cron fires at
     # `checkout_reminder_time` (office-local HH:MM) and sends one SMS per
     # member who has an open session for today AND hasn't already been
