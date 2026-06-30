@@ -276,6 +276,30 @@ async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -
     ).to_list(2000)
     distinct_dates = sorted({a["date"] for a in atts})
 
+    # R2 (30 Jun 2026): A member who is on an approved `posting` does NOT
+    # accrue comp-off, even if they check in on their weekly off. The
+    # academy treats posted members as on-deputation — they're earning
+    # their salary at the host academy, not the home one, so weekly-off
+    # work there can't double-count as home-academy comp-off.
+    posting_rows = await db.leaves.find({
+        "user_id": user["id"],
+        "type": "posting",
+        "status": "approved",
+        "start_date": {"$lte": yr_end},
+        "end_date": {"$gte": yr_start},
+    }, {"_id": 0, "start_date": 1, "end_date": 1}).to_list(200)
+    posting_dates: set = set()
+    for P in posting_rows:
+        try:
+            s = max(date.fromisoformat(P["start_date"]), date.fromisoformat(yr_start))
+            e = min(date.fromisoformat(P["end_date"]), date.fromisoformat(yr_end))
+        except Exception:
+            continue
+        cur = s
+        while cur <= e:
+            posting_dates.add(cur.isoformat())
+            cur = date.fromordinal(cur.toordinal() + 1)
+
     breakdown: List[dict] = []
     accrued = 0
     for ds in distinct_dates:
@@ -284,6 +308,10 @@ async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -
         except Exception:
             continue
         if wd != weekly_off:
+            continue
+        # Skip accrual for any weekly-off date that falls inside an
+        # approved posting window (see comment above).
+        if ds in posting_dates:
             continue
         accrued += 1
         breakdown.append({"date": ds, "kind": "weekly_off"})

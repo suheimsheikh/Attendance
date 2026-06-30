@@ -33,13 +33,14 @@ export default function LeaveBalanceNotice({
   asAdmin = false,
   balanceSummary = null,
 }) {
-  // Tours / late-coming don't draw from any balance — slim info note.
-  if (leaveType === "tour" || leaveType === "late_coming") {
+  // Tours / postings / late-coming don't draw from any balance — slim info note.
+  if (leaveType === "tour" || leaveType === "late_coming" || leaveType === "posting") {
     return (
       <div className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5 flex items-start gap-2" data-testid="leave-balance-info-nonleave">
         <Info size={14} className="text-sky-600 mt-0.5 shrink-0" />
         <div className="text-xs text-sky-900 leading-snug">
           {leaveType === "tour" && "Tours don't count against your leave or comp-off balance."}
+          {leaveType === "posting" && "Postings don't consume any leave or comp-off, and won't accrue weekly-off comp-off either."}
           {leaveType === "late_coming" && "Late-coming is for the same day only and doesn't consume any leave."}
           {" "}
           <ApprovalLine autoApprove={autoApprove} asAdmin={asAdmin} />

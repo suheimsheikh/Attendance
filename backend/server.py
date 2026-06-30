@@ -915,13 +915,13 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
     today = local_date_str(office)
     year = today[:4]
     yr_start, yr_end = f"{year}-01-01", f"{year}-12-31"
-    # Pull every approved leave/tour row for the year ONCE and bucket by
+    # Pull every approved leave/tour/posting row for the year ONCE and bucket by
     # user_id+type → avoids N queries per member.
     approved = await db.leaves.find({
         "status": "approved",
         "start_date": {"$lte": yr_end},
         "end_date":   {"$gte": yr_start},
-        "type": {"$in": ["leave", "tour", "comp_off"]},
+        "type": {"$in": ["leave", "tour", "comp_off", "posting"]},
     }, {"_id": 0, "user_id": 1, "type": 1, "start_date": 1, "end_date": 1,
         "comp_off_used": 1, "paid_leave_used": 1, "lop_days": 1}).to_list(20000)
     paid_used: dict = {}
@@ -933,6 +933,10 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
     # holidays.compute_comp_off_balance so the admin Leave Balances page
     # matches /api/me/comp-off-balance).
     tour_ranges_by_user: dict = {}
+    # R2 (30 Jun 2026): expanded posting date-set per user. Used to
+    # suppress weekly-off comp-off accrual that would otherwise fire
+    # while a member is on Posting deputation.
+    posting_dates_by_user: dict = {}
     for L in approved:
         uid = L["user_id"]
         n = _days_inclusive_safe(L["start_date"], L["end_date"])
@@ -953,6 +957,18 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
             tour_ranges_by_user.setdefault(uid, []).append(
                 (L["start_date"], L["end_date"])
             )
+        elif L["type"] == "posting":
+            # Expand into a date-set used to gate comp-off accrual below.
+            try:
+                s = max(date.fromisoformat(L["start_date"]), date.fromisoformat(yr_start))
+                e = min(date.fromisoformat(L["end_date"]), date.fromisoformat(yr_end))
+            except Exception:
+                continue
+            pset = posting_dates_by_user.setdefault(uid, set())
+            cur = s
+            while cur <= e:
+                pset.add(cur.isoformat())
+                cur = date.fromordinal(cur.toordinal() + 1)
     # Comp-off accrual is per-member and depends on attendance ∩ weekly-off.
     # Cache the office default to avoid hitting db.config inside the loop.
     default_weekly_off = (office or {}).get("default_weekly_off") or "sunday"
@@ -974,13 +990,15 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
         opening = float(u.get("leave_balance_opening") or 0)
         taken = float(paid_used.get(uid, 0))
         # Comp-off accrual = days the user attended that fell on their
-        # effective weekly off …
+        # effective weekly off … MINUS any such date that lands inside an
+        # approved posting window (R2, 30 Jun 2026).
         wo = (u.get("weekly_off") or default_weekly_off).lower()
         accrued_from_attendance = 0
         att_seen = att_dates.get(uid, set())
+        posting_set = posting_dates_by_user.get(uid, set())
         for ds in att_seen:
             try:
-                if WEEKDAY_KEY[date.fromisoformat(ds).weekday()] == wo:
+                if WEEKDAY_KEY[date.fromisoformat(ds).weekday()] == wo and ds not in posting_set:
                     accrued_from_attendance += 1
             except Exception:
                 continue
@@ -2188,6 +2206,15 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             detail = leave.get("location") or "On tour"
             since = leave["start_date"]
             photo = u_thumb
+        elif leave and leave["type"] == "posting":
+            # R2 (30 Jun 2026): a posted member shows in the On Tour
+            # column but with a "POSTED" label so coaches don't confuse
+            # a deputation with a regular short tour. `leave_kind` is
+            # forwarded so the frontend chip styling can switch.
+            status_v = "on_tour"
+            detail = "POSTED" + (f" · {leave.get('location')}" if leave.get("location") else "")
+            since = leave["start_date"]
+            photo = u_thumb
         elif leave and leave["type"] == "leave":
             status_v = "on_leave"
             detail = f"Till {leave['end_date']}"
@@ -2438,6 +2465,10 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             # >1 means the member ended a session and started a new one
             # (split shift OR an accidental double check-in worth a glance).
             "sessions_today_count": sessions_count_map.get(u["id"], 0),
+            # R2: surface the underlying leave row's type so the frontend
+            # can differentiate "POSTED" from a regular tour chip even
+            # though both render in the on_tour column.
+            "leave_kind": (leave or {}).get("type"),
             "days_remaining": days_remaining,
             "days_absent_streak": days_absent_streak,
             "check_in_at": primary_session.get("check_in_at") if primary_session else None,
@@ -2485,7 +2516,8 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
         escort_docs = {
             e["id"]: e for e in await db.escorts.find(
                 {"id": {"$in": escort_ids}},
-                {"_id": 0, "id": 1, "name": 1, "institution": 1, "photo_thumb": 1, "photo": 1},
+                {"_id": 0, "id": 1, "name": 1, "institution": 1,
+                 "photo_thumb": 1, "photo": 1, "valid_until": 1},
             ).to_list(500)
         }
         for r in rows:
@@ -2545,6 +2577,11 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                 "expected_return": expected_return_iso,
                 "expected_return_time": expected_return_local,
                 "overdue_minutes": overdue_min,
+                # Enhancement (30 Jun 2026): forward the escort's access
+                # window-end so the Presence chip can render an amber
+                # dot when expiry is within the next 7 days. Frontend
+                # computes the diff; backend just supplies the raw date.
+                "valid_until": ed.get("valid_until"),
             })
         escorts_present.sort(key=lambda e: ((e.get("institution") or "").lower(), (e.get("name") or "").lower()))
 

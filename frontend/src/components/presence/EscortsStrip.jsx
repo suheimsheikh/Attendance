@@ -1,7 +1,26 @@
 import React from "react";
-import { Shield, Coffee, Users } from "lucide-react";
+import { Shield, Coffee, Users, AlertTriangle } from "lucide-react";
 import Avatar from "../Avatar";
 import { ExpectedReturnPill } from "./ExpectedReturnPill";
+
+/**
+ * Days between today (local) and a YYYY-MM-DD ISO date string.
+ * Returns null if the date string is missing or unparseable.
+ * Negative result means the date is in the past.
+ */
+function daysUntil(isoDate) {
+  if (!isoDate) return null;
+  try {
+    const [y, m, d] = isoDate.split("-").map(Number);
+    if (!y || !m || !d) return null;
+    const target = new Date(y, m - 1, d);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.floor((target - today) / 86400000);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * EscortsStrip — small list shown above the column grid on the Presence
@@ -17,6 +36,13 @@ function EscortStripRow({ escort }) {
     ? new Date(escort.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "—";
   const onStepOut = !!escort.temp_out;
+  // Enhancement (30 Jun 2026): warn the on-duty officer when an escort's
+  // access window is about to lapse. Amber dot = ≤7 days, red dot =
+  // already expired (shouldn't happen as the gate blocks login, but
+  // historical/stuck sessions can drift past it).
+  const dLeft = daysUntil(escort.valid_until);
+  const expiringSoon = dLeft != null && dLeft >= 0 && dLeft <= 7;
+  const expired = dLeft != null && dLeft < 0;
   return (
     <div
       className="px-4 py-2.5 flex items-center gap-3"
@@ -26,6 +52,18 @@ function EscortStripRow({ escort }) {
       <div className="flex-1 min-w-0">
         <div className="text-[13px] font-semibold text-slate-900 leading-tight truncate flex items-center gap-2 flex-wrap">
           {escort.name}
+          {(expiringSoon || expired) && (
+            <span
+              className={`inline-flex items-center gap-1 px-1.5 h-4 rounded text-[9px] font-bold shrink-0 ${expired ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+              title={expired
+                ? `Access expired ${Math.abs(dLeft)} day${Math.abs(dLeft) === 1 ? "" : "s"} ago (${escort.valid_until}) — renew before next sign-in.`
+                : `Access expires in ${dLeft} day${dLeft === 1 ? "" : "s"} (${escort.valid_until}) — renew soon.`}
+              data-testid={`escort-presence-expiry-${escort.escort_id}`}
+            >
+              <AlertTriangle size={9}/>
+              {expired ? "expired" : (dLeft === 0 ? "expires today" : `${dLeft}d left`)}
+            </span>
+          )}
           {onStepOut && (
             <span
               className="inline-flex items-center gap-1 px-1.5 h-4 rounded text-[9px] font-bold bg-cyan-100 text-cyan-700 shrink-0"

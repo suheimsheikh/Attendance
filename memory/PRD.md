@@ -983,14 +983,51 @@ type), R3 (3-day notice rule). R1 shipped today.
 
 ## Pending (in priority order)
 
-### R2 — "Posting" Leave Type (P1) ⏸ PAUSED awaiting user go-ahead
-- New leave type `posting` (member is posted to another academy).
-- Apply-on-behalf ONLY (admin files it; user cannot self-apply).
-- Zero comp-off accrual on weekly-off days during a posting (DIFFERENT
-  from tours which DO accrue).
-- Zero paid-leave consumption.
-- Check-ins behave normally (off-site flagged if applicable).
-- Presence board: shows under "On Tour" column but labelled "POSTED".
+### R2 — "Posting" Leave Type (30 Jun 2026) ✅ COMPLETE
+- New leave `type=posting` recognised in `routes/leaves.py`. Apply-on-behalf
+  ONLY: a non-admin trying to `POST /api/leaves` with `type=posting`
+  gets 403; an admin filing without `target_user_id` (or with their own
+  id) gets 400. Verified by `tests/test_posting_r2.py`.
+- Skips the comp-off/paid-leave deduction ladder entirely (the document
+  carries no `comp_off_used`/`paid_leave_used`/`lop_days` stamps).
+- `compute_comp_off_balance` (holidays.py) AND the admin Leave Balances
+  aggregation (server.py) now suppress weekly-off comp-off accrual for
+  any attendance date that falls inside an approved posting window.
+  Pending/rejected posting rows do NOT suppress. Covered by
+  `tests/test_posting_compoff_suppression.py` (5 cases).
+- Presence Board: posted members render in the **On Tour** column with
+  `status: on_tour`, `leave_kind: posting`, and `detail: "POSTED · …"`.
+  The frontend (`MemberCard.jsx`) renders a sky-blue **POSTED** pill
+  using `m.leave_kind === "posting"`.
+- Daily Report (`/api/reports/daily`): posting rows bundle into
+  `on_tour` (NOT `on_leave`) so admins see deputed members alongside
+  short tours at a glance.
+- Overlap (`/api/leaves/overlap`): includes posting so admins planning
+  leave see overlapping postings as conflicts.
+- Muster (`/api/muster/athletes`): does NOT exclude posted athletes —
+  postings allow normal check-in (the "Check-ins behave as normal" rule).
+- Frontend:
+  - `MyLeaves.jsx::ApplyForm` shows a 4th type button ("Posting") only
+    when `asAdmin=true`. Member self-apply UI never sees the option.
+  - Sky-blue helper note explains the rules to the admin.
+  - Location field re-labelled "Host academy / location" when type=posting.
+  - `LeaveBalanceNotice.jsx` and admin balance card both render slim
+    info notes ("Postings don't consume any leave or comp-off…").
+  - `admin/Leaves.jsx` Type column uses sky `POSTED` chip.
+- Coverage: 6/6 R2 HTTP tests + 5/5 comp-off suppression unit tests
+  + 311/311 full backend suite (excl. 2 pre-existing flakes).
+
+### Enhancement — Escort expiry warning on Presence Board (30 Jun 2026) ✅
+- `escorts_present` now carries each escort's `valid_until`.
+- `EscortsStrip.jsx` computes `daysUntil` and renders:
+  - Amber **Nd left** / **expires today** chip when 0 ≤ days ≤ 7
+  - Red **expired** chip when days < 0 (drifted past expiry on a
+    stuck open session — shouldn't normally happen because auth gates
+    re-login, but the chip surfaces it if it ever does).
+- Hover tooltip shows the exact `valid_until` date so the on-duty
+  officer knows when to chase a renewal.
+
+## Pending (in priority order)
 
 ### R3 — 3-day notice rule for Leaves (P1) ⏸ PAUSED awaiting user go-ahead
 - Applies to `leave` type ONLY (not tour, not posting).

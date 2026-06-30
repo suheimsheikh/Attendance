@@ -126,7 +126,11 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         }, {"_id": 0}).to_list(1000)
         leaves = await enrich_leaves(leaves)
         on_leave = [leave for leave in leaves if leave["type"] == "leave"]
-        on_tour = [leave for leave in leaves if leave["type"] == "tour"]
+        # R2 (30 Jun 2026): Postings ride in the on_tour bucket so the
+        # daily report's "On Tour" tile gives admins a single view of who's
+        # off-base. The row carries `type=posting` so the frontend can
+        # label it "POSTED" rather than "Tour".
+        on_tour = [leave for leave in leaves if leave["type"] in ("tour", "posting")]
         return {"date": on, "on_leave": on_leave, "on_tour": on_tour}
 
     @router.get("/reports/hours/export")

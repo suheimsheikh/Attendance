@@ -22,7 +22,7 @@ from holidays import _days_inclusive
 
 # -------------------- Pydantic bodies --------------------
 class LeaveCreate(BaseModel):
-    type: str  # leave | tour | comp_off | late_coming
+    type: str  # leave | tour | comp_off | late_coming | posting
     start_date: str
     end_date: str
     reason: Optional[str] = None
@@ -100,7 +100,7 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
     @router.post("/leaves")
     async def create_leave(body: LeaveCreate, target_user_id: Optional[str] = None,
                           user: dict = Depends(get_current_user)):
-        """Create a leave/tour/comp-off request. Admins may pass `target_user_id`
+        """Create a leave/tour/comp-off/posting request. Admins may pass `target_user_id`
         to file on behalf of another member."""
         target_user = user
         if target_user_id and target_user_id != user["id"]:
@@ -109,6 +109,14 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
             target_user = await db.users.find_one({"id": target_user_id}, {"_id": 0})
             if not target_user:
                 raise HTTPException(status_code=404, detail="Target member not found")
+        # Posting (R2, 30 Jun 2026): admin-only apply-on-behalf. A member
+        # cannot self-apply for a Posting — the academy decides who is
+        # posted, never the individual.
+        if body.type == "posting":
+            if user.get("role") != "admin":
+                raise HTTPException(status_code=403, detail="Posting can only be filed by an admin on behalf of a member")
+            if not target_user_id or target_user_id == user["id"]:
+                raise HTTPException(status_code=400, detail="Posting must target another member (apply-on-behalf only)")
         # Comp-off: enforce balance ceiling before persisting the row.
         if body.type == "comp_off":
             # Legacy guard kept for direct API hits — the UI no longer
@@ -249,8 +257,10 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
             # Comp-off rows are deprecated as an application type, but we
             # still surface legacy ones so admins reviewing historic data
             # see the full picture. `late_coming` is intentionally excluded
-            # — it's a same-day notice, not a multi-day absence.
-            "type": {"$in": ["leave", "tour", "comp_off"]},
+            # — it's a same-day notice, not a multi-day absence. Postings
+            # are included so the apply form / Approvals view warn admins
+            # when scheduling on top of an existing posting window.
+            "type": {"$in": ["leave", "tour", "comp_off", "posting"]},
         }
         if exclude_user_id:
             q["user_id"] = {"$ne": exclude_user_id}

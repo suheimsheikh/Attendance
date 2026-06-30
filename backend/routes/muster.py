@@ -115,8 +115,14 @@ def make_router(db, get_current_user, active_camp_for) -> APIRouter:
         open_map = {s["user_id"]: s for s in open_sessions}
         open_ids = set(open_map.keys())
 
+        # Members on Leave or Tour are excluded from muster (they can't
+        # be checked in). Postings are NOT in this list — R2 (30 Jun 2026)
+        # says posted members check in normally (the "POSTED" label on
+        # the Presence board is informational only, not a hard block).
         on_leave = await db.leaves.find(
-            {"status": "approved", "start_date": {"$lte": today}, "end_date": {"$gte": today}},
+            {"status": "approved",
+             "type": {"$in": ["leave", "tour"]},
+             "start_date": {"$lte": today}, "end_date": {"$gte": today}},
             {"_id": 0, "user_id": 1},
         ).to_list(2000)
         on_leave_ids = {leave["user_id"] for leave in on_leave}

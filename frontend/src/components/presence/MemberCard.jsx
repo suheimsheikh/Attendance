@@ -103,6 +103,15 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
               {m.days_remaining}d more
             </span>
           )}
+          {m.leave_kind === "posting" && (
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 text-[10px] font-bold"
+              data-testid={`posting-chip-${m.id}`}
+              title="On posting / deputation to another academy"
+            >
+              POSTED
+            </span>
+          )}
           {m.status === "absent" && m.days_absent_streak > 1 && (
             <span
               className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold"

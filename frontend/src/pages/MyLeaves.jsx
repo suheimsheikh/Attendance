@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw, Clock, Search, Check } from "lucide-react";
+import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw, Clock, Search, Check, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import Avatar from "../components/Avatar";
@@ -14,6 +14,7 @@ import { useEscape } from "../hooks/useEscape";
 const TYPE_LABELS = {
   leave:        { label: "Leave",        color: "#F59E0B", Icon: Bed },
   tour:         { label: "Tour",         color: "#F97316", Icon: Plane },
+  posting:      { label: "Posted",       color: "#0EA5E9", Icon: Briefcase },
   comp_off:     { label: "Comp Off",     color: "#8B5CF6", Icon: RefreshCw }, // legacy rows only — no longer applicable
   late_coming:  { label: "Late Coming",  color: "#DC2626", Icon: Clock },
 };
@@ -569,16 +570,26 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           )}
           <div>
             <label className="iu-label">Type</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid ${asAdmin ? "grid-cols-2 md:grid-cols-4" : "grid-cols-3"} gap-2`}>
               <button data-testid="leave-type-leave" type="button" onClick={() => setType("leave")} className={`iu-btn ${type === "leave" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Bed size={16}/> Leave</button>
               <button data-testid="leave-type-tour" type="button" onClick={() => setType("tour")} className={`iu-btn ${type === "tour" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Plane size={16}/> Tour</button>
               <button data-testid="leave-type-late-coming" type="button" onClick={() => setType("late_coming")} className={`iu-btn ${type === "late_coming" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Clock size={16}/> Late Coming</button>
+              {/* R2: Posting is admin-only on-behalf — member self-apply
+                  must never see this option. */}
+              {asAdmin && (
+                <button data-testid="leave-type-posting" type="button" onClick={() => setType("posting")} className={`iu-btn ${type === "posting" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Briefcase size={16}/> Posting</button>
+              )}
             </div>
             {type === "leave" && (
               <p className="text-[11px] text-slate-500 mt-1.5">Days are deducted from your Comp-Off balance first, then your Paid Leave. Anything left is treated as Loss of Pay.</p>
             )}
             {type === "late_coming" && (
               <p className="text-[11px] text-slate-500 mt-1.5">Use this when you&apos;ll arrive late today. Admin gets pinged so you&apos;re not flagged as absent.</p>
+            )}
+            {type === "posting" && (
+              <p className="text-[11px] text-sky-700 mt-1.5" data-testid="posting-note">
+                Posting = member is on deputation to another academy. <strong>Zero comp-off accrual</strong> on weekly-off days and <strong>zero paid-leave consumption</strong>. They check in normally; the Presence board labels them <strong>POSTED</strong>.
+              </p>
             )}
           </div>
           {type === "late_coming" && (
@@ -611,10 +622,10 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
               </div>
             </div>
           )}
-          {type === "tour" && (
+          {(type === "tour" || type === "posting") && (
             <div>
-              <label className="iu-label">Tour location</label>
-              <input data-testid="leave-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Mumbai Naval Base" className="iu-input" />
+              <label className="iu-label">{type === "posting" ? "Host academy / location" : "Tour location"}</label>
+              <input data-testid="leave-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder={type === "posting" ? "e.g. INS Chilka" : "e.g. Mumbai Naval Base"} className="iu-input" />
             </div>
           )}
           <div>
@@ -638,7 +649,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
 
           {/* Conflict guard — only relevant for multi-day absences.
               Late-coming is a same-day notice with no overlap value. */}
-          {start && end && (type === "leave" || type === "tour") && (
+          {start && end && (type === "leave" || type === "tour" || type === "posting") && (
             <>
               <OverlapNotice
                 startDate={start}

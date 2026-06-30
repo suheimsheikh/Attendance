@@ -20,6 +20,7 @@ const FILTERS = [
 const TYPE_META = {
   leave:       { label: "Leave",       cls: "bg-amber-100 text-amber-800" },
   tour:        { label: "Tour",        cls: "bg-orange-100 text-orange-800" },
+  posting:     { label: "POSTED",      cls: "bg-sky-100 text-sky-800" },
   comp_off:    { label: "Comp Off",    cls: "bg-violet-100 text-violet-800" },
   late_coming: { label: "Late",        cls: "bg-rose-100 text-rose-800" },
 };
@@ -208,7 +209,7 @@ export default function AdminLeaves({ embedded = false }) {
                 const statusMeta = STATUS_META[l.status] || { label: l.status, cls: "bg-slate-100 text-slate-700" };
                 const days = daysInclusive(l.start_date, l.end_date);
                 const isExpanded = expandedId === l.id;
-                const showExpander = l.type === "leave" || l.type === "tour" || l.type === "comp_off";
+                const showExpander = l.type === "leave" || l.type === "tour" || l.type === "comp_off" || l.type === "posting";
                 return (
                   <React.Fragment key={l.id}>
                   <tr
@@ -414,6 +415,11 @@ function BalanceSummaryCard({ data, memberName, requestedDays, leaveType }) {
       {leaveType === "tour" && (
         <div className="mt-2 text-[11px] text-slate-500" data-testid="balance-tour-note">
           Tours don&apos;t consume Comp-Off or Paid Leave.
+        </div>
+      )}
+      {leaveType === "posting" && (
+        <div className="mt-2 text-[11px] text-sky-700" data-testid="balance-posting-note">
+          Postings don&apos;t consume Comp-Off or Paid Leave, and weekly-off attendance during a posting won&apos;t accrue Comp-Off either.
         </div>
       )}
     </div>
