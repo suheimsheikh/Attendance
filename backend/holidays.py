@@ -273,15 +273,14 @@ async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -
         accrued += 1
         breakdown.append({"date": ds, "kind": "weekly_off"})
 
-    # Tour-day accrual (Staff only, 28 Jun 2026):
-    # When a staff member is on an approved tour that spans their weekly_off,
-    # they've effectively given up that off-day for work — same intent as the
-    # on-campus weekly_off accrual above. We mirror Option A: only the
-    # weekly_off date(s) inside the tour window accrue, not every tour day.
-    # Athletes/coaches/executives keep the original on-campus-only rule (athletes
-    # use the Breaks workflow for off-time anyway; coaches/execs typically don't
-    # use comp-off).
-    if (user.get("category") or "").lower() == "staff":
+    # Tour-day accrual (28 Jun 2026, updated to include coaches/executives):
+    # When a member (any category EXCEPT athlete) is on an approved tour that
+    # spans their weekly_off, they've effectively given up that off-day for
+    # work — same intent as the on-campus weekly_off accrual above. We mirror
+    # Option A: only the weekly_off date(s) inside the tour window accrue,
+    # not every tour day. Athletes are excluded because they use the Breaks
+    # workflow for off-time, not the leave/comp-off pool.
+    if (user.get("category") or "").lower() != "athlete":
         tour_rows = await db.leaves.find({
             "user_id": user["id"],
             "type": "tour",

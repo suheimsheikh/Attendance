@@ -820,17 +820,16 @@ See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or
     browser console — likely fixed by prior Members/Presence/Calendar
     component extractions.
 
-- **Tour-day → Comp-off accrual for Staff (28 Jun 2026)** —
+- **Tour-day → Comp-off accrual for Staff/Coaches/Executives (28 Jun 2026)** —
   `compute_comp_off_balance` in `/app/backend/holidays.py` now ALSO walks
-  every approved `tour` row for staff members; each tour date that
+  every approved `tour` row for non-athletes; each tour date that
   matches their effective weekly_off adds +1 to `accrued` with
-  `kind: "tour_weekly_off"` in the breakdown. Athletes / coaches /
-  executives keep the original on-campus-only rule (no change for
-  them). Idempotent against double-counting when attendance + tour
-  cover the same date, and against overlapping approved tours.
-  Pending tours do NOT accrue.
+  `kind: "tour_weekly_off"` in the breakdown. Athletes are the only
+  category excluded (they use the Breaks workflow). Idempotent against
+  double-counting when attendance + tour cover the same date, and
+  against overlapping approved tours. Pending tours do NOT accrue.
   Coverage: `/app/backend/tests/test_comp_off_tour_accrual.py` — 9/9
-  passing.
+  passing (updated from staff-only after user feedback).
 
 - **Multi-site geofence (28 Jun 2026)** — additional geofenced
   locations (e.g. neighbouring Rowing Academy) where check-ins are

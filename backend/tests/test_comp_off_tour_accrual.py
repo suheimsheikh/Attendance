@@ -100,6 +100,7 @@ def test_staff_tour_only_weekly_off_days_count():
 
 
 def test_athlete_tour_does_not_accrue():
+    """Athletes are the only category excluded — they use the Breaks workflow."""
     bal = _run_case(
         seed_args={"user_id": "u-athlete", "tour_ranges": [("2026-01-03", "2026-01-05")]},
         user={"id": "u-athlete", "category": "athlete", "weekly_off": "sunday"},
@@ -107,20 +108,24 @@ def test_athlete_tour_does_not_accrue():
     assert bal["accrued"] == 0
 
 
-def test_coach_tour_does_not_accrue():
+def test_coach_tour_accrues():
+    """Updated 28 Jun 2026 — coaches now accrue tour-day comp-off too."""
     bal = _run_case(
         seed_args={"user_id": "u-coach", "tour_ranges": [("2026-01-03", "2026-01-05")]},
         user={"id": "u-coach", "category": "coach", "weekly_off": "sunday"},
     )
-    assert bal["accrued"] == 0
+    assert bal["accrued"] == 1
+    assert any(b["kind"] == "tour_weekly_off" for b in bal["breakdown"])
 
 
-def test_executive_tour_does_not_accrue():
+def test_executive_tour_accrues():
+    """Updated 28 Jun 2026 — executives now accrue tour-day comp-off too."""
     bal = _run_case(
         seed_args={"user_id": "u-exec", "tour_ranges": [("2026-01-03", "2026-01-05")]},
         user={"id": "u-exec", "category": "executive", "weekly_off": "sunday"},
     )
-    assert bal["accrued"] == 0
+    assert bal["accrued"] == 1
+    assert any(b["kind"] == "tour_weekly_off" for b in bal["breakdown"])
 
 
 def test_staff_tour_and_attendance_no_double_count():
