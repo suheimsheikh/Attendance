@@ -819,3 +819,45 @@ See `/app/memory/test_credentials.md` — admin@attendance.app / Admin@12345 (or
     Hydration warning `<span> in <option>` no longer reproduces in
     browser console — likely fixed by prior Members/Presence/Calendar
     component extractions.
+
+- **Tour-day → Comp-off accrual for Staff (28 Jun 2026)** —
+  `compute_comp_off_balance` in `/app/backend/holidays.py` now ALSO walks
+  every approved `tour` row for staff members; each tour date that
+  matches their effective weekly_off adds +1 to `accrued` with
+  `kind: "tour_weekly_off"` in the breakdown. Athletes / coaches /
+  executives keep the original on-campus-only rule (no change for
+  them). Idempotent against double-counting when attendance + tour
+  cover the same date, and against overlapping approved tours.
+  Pending tours do NOT accrue.
+  Coverage: `/app/backend/tests/test_comp_off_tour_accrual.py` — 9/9
+  passing.
+
+- **Multi-site geofence (28 Jun 2026)** — additional geofenced
+  locations (e.g. neighbouring Rowing Academy) where check-ins are
+  treated as on-site. The main office stays in `OfficeConfig`; sites
+  are an additive list managed via `/api/sites` CRUD (admin-only
+  mutations).
+  - New helper `services/geo.py::resolve_site(office, lat, lng, sites)`
+    picks the CLOSEST active geofence and returns
+    `(site_id, site_name, distance_m, out_of_geofence)`. Inactive
+    sites are ignored. If point is inside no geofence at all →
+    `out_of_geofence=True` (still informational — never blocking).
+  - `perform_toggle` (QR / scan-card / mark-member) and `_geo_toggle`
+    (member self-service) both call this helper and stamp `site_id` +
+    `site_name` (and `exit_site_id` + `exit_site_name`) on the
+    attendance row. Backward-compatible: `site_id=None` ⇒ main office
+    won, identical to pre-multi-site rows.
+  - `/api/admin/activity` events carry `site_name` and append
+    `· at <site_name>` to the human-readable `detail`.
+  - New admin page `/admin/sites` (sidebar entry between Fleets and
+    Office Settings) — create/edit/delete with name, lat/lng (with
+    "Use my current location" geolocation shortcut), radius_m (1–4999),
+    active toggle, and optional notes. Deleting a site preserves the
+    site_name on historical attendance rows so old reports stay
+    readable.
+  - Coverage: `/app/backend/tests/test_geo_multi_site.py` — 8/8
+    passing. Iter17 testing agent: 11/11 backend contract tests +
+    65/65 regression (incl. iter16) GREEN. Frontend bug found
+    (useFormError exposes setMessage not setError) — fixed in same
+    session, re-screenshot confirms 0 console errors and successful
+    save with validation.

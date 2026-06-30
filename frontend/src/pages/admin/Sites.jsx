@@ -119,12 +119,12 @@ function SiteForm({ initial, onClose, onSaved }) {
   const [notes, setNotes] = useState(initial?.notes || "");
   const [saving, setSaving] = useState(false);
   const [locating, setLocating] = useState(false);
-  const { error, setError, clear } = useFormError();
+  const { error, setMessage, clear } = useFormError();
   useEscape(onClose);
 
   const useMyLocation = () => {
     if (!navigator.geolocation) {
-      setError("Your browser doesn't support geolocation");
+      setMessage("Your browser doesn't support geolocation");
       return;
     }
     setLocating(true);
@@ -137,7 +137,7 @@ function SiteForm({ initial, onClose, onSaved }) {
       },
       (err) => {
         setLocating(false);
-        setError(err?.message || "Could not get your location");
+        setMessage(err?.message || "Could not get your location");
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
@@ -147,13 +147,13 @@ function SiteForm({ initial, onClose, onSaved }) {
     e?.preventDefault?.();
     clear();
     const n = name.trim();
-    if (!n) { setError("Name is required"); return; }
+    if (!n) { setMessage("Name is required"); return; }
     const latN = Number(lat), lngN = Number(lng);
-    if (Number.isNaN(latN) || Number.isNaN(lngN)) { setError("Latitude and longitude must be numbers"); return; }
-    if (latN < -90 || latN > 90) { setError("Latitude out of range"); return; }
-    if (lngN < -180 || lngN > 180) { setError("Longitude out of range"); return; }
+    if (Number.isNaN(latN) || Number.isNaN(lngN)) { setMessage("Latitude and longitude must be numbers"); return; }
+    if (latN < -90 || latN > 90) { setMessage("Latitude out of range"); return; }
+    if (lngN < -180 || lngN > 180) { setMessage("Longitude out of range"); return; }
     const radN = parseInt(radius, 10);
-    if (!radN || radN <= 0 || radN >= 5000) { setError("Radius must be 1 – 4999 metres"); return; }
+    if (!radN || radN <= 0 || radN >= 5000) { setMessage("Radius must be 1 – 4999 metres"); return; }
 
     const body = { name: n, latitude: latN, longitude: lngN, radius_m: radN, active, notes: notes.trim() || null };
     setSaving(true);
@@ -163,7 +163,7 @@ function SiteForm({ initial, onClose, onSaved }) {
       toast.success(isEdit ? "Site updated" : "Site created");
       onSaved();
     } catch (err) {
-      setError(err?.message || "Save failed");
+      setMessage(err?.message || "Save failed");
     } finally { setSaving(false); }
   };
 
