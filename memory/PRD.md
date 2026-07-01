@@ -983,6 +983,23 @@ type), R3 (3-day notice rule). R1 shipped today.
 
 ## Pending (in priority order)
 
+### Version poller + auto-refresh toast (1 Jul 2026) ✅ COMPLETE
+- **Backend** `GET /api/version` (in `routes/office.py`):
+  - Returns `{"version": "<string>"}`.
+  - Version resolution precedence: `APP_VERSION` env var → `git rev-parse --short HEAD` → `boot-<epoch>` fallback.
+  - `@lru_cache(maxsize=1)` — one resolution per process, cheap under polling load.
+  - Public — no auth required — so the poller works on the `/login` screen too.
+- **Frontend** `components/VersionPoller.jsx`:
+  - Mounted once in `App.js` above the `Suspense` boundary.
+  - Polls every 60 s; skipped when tab hidden.
+  - First response cached as `initialVersion`. On subsequent mismatch, fires a persistent Sonner toast ("New version available") with a Refresh button.
+  - Refresh button: unregisters every service worker → clears all Cache Storage → `location.reload()`. Guarantees a fresh index.html + JS bundles.
+  - Toast fires at most once per session; polling stops after firing so the user isn't spammed.
+  - Fully silent on failures — missing endpoint or network blips just skip the tick.
+- **Deploy signal**: production deploy script should `export APP_VERSION=$(git rev-parse --short HEAD)` before the container build; without it the git fallback works if `.git/` is in the image, else the boot-timestamp fallback fires on every container restart (harmless but noisy).
+- **Testing**: 5/5 in `tests/test_version_endpoint.py` (returns string, public/no-auth, stable across calls, env override, git-or-timestamp fallback). **Full suite: 337/337 passing.**
+- **Verified**: preview backend returns `{"version": "152f560"}`, poller fires 2× on login page (React StrictMode double-mount in dev — normal), zero console errors.
+
 ### Summary card — half + full breakdown (30 Jun 2026, late) ✅ COMPLETE
 - **Backend** (`holidays._bucket_leave_rows` + `compute_balance_summary`):
   `paid_leave` payload now carries `full_count` (approved leave rows

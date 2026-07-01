@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import SelfCheckIn from "./pages/SelfCheckIn";
+import VersionPoller from "./components/VersionPoller";
 import { Loader2 } from "lucide-react";
 
 // Admin and seldom-used routes are code-split — keeps the athlete bundle
@@ -90,6 +91,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
         <Toaster position="top-center" richColors closeButton />
+        <VersionPoller />
         <Suspense fallback={<FullPageSpinner />}>
         <Routes>
           <Route path="/login" element={<Login />} />

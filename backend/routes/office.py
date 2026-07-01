@@ -19,8 +19,44 @@ which is tied to the SMS module setup). The factory accepts the class so
 this module doesn't need a back-import.
 """
 
+import os
 import pathlib
+import subprocess
+import time
+from functools import lru_cache
 from fastapi import APIRouter, Depends
+
+
+@lru_cache(maxsize=1)
+def _cached_version() -> str:
+    """Resolve the app version once per process.
+
+    Precedence:
+      1. `APP_VERSION` env var — set by the deploy script (e.g. to the
+         git SHA at build time). Preferred because it survives cache
+         layers and container restarts identically.
+      2. `git rev-parse --short HEAD` executed against the repo the
+         container was built from. Works in-place when the .git dir
+         is present.
+      3. Container-start timestamp (fallback). Guarantees the endpoint
+         always returns a stable string per-restart, so at worst the
+         version-poller triggers a refresh on the first backend restart
+         after a stale-cached tab reconnects.
+    """
+    env = os.environ.get("APP_VERSION", "").strip()
+    if env:
+        return env
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=pathlib.Path(__file__).resolve().parent.parent.parent,
+            capture_output=True, text=True, timeout=2,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.strip()
+    except Exception:
+        pass
+    return f"boot-{int(time.time())}"
 
 
 def make_router(db, require_admin, get_current_user, send_checkout_reminders, OfficeConfig) -> APIRouter:
@@ -73,5 +109,19 @@ def make_router(db, require_admin, get_current_user, send_checkout_reminders, Of
         if not path.exists():
             return {"markdown": "# Changelog\n\n_Not available yet._"}
         return {"markdown": path.read_text(encoding="utf-8")}
+
+    @router.get("/version")
+    async def app_version():
+        """Return the currently deployed app version.
+
+        Public — no auth needed — because the frontend polls this every
+        60 s (even on the login screen) to detect deploys and prompt
+        users to reload for the new bundle. Returns a stable string:
+        preferred is the git SHA set via the `APP_VERSION` env var; the
+        boot-timestamp fallback still guarantees a fresh value per
+        container start. Cached at import time so the endpoint stays
+        cheap even under aggressive polling.
+        """
+        return {"version": _cached_version()}
 
     return router
