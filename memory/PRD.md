@@ -991,7 +991,7 @@ type), R3 (3-day notice rule). R1 shipped today.
   - Public — no auth required — so the poller works on the `/login` screen too.
 - **Frontend** `components/VersionPoller.jsx`:
   - Mounted once in `App.js` above the `Suspense` boundary.
-  - Polls every 60 s; skipped when tab hidden.
+  - Polls every 30 minutes; skipped when tab hidden.
   - First response cached as `initialVersion`. On subsequent mismatch, fires a persistent Sonner toast ("New version available") with a Refresh button.
   - Refresh button: unregisters every service worker → clears all Cache Storage → `location.reload()`. Guarantees a fresh index.html + JS bundles.
   - Toast fires at most once per session; polling stops after firing so the user isn't spammed.

@@ -7,10 +7,10 @@ import { api } from "../api";
 /**
  * VersionPoller — mounted once at the app root (App.js).
  *
- * Polls `GET /api/version` every 60 s while the tab is visible. When the
- * value differs from the version recorded on first successful poll, we
- * show a persistent Sonner toast asking the user to refresh. The
- * Refresh button:
+ * Polls `GET /api/version` every 30 minutes while the tab is visible.
+ * When the value differs from the version recorded on first successful
+ * poll, we show a persistent Sonner toast asking the user to refresh.
+ * The Refresh button:
  *   1. Unregisters every service worker (kills stale caching layers).
  *   2. Clears all Cache Storage entries.
  *   3. Reloads the page with `location.reload()` so the fresh
@@ -90,7 +90,12 @@ export default function VersionPoller() {
   const timerRef = useRef(null);
 
   useEffect(() => {
-    const POLL_MS = 60_000;
+    // Poll every 30 minutes. Aggressive polling isn't necessary — a
+    // deploy that lands mid-shift can wait a bit for members to be
+    // told; we care far more about surfacing stale bundles WITHIN THE
+    // SAME DAY than in the same minute. The visibility-gate below
+    // also skips ticks while the tab is hidden.
+    const POLL_MS = 30 * 60_000;
 
     const check = async () => {
       if (notified.current) return;
