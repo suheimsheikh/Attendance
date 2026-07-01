@@ -29,13 +29,17 @@ def _bucket_leave_rows(rows: list, today: str) -> dict:
     """Walk a year's worth of leave/tour rows for one member and bucket the
     aggregates we need for the balance summary. Single-pass so the caller
     can stay flat. Returns paid_used, pending_leave_days, future_approved_leave_days,
-    tour_ytd_days, pending_tour_days, lop_ytd_days."""
+    tour_ytd_days, pending_tour_days, lop_ytd_days, plus a
+    `leave_full_count` / `leave_half_count` breakdown of approved rows
+    for the summary card (added 30 Jun 2026, half-day launch)."""
     paid_used = 0.0
     pending_leave_days = 0.0
     future_approved_leave_days = 0.0
     tour_ytd_days = 0
     pending_tour_days = 0
     lop_ytd_days = 0.0
+    leave_full_count = 0
+    leave_half_count = 0
     for L in rows:
         n = _days_inclusive(L["start_date"], L["end_date"])
         if L["type"] == "leave":
@@ -49,6 +53,11 @@ def _bucket_leave_rows(rows: list, today: str) -> dict:
                 # commitment the member should see — applied & not yet taken.
                 if L["start_date"] > today:
                     future_approved_leave_days += n
+                # Half-vs-full breakdown for the summary card.
+                if L.get("half_day"):
+                    leave_half_count += 1
+                else:
+                    leave_full_count += 1
             elif L["status"] == "pending":
                 pending_leave_days += n
         elif L["type"] == "tour":
@@ -64,6 +73,8 @@ def _bucket_leave_rows(rows: list, today: str) -> dict:
         "tour_ytd_days": tour_ytd_days,
         "pending_tour_days": pending_tour_days,
         "lop_ytd_days": lop_ytd_days,
+        "leave_full_count": leave_full_count,
+        "leave_half_count": leave_half_count,
     }
 
 
@@ -93,7 +104,8 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
         "start_date": {"$gte": yr_start, "$lte": yr_end},
         "type": {"$in": ["leave", "tour", "comp_off"]},
     }, {"_id": 0, "type": 1, "status": 1, "start_date": 1, "end_date": 1,
-        "paid_leave_used": 1, "lop_days": 1, "comp_off_used": 1}).to_list(2000)
+        "paid_leave_used": 1, "lop_days": 1, "comp_off_used": 1,
+        "half_day": 1}).to_list(2000)
 
     today = date.today().isoformat()
     buckets = _bucket_leave_rows(rows, today)
@@ -125,6 +137,10 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
             "used": buckets["paid_used"],
             "available": paid_avail,
             "tracked": tracked,
+            # Row-count breakdown of the "used" number so the summary
+            # card can render "X leaves used (F full + H half)".
+            "full_count": buckets["leave_full_count"],
+            "half_count": buckets["leave_half_count"],
         },
         "total_available": int(co["available"]) + int(paid_avail),
         "pending_leave_days": buckets["pending_leave_days"],
@@ -228,18 +244,33 @@ def _break_covers_user(b: dict, user: dict) -> bool:
     return False
 
 
-def split_leave_days(requested: int, comp_off_avail: int, paid_avail: float) -> dict:
-    """Split a requested leave (calendar days) across the deduction ladder.
+def split_leave_days(requested, comp_off_avail: int, paid_avail: float) -> dict:
+    """Split a requested leave (calendar days, may be fractional for
+    half-days) across the deduction ladder.
 
-    Order: comp-off first, paid leave second, anything left = LOP.
-    Returns a dict ready to stamp on the leave document — callers can
-    spread this onto the create payload.
+    Order:
+      • Comp-off first (whole-days only — comp-off is atomic; the
+        half-day remainder always falls to paid leave).
+      • Paid leave next.
+      • Anything left is LOP.
+
+    Returns a dict ready to stamp on the leave document. `comp_off_used`
+    stays an `int`; `paid_leave_used` and `lop_days` may be fractional
+    (0.5) for a half-day.
     """
-    requested = max(0, int(requested))
-    co = min(requested, max(0, int(comp_off_avail)))
-    paid = min(requested - co, max(0.0, float(paid_avail)))
-    lop = max(0, requested - co - int(paid))
-    return {"comp_off_used": co, "paid_leave_used": paid, "lop_days": lop}
+    try:
+        requested_f = max(0.0, float(requested))
+    except (TypeError, ValueError):
+        requested_f = 0.0
+    co = min(int(requested_f), max(0, int(comp_off_avail)))
+    remaining = requested_f - co
+    paid = min(remaining, max(0.0, float(paid_avail)))
+    lop = max(0.0, remaining - paid)
+    return {
+        "comp_off_used": co,
+        "paid_leave_used": round(paid, 1),
+        "lop_days": round(lop, 1),
+    }
 
 
 async def _resolve_weekly_off(db, user: dict) -> str:

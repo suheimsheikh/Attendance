@@ -983,6 +983,66 @@ type), R3 (3-day notice rule). R1 shipped today.
 
 ## Pending (in priority order)
 
+### Summary card — half + full breakdown (30 Jun 2026, late) ✅ COMPLETE
+- **Backend** (`holidays._bucket_leave_rows` + `compute_balance_summary`):
+  `paid_leave` payload now carries `full_count` (approved leave rows
+  without `half_day`) and `half_count` (approved leave rows with a
+  `half_day` stamp). The row-count buckets sit alongside the
+  fractional `used` total so the UI can show both.
+- **Frontend**:
+  - `MyLeaves.jsx::StatsDashboard` "Leave availed" tile now reads e.g.
+    *"2.5 · 1 full + 3 half days"* when any half-days exist. Members
+    with only full-day leaves see the original copy.
+  - `admin/Leaves.jsx` balance card shows `· 4 full + 2 half` as a
+    trailing chip under the paid-leave "opening − used" line.
+  - `LeaveBalanceNotice.jsx` (apply-form live preview) adds `(4F + 2H)`
+    to the paid-leave pool hint.
+- **Test**: `test_summary_reports_half_and_full_counts` — applies a
+  half + a full leave, approves both, asserts `half_count ≥ 1` and
+  `full_count ≥ 1` and `used ≥ 2.4`.
+- **Coverage**: 10/10 half-day tests, **332/332 full suite** passing.
+
+### Half-Day Leave (30 Jun 2026, evening) ✅ COMPLETE
+- **Spec** (per user): FN (forenoon) / PN (postnoon), single-day only,
+  Leave type only, timings configurable in Office Settings (defaults
+  FN 09:30–13:30, PN 13:30–18:00), works via both self-apply and
+  admin apply-on-behalf.
+- **Data model**:
+  - `LeaveCreate.half_day: Literal["FN","PN"] | None` and same on
+    `GroupLeaveIn`.
+  - `OfficeConfig` gained `half_day_fn_start`, `half_day_fn_end`,
+    `half_day_pn_start`, `half_day_pn_end` (HH:MM strings).
+- **Backend rules** (`routes/leaves.py::create_leave` and
+  `::group_leave`):
+  - `half_day` requires `type=leave` → HTTP 400 otherwise.
+  - `half_day` requires `start_date == end_date` → HTTP 400 otherwise.
+  - `half_day` must be `"FN"` or `"PN"` (Pydantic Literal → 422).
+- **Balance ladder** (`holidays.split_leave_days`): now accepts
+  fractional `requested`. Comp-off stays whole-day-only (atomic), so
+  a half-day always drops to paid-leave, or LOP if paid is empty.
+- **Presence Board** (`server.py`): `leave` rows carrying `half_day`
+  render detail as `"Half-day · FN · Till <end_date>"`. The row
+  ships `half_day` field → `MemberCard.jsx` shows a sky **HALF · FN/PN**
+  chip.
+- **Frontend UI**:
+  - `ApplyForm` (self-apply + admin on-behalf): Half-day checkbox
+    under the Leave type. When enabled, FN/PN pill picker appears with
+    the office-configured clock windows in the labels; End-date input
+    is disabled and locked to the Start date. Also blocks submit with
+    a helpful message if the user tries to combine half-day with a
+    multi-day range.
+  - `admin/Office.jsx`: 4 `<input type="time">` fields in a 2×2 grid
+    under a "Half-day leave windows" card.
+  - `MyLeaves.jsx` row + `admin/Leaves.jsx` table row both show a
+    sky **Half · FN/PN** chip; the Days column reads `0.5` for
+    half-day rows.
+- **Testing**: 9/9 new tests in `tests/test_half_day_leave.py`
+  (type-only-leave, single-day-only, invalid-half-day-value rejected;
+  single-apply stamps `paid_leave_used=0.5`; group-apply supports
+  half-day; group-half-must-be-single-day; unit tests on
+  `split_leave_days` for half-to-paid, half-to-LOP, full-day-unchanged).
+  Full backend suite: **331/331** passing.
+
 ### R3 — 3-day notice rule for self-applied Leaves (30 Jun 2026) ✅ COMPLETE
 - `OfficeConfig.leave_notice_days` is now a **per-category** dict
   `{athlete, staff, coach, executive}` (default 3 each). A

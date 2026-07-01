@@ -105,7 +105,14 @@ function StatsDashboard({ summary }) {
       key: "leave-availed",
       label: "Leave availed",
       value: pl.tracked ? round1(pl.used) : "—",
-      hint: pl.tracked ? "Paid leave taken this year" : "Not tracked",
+      // When any half-days have been taken, show the full/half breakdown
+      // so it's clear how the "used" figure was built up. Zero-half
+      // members keep the simple hint.
+      hint: pl.tracked
+        ? ((pl.half_count || 0) > 0
+            ? `${pl.full_count || 0} full + ${pl.half_count} half day${pl.half_count === 1 ? "" : "s"}`
+            : "Paid leave taken this year")
+        : "Not tracked",
       tone: "amber",
       Icon: Bed,
     },
@@ -250,6 +257,15 @@ function MyLeaveRow({ l }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <div className="font-semibold">{t.label}{l.location ? ` · ${l.location}` : ""}</div>
+            {l.half_day && (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-100 text-sky-800 text-[10px] font-extrabold uppercase tracking-wide"
+                data-testid={`myleave-halfday-${l.id}`}
+                title={`Half-day (${l.half_day === "FN" ? "forenoon" : "postnoon"})`}
+              >
+                Half · {l.half_day}
+              </span>
+            )}
             {l.late_application && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-extrabold uppercase tracking-wide">
                 <AlertTriangle size={10} /> Late
@@ -318,6 +334,15 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   const [location, setLocation] = useState("");
   const [expectedArrival, setExpectedArrival] = useState("");
   const [busy, setBusy] = useState(false);
+  // Half-day (30 Jun 2026): only valid when type=leave AND single-day.
+  // `halfDay` ∈ null | "FN" | "PN". null means full-day.
+  const [halfDay, setHalfDay] = useState(null);
+  // Office half-day clock windows — surfaced in the UI copy so members
+  // know what "FN" and "PN" actually mean for their academy. Populated
+  // by the same /api/office fetch that already resolves noticeDays.
+  const [halfDayWindows, setHalfDayWindows] = useState({
+    fn: "09:30–13:30", pn: "13:30–18:00",
+  });
   const [memberId, setMemberId] = useState("");          // legacy single-pick (non-admin path unchanged)
   const [members, setMembers] = useState([]);
   // Admin multi-select state
@@ -361,9 +386,24 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           n = Number.isFinite(v) && v >= 0 ? Math.floor(v) : 3;
         }
         setNoticeDays(n);
+        setHalfDayWindows({
+          fn: `${o.half_day_fn_start || "09:30"}–${o.half_day_fn_end || "13:30"}`,
+          pn: `${o.half_day_pn_start || "13:30"}–${o.half_day_pn_end || "18:00"}`,
+        });
       }).catch(() => {});
     }).catch(() => {});
     api.get("/me/leave-summary").then(setBalanceSummary).catch(() => {});
+  }, [asAdmin]);
+
+  // Admin path also needs the half-day windows for the on-behalf modal.
+  useEffect(() => {
+    if (!asAdmin) return;
+    api.get("/office").then((o) => {
+      setHalfDayWindows({
+        fn: `${o.half_day_fn_start || "09:30"}–${o.half_day_fn_end || "13:30"}`,
+        pn: `${o.half_day_pn_start || "13:30"}–${o.half_day_pn_end || "18:00"}`,
+      });
+    }).catch(() => {});
   }, [asAdmin]);
 
   // Admin single-pick: refetch unified summary whenever the picked target
@@ -413,7 +453,9 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
 
   // ── Leave-balance preview (for the notice block) ─────────────────────────
   // Calendar days inclusive — matches the backend formula (`end - start + 1`).
+  // A half-day counts as 0.5 (no matter how the dates look).
   const requestedDays = useMemo(() => {
+    if (halfDay && type === "leave") return 0.5;
     try {
       const s = new Date(start + "T00:00:00");
       const e = new Date(end + "T00:00:00");
@@ -422,7 +464,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
     } catch {
       return 0;
     }
-  }, [start, end]);
+  }, [start, end, halfDay, type]);
 
   // R3 — calendar days between today and `start`. Negative when start is
   // in the past (a late application). Used to gate the Submit button on
@@ -478,7 +520,17 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
       const t = todayIso();
       setStart(t); setEnd(t);
     }
+    // Half-day is only valid on the Leave type — clear it whenever the
+    // type changes to anything else.
+    if (type !== "leave") setHalfDay(null);
   }, [type]);
+
+  // Force `end === start` whenever a half-day is selected. The backend
+  // rejects otherwise, but this keeps the picker consistent with the
+  // preview / notice / submit flow.
+  useEffect(() => {
+    if (halfDay) setEnd(start);
+  }, [halfDay, start]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -487,6 +539,10 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
     if (!reason.trim()) { formErr.setMessage("Enter a reason"); return; }
     if (type === "late_coming" && !expectedArrival) { formErr.setMessage("Tell us when you'll arrive"); return; }
     if (end < start) { formErr.setMessage("End date must be after start"); return; }
+    if (halfDay && (type !== "leave" || start !== end)) {
+      formErr.setMessage("Half-day is only for single-day Leave applications");
+      return;
+    }
     setBusy(true);
     try {
       if (asAdmin) {
@@ -504,6 +560,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           reason: reasonOut,
           location: (type === "tour" || type === "posting") ? location : null,
           auto_approve: autoApprove,
+          half_day: (type === "leave" && halfDay) ? halfDay : null,
         });
         toast.success(`${r.created} ${r.created === 1 ? "request" : "requests"} created (${r.status})`);
       } else {
@@ -511,6 +568,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           type, start_date: start, end_date: end, reason,
           location: (type === "tour" || type === "posting") ? location : null,
           expected_arrival: type === "late_coming" ? expectedArrival : null,
+          half_day: (type === "leave" && halfDay) ? halfDay : null,
         };
         await api.post("/leaves", payload);
         toast.success("Request submitted");
@@ -627,6 +685,42 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
             {type === "leave" && (
               <p className="text-[11px] text-slate-500 mt-1.5">Days are deducted from your Comp-Off balance first, then your Paid Leave. Anything left is treated as Loss of Pay.</p>
             )}
+            {type === "leave" && (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5" data-testid="half-day-block">
+                <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-slate-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!halfDay}
+                    onChange={(e) => setHalfDay(e.target.checked ? "FN" : null)}
+                    data-testid="half-day-toggle"
+                  />
+                  Half-day only (single day, consumes 0.5 from balance)
+                </label>
+                {halfDay && (
+                  <div className="mt-2 flex flex-wrap gap-2 items-center">
+                    <button
+                      type="button"
+                      onClick={() => setHalfDay("FN")}
+                      data-testid="half-day-fn"
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition ${halfDay === "FN" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:border-slate-500"}`}
+                    >
+                      Forenoon · {halfDayWindows.fn}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHalfDay("PN")}
+                      data-testid="half-day-pn"
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition ${halfDay === "PN" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:border-slate-500"}`}
+                    >
+                      Postnoon · {halfDayWindows.pn}
+                    </button>
+                    <span className="text-[11px] text-slate-500">
+                      End date will be locked to the start date.
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
             {type === "late_coming" && (
               <p className="text-[11px] text-slate-500 mt-1.5">Use this when you&apos;ll arrive late today. Admin gets pinged so you&apos;re not flagged as absent.</p>
             )}
@@ -655,7 +749,15 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
             </div>
             <div>
               <label className="iu-label">To</label>
-              <input data-testid="leave-end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} min={start} className="iu-input" />
+              <input
+                data-testid="leave-end"
+                type="date"
+                value={halfDay ? start : end}
+                onChange={(e) => setEnd(e.target.value)}
+                min={start}
+                disabled={!!halfDay}
+                className="iu-input disabled:bg-slate-100 disabled:cursor-not-allowed"
+              />
             </div>
           </div>
           {start < todayIso() && (

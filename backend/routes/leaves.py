@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date as _date_cls
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -29,6 +29,11 @@ class LeaveCreate(BaseModel):
     reason: Optional[str] = None
     location: Optional[str] = None
     expected_arrival: Optional[str] = None  # HH:MM for late_coming
+    # Half-day support (30 Jun 2026): when set, `type` MUST be `leave`,
+    # `start_date` MUST equal `end_date`, and the request consumes 0.5
+    # of a day from the balance waterfall. "FN" = forenoon window (per
+    # OfficeConfig.half_day_fn_*), "PN" = postnoon window.
+    half_day: Optional[Literal["FN", "PN"]] = None
 
 
 class GroupLeaveIn(BaseModel):
@@ -39,6 +44,7 @@ class GroupLeaveIn(BaseModel):
     reason: Optional[str] = None
     location: Optional[str] = None
     auto_approve: bool = False
+    half_day: Optional[Literal["FN", "PN"]] = None
 
 
 class LeaveDecision(BaseModel):
@@ -162,6 +168,16 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
             # automatic on `type=leave` now), but old clients/scripts may
             # still POST it. Block over-application same as before.
             await _comp_off_guard(target_user, body.start_date, body.end_date)
+        # Half-day validation (30 Jun 2026): FN/PN is single-day AND
+        # leave-only. Reject early with a clear message so the frontend
+        # can surface it inline.
+        if body.half_day:
+            if body.type != "leave":
+                raise HTTPException(status_code=400, detail="Half-day is only available on the Leave type")
+            if body.start_date != body.end_date:
+                raise HTTPException(status_code=400, detail="Half-day leave must be a single day (start_date must equal end_date)")
+            if body.half_day not in ("FN", "PN"):
+                raise HTTPException(status_code=400, detail="half_day must be 'FN' or 'PN'")
         office = await db.config.find_one({"id": "office"})
         today = local_date_str(office)
         late_application = bool(body.start_date and body.start_date < today)
@@ -174,6 +190,7 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
             "reason": body.reason,
             "location": body.location,
             "expected_arrival": body.expected_arrival,
+            "half_day": body.half_day,  # None | "FN" | "PN"
             "status": "pending",
             "late_application": late_application,
             "filed_by_admin": user["id"] if target_user["id"] != user["id"] else None,
@@ -183,12 +200,11 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
         # ── Unified Leave: stamp the deduction ladder at apply time ─────
         # Order: comp-off first, paid leave second, anything left is LOP.
         # Only `type=leave` runs the ladder — Tour is paid in full and
-        # Late Coming doesn't touch any balance. Stamps are persisted on
-        # the doc so the helpers can sum them without re-deriving from
-        # business logic each time.
+        # Late Coming doesn't touch any balance. Half-day leaves consume
+        # 0.5 instead of a full inclusive-day count.
         if body.type == "leave" and compute_balance_summary and split_leave_days:
             summary = await compute_balance_summary(db, target_user)
-            requested = _days_inclusive(body.start_date, body.end_date)
+            requested = 0.5 if body.half_day else _days_inclusive(body.start_date, body.end_date)
             split = split_leave_days(
                 requested,
                 summary["comp_off"]["available"],
@@ -372,6 +388,15 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
     async def group_leave(body: GroupLeaveIn, admin: dict = Depends(require_admin)):
         if not body.user_ids:
             raise HTTPException(status_code=400, detail="Pick at least one member")
+        # Half-day validation (30 Jun 2026): same rules as the single-apply
+        # path — leave-only, single-day, FN or PN.
+        if body.half_day:
+            if body.type != "leave":
+                raise HTTPException(status_code=400, detail="Half-day is only available on the Leave type")
+            if body.start_date != body.end_date:
+                raise HTTPException(status_code=400, detail="Half-day leave must be a single day (start_date must equal end_date)")
+            if body.half_day not in ("FN", "PN"):
+                raise HTTPException(status_code=400, detail="half_day must be 'FN' or 'PN'")
         # Comp-off: validate every member's balance up-front, so we never
         # half-insert (partial success would be hard for an admin to reconcile).
         if body.type == "comp_off":
@@ -399,6 +424,7 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
                 "end_date": body.end_date,
                 "reason": body.reason,
                 "location": body.location,
+                "half_day": body.half_day,
                 "status": "approved" if body.auto_approve else "pending",
                 "late_application": late_application,
                 "filed_by_admin": admin["id"],
@@ -406,6 +432,20 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
                 "group_leave": True,
                 "created_at": now_utc().isoformat(),
             }
+            # Stamp the deduction ladder for the leave type too (mirror
+            # the single-apply path so balances stay in sync). Half-day
+            # rows draw 0.5.
+            if body.type == "leave" and compute_balance_summary and split_leave_days:
+                u = await db.users.find_one({"id": uid}, {"_id": 0})
+                if u:
+                    summary = await compute_balance_summary(db, u)
+                    requested = 0.5 if body.half_day else _days_inclusive(body.start_date, body.end_date)
+                    split = split_leave_days(
+                        requested,
+                        summary["comp_off"]["available"],
+                        summary["paid_leave"]["available"],
+                    )
+                    d.update(split)
             if body.auto_approve:
                 d["decided_by"] = admin["full_name"]
                 d["decided_at"] = now_utc().isoformat()

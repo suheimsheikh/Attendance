@@ -207,7 +207,7 @@ export default function AdminLeaves({ embedded = false }) {
               {visible.map((l) => {
                 const typeMeta = TYPE_META[l.type] || { label: l.type, cls: "bg-slate-100 text-slate-700" };
                 const statusMeta = STATUS_META[l.status] || { label: l.status, cls: "bg-slate-100 text-slate-700" };
-                const days = daysInclusive(l.start_date, l.end_date);
+                const days = l.half_day ? 0.5 : daysInclusive(l.start_date, l.end_date);
                 const isExpanded = expandedId === l.id;
                 const showExpander = l.type === "leave" || l.type === "tour" || l.type === "comp_off" || l.type === "posting";
                 return (
@@ -238,6 +238,15 @@ export default function AdminLeaves({ embedded = false }) {
                       <span className={`inline-flex items-center px-2 h-5 rounded text-[10px] font-bold uppercase ${typeMeta.cls}`}>
                         {typeMeta.label}
                       </span>
+                      {l.half_day && (
+                        <div
+                          className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 text-[9px] font-extrabold uppercase tracking-wide"
+                          data-testid={`halfday-chip-${l.id}`}
+                          title={`Half-day (${l.half_day === "FN" ? "forenoon" : "postnoon"})`}
+                        >
+                          Half · {l.half_day}
+                        </div>
+                      )}
                       {l.late_application && (
                         <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[9px] font-extrabold uppercase tracking-wide" data-testid={`late-chip-${l.id}`}>
                           <AlertTriangle size={9} /> Late
@@ -402,7 +411,14 @@ function BalanceSummaryCard({ data, memberName, requestedDays, leaveType }) {
             {pl.tracked ? round1(pl.available) : "—"}
           </div>
           <div className="text-[10px] text-amber-700/70">
-            {pl.tracked ? `opening ${round1(pl.opening) || 0} − used ${round1(pl.used) || 0}` : "no opening balance"}
+            {pl.tracked
+              ? `opening ${round1(pl.opening) || 0} − used ${round1(pl.used) || 0}`
+              : "no opening balance"}
+            {pl.tracked && (pl.half_count || 0) > 0 && (
+              <span className="ml-1" data-testid="balance-half-breakdown">
+                · {pl.full_count || 0} full + {pl.half_count} half
+              </span>
+            )}
           </div>
         </div>
       </div>

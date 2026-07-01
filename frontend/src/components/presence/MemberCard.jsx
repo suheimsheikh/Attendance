@@ -112,6 +112,15 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
               POSTED
             </span>
           )}
+          {m.half_day && (
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 text-[10px] font-bold"
+              data-testid={`halfday-chip-${m.id}`}
+              title={`Half-day leave (${m.half_day === "FN" ? "forenoon" : "postnoon"})`}
+            >
+              HALF · {m.half_day}
+            </span>
+          )}
           {m.status === "absent" && m.days_absent_streak > 1 && (
             <span
               className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold"

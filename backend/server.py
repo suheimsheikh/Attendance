@@ -293,6 +293,14 @@ class OfficeConfig(BaseModel):
     leave_notice_days: Dict[str, int] = Field(default_factory=lambda: {
         "athlete": 3, "staff": 3, "coach": 3, "executive": 3,
     })
+    # Half-day leave windows (30 Jun 2026). FN = forenoon, PN = postnoon.
+    # These are informational — they drive UI copy and Presence-board
+    # cutover timing; the balance ladder just deducts 0.5. Stored as
+    # HH:MM strings so admins can tune them without a code push.
+    half_day_fn_start: str = "09:30"
+    half_day_fn_end: str = "13:30"
+    half_day_pn_start: str = "13:30"
+    half_day_pn_end: str = "18:00"
 
     @field_validator("leave_notice_days", mode="before")
     @classmethod
@@ -2252,7 +2260,12 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             photo = u_thumb
         elif leave and leave["type"] == "leave":
             status_v = "on_leave"
-            detail = f"Till {leave['end_date']}"
+            if leave.get("half_day"):
+                # e.g. "Half-day · FN · till Jul 3" — keeps the "till end_date"
+                # signal for the rare case an admin backfills a half-day.
+                detail = f"Half-day · {leave['half_day']} · Till {leave['end_date']}"
+            else:
+                detail = f"Till {leave['end_date']}"
             since = leave["start_date"]
             photo = u_thumb
         elif brk:
@@ -2504,6 +2517,10 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             # can differentiate "POSTED" from a regular tour chip even
             # though both render in the on_tour column.
             "leave_kind": (leave or {}).get("type"),
+            # Half-day flag (30 Jun 2026): "FN"/"PN" or None. Drives a
+            # small chip on the member card so a coach can see at a
+            # glance who is only half-day out.
+            "half_day": (leave or {}).get("half_day"),
             "days_remaining": days_remaining,
             "days_absent_streak": days_absent_streak,
             "check_in_at": primary_session.get("check_in_at") if primary_session else None,

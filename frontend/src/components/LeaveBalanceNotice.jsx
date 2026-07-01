@@ -163,7 +163,9 @@ export default function LeaveBalanceNotice({
             <PoolPill
               label="Paid Leave available"
               value={pl.tracked ? round1(pl.available) : "—"}
-              hint={pl.tracked ? `opening ${round1(pl.opening) ?? 0} − used ${round1(pl.used) ?? 0}` : "no opening balance set"}
+              hint={pl.tracked
+                ? `opening ${round1(pl.opening) ?? 0} − used ${round1(pl.used) ?? 0}${(pl.half_count || 0) > 0 ? ` (${pl.full_count || 0}F + ${pl.half_count}H)` : ""}`
+                : "no opening balance set"}
               testId="pool-paid-leave"
             />
           </div>

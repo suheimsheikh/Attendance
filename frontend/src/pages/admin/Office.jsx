@@ -97,6 +97,10 @@ export default function OfficeSettings() {
         parent_notify_grace_minutes: Number(form.parent_notify_grace_minutes ?? 30),
         default_weekly_off: form.default_weekly_off || "sunday",
         leave_notice_days: _normLeaveNoticeDays(form.leave_notice_days),
+        half_day_fn_start: form.half_day_fn_start || "09:30",
+        half_day_fn_end:   form.half_day_fn_end   || "13:30",
+        half_day_pn_start: form.half_day_pn_start || "13:30",
+        half_day_pn_end:   form.half_day_pn_end   || "18:00",
         checkout_reminder_enabled: form.checkout_reminder_enabled !== false,
         checkout_reminder_time: form.checkout_reminder_time || "20:00",
         checkout_reminder_template: form.checkout_reminder_template || "Hi {name}, looks like you're still checked in at {academy}. Please check out via the app when you leave.",
@@ -235,6 +239,57 @@ export default function OfficeSettings() {
             evaluated against the member&apos;s own category. Tours, postings and late-coming are exempt.
             Admins filing on behalf bypass this gate (so genuine emergencies can still be recorded).
             Set any category to <strong>0</strong> to disable the rule for that group. Missing values default to <strong>3</strong>.
+          </p>
+        </div>
+
+        <div>
+          <label className="iu-label">Half-day leave windows</label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-md border border-slate-200 p-3">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-2">Forenoon (FN)</div>
+              <div className="flex items-center gap-2">
+                <input
+                  data-testid="of-halfday-fn-start"
+                  type="time"
+                  value={form.half_day_fn_start || "09:30"}
+                  onChange={(e) => set("half_day_fn_start", e.target.value)}
+                  className="iu-input"
+                />
+                <span className="text-slate-400 text-xs">to</span>
+                <input
+                  data-testid="of-halfday-fn-end"
+                  type="time"
+                  value={form.half_day_fn_end || "13:30"}
+                  onChange={(e) => set("half_day_fn_end", e.target.value)}
+                  className="iu-input"
+                />
+              </div>
+            </div>
+            <div className="rounded-md border border-slate-200 p-3">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-2">Postnoon (PN)</div>
+              <div className="flex items-center gap-2">
+                <input
+                  data-testid="of-halfday-pn-start"
+                  type="time"
+                  value={form.half_day_pn_start || "13:30"}
+                  onChange={(e) => set("half_day_pn_start", e.target.value)}
+                  className="iu-input"
+                />
+                <span className="text-slate-400 text-xs">to</span>
+                <input
+                  data-testid="of-halfday-pn-end"
+                  type="time"
+                  value={form.half_day_pn_end || "18:00"}
+                  onChange={(e) => set("half_day_pn_end", e.target.value)}
+                  className="iu-input"
+                />
+              </div>
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2">
+            Clock windows shown on the Apply Leave form when a member (or admin) picks half-day.
+            The balance ladder always deducts <strong>0.5 days</strong> regardless of these times —
+            they are informational only. Defaults: FN 09:30–13:30, PN 13:30–18:00.
           </p>
         </div>
 
