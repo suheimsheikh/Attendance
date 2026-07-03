@@ -159,7 +159,8 @@ class TestNoticeRuleConfigurable:
         before = admin_client.get(f"{api}/office").json() or {}
         original = before.get("leave_notice_days", 3)
         payload = {**before, "leave_notice_days": 0}
-        payload.pop("twilio", None); payload.pop("qr_token", None)
+        payload.pop("twilio", None)
+        payload.pop("qr_token", None)
         admin_client.put(f"{api}/office", json=payload)
         try:
             sess = _member_session(member_with_session)
@@ -172,7 +173,8 @@ class TestNoticeRuleConfigurable:
         finally:
             restore = {**(admin_client.get(f"{api}/office").json() or {}),
                        "leave_notice_days": original}
-            restore.pop("twilio", None); restore.pop("qr_token", None)
+            restore.pop("twilio", None)
+            restore.pop("qr_token", None)
             admin_client.put(f"{api}/office", json=restore)
 
 
@@ -197,7 +199,8 @@ class TestNoticeRulePerCategory:
             base = {k: n for k in base}
         base.update(per_cat)
         payload = {**before, "leave_notice_days": base}
-        payload.pop("twilio", None); payload.pop("qr_token", None)
+        payload.pop("twilio", None)
+        payload.pop("qr_token", None)
         r = admin_client.put(f"{api}/office", json=payload)
         assert r.status_code == 200, r.text
         return raw  # for restore
@@ -207,7 +210,8 @@ class TestNoticeRulePerCategory:
         cur["leave_notice_days"] = raw if raw is not None else {
             "athlete": 3, "staff": 3, "coach": 3, "executive": 3,
         }
-        cur.pop("twilio", None); cur.pop("qr_token", None)
+        cur.pop("twilio", None)
+        cur.pop("qr_token", None)
         admin_client.put(f"{api}/office", json=cur)
 
     def test_staff_category_uses_staff_threshold(
@@ -271,7 +275,8 @@ class TestNoticeRulePerCategory:
         backup = before.get("leave_notice_days")
         cleared = {**before}
         cleared.pop("leave_notice_days", None)
-        cleared.pop("twilio", None); cleared.pop("qr_token", None)
+        cleared.pop("twilio", None)
+        cleared.pop("qr_token", None)
         admin_client.put(f"{api}/office", json=cleared)
         try:
             sess = _member_session(member_with_session)

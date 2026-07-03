@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { CheckSquare, Loader2, X } from "lucide-react";
 
 /**
@@ -28,8 +28,6 @@ export default function BulkEditBar({
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
 
-  if (selectedCount === 0) return null;
-
   // Field → options lookup. Keeps the JSX flat and the source of truth
   // explicit — adding a new bulk field is one line in this map plus one
   // entry in the <option> list below + one allowlist entry on the backend.
@@ -42,6 +40,19 @@ export default function BulkEditBar({
     gender: genderOptions,
   };
   const currentOpts = optionsByField[field] || [];
+
+  // Options minus the "no-op empty" entry — that placeholder is rendered
+  // separately below alongside the synthetic __CLEAR__ sentinel. Memoised
+  // so the list isn't re-filtered on every keystroke or busy-state flip.
+  // Depend on the specific per-field options prop (stable across renders
+  // from parent) rather than the freshly-allocated `currentOpts` array.
+  const pickableOpts = useMemo(
+    () => (currentOpts || []).filter((o) => o.value !== ""),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- currentOpts identity depends on `field` + upstream props; we use those directly
+    [field, fleetOptions, institutionOptions, categoryOptions, roleOptions, weeklyOffOptions, genderOptions]
+  );
+
+  if (selectedCount === 0) return null;
 
   const apply = async () => {
     // For category/role/gender/weekly_off the empty string means "clear"
@@ -88,7 +99,7 @@ export default function BulkEditBar({
           className="iu-input !h-9 !text-sm !w-44"
         >
           <option value="">— pick a value —</option>
-          {(currentOpts || []).filter((o) => o.value !== "").map((o) => (
+          {pickableOpts.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
           {/* Explicit "clear" option, so admins can wipe a field across many

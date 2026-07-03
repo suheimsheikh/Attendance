@@ -1,11 +1,17 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Trash2, Edit3, Building2, UserCheck, Users, X, Shield, Ban, History } from "lucide-react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { Loader2, Plus, Trash2, Edit3, Building2, UserCheck, X, Shield, Ban, History } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
 import { useEscape } from "../../hooks/useEscape";
 import { formatDate } from "../../utils";
+
+// Feature flag for the (currently hidden) per-institution Twilio "SMS/Voice
+// from" number chips shown on each institution card. All notifications
+// go through the Office default sender for now; flip to `true` if we
+// ever re-introduce per-institution Twilio sub-numbers.
+const SHOW_INST_TWILIO_CHIPS = false;
 
 export default function Institutions() {
   const [rows, setRows] = useState([]);
@@ -60,9 +66,9 @@ export default function Institutions() {
                 <div className="text-xs text-slate-500">{r.short_name ? `${r.short_name} · ` : ""}{r.member_count} member{r.member_count === 1 ? "" : "s"}</div>
                 {/* Institution-level Twilio chips are temporarily hidden —
                     the app uses the Office default-from-number for every
-                    notification. Re-enable by removing the `false &&` below
+                    notification. Flip SHOW_INST_TWILIO_CHIPS in the source
                     when per-institution sender numbers are needed again. */}
-                {false && (r.sms_from_number || r.voice_from_number) && (
+                {SHOW_INST_TWILIO_CHIPS && (r.sms_from_number || r.voice_from_number) && (
                   <div className="text-[11px] text-emerald-700 font-mono mt-0.5 truncate">
                     {r.sms_from_number ? `SMS ${r.sms_from_number}` : ""}
                     {r.sms_from_number && r.voice_from_number ? "  ·  " : ""}
@@ -124,14 +130,14 @@ function EscortManager({ institution, onClose }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editingEsc, setEditingEsc] = useState(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       setRows(await api.get(`/institutions/${institution.id}/escorts`));
     } catch (err) { toast.error(err?.message || "Could not load escorts"); }
     finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, [institution.id]);
+  }, [institution.id]);
+  useEffect(() => { load(); }, [load]);
 
   const groups = useMemo(() => {
     const g = { active: [], replaced: [], left: [] };
@@ -208,7 +214,7 @@ function EscortRow({ escort, onEdit, onChange }) {
 
   // Lazy-load recent visits on first expand. Active escorts get a
   // compact strip; we cap to the 5 most recent dates server-side.
-  const loadVisits = async () => {
+  const loadVisits = useCallback(async () => {
     if (visits !== null) return;
     setLoadingVisits(true);
     try {
@@ -219,8 +225,10 @@ function EscortRow({ escort, onEdit, onChange }) {
       console.debug("recent-visits failed", err);
       setVisits([]);
     } finally { setLoadingVisits(false); }
-  };
-  useEffect(() => { if (escort.status === "active") loadVisits(); }, [escort.id]);
+  }, [escort.id, visits]);
+  useEffect(() => {
+    if (escort.status === "active") loadVisits();
+  }, [escort.status, loadVisits]);
 
   const remove = async () => {
     if (!window.confirm(`Delete escort "${escort.name}"? Attendance trail will also be removed.`)) return;
@@ -363,6 +371,14 @@ function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSave
   // end date" (2b on 28 Jun).
   const legacyMissingEnd = isEdit && !initial?.valid_until;
 
+  // Replacement dropdown roster — exclude self so an active escort can't
+  // "replace" themselves. Memoised so we don't re-filter on every
+  // keystroke while the form is being filled out.
+  const replacementRoster = useMemo(
+    () => activeRoster.filter((a) => a.id !== initial?.id),
+    [activeRoster, initial?.id]
+  );
+
   const submit = async (e) => {
     e.preventDefault();
     formErr.clear();
@@ -457,7 +473,7 @@ function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSave
                 <label className="iu-label">Substituted by</label>
                 <select data-testid="escort-form-replaced-by" value={replacedBy} onChange={(e) => setReplacedBy(e.target.value)} className="iu-input">
                   <option value="">— pick the replacement —</option>
-                  {activeRoster.filter((a) => a.id !== initial?.id).map((a) => (
+                  {replacementRoster.map((a) => (
                     <option key={a.id} value={a.id}>{a.name}</option>
                   ))}
                 </select>

@@ -1252,3 +1252,46 @@ same `compute_hours_report`), so keeping two pages was pure duplication.
 - **Verified:** live in preview — Payroll tab renders 57 staff/coach
   rows with correct leave-balance columns (open/taken-YTD/remaining)
   and month-nav arrows work; pytest 18/18 for reports.
+
+## Code Review sweep (1 Feb 2026)
+An external code-review report flagged 126 hook-dep warnings, 8
+localStorage security issues, 3 undefined Python vars, and various
+complexity numbers. We evaluated each class against the project's
+already-documented policy (see `eslint.config.js` header comment) and
+applied only the concretely-actionable fixes:
+
+**Applied**
+- `Institutions.jsx`: removed unused `Users` import; converted the
+  `false &&` dead-code Twilio-chip toggle into a proper
+  `SHOW_INST_TWILIO_CHIPS` feature flag (eliminates 2
+  `no-constant-binary-expression` errors); wrapped `load` and
+  `loadVisits` in `useCallback` with correct deps and added them to
+  the effect dep arrays (2 real stale-closure warnings); memoised
+  `replacementRoster` for the substitution `<select>`.
+- `BulkEditBar.jsx`: memoised `pickableOpts` (was `.filter()`-ing on
+  every render) and moved the hook above the `selectedCount === 0`
+  early return to satisfy rules-of-hooks.
+- `test_leave_notice_r3.py`: split 5 `E702` semicolon-joined statements
+  onto separate lines (was blocking Python lint).
+
+**Deferred / documented as intentional**
+- `localStorage` → `httpOnly` cookies (P2 — deferred post-launch per
+  earlier user conversation; would log out live users and needs CSRF).
+- Large component splits (`MyLeaves`, `Muster`, `Members`, `Reports`,
+  `Calendar`, `Presence`) — all under 550 lines, single responsibility,
+  documented false positive.
+- 120+ remaining `react-hooks/exhaustive-deps` warnings — stable
+  setState callbacks, module-level `api` singleton, refs; the
+  `eslint.config.js` header comment documents the policy of `warn` not
+  `error` for exactly this reason.
+- Cyclomatic complexity in `EventConflictNotice` / `InstallPrompt` /
+  `DailyContent` / `holidays._absent_days_ytd` — sub-100-line functions
+  with domain-inherent branching; extracting adds indirection without
+  measurable maintainability gain.
+- "3 undefined Python variables" claim — pyflakes reports zero
+  undefined names in production code (`routes/`, `services/`,
+  `server.py`); unsubstantiated by tooling.
+
+**Verified**: pytest 337/337 pass; ESLint 0 errors / 0 warnings on all
+touched files; Institutions renders 4 rows in preview.
+
