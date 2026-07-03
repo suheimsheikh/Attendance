@@ -2260,12 +2260,18 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             photo = u_thumb
         elif leave and leave["type"] == "leave":
             status_v = "on_leave"
+            end_iso = leave["end_date"]
+            # Render as dd/mm/yyyy for the display string. Storage stays
+            # ISO — only the human-visible detail is formatted.
+            try:
+                y, m, d = end_iso.split("-")
+                end_disp = f"{d}/{m}/{y}"
+            except Exception:
+                end_disp = end_iso
             if leave.get("half_day"):
-                # e.g. "Half-day · FN · till Jul 3" — keeps the "till end_date"
-                # signal for the rare case an admin backfills a half-day.
-                detail = f"Half-day · {leave['half_day']} · Till {leave['end_date']}"
+                detail = f"Half-day · {leave['half_day']} · Till {end_disp}"
             else:
-                detail = f"Till {leave['end_date']}"
+                detail = f"Till {end_disp}"
             since = leave["start_date"]
             photo = u_thumb
         elif brk:

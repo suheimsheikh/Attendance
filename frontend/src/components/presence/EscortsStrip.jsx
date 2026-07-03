@@ -2,6 +2,7 @@ import React from "react";
 import { Shield, Coffee, Users, AlertTriangle } from "lucide-react";
 import Avatar from "../Avatar";
 import { ExpectedReturnPill } from "./ExpectedReturnPill";
+import { formatDate } from "../../utils";
 
 /**
  * Days between today (local) and a YYYY-MM-DD ISO date string.
@@ -56,8 +57,8 @@ function EscortStripRow({ escort }) {
             <span
               className={`inline-flex items-center gap-1 px-1.5 h-4 rounded text-[9px] font-bold shrink-0 ${expired ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
               title={expired
-                ? `Access expired ${Math.abs(dLeft)} day${Math.abs(dLeft) === 1 ? "" : "s"} ago (${escort.valid_until}) — renew before next sign-in.`
-                : `Access expires in ${dLeft} day${dLeft === 1 ? "" : "s"} (${escort.valid_until}) — renew soon.`}
+                ? `Access expired ${Math.abs(dLeft)} day${Math.abs(dLeft) === 1 ? "" : "s"} ago (${formatDate(escort.valid_until)}) — renew before next sign-in.`
+                : `Access expires in ${dLeft} day${dLeft === 1 ? "" : "s"} (${formatDate(escort.valid_until)}) — renew soon.`}
               data-testid={`escort-presence-expiry-${escort.escort_id}`}
             >
               <AlertTriangle size={9}/>

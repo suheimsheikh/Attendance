@@ -3,6 +3,7 @@ import { Loader2, ChevronLeft, ChevronRight, Plus, Trash2, Edit3, Tent, Sailboat
 import { toast } from "sonner";
 import { api } from "../../api";
 import { CampForm } from "./Camps";
+import { formatDate } from "../../utils";
 import {
   LEVEL_STYLE, LEVELS, DOW_KEYS,
   ymd, startOfMonth, endOfMonth, addMonths, scopeLabel,
@@ -268,7 +269,7 @@ export default function Calendar() {
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-slate-900 truncate">{c.name}</div>
                   <div className="text-xs text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5">
-                    <span>{c.start_date} → {c.end_date}</span>
+                    <span>{formatDate(c.start_date)} → {formatDate(c.end_date)}</span>
                     <span>{c.start_time} – {c.end_time}</span>
                     {c.institution && <span className="italic">{c.institution}</span>}
                     <span>{c.member_ids?.length ? `${c.member_ids.length} enrolled` : (c.institution ? `all ${c.institution}` : "0 enrolled")}</span>
@@ -297,7 +298,7 @@ export default function Calendar() {
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-slate-900 truncate">{b.name}</div>
                   <div className="text-xs text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5">
-                    <span>{b.start_date} → {b.end_date}</span>
+                    <span>{formatDate(b.start_date)} → {formatDate(b.end_date)}</span>
                     {b.scope === "institution" && b.institution && <span className="italic">{b.institution}</span>}
                     {b.scope === "selected" && <span>{(b.member_ids || []).length} members</span>}
                   </div>
@@ -325,7 +326,7 @@ export default function Calendar() {
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-slate-900 truncate">{r.name}</div>
                     <div className="text-xs text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5">
-                      <span>{r.start_date} → {r.end_date}</span>
+                      <span>{formatDate(r.start_date)} → {formatDate(r.end_date)}</span>
                       {r.location && <span className="inline-flex items-center gap-1"><Globe size={11} />{r.location}{r.country ? `, ${r.country}` : ""}</span>}
                       {r.host_org && <span className="italic">{r.host_org}</span>}
                     </div>

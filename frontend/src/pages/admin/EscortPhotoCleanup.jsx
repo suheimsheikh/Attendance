@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, Trash2, Camera, AlertTriangle, ImageOff, CheckSquare, Square } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
+import { formatDate } from "../../utils";
 
 /**
  * EscortPhotoCleanup — admin curation page for escort selfies older than
@@ -131,7 +132,7 @@ export default function EscortPhotoCleanup() {
                     </td>
                     <td className="iu-table-td font-semibold">{r.escort_name}</td>
                     <td className="iu-table-td hidden sm:table-cell text-xs text-slate-500">{r.institution}</td>
-                    <td className="iu-table-td font-mono text-xs">{r.date}</td>
+                    <td className="iu-table-td font-mono text-xs">{formatDate(r.date)}</td>
                     <td className="iu-table-td">
                       <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-amber-100 text-amber-800 border border-amber-200">
                         <AlertTriangle size={10}/> Purge ready
@@ -163,7 +164,7 @@ export default function EscortPhotoCleanup() {
       {previewId && preview && (
         <div className="iu-modal" onClick={() => { setPreviewId(null); setPreview(null); }}>
           <div className="iu-modal-card max-w-md p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
-            <div className="font-bold">{preview.escort_name} · {preview.date}</div>
+            <div className="font-bold">{preview.escort_name} · {formatDate(preview.date)}</div>
             <div className="grid grid-cols-2 gap-3">
               <PhotoTile label="Check-in" b64={preview.check_in_selfie} />
               <PhotoTile label="Check-out" b64={preview.check_out_selfie} />

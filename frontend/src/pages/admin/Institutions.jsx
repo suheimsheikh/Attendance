@@ -5,6 +5,7 @@ import { api } from "../../api";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
 import { useEscape } from "../../hooks/useEscape";
+import { formatDate } from "../../utils";
 
 export default function Institutions() {
   const [rows, setRows] = useState([]);
@@ -252,7 +253,7 @@ function EscortRow({ escort, onEdit, onChange }) {
         <div className="flex-1 min-w-0">
           <div className="font-semibold truncate">{escort.name}</div>
           <div className="text-[11px] text-slate-500 truncate">
-            {escort.phone || "no phone"} · since {escort.start_date}
+            {escort.phone || "no phone"} · since {formatDate(escort.start_date)}
             {escort.ended_at && ` · ended ${escort.ended_at}`}
           </div>
           {/* Validity window — added 28 Jun 2026. Surfaces the active
@@ -267,7 +268,7 @@ function EscortRow({ escort, onEdit, onChange }) {
               title={!escort.valid_until ? "Legacy escort — please set Valid-until on next edit" : "Authorised window"}
             >
               <Shield size={9} />
-              {escort.valid_from || "?"} → {escort.valid_until || "no end date"}
+              {escort.valid_from ? formatDate(escort.valid_from) : "?"} → {escort.valid_until ? formatDate(escort.valid_until) : "no end date"}
             </div>
           )}
         </div>

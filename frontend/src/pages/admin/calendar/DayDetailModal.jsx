@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { Tent, Sailboat, Coffee, Globe } from "lucide-react";
 import { useEscape } from "../../../hooks/useEscape";
+import { formatDate } from "../../../utils";
 import { LEVEL_STYLE, scopeLabel } from "./helpers";
 
 /**
@@ -70,7 +71,7 @@ export default function DayDetailModal({
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-slate-900 truncate">{b.name}</div>
                     <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3">
-                      <span>{b.start_date} → {b.end_date}</span>
+                      <span>{formatDate(b.start_date)} → {formatDate(b.end_date)}</span>
                       {b.scope === "selected" && <span>{(b.member_ids || []).length} members</span>}
                     </div>
                   </div>
@@ -145,7 +146,7 @@ export default function DayDetailModal({
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-slate-900 truncate">{r.name}</div>
                       <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3">
-                        <span>{r.start_date} → {r.end_date}</span>
+                        <span>{formatDate(r.start_date)} → {formatDate(r.end_date)}</span>
                         {r.location && <span className="inline-flex items-center gap-1"><Globe size={10}/>{r.location}{r.country ? `, ${r.country}` : ""}</span>}
                         {r.host_org && <span className="italic">{r.host_org}</span>}
                       </div>

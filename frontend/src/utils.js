@@ -30,8 +30,10 @@ export function formatTime(iso) {
 }
 
 /**
- * Format a date as `dd/mm/yy` — always shows the 2-digit year. Used in
- * contexts where the year might differ (Profile session history, headers).
+ * Format a date as `dd/mm/yyyy` (Indian standard, 4-digit year). Used in
+ * headers, tables, list rows, and anywhere a full unambiguous date is
+ * shown to a human. Accepts both `YYYY-MM-DD` strings and full ISO
+ * timestamps.
  */
 export function formatDate(d) {
   if (!d) return "";
@@ -39,8 +41,8 @@ export function formatDate(d) {
     const date = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + "T00:00:00") : new Date(d);
     const dd = String(date.getDate()).padStart(2, "0");
     const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const yy = String(date.getFullYear()).slice(-2);
-    return `${dd}/${mm}/${yy}`;
+    const yyyy = String(date.getFullYear());
+    return `${dd}/${mm}/${yyyy}`;
   } catch { return d; }
 }
 

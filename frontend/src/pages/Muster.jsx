@@ -6,6 +6,7 @@ import Avatar from "../components/Avatar";
 import ParentContact from "../components/ParentContact";
 import { useAuth } from "../auth";
 import SelfieCapture from "../components/SelfieCapture";
+import { formatDate } from "../utils";
 
 const MODES = [
   { key: "checkin",  label: "Check in",  Icon: LogIn,        verb: "Check in",  color: "#10B981" },
@@ -306,7 +307,7 @@ export default function Muster() {
             <> · <span className="font-bold text-emerald-700">{picked.size}</span> ticked</>
           )}
         </p>
-        <p className="text-xs text-slate-400">{data?.date}</p>
+        <p className="text-xs text-slate-400">{data?.date ? formatDate(data.date) : ""}</p>
       </div>
 
       {/* Sticky breakdown bar — mirrors the per-category chip row on
