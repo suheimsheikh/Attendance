@@ -148,10 +148,11 @@ def test_hours_export_csv_has_correct_header_row(admin_client, base_url):
     reader = csv.reader(io.StringIO(r.text))
     headers = next(reader)
     # These headers are referenced by the frontend's Reports page — keep stable.
-    # Header contract — refreshed on 1 Jul 2026 when the PDF layout was
-    # switched to landscape and headers were shortened / reordered so
-    # the Name column leads.
-    for required in ("Name", "Category", "Att %", "Present", "Hours", "Late"):
+    # Header contract refreshed on 3 Jul 2026 — user-requested trim:
+    # dropped Rank, Weekly-off, Hours, OT-pending, Overstays, CO-Pending.
+    # The Attendance % header was also renamed from "Att %" back to
+    # "Attendance %" (the fully-spelt version was requested).
+    for required in ("Name", "Category", "Attendance %", "Present", "Late", "OT Hrs"):
         assert required in headers, f"Missing CSV header: {required}"
 
 

@@ -169,9 +169,9 @@ def test_hours_csv_export_returns_csv_with_headers(admin_client, base_url):
     headers = next(reader)
     assert "Name" in headers
     assert "Category" in headers
-    # Header renamed from "Total hrs" → "Hours" on 1 Jul 2026 (PDF/CSV
-    # column shortening pass so landscape PDFs fit A4).
-    assert "Hours" in headers
+    # Header renamed from "Total hrs" → "Hours" (1 Jul) → dropped and
+    # replaced by "OT Hrs" on the trim pass (3 Jul 2026 per user request).
+    assert "OT Hrs" in headers
 
 
 def test_changelog_is_public(base_url):

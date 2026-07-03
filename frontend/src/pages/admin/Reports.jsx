@@ -1,30 +1,37 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, FileDown, FileText, RefreshCw } from "lucide-react";
+import { Loader2, FileDown, FileText, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 import { api, downloadBlob } from "../../api";
 import ParentContact from "../../components/ParentContact";
 import { todayIso, shortDate, categoryLabel } from "../../utils";
 
-function nDaysAgo(n) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+function pad2(n) { return String(n).padStart(2, "0"); }
+function isoDate(y, m0, d) { return `${y}-${pad2(m0 + 1)}-${pad2(d)}`; }
+
+/** Return `{start, end, isCurrent, label}` for the calendar month
+ * containing (year, monthIdx). If the month is the current one, `end`
+ * clamps to today; otherwise it's the last of the month. `label` reads
+ * "July 2026" (browser-locale month name). */
+function monthWindow(year, monthIdx) {
+  const today = new Date();
+  const isCurrent = today.getFullYear() === year && today.getMonth() === monthIdx;
+  const start = isoDate(year, monthIdx, 1);
+  const lastDay = new Date(year, monthIdx + 1, 0).getDate();
+  const end = isCurrent ? todayIso() : isoDate(year, monthIdx, lastDay);
+  const label = new Date(year, monthIdx, 1).toLocaleDateString(undefined,
+    { month: "long", year: "numeric" });
+  return { start, end, isCurrent, label, lastDay };
 }
 
-function firstOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-}
-function lastOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
-}
-function thisMonth() {
-  const d = new Date();
-  return { start: firstOfMonth(d), end: todayIso() };
-}
-function lastMonth() {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 1);
-  return { start: firstOfMonth(d), end: lastOfMonth(d) };
+/** Days elapsed in a month up to `end` (inclusive). If `end` is the
+ * last day, it's the month's full length. */
+function daysElapsed(start, end) {
+  try {
+    const s = new Date(start + "T00:00:00");
+    const e = new Date(end + "T00:00:00");
+    return Math.floor((e - s) / 86400000) + 1;
+  } catch { return 0; }
 }
 
 const CATEGORY_FILTERS = [
@@ -40,18 +47,47 @@ const SORT_OPTIONS = [
   { key: "pct_desc", label: "Attendance %" },
 ];
 
+const VALID_TABS = new Set(["hours", "daily", "payroll"]);
+
 export default function Reports() {
-  // Default the picker to the current calendar month (1st → today) rather
-  // than the last 7 days — matches the way admins naturally think about
-  // attendance reports ("show me this month so far").
-  const _tm = thisMonth();
-  const [start, setStart] = useState(_tm.start);
-  const [end, setEnd] = useState(_tm.end);
+  // Month-navigator state (30 Jun 2026): admins think in months, not
+  // arbitrary date ranges. Two arrow buttons flip year/monthIdx; today
+  // resets to the current month. `start`/`end` are derived and passed
+  // to the backend unchanged (so range endpoints stay clean).
+  const _now = new Date();
+  const [year, setYear] = useState(_now.getFullYear());
+  const [monthIdx, setMonthIdx] = useState(_now.getMonth());
+  const win = useMemo(() => monthWindow(year, monthIdx), [year, monthIdx]);
+  const { start, end, isCurrent, label: monthLabel } = win;
+  // Navigation helpers.
+  const stepMonth = (delta) => {
+    let m = monthIdx + delta, y = year;
+    while (m < 0)  { m += 12; y -= 1; }
+    while (m > 11) { m -= 12; y += 1; }
+    setYear(y); setMonthIdx(m);
+  };
+  const jumpToday = () => { setYear(_now.getFullYear()); setMonthIdx(_now.getMonth()); };
+
+  // Tab is URL-driven so /admin/reports?tab=payroll works (and legacy
+  // /admin/payroll redirects here) — 1 Feb 2026 Payroll+Reports merge.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get("tab");
+  const [tab, setTabState] = useState(VALID_TABS.has(urlTab) ? urlTab : "hours");
+  const setTab = (t) => {
+    setTabState(t);
+    const next = new URLSearchParams(searchParams);
+    if (t === "hours") next.delete("tab"); else next.set("tab", t);
+    setSearchParams(next, { replace: true });
+  };
+  useEffect(() => {
+    if (VALID_TABS.has(urlTab) && urlTab !== tab) setTabState(urlTab);
+  }, [urlTab, tab]);
+
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState("hours"); // hours | daily
   const [day, setDay] = useState(todayIso());
   const [daily, setDaily] = useState(null);
+  const [payroll, setPayroll] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
   // Fleet (class-wise) filter — only meaningful when the category
   // filter is set to Athletes. Populated from the rows on load; empty
@@ -75,10 +111,35 @@ export default function Reports() {
     finally { setLoading(false); }
   }, [day]);
 
-  useEffect(() => { if (tab === "hours") loadHours(); else loadDaily(); }, [tab, loadHours, loadDaily]);
+  const monthIso = `${year}-${pad2(monthIdx + 1)}`;
+  const loadPayroll = useCallback(async () => {
+    setLoading(true);
+    try { setPayroll(await api.get("/reports/payroll", { month: monthIso })); }
+    catch (err) { toast.error(err?.message || "Failed"); }
+    finally { setLoading(false); }
+  }, [monthIso]);
 
-  const exportHours = (fmt) => downloadBlob("/reports/hours/export", `hours_${start}_${end}.${fmt}`, { start, end, fmt });
+  useEffect(() => {
+    if (tab === "hours") loadHours();
+    else if (tab === "daily") loadDaily();
+    else if (tab === "payroll") loadPayroll();
+  }, [tab, loadHours, loadDaily, loadPayroll]);
+
+  const exportHours = (fmt) => {
+    // Push the same category + fleet filters up to the backend so the
+    // downloaded PDF/CSV matches what the admin currently sees on
+    // screen (30 Jun 2026 late-evening — user-requested consistency).
+    const params = { start, end, fmt };
+    if (categoryFilter && categoryFilter !== "all") params.category = categoryFilter;
+    if (fleetFilter) params.fleet = fleetFilter;
+    return downloadBlob("/reports/hours/export", `hours_${start}_${end}.${fmt}`, params);
+  };
   const exportDaily = (fmt) => downloadBlob("/reports/daily/export", `daily_${day}.${fmt}`, { on: day, fmt });
+  const exportPayroll = (fmt) => {
+    if (!payroll) return;
+    return downloadBlob("/reports/hours/export", `payroll_${monthIso}.${fmt}`,
+                        { start: payroll.start, end: payroll.end, fmt });
+  };
 
   const displayedRows = useMemo(() => {
     let list = rows;
@@ -124,47 +185,31 @@ export default function Reports() {
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <header className="mb-6">
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Reports</h1>
-        <p className="text-slate-500 text-sm mt-1">Attendance hours and daily leave/tour summaries.</p>
+        <p className="text-slate-500 text-sm mt-1">Attendance hours, daily leave/tour summaries and monthly payroll.</p>
       </header>
 
       <div className="flex gap-2 mb-4">
         <button data-testid="tab-hours" onClick={() => setTab("hours")} className={`iu-chip ${tab === "hours" ? "iu-chip-active" : ""}`}>Hours & Attendance</button>
         <button data-testid="tab-daily" onClick={() => setTab("daily")} className={`iu-chip ${tab === "daily" ? "iu-chip-active" : ""}`}>Daily Leave/Tour</button>
+        <button data-testid="tab-payroll" onClick={() => setTab("payroll")} className={`iu-chip ${tab === "payroll" ? "iu-chip-active" : ""}`}>Payroll</button>
       </div>
 
-      {tab === "hours" ? (
+      {tab === "hours" && (
         <>
-          <div className="iu-card p-4 mb-4 flex flex-wrap items-end gap-3" data-testid="hours-controls">
-            <div>
-              <label className="iu-label">From</label>
-              <input data-testid="rep-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} className="iu-input !w-44" />
-            </div>
-            <div>
-              <label className="iu-label">To</label>
-              <input data-testid="rep-end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="iu-input !w-44" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="iu-label">Quick pick</label>
-              <div className="flex gap-1.5" data-testid="quick-pick-row">
-                <button
-                  type="button"
-                  data-testid="qp-this-month"
-                  onClick={() => { const r = thisMonth(); setStart(r.start); setEnd(r.end); }}
-                  className="iu-chip"
-                >This month</button>
-                <button
-                  type="button"
-                  data-testid="qp-last-month"
-                  onClick={() => { const r = lastMonth(); setStart(r.start); setEnd(r.end); }}
-                  className="iu-chip"
-                >Last month</button>
-                <button
-                  type="button"
-                  data-testid="qp-7d"
-                  onClick={() => { setStart(nDaysAgo(7)); setEnd(todayIso()); }}
-                  className="iu-chip"
-                >Last 7 days</button>
-              </div>
+          <div className="iu-card p-4 mb-4 flex flex-wrap items-center gap-3" data-testid="hours-controls">
+            {/* Month navigator (30 Jun 2026): arrows + label replace the
+                old From/To/Quick-Pick tri-input. `end` clamps to today
+                for the current month so mid-month runs read "01 → today". */}
+            <MonthNav
+              monthLabel={monthLabel}
+              isCurrent={isCurrent}
+              onPrev={() => stepMonth(-1)}
+              onNext={() => stepMonth(1)}
+              onToday={jumpToday}
+            />
+            <div className="text-[11px] text-slate-500 hidden md:block" data-testid="month-range-hint">
+              {start.split("-").reverse().join("/")} → {end.split("-").reverse().join("/")}
+              &nbsp;·&nbsp; {daysElapsed(start, end)} day{daysElapsed(start, end) === 1 ? "" : "s"} elapsed
             </div>
             <button data-testid="rep-run" onClick={loadHours} disabled={loading} className="iu-btn-primary">
               {loading ? <Loader2 className="animate-spin" size={14}/> : <RefreshCw size={14}/>} Run report
@@ -285,7 +330,9 @@ export default function Reports() {
             </div>
           </div>
         </>
-      ) : (
+      )}
+
+      {tab === "daily" && (
         <>
           <div className="iu-card p-4 mb-4 flex flex-wrap items-end gap-3">
             <div>
@@ -305,6 +352,117 @@ export default function Reports() {
             <SectionList title="On tour" items={daily?.on_tour || []} />
           </div>
         </>
+      )}
+
+      {tab === "payroll" && (
+        <>
+          <div className="iu-card p-4 mb-4 flex flex-wrap items-center gap-3" data-testid="payroll-controls">
+            <MonthNav
+              monthLabel={monthLabel}
+              isCurrent={isCurrent}
+              onPrev={() => stepMonth(-1)}
+              onNext={() => stepMonth(1)}
+              onToday={jumpToday}
+            />
+            <div className="text-[11px] text-slate-500 hidden md:block">
+              Staff &amp; coaches only · running totals when the current month is picked
+            </div>
+            <button data-testid="pr-run" onClick={loadPayroll} disabled={loading} className="iu-btn-primary">
+              {loading ? <Loader2 className="animate-spin" size={14}/> : <RefreshCw size={14}/>} Run
+            </button>
+            <div className="flex-1" />
+            <button data-testid="pr-csv" onClick={() => exportPayroll("csv")} className="iu-btn-secondary"><FileDown size={14}/> CSV</button>
+            <button data-testid="pr-pdf" onClick={() => exportPayroll("pdf")} className="iu-btn-secondary"><FileText size={14}/> PDF</button>
+          </div>
+
+          {payroll && (
+            <p className="text-xs text-slate-500 mb-3">
+              Period: <strong>{payroll.start.split("-").reverse().join("/")} → {payroll.end.split("-").reverse().join("/")}</strong>
+              &nbsp;· {payroll.rows.length} members
+            </p>
+          )}
+
+          <div className="iu-card overflow-hidden">
+            <div className="overflow-auto max-h-[70vh]">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="iu-table-th">Member</th>
+                    <th className="iu-table-th hidden md:table-cell">Category</th>
+                    <th className="iu-table-th">Days Present</th>
+                    <th className="iu-table-th">Total hrs</th>
+                    <th className="iu-table-th">OT hrs (approved)</th>
+                    <th className="iu-table-th">Leave days (month)</th>
+                    <th className="iu-table-th">Comp-Off (E/U/P)</th>
+                    <th className="iu-table-th">Leave bal · open</th>
+                    <th className="iu-table-th">Leave bal · taken YTD</th>
+                    <th className="iu-table-th">Leave bal · remaining</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(payroll?.rows || []).map((r) => (
+                    <tr key={r.member_id} className="hover:bg-slate-50" data-testid={`pr-row-${r.member_id}`}>
+                      <td className="iu-table-td font-semibold">{r.member_name}<div className="text-xs text-slate-400">{r.rank || ""}</div></td>
+                      <td className="iu-table-td hidden md:table-cell">{categoryLabel(r.category)}</td>
+                      <td className="iu-table-td">{r.days_present}</td>
+                      <td className="iu-table-td">{r.total_hours}h</td>
+                      <td className="iu-table-td font-semibold text-emerald-700">{r.overtime_hours_approved || 0}h</td>
+                      <td className="iu-table-td">{r.days_on_leave || 0}</td>
+                      <td className="iu-table-td">
+                        <span className="text-xs">
+                          <span className="text-slate-700 font-semibold">{r.comp_off_earned || 0}</span>
+                          <span className="text-slate-400"> · </span>
+                          <span className="text-emerald-700">{r.comp_off_used || 0}</span>
+                          <span className="text-slate-400"> · </span>
+                          <span className={(r.comp_off_pending || 0) > 0 ? "text-violet-700 font-semibold" : "text-slate-400"}>{r.comp_off_pending || 0}</span>
+                        </span>
+                      </td>
+                      <td className="iu-table-td">{r.leave_balance_opening || 0}</td>
+                      <td className="iu-table-td">{r.leave_balance_taken_ytd || 0}</td>
+                      <td className={`iu-table-td font-bold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{r.leave_balance_remaining || 0}</td>
+                    </tr>
+                  ))}
+                  {!loading && (payroll?.rows || []).length === 0 && (
+                    <tr><td colSpan={10} className="text-center py-10 text-slate-500">No data.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MonthNav({ monthLabel, isCurrent, onPrev, onNext, onToday }) {
+  return (
+    <div className="flex items-center gap-1" data-testid="month-nav">
+      <button
+        type="button"
+        data-testid="month-prev"
+        onClick={onPrev}
+        className="iu-btn-secondary !h-9 !w-9 !p-0 justify-center"
+        aria-label="Previous month"
+      ><ChevronLeft size={16}/></button>
+      <div className="px-3 min-w-[160px] text-center font-semibold text-slate-800 tabular-nums" data-testid="month-label">
+        {monthLabel}
+        {isCurrent && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">· current</span>}
+      </div>
+      <button
+        type="button"
+        data-testid="month-next"
+        onClick={onNext}
+        className="iu-btn-secondary !h-9 !w-9 !p-0 justify-center"
+        aria-label="Next month"
+      ><ChevronRight size={16}/></button>
+      {!isCurrent && (
+        <button
+          type="button"
+          data-testid="month-today"
+          onClick={onToday}
+          className="iu-chip ml-1"
+        >Today</button>
       )}
     </div>
   );

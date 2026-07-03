@@ -267,7 +267,10 @@ def test_15_reports_csv_export(admin_s):
     header_norm = [h.strip().lower() for h in header]
     assert any("name" == h for h in header_norm), f"no Name column: {header}"
     assert any("category" == h for h in header_norm), f"no Category column: {header}"
-    assert any("total hrs" in h for h in header_norm), f"no Total hrs col: {header}"
+    # "Total hrs" was dropped from the export on 3 Jul 2026 as part of
+    # the user-requested column trim. OT Hrs is what remains for
+    # payroll-adjacent reporting.
+    assert any("ot hrs" in h for h in header_norm), f"no OT Hrs col: {header}"
 
 
 # ---------- 13. Self check-in geo-toggle ----------

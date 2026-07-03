@@ -1223,3 +1223,32 @@ type), R3 (3-day notice rule). R1 shipped today.
   `InlinePhotoAvatar` (76L) complexity** — sub-200-line components
   with single responsibilities; extracting further reduces locality
   of behaviour without measurable maintainability gain. Skipping.
+
+
+## Payroll merged into Reports (1 Feb 2026)
+Payroll and Reports had converged onto the same month-based dataset
+(`/api/reports/hours` + `/api/reports/payroll`, both derived from the
+same `compute_hours_report`), so keeping two pages was pure duplication.
+
+- **Merged** `pages/admin/Payroll.jsx` into `pages/admin/Reports.jsx`
+  as a **third tab** ("Payroll") alongside the existing "Hours &
+  Attendance" and "Daily Leave/Tour" tabs.
+- **Reused** the month navigator (◀ July 2026 ▶ + Today chip) from
+  the Hours tab — extracted into a small `<MonthNav>` helper inside
+  the file so both tabs stay in lock-step.
+- **Backend untouched** — the Payroll tab still calls
+  `/api/reports/payroll?month=YYYY-MM`. All 18 pytest cases in
+  `test_routes_reports.py` (incl. Dec end-date, staff/coach-only,
+  leave-balance-fields) pass unchanged.
+- **URL-driven tab** — `/admin/reports?tab=payroll` deep-links to the
+  Payroll tab; `?tab=daily` for Daily; default (no query) is Hours.
+- **Legacy deep-links preserved** — `/admin/payroll` route in `App.js`
+  now `<Navigate to="/admin/reports?tab=payroll" replace />`.
+- **Sidebar cleanup** — dropped the "Payroll" entry from
+  `Layout.jsx`; Reports is now the single entry point for all
+  reporting workflows.
+- **Files deleted:** `frontend/src/pages/admin/Payroll.jsx`.
+- **Files touched:** `Reports.jsx`, `App.js`, `Layout.jsx`.
+- **Verified:** live in preview — Payroll tab renders 57 staff/coach
+  rows with correct leave-balance columns (open/taken-YTD/remaining)
+  and month-nav arrows work; pytest 18/18 for reports.

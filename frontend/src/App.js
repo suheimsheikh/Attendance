@@ -23,7 +23,6 @@ const Reports = lazy(() => import("./pages/admin/Reports"));
 const Overtime = lazy(() => import("./pages/admin/Overtime"));
 const Approvals = lazy(() => import("./pages/admin/Approvals"));
 const LeaveBalances = lazy(() => import("./pages/admin/LeaveBalances"));
-const Payroll = lazy(() => import("./pages/admin/Payroll"));
 const Institutions = lazy(() => import("./pages/admin/Institutions"));
 const Fleets = lazy(() => import("./pages/admin/Fleets"));
 const Sites = lazy(() => import("./pages/admin/Sites"));
@@ -117,7 +116,8 @@ function App() {
             <Route path="admin/office" element={<RequireAdmin><OfficeSettings /></RequireAdmin>} />
             <Route path="admin/sms-log" element={<RequireAdmin><SmsLog /></RequireAdmin>} />
             <Route path="admin/reports" element={<RequireAdmin><Reports /></RequireAdmin>} />
-            <Route path="admin/payroll" element={<RequireAdmin><Payroll /></RequireAdmin>} />
+            {/* Payroll merged into Reports as a tab (1 Feb 2026). Keep deep-links alive. */}
+            <Route path="admin/payroll" element={<Navigate to="/admin/reports?tab=payroll" replace />} />
             <Route path="admin/sessions" element={<Navigate to="/presence" replace />} />
             <Route path="admin/leave-balances" element={<RequireAdmin><LeaveBalances /></RequireAdmin>} />
             <Route path="admin/group-leave" element={<Navigate to="/admin/leaves" replace />} />

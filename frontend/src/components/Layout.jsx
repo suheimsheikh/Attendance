@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
-  CalendarCheck2, ClipboardList, Building2, IdCard, FileSpreadsheet, Sailboat, MapPin,
+  CalendarCheck2, ClipboardList, Building2, IdCard, Sailboat, MapPin,
   LogOut, Menu, X, ListTree, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera
 } from "lucide-react";
 import Avatar from "./Avatar";
@@ -46,7 +46,6 @@ const NAV_ADMIN = [
   { to: "/admin/sites", label: "Sites", icon: MapPin },
   { to: "/admin/office", label: "Office Settings", icon: Settings },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
-  { to: "/admin/payroll", label: "Payroll", icon: FileSpreadsheet },
   { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera },
   { to: "/admin/backup", label: "Backup & Restore", icon: Database },
 ];

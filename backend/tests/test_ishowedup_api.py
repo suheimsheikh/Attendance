@@ -303,10 +303,10 @@ def test_18_reports_hours_export(admin_client, base_url):
                          timeout=60)
     assert rc.status_code == 200, rc.text[:200]
     assert "text/csv" in rc.headers.get("content-type", ""), rc.headers
-    # Header contract — refreshed on 1 Jul 2026 when the PDF layout was
-    # switched to landscape and headers were shortened / reordered so
-    # Name leads (was: Attendance %,Name,Category,Rank).
-    assert rc.content.startswith(b"Name,Category,Rank")
+    # Header contract refreshed on 3 Jul 2026 — user-requested column
+    # trim. Now: Name,Category,Attendance %,Present,Leave,Tour,Absent,
+    # Late,OT Hrs,CO Earned,CO Used.
+    assert rc.content.startswith(b"Name,Category,Attendance %")
 
     rp = admin_client.get(f"{base_url}/api/reports/hours/export",
                          params={"start": "2026-01-01", "end": "2026-01-31", "fmt": "pdf"},

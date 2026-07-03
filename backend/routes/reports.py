@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import date, timedelta
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 
@@ -50,7 +49,10 @@ def _pdf_from_table(
     doc = SimpleDocTemplate(
         buf, pagesize=pagesize,
         topMargin=15 * mm, bottomMargin=12 * mm,
-        leftMargin=10 * mm, rightMargin=10 * mm,
+        # 15 mm gutter on the left kept printers happy — the 10 mm we
+        # used earlier was clipping the first character of long member
+        # names on standard office printers (user report, 3 Jul 2026).
+        leftMargin=15 * mm, rightMargin=12 * mm,
     )
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
@@ -199,38 +201,47 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         return {"date": on, "on_leave": on_leave, "on_tour": on_tour}
 
     @router.get("/reports/hours/export")
-    async def export_hours(start: str, end: str, fmt: str = "csv", admin: dict = Depends(require_admin)):
+    async def export_hours(start: str, end: str, fmt: str = "csv",
+                          category: Optional[str] = None,
+                          fleet: Optional[str] = None,
+                          admin: dict = Depends(require_admin)):
         rows = await compute_hours_report(start, end)
-        # Prioritised column order — Name first, most useful metrics next.
-        # Kept narrow enough to fit A4 landscape without clipping.
-        headers = ["Name", "Category", "Rank", "Weekly off", "Att %",
+
+        # Apply the same filters the admin has set on the UI so the
+        # downloaded PDF/CSV matches what they see (30 Jun 2026 late).
+        if category == "athlete":
+            rows = [r for r in rows if r.get("category") == "athlete"]
+        elif category == "rest":
+            rows = [r for r in rows if r.get("category") != "athlete"]
+        if fleet:
+            if fleet == "__none__":
+                rows = [r for r in rows if not r.get("fleet")]
+            else:
+                rows = [r for r in rows if (r.get("fleet") or "").lower() == fleet.lower()]
+
+        # Trimmed column set (user-requested 3 Jul 2026): Name leads,
+        # Weekly-off / Rank / Hours / OT-pending / Overstays / CO-Pending
+        # dropped. Fewer, wider columns → no more Name clipping.
+        headers = ["Name", "Category", "Attendance %",
                    "Present", "Leave", "Tour", "Absent",
-                   "Hours", "OT (appr)", "OT (pend)",
-                   "Late", "Overstays",
-                   "CO Earned", "CO Used", "CO Pend"]
+                   "Late", "OT Hrs", "CO Earned", "CO Used"]
         table = [[
-            r["member_name"], r["category"], r.get("rank") or "-",
-            (r.get("weekly_off") or "monday").title(),
+            r["member_name"], (r.get("category") or "").title(),
             f"{r['attendance_pct']}%",
             r["days_present"],
             (r.get("days_leave", 0) + r.get("days_break", 0)),
             r.get("days_tour", 0),
             r.get("days_absent", 0),
-            r["total_hours"],
-            r.get("overtime_hours_approved", 0),
-            r.get("overtime_hours_pending", 0),
             r.get("late_days", 0),
-            r.get("overstays", 0),
+            r.get("overtime_hours_approved", 0),
             r.get("comp_off_earned", 0),
             r.get("comp_off_used", 0),
-            r.get("comp_off_pending", 0),
         ] for r in rows]
+
         if fmt == "pdf":
-            # Landscape + explicit column widths so nothing clips.
             office = await db.config.find_one({"id": "office"})
             academy = (office or {}).get("office_name") or "iShowedUp"
-            # dd/mm/yyyy display for the meta block + subtitle (Indian
-            # standard). Storage stays ISO.
+            # dd/mm/yyyy display for the meta block + subtitle.
             def _ddmmyyyy(iso: str) -> str:
                 try:
                     y, m, d = iso.split("-")
@@ -238,15 +249,32 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 except Exception:
                     return iso
             period_disp = f"{_ddmmyyyy(start)}  to  {_ddmmyyyy(end)}"
+            # Days elapsed in the reporting window (inclusive both ends).
+            try:
+                d0 = date.fromisoformat(start)
+                d1 = date.fromisoformat(end)
+                elapsed = (d1 - d0).days + 1
+            except Exception:
+                elapsed = 0
+            # Human filter descriptors so the report is self-describing.
+            cat_label = {"athlete": "Athletes",
+                         "rest": "Rest (Staff / Coach / Executive)"}.get(category, "All")
+            filter_label = cat_label
+            if fleet:
+                filter_label += f" · Fleet: {'(No fleet)' if fleet == '__none__' else fleet}"
             meta = {
                 "Academy": academy,
                 "Period": period_disp,
+                "Days elapsed": str(elapsed),
+                "Filter": filter_label,
                 "Members": str(len(rows)),
                 "Generated by": admin.get("full_name") or admin.get("email") or "Admin",
             }
-            # Column widths (mm) — Name gets the most room, %/counts stay tight.
-            col_widths_mm = [42, 22, 18, 20, 15,  16, 14, 14, 16,
-                             16, 18, 18, 14, 18,  18, 16, 18]
+            # Column widths (mm) for landscape A4 (usable ~277 mm after
+            # margins). Sum here = 265 mm — leaves comfortable slack so
+            # ReportLab doesn't force-shrink the leftmost cells.
+            #   Name   Cat  Att%  Pres Leave Tour Abs  Late OT  COe  COu
+            col_widths_mm = [55,   28,   22,   19,   19,   16,  19,  16,  22, 25, 24]
             pdf = _pdf_from_table(
                 "Attendance Report",
                 headers, table,
