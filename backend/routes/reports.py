@@ -11,39 +11,104 @@ from __future__ import annotations
 import csv
 import io
 from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Response
 
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 
 from services.time_utils import local_date_str
 
 
-def _pdf_from_table(title: str, headers: List[str], data: List[List[str]], subtitle: str = "") -> bytes:
+def _pdf_from_table(
+    title: str,
+    headers: List[str],
+    data: List[List[str]],
+    subtitle: str = "",
+    *,
+    orientation: str = "portrait",
+    col_widths: Optional[List[float]] = None,
+    meta: Optional[dict] = None,
+) -> bytes:
+    """Build a tabular PDF. ``orientation`` accepts "portrait" (default)
+    or "landscape"; landscape is what wide attendance tables want so the
+    left-most columns (member name!) don't clip off the page.
+
+    ``meta`` optionally provides a small key-value header block above the
+    table — used by the monthly attendance report to declare the period,
+    generation timestamp, and record count so a printed sheet is
+    self-explanatory when it lands on the treasurer's desk.
+    """
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=20 * mm, bottomMargin=15 * mm)
+    pagesize = landscape(A4) if orientation == "landscape" else A4
+    doc = SimpleDocTemplate(
+        buf, pagesize=pagesize,
+        topMargin=15 * mm, bottomMargin=12 * mm,
+        leftMargin=10 * mm, rightMargin=10 * mm,
+    )
     styles = getSampleStyleSheet()
-    elems = [Paragraph(title, styles["Title"])]
+    title_style = ParagraphStyle(
+        "ReportTitle", parent=styles["Title"], fontSize=16, spaceAfter=2,
+        alignment=TA_LEFT,
+    )
+    meta_style = ParagraphStyle(
+        "ReportMeta", parent=styles["Normal"], fontSize=9,
+        textColor=colors.HexColor("#475569"), leading=12,
+    )
+    elems = [Paragraph(title, title_style)]
     if subtitle:
-        elems.append(Paragraph(subtitle, styles["Normal"]))
-    elems.append(Spacer(1, 8 * mm))
+        elems.append(Paragraph(subtitle, meta_style))
+    if meta:
+        # Two-column mini table: label · value. Kept tight so it doesn't
+        # steal vertical space from the main data table below.
+        mrows = [[Paragraph(f"<b>{k}</b>", meta_style), Paragraph(str(v), meta_style)]
+                 for k, v in meta.items()]
+        mtbl = Table(mrows, colWidths=[35 * mm, 130 * mm], hAlign="LEFT")
+        mtbl.setStyle(TableStyle([
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+            ("TOPPADDING", (0, 0), (-1, -1), 1),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        elems.append(Spacer(1, 3 * mm))
+        elems.append(mtbl)
+    elems.append(Spacer(1, 5 * mm))
     table_data = [headers] + (data if data else [["No records"] + [""] * (len(headers) - 1)])
-    t = Table(table_data, repeatRows=1)
+    t = Table(table_data, repeatRows=1, colWidths=col_widths)
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F2937")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D1D5DB")),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("FONTSIZE", (0, 1), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D1D5DB")),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F3F4F6")]),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        # Left-align the Name column (col 0 in the reordered layout)
+        # for readability; right-align the rest for number columns.
+        ("ALIGN", (0, 1), (0, -1), "LEFT"),
+        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
     ]))
     elems.append(t)
+
+    # Small footer with generation timestamp — printed sheets tend to
+    # linger, and a "generated 2 Jul 2026 11:04 IST" line saves everyone
+    # from arguing whether the numbers are stale.
+    footer = ParagraphStyle(
+        "Footer", parent=styles["Normal"], fontSize=7,
+        textColor=colors.HexColor("#94A3B8"), alignment=TA_RIGHT,
+    )
+    elems.append(Spacer(1, 5 * mm))
+    elems.append(Paragraph(
+        f"Generated {datetime.now().strftime('%d %b %Y %H:%M')} · iShowedUp",
+        footer,
+    ))
     doc.build(elems)
     return buf.getvalue()
 
@@ -136,22 +201,51 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
     @router.get("/reports/hours/export")
     async def export_hours(start: str, end: str, fmt: str = "csv", admin: dict = Depends(require_admin)):
         rows = await compute_hours_report(start, end)
-        headers = ["Attendance %", "Name", "Category", "Rank", "Weekly off",
-                   "Present", "Leave", "Tour", "Comp-Off", "Absent", "Total accounted", "Span",
-                   "Total hrs", "OT hrs (approved)", "OT hrs (pending)",
-                   "Late Days", "Overstays",
-                   "Comp-Off Earned", "Comp-Off Used", "Comp-Off Pending"]
-        table = [[f"{r['attendance_pct']}%", r["member_name"], r["category"], r.get("rank") or "-",
-                  (r.get("weekly_off") or "monday").title(),
-                  r["days_present"],
-                  (r.get("days_leave", 0) + r.get("days_break", 0)),
-                  r.get("days_tour", 0), r.get("comp_off_used", 0),
-                  r.get("days_absent", 0), r.get("days_accounted", 0), r.get("span_days", 0),
-                  r["total_hours"], r.get("overtime_hours_approved", 0), r.get("overtime_hours_pending", 0),
-                  r.get("late_days", 0), r.get("overstays", 0),
-                  r.get("comp_off_earned", 0), r.get("comp_off_used", 0), r.get("comp_off_pending", 0)] for r in rows]
+        # Prioritised column order — Name first, most useful metrics next.
+        # Kept narrow enough to fit A4 landscape without clipping.
+        headers = ["Name", "Category", "Rank", "Weekly off", "Att %",
+                   "Present", "Leave", "Tour", "Absent",
+                   "Hours", "OT (appr)", "OT (pend)",
+                   "Late", "Overstays",
+                   "CO Earned", "CO Used", "CO Pend"]
+        table = [[
+            r["member_name"], r["category"], r.get("rank") or "-",
+            (r.get("weekly_off") or "monday").title(),
+            f"{r['attendance_pct']}%",
+            r["days_present"],
+            (r.get("days_leave", 0) + r.get("days_break", 0)),
+            r.get("days_tour", 0),
+            r.get("days_absent", 0),
+            r["total_hours"],
+            r.get("overtime_hours_approved", 0),
+            r.get("overtime_hours_pending", 0),
+            r.get("late_days", 0),
+            r.get("overstays", 0),
+            r.get("comp_off_earned", 0),
+            r.get("comp_off_used", 0),
+            r.get("comp_off_pending", 0),
+        ] for r in rows]
         if fmt == "pdf":
-            pdf = _pdf_from_table("Monthly Attendance Report", headers, table, f"{start} to {end}")
+            # Landscape + explicit column widths so nothing clips.
+            office = await db.config.find_one({"id": "office"})
+            academy = (office or {}).get("office_name") or "iShowedUp"
+            meta = {
+                "Academy": academy,
+                "Period": f"{start}  to  {end}",
+                "Members": str(len(rows)),
+                "Generated by": admin.get("full_name") or admin.get("email") or "Admin",
+            }
+            # Column widths (mm) — Name gets the most room, %/counts stay tight.
+            col_widths_mm = [42, 22, 18, 20, 15,  16, 14, 14, 16,
+                             16, 18, 18, 14, 18,  18, 16, 18]
+            pdf = _pdf_from_table(
+                "Attendance Report",
+                headers, table,
+                subtitle=f"{start} to {end}",
+                orientation="landscape",
+                col_widths=[w * mm for w in col_widths_mm],
+                meta=meta,
+            )
             return Response(content=pdf, media_type="application/pdf",
                             headers={"Content-Disposition": f"attachment; filename=hours_{start}_{end}.pdf"})
         return _csv_response(headers, table, f"hours_{start}_{end}.csv")

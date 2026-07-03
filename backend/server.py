@@ -2855,7 +2855,7 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
 async def compute_hours_report(start: str, end: str) -> List[dict]:
     """Aggregate hours and days present per member between dates inclusive."""
     users = await db.users.find(
-        {}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "weekly_off": 1}
+        {}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "weekly_off": 1, "fleet": 1}
     ).sort("full_name", 1).to_list(2000)
     sd = date.fromisoformat(start)
     ed = date.fromisoformat(end)
@@ -2999,6 +2999,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "category": u["category"],
             "rank": u.get("rank"),
             "weekly_off": u.get("weekly_off") or "monday",
+            "fleet": u.get("fleet"),
             "total_hours": total_hours,
             "days_present": days_present,
             "late_days": late_days,

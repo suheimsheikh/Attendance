@@ -28,11 +28,11 @@ function lastMonth() {
 }
 
 const CATEGORY_FILTERS = [
-  { key: "all", label: "All" },
+  { key: "all",     label: "All" },
   { key: "athlete", label: "Athletes" },
-  { key: "staff", label: "Staff" },
-  { key: "coach", label: "Coaches" },
-  { key: "executive", label: "Executives" },
+  // "Rest" collapses staff/coach/executive into one bucket — matches the
+  // way admins actually think about the two populations at YCH.
+  { key: "rest",    label: "Rest" },
 ];
 
 const SORT_OPTIONS = [
@@ -41,14 +41,22 @@ const SORT_OPTIONS = [
 ];
 
 export default function Reports() {
-  const [start, setStart] = useState(nDaysAgo(7));
-  const [end, setEnd] = useState(todayIso());
+  // Default the picker to the current calendar month (1st → today) rather
+  // than the last 7 days — matches the way admins naturally think about
+  // attendance reports ("show me this month so far").
+  const _tm = thisMonth();
+  const [start, setStart] = useState(_tm.start);
+  const [end, setEnd] = useState(_tm.end);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState("hours"); // hours | daily
   const [day, setDay] = useState(todayIso());
   const [daily, setDaily] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
+  // Fleet (class-wise) filter — only meaningful when the category
+  // filter is set to Athletes. Populated from the rows on load; empty
+  // string means "any fleet".
+  const [fleetFilter, setFleetFilter] = useState("");
   const [sortBy, setSortBy] = useState("alpha");
 
   const loadHours = useCallback(async () => {
@@ -74,8 +82,20 @@ export default function Reports() {
 
   const displayedRows = useMemo(() => {
     let list = rows;
-    if (categoryFilter !== "all") {
-      list = list.filter((r) => r.category === categoryFilter);
+    if (categoryFilter === "athlete") {
+      list = list.filter((r) => r.category === "athlete");
+    } else if (categoryFilter === "rest") {
+      list = list.filter((r) => r.category !== "athlete");
+    }
+    // Class-wise (fleet) filter — only applied when set. Empty string
+    // means "any fleet". Members with no fleet stamped are matched only
+    // by the explicit "(No fleet)" option.
+    if (fleetFilter) {
+      list = list.filter((r) =>
+        fleetFilter === "__none__"
+          ? !r.fleet
+          : (r.fleet || "").toLowerCase() === fleetFilter.toLowerCase()
+      );
     }
     const sorted = [...list];
     if (sortBy === "pct_desc") {
@@ -85,7 +105,20 @@ export default function Reports() {
       sorted.sort((a, b) => (a.member_name || "").localeCompare(b.member_name || ""));
     }
     return sorted;
-  }, [rows, categoryFilter, sortBy]);
+  }, [rows, categoryFilter, fleetFilter, sortBy]);
+
+  // Distinct fleet list (sorted). Recomputed whenever rows change.
+  const fleetOptions = useMemo(() => {
+    const s = new Set();
+    let hasBlank = false;
+    for (const r of rows) {
+      if (r.fleet) s.add(r.fleet);
+      else hasBlank = true;
+    }
+    const out = [...s].sort((a, b) => a.localeCompare(b));
+    if (hasBlank) out.push("__none__");
+    return out;
+  }, [rows]);
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
@@ -145,12 +178,16 @@ export default function Reports() {
             <div className="flex flex-wrap gap-2" data-testid="category-filters">
               {CATEGORY_FILTERS.map((f) => {
                 const active = categoryFilter === f.key;
-                const count = f.key === "all" ? rows.length : rows.filter((r) => r.category === f.key).length;
+                const count = f.key === "all"
+                  ? rows.length
+                  : f.key === "athlete"
+                    ? rows.filter((r) => r.category === "athlete").length
+                    : rows.filter((r) => r.category !== "athlete").length;
                 return (
                   <button
                     key={f.key}
                     data-testid={`cat-filter-${f.key}`}
-                    onClick={() => setCategoryFilter(f.key)}
+                    onClick={() => { setCategoryFilter(f.key); if (f.key !== "athlete") setFleetFilter(""); }}
                     className={`iu-chip ${active ? "iu-chip-active" : ""}`}
                   >
                     {f.label}
@@ -158,6 +195,23 @@ export default function Reports() {
                   </button>
                 );
               })}
+              {/* Fleet (class-wise) filter — only relevant for athletes;
+                  shown as a compact dropdown adjacent to the pills. */}
+              {categoryFilter === "athlete" && fleetOptions.length > 0 && (
+                <select
+                  data-testid="fleet-filter"
+                  value={fleetFilter}
+                  onChange={(e) => setFleetFilter(e.target.value)}
+                  className="iu-input !w-40 !py-1 !h-8 text-xs"
+                >
+                  <option value="">All fleets</option>
+                  {fleetOptions.map((f) => (
+                    <option key={f} value={f}>
+                      {f === "__none__" ? "(No fleet)" : f}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="flex items-center gap-2" data-testid="sort-options">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Sort</span>

@@ -148,7 +148,10 @@ def test_hours_export_csv_has_correct_header_row(admin_client, base_url):
     reader = csv.reader(io.StringIO(r.text))
     headers = next(reader)
     # These headers are referenced by the frontend's Reports page — keep stable.
-    for required in ("Attendance %", "Name", "Category", "Total hrs", "Late Days"):
+    # Header contract — refreshed on 1 Jul 2026 when the PDF layout was
+    # switched to landscape and headers were shortened / reordered so
+    # the Name column leads.
+    for required in ("Name", "Category", "Att %", "Present", "Hours", "Late"):
         assert required in headers, f"Missing CSV header: {required}"
 
 

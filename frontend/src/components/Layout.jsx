@@ -46,7 +46,7 @@ const NAV_ADMIN = [
   { to: "/admin/sites", label: "Sites", icon: MapPin },
   { to: "/admin/office", label: "Office Settings", icon: Settings },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
-  { to: "/admin/payroll", label: "Monthly Payroll", icon: FileSpreadsheet },
+  { to: "/admin/payroll", label: "Payroll", icon: FileSpreadsheet },
   { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera },
   { to: "/admin/backup", label: "Backup & Restore", icon: Database },
 ];
