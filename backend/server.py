@@ -2867,6 +2867,14 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
     ed = date.fromisoformat(end)
     span_days = max(1, (ed - sd).days + 1)
 
+    # Absent-calc corrections (7 Jul 2026): a member's weekly-off day
+    # in the window is legitimately "off", not "absent". Same for the
+    # current in-progress day when the window's `end` is today (mid-day
+    # runs used to show today as absent until the member checked in).
+    office = await db.config.find_one({"id": "office"})
+    today_iso = local_date_str(office)
+    end_is_today = (end == today_iso)
+
     # Batch: all attendance in range, grouped by user_id. Open sessions
     # (no check-out yet) are INCLUDED — a same-day check-in counts as a
     # "Present" day even if the member hasn't checked out yet. Hours are
@@ -2975,8 +2983,9 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
     rows = []
     for u in users:
         sessions = by_user.get(u["id"], [])
+        present_dates = {s["date"] for s in sessions}
         total_hours = round(sum(s.get("hours") or 0 for s in sessions), 2)
-        days_present = len({s["date"] for s in sessions})
+        days_present = len(present_dates)
         late_days = len({s["date"] for s in sessions if s.get("late")})
         days_leave = _count_days_of_type(u["id"], "leave")
         days_tour = _count_days_of_type(u["id"], "tour")
@@ -2995,10 +3004,55 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         co_used = _count_days_of_type(u["id"], "comp_off")
         co_pending = max(0, co_earned - co_used)
         # Days the member is "accounted for" — present, leave, tour, break,
-        # or comp-off. Anything else in the span is absent.
-        days_accounted = days_present + days_leave + days_tour + days_break + co_used
-        days_absent = max(0, span_days - days_accounted)
-        attendance_pct = round((days_present / span_days) * 100, 1)
+        # or comp-off. Anything else in the span is *provisionally* absent
+        # — but weekly-off days they didn't work AND the in-progress day
+        # (today, if the window ends today) are legitimately-off, not
+        # absent. See the block near the top of this function.
+        #
+        # Build the *set* of accounted calendar days first so overlaps
+        # between categories (e.g. half-day check-in + half-day leave on
+        # the same date, or a leave that spans across a Sunday the
+        # member also checked in on) don't double-count.
+        accounted_dates: set = set(present_dates)
+        for leave in leaves_by_user_typed.get(u["id"], {}).get("leave", []):
+            accounted_dates |= _days_overlap(leave["start_date"], leave["end_date"])
+        for leave in leaves_by_user_typed.get(u["id"], {}).get("tour", []):
+            accounted_dates |= _days_overlap(leave["start_date"], leave["end_date"])
+        for leave in leaves_by_user_typed.get(u["id"], {}).get("comp_off", []):
+            accounted_dates |= _days_overlap(leave["start_date"], leave["end_date"])
+        for b in breaks_window:
+            if _breaks_module.break_applies_to(b, u):
+                accounted_dates |= _days_overlap(b["start_date"], b["end_date"])
+        days_accounted = len(accounted_dates)
+        # Unworked weekly-off days in span (worked ones are already in
+        # `days_present` and earn comp-off via `_comp_off_earned`).
+        # Skip Mondays already covered by leave/tour/break/comp-off so
+        # we don't double-count them into `days_off`. Default to Monday
+        # when the member has no weekly_off stamped (mirrors both the
+        # API response default and `_comp_off_earned` above).
+        wo_name = (u.get("weekly_off") or "monday").lower()
+        unworked_weekly_offs = 0
+        if wo_name in WEEKDAY_NAME:
+            wo_idx = WEEKDAY_NAME.index(wo_name)
+            cur = sd
+            while cur <= ed:
+                if cur.weekday() == wo_idx and cur.isoformat() not in accounted_dates:
+                    unworked_weekly_offs += 1
+                cur += timedelta(days=1)
+        # In-progress current day — exclude from absent count until the
+        # day has ended (avoids "everyone is absent" first-thing-in-the-
+        # morning noise on the running-total view). Skip if today is
+        # already accounted (e.g. on approved leave for today).
+        in_progress_today = 1 if (
+            end_is_today and today_iso not in accounted_dates
+        ) else 0
+        days_off = unworked_weekly_offs + in_progress_today
+        days_absent = max(0, span_days - days_accounted - days_off)
+        # Attendance-% uses the workable span (excludes weekly-off days
+        # and the in-progress day) so a member who attended every
+        # working day reads 100%, not 100 × (5/7).
+        workable_span = max(1, span_days - days_off)
+        attendance_pct = round((days_present / workable_span) * 100, 1)
         rows.append({
             "member_id": u["id"],
             "member_name": u["full_name"],
@@ -3015,6 +3069,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "days_absent": days_absent,
             "days_accounted": days_accounted,
             "days_on_leave": days_on_leave,
+            "days_off": days_off,
             "overstays": overstays,
             "overtime_hours_approved": round(approved_ot_min / 60.0, 2),
             "overtime_hours_pending": round(pending_ot_min / 60.0, 2),

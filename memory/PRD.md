@@ -1295,3 +1295,47 @@ applied only the concretely-actionable fixes:
 **Verified**: pytest 337/337 pass; ESLint 0 errors / 0 warnings on all
 touched files; Institutions renders 4 rows in preview.
 
+
+## Absent-day calculation fix (7 Jul 2026)
+**Bug** (reported by user, preview): "In preview a lot of members are
+showing 2 days absent. Why?" On the running-total Hours tab, members
+who attended every working day of the current month showed
+`days_absent = 2` — one for their weekly-off Monday, one for the
+in-progress current day.
+
+**Root cause** in `compute_hours_report` (server.py):
+`days_absent = span_days − days_accounted` treated **every day** in
+the window that wasn't present/leave/tour/break/comp-off as absent,
+including:
+1. The member's own weekly-off day (e.g. Monday for 129 of 133 members)
+2. The current in-progress day (before anyone checked in yet today)
+
+**Fix**:
+- Introduce a `days_off` bucket = unworked weekly-off days + in-progress
+  today. `days_absent = max(0, span − accounted − off)`.
+- Compute `days_accounted` as `len(accounted_dates_set)` (set-union
+  across present/leave/tour/break/comp-off) so overlapping categories
+  (half-day check-in + half-day leave on the same date) don't
+  double-count and break the invariant `accounted + off + absent = span`.
+- Skip weekly-off day from `days_off` if leave/tour/break already
+  covers it (avoids double-counting).
+- Skip today from in-progress if today is already accounted (member is
+  on approved leave today).
+- Attendance % now uses `workable_span = span - days_off` so a member
+  who attends every working day reads **100%**, not 100 × (5/7).
+
+**Verified** on live preview (July 2026, 133 members):
+- 57 members previously showing 2 absent → now show **0 absent, 100%**
+- Members on 7-day leave → correctly show absent=0, off=0, accounted=7
+- Invariant `accounted + off + absent == span` holds for all 133 rows
+
+**Tests** added: `tests/test_hours_absent_weekly_off.py` (4 cases —
+`days_off` field present, invariant holds, weekly-off not counted as
+absent, in-progress today handled). Full suite: 340/341 pass; the 1
+failure (`test_posting_r2::test_presence_labels_posting_as_on_tour`)
+is a **pre-existing** UTC/IST timezone flake unrelated to this fix.
+
+**Files touched:** `backend/server.py` only. No frontend or PDF changes
+needed — the corrected `days_absent` value flows through the existing
+"Absent" column and the 11-column PDF layout unchanged.
+
