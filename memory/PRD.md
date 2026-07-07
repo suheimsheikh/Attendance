@@ -1721,3 +1721,41 @@ client-side against the payload — no backend endpoint change.
   HAQUE OT `1.52h`, ARUNA `2·2·2 abs · 22.5→20.5`, Asif Ahmed
   half=1, escort_days=0 across the sample (Escorts chip counter is 0).
 
+
+## Attendance table — group reorder + sticky left + Total (7 Jul 2026 late)
+
+### Group order (left → right)
+1. **Attendance** (emerald · 8 cols)
+2. **Leave** (amber · 3 cols) — moved directly after Attendance per user.
+3. **Comp-Off** (sky · 3 cols) — moved to third slot per user.
+4. Overtime (violet · 3), Hours (indigo · 2), Escorts (teal · 2).
+
+### Total includes Off
+Attendance-group "Total" column now sums Present + Leave + Tour + Off
+(previously excluded Off). Rationale: weekly-off + in-progress-today
+are legitimate ways a member is "accounted for" on that date; treating
+them the same as Leave/Tour makes the Total column truly represent
+"days the member is not-absent". Client-side change only — the
+backend's own `days_accounted` (used for the absent-invariant check)
+was already inclusive of these.
+
+### Sticky left column pin
+Member and Category cells get `position: sticky; left: 0` (and
+`left: 140px` for Cat) with z-10 so they stay visible when the table
+scrolls horizontally. Header rows are z-30/40 to overlay them on the
+corner. `.group-hover:bg-slate-50` on the row + matching class on the
+pinned cells keeps the hover tint continuous across the pin boundary.
+
+### Files touched
+`frontend/src/pages/admin/Reports.jsx` — thead order + colgroup class
+tweaks + tbody re-order + `attnTotal` formula + `sticky left-0` +
+`group-hover` pattern.
+
+### Verified
+- Live preview screenshot 1 (initial): ABHIRAM 6+1+0+? = 7 Total,
+  ARUNA 0+2+0+2 = 4 Total (was 2), Asif Ahmed 5+0+0+2 = 7 Total.
+- Screenshot 2 (horizontal-scrolled 700 px): Member/Cat cells stayed
+  pinned; Overtime/Hours/Escorts groups revealed on the right; AINUL
+  HAQUE's 1.52h OT visible; hover tint carries across the pin.
+- No backend change, no test churn (25/25 still green).
+

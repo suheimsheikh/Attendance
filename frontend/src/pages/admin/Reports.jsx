@@ -257,18 +257,18 @@ export default function Reports() {
                       row 2 to top-7 (~28 px = row-1 height with text-[10px]
                       + tight vertical padding). z-20 on both so they
                       overlay the first data row on the initial paint. */}
-                  <tr className="sticky top-0 z-20 bg-slate-100 text-[10px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200 shadow-sm">
-                    <th className="py-1.5 px-2 text-left" colSpan={2}>&nbsp;</th>
+                  <tr className="sticky top-0 z-30 bg-slate-100 text-[10px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200 shadow-sm">
+                    <th className="py-1.5 px-2 text-left sticky left-0 z-40 bg-slate-100" colSpan={2}>&nbsp;</th>
                     <th className="py-1.5 px-2 text-center bg-emerald-50 border-l border-r border-emerald-200 text-emerald-800" colSpan={8}>Attendance</th>
-                    <th className="py-1.5 px-2 text-center bg-indigo-50 border-r border-indigo-200 text-indigo-800" colSpan={2}>Hours</th>
                     <th className="py-1.5 px-2 text-center bg-amber-50 border-r border-amber-200 text-amber-800" colSpan={3}>Leave</th>
-                    <th className="py-1.5 px-2 text-center bg-violet-50 border-r border-violet-200 text-violet-800" colSpan={3}>Overtime</th>
                     <th className="py-1.5 px-2 text-center bg-sky-50 border-r border-sky-200 text-sky-800" colSpan={3}>Comp-Off</th>
+                    <th className="py-1.5 px-2 text-center bg-violet-50 border-r border-violet-200 text-violet-800" colSpan={3}>Overtime</th>
+                    <th className="py-1.5 px-2 text-center bg-indigo-50 border-r border-indigo-200 text-indigo-800" colSpan={2}>Hours</th>
                     <th className="py-1.5 px-2 text-center bg-teal-50 border-r border-teal-200 text-teal-800" colSpan={2}>Escorts</th>
                   </tr>
-                  <tr className="sticky top-7 z-20 bg-slate-50 shadow-sm text-[10px] uppercase tracking-wider font-bold text-slate-500">
-                    <th className="py-1.5 px-2 text-left">Member</th>
-                    <th className="py-1.5 px-2 text-left hidden md:table-cell">Cat</th>
+                  <tr className="sticky top-7 z-30 bg-slate-50 shadow-sm text-[10px] uppercase tracking-wider font-bold text-slate-500">
+                    <th className="py-1.5 px-2 text-left sticky left-0 z-40 bg-slate-50">Member</th>
+                    <th className="py-1.5 px-2 text-left hidden md:table-cell sticky left-[140px] z-40 bg-slate-50">Cat</th>
                     <th className="py-1.5 px-1.5 text-center bg-emerald-50/70 border-l border-emerald-100">Pres</th>
                     <th className="py-1.5 px-1.5 text-center bg-emerald-50/70">Lv</th>
                     <th className="py-1.5 px-1.5 text-center bg-emerald-50/70">Tour</th>
@@ -277,36 +277,40 @@ export default function Reports() {
                     <th className="py-1.5 px-1.5 text-center bg-emerald-50/70">Half</th>
                     <th className="py-1.5 px-1.5 text-center bg-emerald-50/70">Abs</th>
                     <th className="py-1.5 px-1.5 text-center bg-emerald-50/70 border-r border-emerald-100 font-extrabold">Tot</th>
-                    <th className="py-1.5 px-1.5 text-center bg-indigo-50/70">Tot h</th>
-                    <th className="py-1.5 px-1.5 text-center bg-indigo-50/70 border-r border-indigo-100">Avg h</th>
                     <th className="py-1.5 px-1.5 text-center bg-amber-50/70">Open</th>
                     <th className="py-1.5 px-1.5 text-center bg-amber-50/70">Avld</th>
                     <th className="py-1.5 px-1.5 text-center bg-amber-50/70 border-r border-amber-100 font-extrabold">Close</th>
-                    <th className="py-1.5 px-1.5 text-center bg-violet-50/70">Srvd</th>
-                    <th className="py-1.5 px-1.5 text-center bg-violet-50/70">Appl</th>
-                    <th className="py-1.5 px-1.5 text-center bg-violet-50/70 border-r border-violet-100 font-extrabold">Apprv</th>
                     <th className="py-1.5 px-1.5 text-center bg-sky-50/70">Srvd</th>
                     <th className="py-1.5 px-1.5 text-center bg-sky-50/70">Appl</th>
                     <th className="py-1.5 px-1.5 text-center bg-sky-50/70 border-r border-sky-100 font-extrabold">Apprv</th>
+                    <th className="py-1.5 px-1.5 text-center bg-violet-50/70">Srvd</th>
+                    <th className="py-1.5 px-1.5 text-center bg-violet-50/70">Appl</th>
+                    <th className="py-1.5 px-1.5 text-center bg-violet-50/70 border-r border-violet-100 font-extrabold">Apprv</th>
+                    <th className="py-1.5 px-1.5 text-center bg-indigo-50/70">Tot h</th>
+                    <th className="py-1.5 px-1.5 text-center bg-indigo-50/70 border-r border-indigo-100">Avg h</th>
                     <th className="py-1.5 px-1.5 text-center bg-teal-50/70">Dut</th>
                     <th className="py-1.5 px-1.5 text-center bg-teal-50/70 border-r border-teal-100">Ovr</th>
                   </tr>
                 </thead>
                 <tbody>
                   {displayedRows.map((r) => {
-                    const attnTotal = (r.days_present || 0) + (r.days_leave || 0) + (r.days_tour || 0);
+                    // 7 Jul 2026 (evening): Total now includes Off so
+                    // weekly-off + in-progress-today land in the sum.
+                    const attnTotal = (r.days_present || 0) + (r.days_leave || 0) + (r.days_tour || 0) + (r.days_off || 0);
                     const otServed = r.overtime_hours_served || 0;
                     const otApplied = r.overtime_hours_pending || 0;
                     const otApproved = r.overtime_hours_approved || 0;
-                    // Blank-on-zero helpers (7 Jul 2026 user-requested):
-                    // a wall of "0"s makes it hard to spot the members
-                    // who actually have something going on. Empty cells
-                    // read as "nothing here, move on".
                     const n = (v) => (v ? v : "");
                     const h = (v) => (v ? `${(+v).toFixed(2).replace(/\.?0+$/, "")}h` : "");
                     return (
-                      <tr key={r.member_id} className="hover:bg-slate-50" data-testid={`attn-row-${r.member_id}`}>
-                        <td className="py-1.5 px-2 font-semibold text-slate-800 border-t border-slate-100">
+                      <tr key={r.member_id} className="hover:bg-slate-50 group" data-testid={`attn-row-${r.member_id}`}>
+                        {/* Member + Category are pinned to the left with
+                            `position: sticky` so admins keep the row
+                            anchor visible when horizontal-scrolling
+                            across the 23 columns. `group-hover:bg-slate-50`
+                            keeps the hover tint continuous across the
+                            pinned + scrolling halves. */}
+                        <td className="py-1.5 px-2 font-semibold text-slate-800 border-t border-slate-100 sticky left-0 z-10 bg-white group-hover:bg-slate-50">
                           {r.member_name}
                           <div className="text-[10px] text-slate-400 leading-tight">
                             {r.rank || ""}
@@ -315,7 +319,7 @@ export default function Reports() {
                             )}
                           </div>
                         </td>
-                        <td className="py-1.5 px-2 hidden md:table-cell text-slate-600 border-t border-slate-100">{categoryLabel(r.category)}</td>
+                        <td className="py-1.5 px-2 hidden md:table-cell text-slate-600 border-t border-slate-100 sticky left-[140px] z-10 bg-white group-hover:bg-slate-50">{categoryLabel(r.category)}</td>
                         {/* Attendance group */}
                         <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-l border-t border-emerald-100 font-semibold text-emerald-700" data-testid={`days-present-${r.member_id}`}>{n(r.days_present)}</td>
                         <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-amber-700" data-testid={`days-leave-${r.member_id}`}>{n(r.days_leave)}</td>
@@ -325,21 +329,21 @@ export default function Reports() {
                         <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100" data-testid={`half-days-${r.member_id}`}>{n(r.half_days)}</td>
                         <td className={`py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 font-semibold ${(r.days_absent || 0) > 0 ? "text-red-600" : "text-slate-400"}`} data-testid={`days-absent-${r.member_id}`}>{n(r.days_absent)}</td>
                         <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-r border-t border-emerald-100 font-extrabold text-slate-900" data-testid={`days-total-${r.member_id}`}>{n(attnTotal)}</td>
-                        {/* Hours group */}
-                        <td className="py-1.5 px-1.5 text-center bg-indigo-50/30 border-t border-indigo-100">{r.total_hours ? `${r.total_hours}h` : ""}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-indigo-50/30 border-r border-t border-indigo-100 text-slate-600">{r.avg_hours_per_day ? `${r.avg_hours_per_day}h` : ""}</td>
                         {/* Leave group */}
                         <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100">{n(r.leave_balance_opening)}</td>
                         <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100">{n(r.leave_balance_taken_ytd)}</td>
                         <td className={`py-1.5 px-1.5 text-center bg-amber-50/30 border-r border-t border-amber-100 font-extrabold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{n(r.leave_balance_remaining)}</td>
-                        {/* Overtime group */}
-                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100">{h(otServed)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 text-amber-700">{h(otApplied)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-r border-t border-violet-100 font-extrabold text-emerald-700">{h(otApproved)}</td>
                         {/* Comp-Off group */}
                         <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100" data-testid={`comp-off-earned-${r.member_id}`}>{n(r.comp_off_earned)}</td>
                         <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 text-amber-700" data-testid={`comp-off-applied-${r.member_id}`}>{n(r.comp_off_applied)}</td>
                         <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-r border-t border-sky-100 font-extrabold text-emerald-700" data-testid={`comp-off-approved-${r.member_id}`}>{n(r.comp_off_used)}</td>
+                        {/* Overtime group */}
+                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100">{h(otServed)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 text-amber-700">{h(otApplied)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-r border-t border-violet-100 font-extrabold text-emerald-700">{h(otApproved)}</td>
+                        {/* Hours group */}
+                        <td className="py-1.5 px-1.5 text-center bg-indigo-50/30 border-t border-indigo-100">{r.total_hours ? `${r.total_hours}h` : ""}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-indigo-50/30 border-r border-t border-indigo-100 text-slate-600">{r.avg_hours_per_day ? `${r.avg_hours_per_day}h` : ""}</td>
                         {/* Escorts group */}
                         <td className="py-1.5 px-1.5 text-center bg-teal-50/30 border-t border-teal-100 text-teal-700 font-semibold" data-testid={`escort-days-${r.member_id}`}>{n(r.escort_days)}</td>
                         <td className={`py-1.5 px-1.5 text-center bg-teal-50/30 border-r border-t border-teal-100 ${(r.overstays || 0) > 0 ? "text-red-600 font-semibold" : ""}`} data-testid={`overstays-${r.member_id}`}>{n(r.overstays)}</td>
