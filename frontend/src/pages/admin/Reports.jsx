@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import ReactDOM from "react-dom";
 import { Loader2, FileDown, FileText, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
@@ -86,6 +87,24 @@ export default function Reports() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [fleetFilter, setFleetFilter] = useState("");
   const [sortBy, setSortBy] = useState("alpha");
+
+  // Drill-down hover popover state (7 Jul 2026 — replaces native
+  // `title` attrs which had 1-2s browser-delay and broke inside the
+  // scroll container). One shared portal-rendered bubble that follows
+  // the hovered cell; instant show/hide.
+  const [tip, setTip] = useState(null); // { x, y, label, dates } | null
+  const showTip = useCallback((e, label, dates) => {
+    const arr = Array.isArray(dates) ? dates : [];
+    if (arr.length === 0) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    setTip({
+      x: r.left + r.width / 2,
+      y: r.top,
+      label,
+      dates: arr,
+    });
+  }, []);
+  const hideTip = useCallback(() => setTip(null), []);
 
   const monthIso = `${year}-${pad2(monthIdx + 1)}`;
   const loadAttendance = useCallback(async () => {
@@ -302,21 +321,26 @@ export default function Reports() {
                     const otApproved = r.overtime_hours_approved || 0;
                     const n = (v) => (v ? v : "");
                     const h = (v) => (v ? `${(+v).toFixed(2).replace(/\.?0+$/, "")}h` : "");
-                    // Drill-down tooltip helper — turns a date-array
-                    // from the API into a short human-readable list
-                    // for the cell's native `title` attribute (7 Jul 2026
-                    // user-requested transparency into individual days).
-                    const tip = (label, dates) => {
+                    // Drill-down hover props for a cell — attaches
+                    // mouse-enter / mouse-leave handlers only when
+                    // there's actually a date list to show. Empty
+                    // categories stay plain (no cursor-help, no
+                    // popover) so admins don't chase phantom hovers.
+                    const hoverProps = (label, dates) => {
                       const arr = Array.isArray(dates) ? dates : [];
-                      if (arr.length === 0) return "";
-                      const pretty = arr.map((d) => {
-                        try {
-                          const dt = new Date(d + "T00:00:00");
-                          return dt.toLocaleDateString(undefined,
-                            { day: "2-digit", month: "short", weekday: "short" });
-                        } catch { return d; }
-                      });
-                      return `${label} (${arr.length}):\n${pretty.join("\n")}`;
+                      if (arr.length === 0) return {};
+                      return {
+                        onMouseEnter: (e) => showTip(e, label, arr),
+                        onMouseLeave: hideTip,
+                        className: "cursor-help",
+                      };
+                    };
+                    // Merge the base cell className with the optional
+                    // `cursor-help` from `hoverProps`.
+                    const merge = (base, extra) => {
+                      if (!extra || !extra.className) return { className: base, ...(extra || {}) };
+                      const { className, ...rest } = extra;
+                      return { className: `${base} ${className}`, ...rest };
                     };
                     return (
                       <tr key={r.member_id} className="hover:bg-slate-50 group" data-testid={`attn-row-${r.member_id}`}>
@@ -337,31 +361,31 @@ export default function Reports() {
                         </td>
                         <td className="py-1.5 px-2 hidden md:table-cell text-slate-600 border-t border-slate-100 sticky left-[140px] z-10 bg-white group-hover:bg-slate-50">{categoryLabel(r.category)}</td>
                         {/* Attendance group */}
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-l border-t border-emerald-100 font-semibold text-emerald-700 cursor-help" title={tip("Present", r.dates_present)} data-testid={`days-present-${r.member_id}`}>{n(r.days_present)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-amber-700 cursor-help" title={tip("Leave", r.dates_leave)} data-testid={`days-leave-${r.member_id}`}>{n(r.days_leave)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-orange-700 cursor-help" title={tip("Tour", r.dates_tour)} data-testid={`days-tour-${r.member_id}`}>{n(r.days_tour)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-slate-500 cursor-help" title={tip("Off", r.dates_off)} data-testid={`days-off-${r.member_id}`}>{n(r.days_off)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-amber-600 cursor-help" title={tip("Late", r.dates_late)} data-testid={`late-days-${r.member_id}`}>{n(r.late_days)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 cursor-help" title={tip("Half-day", r.dates_half_day)} data-testid={`half-days-${r.member_id}`}>{n(r.half_days)}</td>
-                        <td className={`py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 font-semibold cursor-help ${(r.days_absent || 0) > 0 ? "text-red-600" : "text-slate-400"}`} title={tip("Absent", r.dates_absent)} data-testid={`days-absent-${r.member_id}`}>{n(r.days_absent)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-emerald-50/30 border-l border-t border-emerald-100 font-semibold text-emerald-700", hoverProps("Present", r.dates_present))} data-testid={`days-present-${r.member_id}`}>{n(r.days_present)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-amber-700", hoverProps("Leave", r.dates_leave))} data-testid={`days-leave-${r.member_id}`}>{n(r.days_leave)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-orange-700", hoverProps("Tour", r.dates_tour))} data-testid={`days-tour-${r.member_id}`}>{n(r.days_tour)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-slate-500", hoverProps("Off", r.dates_off))} data-testid={`days-off-${r.member_id}`}>{n(r.days_off)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-amber-600", hoverProps("Late", r.dates_late))} data-testid={`late-days-${r.member_id}`}>{n(r.late_days)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100", hoverProps("Half-day", r.dates_half_day))} data-testid={`half-days-${r.member_id}`}>{n(r.half_days)}</td>
+                        <td {...merge(`py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 font-semibold ${(r.days_absent || 0) > 0 ? "text-red-600" : "text-slate-400"}`, hoverProps("Absent", r.dates_absent))} data-testid={`days-absent-${r.member_id}`}>{n(r.days_absent)}</td>
                         <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-r border-t border-emerald-100 font-extrabold text-slate-900" data-testid={`days-total-${r.member_id}`}>{n(attnTotal)}</td>
                         {/* Leave group */}
                         <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100">{n(r.leave_balance_opening)}</td>
                         <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100">{n(r.leave_balance_taken_ytd)}</td>
                         <td className={`py-1.5 px-1.5 text-center bg-amber-50/30 border-r border-t border-amber-100 font-extrabold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{n(r.leave_balance_remaining)}</td>
                         {/* Comp-Off group */}
-                        <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 cursor-help" title={tip("Comp-off earned", r.dates_comp_off_earned)} data-testid={`comp-off-earned-${r.member_id}`}>{n(r.comp_off_earned)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 text-amber-700 cursor-help" title={tip("Comp-off applied", r.dates_comp_off_applied)} data-testid={`comp-off-applied-${r.member_id}`}>{n(r.comp_off_applied)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-r border-t border-sky-100 font-extrabold text-emerald-700 cursor-help" title={tip("Comp-off approved", r.dates_comp_off_used)} data-testid={`comp-off-approved-${r.member_id}`}>{n(r.comp_off_used)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100", hoverProps("Comp-off earned", r.dates_comp_off_earned))} data-testid={`comp-off-earned-${r.member_id}`}>{n(r.comp_off_earned)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 text-amber-700", hoverProps("Comp-off applied", r.dates_comp_off_applied))} data-testid={`comp-off-applied-${r.member_id}`}>{n(r.comp_off_applied)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-r border-t border-sky-100 font-extrabold text-emerald-700", hoverProps("Comp-off approved", r.dates_comp_off_used))} data-testid={`comp-off-approved-${r.member_id}`}>{n(r.comp_off_used)}</td>
                         {/* Overtime group */}
-                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 cursor-help" title={tip("OT served", r.dates_overtime_served)}>{h(otServed)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 text-amber-700 cursor-help" title={tip("OT applied", r.dates_overtime_applied)}>{h(otApplied)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-r border-t border-violet-100 font-extrabold text-emerald-700 cursor-help" title={tip("OT approved", r.dates_overtime_approved)}>{h(otApproved)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100", hoverProps("OT served", r.dates_overtime_served))}>{h(otServed)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 text-amber-700", hoverProps("OT applied", r.dates_overtime_applied))}>{h(otApplied)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-r border-t border-violet-100 font-extrabold text-emerald-700", hoverProps("OT approved", r.dates_overtime_approved))}>{h(otApproved)}</td>
                         {/* Hours group */}
                         <td className="py-1.5 px-1.5 text-center bg-indigo-50/30 border-t border-indigo-100">{r.total_hours ? `${r.total_hours}h` : ""}</td>
                         <td className="py-1.5 px-1.5 text-center bg-indigo-50/30 border-r border-t border-indigo-100 text-slate-600">{r.avg_hours_per_day ? `${r.avg_hours_per_day}h` : ""}</td>
                         {/* Escorts group */}
-                        <td className="py-1.5 px-1.5 text-center bg-teal-50/30 border-t border-teal-100 text-teal-700 font-semibold cursor-help" title={tip("Escort days", r.dates_escort)} data-testid={`escort-days-${r.member_id}`}>{n(r.escort_days)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-teal-50/30 border-t border-teal-100 text-teal-700 font-semibold", hoverProps("Escort days", r.dates_escort))} data-testid={`escort-days-${r.member_id}`}>{n(r.escort_days)}</td>
                         <td className={`py-1.5 px-1.5 text-center bg-teal-50/30 border-r border-t border-teal-100 ${(r.overstays || 0) > 0 ? "text-red-600 font-semibold" : ""}`} data-testid={`overstays-${r.member_id}`}>{n(r.overstays)}</td>
                       </tr>
                     );
@@ -397,6 +421,49 @@ export default function Reports() {
           </div>
         </>
       )}
+
+      {tip && ReactDOM.createPortal(
+        <DrillDownBubble tip={tip} />,
+        document.body
+      )}
+    </div>
+  );
+}
+
+/** Portal-rendered hover bubble that lists the exact dates behind a
+ * count cell. Positioned above the hovered cell (centred), auto-flips
+ * below when the cell is near the top edge of the viewport. */
+function DrillDownBubble({ tip }) {
+  const { x, y, label, dates } = tip;
+  const flipBelow = y < 140; // not enough room above
+  const style = {
+    position: "fixed",
+    left: `${x}px`,
+    top: `${y + (flipBelow ? 24 : -8)}px`,
+    transform: flipBelow
+      ? "translate(-50%, 0)"
+      : "translate(-50%, -100%)",
+    zIndex: 100,
+    pointerEvents: "none",
+    maxWidth: "240px",
+  };
+  const pretty = (dates || []).map((d) => {
+    try {
+      const dt = new Date(d + "T00:00:00");
+      return dt.toLocaleDateString(undefined,
+        { day: "2-digit", month: "short", weekday: "short" });
+    } catch { return d; }
+  });
+  return (
+    <div style={style} data-testid="drilldown-tooltip">
+      <div className="rounded-lg bg-slate-900 text-white text-[11px] px-3 py-2 shadow-xl ring-1 ring-slate-700">
+        <div className="font-bold uppercase tracking-wide text-[10px] text-slate-300 mb-1">
+          {label} · {dates.length}
+        </div>
+        <ul className="leading-tight space-y-0.5">
+          {pretty.map((p, i) => <li key={i} className="tabular-nums">{p}</li>)}
+        </ul>
+      </div>
     </div>
   );
 }

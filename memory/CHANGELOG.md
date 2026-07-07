@@ -5,6 +5,26 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Attendance Report drill-down tooltips (updated)
+
+**Update, later same day:** the native `title=` tooltip proved
+too slow / unreliable inside the horizontally-scrolling table
+(browser default delay ~1s, and some Chrome versions suppress it
+inside overflow-auto containers). Replaced with a portal-rendered
+custom hover popover (`DrillDownBubble`):
+
+- Instant show/hide via `onMouseEnter`/`onMouseLeave` (no delay).
+- Positioned above the hovered cell (auto-flips below near viewport
+  top), rendered into `document.body` so it escapes the table's
+  scroll clip and z-index stack.
+- Dark slate skin with white text, single shared state in `Reports`
+  (only one bubble on screen at any time).
+- `cursor-help` only applied when the cell has non-empty dates —
+  empty categories stay plain.
+- Data-testid `drilldown-tooltip` on the bubble for automated tests.
+- Verified end-to-end via Playwright on ARUNA SURUGU's absent cell:
+  bubble reads "ABSENT · 2 / Wed, Jul 01 / Fri, Jul 03".
+
 ## 7 Jul 2026 — Attendance Report drill-down tooltips
 
 **What shipped**
