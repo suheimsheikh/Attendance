@@ -13,7 +13,7 @@ import io
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
@@ -23,6 +23,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 
 from services.time_utils import local_date_str
+import breaks as _breaks_module
 
 
 def _pdf_from_table(
@@ -339,5 +340,219 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             return Response(content=pdf, media_type="application/pdf",
                             headers={"Content-Disposition": f"attachment; filename=daily_{on}.pdf"})
         return _csv_response(headers, table, f"daily_{on}.csv")
+
+    @router.get("/reports/member-timeline")
+    async def member_timeline(
+        member_id: str, start: str, end: str,
+        admin: dict = Depends(require_admin),
+    ):
+        """Day-by-day breakdown for a single member across [start, end].
+
+        Powers the double-click drill-down modal on the Attendance table
+        (7 Jul 2026 user-requested "why is X absent again?"). Every
+        calendar day in the window gets one row with a primary
+        `bucket` (present/absent/leave/tour/…), a human `label`, and a
+        `details` list carrying the underlying record(s) — attendance
+        session times, leave reasons, half-day flags, late-coming
+        expected-arrivals, overtime status, etc.
+        """
+        WEEKDAY_NAME = ["monday", "tuesday", "wednesday", "thursday",
+                        "friday", "saturday", "sunday"]
+        WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+        user = await db.users.find_one({"id": member_id}, {"_id": 0})
+        if not user:
+            raise HTTPException(status_code=404, detail="Member not found")
+
+        try:
+            sd = date.fromisoformat(start)
+            ed = date.fromisoformat(end)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start/end date")
+        if ed < sd:
+            raise HTTPException(status_code=400, detail="end must be >= start")
+
+        # Attendance sessions in window
+        sessions = await db.attendance.find(
+            {"user_id": member_id,
+             "date": {"$gte": start, "$lte": end}},
+            {"_id": 0},
+        ).to_list(500)
+        sessions_by_date = {s["date"]: s for s in sessions}
+
+        # Leaves overlapping window (all statuses so we can show
+        # pending/rejected too — admins want the full trail)
+        leaves = await db.leaves.find(
+            {"user_id": member_id,
+             "start_date": {"$lte": end},
+             "end_date": {"$gte": start}},
+            {"_id": 0},
+        ).to_list(500)
+
+        def _expand(ls: str, le: str):
+            try:
+                a = max(date.fromisoformat(ls), sd)
+                b = min(date.fromisoformat(le), ed)
+            except ValueError:
+                return
+            while a <= b:
+                yield a.isoformat()
+                a += timedelta(days=1)
+
+        leaves_by_date: dict = {}
+        for lv in leaves:
+            for iso in _expand(lv["start_date"], lv["end_date"]):
+                leaves_by_date.setdefault(iso, []).append(lv)
+
+        # Breaks that apply to this member
+        breaks_window = await db.breaks.find(
+            {"start_date": {"$lte": end}, "end_date": {"$gte": start}},
+            {"_id": 0},
+        ).to_list(200)
+        break_dates_by_date: dict = {}
+        for b in breaks_window:
+            if not _breaks_module.break_applies_to(b, user):
+                continue
+            for iso in _expand(b["start_date"], b["end_date"]):
+                break_dates_by_date.setdefault(iso, []).append(b)
+
+        # Escort-duty days
+        escort_rows = await db.escort_attendance.find(
+            {"date": {"$gte": start, "$lte": end}},
+            {"_id": 0, "date": 1, "check_in_athlete_ids": 1},
+        ).to_list(500)
+        escort_dates = {
+            er["date"] for er in escort_rows
+            if member_id in (er.get("check_in_athlete_ids") or [])
+        }
+
+        # Today (in the office's timezone) — powers the in-progress classification
+        office = await db.config.find_one({"id": "office"})
+        today_iso = local_date_str(office)
+
+        wo_name = (user.get("weekly_off") or "monday").lower()
+        wo_idx = WEEKDAY_NAME.index(wo_name) if wo_name in WEEKDAY_NAME else 0
+
+        # Bucket labels — the primary bucket the row is classified under.
+        LABELS = {
+            "present": "Present",
+            "leave": "Leave",
+            "tour": "Tour",
+            "posting": "Posting",
+            "comp_off": "Comp-off",
+            "late_coming": "Late-coming approved",
+            "break": "Break / Holiday",
+            "escort": "Escort duty",
+            "off_weekly": "Weekly off",
+            "off_in_progress": "In progress (today)",
+            "absent": "Absent",
+        }
+        # Priority order when a day has multiple markers — earliest wins.
+        PRIORITY = ["present", "leave", "tour", "posting", "comp_off",
+                    "late_coming", "break", "escort"]
+        # Buckets that count as "accounted" (member is NOT absent on
+        # that date). Mirrors the aggregation in server.compute_hours_report.
+        ACCOUNTED = {"present", "leave", "tour", "posting", "comp_off",
+                     "late_coming", "break"}
+
+        days_out = []
+        cur = sd
+        while cur <= ed:
+            iso = cur.isoformat()
+            weekday_idx = cur.weekday()
+            buckets: list = []
+            details: list = []
+
+            s = sessions_by_date.get(iso)
+            if s:
+                buckets.append("present")
+                details.append({
+                    "type": "attendance",
+                    "check_in_time": s.get("check_in_time"),
+                    "check_out_time": s.get("check_out_time"),
+                    "hours": s.get("hours"),
+                    "late": bool(s.get("late")),
+                    "late_minutes": s.get("late_minutes"),
+                    "method": s.get("method"),
+                    "auto_checkout": bool(s.get("auto_checkout")),
+                    "overtime_total_min": s.get("overtime_total_min"),
+                    "overtime_status": s.get("overtime_status"),
+                    "out_of_geofence": bool(s.get("out_of_geofence")),
+                })
+
+            for lv in leaves_by_date.get(iso, []):
+                if lv.get("status") not in ("approved", "pending"):
+                    # Rejected/cancelled leaves are worth surfacing too
+                    # so admins can see "she tried to file but it was
+                    # rejected" — kept as a distinct detail entry.
+                    details.append({
+                        "type": lv["type"],
+                        "status": lv["status"],
+                        "reason": lv.get("reason"),
+                        "start_date": lv["start_date"],
+                        "end_date": lv["end_date"],
+                    })
+                    continue
+                buckets.append(lv["type"])
+                details.append({
+                    "type": lv["type"],
+                    "status": lv["status"],
+                    "reason": lv.get("reason"),
+                    "location": lv.get("location"),
+                    "half_day": lv.get("half_day"),
+                    "expected_arrival": lv.get("expected_arrival"),
+                    "start_date": lv["start_date"],
+                    "end_date": lv["end_date"],
+                })
+
+            for b in break_dates_by_date.get(iso, []):
+                buckets.append("break")
+                details.append({
+                    "type": "break",
+                    "name": b.get("name") or b.get("title"),
+                    "start_date": b["start_date"],
+                    "end_date": b["end_date"],
+                })
+
+            if iso in escort_dates:
+                buckets.append("escort")
+                details.append({"type": "escort"})
+
+            has_accounted = any(b in ACCOUNTED for b in buckets)
+            is_wo = weekday_idx == wo_idx
+
+            if not has_accounted:
+                if is_wo:
+                    primary = "off_weekly"
+                elif iso == today_iso:
+                    primary = "off_in_progress"
+                else:
+                    primary = "absent"
+            else:
+                primary = next((b for b in PRIORITY if b in buckets), buckets[0])
+
+            days_out.append({
+                "date": iso,
+                "weekday": WEEKDAY_SHORT[weekday_idx],
+                "bucket": primary,
+                "label": LABELS.get(primary, primary.title()),
+                "buckets": list(dict.fromkeys(buckets)),  # unique, insertion order
+                "details": details,
+                "is_weekly_off": is_wo,
+                "is_today": iso == today_iso,
+            })
+            cur += timedelta(days=1)
+
+        return {
+            "member_id": member_id,
+            "member_name": user.get("full_name"),
+            "category": user.get("category"),
+            "rank": user.get("rank"),
+            "weekly_off": user.get("weekly_off"),
+            "fleet": user.get("fleet"),
+            "start": start,
+            "end": end,
+            "days": days_out,
+        }
 
     return router

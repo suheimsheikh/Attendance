@@ -219,3 +219,31 @@ def test_20_attendance_status(admin_client, base_url):
     r = admin_client.get(f"{base_url}/api/attendance/status", timeout=15)
     assert r.status_code == 200, r.text
     assert isinstance(r.json(), dict)
+
+
+def test_21_member_timeline(admin_client, base_url):
+    """Day-by-day drill-down endpoint (7 Jul 2026). Powers the
+    double-click modal on Reports. Shape check only."""
+    listing = admin_client.get(f"{base_url}/api/members", timeout=15).json()
+    if not listing:
+        pytest.skip("no members in DB")
+    mid = listing[0]["id"]
+    today = dt.date.today()
+    start = today.replace(day=1).isoformat()
+    end = today.isoformat()
+    r = admin_client.get(
+        f"{base_url}/api/reports/member-timeline",
+        params={"member_id": mid, "start": start, "end": end},
+        timeout=15,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["member_id"] == mid
+    assert body["start"] == start and body["end"] == end
+    assert isinstance(body["days"], list)
+    # Every day in [start, end] must be present.
+    span = (today - dt.date.fromisoformat(start)).days + 1
+    assert len(body["days"]) == span
+    for d in body["days"]:
+        for k in ("date", "weekday", "bucket", "label", "buckets", "details"):
+            assert k in d, f"missing {k}: {d}"

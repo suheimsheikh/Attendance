@@ -5,6 +5,42 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Double-click drill-down timeline modal
+
+**Shipped**
+- New backend endpoint: `GET /api/reports/member-timeline?member_id=…&start=…&end=…`
+  Returns a day-by-day breakdown for one member across the window with
+  each row shaped as:
+    { date, weekday, bucket, label, buckets[], details[],
+      is_weekly_off, is_today }
+  Buckets: `present`, `leave`, `tour`, `posting`, `comp_off`,
+  `late_coming`, `break`, `escort`, `off_weekly`,
+  `off_in_progress`, `absent`. Priority order matches the aggregation
+  used in `compute_hours_report`.
+  Details include check-in/out times, hours, late minutes,
+  auto-checkout flag, geofence status, overtime status, leave
+  reasons, half-day FN/PN, late-coming expected-arrival, and break
+  names. Rejected/cancelled leaves show up as separate details
+  entries so admins can see attempts, not just approvals.
+- New frontend component: `components/MemberTimelineModal.jsx`.
+  Portal-rendered modal with a compact 4-column table (Date, Day,
+  Status, Details), coloured bucket badges matching the parent
+  report's group colours (emerald present, amber leave, red absent,
+  slate off, sky comp-off, violet OT, teal escort, purple break),
+  ESC-to-close, click-outside-to-close, and a **Copy** button that
+  dumps the timeline as a Markdown table into the clipboard (for
+  pasting into WhatsApp / email during parent conversations).
+- Reports.jsx: double-clicking a member's name in the Attendance
+  table opens the modal for that member with the current report
+  window. `data-testid="attn-name-<id>"` added for the trigger cell;
+  hover title reads "Double-click for day-by-day timeline".
+- Smoke suite grew from 20 → 21 tests (added
+  `test_21_member_timeline`); pytest still ~3s. Full suite: 412
+  passed.
+- Verified live on ARUNA SURUGU — modal now renders exactly the
+  table I gave the user via chat, including "Late-coming approved"
+  on Jul 2 (which was previously invisible in the aggregate view).
+
 ## 7 Jul 2026 — Launch-day smoke suite
 
 **Shipped**

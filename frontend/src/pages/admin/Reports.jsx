@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 import { api, downloadBlob } from "../../api";
 import { todayIso, shortDate, categoryLabel } from "../../utils";
+import MemberTimelineModal from "../../components/MemberTimelineModal";
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 function isoDate(y, m0, d) { return `${y}-${pad2(m0 + 1)}-${pad2(d)}`; }
@@ -105,6 +106,12 @@ export default function Reports() {
     });
   }, []);
   const hideTip = useCallback(() => setTip(null), []);
+
+  // Day-by-day timeline modal (7 Jul 2026 user-requested "why is X
+  // absent again?"). Triggered by double-clicking the member name.
+  // `timelineMember` holds the row that's currently drilled into;
+  // `null` closes the modal.
+  const [timelineMember, setTimelineMember] = useState(null);
 
   const monthIso = `${year}-${pad2(monthIdx + 1)}`;
   const loadAttendance = useCallback(async () => {
@@ -349,8 +356,15 @@ export default function Reports() {
                             anchor visible when horizontal-scrolling
                             across the 23 columns. `group-hover:bg-slate-50`
                             keeps the hover tint continuous across the
-                            pinned + scrolling halves. */}
-                        <td className="py-1.5 px-2 font-semibold text-slate-800 border-t border-slate-100 sticky left-0 z-10 bg-white group-hover:bg-slate-50">
+                            pinned + scrolling halves. Double-clicking
+                            the name opens the day-by-day timeline
+                            modal (7 Jul 2026). */}
+                        <td
+                          className="py-1.5 px-2 font-semibold text-slate-800 border-t border-slate-100 sticky left-0 z-10 bg-white group-hover:bg-slate-50 cursor-pointer"
+                          onDoubleClick={() => setTimelineMember(r)}
+                          title="Double-click for day-by-day timeline"
+                          data-testid={`attn-name-${r.member_id}`}
+                        >
                           {r.member_name}
                           <div className="text-[10px] text-slate-400 leading-tight">
                             {r.rank || ""}
@@ -425,6 +439,15 @@ export default function Reports() {
       {tip && ReactDOM.createPortal(
         <DrillDownBubble tip={tip} />,
         document.body
+      )}
+
+      {timelineMember && attendance && (
+        <MemberTimelineModal
+          memberId={timelineMember.member_id}
+          start={attendance.start}
+          end={attendance.end}
+          onClose={() => setTimelineMember(null)}
+        />
       )}
     </div>
   );
