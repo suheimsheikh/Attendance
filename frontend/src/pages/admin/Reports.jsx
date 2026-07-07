@@ -242,36 +242,36 @@ export default function Reports() {
 
           <div className="iu-card overflow-hidden">
             <div className="overflow-auto max-h-[70vh]">
-              <table className="min-w-full text-sm" style={{ minWidth: 1100 }}>
+              <table className="min-w-full text-xs" style={{ minWidth: 1000 }}>
                 <thead>
                   {/* Grouped header row + sub-header row are BOTH sticky
                       (7 Jul 2026 user-requested). Row 1 pins to top-0,
-                      row 2 to top-8 (~32px = row-1 height with py-2 +
-                      text-[10px]). z-20 on both so they overlay the
-                      first data row on the initial paint. */}
+                      row 2 to top-7 (~28 px = row-1 height with text-[10px]
+                      + tight vertical padding). z-20 on both so they
+                      overlay the first data row on the initial paint. */}
                   <tr className="sticky top-0 z-20 bg-slate-100 text-[10px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200 shadow-sm">
-                    <th className="py-2 px-4 text-left" colSpan={2}>&nbsp;</th>
-                    <th className="py-2 px-4 text-center bg-emerald-50 border-l border-r border-emerald-200 text-emerald-800" colSpan={4}>Attendance</th>
-                    <th className="py-2 px-4 text-center bg-amber-50 border-r border-amber-200 text-amber-800" colSpan={3}>Leave</th>
-                    <th className="py-2 px-4 text-center bg-violet-50 border-r border-violet-200 text-violet-800" colSpan={3}>Overtime</th>
-                    <th className="py-2 px-4 text-center bg-sky-50 border-r border-sky-200 text-sky-800" colSpan={3}>Comp-Off</th>
+                    <th className="py-1.5 px-2 text-left" colSpan={2}>&nbsp;</th>
+                    <th className="py-1.5 px-2 text-center bg-emerald-50 border-l border-r border-emerald-200 text-emerald-800" colSpan={4}>Attendance</th>
+                    <th className="py-1.5 px-2 text-center bg-amber-50 border-r border-amber-200 text-amber-800" colSpan={3}>Leave</th>
+                    <th className="py-1.5 px-2 text-center bg-violet-50 border-r border-violet-200 text-violet-800" colSpan={3}>Overtime</th>
+                    <th className="py-1.5 px-2 text-center bg-sky-50 border-r border-sky-200 text-sky-800" colSpan={3}>Comp-Off</th>
                   </tr>
-                  <tr className="sticky top-8 z-20 bg-slate-50 shadow-sm">
-                    <th className="iu-table-th">Member</th>
-                    <th className="iu-table-th hidden md:table-cell">Category</th>
-                    <th className="iu-table-th text-center bg-emerald-50/70 border-l border-emerald-100">Present</th>
-                    <th className="iu-table-th text-center bg-emerald-50/70">Leave</th>
-                    <th className="iu-table-th text-center bg-emerald-50/70">Tour</th>
-                    <th className="iu-table-th text-center bg-emerald-50/70 border-r border-emerald-100 font-extrabold">Total</th>
-                    <th className="iu-table-th text-center bg-amber-50/70">Open</th>
-                    <th className="iu-table-th text-center bg-amber-50/70">Availed</th>
-                    <th className="iu-table-th text-center bg-amber-50/70 border-r border-amber-100 font-extrabold">Closing</th>
-                    <th className="iu-table-th text-center bg-violet-50/70">Served</th>
-                    <th className="iu-table-th text-center bg-violet-50/70">Applied</th>
-                    <th className="iu-table-th text-center bg-violet-50/70 border-r border-violet-100 font-extrabold">Approved</th>
-                    <th className="iu-table-th text-center bg-sky-50/70">Served</th>
-                    <th className="iu-table-th text-center bg-sky-50/70">Applied</th>
-                    <th className="iu-table-th text-center bg-sky-50/70 border-r border-sky-100 font-extrabold">Approved</th>
+                  <tr className="sticky top-7 z-20 bg-slate-50 shadow-sm text-[10px] uppercase tracking-wider font-bold text-slate-500">
+                    <th className="py-1.5 px-2 text-left">Member</th>
+                    <th className="py-1.5 px-2 text-left hidden md:table-cell">Cat</th>
+                    <th className="py-1.5 px-1.5 text-center bg-emerald-50/70 border-l border-emerald-100">Pres</th>
+                    <th className="py-1.5 px-1.5 text-center bg-emerald-50/70">Lv</th>
+                    <th className="py-1.5 px-1.5 text-center bg-emerald-50/70">Tour</th>
+                    <th className="py-1.5 px-1.5 text-center bg-emerald-50/70 border-r border-emerald-100 font-extrabold">Tot</th>
+                    <th className="py-1.5 px-1.5 text-center bg-amber-50/70">Open</th>
+                    <th className="py-1.5 px-1.5 text-center bg-amber-50/70">Avld</th>
+                    <th className="py-1.5 px-1.5 text-center bg-amber-50/70 border-r border-amber-100 font-extrabold">Close</th>
+                    <th className="py-1.5 px-1.5 text-center bg-violet-50/70">Srvd</th>
+                    <th className="py-1.5 px-1.5 text-center bg-violet-50/70">Appl</th>
+                    <th className="py-1.5 px-1.5 text-center bg-violet-50/70 border-r border-violet-100 font-extrabold">Apprv</th>
+                    <th className="py-1.5 px-1.5 text-center bg-sky-50/70">Srvd</th>
+                    <th className="py-1.5 px-1.5 text-center bg-sky-50/70">Appl</th>
+                    <th className="py-1.5 px-1.5 text-center bg-sky-50/70 border-r border-sky-100 font-extrabold">Apprv</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -280,36 +280,41 @@ export default function Reports() {
                     const otServed = r.overtime_hours_served || 0;
                     const otApplied = r.overtime_hours_pending || 0;
                     const otApproved = r.overtime_hours_approved || 0;
-                    const fmtHrs = (n) => (n ? `${(+n).toFixed(2).replace(/\.?0+$/, "")}h` : "0h");
+                    // Blank-on-zero helpers (7 Jul 2026 user-requested):
+                    // a wall of "0"s makes it hard to spot the members
+                    // who actually have something going on. Empty cells
+                    // read as "nothing here, move on".
+                    const n = (v) => (v ? v : "");
+                    const h = (v) => (v ? `${(+v).toFixed(2).replace(/\.?0+$/, "")}h` : "");
                     return (
                       <tr key={r.member_id} className="hover:bg-slate-50" data-testid={`attn-row-${r.member_id}`}>
-                        <td className="iu-table-td font-semibold">
+                        <td className="py-1.5 px-2 font-semibold text-slate-800 border-t border-slate-100">
                           {r.member_name}
-                          <div className="text-xs text-slate-400">
+                          <div className="text-[10px] text-slate-400 leading-tight">
                             {r.rank || ""}
                             {r.attendance_pct !== undefined && (
-                              <span className="ml-2 text-slate-500">{r.attendance_pct}%</span>
+                              <span className={r.rank ? "ml-1.5" : ""}>{r.attendance_pct}%</span>
                             )}
                           </div>
                         </td>
-                        <td className="iu-table-td hidden md:table-cell">{categoryLabel(r.category)}</td>
+                        <td className="py-1.5 px-2 hidden md:table-cell text-slate-600 border-t border-slate-100">{categoryLabel(r.category)}</td>
                         {/* Attendance group */}
-                        <td className="iu-table-td text-center bg-emerald-50/30 border-l border-emerald-100 font-semibold text-emerald-700" data-testid={`days-present-${r.member_id}`}>{r.days_present}</td>
-                        <td className="iu-table-td text-center bg-emerald-50/30 text-amber-700" data-testid={`days-leave-${r.member_id}`}>{r.days_leave || 0}</td>
-                        <td className="iu-table-td text-center bg-emerald-50/30 text-orange-700" data-testid={`days-tour-${r.member_id}`}>{r.days_tour || 0}</td>
-                        <td className="iu-table-td text-center bg-emerald-50/30 border-r border-emerald-100 font-extrabold text-slate-900" data-testid={`days-total-${r.member_id}`}>{attnTotal}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-l border-t border-emerald-100 font-semibold text-emerald-700" data-testid={`days-present-${r.member_id}`}>{n(r.days_present)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-amber-700" data-testid={`days-leave-${r.member_id}`}>{n(r.days_leave)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-orange-700" data-testid={`days-tour-${r.member_id}`}>{n(r.days_tour)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-r border-t border-emerald-100 font-extrabold text-slate-900" data-testid={`days-total-${r.member_id}`}>{n(attnTotal)}</td>
                         {/* Leave group */}
-                        <td className="iu-table-td text-center bg-amber-50/30">{r.leave_balance_opening || 0}</td>
-                        <td className="iu-table-td text-center bg-amber-50/30">{r.leave_balance_taken_ytd || 0}</td>
-                        <td className={`iu-table-td text-center bg-amber-50/30 border-r border-amber-100 font-extrabold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{r.leave_balance_remaining || 0}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100">{n(r.leave_balance_opening)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100">{n(r.leave_balance_taken_ytd)}</td>
+                        <td className={`py-1.5 px-1.5 text-center bg-amber-50/30 border-r border-t border-amber-100 font-extrabold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{n(r.leave_balance_remaining)}</td>
                         {/* Overtime group */}
-                        <td className="iu-table-td text-center bg-violet-50/30">{fmtHrs(otServed)}</td>
-                        <td className="iu-table-td text-center bg-violet-50/30 text-amber-700">{fmtHrs(otApplied)}</td>
-                        <td className="iu-table-td text-center bg-violet-50/30 border-r border-violet-100 font-extrabold text-emerald-700">{fmtHrs(otApproved)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100">{h(otServed)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 text-amber-700">{h(otApplied)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-r border-t border-violet-100 font-extrabold text-emerald-700">{h(otApproved)}</td>
                         {/* Comp-Off group */}
-                        <td className="iu-table-td text-center bg-sky-50/30" data-testid={`comp-off-earned-${r.member_id}`}>{r.comp_off_earned || 0}</td>
-                        <td className="iu-table-td text-center bg-sky-50/30 text-amber-700" data-testid={`comp-off-applied-${r.member_id}`}>{r.comp_off_applied || 0}</td>
-                        <td className="iu-table-td text-center bg-sky-50/30 border-r border-sky-100 font-extrabold text-emerald-700" data-testid={`comp-off-approved-${r.member_id}`}>{r.comp_off_used || 0}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100" data-testid={`comp-off-earned-${r.member_id}`}>{n(r.comp_off_earned)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 text-amber-700" data-testid={`comp-off-applied-${r.member_id}`}>{n(r.comp_off_applied)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-r border-t border-sky-100 font-extrabold text-emerald-700" data-testid={`comp-off-approved-${r.member_id}`}>{n(r.comp_off_used)}</td>
                       </tr>
                     );
                   })}
