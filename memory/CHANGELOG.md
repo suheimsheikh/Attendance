@@ -5,6 +5,27 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Stale-photo detection on Data Quality
+
+Photos older than 12 months on athletes now surface as
+`member.photo_stale` in Data Quality (low severity, "Stale data"
+category). Athletes only — staff / coach faces are stable enough
+that a 3-year-old photo isn't a coaching-recognition problem, so
+they're excluded to keep the queue focused.
+
+- **Backend**: `_scan_member` in `data_quality.py` checks
+  `photo_captured_at` (server-stamped on every upload/replace);
+  photos with a valid ISO timestamp older than 365 days emit the
+  finding with a `"Refresh photo"` fix action pointing at the
+  Members edit modal.
+- **Test**: new `test_stale_photo_detection` — synthetically ages
+  an athlete's `photo_captured_at` by 800 days, asserts the
+  finding + fix label + severity, then restores the original.
+  Uses a new `mongo_db` conftest fixture (direct pymongo handle,
+  auto-skips when Mongo isn't configured).
+- **Live**: current DB is fresh so no members flagged yet — will
+  surface naturally as photos age past 12 months.
+
 ## 7 Jul 2026 — Photo UX cleanup + opportunistic capture on Presence
 
 ### 1. New shared `PhotoZoom` modal (`components/PhotoZoom.jsx`)

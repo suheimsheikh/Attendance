@@ -51,6 +51,7 @@ def _fix_for(code: str, entity_ids: list) -> Optional[dict]:
         "athlete.no_parent_mobile":    ("Add parent contact", "/admin/members"),
         "member.bad_mobile":           ("Fix mobile",        "/admin/members"),
         "member.no_photo":             ("Add photo",         "/admin/members"),
+        "member.photo_stale":          ("Refresh photo",     "/admin/members"),
         "member.dob_in_future":        ("Fix DOB",           "/admin/members"),
         "member.dob_ancient":          ("Fix DOB",           "/admin/members"),
         "member.dob_bad_format":       ("Fix DOB",           "/admin/members"),
@@ -296,6 +297,28 @@ def make_router(db, require_admin) -> APIRouter:
                     "entity_ids": [u["id"]],
                     "entity_names": [u.get("full_name")],
                 })
+            else:
+                # Stale photo — anything older than 12 months. Only
+                # applies to athletes (competitive kids grow fast;
+                # staff/coach faces are stable enough that a stale
+                # photo isn't a coaching-recognition problem).
+                captured = u.get("photo_captured_at")
+                if u.get("category") == "athlete" and captured:
+                    try:
+                        capt_dt = datetime.fromisoformat(captured.replace("Z", "+00:00"))
+                        age_days = (now - capt_dt).days
+                        if age_days > 365:
+                            findings.append({
+                                "category": "Stale data",
+                                "code": "member.photo_stale",
+                                "severity": "low",
+                                "message": f"Photo captured {age_days} days ago — kids' faces change fast, worth a refresh",
+                                "entity_type": "member",
+                                "entity_ids": [u["id"]],
+                                "entity_names": [u.get("full_name")],
+                            })
+                    except (ValueError, TypeError):
+                        pass
 
         # ── Leaves ────────────────────────────────────────────────
         leaves = await db.leaves.find({}, {"_id": 0}).to_list(20000)

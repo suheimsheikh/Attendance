@@ -77,3 +77,23 @@ def athlete(admin_client, base_url):
 @pytest.fixture(scope="session")
 def shared_state():
     return {}
+
+
+@pytest.fixture(scope="session")
+def mongo_db():
+    """Direct pymongo handle to the app's MongoDB. Only used by tests
+    that need to seed fields the API doesn't expose (e.g. server-
+    stamped `photo_captured_at` for stale-photo detection).
+
+    Returns None if `MONGO_URL` / `DB_NAME` aren't configured — tests
+    using this fixture should `pytest.skip()` on None."""
+    url = os.environ.get("MONGO_URL")
+    name = os.environ.get("DB_NAME")
+    if not url or not name:
+        return None
+    try:
+        from pymongo import MongoClient
+        client = MongoClient(url)
+        return client[name]
+    except Exception:
+        return None

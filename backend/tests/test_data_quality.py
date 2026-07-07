@@ -98,3 +98,41 @@ def test_findings_carry_fix_metadata(admin_client, base_url, athlete):
     finally:
         admin_client.patch(f"{base_url}/api/members/{mid}",
                            json={"leave_balance_opening": original}, timeout=15)
+
+
+def test_stale_photo_detection(admin_client, base_url, athlete, mongo_db):
+    """Photos older than 12 months on an ATHLETE must surface as
+    `member.photo_stale` with a "Refresh photo" fix action.
+
+    Uses direct Mongo write because `photo_captured_at` isn't a
+    user-facing PATCH field (it's stamped by the server on photo
+    upload). Skips if the mongo fixture isn't wired in this env."""
+    import datetime as dt
+    if mongo_db is None:
+        pytest.skip("no direct mongo fixture in this env")
+    mid = athlete["id"]
+    two_years_ago = (dt.datetime.now(dt.timezone.utc)
+                     - dt.timedelta(days=800)).isoformat()
+    original = mongo_db.users.find_one({"id": mid}) or {}
+    try:
+        mongo_db.users.update_one(
+            {"id": mid},
+            {"$set": {"photo": "data:image/png;base64,test",
+                      "category": "athlete",
+                      "photo_captured_at": two_years_ago}},
+        )
+        sc = admin_client.get(f"{base_url}/api/admin/data-quality",
+                              timeout=30).json()
+        stale = [f for f in sc["findings"]
+                 if f["code"] == "member.photo_stale" and mid in f["entity_ids"]]
+        assert stale, "stale photo not surfaced"
+        assert stale[0]["fix"]["label"] == "Refresh photo"
+        assert stale[0]["severity"] == "low"
+    finally:
+        mongo_db.users.update_one(
+            {"id": mid},
+            {"$set": {
+                "photo": original.get("photo"),
+                "photo_captured_at": original.get("photo_captured_at"),
+            }},
+        )
