@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Loader2, Check, X, AlertTriangle, Plus, Coffee, ChevronDown, ChevronUp, Users, RefreshCw, Bed, Tent, Sailboat, ShieldAlert } from "lucide-react";
+import { Loader2, Check, X, AlertTriangle, Plus, Coffee, ChevronDown, ChevronUp, Users, RefreshCw, Bed } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { shortDate } from "../../utils";
@@ -7,6 +7,7 @@ import { ApplyForm } from "../MyLeaves";
 import { BreakForm } from "./Calendar";
 import OverlapNotice from "../../components/OverlapNotice";
 import EventConflictNotice from "../../components/EventConflictNotice";
+import ConflictAcknowledgeModal from "../../components/ConflictAcknowledgeModal";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -403,8 +404,26 @@ export default function AdminLeaves({ embedded = false }) {
         />
       )}
       {confirmGate && (
-        <ApproveConflictGate
-          gate={confirmGate}
+        <ConflictAcknowledgeModal
+          open
+          camps={confirmGate.camps}
+          regattas={confirmGate.regattas}
+          heading="Confirm approval — conflicts detected"
+          subheading={
+            <>
+              <span className="font-semibold">{confirmGate.leave.member_name}</span>&apos;s{" "}
+              {confirmGate.leave.type === "posting" ? "posting" : confirmGate.leave.type} runs{" "}
+              <span className="font-mono">
+                {shortDate(confirmGate.leave.start_date)} → {shortDate(confirmGate.leave.end_date)}
+              </span>
+              , overlapping{" "}
+              <span className="font-bold">{confirmGate.camps.length + confirmGate.regattas.length}</span>{" "}
+              scheduled event{(confirmGate.camps.length + confirmGate.regattas.length) === 1 ? "" : "s"}.
+            </>
+          }
+          ackLabel="I've reviewed the conflicts above and confirm this member can be spared during these events."
+          confirmLabel="Confirm approval"
+          testIdPrefix="approve-conflict-gate"
           onCancel={() => setConfirmGate(null)}
           onConfirm={async () => {
             await decide(confirmGate.leave.id, "approved");
@@ -412,125 +431,6 @@ export default function AdminLeaves({ embedded = false }) {
           }}
         />
       )}
-    </div>
-  );
-}
-
-/**
- * ApproveConflictGate — modal blocker shown when the admin clicks
- * Approve on a Leave/Tour/Posting that overlaps one or more camps or
- * regattas. Requires the admin to explicitly tick "I've reviewed the
- * conflicts" before the Confirm button unlocks — a small friction to
- * make sure the notice isn't just clicked-through on autopilot.
- *
- * The API lookup runs in the parent (so we can skip the modal entirely
- * when the leave has zero conflicts); this component is purely UI.
- */
-function ApproveConflictGate({ gate, onCancel, onConfirm }) {
-  const { leave, camps, regattas } = gate;
-  const [ack, setAck] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const total = camps.length + regattas.length;
-  const submit = async () => {
-    setBusy(true);
-    try { await onConfirm(); } finally { setBusy(false); }
-  };
-  return (
-    <div
-      className="iu-modal"
-      data-testid="approve-conflict-gate"
-      onClick={(e) => e.target === e.currentTarget && onCancel()}
-    >
-      <div className="iu-modal-card max-w-lg">
-        <header className="p-4 border-b border-amber-100 bg-amber-50/60 rounded-t-lg flex items-start gap-3">
-          <ShieldAlert size={22} className="text-amber-700 shrink-0 mt-0.5"/>
-          <div className="flex-1">
-            <h3 className="font-extrabold text-slate-900 text-sm">Confirm approval — conflicts detected</h3>
-            <p className="text-xs text-slate-600 mt-0.5">
-              <span className="font-semibold">{leave.member_name}</span>&apos;s{" "}
-              {leave.type === "posting" ? "posting" : leave.type} runs{" "}
-              <span className="font-mono">{shortDate(leave.start_date)} → {shortDate(leave.end_date)}</span>,
-              overlapping <span className="font-bold">{total}</span> scheduled event{total === 1 ? "" : "s"}.
-            </p>
-          </div>
-        </header>
-
-        <div className="p-4 space-y-3 max-h-[50vh] overflow-y-auto">
-          {camps.length > 0 && (
-            <div data-testid="gate-camps">
-              <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 inline-flex items-center gap-1">
-                <Tent size={11}/> Camps ({camps.length})
-              </div>
-              <ul className="space-y-1">
-                {camps.map((c) => (
-                  <li key={c.id} className="text-xs bg-amber-50 border border-amber-200 rounded px-2 py-1.5 flex items-baseline gap-2" data-testid={`gate-camp-${c.id}`}>
-                    <span className="font-semibold text-amber-900 flex-1">{c.name}</span>
-                    <span className="font-mono text-[10px] text-amber-800 shrink-0">
-                      {shortDate(c.start_date)}
-                      {c.start_date !== c.end_date && ` → ${shortDate(c.end_date)}`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {regattas.length > 0 && (
-            <div data-testid="gate-regattas">
-              <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 inline-flex items-center gap-1">
-                <Sailboat size={11}/> Regattas ({regattas.length})
-              </div>
-              <ul className="space-y-1">
-                {regattas.map((r) => (
-                  <li key={r.id} className="text-xs bg-amber-50 border border-amber-200 rounded px-2 py-1.5 flex items-baseline gap-2" data-testid={`gate-regatta-${r.id}`}>
-                    <span className="font-semibold text-amber-900 flex-1">
-                      {r.name}
-                      {r.location && <span className="text-amber-700/70 font-normal"> · {r.location}</span>}
-                    </span>
-                    <span className="font-mono text-[10px] text-amber-800 shrink-0">
-                      {shortDate(r.start_date)}
-                      {r.start_date !== r.end_date && ` → ${shortDate(r.end_date)}`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        <div className="px-4 pb-4">
-          <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              data-testid="gate-ack-checkbox"
-              checked={ack}
-              onChange={(e) => setAck(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-            />
-            <span>
-              I&apos;ve reviewed the conflicts above and confirm this member can be spared during these events.
-            </span>
-          </label>
-        </div>
-
-        <div className="p-3 border-t border-slate-100 flex gap-2 bg-slate-50/40 rounded-b-lg">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="iu-btn-secondary flex-1"
-            data-testid="gate-cancel"
-          >Cancel</button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!ack || busy}
-            data-testid="gate-confirm"
-            className="iu-btn-primary flex-1"
-          >
-            {busy ? <Loader2 className="animate-spin" size={14}/> : <Check size={14}/>}
-            Confirm approval
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

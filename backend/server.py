@@ -3003,23 +3003,28 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         co_earned = _comp_off_earned(u, sessions)
         co_used = _count_days_of_type(u["id"], "comp_off")
         co_pending = max(0, co_earned - co_used)
-        # Days the member is "accounted for" — present, leave, tour, break,
-        # or comp-off. Anything else in the span is *provisionally* absent
-        # — but weekly-off days they didn't work AND the in-progress day
-        # (today, if the window ends today) are legitimately-off, not
-        # absent. See the block near the top of this function.
+        # Days the member is "accounted for" — present, leave, tour,
+        # posting (admin off-base assignment), late-coming (approved
+        # delayed arrival), break, or comp-off. Anything else in the
+        # span is *provisionally* absent — but weekly-off days they
+        # didn't work AND the in-progress day (today, if the window
+        # ends today) are legitimately-off, not absent. See the block
+        # near the top of this function.
         #
         # Build the *set* of accounted calendar days first so overlaps
         # between categories (e.g. half-day check-in + half-day leave on
         # the same date, or a leave that spans across a Sunday the
         # member also checked in on) don't double-count.
         accounted_dates: set = set(present_dates)
-        for leave in leaves_by_user_typed.get(u["id"], {}).get("leave", []):
-            accounted_dates |= _days_overlap(leave["start_date"], leave["end_date"])
-        for leave in leaves_by_user_typed.get(u["id"], {}).get("tour", []):
-            accounted_dates |= _days_overlap(leave["start_date"], leave["end_date"])
-        for leave in leaves_by_user_typed.get(u["id"], {}).get("comp_off", []):
-            accounted_dates |= _days_overlap(leave["start_date"], leave["end_date"])
+        # All leave-like types that mean "not absent" on that date. Note
+        # `late_coming` is a same-day one-day record acknowledging the
+        # member will arrive late — an approved one is admin-sanctioned
+        # presence for the day, even if attendance never got captured
+        # (7 Jul 2026 fix: ARUNA was showing absent for a Jul 2 with
+        # approved late-coming and no attendance row).
+        for ltype in ("leave", "tour", "posting", "comp_off", "late_coming"):
+            for leave in leaves_by_user_typed.get(u["id"], {}).get(ltype, []):
+                accounted_dates |= _days_overlap(leave["start_date"], leave["end_date"])
         for b in breaks_window:
             if _breaks_module.break_applies_to(b, u):
                 accounted_dates |= _days_overlap(b["start_date"], b["end_date"])

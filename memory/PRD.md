@@ -1381,3 +1381,65 @@ existing `test_review_iter7.py` (4 backend tests for the conflicts
 endpoint) — still 4/4 green. `test_hours_absent_weekly_off.py` — 4/4
 green. Cleaned up the test leave post-verification.
 
+
+## ARUNA absent-count fix + Member-side conflict gate (7 Jul 2026)
+
+### 1. ARUNA showing 3 days absent — traced to `late_coming`
+User asked why ARUNA SURUGU (staff / cook) showed 3 days absent for
+Jul 1-7 despite having an approved `late_coming` on Jul 2. Root
+cause: the `accounted_dates` set built for the `days_absent`
+computation only looked at `leave / tour / comp_off` — but the leaves
+collection also stores `posting` and `late_coming` records. An
+approved `late_coming` is admin-sanctioned presence for that date
+(the member said "I'll be late" and admin OK'd it), so it should
+count as accounted even when the actual attendance row is missing.
+
+**Fix**: expanded the accounted-types tuple in `compute_hours_report`
+(server.py) from `("leave", "tour", "comp_off")` to `("leave",
+"tour", "posting", "comp_off", "late_coming")`. ARUNA now shows
+absent=2 (legitimate Wed Jul 1 + Fri Jul 3), off=2 (Mon weekly-off +
+in-progress today), accounted=3 (late-coming Jul 2 + leave Jul 4-5).
+Invariant `accounted + off + absent = span` still holds for all 133
+members.
+
+### 2. Member-side apply-form conflict gate ("potential improvement")
+Extracted the admin approval gate into a reusable component
+`components/ConflictAcknowledgeModal.jsx` (accepts custom heading,
+subheading, ack-label, confirm-label + testId prefix). Both flows
+now share the same modal implementation:
+
+- **Admin Approve** (`admin/Leaves.jsx`): "Confirm approval — conflicts
+  detected" / "I've reviewed the conflicts above and confirm this
+  member can be spared during these events." / **Confirm approval**
+- **Member Submit** (`pages/MyLeaves.jsx` `ApplyForm`): "You'll miss
+  scheduled events during this window" / "I understand I'll miss the
+  events listed above and still want to submit this request." /
+  **Submit request**
+
+**Behaviour on Submit** (member self-apply):
+- Only fires for `leave / tour / posting` types.
+- Fetches `/api/leaves/event-conflicts` for the requested window.
+- Zero conflicts → submits immediately (no friction).
+- Any conflicts → modal blocks until the member ticks the ack.
+- Admin-on-behalf multi-pick is not gated (per-member conflicts would
+  be ambiguous); single-pick admin-on-behalf uses the same modal with
+  admin phrasing.
+
+**Files touched**:
+- `backend/server.py` — `accounted_dates` extended to include
+  posting + late_coming.
+- `frontend/src/components/ConflictAcknowledgeModal.jsx` — new
+  shared component.
+- `frontend/src/pages/admin/Leaves.jsx` — refactored to use
+  shared modal.
+- `frontend/src/pages/MyLeaves.jsx` — new submit intercept + gate
+  render.
+
+**Verified**: pytest 30/30 pass across
+`test_hours_absent_weekly_off.py`, `test_routes_reports.py`,
+`test_review_iter7.py`. Manual E2E on preview:
+- ARUNA correctly shows absent=2 in the July window.
+- Filed a Jul 13-15 leave from the member Apply form → modal fired
+  showing "Agape Sat Sun Camp" + "40th International Hyderabad
+  Sailing Week"; Submit disabled until checkbox ticked.
+

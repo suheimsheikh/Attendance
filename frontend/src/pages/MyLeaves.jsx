@@ -6,6 +6,7 @@ import Avatar from "../components/Avatar";
 import LeaveBalanceNotice from "../components/LeaveBalanceNotice";
 import OverlapNotice from "../components/OverlapNotice";
 import EventConflictNotice from "../components/EventConflictNotice";
+import ConflictAcknowledgeModal from "../components/ConflictAcknowledgeModal";
 import FormErrorBanner from "../components/FormErrorBanner";
 import { useFormError } from "../hooks/useFormError";
 import { shortDate, todayIso } from "../utils";
@@ -334,6 +335,12 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   const [location, setLocation] = useState("");
   const [expectedArrival, setExpectedArrival] = useState("");
   const [busy, setBusy] = useState(false);
+  // Conflict-gate state (2 Feb 2026): when the requested window
+  // overlaps a camp / regatta, we intercept submit and show an ack
+  // modal before firing the API. `pendingSubmit` holds the callback
+  // to invoke once the member ticks "I understand".
+  const [conflictGate, setConflictGate] = useState(null);
+  const [pendingSubmit, setPendingSubmit] = useState(null);
   // Half-day (30 Jun 2026): only valid when type=leave AND single-day.
   // `halfDay` ∈ null | "FN" | "PN". null means full-day.
   const [halfDay, setHalfDay] = useState(null);
@@ -543,39 +550,78 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
       formErr.setMessage("Half-day is only for single-day Leave applications");
       return;
     }
+
+    // The actual submit, invoked either immediately (no conflicts) or
+    // after the ack modal (with conflicts).
+    const doSubmit = async () => {
+      setBusy(true);
+      try {
+        if (asAdmin) {
+          const reasonOut = type === "late_coming" && expectedArrival
+            ? `${reason.trim()} (expected arrival ${expectedArrival})`
+            : reason.trim();
+          const r = await api.post("/leaves/group", {
+            user_ids: [...picked],
+            type,
+            start_date: start,
+            end_date: end,
+            reason: reasonOut,
+            location: (type === "tour" || type === "posting") ? location : null,
+            auto_approve: autoApprove,
+            half_day: (type === "leave" && halfDay) ? halfDay : null,
+          });
+          toast.success(`${r.created} ${r.created === 1 ? "request" : "requests"} created (${r.status})`);
+        } else {
+          const payload = {
+            type, start_date: start, end_date: end, reason,
+            location: (type === "tour" || type === "posting") ? location : null,
+            expected_arrival: type === "late_coming" ? expectedArrival : null,
+            half_day: (type === "leave" && halfDay) ? halfDay : null,
+          };
+          await api.post("/leaves", payload);
+          toast.success("Request submitted");
+        }
+        onCreated();
+      } catch (err) {
+        formErr.setFromApi(err, "Failed to submit request");
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    // Only gate leave/tour/posting — the other types don't have a
+    // "during the period" semantic (comp_off is legacy, late_coming
+    // is a same-day arrival note).
+    const gatedTypes = ["leave", "tour", "posting"];
+    if (!gatedTypes.includes(type)) {
+      return doSubmit();
+    }
+
+    // Fetch conflicts for the window. For admin multi-pick this is
+    // ambiguous per-member — we skip the gate then (the caller can
+    // still see individual notices on the row when approving). Only
+    // gate self-apply or single-pick admin apply.
+    if (asAdmin && picked.size !== 1) {
+      return doSubmit();
+    }
     setBusy(true);
     try {
-      if (asAdmin) {
-        // Admin path → always use the group endpoint, even for a single pick.
-        // expected_arrival isn't accepted by /leaves/group; fold it into the reason
-        // so the admin's intent isn't lost.
-        const reasonOut = type === "late_coming" && expectedArrival
-          ? `${reason.trim()} (expected arrival ${expectedArrival})`
-          : reason.trim();
-        const r = await api.post("/leaves/group", {
-          user_ids: [...picked],
-          type,
-          start_date: start,
-          end_date: end,
-          reason: reasonOut,
-          location: (type === "tour" || type === "posting") ? location : null,
-          auto_approve: autoApprove,
-          half_day: (type === "leave" && halfDay) ? halfDay : null,
-        });
-        toast.success(`${r.created} ${r.created === 1 ? "request" : "requests"} created (${r.status})`);
+      const params = { start_date: start, end_date: end };
+      if (asAdmin) params.user_id = Array.from(picked)[0];
+      const res = await api.get("/leaves/event-conflicts", params);
+      const camps = res?.camps || [];
+      const regattas = res?.regattas || [];
+      if (camps.length === 0 && regattas.length === 0) {
+        // Clean path — no overlaps, no modal.
+        await doSubmit();
       } else {
-        const payload = {
-          type, start_date: start, end_date: end, reason,
-          location: (type === "tour" || type === "posting") ? location : null,
-          expected_arrival: type === "late_coming" ? expectedArrival : null,
-          half_day: (type === "leave" && halfDay) ? halfDay : null,
-        };
-        await api.post("/leaves", payload);
-        toast.success("Request submitted");
+        setConflictGate({ camps, regattas });
+        setPendingSubmit(() => doSubmit);
       }
-      onCreated();
     } catch (err) {
-      formErr.setFromApi(err, "Failed to submit request");
+      // Conflict lookup failed — don't block the user's workflow.
+      console.debug("event-conflicts lookup failed", err);
+      await doSubmit();
     } finally {
       setBusy(false);
     }
@@ -853,6 +899,35 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           </button>
         </form>
       </div>
+      {conflictGate && (
+        <ConflictAcknowledgeModal
+          open
+          camps={conflictGate.camps}
+          regattas={conflictGate.regattas}
+          heading={asAdmin ? "You're about to file a leave during a scheduled event" : "You'll miss scheduled events during this window"}
+          subheading={
+            <>
+              Your {type === "posting" ? "posting" : type} runs{" "}
+              <span className="font-mono">{shortDate(start)} → {shortDate(end)}</span>
+              , overlapping{" "}
+              <span className="font-bold">{conflictGate.camps.length + conflictGate.regattas.length}</span>{" "}
+              scheduled event{(conflictGate.camps.length + conflictGate.regattas.length) === 1 ? "" : "s"}.
+            </>
+          }
+          ackLabel={asAdmin
+            ? "I've reviewed the conflicts above and want to file this leave regardless."
+            : "I understand I'll miss the events listed above and still want to submit this request."}
+          confirmLabel="Submit request"
+          testIdPrefix="apply-conflict-gate"
+          onCancel={() => { setConflictGate(null); setPendingSubmit(null); }}
+          onConfirm={async () => {
+            const p = pendingSubmit;
+            setConflictGate(null);
+            setPendingSubmit(null);
+            if (p) await p();
+          }}
+        />
+      )}
     </div>
   );
 }
