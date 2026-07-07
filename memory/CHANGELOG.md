@@ -5,6 +5,26 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Muster photo prompt is now truly non-blocking
+
+**Problem**: the coach ticks 20 athletes for check-in, hits the button,
+and gets stopped by a photo-capture modal for every athlete without a
+photo BEFORE the muster is filed. If they close the tab, they lose the
+check-in they thought they'd made.
+
+**Fix** (Muster.jsx):
+- `submit()` now calls `runBulk(picked)` FIRST — check-in fires and
+  a success toast lands immediately.
+- If any of the picked athletes had no photo, we then open the
+  `SelfieCapture` modal as a POST-checkin cleanup queue with a 400ms
+  delay so the success toast is visible.
+- Subtitle updated to: **"Checked in ✓ — capture their photo while
+  they're here. N left · tap Skip or close (×) to bail anytime."**
+- `advancePhotoQueue([])` now just closes the modal — no longer
+  triggers a second bulk-checkin.
+- Coach can Save, Skip, or × out at any point. Check-in is already
+  recorded, so bailing has zero consequence.
+
 ## 7 Jul 2026 — Context-sensitive Fix button on Data Quality rows
 
 **Shipped**

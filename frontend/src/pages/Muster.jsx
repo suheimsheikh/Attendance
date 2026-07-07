@@ -70,21 +70,20 @@ export default function Muster() {
     }
   }, [mode, load]);
 
-  // Step through the photo queue: open the next missing-photo athlete in the
-  // selfie modal until empty, then submit the muster bulk endpoint.
+  // Step through the photo queue as an OPTIONAL post-checkin cleanup
+  // — check-in has already fired by the time we get here (7 Jul 2026
+  // user-requested "non-blocking"). Empty queue just closes the
+  // modal; the coach can Skip any single athlete without consequence.
   const advancePhotoQueue = useCallback((queue) => {
     if (queue.length === 0) {
       setPhotoTarget(null);
       setPhotoQueue([]);
-      // queue exhausted — submit the actual muster now with the originally
-      // picked IDs (which we read from state at the moment of submit).
-      runBulk(Array.from(picked));
       return;
     }
     const next = queue[0];
     setPhotoTarget({ id: next.id, full_name: next.full_name, queued: true });
     setPhotoQueue(queue);
-  }, [picked, runBulk]);
+  }, []);
 
   const savePhoto = async (dataUrl) => {
     if (!photoTarget) return;
@@ -197,17 +196,21 @@ export default function Muster() {
       toast.error("Tick at least one athlete first");
       return;
     }
-    // Only prompt for photos on check-IN (during muster the coach has the
-    // athlete in front of them). Check-OUT skips this — most go home in groups
-    // and we don't want to slow that down.
-    const missing = mode === "checkin"
+    // Snapshot who needs a photo BEFORE we clear the picked set on
+    // successful bulk. Check-OUT skips the prompt entirely — athletes
+    // are usually leaving in a group and the coach doesn't want to be
+    // slowed down. 7 Jul 2026: non-blocking — check-in fires first,
+    // photo capture opens as an optional follow-up.
+    const needsPhoto = mode === "checkin"
       ? (data?.athletes || []).filter((a) => picked.has(a.id) && !a.photo)
       : [];
-    if (missing.length > 0) {
-      advancePhotoQueue(missing);
-      return;
+    await runBulk(Array.from(picked));
+    if (needsPhoto.length > 0) {
+      // Small delay so the success toast lands first — otherwise the
+      // camera modal opens before the coach registers the check-in
+      // succeeded.
+      setTimeout(() => advancePhotoQueue(needsPhoto), 400);
     }
-    runBulk(Array.from(picked));
   };
 
   const allVisiblePicked = tickable.length > 0 && tickable.every((s) => picked.has(s.id));
@@ -492,7 +495,7 @@ export default function Muster() {
           title={`Photo for ${photoTarget.full_name}`}
           subtitle={
             photoTarget.queued
-              ? `Capturing photos before check-in · ${photoQueue.length} left. Tap Skip to do it later.`
+              ? `Checked in ✓ — capture their photo while they're here. ${photoQueue.length} left · tap Skip or close (×) to bail anytime.`
               : "Point your camera at the athlete. We'll save this to their profile."
           }
           facingMode="environment"
