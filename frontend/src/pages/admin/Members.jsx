@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { Loader2, Plus, Search, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, showApiError } from "../../api";
 import BulkEditBar from "../../components/BulkEditBar";
 import MemberForm from "./MemberForm";
@@ -146,6 +146,37 @@ export default function Members() {
       (m.institution || "").toLowerCase().includes(q)
     );
   }, [members, search, bucket, onlyAdmins, instFilter]);
+
+  // Deep-link handling — Data Quality "Fix" buttons route here with
+  // `?edit=<id>` (opens the edit modal directly) or `?highlight=<id>`
+  // (scrolls the row into view and briefly tints it amber). Both
+  // params are consumed once; we strip them so a refresh doesn't
+  // re-open the modal.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightId = searchParams.get("highlight");
+  const editId = searchParams.get("edit");
+  useEffect(() => {
+    if (!editId || loading || members.length === 0) return;
+    const m = members.find((x) => x.id === editId);
+    if (m) setEditing(m);
+    // Consume the param so a refresh doesn't re-pop the modal.
+    setSearchParams((p) => {
+      const np = new URLSearchParams(p);
+      np.delete("edit");
+      return np;
+    }, { replace: true });
+  }, [editId, members, loading, setSearchParams]);
+
+  // Highlight-scroll: when the deep-link points at a member, scroll
+  // their row into view once the members list is loaded so admins
+  // land visually on the record they came here to fix.
+  useEffect(() => {
+    if (!highlightId || loading) return;
+    const el = document.querySelector(`[data-testid="member-row-${highlightId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightId, loading, filtered]);
 
   const remove = async (m) => {
     if (!window.confirm(`Delete ${m.full_name}? This also removes their attendance & leaves.`)) return;
@@ -376,6 +407,7 @@ export default function Members() {
                     onPatchField={patchMember}
                     onToggleRow={toggleRow}
                     onPhotoUpdated={onPhotoUpdated(m.id)}
+                    highlighted={highlightId === m.id}
                   />
                 ))}
                 {filtered.length === 0 && (

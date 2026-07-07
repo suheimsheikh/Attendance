@@ -37,6 +37,7 @@ export default function MemberRow({
   options,
   onEdit, onDelete, onToggleAttendance, onPatchField, onToggleRow,
   onPhotoUpdated,
+  highlighted,
 }) {
   const p = presenceRow;
   const b = BUCKET_BY_KEY[bucketOf(m)] || BUCKET_BY_KEY.athlete;
@@ -44,7 +45,10 @@ export default function MemberRow({
 
   return (
     <tr
-      className={`transition cursor-pointer ${isSelected ? "bg-sky-50/80" : b.rowHover}`}
+      className={`transition cursor-pointer ${
+        highlighted ? "ring-2 ring-amber-400 bg-amber-50/60" :
+        isSelected ? "bg-sky-50/80" : b.rowHover
+      }`}
       data-testid={`member-row-${m.id}`}
       onDoubleClick={(e) => { if (!isInteractive(e.target)) onEdit(m); }}
       title="Double-click to edit · click checkbox + shift-click for bulk select"

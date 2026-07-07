@@ -5,6 +5,53 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Context-sensitive Fix button on Data Quality rows
+
+**Shipped**
+- Backend: each finding now ships a `fix` metadata object shaped
+  `{ label, to, params }` (e.g.
+  `{ label: "Add parent contact", to: "/admin/members",
+     params: { edit: "<id>", highlight: "<id>" } }`).
+  Mapping lives in `_fix_for(code, entity_ids)` in
+  `routes/data_quality.py` — one central source of truth. Findings
+  without an automated jump target simply have `fix: null`.
+- Frontend: new `FixButton` component in DataQuality.jsx renders a
+  slate-900 button with a wrench icon at the end of every row that
+  has a fix. Empty → em-dash.
+- Members.jsx now honours **deep-links**:
+  - `?edit=<id>` → auto-opens the MemberForm modal for that member
+    (param is consumed so a refresh doesn't re-open).
+  - `?highlight=<id>` → scrolls the row into view + tints it amber
+    with a ring for visual anchoring.
+- MemberRow.jsx accepts a `highlighted` prop; when true, applies
+  `ring-2 ring-amber-400 bg-amber-50/60` to the row.
+
+**Fix routes wired**
+| Finding code | Fix label | Destination |
+|---|---|---|
+| athlete.no_parent_mobile | "Add parent contact" | Members edit modal |
+| member.missing_fields    | "Fix missing fields" | Members edit modal |
+| member.bad_mobile        | "Fix mobile"        | Members edit modal |
+| member.no_photo          | "Add photo"         | Members edit modal |
+| member.dob_*             | "Fix DOB"           | Members edit modal |
+| member.duplicate_*       | "Review dupes"      | Members edit modal on first offender |
+| member.negative_leave    | "Adjust balance"    | Leave Balances (highlighted row) |
+| member.high_leave_opening| "Review balance"    | Leave Balances (highlighted row) |
+| leave.end_before_start   | "Review leave"      | Approvals (highlighted leave) |
+| leave.late_coming_multiday | "Review leave"    | Approvals (highlighted leave) |
+| leave.half_day_wrong_type  | "Review leave"    | Approvals (highlighted leave) |
+| session.checkout_before_checkin | "Open member" | Members edit modal |
+| session.open_over_36h    | "Open member"       | Members edit modal |
+
+**Tests**
+- New `test_findings_carry_fix_metadata` — verifies every
+  automatable finding ships a `fix` object with label, to, and
+  params that include `highlight`.
+
+**Verified live** — clicked "Add parent contact" on the DQ page, was
+routed to `/admin/members?edit=<id>&highlight=<id>`, edit modal
+opened directly on the flagged athlete. Total round-trip: one click.
+
 ## 7 Jul 2026 — Audit trail + Data Quality dashboard
 
 ### Backend

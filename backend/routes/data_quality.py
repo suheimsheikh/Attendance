@@ -30,6 +30,62 @@ from fastapi import APIRouter, Depends
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3}
 
 
+def _fix_for(code: str, entity_ids: list) -> Optional[dict]:
+    """Map a finding code to a "Fix" call-to-action the frontend can
+    turn into a button. Returns None when there's no automated jump
+    target (e.g. review-only findings on duplicates).
+
+    Each fix returns:
+        { label, to, params }
+    where `to` is a react-router path and `params` is a dict of URL
+    search-params to append. The frontend links the button directly.
+    """
+    if not entity_ids:
+        return None
+    first = entity_ids[0]
+
+    # Member-scoped: jump to Manage Members with `?edit=<id>` so the
+    # edit modal opens directly on the right row.
+    MEMBER_EDIT = {
+        "member.missing_fields":       ("Fix missing fields", "/admin/members"),
+        "athlete.no_parent_mobile":    ("Add parent contact", "/admin/members"),
+        "member.bad_mobile":           ("Fix mobile",        "/admin/members"),
+        "member.no_photo":             ("Add photo",         "/admin/members"),
+        "member.dob_in_future":        ("Fix DOB",           "/admin/members"),
+        "member.dob_ancient":          ("Fix DOB",           "/admin/members"),
+        "member.dob_bad_format":       ("Fix DOB",           "/admin/members"),
+    }
+    if code in MEMBER_EDIT:
+        label, to = MEMBER_EDIT[code]
+        return {"label": label, "to": to,
+                "params": {"edit": first, "highlight": first}}
+
+    # Leave-balance findings live on the Leave Balances page.
+    if code in ("member.negative_leave", "member.high_leave_opening"):
+        return {"label": "Adjust balance", "to": "/admin/leave-balances",
+                "params": {"highlight": first}}
+
+    # Duplicate members: highlight the FIRST offender and let the admin
+    # walk the list from there (up to 5 shown as chips in the row).
+    if code in ("member.duplicate_email", "member.duplicate_mobile",
+                "member.duplicate_name"):
+        return {"label": "Review dupes", "to": "/admin/members",
+                "params": {"highlight": first, "edit": first}}
+
+    # Leave-record corruption → Approvals page.
+    if code in ("leave.end_before_start", "leave.late_coming_multiday",
+                "leave.half_day_wrong_type"):
+        return {"label": "Review leave", "to": "/admin/approvals",
+                "params": {"highlight": first}}
+
+    # Attendance session corruption → open the member for retroactive fix.
+    if code in ("session.checkout_before_checkin", "session.open_over_36h"):
+        return {"label": "Open member", "to": "/admin/members",
+                "params": {"highlight": first, "edit": first}}
+
+    return None
+
+
 def _severity_key(f: dict) -> int:
     return SEVERITY_ORDER.get(f.get("severity", "low"), 99)
 
@@ -310,6 +366,12 @@ def make_router(db, require_admin) -> APIRouter:
 
         # Sort by severity, then category.
         findings.sort(key=lambda f: (_severity_key(f), f.get("category", ""), f.get("code", "")))
+
+        # Attach a "Fix" call-to-action to every finding that has an
+        # automated jump target. Done after sorting so the mapping is
+        # a pure post-processing step (easy to audit / disable).
+        for f in findings:
+            f["fix"] = _fix_for(f.get("code", ""), f.get("entity_ids") or [])
 
         # Roll-up counts for the summary card.
         summary = defaultdict(int)

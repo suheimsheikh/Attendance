@@ -72,3 +72,29 @@ def test_synthetic_negative_leave_surfaces(admin_client, base_url, athlete):
     finally:
         admin_client.patch(f"{base_url}/api/members/{mid}",
                            json={"leave_balance_opening": original}, timeout=15)
+
+
+def test_findings_carry_fix_metadata(admin_client, base_url, athlete):
+    """Every automatable finding must ship a `fix` object with a
+    label, react-router path, and params — that's the contract the
+    frontend "Fix" button relies on."""
+    mid = athlete["id"]
+    original = athlete.get("leave_balance_opening")
+    try:
+        # Guarantee at least one high-severity, member-scoped finding.
+        admin_client.patch(f"{base_url}/api/members/{mid}",
+                           json={"leave_balance_opening": -3}, timeout=15)
+        sc = admin_client.get(f"{base_url}/api/admin/data-quality", timeout=30).json()
+        # Grab our synthetic finding.
+        our = next((f for f in sc["findings"]
+                    if f["code"] == "member.negative_leave" and mid in f["entity_ids"]),
+                   None)
+        assert our is not None
+        assert our.get("fix"), "fix metadata missing on negative-leave finding"
+        for k in ("label", "to", "params"):
+            assert k in our["fix"], f"fix.{k} missing"
+        assert our["fix"]["to"].startswith("/admin/")
+        assert "highlight" in our["fix"]["params"]
+    finally:
+        admin_client.patch(f"{base_url}/api/members/{mid}",
+                           json={"leave_balance_opening": original}, timeout=15)

@@ -8,7 +8,7 @@
  *      drift (say, someone typing a 9-digit mobile) surfaces fast.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCw, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { Loader2, RefreshCw, ShieldAlert, CheckCircle2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
@@ -30,6 +30,27 @@ function SeverityBadge({ severity }) {
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
       {severity}
     </span>
+  );
+}
+
+/** Render a context-sensitive "Fix" button for a finding, if the
+ * backend attached a `fix` action (route + params). Falls back to
+ * an em-dash when no automated jump target exists (e.g. review-only
+ * findings like session-open-too-long which need human judgement). */
+function FixButton({ finding }) {
+  const fix = finding.fix;
+  if (!fix) return <span className="text-slate-300">—</span>;
+  const qs = new URLSearchParams(fix.params || {}).toString();
+  const to = qs ? `${fix.to}?${qs}` : fix.to;
+  return (
+    <Link
+      to={to}
+      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-900 text-white text-[11px] font-bold hover:bg-slate-700 transition"
+      data-testid={`dq-fix-${finding.code}`}
+    >
+      <Wrench size={11} />
+      {fix.label}
+    </Link>
   );
 }
 
@@ -179,6 +200,7 @@ export default function DataQuality() {
                   <th className="py-2 px-3 text-left w-24">Severity</th>
                   <th className="py-2 px-3 text-left">Issue</th>
                   <th className="py-2 px-3 text-left">Affected</th>
+                  <th className="py-2 px-3 text-left w-32">Fix</th>
                   <th className="py-2 px-3 text-left w-40 font-mono text-[10px] normal-case">Code</th>
                 </tr>
               </thead>
@@ -188,6 +210,7 @@ export default function DataQuality() {
                     <td className="py-2 px-3"><SeverityBadge severity={f.severity} /></td>
                     <td className="py-2 px-3 text-slate-800">{f.message}</td>
                     <td className="py-2 px-3"><EntityRefs f={f} /></td>
+                    <td className="py-2 px-3"><FixButton finding={f} /></td>
                     <td className="py-2 px-3 font-mono text-[10px] text-slate-400">{f.code}</td>
                   </tr>
                 ))}
