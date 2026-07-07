@@ -1489,3 +1489,40 @@ shortcut).
 134 members (89 athletes + 45 rest), Attendance % clamped to elapsed
 days, ARUNA row consistent with earlier payroll display.
 
+
+## Attendance table — grouped 3-column layout (7 Jul 2026)
+User specified the exact column set for the unified Attendance tab:
+
+  | Attendance                            | Leave                    | Overtime            |
+  | Present · Leave · Tour · Total        | Open · Availed · Closing | Applied · Approved  |
+
+**Implementation**:
+- Two-row `<thead>`: coloured group headers (emerald / amber / violet)
+  span multiple columns; sub-headers name each metric. Group cells
+  are tinted at 20 % opacity so the eye tracks the group without the
+  table getting shouty.
+- **Total** (Attendance group) = `days_present + days_leave + days_tour`
+  — a simple sum, no comp-off / break folded in (kept the definition
+  transparent to admins).
+- **Leave · Open / Availed / Closing** map to the existing
+  `leave_balance_opening / _taken_ytd / _remaining` fields returned
+  by `/api/reports/payroll`. Closing turns red when negative.
+- **Overtime · Applied** = approved + pending OT hours;
+  **Approved** = just approved.
+- Attendance % moved from its own column to a small subtle chip below
+  the member name (still useful for the "Attendance %" sort, no
+  longer a dominant number).
+- Dropped columns per user spec: Comp-Off (E/U/P), OT-pending
+  qualifier, Total hrs, Late days, Overstays, and the standalone
+  Absent column. If any of these are needed later they can go back
+  as an "Expand row" detail panel.
+- 11 columns total, all comfortably fit on a 1400-px wide viewport
+  without hidden-on-mobile trickery.
+
+**Files touched**: `frontend/src/pages/admin/Reports.jsx` only.
+Backend and tests untouched.
+
+**Verified** on live preview — screenshot shows the tri-group layout
+rendering cleanly across 134 members with the correct Attendance
+window (01/07 → 07/07, current-month clamp still active).
+

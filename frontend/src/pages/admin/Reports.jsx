@@ -243,53 +243,57 @@ export default function Reports() {
           <div className="iu-card overflow-hidden">
             <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="iu-table-th">Attendance</th>
+                <thead>
+                  {/* Grouped header row (2 Feb 2026 — user-requested
+                      layout: Attendance · Leave · Overtime). */}
+                  <tr className="bg-slate-100 text-[10px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200">
+                    <th className="py-2 px-4 text-left" colSpan={2}>&nbsp;</th>
+                    <th className="py-2 px-4 text-center bg-emerald-50/60 border-l border-r border-emerald-200 text-emerald-800" colSpan={4}>Attendance</th>
+                    <th className="py-2 px-4 text-center bg-amber-50/60 border-r border-amber-200 text-amber-800" colSpan={3}>Leave</th>
+                    <th className="py-2 px-4 text-center bg-violet-50/60 border-r border-violet-200 text-violet-800" colSpan={2}>Overtime</th>
+                  </tr>
+                  <tr className="bg-slate-50">
                     <th className="iu-table-th">Member</th>
                     <th className="iu-table-th hidden md:table-cell">Category</th>
-                    <th className="iu-table-th">Present</th>
-                    <th className="iu-table-th hidden md:table-cell">Total hrs</th>
-                    <th className="iu-table-th hidden lg:table-cell">OT hrs (approved)</th>
-                    <th className="iu-table-th">Leave days</th>
-                    <th className="iu-table-th">Comp-Off (E/U/P)</th>
-                    <th className="iu-table-th hidden lg:table-cell">Leave bal · open</th>
-                    <th className="iu-table-th hidden lg:table-cell">Leave bal · taken YTD</th>
-                    <th className="iu-table-th">Leave bal · remaining</th>
+                    <th className="iu-table-th text-center bg-emerald-50/40 border-l border-emerald-100">Present</th>
+                    <th className="iu-table-th text-center bg-emerald-50/40">Leave</th>
+                    <th className="iu-table-th text-center bg-emerald-50/40">Tour</th>
+                    <th className="iu-table-th text-center bg-emerald-50/40 border-r border-emerald-100 font-extrabold">Total</th>
+                    <th className="iu-table-th text-center bg-amber-50/40">Open</th>
+                    <th className="iu-table-th text-center bg-amber-50/40">Availed</th>
+                    <th className="iu-table-th text-center bg-amber-50/40 border-r border-amber-100 font-extrabold">Closing</th>
+                    <th className="iu-table-th text-center bg-violet-50/40">Applied</th>
+                    <th className="iu-table-th text-center bg-violet-50/40 border-r border-violet-100 font-extrabold">Approved</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {displayedRows.map((r) => (
-                    <tr key={r.member_id} className="hover:bg-slate-50" data-testid={`attn-row-${r.member_id}`}>
-                      <td className="iu-table-td font-bold">{r.attendance_pct}%</td>
-                      <td className="iu-table-td font-semibold">
-                        {r.member_name}
-                        <div className="text-xs text-slate-400">{r.rank || ""}</div>
-                      </td>
-                      <td className="iu-table-td hidden md:table-cell">{categoryLabel(r.category)}</td>
-                      <td className="iu-table-td font-semibold text-emerald-700" data-testid={`days-present-${r.member_id}`}>{r.days_present}</td>
-                      <td className="iu-table-td hidden md:table-cell">{r.total_hours}h</td>
-                      <td className="iu-table-td hidden lg:table-cell">
-                        <span className="font-semibold text-emerald-700">{r.overtime_hours_approved || 0}h</span>
-                        {r.overtime_hours_pending > 0 && (
-                          <span className="ml-1 text-amber-600 text-xs">(+{r.overtime_hours_pending}h pending)</span>
-                        )}
-                      </td>
-                      <td className="iu-table-td text-amber-700" data-testid={`days-leave-${r.member_id}`}>{(r.days_leave || 0) + (r.days_break || 0)}</td>
-                      <td className="iu-table-td">
-                        <span className="text-xs">
-                          <span className="text-slate-700 font-semibold">{r.comp_off_earned || 0}</span>
-                          <span className="text-slate-400"> · </span>
-                          <span className="text-emerald-700">{r.comp_off_used || 0}</span>
-                          <span className="text-slate-400"> · </span>
-                          <span className={(r.comp_off_pending || 0) > 0 ? "text-violet-700 font-semibold" : "text-slate-400"}>{r.comp_off_pending || 0}</span>
-                        </span>
-                      </td>
-                      <td className="iu-table-td hidden lg:table-cell">{r.leave_balance_opening || 0}</td>
-                      <td className="iu-table-td hidden lg:table-cell">{r.leave_balance_taken_ytd || 0}</td>
-                      <td className={`iu-table-td font-bold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{r.leave_balance_remaining || 0}</td>
-                    </tr>
-                  ))}
+                  {displayedRows.map((r) => {
+                    const attnTotal = (r.days_present || 0) + (r.days_leave || 0) + (r.days_tour || 0);
+                    const otApplied = (r.overtime_hours_approved || 0) + (r.overtime_hours_pending || 0);
+                    return (
+                      <tr key={r.member_id} className="hover:bg-slate-50" data-testid={`attn-row-${r.member_id}`}>
+                        <td className="iu-table-td font-semibold">
+                          {r.member_name}
+                          <div className="text-xs text-slate-400">
+                            {r.rank || ""}
+                            {r.attendance_pct !== undefined && (
+                              <span className="ml-2 text-slate-500">{r.attendance_pct}%</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="iu-table-td hidden md:table-cell">{categoryLabel(r.category)}</td>
+                        <td className="iu-table-td text-center bg-emerald-50/20 border-l border-emerald-100 font-semibold text-emerald-700" data-testid={`days-present-${r.member_id}`}>{r.days_present}</td>
+                        <td className="iu-table-td text-center bg-emerald-50/20 text-amber-700" data-testid={`days-leave-${r.member_id}`}>{r.days_leave || 0}</td>
+                        <td className="iu-table-td text-center bg-emerald-50/20 text-orange-700" data-testid={`days-tour-${r.member_id}`}>{r.days_tour || 0}</td>
+                        <td className="iu-table-td text-center bg-emerald-50/20 border-r border-emerald-100 font-extrabold text-slate-900" data-testid={`days-total-${r.member_id}`}>{attnTotal}</td>
+                        <td className="iu-table-td text-center bg-amber-50/20">{r.leave_balance_opening || 0}</td>
+                        <td className="iu-table-td text-center bg-amber-50/20">{r.leave_balance_taken_ytd || 0}</td>
+                        <td className={`iu-table-td text-center bg-amber-50/20 border-r border-amber-100 font-extrabold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{r.leave_balance_remaining || 0}</td>
+                        <td className="iu-table-td text-center bg-violet-50/20">{otApplied ? `${otApplied.toFixed(2).replace(/\.?0+$/, "")}h` : "0h"}</td>
+                        <td className="iu-table-td text-center bg-violet-50/20 border-r border-violet-100 font-extrabold text-emerald-700">{(r.overtime_hours_approved || 0) ? `${r.overtime_hours_approved}h` : "0h"}</td>
+                      </tr>
+                    );
+                  })}
                   {!loading && displayedRows.length === 0 && (
                     <tr><td colSpan={11} className="text-center py-10 text-slate-500">No data.</td></tr>
                   )}
