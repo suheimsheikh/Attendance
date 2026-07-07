@@ -178,8 +178,11 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
+  const inflightRef = React.useRef(false);
 
   const load = useCallback(async (soft = false) => {
+    if (inflightRef.current) return;      // guard against concurrent refreshes
+    inflightRef.current = true;
     if (soft) setReloading(true); else setLoading(true);
     try {
       const r = await api.get("/admin/dashboard");
@@ -189,6 +192,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
       setReloading(false);
+      inflightRef.current = false;
     }
   }, []);
 

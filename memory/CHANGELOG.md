@@ -5,6 +5,58 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Single-glance Admin Dashboard
+
+New `/admin/dashboard` landing page for admins and head coaches —
+a one-screen overview of the club's day, week, and month without
+clicking through six tabs. Also made this the default admin landing
+(bare `/admin` now redirects here).
+
+**Backend** — new file `routes/dashboard.py`
+- Endpoint: `GET /api/admin/dashboard` (admin-only). One targeted
+  fan-out, no full scans. Bulk-loads users (up to 5k) once, then runs
+  narrow queries per zone.
+- Returns four zones in one payload:
+  - **now** — on-campus total + A/C/S/E breakdown, late today, absent
+    athletes (present set ∪ approved-leave set), guests present,
+    escorts on campus, pending-approvals (leaves + overtime + devices).
+  - **week** — 7-day sparkline (unique athletes vs unique staff per
+    day), top 5 late-comers (distinct late-days), birthdays this week,
+    camps + regattas overlapping the coming 7 days.
+  - **month** — staff hours MTD (coach + staff + executive), approved
+    OT hours, approved leave-days consumed, new members joined.
+  - **attention** — pending leaves / OT / devices / stale sessions
+    (open >36 h) / athletes without any parent contact.
+- Wired into `server.py` next to the data-quality router.
+
+**Frontend** — new file `pages/admin/Dashboard.jsx`
+- Left main column: three stacked SectionCards (Now / This week /
+  This month) with 6/2/4 clickable StatTiles. SVG dual-line sparkline,
+  top-late list with Avatars + category chips, birthdays, and
+  camps/regattas list.
+- Right rail: Attention list (5 rows, all linking to their queue
+  pages) + Shortcuts grid (6 nav buttons).
+- Auto-refresh every 60 s while tab is visible, with an in-flight
+  guard so slow networks can't double-fire. Manual Refresh button too.
+- 32 `data-testid`s across every tile, list, chip, and nav link so
+  the automated suite can drive precise assertions.
+- Sidebar (`Layout.jsx`) — new "Dashboard" entry (`Gauge` icon) at the
+  top of `NAV_ADMIN`. `/admin` redirects to `/admin/dashboard`.
+
+**Tests**
+- New `backend/tests/test_dashboard.py` — 3 contract tests: auth
+  gate (401/403), bogus-token rejection, and deep payload-shape
+  invariants (7-day sparkline, sorted top-late, pending-total sum,
+  attention/now cross-check, non-negative-int guarantees).
+- Testing agent (iter18) added `test_review_iter18.py` covering
+  non-admin token rejection and regression on 4 admin endpoints.
+- Frontend testing agent: all 32 data-testids present, click-throughs
+  correct, no console errors, no regressions on Presence/Muster/
+  Members/Reports/Approvals. 100% pass.
+
+---
+
+
 ## 7 Jul 2026 — OT-eligibility checkbox per member
 
 Admins can now opt individual members out of OT accrual regardless
