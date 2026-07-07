@@ -76,6 +76,16 @@ body {
   .iu-table-td {
     @apply text-sm text-slate-700 py-3 px-4 border-t border-slate-100;
   }
+  /* Modal overlay + card. Used by admin flows (EscortPhotoCleanup,
+     Institutions, Leaves-approval-gate). Adding this in Feb 2026 —
+     previous callers used the class names without CSS backing them
+     so modals were rendering inline in the page flow. */
+  .iu-modal {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm;
+  }
+  .iu-modal-card {
+    @apply w-full bg-white rounded-xl shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto;
+  }
 }
 
 /* Subtle scrollbar */

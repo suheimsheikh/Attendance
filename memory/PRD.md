@@ -1339,3 +1339,45 @@ is a **pre-existing** UTC/IST timezone flake unrelated to this fix.
 needed — the corrected `days_absent` value flows through the existing
 "Absent" column and the 11-column PDF layout unchanged.
 
+
+## Approval-gate for leaves overlapping camps/regattas (7 Jul 2026)
+**User request** ("f"): "Make it a blocking warning (admin must
+confirm 'I've read this' before Approve)." Applies to Approvals.
+
+**Behaviour**:
+- When an admin clicks Approve on a **pending Leave / Tour / Posting**
+  in `/admin/approvals?tab=leaves`, the client first hits
+  `/api/leaves/event-conflicts` for that leave's window.
+- **Zero conflicts** → approves immediately (no interruption for the
+  common case).
+- **Any conflicts** → opens a full-screen modal:
+  - Header: "Confirm approval — conflicts detected"
+  - Body: applicant name + window, then two accordions (Camps · Regattas)
+    listing every overlapping event with dates + location.
+  - Ackowledgement checkbox: "I've reviewed the conflicts above and
+    confirm this member can be spared during these events."
+  - Confirm button is **disabled** until the checkbox is ticked.
+- **Reject / Re-open** paths are never gated — safety net applies only
+  to Approve.
+- Comp-off + late-coming leave types skip the gate (no "during the
+  period" semantics).
+
+**Bonus fix**: the `iu-modal` / `iu-modal-card` CSS classes were used
+across three admin pages (`EscortPhotoCleanup`, `Institutions x2`, and
+now `Leaves`) but **never defined** in `index.css` — so those modals
+were rendering inline in the page flow instead of as overlays. Added
+proper `.iu-modal` (fixed inset, backdrop blur) + `.iu-modal-card`
+styles. All existing modals now render as centered overlays.
+
+**Files touched**:
+- `frontend/src/pages/admin/Leaves.jsx` — `startApprove` flow +
+  `ApproveConflictGate` sub-component.
+- `frontend/src/index.css` — `iu-modal` / `iu-modal-card` styles.
+
+**Verified**: manual E2E on preview — created a July 8-13 pending
+leave that overlaps 1 camp + 4 regattas, gate rendered correctly,
+checkbox toggled `Confirm approval` disabled → enabled. Reused
+existing `test_review_iter7.py` (4 backend tests for the conflicts
+endpoint) — still 4/4 green. `test_hours_absent_weekly_off.py` — 4/4
+green. Cleaned up the test leave post-verification.
+
