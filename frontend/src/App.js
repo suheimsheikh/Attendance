@@ -36,6 +36,7 @@ const EscortCheckIn = lazy(() => import("./pages/EscortCheckIn"));
 const EscortPhotoCleanup = lazy(() => import("./pages/admin/EscortPhotoCleanup"));
 const AuditLog = lazy(() => import("./pages/admin/AuditLog"));
 const DataQuality = lazy(() => import("./pages/admin/DataQuality"));
+const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -105,7 +106,8 @@ function App() {
             <Route path="escort-checkin" element={<EscortCheckIn />} />
             <Route path="whats-new" element={<WhatsNew />} />
             <Route path="profile" element={<RequireMember><Profile /></RequireMember>} />
-            <Route path="admin" element={<Navigate to="/presence" replace />} />
+            <Route path="admin" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="admin/dashboard" element={<RequireAdmin><Dashboard /></RequireAdmin>} />
             <Route path="admin/members" element={<RequireAdmin><Members /></RequireAdmin>} />
             <Route path="admin/approvals" element={<RequireAdmin><Approvals /></RequireAdmin>} />
             {/* Legacy direct links — keep deep-links working but funnel into Approvals. */}

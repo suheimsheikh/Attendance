@@ -5,7 +5,7 @@ import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, Building2, IdCard, Sailboat, MapPin,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert
+  ShieldAlert, Gauge
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -36,6 +36,7 @@ const NAV_COACH = [
 // landing page for admins — it carries the OT banners + "Coming up this week"
 // strip that used to live on the Admin Console.
 const NAV_ADMIN = [
+  { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true },
   { to: "/admin/members", label: "Manage Members", icon: Users },
   { to: "/admin/approvals", label: "Leave Tour Approvals", icon: ClipboardCheck },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },

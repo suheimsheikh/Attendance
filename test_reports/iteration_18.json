@@ -1,0 +1,36 @@
+{
+  "summary": "Iter 18 — Reviewed the new single-glance Admin Dashboard (backend GET /api/admin/dashboard + frontend /admin/dashboard). Backend: 3/3 existing contract tests + 3/3 new tests (non-admin rejection, deeper invariants, regression on 4 admin endpoints) all pass. Smoke suite still 9/9 green. Frontend: /admin redirects to /admin/dashboard, all 32 required data-testids present, tiles/attention rows/shortcuts/nav-dashboard/refresh all wired correctly, click-throughs land on /presence, /admin/approvals, /muster as designed. Zero console errors. No regression on /presence, /muster, /admin/members, /admin/reports, /admin/approvals.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_dashboard.py",
+    "/app/backend/tests/test_review_iter18.py",
+    "/app/test_reports/pytest/iter18_dashboard.xml",
+    "/app/test_reports/pytest/iter18_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/dashboard.py bulk-loads users with a 5000 cap, but if the org ever exceeds that, silent truncation would skew every metric. Consider raising the cap or paginating and asserting count(users) <= cap with a warning.",
+    "The `absent_athletes_today` computation counts only leave-covered exceptions (excused_leaves); athletes on approved tour/break may still show as 'absent'. Confirm intended semantics or extend the filter to cover tour/break types (routes/dashboard.py L84-98).",
+    "OT hours use `overtime_status == 'approved'` but the leave_days section filters by `type == 'leave'` (excludes tour/comp-off etc.) — this is a policy choice; document it in the endpoint docstring so future readers don't diverge.",
+    "Frontend Dashboard.jsx: auto-refresh every 60s calls `load(true)` but there's no cleanup / no in-flight guard — if a refresh takes >60s (slow network) two concurrent requests could race and toggle setData twice. Minor; not observed in preview.",
+    "Sparkline SVG has no aria-label / role='img' description — accessibility win to add tooltip on hover or aria label like `${lastAth} athletes today, ${lastStaff} staff/coaches today`."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter18.py (new — 3 tests: non-admin rejection, deep invariants, regression on 4 admin endpoints)"
+  ],
+  "success_rate": {"backend": "100% (12/12 across dashboard + smoke)", "frontend": "100% (all 32 testids + 5 regression pages + navigation flows)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 — used as documented",
+  "seed_data_creation": "One transient TEST_ non-admin member created via /api/members then deleted at end of test_dashboard_rejects_non_admin_token.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Dashboard live at /admin/dashboard. /admin now redirects. All 32 data-testids validated. Preview DB has: 40 on campus, 27 late, 52 absent, 85 pending OT approvals, 1615.6 staff hours MTD. Backend test file at /app/backend/tests/test_review_iter18.py can be re-run any time with `TEST_ADMIN_PASSWORD=Admin@12345 pytest tests/test_review_iter18.py tests/test_dashboard.py`.",
+  "rca_of_the_issue": "N/A — feature-testing pass, no bugs found."
+}

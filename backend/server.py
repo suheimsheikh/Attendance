@@ -3414,6 +3414,11 @@ app.include_router(_audit_router(db, require_admin))
 from routes.data_quality import make_router as _data_quality_router  # noqa: E402
 app.include_router(_data_quality_router(db, require_admin))
 
+# Single-glance admin dashboard (GET /api/admin/dashboard) — aggregates
+# Now / This week / This month / Attention widgets in one payload.
+from routes.dashboard import make_router as _dashboard_router  # noqa: E402
+app.include_router(_dashboard_router(db, require_admin))
+
 # Leave / Tour routes — split out 06/2026 during the server.py refactor.
 from routes.leaves import make_router as _leaves_router  # noqa: E402
 from holidays import (
