@@ -38,6 +38,9 @@ class UserPublic(BaseModel):
     mother_name: Optional[str] = None
     guardian_mobile: Optional[str] = None
     guardian_name: Optional[str] = None
+    # ISO YYYY-MM-DD. Optional — drives the "Happy birthday" flourish
+    # on the Check-In greeting (added 7 Jul 2026).
+    date_of_birth: Optional[str] = None
     # Optional decorated fields — populated by GET /members for the admin
     # Members page (Fleet / Last seen / Leave balance columns). Other
     # endpoints that return UserPublic just leave these as None.

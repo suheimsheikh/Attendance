@@ -5,6 +5,33 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Birthday flourish on Check-In greeting
+
+**Backend**
+- Added optional `date_of_birth: Optional[str]` (ISO YYYY-MM-DD) to
+  `MemberCreate`, `MemberUpdate`, and `UserPublic` (exposed via
+  `/auth/me` and `/api/members`).
+- PATCH auto-persists via existing `model_dump(exclude_unset=True)`.
+
+**Frontend**
+- `MemberForm.jsx` — new "Date of birth (optional)" field on the
+  admin member-edit form with `data-testid="mf-dob"`.
+- `SelfCheckIn.jsx` — `Greeting` component now compares today's
+  MM-DD against the user's DOB MM-DD. Match → renders
+  **"Happy birthday, {first_name} 🎂"** in a warm amber card
+  (`bg-amber-50 ring-amber-200`). Otherwise falls back to the
+  time-of-day salutation.
+
+**Tests**
+- New `backend/tests/test_dob_field.py` — 4 regression tests:
+  PATCH round-trip, `/auth/me` schema, `/members` list schema, and
+  the MM-DD equality rule that drives the flourish.
+- Full pytest suite still green (416 tests, `pytest -m smoke` still ~3s).
+
+**Verified live** — set admin DOB = today, refreshed Check-In page,
+saw "Happy birthday, Campus 🎂" render in amber card. Cleared field,
+greeting reverted to "Good afternoon, Campus 👋".
+
 ## 7 Jul 2026 — Personalised greeting on Check-In card
 
 - `SelfCheckIn.jsx` — added a `Greeting` helper component that

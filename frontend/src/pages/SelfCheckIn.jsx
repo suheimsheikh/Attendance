@@ -339,10 +339,33 @@ function fmtHmLocal(d) {
  * "Good morning, ARUNA 👋". Time-of-day slot follows local hour:
  * 05-11 morning · 12-16 afternoon · 17-21 evening · else night.
  * When the member is already checked in we shift to a "welcome back
- * on campus" register so the copy doesn't feel repetitive. */
+ * on campus" register so the copy doesn't feel repetitive.
+ *
+ * 7 Jul 2026 — birthday flourish: when today's MM-DD matches the
+ * member's `date_of_birth`, the wave 👋 becomes a cake 🎂 and the
+ * greeting reads "Happy birthday, ARUNA 🎂".
+ */
 function Greeting({ user, checkedIn }) {
   const firstName = (user?.full_name || "").trim().split(/\s+/)[0] || "there";
-  const hour = new Date().getHours();
+
+  // Birthday check — compare MM-DD only so the year is irrelevant.
+  const dob = user?.date_of_birth || "";
+  const now = new Date();
+  const todayMD = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const isBirthday = /^\d{4}-\d{2}-\d{2}$/.test(dob) && dob.slice(5) === todayMD;
+
+  if (isBirthday) {
+    return (
+      <div
+        className="mb-4 text-amber-800 font-extrabold text-lg md:text-xl bg-amber-50 rounded-xl px-3 py-2 ring-1 ring-amber-200"
+        data-testid="checkin-greeting"
+      >
+        Happy birthday, {firstName} 🎂
+      </div>
+    );
+  }
+
+  const hour = now.getHours();
   let slot = "night";
   if (hour >= 5 && hour < 12) slot = "morning";
   else if (hour < 17) slot = "afternoon";

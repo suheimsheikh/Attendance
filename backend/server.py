@@ -200,6 +200,9 @@ class MemberCreate(BaseModel):
     mother_name: Optional[str] = None
     guardian_mobile: Optional[str] = None
     guardian_name: Optional[str] = None
+    # ISO YYYY-MM-DD. Optional — powers the "Happy birthday" flourish
+    # on the Check-In greeting (added 7 Jul 2026).
+    date_of_birth: Optional[str] = None
 
 
 class MemberUpdate(BaseModel):
@@ -223,6 +226,7 @@ class MemberUpdate(BaseModel):
     mother_name: Optional[str] = None
     guardian_mobile: Optional[str] = None
     guardian_name: Optional[str] = None
+    date_of_birth: Optional[str] = None
 
 
 class LeaveBalanceBulkRow(BaseModel):
@@ -739,6 +743,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "mother_name": body.mother_name,
         "guardian_mobile": body.guardian_mobile,
         "guardian_name": body.guardian_name,
+        "date_of_birth": body.date_of_birth,
         "photo": None,
         "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
         "hashed_password": hash_password(body.password),

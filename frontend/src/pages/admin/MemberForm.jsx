@@ -32,6 +32,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     mother_name: initial?.mother_name || "",
     guardian_mobile: initial?.guardian_mobile || "",
     guardian_name: initial?.guardian_name || "",
+    date_of_birth: initial?.date_of_birth || "",
   });
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -224,6 +225,17 @@ export default function MemberForm({ initial, onClose, onSaved }) {
           <div>
             <label className="iu-label">{isEdit ? "Reset password (leave blank to keep)" : "Password"}</label>
             <input data-testid="mf-password" type="password" value={form.password} onChange={(e) => set("password", e.target.value)} className="iu-input" autoComplete="new-password" />
+          </div>
+          <div>
+            <label className="iu-label">Date of birth <span className="text-slate-400 font-normal">(optional)</span></label>
+            <input
+              data-testid="mf-dob"
+              type="date"
+              value={form.date_of_birth}
+              onChange={(e) => set("date_of_birth", e.target.value)}
+              className="iu-input"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">Powers a &ldquo;Happy birthday&rdquo; greeting on the Check-In screen.</p>
           </div>
           <div className="pt-3 mt-3 border-t border-slate-100">
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Parents & guardian</div>
