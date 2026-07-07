@@ -1663,3 +1663,61 @@ does what it says.
 - No backend contract broke — existing fields still returned;
   pytest 22/22 green.
 
+
+## Attendance table — compact 23-column layout (7 Jul 2026 evening)
+
+User asked to fit everything on-screen, blank the zeros, and add all
+8 suggested columns + an Escorts filter.
+
+### Compactness pass
+- Font dropped from `text-sm` → `text-xs` throughout the table.
+- Cell padding cut to `py-1.5 px-1.5`; header padding `py-1.5 px-2`.
+- Headers abbreviated for width: Pres · Lv · Tour · Off · Late · Half
+  · Abs · Tot · Tot h · Avg h · Open · Avld · Close · Srvd · Appl
+  · Apprv · Dut · Ovr. Group tags stay full-word.
+- **Blank-on-zero**: two tiny helpers `n(v)` and `h(v)` return empty
+  string for falsy values. A wall of `0`s made real activity hard to
+  spot; empty cells read as "nothing here, move on".
+- Table gets `min-w-[1500px]` — comfortable on a 1440-px laptop
+  screen with sidebar, retains horizontal scroll for future columns.
+
+### 6 groups × 23 columns
+1. **Attendance** (emerald · 8) — Pres · Lv · Tour · Off · Late ·
+   Half · Abs · **Tot**
+2. **Hours** (indigo · 2) — Tot h · Avg h
+3. **Leave** (amber · 3) — Open · Avld · **Close**
+4. **Overtime** (violet · 3) — Srvd · Appl · **Apprv**
+5. **Comp-Off** (sky · 3) — Srvd · Appl · **Apprv**
+6. **Escorts** (teal · 2) — Dut · Ovr
+
+Plus 2 fixed columns on the left (Member, Cat).
+
+### New data
+Backend `compute_hours_report` additions:
+- `half_days` — count of FN/PN half-day approved leaves in window.
+- `avg_hours_per_day` — `total_hours ÷ max(1, days_present)`.
+- `escort_days` — distinct dates in `escort_attendance` where the
+  member's id is in `check_in_athlete_ids`.
+- (Previously added: `overtime_hours_served`, `comp_off_applied`.)
+
+Frontend already had `days_off`, `days_absent`, `late_days`,
+`overstays`, `total_hours` — they just weren't surfaced.
+
+### Escorts filter chip
+New `Escorts` filter chip alongside `All / Athletes / Rest`. Counts
+and shows only rows with `escort_days > 0` in the window. Applied
+client-side against the payload — no backend endpoint change.
+
+### Files touched
+- `backend/server.py` — 3 new fields + escort-attendance query.
+- `frontend/src/pages/admin/Reports.jsx` — thead + 23 tbody cells +
+  Escorts filter + blank-on-zero helpers.
+
+### Verified
+- pytest 25/25 pass (`test_routes_reports.py` +
+  `test_hours_absent_weekly_off.py` + `test_reason_bank.py`).
+- Live preview screenshot shows all rows rendering with blanked
+  zeros, all 6 group headers, ABHIRAM=6/1/·/·/4/·/·/**6**, AINUL
+  HAQUE OT `1.52h`, ARUNA `2·2·2 abs · 22.5→20.5`, Asif Ahmed
+  half=1, escort_days=0 across the sample (Escorts chip counter is 0).
+

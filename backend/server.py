@@ -3023,6 +3023,42 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
     for lv in pending_comp_off:
         pending_comp_off_by_user.setdefault(lv["user_id"], []).append(lv)
 
+    # Half-day leaves (FN/PN, 0.5-day deduction) in the window — surfaced
+    # as its own column so admins can spot partial absences at a glance
+    # (7 Jul 2026 user-requested addition).
+    half_day_leaves = await db.leaves.find(
+        {
+            "status": "approved",
+            "type": "leave",
+            "half_day": {"$in": ["FN", "PN"]},
+            "start_date": {"$lte": end},
+            "end_date": {"$gte": start},
+        },
+        {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1},
+    ).to_list(10000)
+    half_days_by_user: dict = {}
+    for lv in half_day_leaves:
+        # Half-days are single-day by construction — start==end.
+        try:
+            d_ = date.fromisoformat(lv["start_date"])
+            if sd <= d_ <= ed:
+                half_days_by_user[lv["user_id"]] = half_days_by_user.get(lv["user_id"], 0) + 1
+        except Exception:
+            pass
+
+    # Escort-duty days per member (7 Jul 2026 user-requested): distinct
+    # dates in `escort_attendance` where the member was one of the
+    # athletes checked in with an escort. Useful for coaches / athletes
+    # who accompany parent-escorts around the campus.
+    escort_rows = await db.escort_attendance.find(
+        {"date": {"$gte": start, "$lte": end}},
+        {"_id": 0, "date": 1, "check_in_athlete_ids": 1},
+    ).to_list(10000)
+    escort_days_by_user: dict = {}
+    for er in escort_rows:
+        for aid in (er.get("check_in_athlete_ids") or []):
+            escort_days_by_user.setdefault(aid, set()).add(er["date"])
+
     # Breaks that overlap the report window — folded into the leave column
     # since on the Presence Board breaks already render as on_leave.
     breaks_window = await db.breaks.find(
@@ -3188,6 +3224,11 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
                 d for lv in pending_comp_off_by_user.get(u["id"], [])
                 for d in _days_overlap(lv["start_date"], lv["end_date"])
             }),
+            # 7 Jul 2026 user-requested extras — surface data that
+            # already existed on the row but wasn't rendered.
+            "half_days": half_days_by_user.get(u["id"], 0),
+            "avg_hours_per_day": round(total_hours / max(1, days_present), 2) if days_present else 0,
+            "escort_days": len(escort_days_by_user.get(u["id"], set())),
             "span_days": span_days,
             "attendance_pct": attendance_pct,
         })
