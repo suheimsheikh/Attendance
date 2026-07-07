@@ -13,7 +13,7 @@ import OfflineBanner from "./OfflineBanner";
 
 const NAV_MEMBER = [
   { to: "/", label: "My Check In/Out", icon: ScanLine, end: true },
-  { to: "/my-leaves", label: "My Leave/Tour/C-Off", icon: CalendarCheck2 },
+  { to: "/my-leaves", label: "Leave/Tour/Late", icon: CalendarCheck2 },
   // Escort kiosk: visible to every signed-in user. Athletes/coaches/staff
   // help mark escorts in/out — escorts themselves land here after phone
   // login (auth.jsx forces the redirect when `is_escort=true`).

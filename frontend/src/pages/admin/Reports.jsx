@@ -27,9 +27,10 @@ function monthWindow(year, monthIdx) {
 const CATEGORY_FILTERS = [
   { key: "all",     label: "All" },
   { key: "athlete", label: "Athletes" },
-  // "Rest" collapses staff/coach/executive into one bucket — matches the
+  // "Rest" (renamed to "Staff & Coaches" 7 Jul 2026 on user request)
+  // collapses staff/coach/executive into one bucket — matches the
   // way admins actually think about the two populations at YCH.
-  { key: "rest",    label: "Rest" },
+  { key: "rest",    label: "Staff & Coaches" },
   // "Escorts" surfaces members who accompanied a parent-escort in the
   // window (7 Jul 2026 user-requested). Filter is applied client-side
   // against the row's escort_days count.

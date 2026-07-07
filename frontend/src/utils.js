@@ -142,6 +142,18 @@ export function todayIso() {
   return `${y}-${m}-${day}`;
 }
 
+/** ISO date string (YYYY-MM-DD) for tomorrow in the browser's local
+ * timezone. Used by the Late-Coming apply form (added 7 Jul 2026 —
+ * user-requested since most late-comings are filed the previous night). */
+export function tomorrowIso() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function categoryLabel(cat) {
   return { athlete: "Athlete", staff: "Staff", coach: "Coach", executive: "Executive" }[cat] || cat;
 }

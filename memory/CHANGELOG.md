@@ -5,6 +5,42 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — UX cleanup (menu label, late-coming default, filter rename)
+
+**Shipped**
+- **Sidebar menu**: "My Leave/Tour/C-Off" → **"Leave/Tour/Late"**
+  (route unchanged: `/my-leaves`).
+- **Late-coming apply form** (MyLeaves.jsx ApplyForm):
+  - Default `start_date` / `end_date` now **tomorrow** instead of today
+    (`utils.tomorrowIso()` added). Rationale: most late-comings are
+    filed the previous night for the next morning's delay.
+  - Date picker `min` = today, `max` = tomorrow — hard-restricts the
+    range so admins don't see stray far-future picks.
+  - `To` picker is disabled for late_coming (single-day by design).
+    A synchronising effect keeps `end === start` under the covers.
+  - Copy updated: "Use this when you'll arrive late **today or
+    tomorrow**. Defaults to tomorrow — flip to today via the date
+    picker if needed."
+  - "Expected arrival today" label → "Expected arrival time"
+    (no longer implies same-day).
+  - Backend was already permissive on `start_date` for late_coming
+    (no future-date guard), so no server changes required.
+- **Attendance report filter**: "Rest" → **"Staff & Coaches"**
+  (chip label + PDF-export meta label both updated).
+
+**Files touched**
+- `frontend/src/components/Layout.jsx`
+- `frontend/src/pages/MyLeaves.jsx`
+- `frontend/src/pages/admin/Reports.jsx`
+- `frontend/src/utils.js` (new `tomorrowIso()` helper)
+- `backend/routes/reports.py` (PDF filter label only)
+
+**Verified end-to-end via Playwright**
+- Sidebar renders "Leave/Tour/Late"; old label gone.
+- Reports chip: "Staff & Coaches (44)".
+- Late Coming form defaults to `2026-07-08` with `min=2026-07-07`,
+  `max=2026-07-08` on the From picker.
+
 ## 7 Jul 2026 — Double-click drill-down timeline modal
 
 **Shipped**

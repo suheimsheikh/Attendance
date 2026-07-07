@@ -10,7 +10,7 @@ import ConflictAcknowledgeModal from "../components/ConflictAcknowledgeModal";
 import ReasonPicker from "../components/ReasonPicker";
 import FormErrorBanner from "../components/FormErrorBanner";
 import { useFormError } from "../hooks/useFormError";
-import { shortDate, todayIso } from "../utils";
+import { shortDate, todayIso, tomorrowIso } from "../utils";
 import { useEscape } from "../hooks/useEscape";
 
 const TYPE_LABELS = {
@@ -525,16 +525,26 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
     }];
   }, [asAdmin, picked, members, me]);
 
-  // Late-coming is single-day & today
+  // Late-coming is single-day. Defaults to TOMORROW (7 Jul 2026 —
+  // most late-coming applications are filed the previous night for
+  // the next-morning delay). User can flip back to today via the
+  // date picker; anything else is out of range.
   useEffect(() => {
     if (type === "late_coming") {
-      const t = todayIso();
+      const t = tomorrowIso();
       setStart(t); setEnd(t);
     }
     // Half-day is only valid on the Leave type — clear it whenever the
     // type changes to anything else.
     if (type !== "leave") setHalfDay(null);
   }, [type]);
+
+  // Keep `end` in lock-step with `start` for late_coming (single-day
+  // application; the To picker is disabled but the state still needs
+  // to track so the backend receives start_date == end_date).
+  useEffect(() => {
+    if (type === "late_coming") setEnd(start);
+  }, [type, start]);
 
   // Force `end === start` whenever a half-day is selected. The backend
   // rejects otherwise, but this keeps the picker consistent with the
@@ -772,7 +782,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
               </div>
             )}
             {type === "late_coming" && (
-              <p className="text-[11px] text-slate-500 mt-1.5">Use this when you&apos;ll arrive late today. Admin gets pinged so you&apos;re not flagged as absent.</p>
+              <p className="text-[11px] text-slate-500 mt-1.5">Use this when you&apos;ll arrive late today or tomorrow. Admin gets pinged so you&apos;re not flagged as absent. <span className="text-slate-400">Defaults to tomorrow — flip to today via the date picker if needed.</span></p>
             )}
             {type === "posting" && (
               <p className="text-[11px] text-sky-700 mt-1.5" data-testid="posting-note">
@@ -782,7 +792,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           </div>
           {type === "late_coming" && (
             <div>
-              <label className="iu-label">Expected arrival today</label>
+              <label className="iu-label">Expected arrival time</label>
               <input
                 data-testid="leave-expected-arrival"
                 type="time"
@@ -795,7 +805,15 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="iu-label">From</label>
-              <input data-testid="leave-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} className="iu-input" />
+              <input
+                data-testid="leave-start"
+                type="date"
+                value={start}
+                onChange={(e) => setStart(e.target.value)}
+                min={type === "late_coming" ? todayIso() : undefined}
+                max={type === "late_coming" ? tomorrowIso() : undefined}
+                className="iu-input"
+              />
             </div>
             <div>
               <label className="iu-label">To</label>
@@ -805,7 +823,8 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
                 value={halfDay ? start : end}
                 onChange={(e) => setEnd(e.target.value)}
                 min={start}
-                disabled={!!halfDay}
+                max={type === "late_coming" ? tomorrowIso() : undefined}
+                disabled={!!halfDay || type === "late_coming"}
                 className="iu-input disabled:bg-slate-100 disabled:cursor-not-allowed"
               />
             </div>

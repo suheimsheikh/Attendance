@@ -292,7 +292,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 elapsed = 0
             # Human filter descriptors so the report is self-describing.
             cat_label = {"athlete": "Athletes",
-                         "rest": "Rest (Staff / Coach / Executive)"}.get(category, "All")
+                         "rest": "Staff & Coaches (incl. Executive)"}.get(category, "All")
             filter_label = cat_label
             if fleet:
                 filter_label += f" · Fleet: {'(No fleet)' if fleet == '__none__' else fleet}"
