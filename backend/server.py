@@ -203,6 +203,11 @@ class MemberCreate(BaseModel):
     # ISO YYYY-MM-DD. Optional — powers the "Happy birthday" flourish
     # on the Check-In greeting (added 7 Jul 2026).
     date_of_birth: Optional[str] = None
+    # OT-eligible flag (7 Jul 2026). Explicit `False` disables OT
+    # accrual for this member regardless of category. `None` / `True`
+    # → the pre-existing category-based rule applies (staff/coach/
+    # executive accrue, athletes never do).
+    ot_eligible: Optional[bool] = None
 
 
 class MemberUpdate(BaseModel):
@@ -227,6 +232,7 @@ class MemberUpdate(BaseModel):
     guardian_mobile: Optional[str] = None
     guardian_name: Optional[str] = None
     date_of_birth: Optional[str] = None
+    ot_eligible: Optional[bool] = None
 
 
 class LeaveBalanceBulkRow(BaseModel):
@@ -744,6 +750,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "guardian_mobile": body.guardian_mobile,
         "guardian_name": body.guardian_name,
         "date_of_birth": body.date_of_birth,
+        "ot_eligible": body.ot_eligible,
         "photo": None,
         "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
         "hashed_password": hash_password(body.password),

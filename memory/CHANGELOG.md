@@ -5,6 +5,34 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — OT-eligibility checkbox per member
+
+Admins can now opt individual members out of OT accrual regardless
+of category — for salaried supervisors, contractors, or anyone
+whose contract doesn't include overtime.
+
+**Backend**
+- New optional `ot_eligible: bool` field on `MemberCreate`,
+  `MemberUpdate`, and `UserPublic` (`models.py` + `server.py`).
+- `services/attendance_calc.py` — `compute_overtime_in` and
+  `compute_overtime_out` now short-circuit and return `(0, "")` when
+  `member.get("ot_eligible") is False`. `None` / `True` preserve the
+  pre-existing category-based rule (staff/coach/executive accrue,
+  athletes never do). Opt-out semantics keep existing data intact.
+
+**Frontend**
+- New checkbox on the Members edit modal (`MemberForm.jsx`) labelled
+  "Include this member in Overtime calculation". Sub-copy explains
+  when to uncheck. `data-testid="mf-ot-eligible"`. Defaults to true
+  for legacy members with the field unset.
+
+**Tests**
+- New `backend/tests/test_ot_eligible.py`:
+  - PATCH round-trip (True → False → True).
+  - `/auth/me` exposes the field.
+  - Direct unit test on `compute_overtime_in` / `_out` proving the
+    gate works and category-based exclusion of athletes still wins.
+
 ## 7 Jul 2026 — Zebra striping on Attendance Report
 
 **Reports table** (`Reports.jsx`): every alternate row now carries a

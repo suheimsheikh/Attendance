@@ -41,6 +41,9 @@ class UserPublic(BaseModel):
     # ISO YYYY-MM-DD. Optional — drives the "Happy birthday" flourish
     # on the Check-In greeting (added 7 Jul 2026).
     date_of_birth: Optional[str] = None
+    # OT eligibility (7 Jul 2026). Explicit False disables OT accrual;
+    # None/True → category-based defaults apply.
+    ot_eligible: Optional[bool] = None
     # Optional decorated fields — populated by GET /members for the admin
     # Members page (Fleet / Last seen / Leave balance columns). Other
     # endpoints that return UserPublic just leave these as None.

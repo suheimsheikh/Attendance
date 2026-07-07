@@ -50,8 +50,19 @@ def hm_to_minutes(hm: Optional[str]) -> Optional[int]:
 
 
 def compute_overtime_in(office: Optional[dict], member: dict, ts: datetime) -> Tuple[int, str]:
-    """Returns (early_minutes, work_start_hm). 0 if not applicable."""
+    """Returns (early_minutes, work_start_hm). 0 if not applicable.
+
+    Gated by two flags:
+      • Member's `category` must be in OVERTIME_CATEGORIES (staff / coach /
+        executive — athletes never accrue OT).
+      • Member's `ot_eligible` must not be explicitly False. The flag is
+        opt-out (added 7 Jul 2026): missing/None/True → compute as before;
+        False → skip. Lets admins exclude specific staff members (e.g.
+        salaried supervisors) from OT accrual without changing category.
+    """
     if member.get("category") not in OVERTIME_CATEGORIES:
+        return 0, ""
+    if member.get("ot_eligible") is False:
         return 0, ""
     work_start = member.get("work_start")
     ws_min = hm_to_minutes(work_start)
@@ -64,8 +75,13 @@ def compute_overtime_in(office: Optional[dict], member: dict, ts: datetime) -> T
 
 
 def compute_overtime_out(office: Optional[dict], member: dict, ts: datetime) -> Tuple[int, str]:
-    """Returns (late_minutes, work_end_hm). 0 if not applicable."""
+    """Returns (late_minutes, work_end_hm). 0 if not applicable.
+
+    Same eligibility rules as `compute_overtime_in` — see that docstring.
+    """
     if member.get("category") not in OVERTIME_CATEGORIES:
+        return 0, ""
+    if member.get("ot_eligible") is False:
         return 0, ""
     work_end = member.get("work_end")
     we_min = hm_to_minutes(work_end)

@@ -33,6 +33,9 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     guardian_mobile: initial?.guardian_mobile || "",
     guardian_name: initial?.guardian_name || "",
     date_of_birth: initial?.date_of_birth || "",
+    // Undefined on legacy members → treat as eligible (matches the
+    // backend's opt-out semantics). Admin can uncheck to disable.
+    ot_eligible: initial?.ot_eligible !== false,
   });
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -236,6 +239,25 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               className="iu-input"
             />
             <p className="text-[11px] text-slate-500 mt-1">Powers a &ldquo;Happy birthday&rdquo; greeting on the Check-In screen.</p>
+          </div>
+          <div>
+            <label className="iu-label">Overtime eligibility</label>
+            <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
+              <input
+                data-testid="mf-ot-eligible"
+                type="checkbox"
+                checked={!!form.ot_eligible}
+                onChange={(e) => set("ot_eligible", e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800"
+              />
+              <span className="text-sm text-slate-700 leading-snug">
+                Include this member in Overtime calculation.
+                <span className="block text-[11px] text-slate-500 mt-0.5">
+                  Uncheck for salaried supervisors or anyone whose contract
+                  doesn&apos;t accrue OT. Athletes never accrue OT regardless.
+                </span>
+              </span>
+            </label>
           </div>
           <div className="pt-3 mt-3 border-t border-slate-100">
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Parents & guardian</div>
