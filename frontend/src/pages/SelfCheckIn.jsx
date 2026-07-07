@@ -6,7 +6,6 @@ import { useAuth } from "../auth";
 import { getLocation, speakLateMessage } from "../utils";
 import SelfieCapture from "../components/SelfieCapture";
 import DailyContent from "../components/DailyContent";
-import BrandHero from "../components/BrandHero";
 import ReasonPicker from "../components/ReasonPicker";
 
 function hmNow() {
@@ -166,8 +165,6 @@ export default function SelfCheckIn() {
 
   return (
     <div className="p-4 md:p-8 max-w-xl mx-auto">
-      <BrandHero />
-
       <header className="mb-6 text-center md:text-left">
         <h2 className="text-lg md:text-xl font-bold tracking-tight md:hidden">Check In / Out</h2>
         <h2 className="hidden md:block text-2xl md:text-3xl font-extrabold tracking-tight">Check In / Out</h2>

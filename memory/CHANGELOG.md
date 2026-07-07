@@ -5,6 +5,14 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Removed top BrandHero from Check-In screen
+
+- `SelfCheckIn.jsx` — removed the `<BrandHero />` block at the top
+  of the page. The YCH logo now lives solely on the big check-in
+  button below, so the top-of-page treatment was redundant.
+- Deleted `components/BrandHero.jsx` entirely — no other page
+  imported it (grep-verified).
+
 ## 7 Jul 2026 — Check-in button rebranded to YCH logo
 
 - `SelfCheckIn.jsx` — the big "I showed up 😊" check-in button no
