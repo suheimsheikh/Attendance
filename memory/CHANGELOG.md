@@ -5,6 +5,34 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Launch-day smoke suite
+
+**Shipped**
+- New `backend/tests/test_smoke_launch.py` — 20 tests covering every
+  critical endpoint: `/health`, `/version`, admin login + `/auth/me`,
+  members, presence, muster, reports/hours (incl. drill-down date
+  keys), reports/daily, admin + self leaves lists, office config,
+  institutions, fleets, camps, regattas, escort snapshot, comp-off
+  balance, self stats, personal reason bank, attendance status.
+- All 20 tagged `@pytest.mark.smoke`. Total wall time: **~2.5s** on
+  the live preview backend.
+- `backend/pytest.ini` updated: smoke marker now documents its
+  purpose. Base command:
+    `python -m pytest -m smoke -q`
+- New `backend/smoke.sh` — one-command wrapper with a helpful error
+  if `TEST_ADMIN_PASSWORD` isn't set. Usage on launch morning:
+    `TEST_ADMIN_PASSWORD='...' ./smoke.sh`
+- Full suite (`pytest`) now has 411 tests (391 + 20 smoke).
+
+**Design notes**
+- Every test asserts *shape*, not content — a fresh DB with zero
+  members still passes; the goal is to catch broken endpoints /
+  auth / routing before real users see them.
+- No mutations. Safe to run against production if we ever swap
+  targets.
+- Uses the existing session-scoped `admin_client` fixture so the
+  20 tests share a single JWT (avoids re-login latency).
+
 ## 7 Jul 2026 — Code-review hardening pass (Categories A + B)
 
 Applied fixes from the pre-launch code-review report. Excluded items
