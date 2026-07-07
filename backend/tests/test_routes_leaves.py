@@ -11,7 +11,6 @@ and test_smoke_flows.py respectively.
 import uuid
 from datetime import date, timedelta
 
-import pytest
 import requests
 
 # The `athlete` fixture is registered in tests/conftest.py.

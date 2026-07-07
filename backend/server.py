@@ -79,7 +79,7 @@ from services.time_utils import (  # noqa: E402, F401
     DEFAULT_TZ, now_utc, iso, office_tz, local_now, local_date_str, local_hm,
 )
 from services.geo import haversine_m, resolve_site  # noqa: E402
-from services.phone import normalize_phone, phone_key  # noqa: E402
+from services.phone import phone_key  # noqa: E402
 from services.photo import (  # noqa: E402, F401
     MAX_PHOTO_BYTES, THUMB_MAX_PX, THUMB_QUALITY,
     check_photo_size as _check_photo_size,

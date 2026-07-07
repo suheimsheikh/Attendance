@@ -213,7 +213,14 @@ export default function MemberTimelineModal({ memberId, start, end, onClose }) {
                       ) : (
                         <ul className="space-y-0.5">
                           {d.details.map((det, i) => (
-                            <li key={i}>{renderDetail(det)}</li>
+                            // `details` items don't carry stable ids —
+                            // a leave + a check-in for the same date can
+                            // coexist. Compose a key from the type +
+                            // stable payload fields so React re-uses
+                            // rows correctly across re-renders.
+                            <li key={`${det.type}-${det.status || det.check_in_time || det.expected_arrival || i}`}>
+                              {renderDetail(det)}
+                            </li>
                           ))}
                         </ul>
                       )}

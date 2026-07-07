@@ -1,8 +1,6 @@
 """Smoke test for the /api/version endpoint (30 Jun 2026)."""
 import os
-import subprocess
 
-import pytest
 import requests
 
 

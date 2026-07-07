@@ -7,7 +7,6 @@ Covers:
 - Non-admin requesting user_id != self gets 403
 - Admin querying another member returns the targeted member's scoped conflicts
 """
-import datetime
 import pytest
 
 

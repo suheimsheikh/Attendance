@@ -22,7 +22,6 @@ Covers:
 import uuid
 import datetime as dt
 import pytest
-import requests
 
 
 TINY = ("data:image/png;base64,"

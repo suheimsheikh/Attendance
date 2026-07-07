@@ -10,7 +10,6 @@ import uuid
 import requests
 import pytest
 import tarfile
-import json as _json
 from openpyxl import Workbook
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")

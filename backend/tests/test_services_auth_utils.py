@@ -1,5 +1,4 @@
 """Unit tests for `services/auth_utils.py` — hash + token."""
-import os
 from datetime import datetime, timezone, timedelta
 
 import jwt

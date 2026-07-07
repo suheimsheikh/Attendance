@@ -21,7 +21,6 @@ import os
 import re
 import csv
 import uuid
-import time
 import requests
 import pytest
 

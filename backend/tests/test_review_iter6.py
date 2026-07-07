@@ -4,9 +4,7 @@ Validates the extended schema and that the regression baseline (210 tests)
 still holds.  Only the iter6-specific contract is tested here; iter5 items
 are exercised by their own test files.
 """
-import os
 import pytest
-import requests
 
 @pytest.fixture(scope="module")
 def api(base_url):

@@ -14,7 +14,6 @@ Covers the 3 new enhancements:
         - Coaches/admins continue to see/muster ALL athletes (no regression)
 """
 import uuid
-import time
 import pytest
 import requests
 

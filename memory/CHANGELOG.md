@@ -5,6 +5,52 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Code-review hardening pass #2
+
+Applied every fix in the second code-review report that didn't overlap
+with the post-launch deferral list.
+
+**Fixed**
+- `MemberTimelineModal.jsx:216` — replaced `key={i}` on the
+  `details.map` with a composite key derived from `type +
+  (status | check_in_time | expected_arrival)` so React reconciles
+  correctly when a day's details reshuffle (a check-in row and a
+  leave row can coexist on the same date).
+- `auth.jsx` — wrapped the AuthProvider context value in `useMemo`
+  so `useAuth()` consumers don't re-render every time the provider
+  re-renders.
+- `Presence.jsx` — hoisted the inline `[...on_campus, ...temp_out]`
+  array passed to `<EscortsStrip escorts=…>` into a memoised
+  `escortsForStrip`. Prevents EscortsStrip's memoisation from being
+  invalidated every render.
+- `components/InlinePhotoAvatar.jsx` — removed unused `Camera`
+  lucide import.
+- Backend tests: `ruff --fix` cleaned up 13 unused imports across
+  `test_version_endpoint.py`, `test_services_*`, and a handful of
+  legacy test files.
+
+**Explicitly NOT-fixed (still deferred per prior user directive)**
+- localStorage JWT → httpOnly cookies (P2, post-launch).
+- Component splits of Members / Reports / Muster / MyLeaves /
+  Presence (P3, post-launch).
+- Python router-complexity refactors: `holidays.py`,
+  `breaks.py`, `daily_content.py`, `guests.py`, `regattas.py`,
+  `camps.py` (P3, post-launch).
+- 242 nested-ternary occurrences (P3, mostly stylistic; would
+  bloat the codebase 3-5%).
+- TypeScript migration (large scope; not planned pre-launch).
+- The report's "hardcoded secret" flag on
+  `tests/test_smoke_launch.py:4` — false positive; that's a
+  docstring showing the shell invocation with `<pw>` as a
+  placeholder.
+
+**Verified**
+- ESLint: 0 real issues remaining. 3 blocking errors are all in
+  shadcn-provided ui/ files (calendar.jsx unstable-nested-components,
+  command.jsx unknown-property) — third-party generated, not
+  touching per convention.
+- 40 focused tests green (audit + DQ + DOB + drill-down + smoke).
+
 ## 7 Jul 2026 — Compact / Detailed density toggle on Presence
 
 New icon button in the Presence header flips every column between

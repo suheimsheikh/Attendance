@@ -244,6 +244,15 @@ export default function Presence() {
     }
     return buckets;
   }, [data]);
+  // Escorts strip flattens on-campus + stepped-out into one visible
+  // list. Memoised so the array identity is stable across re-renders
+  // (7 Jul 2026 code review — inline `[...a, ...b]` in JSX broke
+  // EscortsStrip's own memoisation).
+  const escortsForStrip = useMemo(
+    () => [...escortsByStatus.on_campus, ...escortsByStatus.temp_out],
+    [escortsByStatus]
+  );
+
   const totalMembers = data?.counts?.total ?? (data?.members?.length || 0);
   const lateCount = data?.counts?.late || 0;
   const absentCount = data?.counts?.absent || 0;
@@ -382,7 +391,7 @@ export default function Presence() {
           out escorts surface in the Exited column directly. */}
       {!isHistorical && (
         <EscortsStrip
-          escorts={[...escortsByStatus.on_campus, ...escortsByStatus.temp_out]}
+          escorts={escortsForStrip}
         />
       )}
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { api, setToken, clearToken, getToken } from "./api";
 
 const AuthCtx = createContext(null);
@@ -96,8 +96,17 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // Memoise the context value so consumers of `useAuth()` don't
+  // re-render on every provider re-render (7 Jul 2026 code review).
+  // `login`, `logout`, `loginWithToken`, `refreshMe` are already
+  // stable via `useCallback`; only `user` / `loading` fluctuate.
+  const ctxValue = useMemo(
+    () => ({ user, loading, login, loginWithToken, logout, refreshMe }),
+    [user, loading, login, loginWithToken, logout, refreshMe]
+  );
+
   return (
-    <AuthCtx.Provider value={{ user, loading, login, loginWithToken, logout, refreshMe }}>
+    <AuthCtx.Provider value={ctxValue}>
       {children}
     </AuthCtx.Provider>
   );

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { Loader2, Maximize2, Camera } from "lucide-react";
+import { Loader2, Maximize2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import { fileToResizedDataUrl } from "../utils";

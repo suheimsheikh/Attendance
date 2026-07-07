@@ -14,7 +14,6 @@ Run:  cd /app/backend && python -m pytest tests/test_smoke_flows.py -v
 import csv
 import io
 import os
-import re
 from datetime import date, timedelta
 
 import requests
