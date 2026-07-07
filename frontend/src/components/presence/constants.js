@@ -11,8 +11,3 @@ export const COLUMNS = [
   { key: "on_leave",   label: "Leave",        icon: Bed,          accent: "#F59E0B", soft: "bg-amber-50",    badge: "bg-amber-100 text-amber-700" },
   { key: "absent",     label: "Absent",       icon: UserX,        accent: "#DC2626", soft: "bg-red-50",      badge: "bg-red-100 text-red-700" },
 ];
-
-// On Campus & Checked Out share a single sorted union so each member's row
-// sits at the same vertical position in both columns (blank where the
-// member isn't in that status). The two columns also scroll in lockstep.
-export const PAIRED_COLUMN_KEYS = new Set(["on_campus", "exited"]);

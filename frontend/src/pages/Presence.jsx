@@ -9,7 +9,7 @@ import UpcomingThisWeek from "../components/UpcomingThisWeek";
 import EscortMissingBanner from "../components/EscortMissingBanner";
 import SelfieCapture from "../components/SelfieCapture";
 
-import { COLUMNS, PAIRED_COLUMN_KEYS } from "../components/presence/constants";
+import { COLUMNS } from "../components/presence/constants";
 import { Column } from "../components/presence/Column";
 import { GuestStrip } from "../components/presence/GuestStrip";
 import { EscortsStrip } from "../components/presence/EscortsStrip";
@@ -208,22 +208,10 @@ export default function Presence() {
     return Array.from(set).sort();
   }, [data]);
 
-  // Build the paired (vertically-aligned) display lists for the
-  // On Campus + Checked Out pair. Each entry is `{member, visible}` — when
-  // `visible=true` we render the real card, otherwise we render an INVISIBLE
-  // clone of the OTHER column's member at this index so the row heights match
-  // exactly across both columns. Union is sorted alphabetically so both
-  // columns scroll in lockstep, which is exactly what you want when scanning
-  // "who's still here vs who already left" side-by-side.
-  // (PAIRED_COLUMN_KEYS in constants.js declares the same pair.)
-  const pairedDisplay = useMemo(() => {
-    const union = [...byColumn.on_campus, ...byColumn.exited]
-      .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
-    return {
-      on_campus: union.map((m) => ({ member: m, visible: m.status === "on_campus" })),
-      exited:    union.map((m) => ({ member: m, visible: m.status === "exited" })),
-    };
-  }, [byColumn]);
+  // On Campus + Checked Out used to be rendered as "paired" columns
+  // with invisible blank placeholders so their rows aligned pixel-by-
+  // pixel. Removed 7 Jul 2026 — users read the gaps as broken layout,
+  // not as alignment. Both columns now render only their own members.
 
   const filteredTotal = useMemo(
     () => Object.values(byColumn).reduce((sum, list) => sum + list.length, 0),
@@ -398,7 +386,7 @@ export default function Presence() {
               key={col.key}
               col={col}
               members={byColumn[col.key]}
-              displayList={PAIRED_COLUMN_KEYS.has(col.key) ? pairedDisplay[col.key] : null}
+              displayList={null}
               escorts={escortsByStatus[col.key] || null}
               adminContacts={data?.admin_contacts || []}
               coachMobile={currentUser?.mobile}

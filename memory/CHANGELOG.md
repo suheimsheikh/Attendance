@@ -5,6 +5,32 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Removed blank gaps on Presence Board columns
+
+**Bug**: On Campus and Checked Out columns showed huge blank gaps
+between member cards. Complaint from both preview and production.
+
+**Root cause**: `Presence.jsx` built a "paired" display list —
+`pairedDisplay` was the alphabetical union of both columns' members;
+each column then rendered a real card when the member matched its
+status and an INVISIBLE placeholder card (`visibility: hidden`) when
+they didn't. The intent was to keep rows pixel-aligned across the
+pair, but users read the invisible rows as broken layout.
+
+**Fix**: dropped the pairing entirely. Both columns now render only
+their own members (already sorted). No more invisible placeholders,
+no more `presence-blank-*` rows in the DOM.
+
+**Files touched**:
+- `frontend/src/pages/Presence.jsx` — removed `pairedDisplay` memo
+  and the `PAIRED_COLUMN_KEYS` import; `Column` now always gets
+  `displayList={null}`.
+- `frontend/src/components/presence/constants.js` — removed the
+  now-unused `PAIRED_COLUMN_KEYS` export.
+
+**Verified**: 0 `presence-blank-*` placeholder rows in the DOM
+after the fix; columns visually tight.
+
 ## 7 Jul 2026 — Stale-photo detection on Data Quality
 
 Photos older than 12 months on athletes now surface as
