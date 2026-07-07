@@ -240,10 +240,6 @@ export default function Presence() {
     }
     return buckets;
   }, [data]);
-  // Keep `steppedOutEscorts` name for the existing testIds / messaging,
-  // but it's now derived from the bucket map.
-  const steppedOutEscorts = escortsByStatus.temp_out;
-
   const totalMembers = data?.counts?.total ?? (data?.members?.length || 0);
   const lateCount = data?.counts?.late || 0;
   const absentCount = data?.counts?.absent || 0;

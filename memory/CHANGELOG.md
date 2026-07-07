@@ -5,6 +5,61 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Code-review hardening pass (Categories A + B)
+
+Applied fixes from the pre-launch code-review report. Excluded items
+still explicitly deferred until post-launch (JWT → httpOnly cookies,
+component splits, large-router refactors).
+
+**Fixed**
+- `backend/server.py` — ruff F811: renamed inner `iso` shadowing an
+  outer loop variable inside the drill-down absent-dates block.
+- `Reports.jsx` — wrapped `rows = attendance?.rows || []` in `useMemo`
+  so downstream `displayedRows` / `fleetOptions` memos don't
+  re-invalidate every render.
+- `Reports.jsx` — replaced `key={i}` on the DrillDownBubble date list
+  with `key={dates[i]}` (backend guarantees dates are unique + sorted).
+- `EscortCheckIn.jsx` — wrapped `load()` in `useCallback` and its
+  effect now depends on `[load]`; wrapped `escorts = snapshot?.escorts`
+  in `useMemo` so downstream memos are stable. Removed 3 unused
+  lucide imports.
+- `BulkEditBar.jsx` — removed stale `eslint-disable` and reworked the
+  option-map lookup into a properly memoised `currentOpts`.
+- `eslint.config.js` — added `process: "readonly"` to browser globals
+  so CRA's build-time `process.env.REACT_APP_*` injection stops
+  triggering `no-undef` (was false-positiving `api.js` +
+  `BackupRestore.jsx`).
+- `Layout.jsx`, `CheckIn.jsx`, `Profile.jsx`,
+  `EscortPhotoCleanup.jsx` — dropped unused lucide imports.
+- `MyLeaves.jsx` — removed dead `memberId` legacy single-pick state
+  (was replaced by admin multi-select months ago).
+- `Presence.jsx` — removed unused `steppedOutEscorts` alias.
+- `admin/Members.jsx` — destructured `[, setBulkBusy]` to signal
+  intent (the read half was never consumed).
+- `EscortCheckIn.jsx:205` — renamed unused `isEscort` arg on
+  `EscortActionCard` to `_isEscort` (matches our unused-arg policy).
+
+**Explicitly not-fixed (out of scope by user directive)**
+- localStorage JWT → httpOnly cookies (P2, post-launch).
+- Component splits of Reports/Members/Leaves/MyLeaves/Muster/
+  Presence/Calendar (P3, post-launch).
+- `server.py`, `holidays.py`, `daily_content.py`, `breaks.py`,
+  `guests.py`, `camps.py`, `regattas.py` router-complexity
+  refactors (P3, post-launch).
+- 24 `console.debug` calls left in place — they're already
+  suppressed by default in browsers (verbose level required) and
+  are legitimate error-triage aids.
+- 2 lint issues in shadcn-provided `ui/command.jsx` +
+  `hooks/use-toast.js` — third-party generated files, not touching
+  per shadcn convention.
+
+**Verified**
+- Full pytest suite still 389 passed / 0 failed (only 2 flaky
+  network timeouts on retryable tests, unrelated to changes).
+- ESLint dropped from 17 problems → 2 (both in shadcn UI files).
+- Playwright verified Aruna Surugu absent-cell drill-down tooltip
+  still shows `ABSENT · 2 / Wed, Jul 01 / Fri, Jul 03`.
+
 ## 7 Jul 2026 — Attendance Report drill-down tooltips (updated)
 
 **Update, later same day:** the native `title=` tooltip proved

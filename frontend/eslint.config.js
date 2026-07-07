@@ -64,6 +64,9 @@ export default [
       globals: {
         ...globals.browser,
         ...globals.es2024,
+        // CRA injects `process.env.REACT_APP_*` at build time — the
+        // `process` global is legitimately available in app code.
+        process: "readonly",
       },
     },
     plugins: {

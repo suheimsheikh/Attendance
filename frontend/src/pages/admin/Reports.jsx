@@ -138,7 +138,7 @@ export default function Reports() {
   };
   const exportDaily = (fmt) => downloadBlob("/reports/daily/export", `daily_${day}.${fmt}`, { on: day, fmt });
 
-  const rows = attendance?.rows || [];
+  const rows = useMemo(() => attendance?.rows || [], [attendance]);
   const displayedRows = useMemo(() => {
     let list = rows;
     if (categoryFilter === "athlete") {
@@ -461,7 +461,7 @@ function DrillDownBubble({ tip }) {
           {label} · {dates.length}
         </div>
         <ul className="leading-tight space-y-0.5">
-          {pretty.map((p, i) => <li key={i} className="tabular-nums">{p}</li>)}
+          {pretty.map((p, i) => <li key={dates[i]} className="tabular-nums">{p}</li>)}
         </ul>
       </div>
     </div>

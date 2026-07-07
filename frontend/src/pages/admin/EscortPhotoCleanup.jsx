@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Loader2, Trash2, Camera, AlertTriangle, ImageOff, CheckSquare, Square } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";

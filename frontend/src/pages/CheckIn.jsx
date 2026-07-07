@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { MapPin, Loader2, LogIn, LogOut as LogOutIcon, AlertTriangle, RotateCcw, CheckCircle2, Navigation, Coffee, ArrowLeftRight, Clock } from "lucide-react";
+import { MapPin, Loader2, LogIn, LogOut as LogOutIcon, AlertTriangle, CheckCircle2, Navigation, Coffee, ArrowLeftRight, Clock } from "lucide-react";
 import { api, showApiError } from "../api";
 import { getLocation } from "../utils";
 

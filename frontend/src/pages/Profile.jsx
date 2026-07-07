@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Clock, Calendar, AlertCircle, Loader2, Camera, Save } from "lucide-react";
+import { Clock, Calendar, AlertCircle, Loader2, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
 import { useAuth } from "../auth";

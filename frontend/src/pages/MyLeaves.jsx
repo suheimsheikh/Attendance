@@ -351,7 +351,10 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   const [halfDayWindows, setHalfDayWindows] = useState({
     fn: "09:30–13:30", pn: "13:30–18:00",
   });
-  const [memberId, setMemberId] = useState("");          // legacy single-pick (non-admin path unchanged)
+  // Legacy single-pick state was removed 06/2026 during the admin
+  // multi-select migration; the setter was kept for a brief transition
+  // but no longer has any callers. Purged 7 Jul 2026 after the code
+  // review flagged it as unused.
   const [members, setMembers] = useState([]);
   // Admin multi-select state
   const [institutions, setInstitutions] = useState([]);

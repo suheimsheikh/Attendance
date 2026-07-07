@@ -47,7 +47,7 @@ export default function Members() {
   // mirror Shift via window-level keydown/keyup listeners instead.
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const lastClickedIdx = useRef(null);
-  const [bulkBusy, setBulkBusy] = useState(false);
+  const [, setBulkBusy] = useState(false);
   const shiftHeldRef = useRef(false);
   // Today in local YYYY-MM-DD — used by the Last-seen column to compute
   // "Today / Yesterday / N days ago". Memoised so the date string is stable

@@ -3208,9 +3208,9 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         absent_dates: set = set()
         cur = sd
         while cur <= ed:
-            iso = cur.isoformat()
-            if iso not in accounted_dates and iso not in off_dates:
-                absent_dates.add(iso)
+            iso_ = cur.isoformat()
+            if iso_ not in accounted_dates and iso_ not in off_dates:
+                absent_dates.add(iso_)
             cur += timedelta(days=1)
         # Cap at days_absent — invariant guard should keep them equal
         # but a defensive slice makes UI display predictable.

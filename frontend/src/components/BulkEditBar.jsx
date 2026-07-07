@@ -31,25 +31,24 @@ export default function BulkEditBar({
   // Field → options lookup. Keeps the JSX flat and the source of truth
   // explicit — adding a new bulk field is one line in this map plus one
   // entry in the <option> list below + one allowlist entry on the backend.
-  const optionsByField = {
-    fleet: fleetOptions,
-    institution: institutionOptions,
-    category: categoryOptions,
-    role: roleOptions,
-    weekly_off: weeklyOffOptions,
-    gender: genderOptions,
-  };
-  const currentOpts = optionsByField[field] || [];
+  const currentOpts = useMemo(() => {
+    const map = {
+      fleet: fleetOptions,
+      institution: institutionOptions,
+      category: categoryOptions,
+      role: roleOptions,
+      weekly_off: weeklyOffOptions,
+      gender: genderOptions,
+    };
+    return map[field] || [];
+  }, [field, fleetOptions, institutionOptions, categoryOptions,
+      roleOptions, weeklyOffOptions, genderOptions]);
 
   // Options minus the "no-op empty" entry — that placeholder is rendered
-  // separately below alongside the synthetic __CLEAR__ sentinel. Memoised
-  // so the list isn't re-filtered on every keystroke or busy-state flip.
-  // Depend on the specific per-field options prop (stable across renders
-  // from parent) rather than the freshly-allocated `currentOpts` array.
+  // separately below alongside the synthetic __CLEAR__ sentinel.
   const pickableOpts = useMemo(
-    () => (currentOpts || []).filter((o) => o.value !== ""),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- currentOpts identity depends on `field` + upstream props; we use those directly
-    [field, fleetOptions, institutionOptions, categoryOptions, roleOptions, weeklyOffOptions, genderOptions]
+    () => currentOpts.filter((o) => o.value !== ""),
+    [currentOpts]
   );
 
   if (selectedCount === 0) return null;

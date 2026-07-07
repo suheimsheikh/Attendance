@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, UserCheck, ArrowLeftRight, Camera, X, Clock, Coffee, Search, CheckCircle2, Users, LogOut, LogIn, AlertCircle } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Loader2, ArrowLeftRight, Camera, X, Clock, Coffee, Search, CheckCircle2, LogOut, LogIn } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import { useAuth } from "../auth";
@@ -36,7 +36,7 @@ export default function EscortCheckIn() {
 
   // Refresh today's snapshot — drives the live "X expected, Y not in"
   // strip and decides whether to show the check-in or step-out card.
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const snap = await api.get("/escort-attendance/today");
       setSnapshot(snap);
@@ -50,8 +50,8 @@ export default function EscortCheckIn() {
     } finally {
       setLoading(false);
     }
-  };
-  useEffect(() => { load(); }, []);
+  }, [isEscort, user?.escort_id]);
+  useEffect(() => { load(); }, [load]);
 
   // Athletes are loaded once globally; the check-in card filters them
   // by the picked escort's institution.
@@ -61,7 +61,7 @@ export default function EscortCheckIn() {
 
   // Hooks below must run on every render — keep them before the early
   // returns so the order stays stable per the rules-of-hooks.
-  const escorts = snapshot?.escorts || [];
+  const escorts = useMemo(() => snapshot?.escorts || [], [snapshot]);
   const attMap = useMemo(() => {
     const m = {};
     (snapshot?.attendance || []).forEach((a) => { m[a.escort_id] = a; });
@@ -202,7 +202,7 @@ function EscortPickerRow({ escort, att, onPick }) {
  *   • Stepped out→ "Return" + Check-out
  *   • Checked out→ recap; (re-)check-in is admin-only territory
  */
-function EscortActionCard({ escort, att, athletes, onChange, onBack, isEscort }) {
+function EscortActionCard({ escort, att, athletes, onChange, onBack, isEscort: _isEscort }) {
   const checkedIn = !!att?.check_in_at;
   const checkedOut = !!att?.check_out_at;
   const openExcursion = (att?.excursions || []).find((x) => !x.return_at);

@@ -3,8 +3,8 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
-  CalendarCheck2, ClipboardList, Building2, IdCard, Sailboat, MapPin,
-  LogOut, Menu, X, ListTree, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera
+  CalendarCheck2, Building2, IdCard, Sailboat, MapPin,
+  LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
