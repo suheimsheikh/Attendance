@@ -27,6 +27,9 @@
 - **Member (sailor/staff/coach)** — signs in via phone (browser-approved by admin) or via admin email login, checks in/out (QR or GPS), views own stats, applies for leave/tour.
 
 ## What's Implemented (Jan 2026)
+> Session-level shipments (Jun–Jul 2026) live in `CHANGELOG.md`
+> alongside this file to keep PRD.md focused on the durable spec.
+
 ### Backend (reused, verified ✅)
 - `/api/auth/login` — admin email/password login
 - `/api/auth/phone` + `/api/auth/phone/status` — passwordless phone login with admin approval polling

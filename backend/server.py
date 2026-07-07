@@ -3037,12 +3037,14 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1},
     ).to_list(10000)
     half_days_by_user: dict = {}
+    half_day_dates_by_user: dict = {}
     for lv in half_day_leaves:
         # Half-days are single-day by construction — start==end.
         try:
             d_ = date.fromisoformat(lv["start_date"])
             if sd <= d_ <= ed:
                 half_days_by_user[lv["user_id"]] = half_days_by_user.get(lv["user_id"], 0) + 1
+                half_day_dates_by_user.setdefault(lv["user_id"], set()).add(d_.isoformat())
         except Exception:
             pass
 
@@ -3081,19 +3083,27 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             cur += timedelta(days=1)
         return days
 
-    def _count_days_of_type(user_id: str, ltype: str) -> int:
+    def _days_of_type(user_id: str, ltype: str) -> set:
+        """Set of ISO date strings the member is on `ltype` (leave / tour /
+        comp_off / posting / late_coming), clipped to the report window."""
         days: set = set()
         for leave in leaves_by_user_typed.get(user_id, {}).get(ltype, []):
             days |= _days_overlap(leave["start_date"], leave["end_date"])
-        return len(days)
+        return days
 
-    def _count_break_days(member: dict) -> int:
+    def _count_days_of_type(user_id: str, ltype: str) -> int:
+        return len(_days_of_type(user_id, ltype))
+
+    def _break_days(member: dict) -> set:
         days: set = set()
         for b in breaks_window:
             if not _breaks_module.break_applies_to(b, member):
                 continue
             days |= _days_overlap(b["start_date"], b["end_date"])
-        return len(days)
+        return days
+
+    def _count_break_days(member: dict) -> int:
+        return len(_break_days(member))
 
     WEEKDAY_NAME = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 
@@ -3115,10 +3125,15 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         present_dates = {s["date"] for s in sessions}
         total_hours = round(sum(s.get("hours") or 0 for s in sessions), 2)
         days_present = len(present_dates)
-        late_days = len({s["date"] for s in sessions if s.get("late")})
-        days_leave = _count_days_of_type(u["id"], "leave")
-        days_tour = _count_days_of_type(u["id"], "tour")
-        days_break = _count_break_days(u)
+        late_dates = {s["date"] for s in sessions if s.get("late")}
+        late_days = len(late_dates)
+        leave_dates = _days_of_type(u["id"], "leave")
+        tour_dates = _days_of_type(u["id"], "tour")
+        break_dates = _break_days(u)
+        comp_off_used_dates = _days_of_type(u["id"], "comp_off")
+        days_leave = len(leave_dates)
+        days_tour = len(tour_dates)
+        days_break = len(break_dates)
         # Combined "time-off" column for backward-compat with older clients.
         days_on_leave = days_leave + days_tour + days_break
         overstays = _overstays(sessions)
@@ -3130,7 +3145,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
                              if s.get("overtime_status") == "pending")
         # Compensatory off bookkeeping (within this report's date range)
         co_earned = _comp_off_earned(u, sessions)
-        co_used = _count_days_of_type(u["id"], "comp_off")
+        co_used = len(comp_off_used_dates)
         co_pending = max(0, co_earned - co_used)
         # Days the member is "accounted for" — present, leave, tour,
         # posting (admin off-base assignment), late-coming (approved
@@ -3166,12 +3181,14 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         # API response default and `_comp_off_earned` above).
         wo_name = (u.get("weekly_off") or "monday").lower()
         unworked_weekly_offs = 0
+        weekly_off_dates: set = set()
         if wo_name in WEEKDAY_NAME:
             wo_idx = WEEKDAY_NAME.index(wo_name)
             cur = sd
             while cur <= ed:
                 if cur.weekday() == wo_idx and cur.isoformat() not in accounted_dates:
                     unworked_weekly_offs += 1
+                    weekly_off_dates.add(cur.isoformat())
                 cur += timedelta(days=1)
         # In-progress current day — exclude from absent count until the
         # day has ended (avoids "everyone is absent" first-thing-in-the-
@@ -3181,7 +3198,23 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             end_is_today and today_iso not in accounted_dates
         ) else 0
         days_off = unworked_weekly_offs + in_progress_today
+        off_dates = set(weekly_off_dates)
+        if in_progress_today:
+            off_dates.add(today_iso)
         days_absent = max(0, span_days - days_accounted - days_off)
+        # Absent-date set: enumerate the span and exclude accounted + off.
+        # Used by the drill-down tooltip so admins can see WHICH specific
+        # days landed in the Absent column without hunting through logs.
+        absent_dates: set = set()
+        cur = sd
+        while cur <= ed:
+            iso = cur.isoformat()
+            if iso not in accounted_dates and iso not in off_dates:
+                absent_dates.add(iso)
+            cur += timedelta(days=1)
+        # Cap at days_absent — invariant guard should keep them equal
+        # but a defensive slice makes UI display predictable.
+        absent_dates_list = sorted(absent_dates)[:days_absent]
         # Attendance-% uses the workable span (excludes weekly-off days
         # and the in-progress day) so a member who attended every
         # working day reads 100%, not 100 × (5/7).
@@ -3229,6 +3262,44 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "half_days": half_days_by_user.get(u["id"], 0),
             "avg_hours_per_day": round(total_hours / max(1, days_present), 2) if days_present else 0,
             "escort_days": len(escort_days_by_user.get(u["id"], set())),
+            # Date arrays for the drill-down tooltip (7 Jul 2026 —
+            # user-requested "click a number to see why"). Sent inline
+            # on the row since they're small (0-31 items each). The
+            # frontend renders them as native `title` tooltips on the
+            # relevant cells.
+            "dates_present": sorted(present_dates),
+            "dates_off": sorted(off_dates),
+            "dates_absent": absent_dates_list,
+            "dates_late": sorted(late_dates),
+            "dates_leave": sorted(leave_dates),
+            "dates_tour": sorted(tour_dates),
+            "dates_break": sorted(break_dates),
+            "dates_half_day": sorted(half_day_dates_by_user.get(u["id"], set())),
+            "dates_comp_off_used": sorted(comp_off_used_dates),
+            "dates_comp_off_applied": sorted({
+                d for lv in pending_comp_off_by_user.get(u["id"], [])
+                for d in _days_overlap(lv["start_date"], lv["end_date"])
+            }),
+            "dates_escort": sorted(escort_days_by_user.get(u["id"], set())),
+            "dates_overtime_served": sorted({
+                s["date"] for s in sessions
+                if int(s.get("overtime_total_min") or 0) > 0
+            }),
+            "dates_overtime_applied": sorted({
+                s["date"] for s in sessions
+                if s.get("overtime_status") == "pending"
+                and int(s.get("overtime_total_min") or 0) > 0
+            }),
+            "dates_overtime_approved": sorted({
+                s["date"] for s in sessions
+                if s.get("overtime_status") == "approved"
+                and int(s.get("overtime_total_min") or 0) > 0
+            }),
+            "dates_comp_off_earned": sorted({
+                s["date"] for s in sessions
+                if wo_name in WEEKDAY_NAME
+                and date.fromisoformat(s["date"]).weekday() == WEEKDAY_NAME.index(wo_name)
+            }),
             "span_days": span_days,
             "attendance_pct": attendance_pct,
         })

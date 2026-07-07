@@ -302,6 +302,22 @@ export default function Reports() {
                     const otApproved = r.overtime_hours_approved || 0;
                     const n = (v) => (v ? v : "");
                     const h = (v) => (v ? `${(+v).toFixed(2).replace(/\.?0+$/, "")}h` : "");
+                    // Drill-down tooltip helper — turns a date-array
+                    // from the API into a short human-readable list
+                    // for the cell's native `title` attribute (7 Jul 2026
+                    // user-requested transparency into individual days).
+                    const tip = (label, dates) => {
+                      const arr = Array.isArray(dates) ? dates : [];
+                      if (arr.length === 0) return "";
+                      const pretty = arr.map((d) => {
+                        try {
+                          const dt = new Date(d + "T00:00:00");
+                          return dt.toLocaleDateString(undefined,
+                            { day: "2-digit", month: "short", weekday: "short" });
+                        } catch { return d; }
+                      });
+                      return `${label} (${arr.length}):\n${pretty.join("\n")}`;
+                    };
                     return (
                       <tr key={r.member_id} className="hover:bg-slate-50 group" data-testid={`attn-row-${r.member_id}`}>
                         {/* Member + Category are pinned to the left with
@@ -321,31 +337,31 @@ export default function Reports() {
                         </td>
                         <td className="py-1.5 px-2 hidden md:table-cell text-slate-600 border-t border-slate-100 sticky left-[140px] z-10 bg-white group-hover:bg-slate-50">{categoryLabel(r.category)}</td>
                         {/* Attendance group */}
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-l border-t border-emerald-100 font-semibold text-emerald-700" data-testid={`days-present-${r.member_id}`}>{n(r.days_present)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-amber-700" data-testid={`days-leave-${r.member_id}`}>{n(r.days_leave)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-orange-700" data-testid={`days-tour-${r.member_id}`}>{n(r.days_tour)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-slate-500" data-testid={`days-off-${r.member_id}`}>{n(r.days_off)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-amber-600" data-testid={`late-days-${r.member_id}`}>{n(r.late_days)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100" data-testid={`half-days-${r.member_id}`}>{n(r.half_days)}</td>
-                        <td className={`py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 font-semibold ${(r.days_absent || 0) > 0 ? "text-red-600" : "text-slate-400"}`} data-testid={`days-absent-${r.member_id}`}>{n(r.days_absent)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-l border-t border-emerald-100 font-semibold text-emerald-700 cursor-help" title={tip("Present", r.dates_present)} data-testid={`days-present-${r.member_id}`}>{n(r.days_present)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-amber-700 cursor-help" title={tip("Leave", r.dates_leave)} data-testid={`days-leave-${r.member_id}`}>{n(r.days_leave)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-orange-700 cursor-help" title={tip("Tour", r.dates_tour)} data-testid={`days-tour-${r.member_id}`}>{n(r.days_tour)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-slate-500 cursor-help" title={tip("Off", r.dates_off)} data-testid={`days-off-${r.member_id}`}>{n(r.days_off)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-amber-600 cursor-help" title={tip("Late", r.dates_late)} data-testid={`late-days-${r.member_id}`}>{n(r.late_days)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 cursor-help" title={tip("Half-day", r.dates_half_day)} data-testid={`half-days-${r.member_id}`}>{n(r.half_days)}</td>
+                        <td className={`py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 font-semibold cursor-help ${(r.days_absent || 0) > 0 ? "text-red-600" : "text-slate-400"}`} title={tip("Absent", r.dates_absent)} data-testid={`days-absent-${r.member_id}`}>{n(r.days_absent)}</td>
                         <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-r border-t border-emerald-100 font-extrabold text-slate-900" data-testid={`days-total-${r.member_id}`}>{n(attnTotal)}</td>
                         {/* Leave group */}
                         <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100">{n(r.leave_balance_opening)}</td>
                         <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100">{n(r.leave_balance_taken_ytd)}</td>
                         <td className={`py-1.5 px-1.5 text-center bg-amber-50/30 border-r border-t border-amber-100 font-extrabold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{n(r.leave_balance_remaining)}</td>
                         {/* Comp-Off group */}
-                        <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100" data-testid={`comp-off-earned-${r.member_id}`}>{n(r.comp_off_earned)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 text-amber-700" data-testid={`comp-off-applied-${r.member_id}`}>{n(r.comp_off_applied)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-r border-t border-sky-100 font-extrabold text-emerald-700" data-testid={`comp-off-approved-${r.member_id}`}>{n(r.comp_off_used)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 cursor-help" title={tip("Comp-off earned", r.dates_comp_off_earned)} data-testid={`comp-off-earned-${r.member_id}`}>{n(r.comp_off_earned)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 text-amber-700 cursor-help" title={tip("Comp-off applied", r.dates_comp_off_applied)} data-testid={`comp-off-applied-${r.member_id}`}>{n(r.comp_off_applied)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-sky-50/30 border-r border-t border-sky-100 font-extrabold text-emerald-700 cursor-help" title={tip("Comp-off approved", r.dates_comp_off_used)} data-testid={`comp-off-approved-${r.member_id}`}>{n(r.comp_off_used)}</td>
                         {/* Overtime group */}
-                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100">{h(otServed)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 text-amber-700">{h(otApplied)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-r border-t border-violet-100 font-extrabold text-emerald-700">{h(otApproved)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 cursor-help" title={tip("OT served", r.dates_overtime_served)}>{h(otServed)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 text-amber-700 cursor-help" title={tip("OT applied", r.dates_overtime_applied)}>{h(otApplied)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-violet-50/30 border-r border-t border-violet-100 font-extrabold text-emerald-700 cursor-help" title={tip("OT approved", r.dates_overtime_approved)}>{h(otApproved)}</td>
                         {/* Hours group */}
                         <td className="py-1.5 px-1.5 text-center bg-indigo-50/30 border-t border-indigo-100">{r.total_hours ? `${r.total_hours}h` : ""}</td>
                         <td className="py-1.5 px-1.5 text-center bg-indigo-50/30 border-r border-t border-indigo-100 text-slate-600">{r.avg_hours_per_day ? `${r.avg_hours_per_day}h` : ""}</td>
                         {/* Escorts group */}
-                        <td className="py-1.5 px-1.5 text-center bg-teal-50/30 border-t border-teal-100 text-teal-700 font-semibold" data-testid={`escort-days-${r.member_id}`}>{n(r.escort_days)}</td>
+                        <td className="py-1.5 px-1.5 text-center bg-teal-50/30 border-t border-teal-100 text-teal-700 font-semibold cursor-help" title={tip("Escort days", r.dates_escort)} data-testid={`escort-days-${r.member_id}`}>{n(r.escort_days)}</td>
                         <td className={`py-1.5 px-1.5 text-center bg-teal-50/30 border-r border-t border-teal-100 ${(r.overstays || 0) > 0 ? "text-red-600 font-semibold" : ""}`} data-testid={`overstays-${r.member_id}`}>{n(r.overstays)}</td>
                       </tr>
                     );
