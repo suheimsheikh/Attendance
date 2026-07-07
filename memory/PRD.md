@@ -1596,3 +1596,70 @@ that grow as members use the app — e.g. "Picking up Rainbow Kids",
 - `frontend/src/pages/SelfCheckIn.jsx`, `MyLeaves.jsx`, `Profile.jsx`.
 - `backend/tests/test_reason_bank.py` — new.
 
+
+## Attendance table — 4-group layout + sticky headers (7 Jul 2026)
+
+User asked for the columns to be reshuffled into four semantic groups
+and for both header rows to stick as the table scrolls.
+
+### Final layout
+| Attendance (emerald)         | Leave (amber)      | Overtime (violet)          | Comp-Off (sky)             |
+|:-----------------------------|:-------------------|:---------------------------|:---------------------------|
+| Present · Leave · Tour · **Total** | Open · Availed · **Closing** | Served · Applied · **Approved** | Served · Applied · **Approved** |
+
+- Group headers are colour-tinted (emerald / amber / violet / sky) so
+  the eye tracks each concept at a glance.
+- The final column of every group is **bold** (Total / Closing /
+  Approved / Approved).
+- **Both** rows of `<thead>` are `position: sticky` (row 1 at `top-0`,
+  row 2 at `top-8` = 32 px). Confirmed by scrolling the tbody 300 px
+  down — the two-row header stayed pinned.
+- Table set to `min-w-[1100px]` so all 14 columns can breathe on
+  laptop widths; the outer `overflow-auto` provides horizontal scroll
+  on tighter screens (users can see the Comp-Off group by dragging
+  right).
+
+### Data model additions
+Two new fields in the `/api/reports/payroll` (and `/hours`) response:
+- `overtime_hours_served` — total OT minutes recorded within the
+  window across every status (pending + approved + rejected).
+  Rejected OT is still time-served, so it counts here even though it
+  won't be paid.
+- `comp_off_applied` — distinct calendar days across **pending**
+  comp-off leave applications overlapping the window. Fed by a new
+  DB query (`{status: pending, type: comp_off}`) kept separate from
+  the approved-leaves aggregation so nothing existing changes shape.
+
+### Data mapping in the UI
+| Column                       | Backend field                                            |
+|:-----------------------------|:---------------------------------------------------------|
+| Attendance · Present         | `days_present`                                           |
+| Attendance · Leave           | `days_leave`                                             |
+| Attendance · Tour            | `days_tour`                                              |
+| Attendance · Total           | `days_present + days_leave + days_tour` (client-side)    |
+| Leave · Open                 | `leave_balance_opening`                                  |
+| Leave · Availed              | `leave_balance_taken_ytd`                                |
+| Leave · Closing              | `leave_balance_remaining`                                |
+| Overtime · Served            | `overtime_hours_served` (new)                            |
+| Overtime · Applied           | `overtime_hours_pending`                                 |
+| Overtime · Approved          | `overtime_hours_approved`                                |
+| Comp-Off · Served            | `comp_off_earned`                                        |
+| Comp-Off · Applied           | `comp_off_applied` (new)                                 |
+| Comp-Off · Approved          | `comp_off_used`                                          |
+
+### On the "Majji Lalita" data point
+User flagged "Lalita is showing 6 days total, 5 present + 1 leave" —
+verified against the DB: Majji Lalita is a coach with 5 attendance
+sessions + 1 approved leave day + weekly-off Monday + today covered
+by leave. `accounted (6) + off (1) + absent (0) = span (7)`. The
+math is factually correct; the observation just confirmed the layout
+does what it says.
+
+### Files touched
+- `backend/server.py` — `overtime_hours_served` + `comp_off_applied`
+  in `compute_hours_report`; new `pending_comp_off` query.
+- `frontend/src/pages/admin/Reports.jsx` — 4-group thead + 14 data
+  cells + sticky positioning + `min-w-[1100px]`.
+- No backend contract broke — existing fields still returned;
+  pytest 22/22 green.
+

@@ -3007,6 +3007,22 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         leaves_by_user_typed.setdefault(leave["user_id"], {}) \
             .setdefault(leave.get("type") or "leave", []).append(leave)
 
+    # PENDING comp-off applications (used by the Comp-Off "Applied" column
+    # in the Attendance report). Kept separate from `leaves_by_user_typed`
+    # so the approved-only aggregation above stays untouched.
+    pending_comp_off = await db.leaves.find(
+        {
+            "status": "pending",
+            "type": "comp_off",
+            "start_date": {"$lte": end},
+            "end_date": {"$gte": start},
+        },
+        {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1},
+    ).to_list(10000)
+    pending_comp_off_by_user: dict = {}
+    for lv in pending_comp_off:
+        pending_comp_off_by_user.setdefault(lv["user_id"], []).append(lv)
+
     # Breaks that overlap the report window — folded into the leave column
     # since on the Presence Board breaks already render as on_leave.
     breaks_window = await db.breaks.find(
@@ -3155,9 +3171,23 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "overstays": overstays,
             "overtime_hours_approved": round(approved_ot_min / 60.0, 2),
             "overtime_hours_pending": round(pending_ot_min / 60.0, 2),
+            # Overtime "Served" = sum of all OT minutes recorded on any
+            # attendance row within the window, regardless of status
+            # (7 Jul 2026 — drives the Attendance table's Overtime · Served
+            # column). Rejected OT is still time-served, so it's included.
+            "overtime_hours_served": round(
+                sum(int(s.get("overtime_total_min") or 0) for s in sessions) / 60.0, 2
+            ),
             "comp_off_earned": co_earned,
             "comp_off_used": co_used,
             "comp_off_pending": co_pending,
+            # Comp-Off "Applied" = distinct calendar days across pending
+            # comp-off leaves overlapping the window (7 Jul 2026 — drives
+            # the Comp-Off · Applied column).
+            "comp_off_applied": len({
+                d for lv in pending_comp_off_by_user.get(u["id"], [])
+                for d in _days_overlap(lv["start_date"], lv["end_date"])
+            }),
             "span_days": span_days,
             "attendance_pct": attendance_pct,
         })

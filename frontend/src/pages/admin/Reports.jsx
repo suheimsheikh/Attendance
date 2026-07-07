@@ -242,34 +242,45 @@ export default function Reports() {
 
           <div className="iu-card overflow-hidden">
             <div className="overflow-auto max-h-[70vh]">
-              <table className="w-full text-sm">
+              <table className="min-w-full text-sm" style={{ minWidth: 1100 }}>
                 <thead>
-                  {/* Grouped header row (2 Feb 2026 — user-requested
-                      layout: Attendance · Leave · Overtime). */}
-                  <tr className="bg-slate-100 text-[10px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200">
+                  {/* Grouped header row + sub-header row are BOTH sticky
+                      (7 Jul 2026 user-requested). Row 1 pins to top-0,
+                      row 2 to top-8 (~32px = row-1 height with py-2 +
+                      text-[10px]). z-20 on both so they overlay the
+                      first data row on the initial paint. */}
+                  <tr className="sticky top-0 z-20 bg-slate-100 text-[10px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200 shadow-sm">
                     <th className="py-2 px-4 text-left" colSpan={2}>&nbsp;</th>
-                    <th className="py-2 px-4 text-center bg-emerald-50/60 border-l border-r border-emerald-200 text-emerald-800" colSpan={4}>Attendance</th>
-                    <th className="py-2 px-4 text-center bg-amber-50/60 border-r border-amber-200 text-amber-800" colSpan={3}>Leave</th>
-                    <th className="py-2 px-4 text-center bg-violet-50/60 border-r border-violet-200 text-violet-800" colSpan={2}>Overtime</th>
+                    <th className="py-2 px-4 text-center bg-emerald-50 border-l border-r border-emerald-200 text-emerald-800" colSpan={4}>Attendance</th>
+                    <th className="py-2 px-4 text-center bg-amber-50 border-r border-amber-200 text-amber-800" colSpan={3}>Leave</th>
+                    <th className="py-2 px-4 text-center bg-violet-50 border-r border-violet-200 text-violet-800" colSpan={3}>Overtime</th>
+                    <th className="py-2 px-4 text-center bg-sky-50 border-r border-sky-200 text-sky-800" colSpan={3}>Comp-Off</th>
                   </tr>
-                  <tr className="bg-slate-50">
+                  <tr className="sticky top-8 z-20 bg-slate-50 shadow-sm">
                     <th className="iu-table-th">Member</th>
                     <th className="iu-table-th hidden md:table-cell">Category</th>
-                    <th className="iu-table-th text-center bg-emerald-50/40 border-l border-emerald-100">Present</th>
-                    <th className="iu-table-th text-center bg-emerald-50/40">Leave</th>
-                    <th className="iu-table-th text-center bg-emerald-50/40">Tour</th>
-                    <th className="iu-table-th text-center bg-emerald-50/40 border-r border-emerald-100 font-extrabold">Total</th>
-                    <th className="iu-table-th text-center bg-amber-50/40">Open</th>
-                    <th className="iu-table-th text-center bg-amber-50/40">Availed</th>
-                    <th className="iu-table-th text-center bg-amber-50/40 border-r border-amber-100 font-extrabold">Closing</th>
-                    <th className="iu-table-th text-center bg-violet-50/40">Applied</th>
-                    <th className="iu-table-th text-center bg-violet-50/40 border-r border-violet-100 font-extrabold">Approved</th>
+                    <th className="iu-table-th text-center bg-emerald-50/70 border-l border-emerald-100">Present</th>
+                    <th className="iu-table-th text-center bg-emerald-50/70">Leave</th>
+                    <th className="iu-table-th text-center bg-emerald-50/70">Tour</th>
+                    <th className="iu-table-th text-center bg-emerald-50/70 border-r border-emerald-100 font-extrabold">Total</th>
+                    <th className="iu-table-th text-center bg-amber-50/70">Open</th>
+                    <th className="iu-table-th text-center bg-amber-50/70">Availed</th>
+                    <th className="iu-table-th text-center bg-amber-50/70 border-r border-amber-100 font-extrabold">Closing</th>
+                    <th className="iu-table-th text-center bg-violet-50/70">Served</th>
+                    <th className="iu-table-th text-center bg-violet-50/70">Applied</th>
+                    <th className="iu-table-th text-center bg-violet-50/70 border-r border-violet-100 font-extrabold">Approved</th>
+                    <th className="iu-table-th text-center bg-sky-50/70">Served</th>
+                    <th className="iu-table-th text-center bg-sky-50/70">Applied</th>
+                    <th className="iu-table-th text-center bg-sky-50/70 border-r border-sky-100 font-extrabold">Approved</th>
                   </tr>
                 </thead>
                 <tbody>
                   {displayedRows.map((r) => {
                     const attnTotal = (r.days_present || 0) + (r.days_leave || 0) + (r.days_tour || 0);
-                    const otApplied = (r.overtime_hours_approved || 0) + (r.overtime_hours_pending || 0);
+                    const otServed = r.overtime_hours_served || 0;
+                    const otApplied = r.overtime_hours_pending || 0;
+                    const otApproved = r.overtime_hours_approved || 0;
+                    const fmtHrs = (n) => (n ? `${(+n).toFixed(2).replace(/\.?0+$/, "")}h` : "0h");
                     return (
                       <tr key={r.member_id} className="hover:bg-slate-50" data-testid={`attn-row-${r.member_id}`}>
                         <td className="iu-table-td font-semibold">
@@ -282,20 +293,28 @@ export default function Reports() {
                           </div>
                         </td>
                         <td className="iu-table-td hidden md:table-cell">{categoryLabel(r.category)}</td>
-                        <td className="iu-table-td text-center bg-emerald-50/20 border-l border-emerald-100 font-semibold text-emerald-700" data-testid={`days-present-${r.member_id}`}>{r.days_present}</td>
-                        <td className="iu-table-td text-center bg-emerald-50/20 text-amber-700" data-testid={`days-leave-${r.member_id}`}>{r.days_leave || 0}</td>
-                        <td className="iu-table-td text-center bg-emerald-50/20 text-orange-700" data-testid={`days-tour-${r.member_id}`}>{r.days_tour || 0}</td>
-                        <td className="iu-table-td text-center bg-emerald-50/20 border-r border-emerald-100 font-extrabold text-slate-900" data-testid={`days-total-${r.member_id}`}>{attnTotal}</td>
-                        <td className="iu-table-td text-center bg-amber-50/20">{r.leave_balance_opening || 0}</td>
-                        <td className="iu-table-td text-center bg-amber-50/20">{r.leave_balance_taken_ytd || 0}</td>
-                        <td className={`iu-table-td text-center bg-amber-50/20 border-r border-amber-100 font-extrabold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{r.leave_balance_remaining || 0}</td>
-                        <td className="iu-table-td text-center bg-violet-50/20">{otApplied ? `${otApplied.toFixed(2).replace(/\.?0+$/, "")}h` : "0h"}</td>
-                        <td className="iu-table-td text-center bg-violet-50/20 border-r border-violet-100 font-extrabold text-emerald-700">{(r.overtime_hours_approved || 0) ? `${r.overtime_hours_approved}h` : "0h"}</td>
+                        {/* Attendance group */}
+                        <td className="iu-table-td text-center bg-emerald-50/30 border-l border-emerald-100 font-semibold text-emerald-700" data-testid={`days-present-${r.member_id}`}>{r.days_present}</td>
+                        <td className="iu-table-td text-center bg-emerald-50/30 text-amber-700" data-testid={`days-leave-${r.member_id}`}>{r.days_leave || 0}</td>
+                        <td className="iu-table-td text-center bg-emerald-50/30 text-orange-700" data-testid={`days-tour-${r.member_id}`}>{r.days_tour || 0}</td>
+                        <td className="iu-table-td text-center bg-emerald-50/30 border-r border-emerald-100 font-extrabold text-slate-900" data-testid={`days-total-${r.member_id}`}>{attnTotal}</td>
+                        {/* Leave group */}
+                        <td className="iu-table-td text-center bg-amber-50/30">{r.leave_balance_opening || 0}</td>
+                        <td className="iu-table-td text-center bg-amber-50/30">{r.leave_balance_taken_ytd || 0}</td>
+                        <td className={`iu-table-td text-center bg-amber-50/30 border-r border-amber-100 font-extrabold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{r.leave_balance_remaining || 0}</td>
+                        {/* Overtime group */}
+                        <td className="iu-table-td text-center bg-violet-50/30">{fmtHrs(otServed)}</td>
+                        <td className="iu-table-td text-center bg-violet-50/30 text-amber-700">{fmtHrs(otApplied)}</td>
+                        <td className="iu-table-td text-center bg-violet-50/30 border-r border-violet-100 font-extrabold text-emerald-700">{fmtHrs(otApproved)}</td>
+                        {/* Comp-Off group */}
+                        <td className="iu-table-td text-center bg-sky-50/30" data-testid={`comp-off-earned-${r.member_id}`}>{r.comp_off_earned || 0}</td>
+                        <td className="iu-table-td text-center bg-sky-50/30 text-amber-700" data-testid={`comp-off-applied-${r.member_id}`}>{r.comp_off_applied || 0}</td>
+                        <td className="iu-table-td text-center bg-sky-50/30 border-r border-sky-100 font-extrabold text-emerald-700" data-testid={`comp-off-approved-${r.member_id}`}>{r.comp_off_used || 0}</td>
                       </tr>
                     );
                   })}
                   {!loading && displayedRows.length === 0 && (
-                    <tr><td colSpan={11} className="text-center py-10 text-slate-500">No data.</td></tr>
+                    <tr><td colSpan={14} className="text-center py-10 text-slate-500">No data.</td></tr>
                   )}
                 </tbody>
               </table>
