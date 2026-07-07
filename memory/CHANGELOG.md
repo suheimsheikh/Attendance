@@ -5,6 +5,18 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Check-in button rebranded to YCH logo
+
+- `SelfCheckIn.jsx` — the big "I showed up 😊" check-in button no
+  longer uses the generic emerald gradient + LogIn arrow icon. It
+  now displays the **Yacht Club of Hyderabad sail-boat logo**
+  (`/icon-192.png`) on a white background with a subtle
+  `ring-sky-100` outline. Rationale: members recognise the club's
+  brand mark much more than an abstract door-arrow. Rose gradient +
+  LogOut icon is retained for the "Leaving Campus" state (distinct
+  action, deliberately unbranded).
+- Removed unused `LogIn` lucide import.
+
 ## 7 Jul 2026 — UX cleanup (menu label, late-coming default, filter rename)
 
 **Shipped**

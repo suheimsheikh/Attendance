@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { Loader2, LogIn, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, AlertTriangle, Camera } from "lucide-react";
+import { Loader2, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, AlertTriangle, Camera } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { getLocation, speakLateMessage } from "../utils";
@@ -251,10 +251,10 @@ export default function SelfCheckIn() {
             data-testid="self-checkin-button"
             disabled={working}
             onClick={handleToggle}
-            className={`mx-auto inline-flex flex-col items-center justify-center gap-2 rounded-3xl shadow-xl transition active:scale-[0.97] disabled:opacity-60 w-44 h-44 text-white ${
+            className={`mx-auto inline-flex flex-col items-center justify-center gap-2 rounded-3xl shadow-xl transition active:scale-[0.97] disabled:opacity-60 w-44 h-44 ${
               status?.checked_in
-                ? "bg-gradient-to-br from-rose-500 to-rose-700"
-                : "bg-gradient-to-br from-emerald-500 to-emerald-700"
+                ? "bg-gradient-to-br from-rose-500 to-rose-700 text-white"
+                : "bg-white text-slate-900 ring-2 ring-sky-100 hover:ring-sky-200"
             }`}
           >
             {working ? (
@@ -262,9 +262,19 @@ export default function SelfCheckIn() {
             ) : status?.checked_in ? (
               <LogOutIcon size={42} />
             ) : (
-              <LogIn size={42} />
+              // YCH club logo replaces the generic LogIn icon on the
+              // check-in state (7 Jul 2026 user-requested — the club
+              // brand is what members recognise, not an abstract door
+              // arrow). Rose LogOut state stays generic since it's a
+              // "leaving" action, not a brand moment.
+              <img
+                src="/icon-192.png"
+                alt="Yacht Club of Hyderabad"
+                className="w-20 h-20 object-contain"
+                draggable={false}
+              />
             )}
-            <span className="text-lg font-extrabold tracking-tight">{actionLabel}</span>
+            <span className="text-base font-extrabold tracking-tight">{actionLabel}</span>
           </button>
 
           {photoNeeded && !status?.checked_in && (
