@@ -7,6 +7,7 @@ import LeaveBalanceNotice from "../components/LeaveBalanceNotice";
 import OverlapNotice from "../components/OverlapNotice";
 import EventConflictNotice from "../components/EventConflictNotice";
 import ConflictAcknowledgeModal from "../components/ConflictAcknowledgeModal";
+import ReasonPicker from "../components/ReasonPicker";
 import FormErrorBanner from "../components/FormErrorBanner";
 import { useFormError } from "../hooks/useFormError";
 import { shortDate, todayIso } from "../utils";
@@ -822,7 +823,17 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           )}
           <div>
             <label className="iu-label">Reason</label>
-            <textarea data-testid="leave-reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Tell your admin why…" className="iu-input !h-auto py-2" />
+            {type === "comp_off" ? (
+              <ReasonPicker
+                value={reason}
+                onChange={setReason}
+                placeholder="Why are you taking comp-off?"
+                variant="slate"
+                testId="leave-reason-picker"
+              />
+            ) : (
+              <textarea data-testid="leave-reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Tell your admin why…" className="iu-input !h-auto py-2" />
+            )}
           </div>
           {/* Balance preview + LOP warning + "subject to approval" line.
               Always rendered (with content adapted by leave type), so the

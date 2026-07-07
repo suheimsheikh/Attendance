@@ -1471,6 +1471,75 @@ async def my_photo_status(user: dict = Depends(get_current_user)):
     }
 
 
+# ── Personal Reason Bank ─────────────────────────────────────────────
+# Each member accumulates their own list of reasons — anything they
+# type into an OT check-in/check-out prompt or a comp-off application
+# is added (case-insensitively deduped) so it re-appears as a
+# suggestion next time. Kept private per-user; admins do not curate.
+# Introduced 7 Jul 2026 for the user-driven "personal reason base"
+# feature; storage is `users[uid].reasons: [str]` sorted MRU-first.
+async def _ensure_reason_in_bank(user_id: str, reason: Optional[str]) -> None:
+    """Append `reason` to the user's personal bank if it's not already
+    present (case-insensitive). Silent no-op for empty / whitespace
+    input. Sort order: most-recently-used first — repeat use bumps a
+    reason to the top."""
+    if not reason or not reason.strip():
+        return
+    r = reason.strip()
+    # Use explicit `is None` — an existing user without a `reasons`
+    # field yields `{}` from find_one, which is falsy but valid.
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "reasons": 1})
+    if u is None:
+        return
+    current = list(u.get("reasons") or [])
+    # Case-insensitive dedup — treat "Rainbow Kids" and "rainbow kids"
+    # as the same entry (keep the newer capitalisation).
+    lowered = r.lower()
+    kept = [x for x in current if x.lower() != lowered]
+    new_list = [r] + kept  # MRU at head
+    # Hard cap so a chatty member doesn't grow the doc unbounded.
+    new_list = new_list[:50]
+    if new_list != current:
+        await db.users.update_one({"id": user_id}, {"$set": {"reasons": new_list}})
+
+
+@api_router.get("/me/reasons")
+async def list_my_reasons(user: dict = Depends(get_current_user)):
+    """Return the caller's personal reason bank (MRU-first)."""
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0, "reasons": 1})
+    return {"reasons": list((u or {}).get("reasons") or [])}
+
+
+class ReasonIn(BaseModel):
+    reason: str
+
+
+@api_router.post("/me/reasons")
+async def add_my_reason(body: ReasonIn, user: dict = Depends(get_current_user)):
+    """Manually add a reason (also happens automatically on OT/comp-off
+    submit). Idempotent — repeated adds bump the reason to the top."""
+    await _ensure_reason_in_bank(user["id"], body.reason)
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0, "reasons": 1})
+    return {"reasons": list((u or {}).get("reasons") or [])}
+
+
+@api_router.delete("/me/reasons")
+async def delete_my_reason(reason: str, user: dict = Depends(get_current_user)):
+    """Prune a stale reason from the caller's bank. Match is
+    case-insensitive. Reason passed as `?reason=...` query so we don't
+    need to escape it for a URL path."""
+    if not reason or not reason.strip():
+        raise HTTPException(status_code=400, detail="Reason is required")
+    target = reason.strip().lower()
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0, "reasons": 1})
+    current = list((u or {}).get("reasons") or [])
+    kept = [x for x in current if x.lower() != target]
+    if kept != current:
+        await db.users.update_one({"id": user["id"]}, {"$set": {"reasons": kept}})
+    return {"reasons": kept}
+
+
+
 @api_router.post("/members/me/photo", response_model=UserPublic)
 async def set_my_photo(body: dict, user: dict = Depends(get_current_user)):
     photo = body.get("photo")
@@ -1796,6 +1865,11 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         elif overtime_reason and (sess.get("overtime_total_min") or 0) > 0:
             # No new late OT but member supplied a reason that supplements the early-OT one.
             ot_updates = {"overtime_reason": overtime_reason.strip()}
+        # If a reason was captured for OT (either fresh late-out OT or a
+        # supplemental one), stash it in the member's personal reason
+        # bank so it re-appears as a suggestion on their next OT prompt.
+        if overtime_reason and overtime_reason.strip():
+            await _ensure_reason_in_bank(target["id"], overtime_reason)
         update_fields = {
             "check_out_at": ts.isoformat(),
             "hours": hours,
@@ -1849,6 +1923,9 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             "work_start_at_session": work_start_hm,
         })
     await db.attendance.insert_one(doc)
+    # Early-OT reason → personal bank (see notes on _ensure_reason_in_bank).
+    if early_min > 0 and overtime_reason and overtime_reason.strip():
+        await _ensure_reason_in_bank(target["id"], overtime_reason)
     return {"ok": True, "action": "checkin", "member": target["full_name"],
             "out_of_geofence": out, "distance_m": dist,
             "site_id": site_id, "site_name": site_name,

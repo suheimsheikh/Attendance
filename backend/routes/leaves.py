@@ -212,6 +212,21 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
             )
             doc.update(split)
         await db.leaves.insert_one(doc)
+        # Personal reason bank (7 Jul 2026): if the member supplied a
+        # reason on a comp-off application, add it to their bank so it
+        # re-appears as a suggestion next time they apply. Kept
+        # scoped to comp-off (leave/tour/posting reasons are usually
+        # one-off explanations like "family wedding" — no gain from
+        # cluttering the suggestion list).
+        if body.type == "comp_off" and body.reason and body.reason.strip():
+            r = body.reason.strip()
+            u = await db.users.find_one({"id": target_user["id"]}, {"_id": 0, "reasons": 1})
+            cur = list((u or {}).get("reasons") or [])
+            lowered = r.lower()
+            kept = [x for x in cur if x.lower() != lowered]
+            new_list = ([r] + kept)[:50]
+            if new_list != cur:
+                await db.users.update_one({"id": target_user["id"]}, {"$set": {"reasons": new_list}})
         doc.pop("_id", None)
         return doc
 

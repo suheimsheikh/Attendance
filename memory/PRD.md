@@ -1526,3 +1526,73 @@ Backend and tests untouched.
 rendering cleanly across 134 members with the correct Attendance
 window (01/07 → 07/07, current-month clamp still active).
 
+
+## Personal Reason Bank + OT reason picker (7 Jul 2026)
+
+User asked to automate OT reason capture with per-member suggestions
+that grow as members use the app — e.g. "Picking up Rainbow Kids",
+"Agape Camp", "Came to arrange breakfast".
+
+### Design (as agreed with user)
+- **Personal bank per member** — not office-wide; each user builds
+  their own list as they type.
+- **Auto-populated** — reasons submitted on OT prompts (check-in
+  early or check-out late) and on comp-off applications are
+  automatically appended to the caller's bank.
+- **Case-insensitive dedup**; MRU-first ordering (a repeated reason
+  bumps to the top); hard cap at 50 entries per user.
+- **Optional** — OT accrual still records without a reason (admin sees
+  "no reason given" on the approvals page).
+- **Only staff accrue OT** — this was already enforced by
+  `OVERTIME_CATEGORIES = {"staff"}` in `services/attendance_calc.py`;
+  now surfaced as a small disclaimer on the check-in card too.
+- **Comp-off is totally independent of OT** — no auto-conversion
+  from hours to days. Comp-off accrual (1 day per weekly-off worked)
+  unchanged.
+
+### Backend
+- Storage: `users[uid].reasons: [str]`. No new collection.
+- Helper `_ensure_reason_in_bank(user_id, reason)` in `server.py` —
+  used by the OT hook (both check-in-early and check-out-late) and
+  by the comp-off leave-create path (`routes/leaves.py`).
+- Endpoints:
+  - `GET /api/me/reasons` → `{ reasons: [str] }` MRU-first.
+  - `POST /api/me/reasons` `{reason}` → idempotent add + bump.
+  - `DELETE /api/me/reasons?reason=…` → prune (case-insensitive).
+- Bug caught in test: initial `_ensure_reason_in_bank` used
+  `if not u: return`. `find_one` with projection can return `{}`
+  (falsy but valid) when the doc has no `reasons` field yet — fixed
+  to `if u is None: return`.
+
+### Frontend
+- New `components/ReasonPicker.jsx` — controlled input with a
+  textarea + a "YOUR PREVIOUS REASONS" chip row (max 8 chips shown).
+  Clicking a chip loads the reason into the textarea. Two visual
+  variants (`amber` for OT prompts, `slate` for comp-off apply).
+- Wired in:
+  1. `SelfCheckIn.jsx` — replaces the plain `<textarea>` under the
+     OT amber card. Adds "Only staff accrue overtime." disclaimer.
+  2. `MyLeaves.jsx` `ApplyForm` — used only when the selected type is
+     `comp_off` (other leave types keep the free-text field —
+     one-off explanations like "family wedding" would clutter the
+     bank).
+  3. `Profile.jsx` — new "My Reasons" section listing the bank as
+     pill chips with a "×" per item for cleanup.
+
+### Tests
+- `backend/tests/test_reason_bank.py` (3 cases):
+  - CRUD + MRU behaviour + case-insensitive dedup + whitespace
+    silent-no-op.
+  - `DELETE ?reason=` (blank) → 400.
+  - 50-entry cap (POST 55 → GET returns 50 with oldest 5 evicted).
+- Full suite still green post-change (25/25 across reports + new
+  tests + hours-absent).
+
+### Files touched
+- `backend/server.py` — helper + 3 endpoints; hooks in
+  `_geo_toggle` (late-out OT) and the check-in path (early-in OT).
+- `backend/routes/leaves.py` — comp-off reason hook.
+- `frontend/src/components/ReasonPicker.jsx` — new.
+- `frontend/src/pages/SelfCheckIn.jsx`, `MyLeaves.jsx`, `Profile.jsx`.
+- `backend/tests/test_reason_bank.py` — new.
+

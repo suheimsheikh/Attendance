@@ -7,6 +7,7 @@ import { getLocation, speakLateMessage } from "../utils";
 import SelfieCapture from "../components/SelfieCapture";
 import DailyContent from "../components/DailyContent";
 import BrandHero from "../components/BrandHero";
+import ReasonPicker from "../components/ReasonPicker";
 
 function hmNow() {
   const d = new Date();
@@ -236,15 +237,14 @@ export default function SelfCheckIn() {
                 <div className="text-xs text-amber-800 font-semibold">{otInfo.label}</div>
               </div>
               <label className="iu-label text-amber-900">Reason for overtime (optional)</label>
-              <textarea
-                data-testid="ot-reason-input"
-                rows={2}
+              <ReasonPicker
                 value={overtimeReason}
-                onChange={(e) => setOvertimeReason(e.target.value)}
+                onChange={setOvertimeReason}
                 placeholder={otInfo.kind === "early" ? "e.g. Pre-event setup, training session…" : "e.g. End-of-day reconciliation, regatta cleanup…"}
-                className="iu-input !h-auto py-2"
+                variant="amber"
+                testId="ot-reason"
               />
-              <p className="text-[11px] text-amber-700 mt-1.5">Admin will review and approve overtime tomorrow morning.</p>
+              <p className="text-[11px] text-amber-700 mt-1.5">Admin will review and approve overtime tomorrow morning. Only staff accrue overtime.</p>
             </div>
           )}
           <button

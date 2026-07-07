@@ -112,9 +112,79 @@ export default function Profile() {
               </ul>
             )}
           </section>
+          <MyReasonsSection />
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * MyReasonsSection — small self-contained panel on the Profile page
+ * showing the member's personal reason bank (built up from OT prompts
+ * and comp-off applications). Members can prune stale entries with a
+ * one-click "×". Kept intentionally low-key — most members will never
+ * look at this; it's here for cleanup.
+ */
+function MyReasonsSection() {
+  const [reasons, setReasons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try { setReasons((await api.get("/me/reasons"))?.reasons || []); }
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  const remove = async (reason) => {
+    setBusy(reason);
+    try {
+      const res = await api.del(`/me/reasons?reason=${encodeURIComponent(reason)}`);
+      setReasons(res?.reasons || []);
+    } catch (err) {
+      showApiError(err, "Could not remove");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  if (loading) {
+    return (
+      <section className="iu-card p-5 mt-6" data-testid="my-reasons-section">
+        <h3 className="font-extrabold tracking-tight mb-1 text-sm text-slate-500 uppercase">My Reasons</h3>
+        <div className="text-xs text-slate-400 flex items-center gap-1.5"><Loader2 className="animate-spin" size={11}/> loading…</div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="iu-card p-5 mt-6" data-testid="my-reasons-section">
+      <h3 className="font-extrabold tracking-tight mb-1 text-sm text-slate-500 uppercase">My Reasons</h3>
+      <p className="text-xs text-slate-500 mb-3">
+        Reasons you&apos;ve typed on overtime check-ins and comp-off applications. They&apos;ll re-appear as suggestions next time.
+      </p>
+      {reasons.length === 0 ? (
+        <p className="text-xs text-slate-400 italic">Nothing here yet — reasons show up automatically the first time you use them.</p>
+      ) : (
+        <ul className="flex flex-wrap gap-1.5" data-testid="my-reasons-list">
+          {reasons.map((r) => (
+            <li key={r} className="inline-flex items-center gap-1 border border-slate-300 rounded-full px-2 py-0.5 bg-white text-[11px] font-medium text-slate-700">
+              <span>{r}</span>
+              <button
+                type="button"
+                onClick={() => remove(r)}
+                disabled={busy === r}
+                data-testid="my-reasons-remove"
+                aria-label={`Remove ${r}`}
+                className="ml-0.5 text-slate-400 hover:text-red-600 disabled:opacity-40"
+              >×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
