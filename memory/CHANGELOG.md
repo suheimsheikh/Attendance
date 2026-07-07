@@ -5,6 +5,19 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Zebra striping on Attendance Report
+
+**Reports table** (`Reports.jsx`): every alternate row now carries a
+subtle `bg-slate-100/60` tint so the eye tracks across the 23
+columns without losing its place. Group column tints (`bg-emerald-50/30`,
+`bg-amber-50/30`, etc.) layer on top so the visual grouping stays
+intact. The two sticky left columns (Member + Cat) inherit the row's
+zebra tint so the pinned half stays visually aligned with the
+scrolling half.
+
+Hover swapped from `bg-slate-50` → `bg-sky-50` so it reads as
+"currently-highlighted row" instead of fighting the zebra.
+
 ## 7 Jul 2026 — Code-review hardening pass #2
 
 Applied every fix in the second code-review report that didn't overlap

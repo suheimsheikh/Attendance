@@ -320,7 +320,14 @@ export default function Reports() {
                   </tr>
                 </thead>
                 <tbody>
-                  {displayedRows.map((r) => {
+                  {displayedRows.map((r, rowIdx) => {
+                    // Zebra striping (7 Jul 2026 user request "make
+                    // reports easy read"). Odd rows keep the white
+                    // background, even rows carry a subtle slate tint;
+                    // the group column tints (/30 alpha) layer on top
+                    // so the visual grouping is preserved.
+                    const isEven = rowIdx % 2 === 1;
+                    const rowBg = isEven ? "bg-slate-100/60" : "bg-white";
                     // 7 Jul 2026 (evening): Total now includes Off so
                     // weekly-off + in-progress-today land in the sum.
                     const attnTotal = (r.days_present || 0) + (r.days_leave || 0) + (r.days_tour || 0) + (r.days_off || 0);
@@ -351,17 +358,17 @@ export default function Reports() {
                       return { className: `${base} ${className}`, ...rest };
                     };
                     return (
-                      <tr key={r.member_id} className="hover:bg-slate-50 group" data-testid={`attn-row-${r.member_id}`}>
+                      <tr key={r.member_id} className={`${rowBg} hover:bg-sky-50 group transition-colors`} data-testid={`attn-row-${r.member_id}`}>
                         {/* Member + Category are pinned to the left with
                             `position: sticky` so admins keep the row
                             anchor visible when horizontal-scrolling
-                            across the 23 columns. `group-hover:bg-slate-50`
-                            keeps the hover tint continuous across the
-                            pinned + scrolling halves. Double-clicking
-                            the name opens the day-by-day timeline
-                            modal (7 Jul 2026). */}
+                            across the 23 columns. Sticky cells inherit
+                            the row's zebra tint so the pinned half
+                            stays visually aligned with the scrolling
+                            half. Double-clicking the name opens the
+                            day-by-day timeline modal (7 Jul 2026). */}
                         <td
-                          className="py-1.5 px-2 font-semibold text-slate-800 border-t border-slate-100 sticky left-0 z-10 bg-white group-hover:bg-slate-50 cursor-pointer"
+                          className={`py-1.5 px-2 font-semibold text-slate-800 border-t border-slate-100 sticky left-0 z-10 ${rowBg} group-hover:bg-sky-50 cursor-pointer`}
                           onDoubleClick={() => setTimelineMember(r)}
                           title="Double-click for day-by-day timeline"
                           data-testid={`attn-name-${r.member_id}`}
@@ -374,7 +381,7 @@ export default function Reports() {
                             )}
                           </div>
                         </td>
-                        <td className="py-1.5 px-2 hidden md:table-cell text-slate-600 border-t border-slate-100 sticky left-[140px] z-10 bg-white group-hover:bg-slate-50">{categoryLabel(r.category)}</td>
+                        <td className={`py-1.5 px-2 hidden md:table-cell text-slate-600 border-t border-slate-100 sticky left-[140px] z-10 ${rowBg} group-hover:bg-sky-50`}>{categoryLabel(r.category)}</td>
                         {/* Attendance group */}
                         <td {...merge("py-1.5 px-1.5 text-center bg-emerald-50/30 border-l border-t border-emerald-100 font-semibold text-emerald-700", hoverProps("Present", r.dates_present))} data-testid={`days-present-${r.member_id}`}>{n(r.days_present)}</td>
                         <td {...merge("py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 text-amber-700", hoverProps("Leave", r.dates_leave))} data-testid={`days-leave-${r.member_id}`}>{n(r.days_leave)}</td>
