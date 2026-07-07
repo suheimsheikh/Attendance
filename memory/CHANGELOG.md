@@ -5,6 +5,36 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Compact / Detailed density toggle on Presence
+
+New icon button in the Presence header flips every column between
+two densities:
+
+- **Detailed** (default) — the existing rich card layout with sub-
+  line (rank · category · institution chip), status chips
+  (ExpectedReturnPill, excursions, sessions, days-remaining,
+  half-day, late, overdue, notify), and GeoLine.
+- **Compact** — photo, name, parent-contact icon, expand toggle
+  only. Row padding shrinks from `py-2.5` to `py-1.5`. Everything
+  else is hidden via `.hidden`.
+
+Preference persists to `localStorage["presence.density"]` so it
+survives refresh + browser restart. Button icon and label swap so
+the button always shows the density you'd get by clicking it
+("Detail" while in compact, "Compact" while in detail).
+
+**Files touched**:
+- `Presence.jsx` — `density` state + `toggleDensity` (persisted).
+- `presence/PresenceHeader.jsx` — new toggle button after the
+  members-count pill.
+- `presence/Column.jsx` — passes `density` down to MemberCard.
+- `presence/MemberCard.jsx` — `compact` prop hides sub-line, chip
+  strip, and GeoLine; tightens vertical padding.
+
+**Verified live**: On-campus column jumped from ~15 visible rows
+to ~131 in compact mode; `localStorage['presence.density']` = "compact"
+after toggle.
+
 ## 7 Jul 2026 — Removed blank gaps on Presence Board columns
 
 **Bug**: On Campus and Checked Out columns showed huge blank gaps

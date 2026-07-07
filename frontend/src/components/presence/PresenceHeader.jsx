@@ -1,5 +1,5 @@
 import React from "react";
-import { Clock, RefreshCw, UserPlus, UserX, ChevronLeft, ChevronRight } from "lucide-react";
+import { Clock, RefreshCw, UserPlus, UserX, ChevronLeft, ChevronRight, LayoutList, LayoutGrid } from "lucide-react";
 import { formatDate } from "../../utils";
 
 /**
@@ -26,6 +26,8 @@ export function PresenceHeader({
   activeGuestCount,
   totalMembers,
   onRefresh,
+  density,
+  onToggleDensity,
 }) {
   return (
     <header className="flex flex-wrap items-end justify-between gap-3 mb-5">
@@ -127,6 +129,20 @@ export function PresenceHeader({
           <span className="w-2 h-2 rounded-full bg-emerald-500" />
           {totalMembers} members
         </div>
+        {onToggleDensity && (
+          <button
+            onClick={onToggleDensity}
+            data-testid="presence-density-toggle"
+            className="iu-btn-secondary !h-9 !px-3"
+            title={density === "compact" ? "Switch to detailed view" : "Switch to compact view (photo + name only)"}
+            aria-label="Toggle density"
+          >
+            {density === "compact" ? <LayoutList size={14} /> : <LayoutGrid size={14} />}
+            <span className="hidden md:inline text-[11px] font-bold uppercase tracking-wider">
+              {density === "compact" ? "Detail" : "Compact"}
+            </span>
+          </button>
+        )}
         <button onClick={onRefresh} className="iu-btn-secondary !h-9 !px-3" data-testid="presence-refresh-button">
           <RefreshCw size={14} />
         </button>

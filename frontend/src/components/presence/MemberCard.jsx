@@ -9,8 +9,9 @@ import { GeoLine } from "./GeoLine";
 import { SessionTimeline } from "./SessionTimeline";
 import { ExpectedReturnPill } from "./ExpectedReturnPill";
 
-export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick, hidden, expanded, onToggleExpand }) {
+export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick, hidden, expanded, onToggleExpand, density = "detailed" }) {
   const [zoomOpen, setZoomOpen] = useState(false);
+  const compact = density === "compact";
   const lateBg = m.late ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50";
   const notifyDueType = m.notify_due?.not_arrived
     ? "not_arrived"
@@ -29,7 +30,7 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
   return (
     <>
     <div
-      className={`px-3 py-2.5 flex gap-2.5 items-start transition ${hidden ? "" : lateBg} ${!hidden && onDoubleClick ? "cursor-pointer select-none" : ""}`}
+      className={`${compact ? "px-3 py-1.5" : "px-3 py-2.5"} flex gap-2.5 items-start transition ${hidden ? "" : lateBg} ${!hidden && onDoubleClick ? "cursor-pointer select-none" : ""}`}
       data-testid={hidden ? `presence-blank-${columnKey}-${m.id}` : `presence-row-${m.id}`}
       onDoubleClick={handleDouble}
       title={!hidden && onDoubleClick ? (columnKey === "on_campus" ? "Double-click to remove from On Campus" : "Double-click to edit member") : undefined}
@@ -63,7 +64,7 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
             </button>
           )}
         </div>
-        <div className="text-[11px] text-slate-500 leading-tight mt-0.5 flex items-center gap-1.5 flex-wrap">
+        <div className={`text-[11px] text-slate-500 leading-tight mt-0.5 flex items-center gap-1.5 flex-wrap ${compact ? "hidden" : ""}`}>
           <span className="truncate">{m.rank ? `${m.rank} · ` : ""}{categoryLabel(m.category)}</span>
           {m.institution && (
             <span
@@ -75,10 +76,10 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
             </span>
           )}
         </div>
-        {m.detail && (
+        {m.detail && !compact && (
           <div className="text-[11px] text-slate-500 truncate mt-0.5">{m.detail}</div>
         )}
-        <div className="flex flex-wrap gap-1 mt-1">
+        <div className={`flex flex-wrap gap-1 mt-1 ${compact ? "hidden" : ""}`}>
           {columnKey === "temp_out" && (
             <ExpectedReturnPill
               expectedReturnTime={m.expected_return_time}
@@ -169,7 +170,7 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
             <NotifyParentsButton member={m} type={notifiedType} notified onSent={onSent} />
           )}
         </div>
-        <GeoLine geoIn={m.geo_in} geoOut={m.geo_out} status={m.status} />
+        {!compact && <GeoLine geoIn={m.geo_in} geoOut={m.geo_out} status={m.status} />}
       </div>
     </div>
     {expanded && hasTimeline && <SessionTimeline m={m} />}

@@ -4,7 +4,7 @@ import { MemberCard } from "./MemberCard";
 import { ExpectedReturnPill } from "./ExpectedReturnPill";
 import Avatar from "../Avatar";
 
-export function Column({ col, members, displayList, escorts, adminContacts, coachMobile, onSent, onRowDoubleClick, expandedRows, toggleRow }) {
+export function Column({ col, members, displayList, escorts, adminContacts, coachMobile, onSent, onRowDoubleClick, expandedRows, toggleRow, density }) {
   const Icon = col.icon;
   const escortList = escorts || [];
   // Per-category breakdown under the column label so coaches can see
@@ -108,6 +108,7 @@ export function Column({ col, members, displayList, escorts, adminContacts, coac
               onDoubleClick={onRowDoubleClick}
               expanded={expandedRows && expandedRows.has(m.id)}
               onToggleExpand={toggleRow ? () => toggleRow(m.id) : null}
+              density={density}
             />
           ))
         )}

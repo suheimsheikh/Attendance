@@ -45,6 +45,21 @@ export default function Presence() {
   }, []);
   const [viewDate, setViewDate] = useState("");
   const [expandedRows, setExpandedRows] = useState(() => new Set());
+  // Compact / detailed density (7 Jul 2026 — user request). Persisted
+  // to localStorage so the coach's preference survives page refresh /
+  // browser restart. Default is `detailed` which is the pre-existing
+  // rich card layout.
+  const [density, setDensity] = useState(() => {
+    try { return localStorage.getItem("presence.density") || "detailed"; }
+    catch { return "detailed"; }
+  });
+  const toggleDensity = useCallback(() => {
+    setDensity((d) => {
+      const next = d === "compact" ? "detailed" : "compact";
+      try { localStorage.setItem("presence.density", next); } catch { /* private mode */ }
+      return next;
+    });
+  }, []);
   const today = todayIso();
   const isHistorical = !!viewDate && viewDate !== today;
 
@@ -292,6 +307,8 @@ export default function Presence() {
         activeGuestCount={guests.active_count}
         totalMembers={totalMembers}
         onRefresh={load}
+        density={density}
+        onToggleDensity={toggleDensity}
       />
 
       <FleetFilterRow
@@ -394,6 +411,7 @@ export default function Presence() {
               onRowDoubleClick={isAdmin ? handleMemberDoubleClick : null}
               expandedRows={expandedRows}
               toggleRow={toggleRow}
+              density={density}
             />
           ))}
         </div>
