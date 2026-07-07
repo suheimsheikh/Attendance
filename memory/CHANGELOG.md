@@ -5,6 +5,19 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Personalised greeting on Check-In card
+
+- `SelfCheckIn.jsx` — added a `Greeting` helper component that
+  renders "Good morning, ARUNA 👋" (or afternoon/evening/night)
+  directly above the check-in button, using the member's first name
+  from `useAuth().user.full_name`. When already checked in, copy
+  shifts to "Ready to head out, ARUNA?" so it doesn't feel
+  repetitive.
+- Time-of-day slot: 05-11 morning · 12-16 afternoon · 17-21 evening
+  · else night. Runs client-side off `new Date().getHours()` — no
+  server round trip.
+- Data-testid `checkin-greeting`; verified live via Playwright.
+
 ## 7 Jul 2026 — Removed top BrandHero from Check-In screen
 
 - `SelfCheckIn.jsx` — removed the `<BrandHero />` block at the top

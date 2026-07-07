@@ -227,6 +227,7 @@ export default function SelfCheckIn() {
       {/* Big primary check-in/out button */}
       {!onTempOut && (
         <div className="iu-card p-8 text-center" data-testid="self-checkin-card">
+          <Greeting user={user} checkedIn={!!status?.checked_in} />
           {otInfo && (
             <div className="mb-5 text-left rounded-xl border border-amber-200 bg-amber-50 p-3" data-testid="ot-reason-block">
               <div className="flex items-start gap-2 mb-2">
@@ -332,6 +333,31 @@ function fmtHmLocal(d) {
   const h = d.getHours().toString().padStart(2, "0");
   const m = d.getMinutes().toString().padStart(2, "0");
   return `${h}:${m}`;
+}
+
+/** Personalised greeting shown above the check-in button —
+ * "Good morning, ARUNA 👋". Time-of-day slot follows local hour:
+ * 05-11 morning · 12-16 afternoon · 17-21 evening · else night.
+ * When the member is already checked in we shift to a "welcome back
+ * on campus" register so the copy doesn't feel repetitive. */
+function Greeting({ user, checkedIn }) {
+  const firstName = (user?.full_name || "").trim().split(/\s+/)[0] || "there";
+  const hour = new Date().getHours();
+  let slot = "night";
+  if (hour >= 5 && hour < 12) slot = "morning";
+  else if (hour < 17) slot = "afternoon";
+  else if (hour < 22) slot = "evening";
+  const label = checkedIn
+    ? `Ready to head out, ${firstName}?`
+    : `Good ${slot}, ${firstName} 👋`;
+  return (
+    <div
+      className="mb-4 text-slate-700 font-semibold text-base md:text-lg"
+      data-testid="checkin-greeting"
+    >
+      {label}
+    </div>
+  );
 }
 
 function TempExitCard({ onCreated }) {
