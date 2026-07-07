@@ -842,6 +842,10 @@ async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depend
         raise HTTPException(status_code=400, detail="You cannot remove your own admin access")
     if body.photo is not None:
         _check_photo_size(body.photo)
+    # Snapshot BEFORE — feeds the audit diff.
+    before_doc = await db.users.find_one({"id": member_id}, {"_id": 0})
+    if not before_doc:
+        raise HTTPException(status_code=404, detail="Member not found")
     # NOTE: `exclude_unset=True` distinguishes between "field omitted from
     # request" (leave unchanged) and "field explicitly set to null" (clear
     # it). Without this, inline-edit cells in the Members admin table can
@@ -870,6 +874,20 @@ async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depend
     u = await db.users.find_one({"id": member_id}, {"_id": 0})
     if not u:
         raise HTTPException(status_code=404, detail="Member not found")
+    # Audit trail — one row per admin-driven member edit. Sensitive
+    # fields (photo bytes, hashed password) are redacted from the
+    # diff to keep the log lean and to avoid re-persisting secrets.
+    audit_before = {k: v for k, v in before_doc.items()
+                    if k not in ("photo", "photo_thumb", "hashed_password")}
+    audit_after = {k: v for k, v in u.items()
+                   if k not in ("photo", "photo_thumb", "hashed_password")}
+    action = "member.password_reset" if body.password else "member.update"
+    await write_audit(
+        db, actor=admin, action=action,
+        entity_type="member", entity_id=member_id,
+        entity_name=u.get("full_name"),
+        before=audit_before, after=audit_after,
+    )
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
 
 
@@ -1132,9 +1150,23 @@ async def bulk_set_leave_balances(body: LeaveBalanceBulkIn, admin: dict = Depend
             patch["comp_off_opening"] = max(0, int(row.comp_off_opening))
         if not patch:
             continue
+        before = await db.users.find_one({"id": row.member_id},
+                                         {"_id": 0, "id": 1, "full_name": 1,
+                                          "leave_balance_opening": 1,
+                                          "comp_off_opening": 1})
         r = await db.users.update_one({"id": row.member_id}, {"$set": patch})
         if r.modified_count or r.matched_count:
             updated += 1
+            # Audit each row that actually took a write — one row per
+            # member so the log is granular enough to answer "who bumped
+            # ARUNA's paid-leave opening from 12 → 24?".
+            after = {**(before or {}), **patch}
+            await write_audit(
+                db, actor=admin, action="leave_balance.set",
+                entity_type="member", entity_id=row.member_id,
+                entity_name=(before or {}).get("full_name"),
+                before=before, after=after,
+            )
     return {"ok": True, "updated": updated}
 
 
@@ -1990,6 +2022,19 @@ async def admin_toggle_attendance(member_id: str, body: dict = None, admin: dict
     res = await perform_toggle(target, office, office["latitude"], office["longitude"],
                                None, reason, "admin_console", admin["id"])
     res["override"] = True
+    # Audit trail — retroactive check-ins and check-outs are the highest-
+    # stakes admin overrides on the platform (they directly affect
+    # attendance and OT payout). Log every one.
+    await write_audit(
+        db, actor=admin,
+        action=f"attendance.{res.get('action', 'toggle')}",
+        entity_type="member", entity_id=member_id,
+        entity_name=target.get("full_name"),
+        reason=reason,
+        meta={"session_id": res.get("session_id"),
+              "check_in_at": res.get("check_in_at"),
+              "check_out_at": res.get("check_out_at")},
+    )
     return res
 
 
@@ -3350,6 +3395,17 @@ app.include_router(_muster_router(db, get_current_user, _active_camp_for))
 # Admin tooling (wipe / backup / restore / preflight / summary / activity).
 from routes.admin_tools import make_router as _admin_tools_router  # noqa: E402
 app.include_router(_admin_tools_router(db, require_admin))
+
+# Admin audit log — one row per admin-mutating action (member edits,
+# leave-balance changes, retroactive attendance overrides, etc.).
+# Read endpoint: GET /api/admin/audit-log.
+from routes.admin_audit import make_router as _audit_router, write_audit  # noqa: E402
+app.include_router(_audit_router(db, require_admin))
+
+# Data-quality dashboard — read-only DB sweep for dupes, missing
+# fields, and structural inconsistencies.
+from routes.data_quality import make_router as _data_quality_router  # noqa: E402
+app.include_router(_data_quality_router(db, require_admin))
 
 # Leave / Tour routes — split out 06/2026 during the server.py refactor.
 from routes.leaves import make_router as _leaves_router  # noqa: E402

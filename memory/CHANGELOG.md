@@ -5,6 +5,60 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Audit trail + Data Quality dashboard
+
+### Backend
+- New `routes/admin_audit.py` — `audit_log` Mongo collection + a
+  `write_audit(actor, action, entity_type, ..., before, after,
+  reason)` best-effort helper. Diff is computed by the helper, so
+  callers pass raw snapshots. Sensitive fields (`hashed_password`,
+  `photo`, `photo_thumb`) are redacted from the diff.
+- New `GET /api/admin/audit-log` — paged read (max 200), filters:
+  `actor_id`, `entity_id`, `entity_type`, `action`, `since`, `until`.
+- Wired audit writes into:
+  - `PATCH /api/members/{id}` — action `member.update` (or
+    `member.password_reset` if `password` was in the payload).
+  - `POST /api/leave-balances/bulk` — action `leave_balance.set`,
+    one row per member.
+  - `POST /api/admin/attendance/toggle/{id}` — action
+    `attendance.check_in` / `check_out` with the reason + session
+    metadata attached.
+- New `routes/data_quality.py` — read-only DB sweep. `GET
+  /api/admin/data-quality` returns
+  `{ generated_at, total_findings, by_severity, findings[] }` sorted
+  high→low severity. Checks include:
+  duplicate emails / mobiles / names (case-insensitive), athletes
+  with no valid parent/guardian mobile, members missing critical
+  fields, unphonelike mobiles, negative or excessively-high leave
+  balances, DOB in the future / ancient / bad-format, missing
+  profile photos, leaves with end<start, multi-day late-comings,
+  half-day flag on non-Leave types, attendance sessions with
+  checkout<checkin or open >36h.
+
+### Frontend
+- New `pages/admin/AuditLog.jsx` — filter bar (action / actor /
+  entity / date range), diff-in-place table with colour-coded
+  action badges, greyed-out "before" / bold "after" formatting.
+- New `pages/admin/DataQuality.jsx` — severity summary strip
+  (click a severity chip to filter), findings grouped by category,
+  member deep-links pointing to `/admin/members?highlight=<id>`.
+- Registered at `/admin/audit-log` and `/admin/data-quality`;
+  sidebar picks up two new entries (ShieldAlert + ScanLine icons).
+
+### Tests
+- `backend/tests/test_audit_log.py` (4 tests) — verifies member
+  PATCH writes an audit row with the right diff, password reset
+  never leaks hashed_password, filters narrow correctly.
+- `backend/tests/test_data_quality.py` (5 tests) — schema, required
+  fields, severity ordering, synthetic bad-DOB detection, synthetic
+  negative-leave detection.
+- Full suite still green; smoke suite still 21 tests / ~3s.
+
+**Verified live** — on the real production DB the sweep flagged 46
+findings including 20+ athletes with no valid parent/guardian
+mobile (real launch-blocker!). Audit log captured every test
+change with correct actor + diff.
+
 ## 7 Jul 2026 — Birthday flourish on Check-In greeting
 
 **Backend**

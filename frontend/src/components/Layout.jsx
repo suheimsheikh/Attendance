@@ -4,7 +4,8 @@ import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, Building2, IdCard, Sailboat, MapPin,
-  LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera
+  LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
+  ShieldAlert
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -47,6 +48,8 @@ const NAV_ADMIN = [
   { to: "/admin/office", label: "Office Settings", icon: Settings },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera },
+  { to: "/admin/data-quality", label: "Data Quality", icon: ShieldAlert },
+  { to: "/admin/audit-log", label: "Audit Log", icon: ScanLine },
   { to: "/admin/backup", label: "Backup & Restore", icon: Database },
 ];
 

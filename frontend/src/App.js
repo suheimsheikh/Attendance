@@ -34,6 +34,8 @@ const WhatsNew = lazy(() => import("./pages/WhatsNew"));
 const Cards = lazy(() => import("./pages/admin/Cards"));
 const EscortCheckIn = lazy(() => import("./pages/EscortCheckIn"));
 const EscortPhotoCleanup = lazy(() => import("./pages/admin/EscortPhotoCleanup"));
+const AuditLog = lazy(() => import("./pages/admin/AuditLog"));
+const DataQuality = lazy(() => import("./pages/admin/DataQuality"));
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -130,6 +132,8 @@ function App() {
             <Route path="admin/backup" element={<RequireAdmin><BackupRestore /></RequireAdmin>} />
             <Route path="admin/import" element={<RequireAdmin><ImportMembers /></RequireAdmin>} />
             <Route path="admin/escort-photos" element={<RequireAdmin><EscortPhotoCleanup /></RequireAdmin>} />
+            <Route path="admin/audit-log" element={<RequireAdmin><AuditLog /></RequireAdmin>} />
+            <Route path="admin/data-quality" element={<RequireAdmin><DataQuality /></RequireAdmin>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
