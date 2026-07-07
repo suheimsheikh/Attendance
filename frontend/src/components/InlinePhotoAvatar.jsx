@@ -1,24 +1,34 @@
 import React, { useRef, useState } from "react";
-import { Loader2, Camera, Trash2 } from "lucide-react";
+import { Loader2, Maximize2, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import { fileToResizedDataUrl } from "../utils";
 import Avatar from "./Avatar";
+import PhotoZoom from "./PhotoZoom";
 
 /**
- * Avatar that doubles as a click-to-upload control. Hovering reveals a small
- * "Camera" badge (replace) plus, when the member already has a photo on file,
- * a small "Trash" badge to clear it — deleting the photo brings back the
- * initials avatar AND ensures the next bulk muster check-in re-prompts the
- * coach for a fresh capture (useful when a wrong photo got uploaded).
+ * Avatar with a click-to-zoom modal that carries Replace / Remove
+ * actions. Rewired 7 Jul 2026 — the previous hover-to-reveal
+ * camera + trash badges felt like "download and delete" chips to
+ * users and were easy to click by accident.
  *
- * Renders inline in the Members table.
+ * New flow:
+ *   • Click the avatar → PhotoZoom modal opens.
+ *     - Photo present → shows the photo at full quality with
+ *       Replace + Remove footer buttons.
+ *     - No photo yet → shows the initials-only avatar with a single
+ *       "Add photo" button.
+ *   • Hover shows a subtle "expand" glyph so the affordance is
+ *     obvious without exposing raw action badges.
+ *   • The parent's `onUpdated(updated_member)` callback fires after
+ *     both Replace and Remove.
  */
 export default function InlinePhotoAvatar({ member, size = 40, onUpdated }) {
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
+  const [zoomOpen, setZoomOpen] = useState(false);
 
-  const onPick = async (file) => {
+  const savePhoto = async (file) => {
     if (!file) return;
     if (!/^image\//.test(file.type)) { toast.error("Please pick an image file"); return; }
     setBusy(true);
@@ -27,6 +37,7 @@ export default function InlinePhotoAvatar({ member, size = 40, onUpdated }) {
       const updated = await api.patch(`/members/${member.id}`, { photo: dataUrl });
       onUpdated && onUpdated(updated);
       toast.success("Photo updated");
+      setZoomOpen(false);
     } catch (err) {
       toast.error(err?.message || "Couldn't save photo");
     } finally {
@@ -35,14 +46,14 @@ export default function InlinePhotoAvatar({ member, size = 40, onUpdated }) {
     }
   };
 
-  const onDelete = async (e) => {
-    e.stopPropagation();
-    if (!window.confirm(`Delete the photo for ${member.full_name}? The next muster check-in will ask for a new one.`)) return;
+  const removePhoto = async () => {
+    if (!window.confirm(`Remove the photo for ${member.full_name}? The next muster check-in will re-prompt for a new one.`)) return;
     setBusy(true);
     try {
       const updated = await api.patch(`/members/${member.id}`, { photo: "" });
       onUpdated && onUpdated(updated);
       toast.success("Photo removed");
+      setZoomOpen(false);
     } catch (err) {
       toast.error(err?.message || "Couldn't remove photo");
     } finally {
@@ -50,43 +61,50 @@ export default function InlinePhotoAvatar({ member, size = 40, onUpdated }) {
     }
   };
 
+  const openPicker = () => fileRef.current?.click();
+
   return (
-    <div
-      className="relative group cursor-pointer"
-      onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
-      title={member.photo ? "Tap to replace photo (hover for delete)" : "Tap to upload photo"}
-      data-testid={`inline-photo-${member.id}`}
-      style={{ width: size, height: size, flexShrink: 0 }}
-    >
-      <Avatar name={member.full_name} photo={member.photo} size={size} />
-      {/* Camera (replace / upload) badge */}
-      <span
-        className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center border-2 border-white shadow opacity-0 group-hover:opacity-100 transition"
-        style={{ opacity: busy ? 1 : undefined }}
+    <>
+      <button
+        type="button"
+        className="relative group cursor-pointer bg-transparent border-0 p-0"
+        onClick={(e) => { e.stopPropagation(); setZoomOpen(true); }}
+        title="Click to view / edit photo"
+        data-testid={`inline-photo-${member.id}`}
+        style={{ width: size, height: size, flexShrink: 0 }}
       >
-        {busy ? <Loader2 size={10} className="animate-spin" /> : <Camera size={10} />}
-      </span>
-      {/* Delete badge — only when the member already has a photo. */}
-      {member.photo && !busy && (
-        <button
-          type="button"
-          onClick={onDelete}
-          data-testid={`inline-photo-delete-${member.id}`}
-          aria-label="Delete photo"
-          title="Delete photo"
-          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center border-2 border-white shadow opacity-0 group-hover:opacity-100 hover:bg-rose-700 transition"
+        <Avatar name={member.full_name} photo={member.photo} size={size} />
+        {/* Single subtle "expand" affordance on hover. No hover-only
+            action chips — actions live in the zoom modal instead. */}
+        <span
+          className="absolute inset-0 rounded-full flex items-center justify-center bg-slate-900/40 text-white opacity-0 group-hover:opacity-100 transition"
+          aria-hidden="true"
         >
-          <Trash2 size={10} />
-        </button>
-      )}
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <Maximize2 size={12} />}
+        </span>
+      </button>
+
       <input
         ref={fileRef}
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={(e) => onPick(e.target.files?.[0])}
+        onChange={(e) => savePhoto(e.target.files?.[0])}
         data-testid={`inline-photo-input-${member.id}`}
       />
-    </div>
+
+      {zoomOpen && (
+        <PhotoZoom
+          name={member.full_name}
+          photo={member.photo}
+          subtitle={member.photo
+            ? "Click Replace to upload a new photo."
+            : "No photo yet — click Add photo to upload one."}
+          onClose={() => setZoomOpen(false)}
+          onReplace={openPicker}
+          onRemove={removePhoto}
+        />
+      )}
+    </>
   );
 }

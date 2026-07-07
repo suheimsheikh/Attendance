@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { Search } from "lucide-react";
+import { Search, Camera } from "lucide-react";
 import { api, showApiError } from "../api";
 import GuestCheckInModal from "../components/GuestCheckInModal";
 import MemberForm from "./admin/MemberForm";
@@ -7,6 +7,7 @@ import { useAuth } from "../auth";
 import { toast } from "sonner";
 import UpcomingThisWeek from "../components/UpcomingThisWeek";
 import EscortMissingBanner from "../components/EscortMissingBanner";
+import SelfieCapture from "../components/SelfieCapture";
 
 import { COLUMNS, PAIRED_COLUMN_KEYS } from "../components/presence/constants";
 import { Column } from "../components/presence/Column";
@@ -244,6 +245,45 @@ export default function Presence() {
   const lateCount = data?.counts?.late || 0;
   const absentCount = data?.counts?.absent || 0;
 
+  // On-campus athletes without a photo — opportunistic photo drainage
+  // (7 Jul 2026 user request). Coach clicks the strip, we walk through
+  // a SelfieCapture queue same as Muster. Athletes only — staff/coaches
+  // rarely appear on the presence board and don't need drainage.
+  const missingPhotoOnCampus = useMemo(() => (
+    (data?.members || [])
+      .filter((m) => m.status === "on_campus"
+        && (m.category === "athlete" || !m.category)
+        && !m.photo)
+      .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""))
+  ), [data]);
+
+  const [photoTarget, setPhotoTarget] = useState(null);
+  const [photoQueue, setPhotoQueue] = useState([]);
+  const advancePhotoQueue = useCallback((queue) => {
+    if (queue.length === 0) {
+      setPhotoTarget(null);
+      setPhotoQueue([]);
+      // Refresh the board so the freshly-captured photos show up.
+      load();
+      return;
+    }
+    const next = queue[0];
+    setPhotoTarget({ id: next.id, full_name: next.full_name });
+    setPhotoQueue(queue);
+  }, [load]);
+  const savePhoto = async (dataUrl) => {
+    if (!photoTarget) return;
+    try {
+      await api.post(`/members/${photoTarget.id}/photo`, { photo: dataUrl });
+      toast.success(`Photo saved for ${photoTarget.full_name}`);
+    } catch (err) {
+      showApiError(err, "Failed to save photo");
+      return;
+    }
+    advancePhotoQueue(photoQueue.slice(1));
+  };
+  const skipPhoto = () => advancePhotoQueue(photoQueue.slice(1));
+
   return (
     <div className="p-4 md:p-6 max-w-[1500px] mx-auto">
       {!isHistorical && <UpcomingThisWeek />}
@@ -271,6 +311,33 @@ export default function Presence() {
         fleetFilter={fleetFilter}
         onFleetChange={setFleetFilter}
       />
+
+      {!isHistorical && missingPhotoOnCampus.length > 0 && (
+        <button
+          type="button"
+          onClick={() => advancePhotoQueue(missingPhotoOnCampus)}
+          data-testid="presence-missing-photos-strip"
+          className="w-full mb-3 iu-card px-4 py-2.5 flex items-center gap-3 text-left hover:bg-amber-50 transition group"
+        >
+          <span className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center ring-1 ring-amber-200">
+            <Camera size={16} />
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-slate-800">
+              {missingPhotoOnCampus.length} athlete{missingPhotoOnCampus.length === 1 ? "" : "s"} on campus without a photo
+            </div>
+            <div className="text-xs text-slate-500 truncate">
+              Tap to capture photos while they&apos;re here — skip any time.
+              {" "}
+              {missingPhotoOnCampus.slice(0, 3).map((m) => m.full_name).join(", ")}
+              {missingPhotoOnCampus.length > 3 && ` +${missingPhotoOnCampus.length - 3} more`}
+            </div>
+          </div>
+          <span className="text-[10px] uppercase tracking-wider font-bold text-amber-700 group-hover:underline">
+            Capture
+          </span>
+        </button>
+      )}
 
       <div className="iu-card mb-4 px-3 py-2 flex items-center gap-3" data-testid="presence-search-wrap">
         <Search size={16} className="text-sky-500 shrink-0" />
@@ -355,6 +422,15 @@ export default function Presence() {
           initial={editingMember}
           onClose={() => setEditingMember(null)}
           onSaved={() => { setEditingMember(null); load(); }}
+        />
+      )}
+      {photoTarget && (
+        <SelfieCapture
+          title={`Photo for ${photoTarget.full_name}`}
+          subtitle={`They're on campus now — quick tap and next. ${photoQueue.length} left · Skip or × to bail.`}
+          facingMode="environment"
+          onCapture={savePhoto}
+          onClose={skipPhoto}
         />
       )}
     </div>

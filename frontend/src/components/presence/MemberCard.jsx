@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { AlertTriangle, Clock, Coffee, ChevronDown, ChevronRight, Repeat } from "lucide-react";
 import Avatar from "../Avatar";
+import PhotoZoom from "../PhotoZoom";
 import ParentContact from "../ParentContact";
 import NotifyParentsButton from "../NotifyParentsButton";
 import { categoryLabel } from "../../utils";
@@ -9,6 +10,7 @@ import { SessionTimeline } from "./SessionTimeline";
 import { ExpectedReturnPill } from "./ExpectedReturnPill";
 
 export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick, hidden, expanded, onToggleExpand }) {
+  const [zoomOpen, setZoomOpen] = useState(false);
   const lateBg = m.late ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50";
   const notifyDueType = m.notify_due?.not_arrived
     ? "not_arrived"
@@ -34,7 +36,16 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
       style={hiddenStyle}
       aria-hidden={hidden ? true : undefined}
     >
-      <Avatar name={m.full_name} photo={m.photo} size={34} ring={columnKey === "on_campus" ? accent : null} />
+      <button
+        type="button"
+        onClick={(e) => { if (!hidden) { e.stopPropagation(); setZoomOpen(true); } }}
+        className="shrink-0 bg-transparent border-0 p-0 cursor-zoom-in disabled:cursor-default"
+        disabled={hidden}
+        title={hidden ? undefined : "Click to zoom photo"}
+        data-testid={hidden ? undefined : `presence-photo-${m.id}`}
+      >
+        <Avatar name={m.full_name} photo={m.photo} size={34} ring={columnKey === "on_campus" ? accent : null} />
+      </button>
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-1.5">
           <div className={`text-[13px] font-semibold leading-tight truncate flex-1 ${m.late ? "text-red-700" : "text-slate-900"}`}>{m.full_name}</div>
@@ -162,6 +173,14 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
       </div>
     </div>
     {expanded && hasTimeline && <SessionTimeline m={m} />}
+    {zoomOpen && (
+      <PhotoZoom
+        name={m.full_name}
+        photo={m.photo}
+        subtitle={m.rank ? `${m.rank} · ${categoryLabel(m.category)}` : categoryLabel(m.category)}
+        onClose={() => setZoomOpen(false)}
+      />
+    )}
     </>
   );
 }

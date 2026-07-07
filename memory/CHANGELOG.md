@@ -5,6 +5,45 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 7 Jul 2026 — Photo UX cleanup + opportunistic capture on Presence
+
+### 1. New shared `PhotoZoom` modal (`components/PhotoZoom.jsx`)
+Portal-rendered modal that shows the photo at up to 80vw × 75vh with
+a black backdrop. Backdrop-click / ESC / × all close. Optional
+`onReplace` and `onRemove` action buttons in the footer — parents
+can wire in their own file-picker + delete callbacks.
+
+### 2. Members photo hover, fixed
+Users found the previous hover-to-reveal Camera + Trash badges
+"strange, goes to downloads and delete". Rewired `InlinePhotoAvatar`:
+- Click → opens `PhotoZoom` with the photo at full quality.
+- Hover → single subtle dark overlay with an expand glyph
+  (no bare action chips).
+- Actions (**Replace** / **Remove**) live inside the zoom modal as
+  labelled buttons, with confirm-dialog on Remove.
+
+### 3. Photo zoom on Presence
+`components/presence/MemberCard` — the avatar is now a
+`<button>` that opens `PhotoZoom` on click (view-only, no edit
+actions since coaches on the board shouldn't be reshooting from
+here). `cursor-zoom-in` on hover.
+
+### 4. Presence "photos missing" opportunistic strip
+When any on-campus athlete lacks a photo, an amber strip appears
+above the columns:
+
+  📷  *N* athletes on campus without a photo
+       Tap to capture photos while they're here — skip any time.
+       ARUNA, KIRAN, RAVI +2 more                          CAPTURE →
+
+Click → walks through a SelfieCapture queue (same as Muster) that
+saves each capture immediately, non-blocking. Board reloads at the
+end so newly-captured photos land right where the coach expects.
+
+**Design constraint kept**: only athletes are candidates — staff /
+coaches don't clutter the queue since they rarely show up on the
+board without a photo.
+
 ## 7 Jul 2026 — Muster photo prompt is now truly non-blocking
 
 **Problem**: the coach ticks 20 athletes for check-in, hits the button,
