@@ -327,7 +327,11 @@ export default function Reports() {
                     // the group column tints (/30 alpha) layer on top
                     // so the visual grouping is preserved.
                     const isEven = rowIdx % 2 === 1;
-                    const rowBg = isEven ? "bg-slate-100/60" : "bg-white";
+                    // Higher-contrast zebra (7 Jul 2026 — user asked
+                    // for stronger banding). slate-200/80 reads
+                    // clearly against white without overpowering the
+                    // per-group column tints.
+                    const rowBg = isEven ? "bg-slate-200/80" : "bg-white";
                     // 7 Jul 2026 (evening): Total now includes Off so
                     // weekly-off + in-progress-today land in the sum.
                     const attnTotal = (r.days_present || 0) + (r.days_leave || 0) + (r.days_tour || 0) + (r.days_off || 0);
