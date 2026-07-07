@@ -76,12 +76,33 @@ def test_payroll_explicit_month(admin_client, base_url):
     assert body["end"] == "2026-01-31"
 
 
-def test_payroll_includes_only_staff_and_coaches(admin_client, base_url):
-    """Payroll is for staff + coaches only. Athletes and executives must NOT appear."""
+def test_payroll_includes_all_categories_by_default(admin_client, base_url):
+    """As of 7 Jul 2026 the /reports/payroll endpoint is the unified
+    monthly view — it returns EVERY member (athletes + staff + coach +
+    executive). The legacy staff+coach-only behaviour is available via
+    ?category=payroll for callers that still want it."""
     body = admin_client.get(f"{base_url}/api/reports/payroll", timeout=30).json()
-    for r in body["rows"]:
+    cats = {r["category"] for r in body["rows"]}
+    # No hard requirement on which cats exist (depends on seed data),
+    # but if athletes exist in the DB they must not be silently filtered
+    # out. Verify by comparing against the underlying hours report.
+    hours = admin_client.get(
+        f"{base_url}/api/reports/hours",
+        params={"start": body["start"], "end": body["end"]},
+        timeout=30,
+    ).json()
+    expected = {r["category"] for r in hours["rows"]}
+    assert cats == expected, f"category set drift: payroll={cats} vs hours={expected}"
+
+    # And the legacy ?category=payroll shortcut still narrows to staff/coach.
+    legacy = admin_client.get(
+        f"{base_url}/api/reports/payroll",
+        params={"category": "payroll"},
+        timeout=30,
+    ).json()
+    for r in legacy["rows"]:
         assert r["category"] in ("staff", "coach"), \
-            f"Non-payroll category leaked into payroll listing: {r}"
+            f"category=payroll leaked a non-payroll row: {r}"
 
 
 def test_payroll_rows_have_leave_balance_fields(admin_client, base_url):

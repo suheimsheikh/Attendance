@@ -137,9 +137,26 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         return {"start": start, "end": end, "rows": rows}
 
     @router.get("/reports/payroll")
-    async def payroll_report(month: Optional[str] = None, admin: dict = Depends(require_admin)):
-        """Monthly payroll report. `month` = YYYY-MM (defaults to the previous
-        calendar month so a 1st-of-month run pulls last month's numbers)."""
+    async def payroll_report(
+        month: Optional[str] = None,
+        category: Optional[str] = None,
+        fleet: Optional[str] = None,
+        admin: dict = Depends(require_admin),
+    ):
+        """Monthly attendance & payroll report. `month` = YYYY-MM
+        (defaults to the previous calendar month so a 1st-of-month run
+        pulls last month's numbers).
+
+        As of 7 Jul 2026 this is the *unified* monthly view used by the
+        merged Reports > Attendance tab — it now returns EVERY member
+        by default (athletes + staff + coaches + executives) with the
+        leave-balance decoration attached. The optional `category`
+        filter follows the same vocabulary as /reports/hours:
+          - `athlete` → athletes only
+          - `rest`    → staff + coach + executive (drops athletes)
+          - `payroll` → legacy alias for staff + coach only
+        And `fleet` filters athlete rows by class-wise fleet name.
+        """
         office = await db.config.find_one({"id": "office"})
         today = date.fromisoformat(local_date_str(office))
         if not month:
@@ -152,12 +169,28 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             end_d = date(y + 1, 1, 1) - timedelta(days=1)
         else:
             end_d = date(y, m + 1, 1) - timedelta(days=1)
+        # Clamp end-date to `today` when the caller asked for the
+        # *current* calendar month — otherwise the mid-month running-
+        # total view over-counts absent/off days (e.g. Attendance % on
+        # 7 Jul 2026 divides by the whole 31-day July instead of the
+        # elapsed 7). Past / future months keep their full spans.
+        if start_d <= today <= end_d:
+            end_d = today
         start_iso, end_iso = start_d.isoformat(), end_d.isoformat()
         rows = await compute_hours_report(start_iso, end_iso)
-        # Payroll applies only to STAFF and COACHES — athletes / executives don't
-        # draw a monthly salary, so they're excluded from the payroll listing.
-        PAYROLL_CATS = {"staff", "coach"}
-        rows = [r for r in rows if r.get("category") in PAYROLL_CATS]
+        # Category filter — merged 7 Jul 2026 to match /reports/hours.
+        if category == "athlete":
+            rows = [r for r in rows if r.get("category") == "athlete"]
+        elif category == "rest":
+            rows = [r for r in rows if r.get("category") != "athlete"]
+        elif category == "payroll":
+            rows = [r for r in rows if r.get("category") in {"staff", "coach"}]
+        # Fleet (class-wise) filter — mirrors the Hours export.
+        if fleet:
+            if fleet == "__none__":
+                rows = [r for r in rows if not r.get("fleet")]
+            else:
+                rows = [r for r in rows if (r.get("fleet") or "").lower() == fleet.lower()]
         # Attach leave balance (annual taken vs opening, computed from full year-to-date)
         users = await db.users.find({}, {"_id": 0, "id": 1, "leave_balance_opening": 1}).to_list(2000)
         opening_map = {u["id"]: float(u.get("leave_balance_opening") or 0) for u in users}

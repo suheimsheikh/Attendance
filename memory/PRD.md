@@ -1443,3 +1443,49 @@ now share the same modal implementation:
   showing "Agape Sat Sun Camp" + "40th International Hyderabad
   Sailing Week"; Submit disabled until checkbox ticked.
 
+
+## Hours & Attendance dropped — unified "Attendance" tab (7 Jul 2026)
+**User request**: "Payroll and Hours and Attendance have too much in
+common. Maybe we should drop Hours and Attendance."
+
+**Design**:
+- **Reports** now has only **2 tabs**: `Attendance` + `Daily Leave/Tour`.
+- **Attendance** replaces both the old Hours tab AND the old Payroll
+  tab — same monthly navigator (arrows + Today chip), category filter
+  chips (All / Athletes / Rest), fleet dropdown for athlete filter,
+  Attendance-% sort, CSV/PDF export.
+- Columns: Attendance % · Member · Category · Present · Total hrs · OT
+  (approved) · Leave days · Comp-Off (Earned/Used/Pending) · Leave bal
+  open · taken YTD · remaining. Absent column deliberately dropped
+  (user found it confusing on the running-total view; the info is
+  implicit in Present + span).
+
+**Backend changes** in `/api/reports/payroll`:
+- Now returns **every member by default** (athletes + staff + coach +
+  executive) — no longer forced to staff+coach.
+- New optional query params `category` (`athlete` / `rest` / `payroll`
+  for legacy staff+coach filter) and `fleet` — mirror the same
+  vocabulary as `/reports/hours`.
+- Clamps `end_iso` to `today` when the requested month is the current
+  calendar month (previously always ran to the last-of-month so the
+  running-total attendance % divided by the FULL month, showing 22%
+  for a fully-attended member 7 days in).
+
+**Legacy compatibility**:
+- URL `/admin/payroll` still redirects to `/admin/reports?tab=payroll`
+  which now folds into the Attendance tab.
+- `?tab=hours` also folds into `?tab=attendance` for old bookmarks.
+- Old `PAYROLL_CATS = {staff, coach}` shortcut lives on as
+  `?category=payroll` for callers that still want that scope.
+
+**Files touched**: `backend/routes/reports.py`, `frontend/src/pages/
+admin/Reports.jsx` (rewrite — 385 → 350 lines, deduped), and
+`backend/tests/test_routes_reports.py` (updated the staff+coach
+assertion to the new all-categories behaviour + verified the legacy
+shortcut).
+
+**Verified**: pytest 22/22 pass across `test_routes_reports.py` +
+`test_hours_absent_weekly_off.py`. Live preview: current month shows
+134 members (89 athletes + 45 rest), Attendance % clamped to elapsed
+days, ARUNA row consistent with earlier payroll display.
+
