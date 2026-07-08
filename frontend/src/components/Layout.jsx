@@ -5,7 +5,7 @@ import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, Building2, IdCard, Sailboat, MapPin,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert, Gauge, ChefHat
+  ShieldAlert, Gauge, ChefHat, PencilRuler
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -16,6 +16,12 @@ import { api } from "../api";
 const NAV_MEMBER = [
   { to: "/", label: "My Check In/Out", icon: ScanLine, end: true },
   { to: "/my-leaves", label: "Leave/Tour/Late", icon: CalendarCheck2 },
+  // Correction requests raised by the member (missed check-ins, wrong
+  // times, leave changes). Badge count = personal pending corrections,
+  // fetched from `/api/me/corrections?status=pending` in the polling
+  // loop below (8 Jul 2026 user request "bring all correction requests
+  // by a member under member in the main menu").
+  { to: "/my-corrections", label: "My Corrections", icon: PencilRuler, badgeKey: "my_corrections" },
   // Escort kiosk: visible to every signed-in user. Athletes/coaches/staff
   // help mark escorts in/out — escorts themselves land here after phone
   // login (auth.jsx forces the redirect when `is_escort=true`).
@@ -88,6 +94,27 @@ export default function Layout() {
     return () => { cancelled = true; clearInterval(t); };
   }, [isAdmin, isEscort]);
 
+  // Member-side pending-corrections badge. Polled every 60 s alongside
+  // the admin summary above. Skipped for escort tokens (they have no
+  // corrections page anyway). 8 Jul 2026 user request "bring all
+  // correction requests by a member under member in the main menu".
+  const [myPendingCorrections, setMyPendingCorrections] = React.useState(0);
+  React.useEffect(() => {
+    if (isEscort) return undefined;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const rows = await api.get("/me/corrections?status=pending");
+        if (!cancelled) setMyPendingCorrections(Array.isArray(rows) ? rows.length : 0);
+      } catch (err) {
+        console.debug("my corrections fetch:", err?.message);
+      }
+    };
+    refresh();
+    const t = setInterval(refresh, 60_000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [isEscort]);
+
   const memberNav = isEscort
     ? [
         ...NAV_MEMBER.filter((n) => n.to === "/escort-checkin"),
@@ -123,9 +150,15 @@ export default function Layout() {
 
       <nav className="px-3 py-4 flex-1 overflow-y-auto">
         <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Member</div>
-        {memberNav.map((item) => (
-          <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
-        ))}
+        {memberNav.map((item) => {
+          // Member section's only badged item today is My Corrections.
+          const badge = item.badgeKey === "my_corrections"
+            ? (myPendingCorrections > 0 ? myPendingCorrections : undefined)
+            : undefined;
+          return (
+            <NavItem key={item.to} {...item} badge={badge} onClick={() => setOpen(false)} />
+          );
+        })}
         {!isEscort && canMuster && (
           <>
             <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Coach</div>

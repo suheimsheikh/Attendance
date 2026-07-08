@@ -5,6 +5,32 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — Reports: section background contrast + Member "My Corrections" page
+
+Two smaller polish items rolled in together:
+
+**Reports: stronger section tints.** Group column backgrounds bumped
+from `bg-{color}-50/30` (barely visible) to `bg-{color}-200/50` so the
+Attendance / Leave / Overtime / Comp-Off / Hours / Escorts groups read
+as distinct color bands even across the zebra rows. Screenshot-verified
+on the Staff & Coaches view — visual grouping now reads at a glance.
+
+**"My Corrections" page.** Coach request "bring all correction requests
+by a member under member in the main menu and all approvals under
+approvals". Approvals side already consolidated (Approvals page has
+Leaves / Overtime / Check-ins / Corrections tabs). New member-side
+`/my-corrections`:
+
+- New page `MyCorrections.jsx` — pending / approved / rejected tabs
+  with tab-pill counts. Read-only; corrections are still raised from
+  the modal on Check-in and Leave/Tour rows.
+- Route + lazy-import wired in `App.js`.
+- Sidebar entry added under NAV_MEMBER with a live badge fed by a 60-s
+  poll against `/api/me/corrections?status=pending`. Skipped for
+  escort tokens (they have no corrections page). Icon: `PencilRuler`.
+
+---
+
 ## 8 Jul 2026 — Reports: Leave ledger drill-down modal
 
 Coach request: "Double click on the leave cols should show all the

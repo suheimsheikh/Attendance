@@ -39,6 +39,7 @@ const DataQuality = lazy(() => import("./pages/admin/DataQuality"));
 const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
 const ChefsView = lazy(() => import("./pages/admin/ChefsView"));
 const Categories = lazy(() => import("./pages/admin/Categories"));
+const MyCorrections = lazy(() => import("./pages/MyCorrections"));
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -105,6 +106,7 @@ function App() {
             <Route path="presence" element={<RequireMuster><Presence /></RequireMuster>} />
             <Route path="muster" element={<RequireMuster><Muster /></RequireMuster>} />
             <Route path="my-leaves" element={<RequireMember><MyLeaves /></RequireMember>} />
+            <Route path="my-corrections" element={<RequireMember><MyCorrections /></RequireMember>} />
             <Route path="escort-checkin" element={<EscortCheckIn />} />
             <Route path="whats-new" element={<WhatsNew />} />
             <Route path="profile" element={<RequireMember><Profile /></RequireMember>} />
