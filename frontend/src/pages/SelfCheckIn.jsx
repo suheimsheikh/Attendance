@@ -103,9 +103,13 @@ export default function SelfCheckIn() {
       }
       setLocating("");
 
-      // Pre-flight geofence check on the client — only for CHECK-INS
-      // (checkouts we let through even off-site, since the person is
-      // clearly leaving). If out and no reason yet, pop the modal.
+      // Pre-flight geofence check on the client — only for CHECK-INS.
+      // Checkouts are trusted (person is leaving; asking a reason
+      // would just create friction). If we have NO GPS fix at all
+      // (permission denied / hardware off), we let the check-in
+      // through — the backend stamps `geo_unavailable=true` and admins
+      // can follow up from Data Quality. Enforcing a reason here would
+      // block members on locked-down browsers from checking in at all.
       if (lat != null && lng != null && !status?.checked_in && !geoReason) {
         const resolved = resolveNearestSite(lat, lng, office, sites);
         if (resolved?.out_of_geofence) {

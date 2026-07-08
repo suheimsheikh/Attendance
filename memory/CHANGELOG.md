@@ -5,6 +5,68 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — Geo-aware check-ins: off-site warn + reason, permission
+banner, muster stamps coach GPS
+
+Every check-in path is now geo-aware. Members and coaches are told
+which training location they landed at, warned when they're outside
+any geofence, prompted for a reason on off-site self check-ins, and
+alerted upfront if the browser has blocked location. Muster batches
+carry the coach's GPS on every stamped attendance row.
+
+**Backend**
+- `POST /api/muster/checkin-bulk` and `/muster/checkout-bulk` now
+  accept optional `latitude` + `longitude`. When present, the server
+  resolves the site via the same `_resolve_site_for` helper the
+  single-user check-in uses; each attendance row is stamped with
+  `latitude`/`longitude`/`site_id`/`site_name`/`out_of_geofence`/
+  `distance_m`/`geo_unavailable` (checkout also stamps mirrored
+  `exit_*` fields). Response echoes the batch's resolved location so
+  the frontend can toast "Mustered N at Rowing Academy". `(0, 0)`
+  remains the sentinel for "GPS not obtained" — falls back gracefully.
+- Router factory `routes/muster.make_router` gained `resolve_site_for`
+  as its 4th parameter (wired in `server.py`).
+- `POST /api/attendance/geo-toggle` already accepted `reason` — now
+  actually used by the frontend and persisted as `geo_reason` on the
+  attendance row when `out_of_geofence=True`.
+
+**Frontend**
+- `hooks/useGeoPermission.js` (new) — reactive geolocation-permission
+  state (`granted` / `prompt` / `denied` / `unsupported`) via the
+  Permissions API, listens to `change` events.
+- `components/GeoPermissionBanner.jsx` (new) — surfaces on `denied`
+  with browser-specific fix hints (Chrome, Safari iOS/desktop, Firefox
+  detected via UA).
+- `components/OutOfGeofenceModal.jsx` (new) — 5 quick-pick reason chips
+  ("At an unlisted training venue" / "GPS drift" / "Regatta" / "Boat
+  maintenance off-site" / "Coach-led outing") + required 3+ char
+  textarea. Distance shown human-friendly (auto km >1000 m).
+- `utils.js` — new `haversineMeters()` + `resolveNearestSite()` helpers
+  mirror the backend geofence math so the modal can fire BEFORE
+  hitting the server.
+- `SelfCheckIn.jsx` — GPS permission banner, pre-flight local
+  resolution, modal prompt on out-of-geofence CHECK-INS (not checkouts),
+  reason passed to backend, success toast now reads
+  "Checked in at <site_name>" for satellite-site hits.
+- `Muster.jsx` — coach's GPS captured (8s budget) on submit, sent in
+  payload; `window.confirm` on off-site with human-formatted distance;
+  toast "Mustering at <site_name>" on in-geofence.
+
+**Tests**
+- `backend/tests/test_muster_gps.py` (new — 4 tests): backward compat
+  without GPS, off-site flagging with far coords, checkout with GPS,
+  `(0,0)` sentinel handled as geo-unavailable.
+- `backend/tests/test_review_iter22.py` (added by testing agent, 3
+  tests): satellite-site site_name propagation to `/api/presence`,
+  `geo_reason` persisted when out, `geo_reason` omitted when in.
+- Testing agent iter22: **72/72 backend pass**, **100% frontend**
+  incl. Playwright verification of modal, banner, and reason submit.
+  Code-review comments: minor polish only (distance formatting +
+  no-GPS documentation applied post-review).
+
+---
+
+
 ## 8 Jul 2026 — Location-wise check-ins on Presence + Admin Dashboard
 
 Members' training-location context now surfaces everywhere it matters

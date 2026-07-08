@@ -79,8 +79,17 @@ export default function Muster() {
       if (lat != null && lng != null && mode === "checkin") {
         const resolved = resolveNearestSite(lat, lng, office, sites);
         if (resolved?.out_of_geofence) {
+          // Format distance human-friendly: "~1.2 km" once we're past
+          // 1000m, otherwise plain metres. Coaches at a regatta don't
+          // need to parse "8667068 m".
+          const d = resolved.nearest_distance_m;
+          const dStr = d == null
+            ? "?"
+            : d >= 1000
+              ? `${(d / 1000).toFixed(1)} km`
+              : `${d} m`;
           const proceed = window.confirm(
-            `You're ~${resolved.nearest_distance_m ?? "?"} m from ${resolved.nearest_name || "any training location"}.\n\n` +
+            `You're ~${dStr} from ${resolved.nearest_name || "any training location"}.\n\n` +
             "Continue mustering from here?\n" +
             "(All check-ins will be stamped as off-site.)"
           );

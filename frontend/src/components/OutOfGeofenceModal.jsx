@@ -53,7 +53,7 @@ export default function OutOfGeofenceModal({
             <p className="text-[12px] text-slate-600 mt-0.5 flex items-center gap-1.5">
               <MapPin size={12} className="text-slate-400" />
               {distanceM != null && nearestName
-                ? <>You are <b>~{distanceM} m</b> from <b>{nearestName}</b>.</>
+                ? <>You are <b>~{distanceM >= 1000 ? `${(distanceM / 1000).toFixed(1)} km` : `${distanceM} m`}</b> from <b>{nearestName}</b>.</>
                 : <>Location fix received but no training location matched.</>}
             </p>
           </div>
