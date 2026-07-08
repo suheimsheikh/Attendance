@@ -6,8 +6,9 @@
  * dedicated modal launched from Check-in / Leaves rows.
  */
 import React, { useCallback, useEffect, useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, Plus } from "lucide-react";
 import { api, showApiError } from "../api";
+import CorrectionRequestModal from "../components/CorrectionRequestModal";
 
 const KIND_LABELS = {
   missed_checkin:    "Missed check-in",
@@ -48,6 +49,11 @@ export default function MyCorrections() {
   // Counts per tab — fetched once (all statuses in parallel) so the pills
   // can surface "how many pending?" without waiting for a tab click.
   const [counts, setCounts] = useState({ pending: 0, approved: 0, rejected: 0 });
+  // Fresh-application modal — opened from the "Raise correction" button
+  // added to this page 8 Jul 2026 on user request. The generic launch
+  // (no pre-filled entityType/entityId) lets members pick attendance
+  // vs leave inside the modal itself.
+  const [modalOpen, setModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,6 +115,13 @@ export default function MyCorrections() {
           {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
           Refresh
         </button>
+        <button
+          onClick={() => setModalOpen(true)}
+          data-testid="my-corr-raise"
+          className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-[11px] font-bold bg-slate-900 text-white hover:bg-slate-800"
+        >
+          <Plus size={13} /> Raise correction
+        </button>
       </div>
 
       {loading ? (
@@ -118,6 +131,17 @@ export default function MyCorrections() {
           {status === "pending"
             ? "No pending corrections. Anything you raise from Check-in or Leave/Tour will land here."
             : `No ${status} corrections yet.`}
+          {status === "pending" && (
+            <div className="not-italic mt-3">
+              <button
+                onClick={() => setModalOpen(true)}
+                data-testid="my-corr-empty-raise"
+                className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-800"
+              >
+                <Plus size={13} /> Raise a fresh correction
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -151,6 +175,12 @@ export default function MyCorrections() {
           ))}
         </div>
       )}
+
+      <CorrectionRequestModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSaved={() => { setStatus("pending"); load(); }}
+      />
     </div>
   );
 }

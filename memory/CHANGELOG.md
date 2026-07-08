@@ -5,6 +5,26 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — My Corrections: raise a fresh correction
+
+Follow-up on the just-shipped My Corrections page: coaches noticed
+there was no way to file a correction from the page itself — they had
+to navigate back to Check-in / Leave/Tour to hit the raise flow. Added
+a **"Raise correction"** button in the tab bar and a mirror on the
+empty-state placeholder.
+
+- `CorrectionRequestModal` now opens all 5 kinds in the dropdown when
+  launched generically (no `entityType` locked by the caller). For
+  kinds that need an existing row to correct (time_adjust, leave_*),
+  a small amber hint below the dropdown tells the member to open the
+  specific row for the fastest turnaround. `missed_checkin` — the one
+  kind that materialises a new row — works fully from this generic
+  entry point.
+- On successful submit, the page auto-refreshes to the Pending tab
+  and the newly-raised row shows immediately.
+
+---
+
 ## 8 Jul 2026 — Reports: section background contrast + Member "My Corrections" page
 
 Two smaller polish items rolled in together:

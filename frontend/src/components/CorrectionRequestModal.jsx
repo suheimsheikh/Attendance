@@ -67,7 +67,15 @@ export default function CorrectionRequestModal({
   if (!open) return null;
 
   const effectiveEntityType = entityType || (KINDS_BY_ENTITY.attendance.includes(kind) ? "attendance" : "leave");
-  const kindOptions = KINDS_BY_ENTITY[effectiveEntityType] || [];
+  // When the modal is opened generically (no entityType locked by the
+  // caller — e.g. from the "Raise correction" button on My Corrections),
+  // the dropdown lists every kind so the member can pick between an
+  // attendance vs a leave correction in one place. When it's launched
+  // from a specific row (Check-in / Leave), only that entity's kinds
+  // show because entity_id is bound.
+  const kindOptions = entityType
+    ? (KINDS_BY_ENTITY[effectiveEntityType] || [])
+    : [...KINDS_BY_ENTITY.attendance, ...KINDS_BY_ENTITY.leave];
 
   const submit = async (e) => {
     e.preventDefault();
@@ -133,6 +141,18 @@ export default function CorrectionRequestModal({
                 <option key={k} value={k}>{KIND_LABELS[k]}</option>
               ))}
             </select>
+            {/* Non-missed_checkin kinds need an existing row (attendance
+                or leave) to correct — when launched generically we can't
+                bind the row here, so nudge the member back to the source
+                page. Backend also rejects at approval time if entity_id
+                is missing, but a friendly hint saves a round-trip. */}
+            {!entityType && !entityId && kind !== "missed_checkin" && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mt-1.5" data-testid="correction-row-hint">
+                Tip — this kind needs an existing row. Open{" "}
+                <b>{kind.startsWith("leave_") ? "Leave/Tour/Late" : "My Check In/Out"}</b>
+                {" "}and use the correction button on the specific entry for the fastest turnaround.
+              </p>
+            )}
           </div>
           <div>
             <label className="iu-label">Which date does this apply to?</label>
