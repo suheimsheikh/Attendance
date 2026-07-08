@@ -12,8 +12,7 @@ Wired into server.py near the bottom via app.include_router.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
-from typing import Optional
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
 
