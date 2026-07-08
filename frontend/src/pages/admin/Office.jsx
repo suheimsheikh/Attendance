@@ -101,6 +101,7 @@ export default function OfficeSettings() {
         half_day_fn_end:   form.half_day_fn_end   || "13:30",
         half_day_pn_start: form.half_day_pn_start || "13:30",
         half_day_pn_end:   form.half_day_pn_end   || "18:00",
+        meal_breakfast_cutoff: form.meal_breakfast_cutoff || "07:00",
         checkout_reminder_enabled: form.checkout_reminder_enabled !== false,
         checkout_reminder_time: form.checkout_reminder_time || "20:00",
         checkout_reminder_template: form.checkout_reminder_template || "Hi {name}, looks like you're still checked in at {academy}. Please check out via the app when you leave.",
@@ -290,6 +291,26 @@ export default function OfficeSettings() {
             Clock windows shown on the Apply Leave form when a member (or admin) picks half-day.
             The balance ladder always deducts <strong>0.5 days</strong> regardless of these times —
             they are informational only. Defaults: FN 09:30–13:30, PN 13:30–18:00.
+          </p>
+        </div>
+
+        <div>
+          <label className="iu-label" htmlFor="of-meal-cutoff">Breakfast eligibility cut-off</label>
+          <div className="flex items-center gap-2 max-w-xs">
+            <input
+              id="of-meal-cutoff"
+              data-testid="of-meal-breakfast-cutoff"
+              type="time"
+              value={form.meal_breakfast_cutoff || "07:00"}
+              onChange={(e) => set("meal_breakfast_cutoff", e.target.value)}
+              className="iu-input"
+            />
+            <span className="text-xs text-slate-500">office-local</span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2">
+            Members must be checked in on or before this time to be counted on the
+            <strong> Chef&apos;s View</strong> for breakfast. Tune tighter (e.g. 06:45)
+            on regatta days when the kitchen leaves early. Default: <strong>07:00</strong>.
           </p>
         </div>
 

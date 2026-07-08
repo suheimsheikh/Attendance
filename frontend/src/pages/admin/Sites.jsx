@@ -7,11 +7,13 @@ import { useFormError } from "../../hooks/useFormError";
 import { useEscape } from "../../hooks/useEscape";
 
 /**
- * Satellite-site geofences (e.g. neighbouring Rowing Academy). Added
+ * Training Locations — additional geofenced spots where members train
+ * (Rowing Academy, satellite dock, regatta venue, etc.). Added
  * 28 Jun 2026 to handle off-campus training sessions that should NOT
- * be flagged as "Off-site" in the activity feed. The main office is
- * configured separately on the Office Settings page; this list is
- * additive — a check-in is on-site if it lands inside ANY geofence.
+ * be flagged as "Off-site" in the activity feed. The main office/club
+ * location is configured separately on the Office Settings page; this
+ * list is additive — a check-in is on-site if it lands inside ANY
+ * geofence (office OR any active training location).
  */
 export default function Sites() {
   const [rows, setRows] = useState([]);
@@ -21,13 +23,13 @@ export default function Sites() {
   const load = async () => {
     setLoading(true);
     try { setRows(await api.get("/sites")); }
-    catch (err) { toast.error(err?.message || "Failed to load sites"); }
+    catch (err) { toast.error(err?.message || "Failed to load training locations"); }
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
 
   const remove = async (r) => {
-    if (!window.confirm(`Delete "${r.name}"?\n\nExisting attendance rows tagged to this site will keep their stamped site name.`)) return;
+    if (!window.confirm(`Delete "${r.name}"?\n\nExisting attendance rows tagged to this location will keep their stamped name.`)) return;
     try {
       await api.del(`/sites/${r.id}`);
       toast.success("Deleted");
@@ -40,15 +42,16 @@ export default function Sites() {
       <header className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2">
-            <MapPin className="text-sky-600" size={28} /> Sites
+            <MapPin className="text-sky-600" size={28} /> Training Locations
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Additional locations where check-ins are still on-site (e.g. Rowing Academy).
-            The main office geofence is set on <b>Office Settings</b>.
+            Additional geofenced spots where check-ins count as on-site
+            (Rowing Academy, satellite dock, regatta venue, etc.).
+            The main club location is set on <b>Office Settings</b>.
           </p>
         </div>
         <button onClick={() => setEditing({})} data-testid="site-new" className="iu-btn-primary">
-          <Plus size={16} /> New site
+          <Plus size={16} /> New location
         </button>
       </header>
 
@@ -57,8 +60,8 @@ export default function Sites() {
       ) : rows.length === 0 ? (
         <div className="iu-card p-12 text-center text-slate-400" data-testid="sites-empty">
           <MapPin size={36} className="mx-auto mb-3 text-slate-300" />
-          <p className="text-sm">No additional sites configured.</p>
-          <p className="text-xs mt-2">Add the neighbouring Rowing Academy, regatta venue, or any spot where members regularly train.</p>
+          <p className="text-sm">No additional training locations configured.</p>
+          <p className="text-xs mt-2">Add the neighbouring Rowing Academy, satellite dock, regatta venue, or any spot where members regularly train.</p>
         </div>
       ) : (
         <div className="space-y-2" data-testid="sites-list">
@@ -160,7 +163,7 @@ function SiteForm({ initial, onClose, onSaved }) {
     try {
       if (isEdit) await api.patch(`/sites/${initial.id}`, body);
       else await api.post(`/sites`, body);
-      toast.success(isEdit ? "Site updated" : "Site created");
+      toast.success(isEdit ? "Location updated" : "Location created");
       onSaved();
     } catch (err) {
       setMessage(err?.message || "Save failed");
@@ -173,7 +176,7 @@ function SiteForm({ initial, onClose, onSaved }) {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <MapPin size={18} className="text-sky-600" />
-            {isEdit ? "Edit site" : "New site"}
+            {isEdit ? "Edit training location" : "New training location"}
           </h2>
           <button type="button" onClick={onClose} className="iu-btn-ghost-sm" aria-label="Close" data-testid="site-form-close">
             <X size={18} />
@@ -275,7 +278,7 @@ function SiteForm({ initial, onClose, onSaved }) {
           <button type="button" onClick={onClose} className="iu-btn-secondary" data-testid="site-form-cancel">Cancel</button>
           <button type="submit" disabled={saving} className="iu-btn-primary" data-testid="site-form-save">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            {isEdit ? "Save changes" : "Create site"}
+            {isEdit ? "Save changes" : "Create location"}
           </button>
         </div>
       </form>

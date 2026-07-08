@@ -56,13 +56,45 @@ def test_meals_today_default_cutoff_shape(base_url):
     )
     assert r.status_code == 200, r.text
     body = r.json()
-    assert set(body.keys()) >= {"today", "cutoff", "generated_at",
+    assert set(body.keys()) >= {"today", "cutoff", "configured_cutoff", "generated_at",
                                  "categories", "counts", "total", "members"}
-    assert body["cutoff"] == "07:00"
+    # Cutoff must be HH:MM regardless of source
+    assert len(body["cutoff"]) == 5 and body["cutoff"][2] == ":"
+    assert len(body["configured_cutoff"]) == 5
     # Counts dict must have every category key from categories master
     for c in body["categories"]:
         assert c["key"] in body["counts"]
     assert body["total"] == sum(body["counts"].values())
+
+
+def test_meals_today_uses_office_setting(base_url):
+    """When no ?cutoff= is passed, the endpoint must use the office-configured
+    meal_breakfast_cutoff. When ?cutoff= IS passed, it overrides."""
+    token = _login(base_url)
+    hdr = {"Authorization": f"Bearer {token}"}
+
+    # Save current office cutoff so we can restore it
+    r = requests.get(f"{base_url}/api/office", headers=hdr, timeout=30)
+    original = r.json().get("meal_breakfast_cutoff") or "07:00"
+
+    try:
+        # 1. Set office cutoff to 06:30
+        requests.put(f"{base_url}/api/office", headers=hdr, json={"meal_breakfast_cutoff": "06:30"}, timeout=30)
+
+        # 2. No ?cutoff → endpoint returns cutoff=06:30
+        r = requests.get(f"{base_url}/api/admin/meals-today?date=2026-07-07", headers=hdr, timeout=30)
+        body = r.json()
+        assert body["cutoff"] == "06:30", body
+        assert body["configured_cutoff"] == "06:30"
+
+        # 3. ?cutoff=23:59 overrides
+        r = requests.get(f"{base_url}/api/admin/meals-today?date=2026-07-07&cutoff=23:59", headers=hdr, timeout=30)
+        body = r.json()
+        assert body["cutoff"] == "23:59"
+        assert body["configured_cutoff"] == "06:30"  # office setting is unchanged
+    finally:
+        # Restore
+        requests.put(f"{base_url}/api/office", headers=hdr, json={"meal_breakfast_cutoff": original}, timeout=30)
 
 
 def test_meals_today_cutoff_widens_pool(base_url):

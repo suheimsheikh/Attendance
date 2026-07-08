@@ -311,6 +311,11 @@ class OfficeConfig(BaseModel):
     half_day_fn_end: str = "13:30"
     half_day_pn_start: str = "13:30"
     half_day_pn_end: str = "18:00"
+    # Chef's View — members must be checked in on or before this
+    # office-local HH:MM to count as eligible for breakfast. Admins can
+    # tune it on the Office Settings page (e.g. tighten to 06:45 on
+    # regatta days). Empty/missing falls back to 07:00 in the endpoint.
+    meal_breakfast_cutoff: str = "07:00"
 
     @field_validator("leave_notice_days", mode="before")
     @classmethod

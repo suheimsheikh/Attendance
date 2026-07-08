@@ -1,0 +1,28 @@
+{
+  "summary": "Iter 20 — Editable meal cut-off in Office Settings + rename Sites→Training Locations. Backend: 13/13 tests green (8 meals contract + 5 iter20 review) via pytest. Frontend: Office Settings shows new field (data-testid=of-meal-breakfast-cutoff) default 07:00, PATCH to 06:45 persists after reload; Chef's View picker hydrates to 06:45 with tooltip 'Office setting: 06:45 (change on Office Settings)' and total ticket subtitle reads 'meals · cut-off 06:45'; Sidebar entry renamed to 'Training Locations' with MapPin icon at /admin/sites; page heading + modal title use 'Training Locations' / 'New training location'; Sites CRUD (POST→GET verify→DELETE→GET verify) works via UI and via API (regression). Regression across /admin/dashboard, /admin/chefs-view, /admin/office, /admin/sites, /admin/members, /admin/reports, /admin/approvals, /presence, /muster produced 0 console errors. Verified main-agent claim empirically: date=2026-07-07 returns 19 members at 06:30 and 21 at 07:00. Office cutoff restored to 07:00 after tests.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_meals.py",
+    "/app/backend/tests/test_review_iter20.py",
+    "/app/test_reports/pytest/iter20_meals.xml",
+    "/app/test_reports/pytest/iter20_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/meals.py: bad office-side meal_breakfast_cutoff silently falls back to DEFAULT (07:00) — clean UX but hides misconfiguration. Consider adding a startup-time or PUT-time warn-log so admins see it.",
+    "PATCH /api/sites/{id} requires the full Pydantic payload (name+lat+lng mandatory) — that is why UI Sites.jsx sends the full body. If any future consumer PATCHes with partial fields (name only, radius only), it will 422. Consider switching PATCH to accept a partial-update model to match its verb semantics.",
+    "Office.jsx save() coerces number fields with Number() then rounds via Number(...) || 0 — a blank latitude becomes 0 rather than surfacing a validation error. Cutoff also uses `|| '07:00'` which quietly rewrites an empty picker to 07:00; safer would be to keep the previous value or prompt the user.",
+    "ChefsView.jsx: rendering the empty state uses `data?.cutoff` and `data?.today` after loading, which is fine, but the h1 tooltip depends on `data?.configured_cutoff` — if the first API call fails, the tooltip stays at 'Loading office setting…' with no visible retry."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter20.py (new — 5 iter20 review tests)"
+  ],
+  "success_rate": {"backend": "100% (13/13 meals + iter20)", "frontend": "100% — all 9 flow steps pass"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (via /app/memory/test_credentials.md; TEST_ADMIN_PASSWORD env for pytest)",
+  "seed_data_creation": "None persistent — a TEST_Regatta_ site + a 'Regatta Venue Test' site were created and deleted in the same run. Office meal_breakfast_cutoff was flipped 07:00→06:45/06:30 and restored to 07:00 (verified via GET /api/office).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Meal cut-off now lives at Office Settings → 'Breakfast eligibility cut-off' (data-testid=of-meal-breakfast-cutoff). Chef's View picker (data-testid=chefs-cutoff-input) hydrates from GET /api/admin/meals-today.configured_cutoff. Sidebar Admin entry for /admin/sites is labelled 'Training Locations' (data-testid=nav-training-locations). Backend tests: `TEST_ADMIN_PASSWORD=Admin@12345 pytest tests/test_meals.py tests/test_review_iter20.py`. PATCH /api/sites/{id} requires full Pydantic body — don't send partial payloads.",
+  "rca_of_the_issue": "N/A — feature acceptance pass, all claims verified end-to-end."
+}

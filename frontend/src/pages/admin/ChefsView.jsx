@@ -52,7 +52,11 @@ function fmtCheckIn(iso) {
 
 export default function ChefsView() {
   const [date, setDate] = useState(todayIso());
-  const [cutoff, setCutoff] = useState("07:00");
+  // Cut-off starts blank — the first API response tells us what the
+  // office setting is (from `configured_cutoff`), which we use as the
+  // initial picker value. Admins tune the office-wide default under
+  // Office Settings → Breakfast eligibility cut-off.
+  const [cutoff, setCutoff] = useState("");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -63,8 +67,15 @@ export default function ChefsView() {
     inflightRef.current = true;
     setLoading(true);
     try {
-      const r = await api.get(`/admin/meals-today?date=${date}&cutoff=${cutoff}`);
+      // If the picker is blank, omit the query param so the backend
+      // uses the office-configured cutoff. Otherwise pass it explicitly.
+      const qs = new URLSearchParams({ date });
+      if (cutoff) qs.set("cutoff", cutoff);
+      const r = await api.get(`/admin/meals-today?${qs}`);
       setData(r);
+      // Hydrate the picker on first successful load so admins see the
+      // office value they configured (and can override it locally).
+      if (!cutoff && r?.cutoff) setCutoff(r.cutoff);
     } catch (err) {
       toast.error(err?.message || "Failed to load meals data");
     } finally {
@@ -140,6 +151,7 @@ export default function ChefsView() {
               onChange={(e) => setCutoff(e.target.value)}
               className="outline-none bg-transparent w-20"
               data-testid="chefs-cutoff-input"
+              title={data?.configured_cutoff ? `Office setting: ${data.configured_cutoff} (change on Office Settings)` : "Loading office setting…"}
             />
           </label>
           <button

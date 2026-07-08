@@ -46,7 +46,7 @@ const NAV_ADMIN = [
   { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare },
   { to: "/admin/institutions", label: "Institutions", icon: Building2 },
   { to: "/admin/fleets", label: "Fleets", icon: Sailboat },
-  { to: "/admin/sites", label: "Sites", icon: MapPin },
+  { to: "/admin/sites", label: "Training Locations", icon: MapPin },
   { to: "/admin/office", label: "Office Settings", icon: Settings },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera },

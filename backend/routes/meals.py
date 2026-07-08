@@ -29,15 +29,20 @@ from services.time_utils import local_date_str, now_utc, office_tz
 DEFAULT_MEAL_CUTOFF = "07:00"
 
 
-def _parse_hm(cutoff: str) -> tuple[int, int]:
+def _valid_hm(s: str) -> bool:
     try:
-        h, m = cutoff.split(":")[:2]
+        h, m = s.split(":")[:2]
         h, m = int(h), int(m)
-        if not (0 <= h <= 23 and 0 <= m <= 59):
-            raise ValueError
-        return h, m
-    except (ValueError, AttributeError):
+        return 0 <= h <= 23 and 0 <= m <= 59
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
+def _parse_hm(cutoff: str) -> tuple[int, int]:
+    if not _valid_hm(cutoff):
         raise HTTPException(status_code=400, detail="cutoff must be HH:MM (00:00–23:59)")
+    h, m = cutoff.split(":")[:2]
+    return int(h), int(m)
 
 
 def make_router(db, require_admin, get_current_user) -> APIRouter:
@@ -61,7 +66,7 @@ def make_router(db, require_admin, get_current_user) -> APIRouter:
     # ------------------------------------------------------------------
     @router.get("/admin/meals-today")
     async def meals_today(
-        cutoff: str = Query(DEFAULT_MEAL_CUTOFF, description="HH:MM meal cut-off (office-local)"),
+        cutoff: Optional[str] = Query(None, description="HH:MM meal cut-off override (defaults to office setting)"),
         date_str: Optional[str] = Query(None, alias="date", description="YYYY-MM-DD (defaults to today, office-local)"),
         admin: dict = Depends(require_admin),
     ):
@@ -71,15 +76,29 @@ def make_router(db, require_admin, get_current_user) -> APIRouter:
           • Their category is `meal_eligible=True` in the categories master
             (all 5 seeded categories are eligible by default), AND
           • They have an attendance row for the target date with
-            `check_in_at` translating to office-local ≤ `cutoff`
-            (default 07:00).
+            `check_in_at` translating to office-local ≤ `cutoff`.
+
+        Cutoff resolution: query param > office.meal_breakfast_cutoff >
+        DEFAULT_MEAL_CUTOFF ("07:00"). Admins tune the office-wide default
+        on the Office Settings page.
 
         Returns counts per category + a flat member list (photo + name +
         institution + fleet + check-in time) for the chef's printable
         drill-down.
         """
-        h, m = _parse_hm(cutoff)
         office = await db.config.find_one({"id": "office"})
+        # Resolution order: explicit query param → office setting → default.
+        # An explicit BAD query param 400s (catches frontend bugs). A bad
+        # office setting silently falls back (so the admin can still open
+        # the page and fix the setting).
+        if cutoff is not None:
+            h, m = _parse_hm(cutoff)          # raises 400 on bad input
+            effective_cutoff = f"{h:02d}:{m:02d}"
+        else:
+            effective_cutoff = (office or {}).get("meal_breakfast_cutoff") or DEFAULT_MEAL_CUTOFF
+            if not _valid_hm(effective_cutoff):
+                effective_cutoff = DEFAULT_MEAL_CUTOFF
+            h, m = _parse_hm(effective_cutoff)
         if date_str:
             try:
                 today_d = date.fromisoformat(date_str)
@@ -162,6 +181,7 @@ def make_router(db, require_admin, get_current_user) -> APIRouter:
         return {
             "today": today_iso,
             "cutoff": f"{h:02d}:{m:02d}",
+            "configured_cutoff": (office or {}).get("meal_breakfast_cutoff") or DEFAULT_MEAL_CUTOFF,
             "generated_at": now_utc().isoformat(),
             "categories": cats,   # ordered, with colors/labels
             "counts": counts,      # {category_key: n}
