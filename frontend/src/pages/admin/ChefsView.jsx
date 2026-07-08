@@ -56,8 +56,11 @@ export default function ChefsView() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const inflightRef = React.useRef(false);
 
   const load = useCallback(async () => {
+    if (inflightRef.current) return;
+    inflightRef.current = true;
     setLoading(true);
     try {
       const r = await api.get(`/admin/meals-today?date=${date}&cutoff=${cutoff}`);
@@ -66,6 +69,7 @@ export default function ChefsView() {
       toast.error(err?.message || "Failed to load meals data");
     } finally {
       setLoading(false);
+      inflightRef.current = false;
     }
   }, [date, cutoff]);
 

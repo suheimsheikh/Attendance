@@ -5,6 +5,69 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — Chef's View + Categories master + "Elite" category
+
+New `/admin/chefs-view` under the Members section of the sidebar —
+one screen the chef checks in the morning to plan the day's meal
+count. Also introduces "Elite" as a first-class category so the
+kitchen (and future features) can distinguish elite squad athletes.
+
+**Backend**
+- New collection **`categories`** — seeded on startup with the 5
+  canonical categories (athlete, elite, coach, staff, executive)
+  including per-row `color`, `is_athlete_like`, `meal_eligible`,
+  `sort_order`. Elite is `is_athlete_like=True`.
+- New file `routes/meals.py`:
+  - `GET /api/masters/categories` — signed-in users read the seeded
+    master (powers the Members-form dropdown).
+  - `GET /api/admin/meals-today?date=YYYY-MM-DD&cutoff=HH:MM` — admin-
+    only. Returns members whose earliest check-in on the target day
+    is at or before the cut-off (default **07:00** office-local),
+    grouped by category. Payload: `{today, cutoff, generated_at,
+    categories[], counts{}, total, members[]}` where each member
+    carries `id / full_name / category / photo_thumb / institution /
+    fleet / check_in_at`.
+- **`ATHLETE_CATEGORIES = {"athlete", "elite"}`** constant added to
+  `services/attendance_calc.py` — used across `server.py`,
+  `holidays.py`, `routes/dashboard.py` so elite kids follow the same
+  rules as athletes: Breaks workflow (not leaves), no leave-balance
+  opening, no comp-off accrual, no OT accrual, expected daily.
+- Pydantic `category` Literal widened to `athlete | elite | coach |
+  staff | executive`.
+- Dashboard aggregator (`routes/dashboard.py`) now includes an
+  `elite` bucket in `on_campus_by_category`.
+
+**Frontend**
+- New page `pages/admin/ChefsView.jsx`:
+  - 6 big bold colored **tickets** (Tailwind cards, coloured per
+    category via master `color` key): Athletes/sky · Elite/rose ·
+    Coaches/emerald · Staff/amber · Executives/violet · Total/slate.
+  - Date picker + cut-off time picker + Refresh + **Print** button
+    (with `@media print` CSS that hides the toolbar).
+  - Drill-down grouped by category — Avatar + name + institution·fleet
+    + HH:MM check-in. Live **search** (name / institution / fleet).
+  - In-flight guard to prevent duplicate refresh races.
+  - 20+ `data-testid`s across every ticket, row, and control.
+- Sidebar: new "Chef's View" entry (`ChefHat` icon) between Manage
+  Members and Leave Tour Approvals.
+- Members master: `Elite` added to inline category dropdown and to
+  the top filter chip bar; `leaveBalanceLabel` treats Elite same as
+  Athlete (em-dash — they use Breaks, not leaves).
+
+**Tests** — all green
+- `backend/tests/test_meals.py` — 7 new contract tests: categories
+  seed, auth gate, payload shape, cutoff-widens invariant, invalid
+  cutoff/date rejection, member-field completeness.
+- `backend/tests/test_review_iter19.py` (added by testing agent) —
+  5 tests: PATCH member to elite, leave-balances regression,
+  dashboard 5-buckets, E2E tag→bucket-move→revert.
+- 12/12 meals tests pass; 61/61 full smoke+dashboard+meals+ot+leaves
+  regression pass.
+- Testing agent iter19: **100% backend + 100% frontend**.
+
+---
+
+
 ## 7 Jul 2026 — Single-glance Admin Dashboard
 
 New `/admin/dashboard` landing page for admins and head coaches —

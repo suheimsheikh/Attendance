@@ -28,7 +28,8 @@
 
 ## What's Implemented (Jan 2026)
 > Session-level shipments (Jun–Jul 2026) live in `CHANGELOG.md`
-> — most recent: **Single-glance Admin Dashboard (`/admin/dashboard`)** shipped 7 Jul 2026.
+> — most recent: **Chef's View + Elite category** shipped 8 Jul 2026;
+> **Single-glance Admin Dashboard (`/admin/dashboard`)** shipped 7 Jul 2026.
 > alongside this file to keep PRD.md focused on the durable spec.
 
 ### Backend (reused, verified ✅)
