@@ -53,19 +53,13 @@ app = FastAPI(lifespan=_lifespan_factory)
 api_router = APIRouter(prefix="/api")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
-# ----------------------------------------------------------------------------
-# Approval workflow flags (added 08 Jul 2026 at admin's request).
-#
-# When True, the system automatically routes anomalous check-ins and
-# earned-overtime into the /admin/approvals queue. Admin wanted these
-# OFF while they clean up a large accumulated pre-launch backlog and
-# handle these cases manually. Flip either back to True to restore the
-# automatic queuing behavior — the underlying `late` / `out_of_geofence`
-# / `overtime_total_min` fields are still calculated + stored so no
-# historical data is lost by turning these off.
-# ----------------------------------------------------------------------------
-AUTO_APPROVAL_LATE_CHECKINS = False
-AUTO_APPROVAL_OVERTIME = False
+# Feature flags — see backend/config.py for docs on why these exist. Imported
+# here (rather than defined) so `routes/muster.py` can share the same source
+# of truth without triggering a circular import back into server.py.
+from config import (  # noqa: E402
+    AUTO_APPROVAL_LATE_CHECKINS,
+    AUTO_APPROVAL_OVERTIME,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
