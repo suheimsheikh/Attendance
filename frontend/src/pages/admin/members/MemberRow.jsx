@@ -122,52 +122,51 @@ export default function MemberRow({
           </div>
         </div>
       </td>
-      {/* Role / category — both inline-editable. Category is a select that
-          renders the colored pill; admin role is a select that renders the
-          indigo shield badge. */}
+      {/* Category — inline-editable pill (colour keyed to the category). */}
       <td className="iu-table-td">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <InlineCell
-            kind="select"
-            value={m.category || "athlete"}
-            options={CATEGORY_OPTS}
-            testId={`inline-category-${m.id}`}
-            onSave={(v) => onPatchField(m.id, "category", v)}
-            renderDisplay={(v) => {
-              const cat = v || "athlete";
-              const meta = BUCKET_BY_KEY[cat] || BUCKET_BY_KEY.athlete;
-              return (
-                <span className={`inline-flex items-center gap-1.5 px-2 h-6 rounded-full text-[11px] font-semibold border ${meta.inactiveBg} ${meta.inactiveText} ${meta.inactiveBorder}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${meta.dotBg}`} />
-                  {meta.label.replace(/s$/, "")}
-                </span>
-              );
-            }}
-          />
-          <InlineCell
-            kind="select"
-            value={m.role || "member"}
-            options={ROLE_OPTS}
-            testId={`inline-role-${m.id}`}
-            onSave={(v) => onPatchField(m.id, "role", v)}
-            renderDisplay={(v) => (
-              v === "admin" ? (
-                <span
-                  data-testid={`admin-badge-${m.id}`}
-                  className="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[11px] font-bold border bg-indigo-50 text-indigo-700 border-indigo-200"
-                  title="Has admin role — independent of category"
-                >
-                  <ShieldCheck size={11} /> Admin
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[10px] font-semibold border bg-slate-50 text-slate-400 border-dashed border-slate-300" title="Click to grant admin">
-                  <ShieldCheck size={10} /> Member
-                </span>
-              )
-            )}
-          />
-        </div>
+        <InlineCell
+          kind="select"
+          value={m.category || "athlete"}
+          options={CATEGORY_OPTS}
+          testId={`inline-category-${m.id}`}
+          onSave={(v) => onPatchField(m.id, "category", v)}
+          renderDisplay={(v) => {
+            const cat = v || "athlete";
+            const meta = BUCKET_BY_KEY[cat] || BUCKET_BY_KEY.athlete;
+            return (
+              <span className={`inline-flex items-center gap-1.5 px-2 h-6 rounded-full text-[11px] font-semibold border ${meta.inactiveBg} ${meta.inactiveText} ${meta.inactiveBorder}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${meta.dotBg}`} />
+                {meta.label.replace(/s$/, "")}
+              </span>
+            );
+          }}
+        />
         <div className="text-xs text-slate-500 mt-1">{categoryLabel(m.category)}</div>
+      </td>
+      {/* Role — orthogonal to category (a coach can also be admin). */}
+      <td className="iu-table-td">
+        <InlineCell
+          kind="select"
+          value={m.role || "member"}
+          options={ROLE_OPTS}
+          testId={`inline-role-${m.id}`}
+          onSave={(v) => onPatchField(m.id, "role", v)}
+          renderDisplay={(v) => (
+            v === "admin" ? (
+              <span
+                data-testid={`admin-badge-${m.id}`}
+                className="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[11px] font-bold border bg-indigo-50 text-indigo-700 border-indigo-200"
+                title="Has admin role — independent of category"
+              >
+                <ShieldCheck size={11} /> Admin
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[10px] font-semibold border bg-slate-50 text-slate-400 border-dashed border-slate-300" title="Click to grant admin">
+                <ShieldCheck size={10} /> Member
+              </span>
+            )
+          )}
+        />
       </td>
       <td className="iu-table-td text-slate-700">
         <InlineCell

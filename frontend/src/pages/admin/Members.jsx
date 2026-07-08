@@ -375,7 +375,8 @@ export default function Members() {
                   </th>
                   <th className="iu-table-th w-10 text-center sticky left-10 z-30 bg-slate-50">Edit</th>
                   <th className="iu-table-th sticky left-20 z-30 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">Member</th>
-                  <th className="iu-table-th">Role / Category</th>
+                  <th className="iu-table-th">Category</th>
+                  <th className="iu-table-th">Role</th>
                   <th className="iu-table-th">Rank</th>
                   <th className="iu-table-th">Gender</th>
                   <th className="iu-table-th">Mobile</th>
@@ -414,7 +415,7 @@ export default function Members() {
                   />
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={18} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
+                  <tr><td colSpan={19} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
                 )}
               </tbody>
             </table>
