@@ -92,6 +92,19 @@ export default function Reports() {
   const [institutionFilter, setInstitutionFilter] = useState("");
   const [compOffOnly, setCompOffOnly] = useState(false);
   const [sortBy, setSortBy] = useState("alpha");
+  // Athlete-like category keys — driven by categories master so Elite
+  // (and any future admin-added athlete-like category) is bucketed with
+  // Athletes, not Staff & Coaches. Fixes 15 Jul 2026 user report
+  // "In the staff and coaches filter a lot of athletes appear".
+  const [athleteLikeKeys, setAthleteLikeKeys] = useState(() => new Set(["athlete", "elite"]));
+  useEffect(() => {
+    api.get("/masters/categories").then((cats) => {
+      const rows = Array.isArray(cats) ? cats : (cats?.items || []);
+      const keys = rows.filter((c) => c.is_athlete_like).map((c) => c.key);
+      if (keys.length) setAthleteLikeKeys(new Set(keys));
+    }).catch(() => { /* fall back to defaults */ });
+  }, []);
+  const isAthleteLike = useCallback((r) => athleteLikeKeys.has(r?.category), [athleteLikeKeys]);
   // Escort-only mode fetches a separate report (list of parent-escorts
   // and their present-days) instead of blending with the member table.
   const [escortReport, setEscortReport] = useState(null);
@@ -180,9 +193,9 @@ export default function Reports() {
   const displayedRows = useMemo(() => {
     let list = rows;
     if (categoryFilter === "athlete") {
-      list = list.filter((r) => r.category === "athlete");
+      list = list.filter((r) => isAthleteLike(r));
     } else if (categoryFilter === "rest") {
-      list = list.filter((r) => r.category !== "athlete");
+      list = list.filter((r) => !isAthleteLike(r));
     } else if (categoryFilter === "escorts") {
       list = list.filter((r) => (r.escort_days || 0) > 0);
     }
@@ -214,7 +227,7 @@ export default function Reports() {
       sorted.sort((a, b) => (a.member_name || "").localeCompare(b.member_name || ""));
     }
     return sorted;
-  }, [rows, categoryFilter, fleetFilter, institutionFilter, compOffOnly, sortBy]);
+  }, [rows, categoryFilter, fleetFilter, institutionFilter, compOffOnly, sortBy, isAthleteLike]);
 
   const fleetOptions = useMemo(() => {
     const s = new Set();
@@ -271,10 +284,10 @@ export default function Reports() {
                 const count = f.key === "all"
                   ? rows.length
                   : f.key === "athlete"
-                    ? rows.filter((r) => r.category === "athlete").length
+                    ? rows.filter((r) => isAthleteLike(r)).length
                     : f.key === "escorts"
                       ? rows.filter((r) => (r.escort_days || 0) > 0).length
-                      : rows.filter((r) => r.category !== "athlete").length;
+                      : rows.filter((r) => !isAthleteLike(r)).length;
                 return (
                   <button
                     key={f.key}

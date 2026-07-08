@@ -128,6 +128,39 @@ def test_payroll_requires_admin(base_url):
     assert r.status_code == 401
 
 
+def test_payroll_category_rest_excludes_athlete_like(admin_client, base_url):
+    """Regression guard (15 Jul 2026): the "Staff & Coaches" (?category=rest)
+    filter must NOT leak athlete-like categories (athlete + elite + any admin-
+    added athlete-like custom category). Previously used `!= "athlete"` which
+    let Elite members bleed in — 18 rows on production.
+    """
+    # Pull the source of truth for athlete-like keys from the categories master.
+    cats = admin_client.get(f"{base_url}/api/masters/categories", timeout=30).json()
+    rows = cats if isinstance(cats, list) else cats.get("items", [])
+    athlete_like_keys = {c["key"] for c in rows if c.get("is_athlete_like")}
+    if not athlete_like_keys:
+        pytest.skip("categories master is empty — nothing to assert.")
+
+    rest = admin_client.get(
+        f"{base_url}/api/reports/payroll", params={"category": "rest"}, timeout=30,
+    ).json()
+    leaked = [r for r in rest["rows"] if r.get("category") in athlete_like_keys]
+    assert not leaked, (
+        f"?category=rest leaked athlete-like rows: "
+        f"{[(r.get('member_name'), r.get('category')) for r in leaked[:5]]}"
+    )
+
+    athlete = admin_client.get(
+        f"{base_url}/api/reports/payroll", params={"category": "athlete"}, timeout=30,
+    ).json()
+    # Conversely, ?category=athlete MUST include every athlete-like category
+    # (not only the literal `athlete` key).
+    for r in athlete["rows"]:
+        assert r.get("category") in athlete_like_keys, (
+            f"?category=athlete leaked a non-athlete-like row: {r.get('category')}"
+        )
+
+
 # ------------------ /reports/daily ------------------
 def test_daily_default_is_today_shape(admin_client, base_url):
     r = admin_client.get(f"{base_url}/api/reports/daily", timeout=30)

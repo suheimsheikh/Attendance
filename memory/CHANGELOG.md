@@ -5,6 +5,38 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — Reports: Staff & Coaches filter no longer leaks Elite athletes
+
+User report: "In the staff and coaches filter a lot of athletes appear."
+
+Root cause: both `Reports.jsx` and the backend `/reports/payroll` +
+`/reports/hours/export` compared `r.category === "athlete"` literally.
+Elite members carry `category="elite"` (with `is_athlete_like=true` in
+the categories master), so all 18 Elites bled into the "Staff & Coaches"
+pill. Custom admin-added athlete-like categories would have done the
+same.
+
+Fix — both layers now consult `is_athlete_like` instead of hard-coding
+the literal `athlete` key:
+
+- Backend: `routes/reports.py` gains an `_athlete_like_keys(db)` helper
+  that queries `db.categories` for every `is_athlete_like: True` key.
+  `?category=athlete` and `?category=rest` on `/reports/payroll` +
+  `/reports/hours/export` filter by set membership.
+- Frontend: `Reports.jsx` fetches `/api/masters/categories` on mount,
+  computes `athleteLikeKeys`, uses it in the filter blocks + pill count
+  computation.
+- Regression guard: `test_payroll_category_rest_excludes_athlete_like`
+  in `test_routes_reports.py` locks the invariant against future drift.
+
+Verified on the prod-preview dataset (73 athletes + 18 elite + 25 staff
++ 11 coach + 6 executive): Staff & Coaches pill now returns 42 rows
+(was 60), Athletes pill returns 91 (was 73).
+
+---
+
+
+
 ## 8 Jul 2026 — ESLint config: encode false-positive policy
 
 In response to a code-review report that flagged 157 "missing hook

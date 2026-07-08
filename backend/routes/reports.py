@@ -132,6 +132,19 @@ def _csv_response(headers: List[str], rows: List[List], filename: str) -> Respon
 def make_router(db, require_admin, get_current_user, compute_hours_report, enrich_leaves) -> APIRouter:
     router = APIRouter(prefix="/api")
 
+    async def _athlete_like_keys(db_) -> set:
+        """Pull the set of category keys flagged `is_athlete_like=True` from
+        the categories master. Falls back to the seeded pair {athlete,elite}
+        if the collection isn't populated yet (fresh install / test)."""
+        keys = set()
+        async for c in db_.categories.find({"is_athlete_like": True}, {"_id": 0, "key": 1}):
+            k = c.get("key")
+            if k:
+                keys.add(k)
+        if not keys:
+            keys = {"athlete", "elite"}
+        return keys
+
     @router.get("/reports/hours")
     async def hours_report(start: str, end: str, admin: dict = Depends(require_admin)):
         rows = await compute_hours_report(start, end)
@@ -179,11 +192,16 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             end_d = today
         start_iso, end_iso = start_d.isoformat(), end_d.isoformat()
         rows = await compute_hours_report(start_iso, end_iso)
+        # Athlete-like category set — pulls from categories master so Elite
+        # (and any future admin-added athlete-like custom category) is bucketed
+        # WITH athletes, not with Staff & Coaches. Fixes 15 Jul 2026 user
+        # report "In the staff and coaches filter a lot of athletes appear".
+        athlete_like = await _athlete_like_keys(db)
         # Category filter — merged 7 Jul 2026 to match /reports/hours.
         if category == "athlete":
-            rows = [r for r in rows if r.get("category") == "athlete"]
+            rows = [r for r in rows if r.get("category") in athlete_like]
         elif category == "rest":
-            rows = [r for r in rows if r.get("category") != "athlete"]
+            rows = [r for r in rows if r.get("category") not in athlete_like]
         elif category == "payroll":
             rows = [r for r in rows if r.get("category") in {"staff", "coach"}]
         # Fleet (class-wise) filter — mirrors the Hours export.
@@ -243,10 +261,11 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
 
         # Apply the same filters the admin has set on the UI so the
         # downloaded PDF/CSV matches what they see (30 Jun 2026 late).
+        athlete_like = await _athlete_like_keys(db)
         if category == "athlete":
-            rows = [r for r in rows if r.get("category") == "athlete"]
+            rows = [r for r in rows if r.get("category") in athlete_like]
         elif category == "rest":
-            rows = [r for r in rows if r.get("category") != "athlete"]
+            rows = [r for r in rows if r.get("category") not in athlete_like]
         if fleet:
             if fleet == "__none__":
                 rows = [r for r in rows if not r.get("fleet")]
