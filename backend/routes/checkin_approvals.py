@@ -135,6 +135,44 @@ def make_router(db, require_admin, write_audit) -> APIRouter:
         return {"ok": True, "id": attendance_id, "decision": body.decision,
                 "approved_at": update["approved_at"]}
 
+    @router.post("/checkin-approvals/approve-all")
+    async def approve_all_checkins(admin: dict = Depends(require_admin)):
+        """Bulk-approve every currently-pending check-in in one shot.
+        Added 08 Jul 2026 alongside the auto-approval flags — lets the
+        admin clear the pre-launch backlog of legacy pending check-ins
+        without clicking through them individually. Writes ONE audit
+        row summarising the batch (not N rows) to keep the audit log
+        readable, but includes the full list of ids in `after.ids` so
+        an individual entry is still traceable if needed later.
+        """
+        pending = await db.attendance.find(
+            {"approval_status": "pending"},
+            {"_id": 0, "id": 1, "date": 1},
+        ).to_list(10000)
+        if not pending:
+            return {"ok": True, "updated": 0}
+        ids = [r["id"] for r in pending]
+        now = now_utc()
+        update = {
+            "approval_status": "approved",
+            "approval_note": "Bulk approved by admin",
+            "approved_by": admin.get("full_name"),
+            "approved_by_id": admin.get("id"),
+            "approved_at": now.isoformat(),
+        }
+        res = await db.attendance.update_many(
+            {"id": {"$in": ids}}, {"$set": update},
+        )
+        await write_audit(
+            db, actor=admin, action="checkin_bulk_approve",
+            entity_type="attendance", entity_id="bulk",
+            entity_name=f"{len(ids)} check-ins",
+            before={"count_pending": len(ids)},
+            after={"approval_status": "approved", "ids": ids},
+            reason="Bulk approve all pending check-ins",
+        )
+        return {"ok": True, "updated": int(res.modified_count)}
+
     @router.get("/approvals-summary")
     async def approvals_summary(admin: dict = Depends(require_admin)):
         """Aggregated pending counts across every approval queue —

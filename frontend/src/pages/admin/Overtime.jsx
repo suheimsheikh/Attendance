@@ -77,6 +77,19 @@ export default function Overtime({ embedded = false }) {
     finally { setBusyId(null); }
   };
 
+  const approveAll = async () => {
+    const count = rows.length;
+    if (count === 0) return;
+    if (!window.confirm(`Approve ALL ${count} pending overtime session${count === 1 ? "" : "s"}? This is auditable but cannot be undone per row.`)) return;
+    setBusyId("bulk");
+    try {
+      const r = await api.post("/admin/overtime/approve-all", {});
+      toast.success(`Approved ${r.updated} session${r.updated === 1 ? "" : "s"} · ${fmtHrs(r.total_minutes)} total`);
+      load();
+    } catch (err) { toast.error(err?.message || "Bulk approve failed"); }
+    finally { setBusyId(null); }
+  };
+
   const totals = useMemo(() => {
     const t = { count: rows.length, minutes: 0 };
     for (const r of rows) t.minutes += r.total_min || 0;
@@ -114,8 +127,23 @@ export default function Overtime({ embedded = false }) {
       </div>
 
       {!loading && (
-        <div className="text-xs text-slate-500 mb-3" data-testid="ot-summary">
-          {totals.count} session{totals.count === 1 ? "" : "s"} · {fmtHrs(totals.minutes)} total
+        <div className="text-xs text-slate-500 mb-3 flex items-center gap-3" data-testid="ot-summary">
+          <span>{totals.count} session{totals.count === 1 ? "" : "s"} · {fmtHrs(totals.minutes)} total</span>
+          {/* Bulk-approve only on the Pending filter, only when rows exist.
+              Confirms first — the mass approval is auditable via one audit
+              row summarising the batch but cannot be undone per-row. */}
+          {status === "pending" && rows.length > 0 && (
+            <button
+              onClick={approveAll}
+              disabled={busyId === "bulk"}
+              className="ml-auto inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-[11px] font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              data-testid="ot-approve-all"
+              title={`Approve all ${rows.length} pending overtime sessions`}
+            >
+              {busyId === "bulk" ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              Approve all ({rows.length})
+            </button>
+          )}
         </div>
       )}
 

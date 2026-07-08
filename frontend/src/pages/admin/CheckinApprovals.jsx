@@ -205,6 +205,22 @@ export default function CheckinApprovals() {
     }
   };
 
+  const approveAll = async () => {
+    const count = rows.length;
+    if (count === 0) return;
+    if (!window.confirm(`Approve ALL ${count} pending check-in${count === 1 ? "" : "s"}? This is auditable but not undoable per row.`)) return;
+    setWorking(true);
+    try {
+      const r = await api.post("/admin/checkin-approvals/approve-all", {});
+      toast.success(`Approved ${r.updated} check-in${r.updated === 1 ? "" : "s"}`);
+      load();
+    } catch (err) {
+      showApiError(err, "Bulk approve failed");
+    } finally {
+      setWorking(false);
+    }
+  };
+
   return (
     <div data-testid="checkin-approvals-tab">
       <div className="mb-4 flex items-center gap-2">
@@ -234,6 +250,19 @@ export default function CheckinApprovals() {
           {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
           Refresh
         </button>
+        {/* Bulk-approve is only relevant on the Pending tab; hidden elsewhere
+            to avoid confusion. Confirms before firing (irreversible per-row). */}
+        {status === "pending" && rows.length > 0 && (
+          <button
+            onClick={approveAll}
+            disabled={working || loading}
+            className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-[11px] font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+            data-testid="checkin-approvals-approve-all"
+            title={`Approve all ${rows.length} pending check-ins`}
+          >
+            <Check size={12} /> Approve all ({rows.length})
+          </button>
+        )}
       </div>
 
       {loading && rows.length === 0 ? (

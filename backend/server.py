@@ -2313,6 +2313,43 @@ async def overtime_list(
     return {"date_from": date_from, "date_to": date_to, "rows": out}
 
 
+@api_router.post("/admin/overtime/approve-all")
+async def overtime_approve_all(admin: dict = Depends(require_admin)):
+    """Bulk-approve every currently-pending overtime entry in one shot.
+    Added 08 Jul 2026 alongside the auto-approval flags — lets the admin
+    clear the pre-launch backlog without clicking through each session.
+    Writes ONE audit-log row summarising the batch (not N rows) with the
+    full list of ids preserved in `after.ids` for later trace-through.
+    """
+    pending = await db.attendance.find(
+        {"overtime_status": "pending"},
+        {"_id": 0, "id": 1, "user_id": 1, "date": 1, "overtime_total_min": 1},
+    ).to_list(10000)
+    if not pending:
+        return {"ok": True, "updated": 0}
+    ids = [r["id"] for r in pending]
+    now = now_utc().isoformat()
+    res = await db.attendance.update_many(
+        {"id": {"$in": ids}},
+        {"$set": {
+            "overtime_status": "approved",
+            "overtime_admin_note": "Bulk approved by admin",
+            "overtime_decided_by": admin["full_name"],
+            "overtime_decided_at": now,
+        }},
+    )
+    total_min = sum(int(r.get("overtime_total_min") or 0) for r in pending)
+    await write_audit(
+        db, actor=admin, action="overtime_bulk_approve",
+        entity_type="attendance", entity_id="bulk",
+        entity_name=f"{len(ids)} sessions · {total_min} min",
+        before={"count_pending": len(ids), "total_minutes": total_min},
+        after={"overtime_status": "approved", "ids": ids},
+        reason="Bulk approve all pending overtime",
+    )
+    return {"ok": True, "updated": int(res.modified_count), "total_minutes": total_min}
+
+
 @api_router.post("/admin/overtime/{session_id}/decide")
 async def overtime_decide(session_id: str, body: OvertimeDecisionIn, admin: dict = Depends(require_admin)):
     sess = await db.attendance.find_one({"id": session_id}, {"_id": 0})
