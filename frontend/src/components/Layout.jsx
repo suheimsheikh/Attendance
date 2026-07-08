@@ -277,12 +277,16 @@ function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason
       <span className="flex-1">{label}</span>
       {typeof badge === "number" && badge > 0 && (
         <span
+          // Show the actual pending count — no 99+ cap. Admins want the
+          // real backlog size at a glance so they can prioritise; the pill
+          // grows horizontally to fit 3–4 digit numbers (px-1.5 + auto width).
           className={`min-w-[22px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center tabular-nums ${
             highlight ? "bg-amber-400 text-amber-950" : "bg-rose-500 text-white"
           }`}
           data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-badge`}
+          title={`${badge} pending`}
         >
-          {badge > 99 ? "99+" : badge}
+          {badge}
         </span>
       )}
     </NavLink>
