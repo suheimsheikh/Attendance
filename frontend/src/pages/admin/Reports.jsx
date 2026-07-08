@@ -28,6 +28,11 @@ function monthWindow(year, monthIdx) {
 const CATEGORY_FILTERS = [
   { key: "all",     label: "All" },
   { key: "athlete", label: "Athletes" },
+  // Elite is athlete-like but coaches asked for a dedicated pill to
+  // drill into just the Elite cohort (~18-strong at YCH) without
+  // exporting. Filter matches `r.category === "elite"` literally so it
+  // stays deterministic even if new athlete-like categories get added.
+  { key: "elite",   label: "Elite" },
   // "Rest" (renamed to "Staff & Coaches" 7 Jul 2026 on user request)
   // collapses staff/coach/executive into one bucket — matches the
   // way admins actually think about the two populations at YCH.
@@ -90,8 +95,23 @@ export default function Reports() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [fleetFilter, setFleetFilter] = useState("");
   const [institutionFilter, setInstitutionFilter] = useState("");
-  const [compOffOnly, setCompOffOnly] = useState(false);
+  // OT-only filter — replaces the previous Comp-off filter (8 Jul 2026
+  // user-requested). Surfaces rows with any non-zero OT signal
+  // (served / applied / approved) this month.
+  const [otOnly, setOtOnly] = useState(false);
   const [sortBy, setSortBy] = useState("alpha");
+  // YTD comp-off available per member — fetched once from /leave-balances
+  // and merged into the on-screen Leave columns (Open · COff · Total ·
+  // Avld · Close). Athletes are absent from this endpoint by design
+  // (Breaks workflow), so their COff falls through to 0.
+  const [compOffMap, setCompOffMap] = useState({});
+  useEffect(() => {
+    api.get("/leave-balances").then((r) => {
+      const map = {};
+      for (const row of (r?.rows || [])) map[row.id] = row.comp_off_available || 0;
+      setCompOffMap(map);
+    }).catch(() => { /* non-fatal — COff column falls back to 0 */ });
+  }, []);
   // Athlete-like category keys — driven by categories master so Elite
   // (and any future admin-added athlete-like category) is bucketed with
   // Athletes, not Staff & Coaches. Fixes 15 Jul 2026 user report
@@ -194,6 +214,8 @@ export default function Reports() {
     let list = rows;
     if (categoryFilter === "athlete") {
       list = list.filter((r) => isAthleteLike(r));
+    } else if (categoryFilter === "elite") {
+      list = list.filter((r) => r.category === "elite");
     } else if (categoryFilter === "rest") {
       list = list.filter((r) => !isAthleteLike(r));
     } else if (categoryFilter === "escorts") {
@@ -213,11 +235,12 @@ export default function Reports() {
           : (r.institution || "") === institutionFilter
       );
     }
-    if (compOffOnly) {
-      // Any non-zero comp-off signal earns inclusion — earned, applied, or approved/used.
-      list = list.filter((r) => (r.comp_off_earned || 0) > 0
-                              || (r.comp_off_applied || 0) > 0
-                              || (r.comp_off_used || 0) > 0);
+    if (otOnly) {
+      // OT filter — any non-zero OT signal (served / applied / approved)
+      // this month. Replaces the Comp-off toggle (8 Jul 2026).
+      list = list.filter((r) => (r.overtime_hours_served || 0) > 0
+                              || (r.overtime_hours_pending || 0) > 0
+                              || (r.overtime_hours_approved || 0) > 0);
     }
     const sorted = [...list];
     if (sortBy === "pct_desc") {
@@ -227,7 +250,7 @@ export default function Reports() {
       sorted.sort((a, b) => (a.member_name || "").localeCompare(b.member_name || ""));
     }
     return sorted;
-  }, [rows, categoryFilter, fleetFilter, institutionFilter, compOffOnly, sortBy, isAthleteLike]);
+  }, [rows, categoryFilter, fleetFilter, institutionFilter, otOnly, sortBy, isAthleteLike]);
 
   const fleetOptions = useMemo(() => {
     const s = new Set();
@@ -285,9 +308,11 @@ export default function Reports() {
                   ? rows.length
                   : f.key === "athlete"
                     ? rows.filter((r) => isAthleteLike(r)).length
-                    : f.key === "escorts"
-                      ? rows.filter((r) => (r.escort_days || 0) > 0).length
-                      : rows.filter((r) => !isAthleteLike(r)).length;
+                    : f.key === "elite"
+                      ? rows.filter((r) => r.category === "elite").length
+                      : f.key === "escorts"
+                        ? rows.filter((r) => (r.escort_days || 0) > 0).length
+                        : rows.filter((r) => !isAthleteLike(r)).length;
                 return (
                   <button
                     key={f.key}
@@ -332,15 +357,18 @@ export default function Reports() {
                   ))}
                 </select>
               )}
-              {/* Comp-off-only toggle — surfaces staff who have any non-zero
-                  comp-off signal (earned / applied / used) this month. */}
+              {/* OT-only toggle — surfaces rows with any non-zero OT
+                  signal (served / applied / approved) this month.
+                  Replaces the previous Comp-off toggle (8 Jul 2026 user
+                  request "The filter comp off > 0 should be replaced
+                  with OT > 0"). */}
               <button
-                data-testid="comp-off-only-toggle"
-                onClick={() => setCompOffOnly((v) => !v)}
-                className={`iu-chip ${compOffOnly ? "iu-chip-active" : ""}`}
-                title="Show only rows where comp-off earned / applied / approved > 0"
+                data-testid="ot-only-toggle"
+                onClick={() => setOtOnly((v) => !v)}
+                className={`iu-chip ${otOnly ? "iu-chip-active" : ""}`}
+                title="Show only rows where OT served / applied / approved > 0"
               >
-                Comp-off &gt; 0
+                OT &gt; 0
               </button>
             </div>
             <div className="flex items-center gap-2" data-testid="sort-options">
@@ -391,7 +419,7 @@ export default function Reports() {
                   </tbody>
                 </table>
               ) : (
-              <table className="min-w-full text-xs iu-table-compact" style={{ minWidth: 1300 }}>
+              <table className="min-w-full text-xs iu-table-compact" style={{ minWidth: 1420 }}>
                 <thead>
                   {/* Grouped header row + sub-header row are BOTH sticky
                       (7 Jul 2026 user-requested). Row 1 pins to top-0,
@@ -401,7 +429,7 @@ export default function Reports() {
                   <tr className="sticky top-0 z-30 bg-slate-100 text-[10px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200 shadow-sm">
                     <th className="py-1.5 px-2 text-left sticky left-0 z-40 bg-slate-100" colSpan={2}>&nbsp;</th>
                     <th className="py-1.5 px-2 text-center bg-emerald-50 border-l border-r border-emerald-200 text-emerald-800" colSpan={8}>Attendance</th>
-                    <th className="py-1.5 px-2 text-center bg-amber-50 border-r border-amber-200 text-amber-800" colSpan={3}>Leave</th>
+                    <th className="py-1.5 px-2 text-center bg-amber-50 border-r border-amber-200 text-amber-800" colSpan={5}>Leave</th>
                     <th className="py-1.5 px-2 text-center bg-violet-50 border-r border-violet-200 text-violet-800" colSpan={3}>Overtime</th>
                     <th className="py-1.5 px-2 text-center bg-sky-50 border-r border-sky-200 text-sky-800" colSpan={3}>Comp-Off</th>
                     <th className="py-1.5 px-2 text-center bg-indigo-50 border-r border-indigo-200 text-indigo-800" colSpan={2}>Hours</th>
@@ -418,9 +446,11 @@ export default function Reports() {
                     <th className="py-1.5 px-1.5 text-center bg-emerald-50/70">Half</th>
                     <th className="py-1.5 px-1.5 text-center bg-emerald-50/70">Abs</th>
                     <th className="py-1.5 px-1.5 text-center bg-emerald-50/70 border-r border-emerald-100 font-extrabold">Tot</th>
-                    <th className="py-1.5 px-1.5 text-center bg-amber-50/70">Open</th>
-                    <th className="py-1.5 px-1.5 text-center bg-amber-50/70">Avld</th>
-                    <th className="py-1.5 px-1.5 text-center bg-amber-50/70 border-r border-amber-100 font-extrabold">Close</th>
+                    <th className="py-1.5 px-1.5 text-center bg-amber-50/70" title="Opening annual leave balance for the year">Open</th>
+                    <th className="py-1.5 px-1.5 text-center bg-amber-50/70" title="Comp-off available YTD (accrued − used). Adds to the leave pool.">COff</th>
+                    <th className="py-1.5 px-1.5 text-center bg-amber-50/70" title="Total = Open + COff (all leave credit available this year)">Total</th>
+                    <th className="py-1.5 px-1.5 text-center bg-amber-50/70" title="Availed = leave taken YTD">Avld</th>
+                    <th className="py-1.5 px-1.5 text-center bg-amber-50/70 border-r border-amber-100 font-extrabold" title="Closing = Total − Avld">Close</th>
                     <th className="py-1.5 px-1.5 text-center bg-violet-50/70">Srvd</th>
                     <th className="py-1.5 px-1.5 text-center bg-violet-50/70">Appl</th>
                     <th className="py-1.5 px-1.5 text-center bg-violet-50/70 border-r border-violet-100 font-extrabold">Apprv</th>
@@ -509,10 +539,30 @@ export default function Reports() {
                         <td {...merge("py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100", hoverProps("Half-day", r.dates_half_day))} data-testid={`half-days-${r.member_id}`}>{n(r.half_days)}</td>
                         <td {...merge(`py-1.5 px-1.5 text-center bg-emerald-50/30 border-t border-emerald-100 font-semibold ${(r.days_absent || 0) > 0 ? "text-red-600" : "text-slate-400"}`, hoverProps("Absent", r.dates_absent))} data-testid={`days-absent-${r.member_id}`}>{n(r.days_absent)}</td>
                         <td className="py-1.5 px-1.5 text-center bg-emerald-50/30 border-r border-t border-emerald-100 font-extrabold text-slate-900" data-testid={`days-total-${r.member_id}`}>{n(attnTotal)}</td>
-                        {/* Leave group */}
-                        <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100">{n(r.leave_balance_opening)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100">{n(r.leave_balance_taken_ytd)}</td>
-                        <td className={`py-1.5 px-1.5 text-center bg-amber-50/30 border-r border-t border-amber-100 font-extrabold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{n(r.leave_balance_remaining)}</td>
+                        {/* Leave group — 5 columns (8 Jul 2026 user
+                            request: Open · COff · Total · Avld · Close).
+                            COff is comp-off available YTD, pulled from
+                            /leave-balances and merged client-side; it
+                            adds to the leave pool. Athletes fall through
+                            to 0 for all fields (Breaks workflow). */}
+                        {(() => {
+                          const open = r.leave_balance_opening || 0;
+                          const coff = compOffMap[r.member_id] || 0;
+                          const total = open + coff;
+                          const avld = r.leave_balance_taken_ytd || 0;
+                          const close = Math.round((total - avld) * 10) / 10;
+                          const hasBalance = open > 0 || coff > 0 || avld > 0;
+                          const fmt = (v) => (hasBalance ? String(v) : "");
+                          return (
+                            <>
+                              <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100" data-testid={`leave-open-${r.member_id}`}>{fmt(open)}</td>
+                              <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100 text-sky-700" data-testid={`leave-coff-${r.member_id}`}>{coff > 0 ? String(coff) : ""}</td>
+                              <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100 font-semibold" data-testid={`leave-total-${r.member_id}`}>{fmt(total)}</td>
+                              <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100" data-testid={`leave-avld-${r.member_id}`}>{fmt(avld)}</td>
+                              <td className={`py-1.5 px-1.5 text-center bg-amber-50/30 border-r border-t border-amber-100 font-extrabold ${close < 0 ? "text-red-600" : "text-emerald-700"}`} data-testid={`leave-close-${r.member_id}`}>{fmt(close)}</td>
+                            </>
+                          );
+                        })()}
                         {/* Comp-Off group */}
                         {/* Overtime group — comes BEFORE Comp-off (07 Jul
                             2026 user request "shift OT one left"). Double-
@@ -536,7 +586,7 @@ export default function Reports() {
                     );
                   })}
                   {!loading && displayedRows.length === 0 && (
-                    <tr><td colSpan={23} className="text-center py-10 text-slate-500">No data.</td></tr>
+                    <tr><td colSpan={25} className="text-center py-10 text-slate-500">No data.</td></tr>
                   )}
                 </tbody>
               </table>

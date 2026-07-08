@@ -5,6 +5,32 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — Reports: Elite pill · OT-only filter · Leave column redesign
+
+Three coach-requested tweaks on the Attendance report:
+
+1. **Elite pill** — new dedicated filter chip between Athletes and Staff &
+   Coaches. Matches `r.category === "elite"` literally so it isolates the
+   18-strong Elite cohort without leaking regular athletes. Athletes pill
+   still shows the combined 91 (athlete + elite) count.
+2. **OT > 0 filter** — replaces the previous Comp-off > 0 toggle. Filters
+   to rows with any non-zero OT signal this month (served / applied /
+   approved). Matches the shift in admin usage: OT auditing surfaces more
+   often than comp-off spelunking.
+3. **Leave columns: Open · COff · Total · Avld · Close** — expanded from
+   3 columns to 5. `COff` is comp-off available YTD (accrued − used),
+   fetched from `/api/leave-balances` and merged client-side; it adds to
+   the leave pool so `Total = Open + COff` and `Close = Total − Avld`.
+   Cells stay blank when all three of Open / COff / Avld are zero so
+   athletes (Breaks workflow) don't clutter the leave view with `0`s.
+
+Table `minWidth` bumped 1300 → 1420 to accommodate the two new columns.
+"No data" `colSpan` bumped 23 → 25. No backend changes.
+
+---
+
+
+
 ## 8 Jul 2026 — Reports: Staff & Coaches filter no longer leaks Elite athletes
 
 User report: "In the staff and coaches filter a lot of athletes appear."
