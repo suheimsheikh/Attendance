@@ -389,8 +389,8 @@ export default function Reports() {
                     <th className="py-1.5 px-2 text-left sticky left-0 z-40 bg-slate-100" colSpan={2}>&nbsp;</th>
                     <th className="py-1.5 px-2 text-center bg-emerald-50 border-l border-r border-emerald-200 text-emerald-800" colSpan={8}>Attendance</th>
                     <th className="py-1.5 px-2 text-center bg-amber-50 border-r border-amber-200 text-amber-800" colSpan={3}>Leave</th>
-                    <th className="py-1.5 px-2 text-center bg-sky-50 border-r border-sky-200 text-sky-800" colSpan={3}>Comp-Off</th>
                     <th className="py-1.5 px-2 text-center bg-violet-50 border-r border-violet-200 text-violet-800" colSpan={3}>Overtime</th>
+                    <th className="py-1.5 px-2 text-center bg-sky-50 border-r border-sky-200 text-sky-800" colSpan={3}>Comp-Off</th>
                     <th className="py-1.5 px-2 text-center bg-indigo-50 border-r border-indigo-200 text-indigo-800" colSpan={2}>Hours</th>
                     <th className="py-1.5 px-2 text-center bg-teal-50 border-r border-teal-200 text-teal-800" colSpan={2}>Escorts</th>
                   </tr>
@@ -408,12 +408,12 @@ export default function Reports() {
                     <th className="py-1.5 px-1.5 text-center bg-amber-50/70">Open</th>
                     <th className="py-1.5 px-1.5 text-center bg-amber-50/70">Avld</th>
                     <th className="py-1.5 px-1.5 text-center bg-amber-50/70 border-r border-amber-100 font-extrabold">Close</th>
-                    <th className="py-1.5 px-1.5 text-center bg-sky-50/70">Srvd</th>
-                    <th className="py-1.5 px-1.5 text-center bg-sky-50/70">Appl</th>
-                    <th className="py-1.5 px-1.5 text-center bg-sky-50/70 border-r border-sky-100 font-extrabold">Apprv</th>
                     <th className="py-1.5 px-1.5 text-center bg-violet-50/70">Srvd</th>
                     <th className="py-1.5 px-1.5 text-center bg-violet-50/70">Appl</th>
                     <th className="py-1.5 px-1.5 text-center bg-violet-50/70 border-r border-violet-100 font-extrabold">Apprv</th>
+                    <th className="py-1.5 px-1.5 text-center bg-sky-50/70">Srvd</th>
+                    <th className="py-1.5 px-1.5 text-center bg-sky-50/70">Appl</th>
+                    <th className="py-1.5 px-1.5 text-center bg-sky-50/70 border-r border-sky-100 font-extrabold">Apprv</th>
                     <th className="py-1.5 px-1.5 text-center bg-indigo-50/70">Tot h</th>
                     <th className="py-1.5 px-1.5 text-center bg-indigo-50/70 border-r border-indigo-100">Avg h</th>
                     <th className="py-1.5 px-1.5 text-center bg-teal-50/70">Dut</th>
@@ -501,13 +501,18 @@ export default function Reports() {
                         <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100">{n(r.leave_balance_taken_ytd)}</td>
                         <td className={`py-1.5 px-1.5 text-center bg-amber-50/30 border-r border-t border-amber-100 font-extrabold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{n(r.leave_balance_remaining)}</td>
                         {/* Comp-Off group */}
-                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 cursor-pointer hover:bg-sky-100/50", hoverProps("Comp-off earned · double-click for OT ledger", r.dates_comp_off_earned))} data-testid={`comp-off-earned-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_earned)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 text-amber-700 cursor-pointer hover:bg-sky-100/50", hoverProps("Comp-off applied · double-click for OT ledger", r.dates_comp_off_applied))} data-testid={`comp-off-applied-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_applied)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-r border-t border-sky-100 font-extrabold text-emerald-700 cursor-pointer hover:bg-sky-100/50", hoverProps("Comp-off approved · double-click for OT ledger", r.dates_comp_off_used))} data-testid={`comp-off-approved-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_used)}</td>
-                        {/* Overtime group */}
-                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100", hoverProps("OT served", r.dates_overtime_served))}>{h(otServed)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 text-amber-700", hoverProps("OT applied", r.dates_overtime_applied))}>{h(otApplied)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-r border-t border-violet-100 font-extrabold text-emerald-700", hoverProps("OT approved", r.dates_overtime_approved))}>{h(otApproved)}</td>
+                        {/* Overtime group — comes BEFORE Comp-off (07 Jul
+                            2026 user request "shift OT one left"). Double-
+                            clicking any OT cell opens the year's OT ledger
+                            for this member. */}
+                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 cursor-pointer hover:bg-violet-100/60", hoverProps("OT served · double-click for OT ledger", r.dates_overtime_served))} data-testid={`ot-served-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{h(otServed)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 text-amber-700 cursor-pointer hover:bg-violet-100/60", hoverProps("OT applied · double-click for OT ledger", r.dates_overtime_applied))} data-testid={`ot-applied-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{h(otApplied)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-r border-t border-violet-100 font-extrabold text-emerald-700 cursor-pointer hover:bg-violet-100/60", hoverProps("OT approved · double-click for OT ledger", r.dates_overtime_approved))} data-testid={`ot-approved-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{h(otApproved)}</td>
+                        {/* Comp-off group — no longer double-clickable
+                            (moved to OT). Hover tooltip still shows dates. */}
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100", hoverProps("Comp-off earned", r.dates_comp_off_earned))} data-testid={`comp-off-earned-${r.member_id}`}>{n(r.comp_off_earned)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 text-amber-700", hoverProps("Comp-off applied", r.dates_comp_off_applied))} data-testid={`comp-off-applied-${r.member_id}`}>{n(r.comp_off_applied)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-r border-t border-sky-100 font-extrabold text-emerald-700", hoverProps("Comp-off approved", r.dates_comp_off_used))} data-testid={`comp-off-approved-${r.member_id}`}>{n(r.comp_off_used)}</td>
                         {/* Hours group */}
                         <td className="py-1.5 px-1.5 text-center bg-indigo-50/30 border-t border-indigo-100">{r.total_hours ? `${r.total_hours}h` : ""}</td>
                         <td className="py-1.5 px-1.5 text-center bg-indigo-50/30 border-r border-t border-indigo-100 text-slate-600">{r.avg_hours_per_day ? `${r.avg_hours_per_day}h` : ""}</td>
