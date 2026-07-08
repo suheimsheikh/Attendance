@@ -98,8 +98,8 @@ export default function Members() {
   // Bundle for MemberRow — passing as one prop keeps the row component's
   // signature tidy and avoids one prop-update per option list change.
   const rowOptions = useMemo(
-    () => ({ CATEGORY_OPTS, ROLE_OPTS, GENDER_OPTS, FLEET_OPTS, INSTITUTION_OPTS }),
-    [CATEGORY_OPTS, ROLE_OPTS, GENDER_OPTS, FLEET_OPTS, INSTITUTION_OPTS],
+    () => ({ CATEGORY_OPTS, ROLE_OPTS, GENDER_OPTS, FLEET_OPTS, INSTITUTION_OPTS, WEEKLY_OFF_OPTS }),
+    [CATEGORY_OPTS, ROLE_OPTS, GENDER_OPTS, FLEET_OPTS, INSTITUTION_OPTS, WEEKLY_OFF_OPTS],
   );
 
   const load = useCallback(async () => {
@@ -385,6 +385,8 @@ export default function Members() {
                   <th className="iu-table-th">Leave balance</th>
                   <th className="iu-table-th">Hours</th>
                   <th className="iu-table-th">Weekly off</th>
+                  <th className="iu-table-th">DOB</th>
+                  <th className="iu-table-th text-center">OT</th>
                   <th className="iu-table-th">Parents / Guardian</th>
                   <th className="iu-table-th">Status</th>
                   <th className="iu-table-th text-center w-12">Del</th>
@@ -412,7 +414,7 @@ export default function Members() {
                   />
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={16} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
+                  <tr><td colSpan={18} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
                 )}
               </tbody>
             </table>

@@ -17,7 +17,7 @@ import { Loader2, Check } from "lucide-react";
  * Required props:
  *  - value: current value (string|number|null)
  *  - onSave: async (newValue) => void   — throws on failure to trigger revert
- *  - kind: "text" | "number" | "select" | "tel"
+ *  - kind: "text" | "number" | "select" | "tel" | "date" | "time" | "checkbox"
  *  - testId: string                     — used as data-testid
  *
  * Optional:
@@ -88,6 +88,43 @@ export default function InlineCell({
       setBusy(false);
     }
   };
+
+  // ── Checkbox fast path — no edit/display split. Toggles on click and
+  // persists immediately; no Enter/Escape flow needed. Renders whatever
+  // `renderDisplay` returns (typically a badge). Falls back to a native
+  // checkbox if no renderDisplay is provided.
+  if (kind === "checkbox") {
+    const checked = !!value;
+    const toggle = async (e) => {
+      e.stopPropagation();
+      if (disabled || busy) return;
+      setBusy(true);
+      try {
+        await onSave(!checked);
+        setSavedFlash(true);
+        setTimeout(() => setSavedFlash(false), 1200);
+      } catch { /* parent shows the toast; keep our state as-is */ }
+      finally { setBusy(false); }
+    };
+    return (
+      <button
+        type="button"
+        disabled={disabled || busy}
+        data-testid={testId}
+        onClick={toggle}
+        className={`group inline-flex items-center gap-1 text-left px-1 -mx-1 rounded transition hover:bg-sky-50/60 cursor-pointer ${className}`}
+        title={disabled ? "Read-only" : `Click to toggle (currently ${checked ? "on" : "off"})`}
+      >
+        <span className="flex-1 min-w-0 truncate">
+          {renderDisplay ? renderDisplay(checked) : (
+            <input type="checkbox" checked={checked} readOnly className="pointer-events-none w-3.5 h-3.5 accent-sky-600" />
+          )}
+        </span>
+        {busy && <Loader2 size={11} className="animate-spin text-slate-400 shrink-0" />}
+        {!busy && savedFlash && <Check size={11} className="text-emerald-600 shrink-0" />}
+      </button>
+    );
+  }
 
   // ── Display layer (idle state) ────────────────────────────────────────────
   if (!editing) {
@@ -193,7 +230,11 @@ function EditSelect({ inputRef, testId, draft, busy, options, className, onCommi
 }
 
 function EditInput({ inputRef, kind, testId, draft, busy, placeholder, className, onChange, onCommit, onCancel }) {
-  const inputType = kind === "number" ? "number" : kind === "tel" ? "tel" : "text";
+  const inputType = kind === "number" ? "number"
+    : kind === "tel" ? "tel"
+    : kind === "date" ? "date"
+    : kind === "time" ? "time"
+    : "text";
   return (
     <input
       ref={inputRef}

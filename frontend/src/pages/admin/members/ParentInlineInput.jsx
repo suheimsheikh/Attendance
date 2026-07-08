@@ -2,67 +2,100 @@ import React, { useEffect, useState } from "react";
 import { Check, Loader2 } from "lucide-react";
 
 /**
- * Tiny per-cell editor for one parent_mobile field. Persists on blur or
- * Enter; shows a green check for ~1s after a successful save so the admin
- * can confirm without a toast spam.
+ * Per-row parent editor — one horizontal strip for a single parent role
+ * (father / mother / guardian). Two inputs in a single strip:
  *
- * Extracted from Members.jsx — pure presentation, no shared state.
+ *   [role badge]  [editable NAME]  [editable MOBILE]
+ *
+ * Both fields persist on blur or Enter and show a green check for ~1 s
+ * after a successful save. Extracted from Members.jsx — pure presentation,
+ * no shared state.
+ *
+ * Props:
+ *   memberId      — the member id these fields belong to
+ *   field         — the mobile field key ("father_mobile" / "mother_mobile" /
+ *                    "guardian_mobile") — drives the PATCH call
+ *   nameField     — the name  field key ("father_name" / …)
+ *   nameValue     — current parent name (string)
+ *   initial       — current parent mobile (string)
+ *   onSave        — (memberId, field, value) => Promise, resolves on success
+ *   colorClass    — tailwind classes for the role badge tint
+ *   defaultBadge  — 1-letter fallback shown before the name is filled in
  */
-export default function ParentInlineInput({ memberId, field, label, initial, onSave }) {
-  const [val, setVal] = useState(initial || "");
-  const [busy, setBusy] = useState(false);
-  const [savedFlash, setSavedFlash] = useState(false);
+export default function ParentInlineInput({
+  memberId, field, nameField, nameValue, initial, onSave, colorClass, defaultBadge,
+}) {
+  // Local drafts, re-synced when the parent reloads with fresh data.
+  const [name, setName] = useState(nameValue || "");
+  const [mobile, setMobile] = useState(initial || "");
+  const [nameBusy, setNameBusy] = useState(false);
+  const [mobileBusy, setMobileBusy] = useState(false);
+  const [nameSaved, setNameSaved] = useState(false);
+  const [mobileSaved, setMobileSaved] = useState(false);
 
-  // Re-sync local state if a fresh reload from the server brings new data.
-  useEffect(() => { setVal(initial || ""); }, [initial]);
+  useEffect(() => { setName(nameValue || ""); }, [nameValue]);
+  useEffect(() => { setMobile(initial || ""); }, [initial]);
 
-  const persist = async () => {
-    const trimmed = val.trim();
-    if (trimmed === (initial || "").trim()) return;
-    setBusy(true);
+  // Generic persist helper — trims, no-ops on unchanged, reverts on error.
+  const persistName = async () => {
+    const trimmed = name.trim();
+    if (trimmed === (nameValue || "").trim()) return;
+    setNameBusy(true);
     try {
-      await onSave(memberId, field, trimmed);
-      setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 1200);
-    } catch {
-      setVal(initial || "");
-    } finally {
-      setBusy(false);
-    }
+      await onSave(memberId, nameField, trimmed || null);
+      setNameSaved(true);
+      setTimeout(() => setNameSaved(false), 1200);
+    } catch { setName(nameValue || ""); }
+    finally { setNameBusy(false); }
   };
-
-  // Background tint stays consistent per role. The `label` text itself now
-  // shows the parent's NAME (truncated) when available — falling back to a
-  // single-letter role badge for older records.
-  const isFather = field === "father_mobile";
-  const isMother = field === "mother_mobile";
-  const labelColor = isFather ? "bg-sky-100 text-sky-700"
-    : isMother ? "bg-pink-100 text-pink-700"
-    : "bg-violet-100 text-violet-700";
-  const isShortBadge = label && label.length <= 1;
+  const persistMobile = async () => {
+    const trimmed = mobile.trim();
+    if (trimmed === (initial || "").trim()) return;
+    setMobileBusy(true);
+    try {
+      await onSave(memberId, field, trimmed || null);
+      setMobileSaved(true);
+      setTimeout(() => setMobileSaved(false), 1200);
+    } catch { setMobile(initial || ""); }
+    finally { setMobileBusy(false); }
+  };
 
   return (
     <div className="flex items-center gap-1.5">
       <span
-        className={`${isShortBadge ? "w-5 h-5" : "px-1.5 h-5 max-w-[200px] truncate"} rounded text-[10px] font-bold flex items-center justify-center ${labelColor}`}
-        title={label}
+        className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center ${colorClass}`}
+        title={nameField.replace("_name", "")}
       >
-        {label}
+        {defaultBadge}
       </span>
       <input
-        type="tel"
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        onBlur={persist}
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={persistName}
         onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-        placeholder="—"
-        data-testid={`inline-${field}-${memberId}`}
-        className="flex-1 min-w-0 px-2 h-7 text-xs font-mono rounded border border-slate-200 bg-white focus:bg-white focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
-        disabled={busy}
+        placeholder="Name"
+        data-testid={`inline-${nameField}-${memberId}`}
+        disabled={nameBusy}
+        className="w-[110px] shrink-0 px-2 h-7 text-xs rounded border border-slate-200 bg-white focus:bg-white focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
       />
-      {busy
+      {nameBusy
         ? <Loader2 size={11} className="animate-spin text-slate-400" />
-        : (savedFlash ? <Check size={11} className="text-emerald-600" /> : <span className="w-3" />)}
+        : (nameSaved ? <Check size={11} className="text-emerald-600" /> : <span className="w-3" />)}
+      <input
+        type="tel"
+        value={mobile}
+        onChange={(e) => setMobile(e.target.value)}
+        onBlur={persistMobile}
+        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+        placeholder="+91…"
+        data-testid={`inline-${field}-${memberId}`}
+        disabled={mobileBusy}
+        className="flex-1 min-w-0 px-2 h-7 text-xs font-mono rounded border border-slate-200 bg-white focus:bg-white focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
+      />
+      {mobileBusy
+        ? <Loader2 size={11} className="animate-spin text-slate-400" />
+        : (mobileSaved ? <Check size={11} className="text-emerald-600" /> : <span className="w-3" />)}
     </div>
   );
 }

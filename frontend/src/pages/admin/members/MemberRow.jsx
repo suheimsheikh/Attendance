@@ -41,7 +41,14 @@ export default function MemberRow({
 }) {
   const p = presenceRow;
   const b = BUCKET_BY_KEY[bucketOf(m)] || BUCKET_BY_KEY.athlete;
-  const { CATEGORY_OPTS, ROLE_OPTS, GENDER_OPTS, FLEET_OPTS, INSTITUTION_OPTS } = options;
+  const { CATEGORY_OPTS, ROLE_OPTS, GENDER_OPTS, FLEET_OPTS, INSTITUTION_OPTS, WEEKLY_OFF_OPTS } = options;
+  // Friendly DOB display — "12 Mar 2005" instead of raw "2005-03-12".
+  const dobDisplay = (v) => {
+    if (!v) return <span className="text-slate-300">—</span>;
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return v;
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  };
   // Frozen-column background — sticky td cells must have their own solid
   // background or the un-frozen columns scroll through them. Pick the same
   // tone the row would show for its state (highlighted → amber, selected →
@@ -225,17 +232,94 @@ export default function MemberRow({
           />
         ) : leaveBalanceLabel(m)}
       </td>
-      <td className="iu-table-td text-slate-700 text-xs whitespace-nowrap">
-        {m.work_start || "—"}{m.work_end ? <> – {m.work_end}</> : null}
+      <td className="iu-table-td text-slate-700 text-xs whitespace-nowrap" data-testid={`work-hours-${m.id}`}>
+        <div className="flex items-center gap-1">
+          <InlineCell
+            kind="time"
+            value={m.work_start}
+            testId={`inline-work_start-${m.id}`}
+            onSave={(v) => onPatchField(m.id, "work_start", v)}
+            renderDisplay={(v) => v || <span className="text-slate-300">—</span>}
+          />
+          <span className="text-slate-300">–</span>
+          <InlineCell
+            kind="time"
+            value={m.work_end}
+            testId={`inline-work_end-${m.id}`}
+            onSave={(v) => onPatchField(m.id, "work_end", v)}
+            renderDisplay={(v) => v || <span className="text-slate-300">—</span>}
+          />
+        </div>
       </td>
-      <td className="iu-table-td text-slate-700 text-xs capitalize">{m.weekly_off || "—"}</td>
-      {/* Inline editable parent mobile numbers, prefixed with the parent's
-          NAME (read-only here — names are edited via the row's edit modal). */}
+      <td className="iu-table-td text-slate-700 text-xs">
+        <InlineCell
+          kind="select"
+          value={m.weekly_off || ""}
+          options={WEEKLY_OFF_OPTS}
+          testId={`inline-weekly_off-${m.id}`}
+          onSave={(v) => onPatchField(m.id, "weekly_off", v)}
+          renderDisplay={(v) => v
+            ? <span className="capitalize">{v}</span>
+            : <span className="text-slate-300">—</span>}
+        />
+      </td>
+      {/* Date of birth — powers the birthday greeting on check-in. */}
+      <td className="iu-table-td text-slate-700 text-xs whitespace-nowrap">
+        <InlineCell
+          kind="date"
+          value={m.date_of_birth}
+          testId={`inline-date_of_birth-${m.id}`}
+          onSave={(v) => onPatchField(m.id, "date_of_birth", v)}
+          renderDisplay={dobDisplay}
+        />
+      </td>
+      {/* Overtime eligibility — click the pill to flip. Undefined counts as
+          eligible (matches the backend's opt-out semantics used elsewhere). */}
+      <td className="iu-table-td text-center">
+        <InlineCell
+          kind="checkbox"
+          value={m.ot_eligible !== false}
+          testId={`inline-ot_eligible-${m.id}`}
+          onSave={(v) => onPatchField(m.id, "ot_eligible", v)}
+          renderDisplay={(v) => v
+            ? <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">OT ✓</span>
+            : <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">OT ✗</span>}
+        />
+      </td>
+      {/* Inline editable parent names + mobile numbers. Names are edited via
+          a small text InlineCell in place of the old static badge label. */}
       <td className="iu-table-td">
-        <div className="flex flex-col gap-1 min-w-[320px] max-w-[420px]">
-          <ParentInlineInput memberId={m.id} field="father_mobile" label={m.father_name || "F"} initial={m.father_mobile} onSave={onPatchField} />
-          <ParentInlineInput memberId={m.id} field="mother_mobile" label={m.mother_name || "M"} initial={m.mother_mobile} onSave={onPatchField} />
-          <ParentInlineInput memberId={m.id} field="guardian_mobile" label={m.guardian_name || "G"} initial={m.guardian_mobile} onSave={onPatchField} />
+        <div className="flex flex-col gap-1 min-w-[360px] max-w-[460px]">
+          <ParentInlineInput
+            memberId={m.id}
+            field="father_mobile"
+            nameField="father_name"
+            nameValue={m.father_name}
+            initial={m.father_mobile}
+            onSave={onPatchField}
+            colorClass="bg-sky-100 text-sky-700"
+            defaultBadge="F"
+          />
+          <ParentInlineInput
+            memberId={m.id}
+            field="mother_mobile"
+            nameField="mother_name"
+            nameValue={m.mother_name}
+            initial={m.mother_mobile}
+            onSave={onPatchField}
+            colorClass="bg-pink-100 text-pink-700"
+            defaultBadge="M"
+          />
+          <ParentInlineInput
+            memberId={m.id}
+            field="guardian_mobile"
+            nameField="guardian_name"
+            nameValue={m.guardian_name}
+            initial={m.guardian_mobile}
+            onSave={onPatchField}
+            colorClass="bg-violet-100 text-violet-700"
+            defaultBadge="G"
+          />
         </div>
       </td>
       <td className="iu-table-td">
