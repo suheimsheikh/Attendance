@@ -134,6 +134,92 @@ export async function getLocation({ targetAccuracy = 50, maxWaitMs = 25000, onPr
   });
 }
 
+/**
+ * Haversine distance in metres between two lat/lng points. Mirrors the
+ * backend's `_resolve_site_for` so the front-end can pre-flight geofence
+ * resolution without a round-trip.
+ */
+export function haversineMeters(lat1, lng1, lat2, lng2) {
+  if ([lat1, lng1, lat2, lng2].some((v) => typeof v !== "number" || Number.isNaN(v))) return null;
+  const R = 6371000;   // Earth radius in metres
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+          + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+}
+
+/**
+ * Given a GPS fix + the loaded `office` config + list of training-location
+ * `sites`, return the nearest configured location and whether the fix
+ * falls inside any geofence. Mirrors backend `_resolve_site_for` so the
+ * check-in UI can show the resolved site BEFORE hitting the server, and
+ * prompt for a reason when the member is outside every geofence.
+ *
+ * Returns `{ site_id, site_name, distance_m, out_of_geofence,
+ *            nearest_name, nearest_distance_m }`.
+ *   • `site_id`/`site_name` = the geofence the fix fell inside (null
+ *     when out_of_geofence).
+ *   • `nearest_name`/`nearest_distance_m` = always populated (even when
+ *     out) so the UI can say "850m from Main Club" in the reason prompt.
+ */
+export function resolveNearestSite(lat, lng, office, sites) {
+  if (lat == null || lng == null) return null;
+  const candidates = [];
+  if (office && typeof office.latitude === "number" && typeof office.longitude === "number") {
+    candidates.push({
+      id: null,
+      name: office.name || "Main Club",
+      lat: office.latitude,
+      lng: office.longitude,
+      radius: Number(office.radius_m) || 100,
+    });
+  }
+  for (const s of sites || []) {
+    if (s.active === false) continue;
+    if (typeof s.latitude !== "number" || typeof s.longitude !== "number") continue;
+    candidates.push({
+      id: s.id,
+      name: s.name,
+      lat: s.latitude,
+      lng: s.longitude,
+      radius: Number(s.radius_m) || 100,
+    });
+  }
+  if (candidates.length === 0) {
+    return { site_id: null, site_name: null, distance_m: null,
+             out_of_geofence: false, nearest_name: null, nearest_distance_m: null };
+  }
+  let nearest = null;
+  let insideMatch = null;
+  for (const c of candidates) {
+    const d = haversineMeters(lat, lng, c.lat, c.lng);
+    if (d == null) continue;
+    if (!nearest || d < nearest.d) nearest = { ...c, d };
+    if (d <= c.radius && (!insideMatch || d < insideMatch.d)) insideMatch = { ...c, d };
+  }
+  if (insideMatch) {
+    return {
+      site_id: insideMatch.id,
+      site_name: insideMatch.name,
+      distance_m: insideMatch.d,
+      out_of_geofence: false,
+      nearest_name: insideMatch.name,
+      nearest_distance_m: insideMatch.d,
+    };
+  }
+  return {
+    site_id: null,
+    site_name: null,
+    distance_m: nearest?.d ?? null,
+    out_of_geofence: true,
+    nearest_name: nearest?.name ?? null,
+    nearest_distance_m: nearest?.d ?? null,
+  };
+}
+
+
 export function todayIso() {
   const d = new Date();
   const y = d.getFullYear();

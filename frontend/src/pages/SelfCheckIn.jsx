@@ -3,10 +3,13 @@ import { toast } from "sonner";
 import { Loader2, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, AlertTriangle, Camera } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import { getLocation, speakLateMessage } from "../utils";
+import { getLocation, speakLateMessage, resolveNearestSite } from "../utils";
+import { useGeoPermission } from "../hooks/useGeoPermission";
 import SelfieCapture from "../components/SelfieCapture";
 import DailyContent from "../components/DailyContent";
 import ReasonPicker from "../components/ReasonPicker";
+import GeoPermissionBanner from "../components/GeoPermissionBanner";
+import OutOfGeofenceModal from "../components/OutOfGeofenceModal";
 
 function hmNow() {
   const d = new Date();
@@ -30,19 +33,26 @@ export default function SelfCheckIn() {
   const [overtimeReason, setOvertimeReason] = useState("");
   const [showSelfie, setShowSelfie] = useState(false);
   const [photoStatus, setPhotoStatus] = useState(null);
+  const [sites, setSites] = useState([]);
+  // Pending off-geofence check-in awaiting a reason from the user.
+  // { lat, lng, distance_m, nearest_name, nearest_distance_m }.
+  const [offGeoPending, setOffGeoPending] = useState(null);
+  const geoPerm = useGeoPermission();
 
   const photoNeeded = photoStatus ? photoStatus.needs_photo : !user?.photo;
 
   const refresh = useCallback(async () => {
     try {
-      const [s, o, ps] = await Promise.all([
+      const [s, o, ps, si] = await Promise.all([
         api.get("/attendance/status"),
         api.get("/office"),
         api.get("/me/photo-status").catch(() => null),
+        api.get("/sites").catch(() => []),
       ]);
       setStatus(s);
       setOffice(o);
       if (ps) setPhotoStatus(ps);
+      setSites(Array.isArray(si) ? si : []);
     } finally {
       setLoading(false);
     }
@@ -78,7 +88,9 @@ export default function SelfCheckIn() {
 
   // Core check-in/out logic — extracted so it can be invoked directly after
   // the first-time selfie is captured (without re-tripping the photo guard).
-  const performToggle = async () => {
+  // Also invoked with an explicit `geoReason` after the off-geofence modal
+  // is confirmed, so the reason lands on the attendance row.
+  const performToggle = async (geoReason = null) => {
     setWorking(true);
     setLocating("Getting your location…");
     let lat = null, lng = null, acc = null;
@@ -90,17 +102,38 @@ export default function SelfCheckIn() {
         console.debug("location unavailable, proceeding without:", err?.message);
       }
       setLocating("");
+
+      // Pre-flight geofence check on the client — only for CHECK-INS
+      // (checkouts we let through even off-site, since the person is
+      // clearly leaving). If out and no reason yet, pop the modal.
+      if (lat != null && lng != null && !status?.checked_in && !geoReason) {
+        const resolved = resolveNearestSite(lat, lng, office, sites);
+        if (resolved?.out_of_geofence) {
+          setOffGeoPending({
+            lat, lng,
+            distance_m: resolved.nearest_distance_m,
+            nearest_name: resolved.nearest_name,
+          });
+          setWorking(false);
+          return;   // await user's reason
+        }
+      }
+
       const body = lat != null && lng != null
         ? { latitude: lat, longitude: lng }
         : { latitude: 0, longitude: 0 };
       if (otInfo && overtimeReason.trim()) body.overtime_reason = overtimeReason.trim();
+      if (geoReason) body.reason = geoReason;
       const res = await api.post("/attendance/geo-toggle", body);
       const dist = res.distance_m;
       setLastDistance({ dist, acc, off: res.out_of_geofence });
+      // Location-aware toast — tell the member which geofence they landed
+      // in so they can spot a mis-tagged check-in immediately.
+      const locBit = res.site_name ? ` at ${res.site_name}` : "";
       toast.success(
         res.action === "checkin"
-          ? `Checked in — welcome, ${res.member}!`
-          : `Checked out — ${res.member} (${res.hours}h)`
+          ? `Checked in${locBit} — welcome, ${res.member}!`
+          : `Checked out${locBit} — ${res.member} (${res.hours}h)`
       );
       // Play a friendly Indian-female voice nudge when a check-in is marked
       // late — handy reminder for the member at the device.
@@ -108,6 +141,7 @@ export default function SelfCheckIn() {
         speakLateMessage(res.late_minutes, res.member);
       }
       setOvertimeReason("");
+      setOffGeoPending(null);
       refresh();
     } catch (err) {
       toast.error(err?.message || "Failed");
@@ -178,6 +212,8 @@ export default function SelfCheckIn() {
       </header>
 
       <DailyContent />
+
+      <GeoPermissionBanner state={geoPerm} />
 
       {/* Status banner */}
       <div className="iu-card p-4 mb-6 flex items-center gap-3" data-testid="status-banner">
@@ -315,6 +351,15 @@ export default function SelfCheckIn() {
           onClose={() => setShowSelfie(false)}
         />
       )}
+
+      <OutOfGeofenceModal
+        open={!!offGeoPending}
+        onClose={() => setOffGeoPending(null)}
+        onConfirm={(reason) => performToggle(reason)}
+        distanceM={offGeoPending?.distance_m}
+        nearestName={offGeoPending?.nearest_name}
+        submitting={working}
+      />
     </div>
   );
 }

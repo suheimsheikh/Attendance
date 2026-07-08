@@ -3468,7 +3468,7 @@ app.include_router(_sites_router(db, require_admin, get_current_user))
 
 # Muster — bulk check-in/out for coaches, admins, and active escorts.
 from routes.muster import make_router as _muster_router  # noqa: E402
-app.include_router(_muster_router(db, get_current_user, _active_camp_for))
+app.include_router(_muster_router(db, get_current_user, _active_camp_for, _resolve_site_for))
 
 # Admin tooling (wipe / backup / restore / preflight / summary / activity).
 from routes.admin_tools import make_router as _admin_tools_router  # noqa: E402

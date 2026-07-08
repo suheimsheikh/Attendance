@@ -6,7 +6,9 @@ import Avatar from "../components/Avatar";
 import ParentContact from "../components/ParentContact";
 import { useAuth } from "../auth";
 import SelfieCapture from "../components/SelfieCapture";
-import { formatDate } from "../utils";
+import { formatDate, getLocation, resolveNearestSite } from "../utils";
+import { useGeoPermission } from "../hooks/useGeoPermission";
+import GeoPermissionBanner from "../components/GeoPermissionBanner";
 
 const MODES = [
   { key: "checkin",  label: "Check in",  Icon: LogIn,        verb: "Check in",  color: "#10B981" },
@@ -28,13 +30,25 @@ export default function Muster() {
 
   const meta = MODES.find((m) => m.key === mode);
   const [institutionFilter, setInstitutionFilter] = useState("all");
+  // Coach's GPS + geofence context — captured on the FIRST submit tap
+  // and reused for the whole batch so all attendance rows are stamped
+  // with the same physical location the coach was at.
+  const [office, setOffice] = useState(null);
+  const [sites, setSites] = useState([]);
+  const geoPerm = useGeoPermission();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get("/muster/athletes", { mode });
+      const [res, o, si] = await Promise.all([
+        api.get("/muster/athletes", { mode }),
+        api.get("/office").catch(() => null),
+        api.get("/sites").catch(() => []),
+      ]);
       setData(res);
       setPicked(new Set());
+      if (o) setOffice(o);
+      setSites(Array.isArray(si) ? si : []);
     } catch (err) {
       showApiError(err, "Couldn't load roster");
     } finally {
@@ -49,8 +63,40 @@ export default function Muster() {
   const runBulk = useCallback(async (ids) => {
     setSaving(true);
     try {
+      // Capture the coach's current GPS (best-effort, 8s budget). We
+      // stamp lat/lng/site/out_of_geofence on every attendance row so
+      // each check-in records WHERE the coach mustered the members.
+      let lat = null, lng = null;
+      try {
+        const loc = await getLocation({ targetAccuracy: 100, maxWaitMs: 8000 });
+        lat = loc.latitude; lng = loc.longitude;
+      } catch (err) {
+        console.debug("muster: coach location unavailable —", err?.message);
+      }
+      // If we have a fix, resolve against configured geofences. Warn but
+      // don't block (coaches are trusted; a wrong location is still
+      // logged for the audit trail rather than lost).
+      if (lat != null && lng != null && mode === "checkin") {
+        const resolved = resolveNearestSite(lat, lng, office, sites);
+        if (resolved?.out_of_geofence) {
+          const proceed = window.confirm(
+            `You're ~${resolved.nearest_distance_m ?? "?"} m from ${resolved.nearest_name || "any training location"}.\n\n` +
+            "Continue mustering from here?\n" +
+            "(All check-ins will be stamped as off-site.)"
+          );
+          if (!proceed) { setSaving(false); return; }
+        } else if (resolved?.site_name) {
+          toast.success(`Mustering at ${resolved.site_name}`, { duration: 2000 });
+        }
+      }
+
       const endpoint = mode === "checkin" ? "/muster/checkin-bulk" : "/muster/checkout-bulk";
-      const res = await api.post(endpoint, { athlete_ids: ids });
+      const payload = { athlete_ids: ids };
+      if (lat != null && lng != null) {
+        payload.latitude = lat;
+        payload.longitude = lng;
+      }
+      const res = await api.post(endpoint, payload);
       const doneCount = res.checked_in_count ?? res.checked_out_count ?? 0;
       const skipCount = res.skipped_count ?? 0;
       const skipNote = skipCount > 0 ? ` · ${skipCount} skipped` : "";
@@ -68,7 +114,7 @@ export default function Muster() {
     } finally {
       setSaving(false);
     }
-  }, [mode, load]);
+  }, [mode, office, sites, load]);
 
   // Step through the photo queue as an OPTIONAL post-checkin cleanup
   // — check-in has already fired by the time we get here (7 Jul 2026
@@ -220,9 +266,11 @@ export default function Muster() {
       <header className="mb-6">
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Muster Roll</h1>
         <p className="text-slate-500 text-sm mt-1">
-          Tick the athletes who are physically present. Their attendance is logged with your name as the verifier.
+          Tick the athletes who are physically present. Their attendance is logged with your name as the verifier. Your GPS location is captured on submit and stamped on each check-in.
         </p>
       </header>
+
+      <GeoPermissionBanner state={geoPerm} />
 
       {/* Mode toggle */}
       <div className="grid grid-cols-2 gap-2 mb-4">

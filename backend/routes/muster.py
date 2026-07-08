@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -34,6 +34,12 @@ from services.attendance_calc import compute_late, excursion_seconds
 # -------------------- Pydantic bodies --------------------
 class MusterBulkIn(BaseModel):
     athlete_ids: List[str]
+    # Coach's GPS at submit time (24 Jul 2026). Stamped on every
+    # attendance row so each check-in captures WHERE the coach mustered
+    # the members. Optional so older clients without the coach-GPS wiring
+    # keep working (they end up with lat/lng=None as before).
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 def _can_muster(user: dict) -> bool:
@@ -56,7 +62,7 @@ def _require_muster(user: dict) -> None:
         )
 
 
-def make_router(db, get_current_user, active_camp_for) -> APIRouter:
+def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     async def _enforce_escort_window(user: dict) -> None:
@@ -169,6 +175,24 @@ def make_router(db, get_current_user, active_camp_for) -> APIRouter:
         office = await db.config.find_one({"id": "office"})
         today = local_date_str(office)
         now = now_utc()
+
+        # Coach's GPS → resolve which training location the muster is
+        # happening at. Fields are stamped on every attendance row so
+        # each check-in records the coach's physical spot (24 Jul 2026).
+        # Missing lat/lng or (0, 0) → geo_unavailable=True, no site.
+        has_gps = (body.latitude is not None and body.longitude is not None
+                   and not (body.latitude == 0 and body.longitude == 0))
+        if has_gps:
+            site_id, site_name, distance_m, out_of_geofence = await resolve_site_for(
+                office, body.latitude, body.longitude,
+            )
+            stamped_lat, stamped_lng = body.latitude, body.longitude
+            geo_unavailable = False
+        else:
+            site_id, site_name, distance_m, out_of_geofence = None, None, None, False
+            stamped_lat, stamped_lng = None, None
+            geo_unavailable = True
+
         done, skipped = [], []
         # Escorts may only muster within their assigned institution. We
         # silently skip athletes outside that institution rather than 403
@@ -200,10 +224,13 @@ def make_router(db, get_current_user, active_camp_for) -> APIRouter:
                 "method": "muster",
                 "checked_in_by": user["full_name"],
                 "checked_in_by_id": user["id"],
-                "latitude": None,
-                "longitude": None,
-                "out_of_geofence": False,
-                "distance_m": 0,
+                "latitude": stamped_lat,
+                "longitude": stamped_lng,
+                "out_of_geofence": bool(out_of_geofence),
+                "distance_m": distance_m if distance_m is not None else 0,
+                "site_id": site_id,
+                "site_name": site_name,
+                "geo_unavailable": geo_unavailable,
                 "late": late,
                 "late_minutes": late_min,
                 "excursions": [],
@@ -211,14 +238,38 @@ def make_router(db, get_current_user, active_camp_for) -> APIRouter:
             }
             await db.attendance.insert_one(att)
             done.append({"id": sid, "name": athlete["full_name"], "late": late})
-        return {"checked_in_count": len(done), "skipped_count": len(skipped),
-                "checked_in": done, "skipped": skipped}
+        return {
+            "checked_in_count": len(done),
+            "skipped_count": len(skipped),
+            "checked_in": done,
+            "skipped": skipped,
+            # Echo back what the batch was stamped with — powers the
+            # "Mustered N athletes at Rowing Academy" toast on the client.
+            "site_id": site_id,
+            "site_name": site_name,
+            "out_of_geofence": bool(out_of_geofence),
+            "distance_m": distance_m,
+        }
 
     @router.post("/muster/checkout-bulk")
     async def muster_checkout_bulk(body: MusterBulkIn, user: dict = Depends(get_current_user)):
         _require_muster(user)
         await _enforce_escort_window(user)
         now = now_utc()
+        office = await db.config.find_one({"id": "office"})
+
+        # Resolve coach location for the exit stamp (24 Jul 2026).
+        has_gps = (body.latitude is not None and body.longitude is not None
+                   and not (body.latitude == 0 and body.longitude == 0))
+        if has_gps:
+            site_id, site_name, distance_m, out_of_geofence = await resolve_site_for(
+                office, body.latitude, body.longitude,
+            )
+            stamped_lat, stamped_lng = body.latitude, body.longitude
+        else:
+            site_id, site_name, distance_m, out_of_geofence = None, None, None, False
+            stamped_lat, stamped_lng = None, None
+
         done, skipped = [], []
         escort_inst = (user.get("institution") or "").strip() if user.get("is_escort") else None
         for sid in body.athlete_ids:
@@ -248,15 +299,25 @@ def make_router(db, get_current_user, active_camp_for) -> APIRouter:
                 "away_minutes": int(away_s / 60),
                 "excursions": excursions,
                 "exit_method": "muster",
-                "exit_out_of_geofence": False,
-                "exit_latitude": None,
-                "exit_longitude": None,
-                "exit_distance_m": 0,
+                "exit_out_of_geofence": bool(out_of_geofence),
+                "exit_latitude": stamped_lat,
+                "exit_longitude": stamped_lng,
+                "exit_distance_m": distance_m if distance_m is not None else 0,
+                "exit_site_id": site_id,
+                "exit_site_name": site_name,
                 "checked_out_by": user["full_name"],
                 "checked_out_by_id": user["id"],
             }})
             done.append({"id": sid, "name": athlete["full_name"], "hours": hours})
-        return {"checked_out_count": len(done), "skipped_count": len(skipped),
-                "checked_out": done, "skipped": skipped}
+        return {
+            "checked_out_count": len(done),
+            "skipped_count": len(skipped),
+            "checked_out": done,
+            "skipped": skipped,
+            "site_id": site_id,
+            "site_name": site_name,
+            "out_of_geofence": bool(out_of_geofence),
+            "distance_m": distance_m,
+        }
 
     return router
