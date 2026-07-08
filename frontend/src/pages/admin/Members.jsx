@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
-import { Loader2, Plus, Search, FileSpreadsheet, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { Loader2, Plus, Search, FileSpreadsheet, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, showApiError } from "../../api";
@@ -524,12 +524,24 @@ const COL_HELP = {
  */
 function SortableTh({ k, sortKey, sortDir, onSort, align = "left", className = "", children }) {
   const active = sortKey === k && !!sortDir;
-  const Icon = !active ? ChevronsUpDown : sortDir === "asc" ? ChevronUp : ChevronDown;
   const justify = align === "center" ? "justify-center" : "justify-start";
   const desc = COL_HELP[k] || "";
   const tip = desc
     ? `${desc}\n\nClick to sort${active ? ` — currently ${sortDir === "asc" ? "A → Z" : "Z → A"}` : ""}.`
     : `Sort by ${k}${active ? ` (${sortDir})` : ""} — click again to change direction`;
+  // Inactive-state indicator: stack an up + down chevron with ~5 mm of
+  // vertical separation. Using two icons instead of `ChevronsUpDown` gives
+  // us explicit control over the gap (the built-in double-chevron packs
+  // them almost touching, which read as one blob at small sizes).
+  const indicator = active ? (
+    (sortDir === "asc" ? <ChevronUp size={18} strokeWidth={2.75} className="text-sky-600" />
+                       : <ChevronDown size={18} strokeWidth={2.75} className="text-sky-600" />)
+  ) : (
+    <div className="flex flex-col items-center justify-between h-[42px] w-3 shrink-0" aria-hidden="true">
+      <ChevronUp   size={12} strokeWidth={2.5} className="text-slate-400" />
+      <ChevronDown size={12} strokeWidth={2.5} className="text-slate-400" />
+    </div>
+  );
   return (
     <th className={`iu-table-th !py-3.5 !text-sm ${align === "center" ? "text-center" : ""} ${className}`}>
       <button
@@ -537,14 +549,10 @@ function SortableTh({ k, sortKey, sortDir, onSort, align = "left", className = "
         data-testid={`sort-${k}`}
         onClick={() => onSort(k)}
         title={tip}
-        className={`flex items-center gap-1.5 w-full ${justify} cursor-pointer select-none transition-colors hover:text-slate-900 ${active ? "text-slate-900 font-extrabold" : "text-slate-700 font-bold"}`}
+        className={`flex items-center gap-2 w-full ${justify} cursor-pointer select-none transition-colors hover:text-slate-900 ${active ? "text-slate-900 font-extrabold" : "text-slate-700 font-bold"}`}
       >
         <span className="tracking-wide">{children}</span>
-        <Icon
-          size={16}
-          strokeWidth={2.5}
-          className={active ? "text-sky-600" : "text-slate-400"}
-        />
+        {indicator}
       </button>
     </th>
   );
