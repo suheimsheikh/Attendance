@@ -89,7 +89,7 @@ from services.auth_utils import (  # noqa: E402
     hash_password, verify_password, create_token,
 )
 from services.attendance_calc import (  # noqa: E402, F401
-    OVERTIME_THRESHOLD_MIN, OVERTIME_CATEGORIES,
+    OVERTIME_THRESHOLD_MIN, OVERTIME_CATEGORIES, ATHLETE_CATEGORIES,
     compute_late,
     hm_to_minutes as _hm_to_minutes,
     compute_overtime_in, compute_overtime_out,
@@ -181,7 +181,7 @@ class MemberCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=4)
     full_name: str
-    category: Literal["athlete", "staff", "coach", "executive"] = "athlete"
+    category: Literal["athlete", "elite", "staff", "coach", "executive"] = "athlete"
     rank: Optional[str] = None
     mobile: Optional[str] = None
     work_start: Optional[str] = None
@@ -212,7 +212,7 @@ class MemberCreate(BaseModel):
 
 class MemberUpdate(BaseModel):
     full_name: Optional[str] = None
-    category: Optional[Literal["athlete", "staff", "coach", "executive"]] = None
+    category: Optional[Literal["athlete", "elite", "staff", "coach", "executive"]] = None
     rank: Optional[str] = None
     mobile: Optional[str] = None
     work_start: Optional[str] = None
@@ -531,6 +531,37 @@ async def _seed_database() -> None:
             except Exception as e:
                 logger.debug("institution seed skipped %r: %s", name, e)
         logger.info("Seeded institutions master from existing users")
+
+    # Seed categories master with the 5 canonical categories. `elite` was
+    # added on 7 Jul 2026 alongside the Chef's View so kitchens can plan
+    # menus by fleet tier. Elite kids still behave as athletes for every
+    # other rule (Breaks workflow, no OT accrual, expected-daily filter).
+    await db.categories.create_index("key", unique=True)
+    if await db.categories.count_documents({}) == 0:
+        _CATEGORY_SEED = [
+            {"key": "athlete",   "label": "Athletes",   "sort_order": 10,
+             "color": "sky",      "is_athlete_like": True,  "meal_eligible": True},
+            {"key": "elite",     "label": "Elite",      "sort_order": 20,
+             "color": "rose",     "is_athlete_like": True,  "meal_eligible": True},
+            {"key": "coach",     "label": "Coaches",    "sort_order": 30,
+             "color": "emerald",  "is_athlete_like": False, "meal_eligible": True},
+            {"key": "staff",     "label": "Staff",      "sort_order": 40,
+             "color": "amber",    "is_athlete_like": False, "meal_eligible": True},
+            {"key": "executive", "label": "Executives", "sort_order": 50,
+             "color": "violet",   "is_athlete_like": False, "meal_eligible": True},
+        ]
+        now_iso = now_utc().isoformat()
+        for row in _CATEGORY_SEED:
+            try:
+                await db.categories.insert_one({
+                    "id": str(uuid.uuid4()),
+                    **row,
+                    "active": True,
+                    "created_at": now_iso,
+                })
+            except Exception as e:
+                logger.debug("category seed skipped %r: %s", row["key"], e)
+        logger.info("Seeded categories master (athlete, elite, coach, staff, executive)")
 
 
 # ----------------------------------------------------------------------------
@@ -979,7 +1010,7 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
     — they don't consume balance — but admins still want visibility).
     """
     users = await db.users.find(
-        {"category": {"$ne": "athlete"}},
+        {"category": {"$nin": list(ATHLETE_CATEGORIES)}},
         {"_id": 0, "id": 1, "full_name": 1, "category": 1,
          "rank": 1, "institution": 1,
          "leave_balance_opening": 1, "comp_off_opening": 1, "weekly_off": 1},
@@ -1081,7 +1112,7 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
         # Athletes are excluded (Breaks workflow). Tour dates that also
         # have attendance are NOT double-counted.
         accrued_from_tours = 0
-        if (u.get("category") or "").lower() != "athlete":
+        if (u.get("category") or "").lower() not in ATHLETE_CATEGORIES:
             seen_tour_dates: set = set()
             for s_iso, e_iso in tour_ranges_by_user.get(uid, ()):
                 try:
@@ -2479,7 +2510,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                     # Athletes with no personal work_start AND no camp today
                     # aren't expected on campus. Skip the "absent" branch so
                     # we don't slander camp-only kids on weekdays.
-                    is_expected_today = bool(u.get("work_start")) or u.get("category") != "athlete"
+                    is_expected_today = bool(u.get("work_start")) or u.get("category") not in ATHLETE_CATEGORIES
                 try:
                     ws_h, ws_m = (int(x) for x in ws_hm.split(":")[:2])
                     if is_historical:
@@ -2531,7 +2562,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
         sent_types = notify_map.get(u["id"], set())
         notify_due_not_arrived = False
         notify_due_late = False
-        if u.get("category") == "athlete" and not is_historical:
+        if u.get("category") in ATHLETE_CATEGORIES and not is_historical:
             if status_v == "absent":
                 ws_hm2 = u.get("work_start") or office.get("default_work_start") or "09:00"
                 try:
@@ -3418,6 +3449,10 @@ app.include_router(_data_quality_router(db, require_admin))
 # Now / This week / This month / Attention widgets in one payload.
 from routes.dashboard import make_router as _dashboard_router  # noqa: E402
 app.include_router(_dashboard_router(db, require_admin))
+
+# Chef's View (GET /api/admin/meals-today) + Categories master read.
+from routes.meals import make_router as _meals_router  # noqa: E402
+app.include_router(_meals_router(db, require_admin, get_current_user))
 
 # Leave / Tour routes — split out 06/2026 during the server.py refactor.
 from routes.leaves import make_router as _leaves_router  # noqa: E402

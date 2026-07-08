@@ -10,6 +10,7 @@ export const BUCKETS = [
   { key: "staff",     label: "Staff",      dotBg: "bg-amber-500",   activeBg: "bg-amber-600",   activeText: "text-white", inactiveBg: "bg-amber-50",   inactiveText: "text-amber-700",   inactiveBorder: "border-amber-200",  stripe: "bg-amber-500",   rowHover: "hover:bg-amber-50/60" },
   { key: "executive", label: "Executives", dotBg: "bg-violet-500",  activeBg: "bg-violet-600",  activeText: "text-white", inactiveBg: "bg-violet-50",  inactiveText: "text-violet-700",  inactiveBorder: "border-violet-200", stripe: "bg-violet-500",  rowHover: "hover:bg-violet-50/60" },
   { key: "athlete",   label: "Athletes",   dotBg: "bg-sky-500",     activeBg: "bg-sky-600",     activeText: "text-white", inactiveBg: "bg-sky-50",     inactiveText: "text-sky-700",     inactiveBorder: "border-sky-200",    stripe: "bg-sky-500",     rowHover: "hover:bg-sky-50/60" },
+  { key: "elite",     label: "Elite",      dotBg: "bg-rose-500",    activeBg: "bg-rose-600",    activeText: "text-white", inactiveBg: "bg-rose-50",    inactiveText: "text-rose-700",    inactiveBorder: "border-rose-200",   stripe: "bg-rose-500",    rowHover: "hover:bg-rose-50/60" },
 ];
 export const BUCKET_BY_KEY = Object.fromEntries(BUCKETS.map((b) => [b.key, b]));
 
@@ -39,10 +40,10 @@ export function lastSeenLabel(iso, today) {
 }
 
 // Render the "Leave balance" column. Only meaningful for non-athletes
-// (the leave-tracked cohort = coach + staff + executive). Athletes use the
-// Breaks workflow instead so we deliberately show em-dash for them.
+// (the leave-tracked cohort = coach + staff + executive). Athletes AND
+// Elite use the Breaks workflow instead so we deliberately show em-dash.
 export function leaveBalanceLabel(m) {
-  if (m.category === "athlete") return <span className="text-slate-300">—</span>;
+  if (m.category === "athlete" || m.category === "elite") return <span className="text-slate-300">—</span>;
   const opening = m.leave_balance_opening;
   const remaining = m.leave_balance_remaining;
   if (opening == null) return <span className="text-slate-400" title="No opening balance set">—</span>;

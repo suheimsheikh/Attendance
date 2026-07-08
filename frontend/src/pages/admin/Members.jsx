@@ -59,6 +59,7 @@ export default function Members() {
   // rejected with a 422.
   const CATEGORY_OPTS = useMemo(() => [
     { value: "athlete",   label: "Athlete" },
+    { value: "elite",     label: "Elite" },
     { value: "coach",     label: "Coach" },
     { value: "staff",     label: "Staff" },
     { value: "executive", label: "Executive" },

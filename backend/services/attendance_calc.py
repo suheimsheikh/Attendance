@@ -17,6 +17,14 @@ from .time_utils import office_tz
 OVERTIME_THRESHOLD_MIN = 30
 OVERTIME_CATEGORIES = {"staff"}
 
+# Athlete-like categories share the same rules across the app: no OT
+# accrual (already handled by OVERTIME_CATEGORIES above), Breaks workflow
+# instead of leaves, no leave-balance opening, and no comp-off accrual.
+# "elite" was added when the Chef's View shipped so the kitchen can plan
+# menus by fleet tier — elite kids are still athletes for every other
+# system rule.
+ATHLETE_CATEGORIES = {"athlete", "elite"}
+
 
 def compute_late(office: dict, target: dict, ts: datetime, camp: Optional[dict] = None) -> Tuple[bool, int]:
     """Returns (is_late, minutes_late) comparing the check-in local time

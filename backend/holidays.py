@@ -14,6 +14,8 @@ from __future__ import annotations
 from datetime import date
 from typing import List, Optional
 
+from services.attendance_calc import ATHLETE_CATEGORIES
+
 
 WEEKDAY_KEY = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
@@ -112,7 +114,7 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
     paid_avail = max(0.0, float(opening) - buckets["paid_used"]) if tracked else 0
 
     absent_ytd_days = 0
-    if user.get("category") != "athlete":
+    if user.get("category") not in ATHLETE_CATEGORIES:
         absent_ytd_days = await _absent_days_ytd(db, user, co["weekly_off"])
 
     # Split the comp-off accrual into its three sources so the member-side
@@ -427,7 +429,7 @@ async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -
     accrued = att_accrued
 
     # ── Accrual: source 2 — past tour weekly-off dates ───────────────
-    if (user.get("category") or "").lower() != "athlete":
+    if (user.get("category") or "").lower() not in ATHLETE_CATEGORIES:
         tour_rows = await db.leaves.find({
             "user_id": user["id"],
             "type": "tour",

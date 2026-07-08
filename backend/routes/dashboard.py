@@ -50,7 +50,7 @@ def make_router(db, require_admin) -> APIRouter:
             },
         ).to_list(5000)
         users_by_id: dict[str, dict] = {u["id"]: u for u in users}
-        athletes = [u for u in users if u.get("category") == "athlete"]
+        athletes = [u for u in users if u.get("category") in ("athlete", "elite")]
 
         # ================== NOW (live today) ==============================
         open_sessions = await db.attendance.find(
@@ -58,7 +58,7 @@ def make_router(db, require_admin) -> APIRouter:
             {"_id": 0, "user_id": 1, "date": 1, "check_in_at": 1, "late": 1},
         ).to_list(5000)
 
-        cat_buckets = {"athlete": 0, "coach": 0, "staff": 0, "executive": 0}
+        cat_buckets = {"athlete": 0, "elite": 0, "coach": 0, "staff": 0, "executive": 0}
         for s in open_sessions:
             u = users_by_id.get(s.get("user_id"))
             if u and u.get("category") in cat_buckets:
@@ -133,7 +133,7 @@ def make_router(db, require_admin) -> APIRouter:
             if not u:
                 continue
             d = r.get("date")
-            if u.get("category") == "athlete":
+            if u.get("category") in ("athlete", "elite"):
                 per_day_athletes.setdefault(d, set()).add(r["user_id"])
             elif u.get("category") in ("coach", "staff", "executive"):
                 per_day_staff.setdefault(d, set()).add(r["user_id"])

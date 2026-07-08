@@ -205,7 +205,7 @@ export default function MemberRow({
         {lastSeenLabel(m.last_seen_date, today)}
       </td>
       <td className="iu-table-td text-slate-700 text-xs whitespace-nowrap" data-testid={`leave-balance-${m.id}`}>
-        {m.category !== "athlete" ? (
+        {(m.category !== "athlete" && m.category !== "elite") ? (
           <InlineCell
             kind="number"
             value={m.leave_balance_opening}
