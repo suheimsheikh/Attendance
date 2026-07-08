@@ -67,14 +67,13 @@ logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------------------------------
 # Soft pagination caps — the Mongo `to_list(N)` calls scattered through this
-# file all use one of these limits. Centralising makes the implicit
-# truncation behaviour visible at a glance and easy to scale up later.
+# file all use one of these limits. See backend/config.py for the source of
+# truth; re-exported here so existing `from server import MAX_USERS` callers
+# continue to work.
 # ----------------------------------------------------------------------------
-MAX_USERS = 5000          # roster + dropdowns. Academy is <500 today.
-MAX_SESSIONS = 100000     # attendance rows in a single report window.
-MAX_LEAVES = 20000
-MAX_DEVICES = 2000
-MAX_LOG_ROWS = 200
+from config import (  # noqa: E402, F401
+    MAX_USERS, MAX_SESSIONS, MAX_LEAVES, MAX_DEVICES, MAX_LOG_ROWS,
+)
 
 
 # ----------------------------------------------------------------------------
@@ -116,8 +115,9 @@ async def _active_camp_for(target: dict, ts: datetime, office: dict) -> Optional
     return _camps_module.resolve_member_camp(target, camps_today, weekday, today_str)
 
 
-# Long-lived tokens for approved devices (passwordless phone login)
-DEVICE_TOKEN_MINUTES = 60 * 24 * 365 * 2  # ~2 years
+# Long-lived tokens for approved devices (passwordless phone login).
+# Source of truth in backend/config.py; re-exported so existing callers work.
+from config import DEVICE_TOKEN_MINUTES  # noqa: E402, F401
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
@@ -1608,7 +1608,8 @@ async def import_parents(
 
 # Threshold for forcing a photo refresh. Members re-capture once a year so
 # coaches always see a current likeness on the muster.
-PHOTO_REFRESH_DAYS = 365
+# Source of truth in backend/config.py.
+from config import PHOTO_REFRESH_DAYS  # noqa: E402, F401
 
 
 @api_router.get("/me/photo-status")
