@@ -55,7 +55,16 @@ export default function ConflictAcknowledgeModal({
     <div
       className="iu-modal"
       data-testid={testIdPrefix}
-      onClick={(e) => e.target === e.currentTarget && onCancel()}
+      // Stop propagation before checking the backdrop-close condition so
+      // clicks inside this modal never leak to an OUTER modal's backdrop
+      // onClick (e.g. when this gate is rendered from inside ApplyForm on
+      // MyLeaves — that outer modal's onClick={onClose} would otherwise
+      // close the whole apply-leave form the moment you tick the "I've
+      // reviewed" checkbox).
+      onClick={(e) => {
+        e.stopPropagation();
+        if (e.target === e.currentTarget) onCancel();
+      }}
     >
       <div className="iu-modal-card max-w-lg">
         <header className="p-4 border-b border-amber-100 bg-amber-50/60 rounded-t-lg flex items-start gap-3">
