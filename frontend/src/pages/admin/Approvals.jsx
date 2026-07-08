@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plane, ClipboardCheck, Camera } from "lucide-react";
+import { Plane, ClipboardCheck, Camera, PencilRuler } from "lucide-react";
 import { api } from "../../api";
 import AdminLeaves from "./Leaves";
 import Overtime from "./Overtime";
 import CheckinApprovals from "./CheckinApprovals";
+import AdminCorrections from "./AdminCorrections";
 
 /**
  * Single landing page for ALL pending approvals — leaves/tours/comp-off,
@@ -19,6 +20,7 @@ export default function Approvals() {
   const raw = params.get("tab");
   const tab = raw === "overtime" ? "overtime"
              : raw === "checkins" ? "checkins"
+             : raw === "corrections" ? "corrections"
              : "leaves";
   const setTab = (t) => {
     const next = new URLSearchParams(params);
@@ -47,9 +49,10 @@ export default function Approvals() {
   }, []);
 
   const tabs = [
-    { key: "leaves",   label: "Leave / Tour / Comp Off", Icon: Plane,           badge: summary?.leaves },
-    { key: "overtime", label: "Overtime",                Icon: ClipboardCheck,  badge: summary?.overtime },
-    { key: "checkins", label: "Check-ins",               Icon: Camera,          badge: summary?.checkins },
+    { key: "leaves",      label: "Leave / Tour / Comp Off", Icon: Plane,           badge: summary?.leaves },
+    { key: "overtime",    label: "Overtime",                Icon: ClipboardCheck,  badge: summary?.overtime },
+    { key: "checkins",    label: "Check-ins",               Icon: Camera,          badge: summary?.checkins },
+    { key: "corrections", label: "Corrections",             Icon: PencilRuler,     badge: summary?.corrections },
   ];
 
   return (
@@ -97,6 +100,7 @@ export default function Approvals() {
         {tab === "leaves" && <AdminLeaves embedded />}
         {tab === "overtime" && <Overtime embedded />}
         {tab === "checkins" && <CheckinApprovals />}
+        {tab === "corrections" && <AdminCorrections />}
       </div>
     </div>
   );

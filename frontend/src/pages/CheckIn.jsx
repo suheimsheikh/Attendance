@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { MapPin, Loader2, LogIn, LogOut as LogOutIcon, AlertTriangle, CheckCircle2, Navigation, Coffee, ArrowLeftRight, Clock } from "lucide-react";
 import { api, showApiError } from "../api";
 import { getLocation } from "../utils";
+import CorrectionRequestModal from "../components/CorrectionRequestModal";
 
 export default function CheckIn() {
   const [status, setStatus] = useState(null);
@@ -13,6 +14,7 @@ export default function CheckIn() {
   const [pendingScan, setPendingScan] = useState(null); // { distance } awaiting off-site reason
   const [lastFix, setLastFix] = useState(null); // {lat, lng, acc} for diagnostics
   const [locating, setLocating] = useState(""); // live "Improving fix… ±N m" text
+  const [correctionOpen, setCorrectionOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -273,6 +275,26 @@ export default function CheckIn() {
       {office && lastFix && (
         <GeoDiagnostic office={office} fix={lastFix} />
       )}
+
+      {/* Retro-fix entry point — a small subtle link, not a big button, so
+          it doesn't compete with the primary check-in CTA. Opens the
+          shared CorrectionRequestModal (limited to the 7-day window). */}
+      <div className="mt-4 text-center">
+        <button
+          type="button"
+          data-testid="checkin-request-correction"
+          onClick={() => setCorrectionOpen(true)}
+          className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2"
+        >
+          Forgot to punch in earlier? Request a correction
+        </button>
+      </div>
+      <CorrectionRequestModal
+        open={correctionOpen}
+        onClose={() => setCorrectionOpen(false)}
+        entityType="attendance"
+        initialKind="missed_checkin"
+      />
 
       {office && (
         <p className="text-xs text-slate-400 mt-6 text-center">

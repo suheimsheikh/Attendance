@@ -6,6 +6,7 @@ import Avatar from "../components/Avatar";
 import LeaveBalanceNotice from "../components/LeaveBalanceNotice";
 import OverlapNotice from "../components/OverlapNotice";
 import EventConflictNotice from "../components/EventConflictNotice";
+import CorrectionRequestModal from "../components/CorrectionRequestModal";
 import ConflictAcknowledgeModal from "../components/ConflictAcknowledgeModal";
 import ReasonPicker from "../components/ReasonPicker";
 import FormErrorBanner from "../components/FormErrorBanner";
@@ -34,6 +35,7 @@ export default function MyLeaves() {
   // BEFORE applying for more leave — comp-off, paid leave, pending,
   // future-approved, tour totals, LOP and approx absent days.
   const [summary, setSummary] = useState(null);
+  const [correctionOpen, setCorrectionOpen] = useState(false);
 
   const load = async () => {
     try {
@@ -57,10 +59,27 @@ export default function MyLeaves() {
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">My Leave and Tour</h1>
           <p className="text-slate-500 text-sm mt-1">Your balances, applied requests and history — all in one place.</p>
         </div>
-        <button data-testid="apply-leave-button" onClick={() => setShowForm(true)} className="iu-btn-primary">
-          <Plus size={16} /> Apply
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            data-testid="myleaves-request-correction"
+            onClick={() => setCorrectionOpen(true)}
+            className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2"
+            title="Report a mistake on one of your existing leaves (wrong dates, wrong type, or shouldn't have run)"
+          >
+            Request a correction
+          </button>
+          <button data-testid="apply-leave-button" onClick={() => setShowForm(true)} className="iu-btn-primary">
+            <Plus size={16} /> Apply
+          </button>
+        </div>
       </header>
+      <CorrectionRequestModal
+        open={correctionOpen}
+        onClose={() => setCorrectionOpen(false)}
+        entityType="leave"
+        initialKind="leave_date_change"
+      />
 
       {/* Stats dashboard — renders only when the summary is available and
           the user has any tracked balances. Athletes get a softer blurb. */}

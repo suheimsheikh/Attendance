@@ -3678,6 +3678,12 @@ app.include_router(_reports_router(
     db, require_admin, get_current_user, compute_hours_report, enrich_leaves,
 ))
 
+# Corrections facility — member-raised after-the-fact fixes to attendance
+# and leave rows, admin-approved. See routes/corrections.py for the full
+# design and the applier dispatch table.
+from routes.corrections import make_router as _corrections_router  # noqa: E402
+app.include_router(_corrections_router(db, require_admin, get_current_user, write_audit))
+
 # Escorts — separate entity (not employees) tracked under institutions.
 # Owns CRUD, daily attendance, temp-exit, and 30-day photo retention.
 from routes.escorts import make_router as _escorts_router  # noqa: E402

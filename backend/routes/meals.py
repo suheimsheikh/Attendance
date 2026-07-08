@@ -52,6 +52,7 @@ class CategoryIn(BaseModel):
 
 
 class CategoryPatch(BaseModel):
+    key: Optional[str] = None  # rename support — cascades to db.users.category
     label: Optional[str] = None
     color: Optional[str] = None
     is_athlete_like: Optional[bool] = None
@@ -139,6 +140,32 @@ def make_router(db, require_admin, get_current_user) -> APIRouter:
         if not row:
             raise HTTPException(status_code=404, detail="Category not found")
         update = {}
+        # ── Key rename (cascade to member records) ───────────────────────────
+        # Seeded categories cannot be renamed because they're referenced by
+        # hard-coded rule sets elsewhere (OVERTIME_CATEGORIES, ATHLETE_CATEGORIES).
+        # Custom categories can be renamed; we cascade the new key into every
+        # user record so no member ends up orphaned.
+        if body.key is not None:
+            new_key = body.key.strip().lower()
+            if not new_key or not all(c.isalnum() or c == "_" for c in new_key):
+                raise HTTPException(status_code=400,
+                                    detail="key must be lowercase alphanumeric + underscore only")
+            if new_key != row["key"]:
+                if row["key"] in SEEDED_CATEGORY_KEYS:
+                    raise HTTPException(status_code=409,
+                                        detail="Seeded categories cannot be renamed — they're referenced by hard-coded rules.")
+                # Reject if another category (seeded or otherwise) already owns the new key.
+                clash = await db.categories.find_one({"key": new_key, "id": {"$ne": cat_id}})
+                if clash or new_key in SEEDED_CATEGORY_KEYS:
+                    raise HTTPException(status_code=409, detail=f"key '{new_key}' is already in use")
+                # Cascade to member records — set BEFORE flipping the category
+                # doc so a mid-flight member fetch never sees a dangling ref.
+                cascade = await db.users.update_many(
+                    {"category": row["key"]}, {"$set": {"category": new_key}}
+                )
+                update["key"] = new_key
+                # Stash cascade info on the returned row for the UI toast.
+                row["_cascaded_members"] = int(cascade.modified_count)
         if body.label is not None:
             update["label"] = body.label.strip()
         if body.color is not None:

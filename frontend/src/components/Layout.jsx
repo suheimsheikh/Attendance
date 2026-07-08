@@ -139,16 +139,17 @@ export default function Layout() {
             <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Admin</div>
             {NAV_ADMIN.map((item) => {
               // Synthetic key `approvals_page` sums only the queues that the
-              // Approvals page actually surfaces (leaves + overtime + checkins).
-              // Device approvals live on their own /admin/devices page so
-              // including them here would confuse admins: the sidebar badge
-              // would always be higher than the number of items visible when
-              // they land on the Approvals page.
+              // Approvals page actually surfaces (leaves + overtime + checkins
+              // + corrections). Device approvals live on their own
+              // /admin/devices page so including them here would confuse
+              // admins: the sidebar badge would always be higher than the
+              // number of items visible when they land on the Approvals page.
               let badge;
               if (item.badgeKey === "approvals_page" && approvalsSummary) {
                 const n = (approvalsSummary.leaves || 0)
                         + (approvalsSummary.overtime || 0)
-                        + (approvalsSummary.checkins || 0);
+                        + (approvalsSummary.checkins || 0)
+                        + (approvalsSummary.corrections || 0);
                 badge = n > 0 ? n : undefined;
               } else if (item.badgeKey) {
                 badge = approvalsSummary?.[item.badgeKey];

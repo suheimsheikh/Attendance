@@ -23,6 +23,12 @@ const COLORS = [
   { key: "slate",   tw: "bg-slate-500" },
 ];
 
+// Keys of the 5 seeded categories — mirrors SEEDED_CATEGORY_KEYS in
+// backend/routes/meals.py. Locked from key-rename because hard-coded
+// business rules (overtime accrual, chef's-view meal eligibility, athlete
+// leave-balance opt-out, etc.) branch on these exact strings.
+const SEEDED_KEYS = new Set(["athlete", "elite", "coach", "staff", "executive"]);
+
 function CategoryForm({ initial, onClose, onSaved }) {
   const isEdit = !!initial?.id;
   const isSeeded = !!initial?.is_seeded;
@@ -45,14 +51,18 @@ function CategoryForm({ initial, onClose, onSaved }) {
     try {
       if (isEdit) {
         const patch = {
+          key: form.key.trim().toLowerCase(),
           label: form.label,
           color: form.color,
           is_athlete_like: form.is_athlete_like,
           meal_eligible: form.meal_eligible,
           sort_order: Number(form.sort_order),
         };
-        await api.patch(`/masters/categories/${initial.id}`, patch);
-        toast.success("Category updated");
+        const r = await api.patch(`/masters/categories/${initial.id}`, patch);
+        const n = r?._cascaded_members || 0;
+        toast.success(n > 0
+          ? `Category updated · ${n} member${n === 1 ? "" : "s"} re-tagged to "${patch.key}"`
+          : "Category updated");
       } else {
         await api.post("/masters/categories", {
           key: form.key.trim().toLowerCase(),
@@ -87,14 +97,16 @@ function CategoryForm({ initial, onClose, onSaved }) {
             <input
               id="cat-key" data-testid="cat-form-key"
               value={form.key}
-              disabled={isEdit}
+              disabled={isEdit && SEEDED_KEYS.has(initial?.key)}
               onChange={(e) => set("key", e.target.value)}
               className="iu-input"
               placeholder="e.g. volunteer"
             />
             <p className="text-[11px] text-slate-500 mt-1">
-              {isEdit
-                ? "Key is locked after creation (referenced by member records)."
+              {isEdit && SEEDED_KEYS.has(initial?.key)
+                ? "Seeded category — key is locked (referenced by hard-coded rules)."
+                : isEdit
+                ? "Renaming will cascade to every member currently tagged with this category."
                 : "Lowercase, alphanumeric + underscore. Used as the stored category value."}
             </p>
           </div>

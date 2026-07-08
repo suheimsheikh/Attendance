@@ -182,12 +182,14 @@ def make_router(db, require_admin, write_audit) -> APIRouter:
         overtime  = await db.attendance.count_documents({"overtime_status": "pending"})
         devices   = await db.devices.count_documents({"status": "pending"})
         checkins  = await db.attendance.count_documents({"approval_status": "pending"})
+        corrections = await db.corrections.count_documents({"status": "pending"})
         return {
             "leaves": leaves,
             "overtime": overtime,
             "devices": devices,
             "checkins": checkins,
-            "total": leaves + overtime + devices + checkins,
+            "corrections": corrections,
+            "total": leaves + overtime + devices + checkins + corrections,
         }
 
     return router
