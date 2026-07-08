@@ -5,6 +5,48 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — OT ledger: split Early reason vs Late reason
+
+Coach request: "In the overtime ledger both reasons for early and late
+need to be mentioned."
+
+Historically the attendance row carried a single `overtime_reason` that
+was overwritten on check-out — so a member who logged an early-in
+reason and later a late-out reason ended up with only the second in the
+ledger. Fixed at storage + display:
+
+- Storage: `_geo_toggle` now stamps `overtime_early_reason` on the
+  early-in path and `overtime_late_reason` on the late-out path.
+  Legacy `overtime_reason` is kept for backward compat with pre-8-Jul
+  rows + downstream readers.
+- Supplemental-reason branch (check-out with no new late OT but a fresh
+  reason) attributes the text to whichever half is missing a reason,
+  early first.
+- `/api/reports/ot-ledger` projects both new fields.
+- `OTLedgerModal` splits the Reason column into two — Early reason and
+  Late reason — with a graceful fallback: rows that only have the
+  merged legacy field attribute it to whichever half actually recorded
+  minutes. Modal max-width bumped 3xl → 4xl to fit the extra column.
+
+---
+
+## 8 Jul 2026 — Reports: Comp-off ledger drill-down modal
+
+Coach request: "A double click on the comp off col for anybody should
+create a window with all the comp off dates and DOW."
+
+- New backend endpoint `/api/reports/comp-off-ledger?member_id&year`
+  returns a merged timeline of Earned (attendance + tour on the
+  member's weekly-off, minus posting windows), Applied (pending
+  comp-off leaves), and Approved (approved comp-off leaves). Each row
+  carries `date`, `dow`, `kind`, `qty`, and a note.
+- New frontend `CompOffLedgerModal.jsx` — mirrors OTLedgerModal styling.
+  Double-clicking any of the three comp-off cells (Earned / Applied /
+  Approved) on Reports opens the modal for that member. Header
+  surfaces totals: Earned · Applied · Approved · Available.
+
+---
+
 ## 8 Jul 2026 — Reports: Elite pill · OT-only filter · Leave column redesign
 
 Three coach-requested tweaks on the Attendance report:

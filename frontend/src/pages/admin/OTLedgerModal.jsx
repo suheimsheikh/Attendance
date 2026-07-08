@@ -48,7 +48,7 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
       data-testid="ot-ledger-modal"
       onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose?.(); }}
     >
-      <div className="iu-modal-card max-w-3xl" onClick={(e) => e.stopPropagation()}>
+      <div className="iu-modal-card max-w-4xl" onClick={(e) => e.stopPropagation()}>
         <header className="p-4 border-b border-slate-100 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold">Overtime ledger — {memberName || meta.member_name}</h2>
@@ -76,32 +76,48 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
                   <th className="text-right">Late</th>
                   <th className="text-right">Total</th>
                   <th>Session</th>
-                  <th>Reason</th>
+                  <th>Early reason</th>
+                  <th>Late reason</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.date + (r.check_in_at || "")} className="border-t border-slate-100 hover:bg-slate-50/60"
-                      data-testid={`ot-ledger-row-${r.date}`}>
-                    <td className="font-mono">{r.date}</td>
-                    <td className="text-right text-emerald-700">{fmtMin(r.overtime_early_min)}</td>
-                    <td className="text-right text-amber-700">{fmtMin(r.overtime_late_min)}</td>
-                    <td className="text-right font-bold">{fmtMin(r.overtime_total_min)}</td>
-                    <td className="text-slate-600">{timeOnly(r.check_in_at)} – {timeOnly(r.check_out_at)}</td>
-                    <td className="text-slate-600 italic max-w-[200px] truncate" title={r.overtime_reason || ""}>
-                      {r.overtime_reason || "—"}
-                    </td>
-                    <td>
-                      <span className={`inline-flex px-2 h-5 rounded-full text-[10px] font-bold border ${STATUS_TINT[r.overtime_status] || "bg-slate-50 text-slate-600 border-slate-200"}`}>
-                        {r.overtime_status || "—"}
-                      </span>
-                      {r.overtime_admin_note && (
-                        <div className="text-[10px] text-slate-500 italic mt-0.5" title={r.overtime_admin_note}>{r.overtime_admin_note}</div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((r) => {
+                  // Post-8-Jul-2026 rows carry the split reasons; older
+                  // rows only have the merged `overtime_reason`. Fall
+                  // back gracefully: attribute the legacy reason to
+                  // whichever half actually recorded minutes.
+                  const earlyReason = r.overtime_early_reason
+                    || (r.overtime_early_min && !r.overtime_late_min ? r.overtime_reason : "");
+                  const lateReason = r.overtime_late_reason
+                    || (r.overtime_late_min && !r.overtime_early_min ? r.overtime_reason : "");
+                  return (
+                    <tr key={r.date + (r.check_in_at || "")} className="border-t border-slate-100 hover:bg-slate-50/60"
+                        data-testid={`ot-ledger-row-${r.date}`}>
+                      <td className="font-mono">{r.date}</td>
+                      <td className="text-right text-emerald-700">{fmtMin(r.overtime_early_min)}</td>
+                      <td className="text-right text-amber-700">{fmtMin(r.overtime_late_min)}</td>
+                      <td className="text-right font-bold">{fmtMin(r.overtime_total_min)}</td>
+                      <td className="text-slate-600">{timeOnly(r.check_in_at)} – {timeOnly(r.check_out_at)}</td>
+                      <td className="text-slate-600 italic max-w-[160px] truncate" title={earlyReason || ""}
+                          data-testid={`ot-ledger-early-reason-${r.date}`}>
+                        {earlyReason || <span className="not-italic text-slate-300">—</span>}
+                      </td>
+                      <td className="text-slate-600 italic max-w-[160px] truncate" title={lateReason || ""}
+                          data-testid={`ot-ledger-late-reason-${r.date}`}>
+                        {lateReason || <span className="not-italic text-slate-300">—</span>}
+                      </td>
+                      <td>
+                        <span className={`inline-flex px-2 h-5 rounded-full text-[10px] font-bold border ${STATUS_TINT[r.overtime_status] || "bg-slate-50 text-slate-600 border-slate-200"}`}>
+                          {r.overtime_status || "—"}
+                        </span>
+                        {r.overtime_admin_note && (
+                          <div className="text-[10px] text-slate-500 italic mt-0.5" title={r.overtime_admin_note}>{r.overtime_admin_note}</div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

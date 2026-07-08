@@ -2039,6 +2039,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         if late_min > 0:
             existing_early = int(sess.get("overtime_early_min") or 0)
             existing_reason = sess.get("overtime_reason") or ""
+            _late_reason = (overtime_reason or "").strip() or None
             ot_updates = {
                 "overtime_late_min": late_min,
                 "overtime_total_min": existing_early + late_min,
@@ -2048,11 +2049,24 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
                 # handles OT manually via the Overtime page.
                 "overtime_status": "pending" if AUTO_APPROVAL_OVERTIME else None,
                 "overtime_reason": (overtime_reason or existing_reason or "").strip() or None,
+                # Late-checkout OT gets its own reason field so the ledger
+                # can surface early-in vs late-out reasons separately
+                # (8 Jul 2026 user request). Preserves whatever
+                # `overtime_early_reason` was stamped at check-in.
+                "overtime_late_reason": _late_reason,
                 "work_end_at_session": work_end_hm,
             }
         elif overtime_reason and (sess.get("overtime_total_min") or 0) > 0:
-            # No new late OT but member supplied a reason that supplements the early-OT one.
-            ot_updates = {"overtime_reason": overtime_reason.strip()}
+            # No new late OT but member supplied a reason that supplements
+            # the earlier OT session. Route it to whichever half is missing
+            # a reason (early first — check-in tends to be the fast path).
+            _sup = overtime_reason.strip()
+            _updates: dict = {"overtime_reason": _sup}
+            if not sess.get("overtime_early_reason") and int(sess.get("overtime_early_min") or 0) > 0:
+                _updates["overtime_early_reason"] = _sup
+            elif not sess.get("overtime_late_reason") and int(sess.get("overtime_late_min") or 0) > 0:
+                _updates["overtime_late_reason"] = _sup
+            ot_updates = _updates
         # If a reason was captured for OT (either fresh late-out OT or a
         # supplemental one), stash it in the member's personal reason
         # bank so it re-appears as a suggestion on their next OT prompt.
@@ -2110,6 +2124,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         } if (late or out) else None,
     }
     if early_min > 0:
+        _early_reason = (overtime_reason or "").strip() or None
         doc.update({
             "overtime_early_min": early_min,
             "overtime_total_min": early_min,
@@ -2117,7 +2132,11 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             # minutes are still recorded on the row but the row is not
             # routed to the OT approval queue.
             "overtime_status": "pending" if AUTO_APPROVAL_OVERTIME else None,
-            "overtime_reason": (overtime_reason or "").strip() or None,
+            "overtime_reason": _early_reason,
+            # Early-in OT gets its own reason field so the OT ledger can
+            # render early vs late reasons side-by-side (8 Jul 2026 user
+            # request). Complements `overtime_late_reason` set on check-out.
+            "overtime_early_reason": _early_reason,
             "work_start_at_session": work_start_hm,
         })
     await db.attendance.insert_one(doc)

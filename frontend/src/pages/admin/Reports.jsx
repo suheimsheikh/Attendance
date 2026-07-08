@@ -7,6 +7,7 @@ import { api, downloadBlob } from "../../api";
 import { todayIso, shortDate, categoryLabel } from "../../utils";
 import MemberTimelineModal from "../../components/MemberTimelineModal";
 import OTLedgerModal from "./OTLedgerModal";
+import CompOffLedgerModal from "./CompOffLedgerModal";
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 function isoDate(y, m0, d) { return `${y}-${pad2(m0 + 1)}-${pad2(d)}`; }
@@ -130,6 +131,10 @@ export default function Reports() {
   const [escortReport, setEscortReport] = useState(null);
   // Double-click OT-ledger modal state.
   const [otLedger, setOtLedger] = useState(null); // { member_id, member_name } | null
+  // Double-click Comp-off ledger modal state (8 Jul 2026 user request:
+  // "A double click on the comp off col for anybody should create a
+  // window with all the comp off dates and DOW").
+  const [coLedger, setCoLedger] = useState(null); // { member_id, member_name } | null
 
   // Drill-down hover popover state (7 Jul 2026 — replaces native
   // `title` attrs which had 1-2s browser-delay and broke inside the
@@ -571,11 +576,13 @@ export default function Reports() {
                         <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 cursor-pointer hover:bg-violet-100/60", hoverProps("OT served · double-click for OT ledger", r.dates_overtime_served))} data-testid={`ot-served-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{h(otServed)}</td>
                         <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 text-amber-700 cursor-pointer hover:bg-violet-100/60", hoverProps("OT applied · double-click for OT ledger", r.dates_overtime_applied))} data-testid={`ot-applied-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{h(otApplied)}</td>
                         <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-r border-t border-violet-100 font-extrabold text-emerald-700 cursor-pointer hover:bg-violet-100/60", hoverProps("OT approved · double-click for OT ledger", r.dates_overtime_approved))} data-testid={`ot-approved-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{h(otApproved)}</td>
-                        {/* Comp-off group — no longer double-clickable
-                            (moved to OT). Hover tooltip still shows dates. */}
-                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100", hoverProps("Comp-off earned", r.dates_comp_off_earned))} data-testid={`comp-off-earned-${r.member_id}`}>{n(r.comp_off_earned)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 text-amber-700", hoverProps("Comp-off applied", r.dates_comp_off_applied))} data-testid={`comp-off-applied-${r.member_id}`}>{n(r.comp_off_applied)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-r border-t border-sky-100 font-extrabold text-emerald-700", hoverProps("Comp-off approved", r.dates_comp_off_used))} data-testid={`comp-off-approved-${r.member_id}`}>{n(r.comp_off_used)}</td>
+                        {/* Comp-off group — double-clicking any cell
+                            opens the year's comp-off ledger (Earned /
+                            Applied / Approved with DOW). Hover tooltip
+                            still shows the month's dates inline. */}
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 cursor-pointer hover:bg-sky-100/60", hoverProps("Comp-off earned · double-click for ledger", r.dates_comp_off_earned))} data-testid={`comp-off-earned-${r.member_id}`} onDoubleClick={() => setCoLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_earned)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 text-amber-700 cursor-pointer hover:bg-sky-100/60", hoverProps("Comp-off applied · double-click for ledger", r.dates_comp_off_applied))} data-testid={`comp-off-applied-${r.member_id}`} onDoubleClick={() => setCoLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_applied)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-r border-t border-sky-100 font-extrabold text-emerald-700 cursor-pointer hover:bg-sky-100/60", hoverProps("Comp-off approved · double-click for ledger", r.dates_comp_off_used))} data-testid={`comp-off-approved-${r.member_id}`} onDoubleClick={() => setCoLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_used)}</td>
                         {/* Hours group */}
                         <td className="py-1.5 px-1.5 text-center bg-indigo-50/30 border-t border-indigo-100">{r.total_hours ? `${r.total_hours}h` : ""}</td>
                         <td className="py-1.5 px-1.5 text-center bg-indigo-50/30 border-r border-t border-indigo-100 text-slate-600">{r.avg_hours_per_day ? `${r.avg_hours_per_day}h` : ""}</td>
@@ -596,12 +603,22 @@ export default function Reports() {
         </>
       )}
 
-      {/* OT-ledger drill-down — opens on double-click of any comp-off cell. */}
+      {/* OT-ledger drill-down — opens on double-click of any OT cell. */}
       <OTLedgerModal
         open={!!otLedger}
         onClose={() => setOtLedger(null)}
         memberId={otLedger?.member_id}
         memberName={otLedger?.member_name}
+        year={year}
+      />
+
+      {/* Comp-off ledger drill-down — opens on double-click of any
+          Comp-off cell (Earned / Applied / Approved). */}
+      <CompOffLedgerModal
+        open={!!coLedger}
+        onClose={() => setCoLedger(null)}
+        memberId={coLedger?.member_id}
+        memberName={coLedger?.member_name}
         year={year}
       />
 

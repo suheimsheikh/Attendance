@@ -638,7 +638,12 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             {"_id": 0,
              "date": 1, "check_in_at": 1, "check_out_at": 1,
              "overtime_early_min": 1, "overtime_late_min": 1,
-             "overtime_total_min": 1, "overtime_reason": 1,
+             "overtime_total_min": 1,
+             # Legacy single-field reason kept for backward compat with
+             # rows pre-8-Jul-2026 that never had the split. Post-split
+             # rows carry both `overtime_early_reason` + `overtime_late_reason`.
+             "overtime_reason": 1,
+             "overtime_early_reason": 1, "overtime_late_reason": 1,
              "overtime_status": 1, "overtime_admin_note": 1,
              "work_start_at_session": 1, "work_end_at_session": 1,
              "overtime_decided_by": 1, "overtime_decided_at": 1},
@@ -655,6 +660,169 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             "category": (u or {}).get("category"),
             "year": year,
             "total_minutes": total_min,
+            "rows": rows,
+        }
+
+    @router.get("/reports/comp-off-ledger")
+    async def comp_off_ledger(
+        member_id: str, year: int,
+        admin: dict = Depends(require_admin),
+    ):
+        """Date-wise comp-off ledger for a single member across a
+        calendar year. Powers the double-click drill-down modal on the
+        Comp-off columns in the Attendance report.
+
+        Returns three streams merged & sorted by date:
+          • `earned`   — attendance date that fell on the member's
+                         weekly_off (excl. dates that land inside an
+                         approved posting window).
+          • `applied`  — pending comp-off leaves.
+          • `approved` — approved comp-off leaves (aka "used").
+
+        Each row carries `date`, `dow` (Mon/Tue/…), `kind`, `qty`,
+        and optionally `note` (leave reason / status detail).
+        """
+        yr_start, yr_end = f"{year}-01-01", f"{year}-12-31"
+        u = await db.users.find_one(
+            {"id": member_id},
+            {"_id": 0, "full_name": 1, "rank": 1, "category": 1, "weekly_off": 1},
+        )
+        if not u:
+            raise HTTPException(status_code=404, detail="Member not found")
+
+        office = await db.config.find_one({"id": "office"})
+        default_wo = ((office or {}).get("default_weekly_off") or "sunday").lower()
+        wo = (u.get("weekly_off") or default_wo).lower()
+
+        # Import lazily — top-of-file already keeps clean.
+        from holidays import WEEKDAY_KEY
+        DOW_LABEL = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+        # --- Earned: attendance on weekly-off (minus posting dates) ---
+        atts = await db.attendance.find(
+            {"user_id": member_id,
+             "date": {"$gte": yr_start, "$lte": yr_end}},
+            {"_id": 0, "date": 1},
+        ).to_list(5000)
+        # Posting date-set for the year (comp-off doesn't accrue during postings).
+        posts = await db.leaves.find(
+            {"user_id": member_id, "type": "posting", "status": "approved",
+             "start_date": {"$lte": yr_end}, "end_date": {"$gte": yr_start}},
+            {"_id": 0, "start_date": 1, "end_date": 1},
+        ).to_list(500)
+        posting_set: set = set()
+        for p in posts:
+            try:
+                s = max(date.fromisoformat(p["start_date"]), date.fromisoformat(yr_start))
+                e = min(date.fromisoformat(p["end_date"]), date.fromisoformat(yr_end))
+            except Exception:
+                continue
+            cur = s
+            while cur <= e:
+                posting_set.add(cur.isoformat())
+                cur = date.fromordinal(cur.toordinal() + 1)
+
+        # Approved tours that landed on weekly_off also accrue (past/today only).
+        tours = await db.leaves.find(
+            {"user_id": member_id, "type": "tour", "status": "approved",
+             "start_date": {"$lte": yr_end}, "end_date": {"$gte": yr_start}},
+            {"_id": 0, "start_date": 1, "end_date": 1},
+        ).to_list(500)
+
+        today_iso = local_date_str(office)
+        att_seen: set = set()
+        earned_rows: list = []
+        for a in atts:
+            ds = a["date"]
+            try:
+                dt = date.fromisoformat(ds)
+            except Exception:
+                continue
+            if WEEKDAY_KEY[dt.weekday()] == wo and ds not in posting_set:
+                earned_rows.append({
+                    "date": ds, "dow": DOW_LABEL[dt.weekday()],
+                    "kind": "earned", "qty": 1, "note": "Attended on weekly-off",
+                })
+                att_seen.add(ds)
+
+        # Tour weekly-off accruals (deduped against att_seen, and only past-or-today).
+        for t in tours:
+            try:
+                s = max(date.fromisoformat(t["start_date"]), date.fromisoformat(yr_start))
+                e = min(date.fromisoformat(t["end_date"]), date.fromisoformat(yr_end))
+            except Exception:
+                continue
+            cur = s
+            while cur <= e:
+                ds = cur.isoformat()
+                if (WEEKDAY_KEY[cur.weekday()] == wo
+                        and ds not in att_seen
+                        and ds <= today_iso):
+                    earned_rows.append({
+                        "date": ds, "dow": DOW_LABEL[cur.weekday()],
+                        "kind": "earned", "qty": 1, "note": "Tour on weekly-off",
+                    })
+                    att_seen.add(ds)
+                cur = date.fromordinal(cur.toordinal() + 1)
+
+        # --- Applied + Approved: comp_off leaves + leaves with comp_off_used ---
+        comp_leaves = await db.leaves.find(
+            {"user_id": member_id,
+             "start_date": {"$lte": yr_end}, "end_date": {"$gte": yr_start},
+             "$or": [
+                 {"type": "comp_off"},
+                 {"comp_off_used": {"$gt": 0}},
+             ]},
+            {"_id": 0, "type": 1, "status": 1, "start_date": 1, "end_date": 1,
+             "reason": 1, "comp_off_used": 1},
+        ).to_list(2000)
+        spent_rows: list = []
+        for L in comp_leaves:
+            status = L.get("status") or "pending"
+            kind = "approved" if status == "approved" else (
+                "rejected" if status == "rejected" else "applied"
+            )
+            # Number of comp-off days spent by this leave.
+            if L.get("comp_off_used") is not None:
+                qty = int(L["comp_off_used"])
+            else:
+                try:
+                    qty = (date.fromisoformat(L["end_date"])
+                           - date.fromisoformat(L["start_date"])).days + 1
+                except Exception:
+                    qty = 1
+            try:
+                s = max(date.fromisoformat(L["start_date"]), date.fromisoformat(yr_start))
+                e = min(date.fromisoformat(L["end_date"]), date.fromisoformat(yr_end))
+            except Exception:
+                continue
+            # Emit ONE row per leave window. Show span in the note.
+            spent_rows.append({
+                "date": s.isoformat(),
+                "dow": DOW_LABEL[s.weekday()],
+                "kind": kind,
+                "qty": qty,
+                "note": (L.get("reason") or "").strip() or (
+                    f"{s.isoformat()} → {e.isoformat()}" if s != e else ""
+                ),
+                "span_end": e.isoformat(),
+            })
+
+        rows = sorted(earned_rows + spent_rows, key=lambda r: (r["date"], r["kind"]))
+        totals = {
+            "earned":   sum(r["qty"] for r in earned_rows),
+            "applied":  sum(r["qty"] for r in spent_rows if r["kind"] == "applied"),
+            "approved": sum(r["qty"] for r in spent_rows if r["kind"] == "approved"),
+        }
+        totals["available"] = max(0, totals["earned"] - totals["approved"])
+        return {
+            "member_id": member_id,
+            "member_name": (u or {}).get("full_name"),
+            "rank": (u or {}).get("rank"),
+            "category": (u or {}).get("category"),
+            "weekly_off": wo,
+            "year": year,
+            "totals": totals,
             "rows": rows,
         }
 
