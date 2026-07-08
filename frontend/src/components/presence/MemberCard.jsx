@@ -13,7 +13,19 @@ import { AWAY_STATUS_STYLE } from "./constants";
 export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick, hidden, expanded, onToggleExpand, density = "detailed" }) {
   const [zoomOpen, setZoomOpen] = useState(false);
   const compact = density === "compact";
-  const lateBg = m.late ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50";
+  // Row background — three cases:
+  //   • late anywhere → keep the existing red-50 tint (highest priority)
+  //   • Away column → tint orange for tour / amber for leave so the
+  //     merged column stays visually two-toned like it used to be when
+  //     they were separate columns
+  //   • everything else → plain white with slate hover
+  let lateBg = "hover:bg-slate-50";
+  if (m.late) {
+    lateBg = "bg-red-50 hover:bg-red-100";
+  } else if (columnKey === "away") {
+    if (m.status === "on_tour") lateBg = "bg-orange-50 hover:bg-orange-100";
+    else if (m.status === "on_leave") lateBg = "bg-amber-50 hover:bg-amber-100";
+  }
   const notifyDueType = m.notify_due?.not_arrived
     ? "not_arrived"
     : (m.notify_due?.late ? "late" : null);

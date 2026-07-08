@@ -5,6 +5,25 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — Away column: two-toned row backgrounds
+
+Follow-up polish on the Tour+Leave merge — rows inside the "Away"
+column now carry distinct row-level tints so the two statuses read
+as almost-separate columns visually while sharing one physical column:
+
+- Tour → light **orange-50** bg (hover **orange-100**)
+- Leave → light **amber-50** bg (hover **amber-100**)
+- Late-flag still wins over the away tint (red-50 takes precedence).
+- `components/presence/MemberCard.jsx` — the `lateBg` helper is now
+  a small 3-way branch: late → red / away-tour → orange / away-leave
+  → amber / everything else → plain-white with slate hover.
+
+**Impact**: zero new tests needed; the row backgrounds are a pure CSS
+tint driven by data already on `m.status` + `columnKey`.
+
+---
+
+
 ## 8 Jul 2026 — Presence Board: merged Tour+Leave, tighter rows
 
 Presence Board went from 6 columns to 5 by merging **Tour + Leave**
