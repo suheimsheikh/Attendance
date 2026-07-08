@@ -15,6 +15,8 @@ import os
 import requests
 import uuid
 
+import pytest
+
 
 def _login(base_url) -> str:
     r = requests.post(
@@ -77,6 +79,7 @@ def test_office_put_invalid_meal_cutoff_no_500(base_url):
 # =====================================================================
 # Cutoff regression — 06:30 must return fewer/equal members than 07:00
 # =====================================================================
+@pytest.mark.slow
 def test_meals_office_cutoff_narrows_pool(base_url):
     token = _login(base_url)
     hdr = {"Authorization": f"Bearer {token}"}
@@ -101,6 +104,7 @@ def test_meals_office_cutoff_narrows_pool(base_url):
 # =====================================================================
 # Sites CRUD regression (route path unchanged even though UI renamed)
 # =====================================================================
+@pytest.mark.slow
 def test_sites_crud_full_lifecycle(base_url):
     token = _login(base_url)
     hdr = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}

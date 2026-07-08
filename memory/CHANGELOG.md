@@ -5,6 +5,77 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — Check-in approvals, unified Approvals queue,
+Categories master CRUD, tiered test suite
+
+Four related shipments in one session:
+
+### 1. Check-in approval workflow (non-blocking)
+Every check-in with `late=true` OR `out_of_geofence=true` is now
+stamped `approval_status="pending"` at ingest time (both self and
+muster paths). The check-in **still succeeds immediately** — hours
+count, appears in reports — but sits in an admin review queue so
+anomalies get an audit-trail eyeball.
+
+- `routes/checkin_approvals.py` (new):
+  - `GET /api/admin/checkin-approvals?status=pending|approved|rejected|all`
+    — hydrates full_name/photo_thumb/institution/fleet in one query.
+  - `POST /api/admin/checkin-approvals/{id}/decide` — body
+    `{decision, note}`. Rejections require ≥3-char note. Both
+    decisions audit-logged as `checkin_approved` / `checkin_rejected`
+    with before/after `approval_status` diff.
+  - `GET /api/admin/approvals-summary` — aggregated pending counts
+    across leaves, overtime, devices, checkins → powers sidebar badge.
+
+### 2. Unified "Approvals" landing (rename + badge)
+- Sidebar: `Leave Tour Approvals` → **`Approvals`** with a **persistent
+  amber-tinted background + ring**, and a **rose/amber count pill**
+  (leaves + OT + devices + checkins, polling every 60 s). Renders
+  "99+" for values >99.
+- `/admin/approvals` page — new 3rd tab **"Check-ins"** alongside
+  Leaves and Overtime. New `pages/admin/CheckinApprovals.jsx` renders
+  per-row approve/reject controls, quick-pick reason (via geo_reason
+  quote if present), and flag chips (Late/Off-site + distance).
+- Old dual-endpoint fetch replaced by one `/approvals-summary` call
+  — 3× fewer network trips per poll.
+
+### 3. Categories master — full CRUD
+- Extended `routes/meals.py` with:
+  - `POST /api/masters/categories` — admin creates a new category
+    (validates key regex + color from allowed palette).
+  - `PATCH /api/masters/categories/{id}` — updates label / color /
+    flags / sort_order / active. Deactivating a seeded category is
+    blocked (409) since attendance rules branch on their keys.
+  - `DELETE /api/masters/categories/{id}` — blocked for seeded keys
+    AND while >0 members reference it.
+  - `GET /api/masters/categories?include_inactive=true` — hydrates
+    `member_count` + `is_seeded` per row for the admin UI.
+- New `pages/admin/Categories.jsx` — list + inline form modal (key
+  locked on edit, 6-color palette, Meal-eligible + Athlete-like flags,
+  sort-order). Delete disabled with tooltip on seeded rows and rows
+  with members.
+- Sidebar entry (`ShieldAlert` icon) between Fleets and Training
+  Locations.
+
+### 4. Tiered test suite for faster iteration
+- New `slow` pytest marker for the 4 tests that dominate wall-time
+  (~60 s combined): sites CRUD lifecycle, meals cutoff narrow-pool,
+  reason-bank cap-at-50, dashboard non-admin rejection.
+- New `backend/ci.sh` runner:
+  - `./ci.sh`           → **fast tier (~70 s)**, `-m "not slow"`
+  - `./ci.sh --all`     → **full suite (~140 s)** — pre-deploy gate
+  - `./ci.sh --smoke`   → smoke (~3 s)
+- Full suite still runs in the deploy pipeline. Iterative development
+  uses the fast tier (2× speedup) — safe: only excludes long
+  end-to-end lifecycles that are exercised by the full suite before
+  every deploy.
+
+**Tests**: 459/460 pass in full run (1 pre-existing state-dependent
+skip in test_review_iter2). Fast tier: 441/441 pass in 69 s.
+
+---
+
+
 ## 8 Jul 2026 — Geo-aware check-ins: off-site warn + reason, permission
 banner, muster stamps coach GPS
 

@@ -7,6 +7,8 @@ their droplist"). Reasons live on `users[uid].reasons: [str]`.
 """
 from __future__ import annotations
 
+import pytest
+
 
 def _cleanup(admin_client, base_url):
     """Best-effort — clear whatever the tests seeded so they can be
@@ -60,6 +62,7 @@ def test_reason_bank_empty_delete_400(admin_client, base_url):
     assert r.status_code == 400, r.text
 
 
+@pytest.mark.slow
 def test_reason_bank_cap_at_50(admin_client, base_url):
     """Chatty members shouldn't be able to grow their doc unbounded."""
     _cleanup(admin_client, base_url)

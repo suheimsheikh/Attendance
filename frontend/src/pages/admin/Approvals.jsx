@@ -1,49 +1,44 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plane, ClipboardCheck } from "lucide-react";
+import { Plane, ClipboardCheck, Camera } from "lucide-react";
 import { api } from "../../api";
 import AdminLeaves from "./Leaves";
 import Overtime from "./Overtime";
+import CheckinApprovals from "./CheckinApprovals";
 
 /**
- * Single landing page for ALL pending approvals — leave/tour/comp-off and
- * overtime — surfaced as two tabs so admins have one place to clear their
- * queue instead of jumping between sidebar items. The tab state lives in the
- * URL (`?tab=leaves|overtime`) so direct links from the dashboard / alert
- * banners can deep-link straight into the right tab.
+ * Single landing page for ALL pending approvals — leaves/tours/comp-off,
+ * overtime, AND check-ins (late or off-geofence) since 8 Jul 2026 —
+ * surfaced as three tabs so admins have one place to clear their queue
+ * instead of jumping between sidebar items. The tab state lives in the
+ * URL (`?tab=leaves|overtime|checkins`) so direct links from the
+ * dashboard / alert banners can deep-link straight into the right tab.
  */
 export default function Approvals() {
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") === "overtime" ? "overtime" : "leaves";
+  const raw = params.get("tab");
+  const tab = raw === "overtime" ? "overtime"
+             : raw === "checkins" ? "checkins"
+             : "leaves";
   const setTab = (t) => {
-    // Preserve other query params (e.g. `?type=comp_off`, `?from=...`) so
-    // existing deep-links from Console banners keep working when they include
-    // additional filters.
     const next = new URLSearchParams(params);
     next.set("tab", t);
     setParams(next, { replace: true });
   };
 
-  // Badge counts on each tab — fetched once on mount and refreshed every 60 s
-  // so admins see new requests without manually refreshing.
-  const [pendingLeaves, setPendingLeaves] = useState(null);
-  const [pendingOt, setPendingOt] = useState(null);
+  // Badge counts on each tab — one round-trip to the consolidated
+  // /approvals-summary endpoint, refreshed every 60 s so admins see new
+  // requests without manually refreshing.
+  const [summary, setSummary] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
       try {
-        const [leaves, ot] = await Promise.all([
-          api.get("/leaves", { status_filter: "pending" }).catch(() => []),
-          api.get("/admin/overtime/needs-review").catch(() => null),
-        ]);
-        if (cancelled) return;
-        setPendingLeaves(Array.isArray(leaves) ? leaves.length : 0);
-        setPendingOt(ot?.total_pending ?? 0);
+        const s = await api.get("/admin/approvals-summary");
+        if (!cancelled) setSummary(s);
       } catch (err) {
-        // Don't fail the whole panel just because the badge counts couldn't
-        // be fetched — render with "—" badges and log for dev visibility.
-        console.debug("Approvals badge fetch failed:", err);
+        console.debug("Approvals summary fetch failed:", err);
       }
     };
     refresh();
@@ -52,8 +47,9 @@ export default function Approvals() {
   }, []);
 
   const tabs = [
-    { key: "leaves", label: "Leave / Tour / Comp Off", Icon: Plane, badge: pendingLeaves },
-    { key: "overtime", label: "Overtime", Icon: ClipboardCheck, badge: pendingOt },
+    { key: "leaves",   label: "Leave / Tour / Comp Off", Icon: Plane,           badge: summary?.leaves },
+    { key: "overtime", label: "Overtime",                Icon: ClipboardCheck,  badge: summary?.overtime },
+    { key: "checkins", label: "Check-ins",               Icon: Camera,          badge: summary?.checkins },
   ];
 
   return (
@@ -98,7 +94,9 @@ export default function Approvals() {
           spacing consistent and gives them a clean canvas without duplicate
           page-level chrome. */}
       <div data-testid={`approvals-tab-content-${tab}`}>
-        {tab === "leaves" ? <AdminLeaves embedded /> : <Overtime embedded />}
+        {tab === "leaves" && <AdminLeaves embedded />}
+        {tab === "overtime" && <Overtime embedded />}
+        {tab === "checkins" && <CheckinApprovals />}
       </div>
     </div>
   );

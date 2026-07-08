@@ -18,15 +18,46 @@ lunch/dinner variations.
 """
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from services.time_utils import local_date_str, now_utc, office_tz
 
 
 DEFAULT_MEAL_CUTOFF = "07:00"
+SEEDED_CATEGORY_KEYS = {"athlete", "elite", "coach", "staff", "executive"}
+VALID_COLORS = {"sky", "rose", "emerald", "amber", "violet", "slate"}
+
+
+class CategoryIn(BaseModel):
+    """Body for creating a new category.
+
+    `key` is normalised to lowercase and used as the persisted category
+    value on user records — cannot be changed after creation. `label` is
+    the human-facing string shown on tiles and dropdowns. `color` picks
+    the tile tint (matches TICKET_STYLE on the frontend). New categories
+    default to `meal_eligible=False` and `is_athlete_like=False` — the
+    admin can flip these explicitly.
+    """
+    key: str = Field(..., min_length=2, max_length=40)
+    label: str = Field(..., min_length=2, max_length=60)
+    color: str = "slate"
+    is_athlete_like: bool = False
+    meal_eligible: bool = False
+    sort_order: int = 100
+
+
+class CategoryPatch(BaseModel):
+    label: Optional[str] = None
+    color: Optional[str] = None
+    is_athlete_like: Optional[bool] = None
+    meal_eligible: Optional[bool] = None
+    sort_order: Optional[int] = None
+    active: Optional[bool] = None
 
 
 def _valid_hm(s: str) -> bool:
@@ -49,17 +80,109 @@ def make_router(db, require_admin, get_current_user) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     # ------------------------------------------------------------------
-    # Categories master (read-only for now — seeded at startup).
-    # Anyone signed in may read this so the Members-form dropdown works
-    # for admins editing rows inline.
+    # Categories master — full CRUD (8 Jul 2026). The 5 seed categories
+    # (athlete/elite/coach/staff/executive) can be renamed/recoloured
+    # but their `key` is locked and they cannot be deleted (backend rules
+    # branch on those keys for OT, leave, and expected-daily semantics).
+    # Anyone signed in may read (so the Members-form dropdown works);
+    # only admins may write.
     # ------------------------------------------------------------------
     @router.get("/masters/categories")
-    async def list_categories(user: dict = Depends(get_current_user)):
-        rows = await db.categories.find(
-            {"active": True},
-            {"_id": 0},
-        ).sort("sort_order", 1).to_list(50)
+    async def list_categories(
+        include_inactive: bool = Query(False),
+        user: dict = Depends(get_current_user),
+    ):
+        q = {} if include_inactive else {"active": True}
+        rows = await db.categories.find(q, {"_id": 0}) \
+            .sort("sort_order", 1).to_list(50)
+        # Hydrate member counts so the admin UI can show "42 members" per
+        # row and disable delete on non-empty categories.
+        pipeline = [{"$group": {"_id": "$category", "n": {"$sum": 1}}}]
+        counts = {c["_id"]: c["n"] async for c in db.users.aggregate(pipeline) if c["_id"]}
+        for r in rows:
+            r["member_count"] = counts.get(r["key"], 0)
+            r["is_seeded"] = r["key"] in SEEDED_CATEGORY_KEYS
         return rows
+
+    @router.post("/masters/categories")
+    async def create_category(body: CategoryIn, admin: dict = Depends(require_admin)):
+        key = body.key.strip().lower()
+        if not key.replace("_", "").isalnum():
+            raise HTTPException(status_code=400,
+                                detail="Key must be alphanumeric (underscores allowed).")
+        if body.color not in VALID_COLORS:
+            raise HTTPException(status_code=400,
+                                detail=f"color must be one of {sorted(VALID_COLORS)}")
+        if await db.categories.find_one({"key": key}):
+            raise HTTPException(status_code=409, detail="A category with that key already exists.")
+        doc = {
+            "id": str(uuid.uuid4()),
+            "key": key,
+            "label": body.label.strip(),
+            "color": body.color,
+            "is_athlete_like": bool(body.is_athlete_like),
+            "meal_eligible": bool(body.meal_eligible),
+            "sort_order": int(body.sort_order),
+            "active": True,
+            "created_at": now_utc().isoformat(),
+            "created_by": admin.get("id"),
+        }
+        await db.categories.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
+
+    @router.patch("/masters/categories/{cat_id}")
+    async def update_category(
+        cat_id: str, body: CategoryPatch, admin: dict = Depends(require_admin)
+    ):
+        row = await db.categories.find_one({"id": cat_id}, {"_id": 0})
+        if not row:
+            raise HTTPException(status_code=404, detail="Category not found")
+        update = {}
+        if body.label is not None:
+            update["label"] = body.label.strip()
+        if body.color is not None:
+            if body.color not in VALID_COLORS:
+                raise HTTPException(status_code=400,
+                                    detail=f"color must be one of {sorted(VALID_COLORS)}")
+            update["color"] = body.color
+        if body.is_athlete_like is not None:
+            update["is_athlete_like"] = bool(body.is_athlete_like)
+        if body.meal_eligible is not None:
+            update["meal_eligible"] = bool(body.meal_eligible)
+        if body.sort_order is not None:
+            update["sort_order"] = int(body.sort_order)
+        if body.active is not None:
+            # Prevent deactivating a seeded category — it's referenced by
+            # rules (OVERTIME_CATEGORIES, ATHLETE_CATEGORIES, etc.).
+            if not body.active and row["key"] in SEEDED_CATEGORY_KEYS:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Seeded categories cannot be deactivated. Rename instead if needed.",
+                )
+            update["active"] = bool(body.active)
+        if not update:
+            return row
+        await db.categories.update_one({"id": cat_id}, {"$set": update})
+        row.update(update)
+        return row
+
+    @router.delete("/masters/categories/{cat_id}")
+    async def delete_category(cat_id: str, admin: dict = Depends(require_admin)):
+        row = await db.categories.find_one({"id": cat_id}, {"_id": 0})
+        if not row:
+            raise HTTPException(status_code=404, detail="Category not found")
+        if row["key"] in SEEDED_CATEGORY_KEYS:
+            raise HTTPException(status_code=409,
+                                detail="Seeded categories are protected — rename instead.")
+        in_use = await db.users.count_documents({"category": row["key"]})
+        if in_use > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=f"{in_use} member(s) still use this category — reassign first.",
+            )
+        await db.categories.delete_one({"id": cat_id})
+        return {"ok": True}
 
     # ------------------------------------------------------------------
     # Chef's View

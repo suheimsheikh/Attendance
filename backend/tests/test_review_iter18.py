@@ -11,6 +11,8 @@ import os
 import uuid
 import requests
 
+import pytest
+
 
 def _base_url():
     b = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
@@ -40,6 +42,7 @@ def _admin_token():
 
 
 # ── /api/admin/dashboard non-admin rejection ────────────────────────────────
+@pytest.mark.slow
 def test_dashboard_rejects_non_admin_token():
     """Create a member (non-admin) via admin, login as that member, ensure
     /admin/dashboard is forbidden."""

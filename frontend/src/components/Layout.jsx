@@ -11,6 +11,7 @@ import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
 import InstallPrompt from "./InstallPrompt";
 import OfflineBanner from "./OfflineBanner";
+import { api } from "../api";
 
 const NAV_MEMBER = [
   { to: "/", label: "My Check In/Out", icon: ScanLine, end: true },
@@ -39,13 +40,14 @@ const NAV_ADMIN = [
   { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true },
   { to: "/admin/members", label: "Manage Members", icon: Users },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat },
-  { to: "/admin/approvals", label: "Leave Tour Approvals", icon: ClipboardCheck },
+  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "total" },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
   { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare },
   { to: "/admin/institutions", label: "Institutions", icon: Building2 },
   { to: "/admin/fleets", label: "Fleets", icon: Sailboat },
+  { to: "/admin/categories", label: "Categories", icon: ShieldAlert },
   { to: "/admin/sites", label: "Training Locations", icon: MapPin },
   { to: "/admin/office", label: "Office Settings", icon: Settings },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
@@ -65,6 +67,27 @@ export default function Layout() {
   // Muster Roll (institution-scoped server-side), and Sign out. They have
   // no member/coach/admin permissions otherwise.
   const isEscort = !!user?.is_escort;
+
+  // Pending-approvals badge — one polling loop, badge attached to the
+  // Approvals nav item. Kept quiet on failures so a temporarily-slow
+  // backend doesn't clog the sidebar with error toasts.
+  const [approvalsSummary, setApprovalsSummary] = React.useState(null);
+  React.useEffect(() => {
+    if (!isAdmin || isEscort) return undefined;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const s = await api.get("/admin/approvals-summary");
+        if (!cancelled) setApprovalsSummary(s);
+      } catch (err) {
+        console.debug("approvals-summary fetch:", err?.message);
+      }
+    };
+    refresh();
+    const t = setInterval(refresh, 60_000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [isAdmin, isEscort]);
+
   const memberNav = isEscort
     ? [
         ...NAV_MEMBER.filter((n) => n.to === "/escort-checkin"),
@@ -114,9 +137,17 @@ export default function Layout() {
         {!isEscort && isAdmin && (
           <>
             <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Admin</div>
-            {NAV_ADMIN.map((item) => (
-              <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
-            ))}
+            {NAV_ADMIN.map((item) => {
+              const badge = item.badgeKey ? approvalsSummary?.[item.badgeKey] : undefined;
+              return (
+                <NavItem
+                  key={item.to}
+                  {...item}
+                  badge={badge}
+                  onClick={() => setOpen(false)}
+                />
+              );
+            })}
           </>
         )}
       </nav>
@@ -192,7 +223,7 @@ export default function Layout() {
   );
 }
 
-function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason }) {
+function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason, highlight, badge }) {
   if (disabled) {
     return (
       <div
@@ -213,13 +244,33 @@ function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason
       onClick={onClick}
       data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
       className={({ isActive }) =>
+        // The Approvals row gets a persistent amber tint + brighter border
+        // so it stays visually loud (there's always work to review). When
+        // active it gets an even stronger amber background so admins
+        // don't lose their place.
         `flex items-center gap-3 px-3 h-10 rounded-lg text-sm font-medium transition mb-0.5 ${
-          isActive ? "bg-white/10 text-white" : "text-slate-300 hover:bg-white/5 hover:text-white"
+          highlight
+            ? isActive
+              ? "bg-amber-500/25 text-amber-100 ring-1 ring-amber-400/60"
+              : "bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 ring-1 ring-amber-400/25"
+            : isActive
+              ? "bg-white/10 text-white"
+              : "text-slate-300 hover:bg-white/5 hover:text-white"
         }`
       }
     >
       <Icon size={17} />
-      <span>{label}</span>
+      <span className="flex-1">{label}</span>
+      {typeof badge === "number" && badge > 0 && (
+        <span
+          className={`min-w-[22px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center tabular-nums ${
+            highlight ? "bg-amber-400 text-amber-950" : "bg-rose-500 text-white"
+          }`}
+          data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-badge`}
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
     </NavLink>
   );
 }

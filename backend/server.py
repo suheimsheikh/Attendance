@@ -1892,6 +1892,16 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
         "late_minutes": late_minutes,
         "method": method,
         "checked_in_by": scanned_by,
+        # Approval workflow (8 Jul 2026): late OR off-geofence check-ins
+        # go through immediately but are flagged for admin review so
+        # the Approvals queue can catch anomalies without blocking the
+        # member. Approved/rejected decisions are audit-logged; a
+        # rejection is a note only (no repercussion, still in reports).
+        "approval_status": ("pending" if (late or out) else None),
+        "approval_flags": {
+            "late": bool(late),
+            "out_of_geofence": bool(out),
+        } if (late or out) else None,
     }
     await db.attendance.insert_one(doc)
     return {"ok": True, "action": "checkin", "member": target["full_name"],
@@ -1993,6 +2003,12 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         "late_minutes": late_minutes,
         "method": "geo",
         "checked_in_by": by,
+        # See parallel comment on the QR check-in path — same approval rule.
+        "approval_status": ("pending" if (late or out) else None),
+        "approval_flags": {
+            "late": bool(late),
+            "out_of_geofence": bool(out),
+        } if (late or out) else None,
     }
     if early_min > 0:
         doc.update({
@@ -3479,6 +3495,10 @@ app.include_router(_admin_tools_router(db, require_admin))
 # Read endpoint: GET /api/admin/audit-log.
 from routes.admin_audit import make_router as _audit_router, write_audit  # noqa: E402
 app.include_router(_audit_router(db, require_admin))
+
+# Check-in approvals queue + unified approvals summary (8 Jul 2026).
+from routes.checkin_approvals import make_router as _checkin_approvals_router  # noqa: E402
+app.include_router(_checkin_approvals_router(db, require_admin, write_audit))
 
 # Data-quality dashboard — read-only DB sweep for dupes, missing
 # fields, and structural inconsistencies.

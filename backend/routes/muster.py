@@ -235,6 +235,15 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 "late_minutes": late_min,
                 "excursions": [],
                 "created_at": now.isoformat(),
+                # Approval workflow — muster check-ins are flagged when
+                # late or off-geofence just like self check-ins so the
+                # Approvals queue catches anomalies. Coaches are trusted
+                # but audited (8 Jul 2026).
+                "approval_status": ("pending" if (late or bool(out_of_geofence)) else None),
+                "approval_flags": {
+                    "late": bool(late),
+                    "out_of_geofence": bool(out_of_geofence),
+                } if (late or bool(out_of_geofence)) else None,
             }
             await db.attendance.insert_one(att)
             done.append({"id": sid, "name": athlete["full_name"], "late": late})
