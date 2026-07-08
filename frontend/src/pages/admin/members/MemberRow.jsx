@@ -6,7 +6,6 @@ import StatusBadge from "../../../components/StatusBadge";
 import InlineCell from "../../../components/InlineCell";
 import ParentInlineInput from "./ParentInlineInput";
 import { BUCKET_BY_KEY, GENDER_LABEL, bucketOf, isInteractive, lastSeenLabel, leaveBalanceLabel } from "./helpers";
-import { categoryLabel } from "../../../utils";
 
 /**
  * MemberRow — one `<tr>` for a single member in the Members admin table.
@@ -141,7 +140,6 @@ export default function MemberRow({
             );
           }}
         />
-        <div className="text-xs text-slate-500 mt-1">{categoryLabel(m.category)}</div>
       </td>
       {/* Role — orthogonal to category (a coach can also be admin). */}
       <td className="iu-table-td">
