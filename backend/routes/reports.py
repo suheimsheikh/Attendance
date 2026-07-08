@@ -826,4 +826,94 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             "rows": rows,
         }
 
+    @router.get("/reports/leave-ledger")
+    async def leave_ledger(
+        member_id: str, year: int,
+        admin: dict = Depends(require_admin),
+    ):
+        """Date-wise leave ledger for a single member across a calendar
+        year. Powers the double-click drill-down modal on the Leave
+        section (Open · COff · Total · Avld · Close) of the Attendance
+        report.
+
+        Returns one row per leave application, sorted chronologically,
+        with kind = applied (pending) / availed (approved) / rejected.
+        Totals surface the split for the year at a glance.
+        """
+        yr_start, yr_end = f"{year}-01-01", f"{year}-12-31"
+        u = await db.users.find_one(
+            {"id": member_id},
+            {"_id": 0, "full_name": 1, "rank": 1, "category": 1,
+             "leave_balance_opening": 1},
+        )
+        if not u:
+            raise HTTPException(status_code=404, detail="Member not found")
+
+        DOW_LABEL = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+        # Every leave-type row for the year — spans that touch the
+        # window on either end are pulled in and clamped to the window.
+        # `posting`/`comp_off`/`tour` are intentionally excluded — they
+        # have their own ledgers and reports.
+        leaves = await db.leaves.find(
+            {"user_id": member_id, "type": "leave",
+             "start_date": {"$lte": yr_end}, "end_date": {"$gte": yr_start}},
+            {"_id": 0, "status": 1, "start_date": 1, "end_date": 1,
+             "reason": 1, "paid_leave_used": 1, "lop_days": 1,
+             "comp_off_used": 1, "admin_note": 1,
+             "decided_by": 1, "decided_at": 1, "applied_at": 1},
+        ).to_list(2000)
+
+        rows: list = []
+        for L in leaves:
+            status = (L.get("status") or "pending").lower()
+            kind = ("availed" if status == "approved"
+                    else "rejected" if status == "rejected"
+                    else "applied")
+            try:
+                s = max(date.fromisoformat(L["start_date"]), date.fromisoformat(yr_start))
+                e = min(date.fromisoformat(L["end_date"]), date.fromisoformat(yr_end))
+            except Exception:
+                continue
+            qty = (e - s).days + 1
+            rows.append({
+                "start_date": s.isoformat(),
+                "end_date": e.isoformat(),
+                "dow": DOW_LABEL[s.weekday()],
+                "kind": kind,
+                "qty": qty,
+                "paid_leave_used": float(L.get("paid_leave_used") or 0),
+                "comp_off_used": int(L.get("comp_off_used") or 0),
+                "lop_days": float(L.get("lop_days") or 0),
+                "reason": (L.get("reason") or "").strip() or None,
+                "admin_note": (L.get("admin_note") or "").strip() or None,
+            })
+
+        rows.sort(key=lambda r: (r["start_date"], r["kind"]))
+        totals = {
+            "applied":  sum(r["qty"] for r in rows if r["kind"] == "applied"),
+            "availed":  sum(r["qty"] for r in rows if r["kind"] == "availed"),
+            "rejected": sum(r["qty"] for r in rows if r["kind"] == "rejected"),
+        }
+        # Leave-balance summary (mirrors the Reports table's Leave columns).
+        opening = float(u.get("leave_balance_opening") or 0)
+        # `paid_leave_used` is the year-to-date deduction from the leave pool
+        # (approved leaves only — see the payroll_report loop).
+        taken_ytd = sum(
+            (r["paid_leave_used"] or r["qty"])
+            for r in rows if r["kind"] == "availed"
+        )
+        totals["opening"] = opening
+        totals["taken_ytd"] = round(taken_ytd, 1)
+        totals["remaining"] = round(opening - taken_ytd, 1)
+        return {
+            "member_id": member_id,
+            "member_name": (u or {}).get("full_name"),
+            "rank": (u or {}).get("rank"),
+            "category": (u or {}).get("category"),
+            "year": year,
+            "totals": totals,
+            "rows": rows,
+        }
+
     return router

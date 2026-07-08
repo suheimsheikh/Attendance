@@ -5,6 +5,27 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — Reports: Leave ledger drill-down modal
+
+Coach request: "Double click on the leave cols should show all the
+leave date like diff rows chronologically of Leave applied, Leave
+availed Leave rejected and totals thereof."
+
+- New backend endpoint `/api/reports/leave-ledger?member_id&year`
+  returns every leave-type application for the year, sorted
+  chronologically, tagged as `applied` (pending) / `availed`
+  (approved) / `rejected`. Header totals surface the split plus
+  Opening / Taken YTD / Remaining so the modal is a self-contained
+  leave audit for the year.
+- New frontend `LeaveLedgerModal.jsx` — chronological table with
+  Start · DOW · End · Days · Kind · Reason · Admin note. Double-
+  clicking Open / Total / Avld / Close in the Reports Leave section
+  opens the modal. COff still opens the comp-off ledger — it's a
+  separate pool. Verified live with HASSAN MOHD (30-day leave) and
+  AINUL HAQUE (1-day availed on Moharam).
+
+---
+
 ## 8 Jul 2026 — OT ledger: split Early reason vs Late reason
 
 Coach request: "In the overtime ledger both reasons for early and late

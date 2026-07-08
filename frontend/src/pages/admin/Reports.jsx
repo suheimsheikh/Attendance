@@ -8,6 +8,7 @@ import { todayIso, shortDate, categoryLabel } from "../../utils";
 import MemberTimelineModal from "../../components/MemberTimelineModal";
 import OTLedgerModal from "./OTLedgerModal";
 import CompOffLedgerModal from "./CompOffLedgerModal";
+import LeaveLedgerModal from "./LeaveLedgerModal";
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 function isoDate(y, m0, d) { return `${y}-${pad2(m0 + 1)}-${pad2(d)}`; }
@@ -135,6 +136,11 @@ export default function Reports() {
   // "A double click on the comp off col for anybody should create a
   // window with all the comp off dates and DOW").
   const [coLedger, setCoLedger] = useState(null); // { member_id, member_name } | null
+  // Double-click Leave ledger modal state (8 Jul 2026 user request:
+  // "Double click on the leave cols should show all the leave date like
+  // diff rows chronologically of Leave applied, Leave availed Leave
+  // rejected and totals thereof").
+  const [lvLedger, setLvLedger] = useState(null); // { member_id, member_name } | null
 
   // Drill-down hover popover state (7 Jul 2026 — replaces native
   // `title` attrs which had 1-2s browser-delay and broke inside the
@@ -549,7 +555,12 @@ export default function Reports() {
                             COff is comp-off available YTD, pulled from
                             /leave-balances and merged client-side; it
                             adds to the leave pool. Athletes fall through
-                            to 0 for all fields (Breaks workflow). */}
+                            to 0 for all fields (Breaks workflow).
+                            Double-clicking Open / Total / Avld / Close
+                            opens the year-wide Leave ledger (applied /
+                            availed / rejected). COff opens the comp-off
+                            ledger instead — it's conceptually a
+                            different pool. */}
                         {(() => {
                           const open = r.leave_balance_opening || 0;
                           const coff = compOffMap[r.member_id] || 0;
@@ -558,13 +569,16 @@ export default function Reports() {
                           const close = Math.round((total - avld) * 10) / 10;
                           const hasBalance = open > 0 || coff > 0 || avld > 0;
                           const fmt = (v) => (hasBalance ? String(v) : "");
+                          const openLv = () => setLvLedger({ member_id: r.member_id, member_name: r.member_name });
+                          const openCo = () => setCoLedger({ member_id: r.member_id, member_name: r.member_name });
+                          const lvCell = "py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100 cursor-pointer hover:bg-amber-100/60";
                           return (
                             <>
-                              <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100" data-testid={`leave-open-${r.member_id}`}>{fmt(open)}</td>
-                              <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100 text-sky-700" data-testid={`leave-coff-${r.member_id}`}>{coff > 0 ? String(coff) : ""}</td>
-                              <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100 font-semibold" data-testid={`leave-total-${r.member_id}`}>{fmt(total)}</td>
-                              <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100" data-testid={`leave-avld-${r.member_id}`}>{fmt(avld)}</td>
-                              <td className={`py-1.5 px-1.5 text-center bg-amber-50/30 border-r border-t border-amber-100 font-extrabold ${close < 0 ? "text-red-600" : "text-emerald-700"}`} data-testid={`leave-close-${r.member_id}`}>{fmt(close)}</td>
+                              <td className={lvCell} data-testid={`leave-open-${r.member_id}`} onDoubleClick={openLv} title="Double-click for leave ledger">{fmt(open)}</td>
+                              <td className={`${lvCell} text-sky-700`} data-testid={`leave-coff-${r.member_id}`} onDoubleClick={openCo} title="Double-click for comp-off ledger">{coff > 0 ? String(coff) : ""}</td>
+                              <td className={`${lvCell} font-semibold`} data-testid={`leave-total-${r.member_id}`} onDoubleClick={openLv} title="Double-click for leave ledger">{fmt(total)}</td>
+                              <td className={lvCell} data-testid={`leave-avld-${r.member_id}`} onDoubleClick={openLv} title="Double-click for leave ledger">{fmt(avld)}</td>
+                              <td className={`py-1.5 px-1.5 text-center bg-amber-50/30 border-r border-t border-amber-100 font-extrabold cursor-pointer hover:bg-amber-100/60 ${close < 0 ? "text-red-600" : "text-emerald-700"}`} data-testid={`leave-close-${r.member_id}`} onDoubleClick={openLv} title="Double-click for leave ledger">{fmt(close)}</td>
                             </>
                           );
                         })()}
@@ -619,6 +633,16 @@ export default function Reports() {
         onClose={() => setCoLedger(null)}
         memberId={coLedger?.member_id}
         memberName={coLedger?.member_name}
+        year={year}
+      />
+
+      {/* Leave ledger drill-down — opens on double-click of any Leave
+          section cell (Open / Total / Avld / Close). */}
+      <LeaveLedgerModal
+        open={!!lvLedger}
+        onClose={() => setLvLedger(null)}
+        memberId={lvLedger?.member_id}
+        memberName={lvLedger?.member_name}
         year={year}
       />
 
