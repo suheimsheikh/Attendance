@@ -286,7 +286,7 @@ export default function MemberRow({
       {/* Inline editable parent names + mobile numbers. Names are edited via
           a small text InlineCell in place of the old static badge label. */}
       <td className="iu-table-td">
-        <div className="flex flex-col gap-1 min-w-[360px] max-w-[460px]">
+        <div className="flex flex-col gap-0.5 min-w-[240px] max-w-[300px]">
           <ParentInlineInput
             memberId={m.id}
             field="father_mobile"

@@ -76,6 +76,18 @@ body {
   .iu-table-td {
     @apply text-sm text-slate-700 py-3 px-4 border-t border-slate-100;
   }
+  /* Compact density — opt-in via `.iu-table-compact` on the <table>. Overrides
+     the default iu-table-th / iu-table-td spacing so wide tables like Members
+     (19 columns) can fit more fields on-screen without horizontal scrolling.
+     Scoped to descendant th/td so it only affects the opted-in table. */
+  .iu-table-compact th,
+  .iu-table-compact td {
+    @apply !py-1.5 !px-2 !text-xs;
+  }
+  .iu-table-compact input,
+  .iu-table-compact select {
+    @apply text-xs;
+  }
   /* Modal overlay + card. Used by admin flows (EscortPhotoCleanup,
      Institutions, Leaves-approval-gate). Adding this in Feb 2026 —
      previous callers used the class names without CSS backing them

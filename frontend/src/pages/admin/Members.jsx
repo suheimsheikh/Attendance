@@ -395,8 +395,7 @@ export default function Members() {
       ) : (
         <div className="iu-card overflow-hidden">
           <div className="overflow-auto max-h-[75vh]">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 sticky top-0 z-20">
+            <table className="w-full text-sm iu-table-compact">              <thead className="bg-slate-50 sticky top-0 z-20">
                 <tr>
                   <th className="iu-table-th w-10 text-center sticky left-0 z-30 bg-slate-50">
                     <input
@@ -416,7 +415,7 @@ export default function Members() {
                       className="w-4 h-4 cursor-pointer accent-sky-600"
                     />
                   </th>
-                  <th className="iu-table-th !py-3.5 !text-sm w-10 text-center sticky left-10 z-30 bg-slate-50 !text-slate-700 !font-bold" title={COL_HELP.edit}>Edit</th>
+                  <th className="iu-table-th w-10 text-center sticky left-10 z-30 bg-slate-50 !text-slate-700 !font-bold" title={COL_HELP.edit}>Edit</th>
                   <SortableTh k="full_name" className="sticky left-20 z-30 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Member</SortableTh>
                   <SortableTh k="category" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Category</SortableTh>
                   <SortableTh k="role" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Role</SortableTh>
@@ -431,9 +430,9 @@ export default function Members() {
                   <SortableTh k="weekly_off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Weekly off</SortableTh>
                   <SortableTh k="date_of_birth" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>DOB</SortableTh>
                   <SortableTh k="ot_eligible" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="center">OT</SortableTh>
-                  <th className="iu-table-th !py-3.5 !text-sm !text-slate-700 !font-bold" title={COL_HELP.parents}>Parents / Guardian</th>
-                  <th className="iu-table-th !py-3.5 !text-sm !text-slate-700 !font-bold" title={COL_HELP.status}>Status</th>
-                  <th className="iu-table-th !py-3.5 !text-sm text-center w-12 !text-slate-700 !font-bold" title={COL_HELP.del}>Del</th>
+                  <th className="iu-table-th !text-slate-700 !font-bold" title={COL_HELP.parents}>Parents / Guardian</th>
+                  <th className="iu-table-th !text-slate-700 !font-bold" title={COL_HELP.status}>Status</th>
+                  <th className="iu-table-th text-center w-12 !text-slate-700 !font-bold" title={COL_HELP.del}>Del</th>
                 </tr>
               </thead>
               <tbody data-testid="members-table">
@@ -543,7 +542,7 @@ function SortableTh({ k, sortKey, sortDir, onSort, align = "left", className = "
     </div>
   );
   return (
-    <th className={`iu-table-th !py-3.5 !text-sm ${align === "center" ? "text-center" : ""} ${className}`}>
+    <th className={`iu-table-th ${align === "center" ? "text-center" : ""} ${className}`}>
       <button
         type="button"
         data-testid={`sort-${k}`}

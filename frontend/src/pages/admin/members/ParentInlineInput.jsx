@@ -77,7 +77,7 @@ export default function ParentInlineInput({
         placeholder="Name"
         data-testid={`inline-${nameField}-${memberId}`}
         disabled={nameBusy}
-        className="w-[110px] shrink-0 px-2 h-7 text-xs rounded border border-slate-200 bg-white focus:bg-white focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
+        className="w-[86px] shrink-0 px-1.5 h-6 text-xs rounded border border-slate-200 bg-white focus:bg-white focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
       />
       {nameBusy
         ? <Loader2 size={11} className="animate-spin text-slate-400" />
@@ -91,7 +91,7 @@ export default function ParentInlineInput({
         placeholder="+91…"
         data-testid={`inline-${field}-${memberId}`}
         disabled={mobileBusy}
-        className="flex-1 min-w-0 px-2 h-7 text-xs font-mono rounded border border-slate-200 bg-white focus:bg-white focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
+        className="flex-1 min-w-0 px-1.5 h-6 text-xs font-mono rounded border border-slate-200 bg-white focus:bg-white focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
       />
       {mobileBusy
         ? <Loader2 size={11} className="animate-spin text-slate-400" />
