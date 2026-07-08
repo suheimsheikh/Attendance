@@ -121,7 +121,7 @@ export default function Members() {
   useEffect(() => { load(); }, [load]);
 
   const counts = useMemo(() => {
-    const c = { all: members.length, coach: 0, staff: 0, executive: 0, athlete: 0 };
+    const c = { all: members.length, coach: 0, staff: 0, executive: 0, athlete: 0, elite: 0 };
     let adminCount = 0;
     for (const m of members) {
       const b = bucketOf(m);
