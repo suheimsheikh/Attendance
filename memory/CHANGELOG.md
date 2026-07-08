@@ -5,6 +5,46 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — Editable meal cut-off + Training Locations rename
+
+**Meal cut-off moved to Office Settings** (was hardcoded 07:00). Admins
+can now tune when breakfast eligibility closes without a code change
+— tighten to 06:45 on regatta days, loosen on holidays, etc.
+
+- `OfficeConfig.meal_breakfast_cutoff: str = "07:00"` added (Pydantic
+  default protects existing docs → no backfill needed).
+- `routes/meals.py` resolution order: **explicit ?cutoff (validated) →
+  office.meal_breakfast_cutoff → 07:00 default**. An explicit bad query
+  400s (catches frontend bugs); a bad office value silently falls back
+  (so admins can still open the page and fix the setting).
+- Response payload now includes `configured_cutoff` alongside the
+  effective `cutoff`, so the Chef's View can show the office default
+  even when an override is active.
+
+**Frontend**
+- `pages/admin/Office.jsx` — new "Breakfast eligibility cut-off"
+  section (data-testid `of-meal-breakfast-cutoff`) with time picker +
+  explanatory hint. Placed between Half-day windows and Forgot-checkout
+  reminder.
+- `pages/admin/ChefsView.jsx` — cut-off picker starts empty and
+  hydrates from `response.cutoff` on first load. Picker `title`
+  tooltip shows "Office setting: HH:MM (change on Office Settings)"
+  so admins know where to change the default.
+
+**Training Locations rename** — multi-location training with lat/long/
+geofence-radius already existed as **Sites** (full CRUD, additive to
+office geofence, resolved on every check-in). Renamed sidebar entry,
+page heading, form title, empty state, and toast copy to
+**"Training Locations"** for discoverability. No schema or route
+changes; the URL is still `/admin/sites`.
+
+**Tests** — 13/13 meals-related tests + full 62/62 regression pass.
+Testing agent iter20: **100% backend + 100% frontend**, incl. E2E
+verification of picker hydration under 06:45 override.
+
+---
+
+
 ## 8 Jul 2026 — Chef's View + Categories master + "Elite" category
 
 New `/admin/chefs-view` under the Members section of the sidebar —
