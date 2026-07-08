@@ -53,6 +53,20 @@ app = FastAPI(lifespan=_lifespan_factory)
 api_router = APIRouter(prefix="/api")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
+# ----------------------------------------------------------------------------
+# Approval workflow flags (added 08 Jul 2026 at admin's request).
+#
+# When True, the system automatically routes anomalous check-ins and
+# earned-overtime into the /admin/approvals queue. Admin wanted these
+# OFF while they clean up a large accumulated pre-launch backlog and
+# handle these cases manually. Flip either back to True to restore the
+# automatic queuing behavior — the underlying `late` / `out_of_geofence`
+# / `overtime_total_min` fields are still calculated + stored so no
+# historical data is lost by turning these off.
+# ----------------------------------------------------------------------------
+AUTO_APPROVAL_LATE_CHECKINS = False
+AUTO_APPROVAL_OVERTIME = False
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -1976,11 +1990,13 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
         "method": method,
         "checked_in_by": scanned_by,
         # Approval workflow (8 Jul 2026): late OR off-geofence check-ins
-        # go through immediately but are flagged for admin review so
-        # the Approvals queue can catch anomalies without blocking the
-        # member. Approved/rejected decisions are audit-logged; a
-        # rejection is a note only (no repercussion, still in reports).
-        "approval_status": ("pending" if (late or out) else None),
+        # go through immediately but were flagged for admin review so
+        # the Approvals queue could catch anomalies without blocking the
+        # member. Currently OFF (see AUTO_APPROVAL_LATE_CHECKINS at top
+        # of file) while admin clears the pre-launch backlog manually.
+        # The `late` / `out_of_geofence` flags below are still stored so
+        # nothing is lost — we just don't route the row to the queue.
+        "approval_status": ("pending" if AUTO_APPROVAL_LATE_CHECKINS and (late or out) else None),
         "approval_flags": {
             "late": bool(late),
             "out_of_geofence": bool(out),
@@ -2031,7 +2047,11 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             ot_updates = {
                 "overtime_late_min": late_min,
                 "overtime_total_min": existing_early + late_min,
-                "overtime_status": "pending",
+                # Gated by AUTO_APPROVAL_OVERTIME (top of file). When OFF,
+                # overtime minutes are still recorded on the row but the
+                # entry is not routed to the OT approval queue — admin
+                # handles OT manually via the Overtime page.
+                "overtime_status": "pending" if AUTO_APPROVAL_OVERTIME else None,
                 "overtime_reason": (overtime_reason or existing_reason or "").strip() or None,
                 "work_end_at_session": work_end_hm,
             }
@@ -2087,7 +2107,8 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         "method": "geo",
         "checked_in_by": by,
         # See parallel comment on the QR check-in path — same approval rule.
-        "approval_status": ("pending" if (late or out) else None),
+        # Currently OFF (AUTO_APPROVAL_LATE_CHECKINS at top of file).
+        "approval_status": ("pending" if AUTO_APPROVAL_LATE_CHECKINS and (late or out) else None),
         "approval_flags": {
             "late": bool(late),
             "out_of_geofence": bool(out),
@@ -2097,7 +2118,10 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         doc.update({
             "overtime_early_min": early_min,
             "overtime_total_min": early_min,
-            "overtime_status": "pending",
+            # Gated by AUTO_APPROVAL_OVERTIME (top of file). When OFF, OT
+            # minutes are still recorded on the row but the row is not
+            # routed to the OT approval queue.
+            "overtime_status": "pending" if AUTO_APPROVAL_OVERTIME else None,
             "overtime_reason": (overtime_reason or "").strip() or None,
             "work_start_at_session": work_start_hm,
         })

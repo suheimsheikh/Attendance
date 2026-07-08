@@ -31,6 +31,18 @@ from services.time_utils import now_utc, local_date_str
 from services.attendance_calc import compute_late, excursion_seconds
 
 
+def _auto_approval_late_checkins() -> bool:
+    """Read the AUTO_APPROVAL_LATE_CHECKINS flag from server.py at call
+    time (not import time) so muster and server share a single toggle
+    without needing a circular import at module init.
+    """
+    try:
+        import server  # local import — server has already imported this module by now
+        return bool(getattr(server, "AUTO_APPROVAL_LATE_CHECKINS", False))
+    except Exception:
+        return False
+
+
 # -------------------- Pydantic bodies --------------------
 class MusterBulkIn(BaseModel):
     athlete_ids: List[str]
@@ -239,7 +251,14 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 # late or off-geofence just like self check-ins so the
                 # Approvals queue catches anomalies. Coaches are trusted
                 # but audited (8 Jul 2026).
-                "approval_status": ("pending" if (late or bool(out_of_geofence)) else None),
+                # Gated by server.AUTO_APPROVAL_LATE_CHECKINS (currently
+                # OFF while admin clears the pre-launch backlog manually).
+                # `late` / `out_of_geofence` are still recorded on the row.
+                "approval_status": (
+                    "pending"
+                    if _auto_approval_late_checkins() and (late or bool(out_of_geofence))
+                    else None
+                ),
                 "approval_flags": {
                     "late": bool(late),
                     "out_of_geofence": bool(out_of_geofence),
