@@ -5,6 +5,50 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — Location-wise check-ins on Presence + Admin Dashboard
+
+Members' training-location context now surfaces everywhere it matters
+so coaches can answer "who's at Rowing Academy right now?" without
+opening the map. Additive to the existing single-session-per-day
+workflow (no check-out/check-in dance needed).
+
+**Backend**
+- `GET /api/presence` — every member entry now carries `site_id` +
+  `site_name` (both null for off-status members, so exited/absent/
+  on_leave rows don't leak stale site data). Response gets a new
+  top-level `by_location` array grouping on_campus + temp_out members
+  by their check-in site with counts and by-category breakdown; null
+  sites fold into "Main Club".
+- `GET /api/admin/dashboard` — `now.on_campus_by_location` mirrors the
+  same shape (minus by_category — dashboard only shows totals).
+- Both responses always include the key (empty array on days with no
+  on-campus members) so the frontend guards are simple.
+
+**Frontend**
+- `components/presence/LocationFilterRow.jsx` (new) — pill row that
+  self-hides when < 2 distinct locations (single-site day). Deep-link-
+  aware via `?location=` URL param.
+- `pages/Presence.jsx` — imports `useSearchParams`, adds `locationFilter`
+  state seeded from URL, includes location predicate in `byColumn`
+  filter (skipped on historical views), syncs URL with `replace:true`
+  on toggle so refresh keeps the filter.
+- `components/presence/MemberCard.jsx` — small emerald 📍 chip with the
+  site_name next to the existing institution chip.
+- `pages/admin/Dashboard.jsx` — new "ON CAMPUS BY LOCATION" chip strip
+  below the Now tiles (hidden when empty). Each chip is a `<Link>` to
+  `/presence?location=<encoded_site_name>` so admins click through to
+  the pre-filtered board in one tap.
+
+**Tests**
+- `backend/tests/test_presence_by_location.py` — 3 new contract tests
+  guarantee the new keys exist on both endpoints and that off-status
+  members don't leak site info.
+- Testing agent iter21: **86/86 backend pass** (regression + new).
+  Code review: clean, non-blocking nits only.
+
+---
+
+
 ## 8 Jul 2026 — Editable meal cut-off + Training Locations rename
 
 **Meal cut-off moved to Office Settings** (was hardcoded 07:00). Admins

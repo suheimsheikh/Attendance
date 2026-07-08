@@ -205,8 +205,9 @@ export default function Presence() {
       // site_name (on_campus + temp_out). If a location is picked, hide
       // members outside that location; a member on leave/tour/absent
       // has no site_name so they naturally drop out — which matches the
-      // user's mental model ("who's at Rowing right now").
-      if (locationFilter && (m.site_name || "") !== locationFilter) return false;
+      // user's mental model ("who's at Rowing right now"). Skip the
+      // filter on historical views since site_name isn't tagged there.
+      if (locationFilter && !isHistorical && (m.site_name || "") !== locationFilter) return false;
       if (!q) return true;
       return (m.full_name || "").toLowerCase().includes(q)
         || (m.rank || "").toLowerCase().includes(q)
