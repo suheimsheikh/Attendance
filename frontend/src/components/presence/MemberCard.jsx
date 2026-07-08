@@ -15,16 +15,18 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
   const compact = density === "compact";
   // Row background — three cases:
   //   • late anywhere → keep the existing red-50 tint (highest priority)
-  //   • Away column → tint orange for tour / amber for leave so the
-  //     merged column stays visually two-toned like it used to be when
-  //     they were separate columns
+  //   • Away column → deliberately cross-hue so Tour vs Leave is legible
+  //     at a glance without having to read the pill:
+  //       Tour  → warm orange-100 (peachy)
+  //       Leave → cool violet-100  (purple)
+  //     -50 tints were previously used but read as "the same beige".
   //   • everything else → plain white with slate hover
   let lateBg = "hover:bg-slate-50";
   if (m.late) {
     lateBg = "bg-red-50 hover:bg-red-100";
   } else if (columnKey === "away") {
-    if (m.status === "on_tour") lateBg = "bg-orange-50 hover:bg-orange-100";
-    else if (m.status === "on_leave") lateBg = "bg-amber-50 hover:bg-amber-100";
+    if (m.status === "on_tour") lateBg = "bg-orange-100 hover:bg-orange-200";
+    else if (m.status === "on_leave") lateBg = "bg-violet-100 hover:bg-violet-200";
   }
   const notifyDueType = m.notify_due?.not_arrived
     ? "not_arrived"
