@@ -41,11 +41,28 @@ export default function MemberForm({ initial, onClose, onSaved }) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [institutions, setInstitutions] = useState([]);
   const [fleets, setFleets] = useState([]);
+  // Categories come from the Categories Master (/api/masters/categories) so
+  // new categories added there (e.g. "Elite") automatically appear in the
+  // dropdown without a code change. Falls back to the seeded 5 if the fetch
+  // fails so the form still works.
+  const [categories, setCategories] = useState([
+    { key: "athlete",   label: "Athlete" },
+    { key: "elite",     label: "Elite" },
+    { key: "coach",     label: "Coach" },
+    { key: "staff",     label: "Staff" },
+    { key: "executive", label: "Executive" },
+  ]);
   const formErr = useFormError();
 
   useEffect(() => {
     api.get("/institutions").then((rows) => setInstitutions((rows || []).filter((r) => r.active))).catch(() => {});
     api.get("/fleets").then((rows) => setFleets((rows || []).filter((r) => r.active))).catch(() => {});
+    api.get("/masters/categories")
+      .then((rows) => {
+        const active = (rows || []).filter((r) => r.active !== false);
+        if (active.length > 0) setCategories(active);
+      })
+      .catch(() => {});
   }, []);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -146,10 +163,12 @@ export default function MemberForm({ initial, onClose, onSaved }) {
             <div>
               <label className="iu-label">Category</label>
               <select data-testid="mf-category" value={form.category} onChange={(e) => set("category", e.target.value)} className="iu-input">
-                <option value="athlete">Athlete</option>
-                <option value="staff">Staff</option>
-                <option value="coach">Coach</option>
-                <option value="executive">Executive</option>
+                {categories.map((c) => (
+                  <option key={c.key} value={c.key}>{c.label}</option>
+                ))}
+                {form.category && !categories.some((c) => c.key === form.category) && (
+                  <option value={form.category}>{form.category} (legacy)</option>
+                )}
               </select>
             </div>
           </div>

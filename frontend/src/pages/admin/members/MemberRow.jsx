@@ -42,6 +42,16 @@ export default function MemberRow({
   const p = presenceRow;
   const b = BUCKET_BY_KEY[bucketOf(m)] || BUCKET_BY_KEY.athlete;
   const { CATEGORY_OPTS, ROLE_OPTS, GENDER_OPTS, FLEET_OPTS, INSTITUTION_OPTS } = options;
+  // Frozen-column background — sticky td cells must have their own solid
+  // background or the un-frozen columns scroll through them. Pick the same
+  // tone the row would show for its state (highlighted → amber, selected →
+  // sky, otherwise white). Bucket hover tints are dropped on frozen cells
+  // by design — matches how Excel/Sheets renders a frozen pane.
+  const frozenBg = highlighted
+    ? "bg-amber-50"
+    : isSelected
+    ? "bg-sky-50"
+    : "bg-white";
 
   return (
     <tr
@@ -58,7 +68,7 @@ export default function MemberRow({
           regardless of synthetic-event ordering quirks). The wrapper td's
           onClick deliberately swallows propagation so the row's
           double-click-to-edit doesn't trigger. */}
-      <td className="iu-table-td text-center" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+      <td className={`iu-table-td text-center sticky left-0 z-10 ${frozenBg}`} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
           data-testid={`bulk-select-${m.id}`}
@@ -70,7 +80,7 @@ export default function MemberRow({
         />
       </td>
       {/* Edit pencil — extreme left, always visible */}
-      <td className="iu-table-td text-center relative pl-2 pr-1">
+      <td className={`iu-table-td text-center relative pl-2 pr-1 sticky left-10 z-10 ${frozenBg}`}>
         <span className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r ${b.stripe}`} aria-hidden="true" />
         <button
           data-testid={`edit-member-${m.id}`}
@@ -82,7 +92,7 @@ export default function MemberRow({
         </button>
       </td>
       {/* Member: photo + name + email + parent-contact icon */}
-      <td className="iu-table-td">
+      <td className={`iu-table-td sticky left-20 z-10 ${frozenBg} shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]`}>
         <div className="flex items-center gap-3">
           <InlinePhotoAvatar
             member={m}

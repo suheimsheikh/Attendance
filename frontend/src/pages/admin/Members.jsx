@@ -353,9 +353,9 @@ export default function Members() {
         <div className="iu-card overflow-hidden">
           <div className="overflow-auto max-h-[75vh]">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 sticky top-0 z-10">
+              <thead className="bg-slate-50 sticky top-0 z-20">
                 <tr>
-                  <th className="iu-table-th w-10 text-center">
+                  <th className="iu-table-th w-10 text-center sticky left-0 z-30 bg-slate-50">
                     <input
                       type="checkbox"
                       data-testid="bulk-select-all"
@@ -373,8 +373,8 @@ export default function Members() {
                       className="w-4 h-4 cursor-pointer accent-sky-600"
                     />
                   </th>
-                  <th className="iu-table-th w-10 text-center">Edit</th>
-                  <th className="iu-table-th">Member</th>
+                  <th className="iu-table-th w-10 text-center sticky left-10 z-30 bg-slate-50">Edit</th>
+                  <th className="iu-table-th sticky left-20 z-30 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">Member</th>
                   <th className="iu-table-th">Role / Category</th>
                   <th className="iu-table-th">Rank</th>
                   <th className="iu-table-th">Gender</th>

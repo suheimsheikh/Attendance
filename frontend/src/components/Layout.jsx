@@ -40,7 +40,7 @@ const NAV_ADMIN = [
   { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true },
   { to: "/admin/members", label: "Manage Members", icon: Users },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat },
-  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "total" },
+  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page" },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
@@ -138,7 +138,21 @@ export default function Layout() {
           <>
             <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Admin</div>
             {NAV_ADMIN.map((item) => {
-              const badge = item.badgeKey ? approvalsSummary?.[item.badgeKey] : undefined;
+              // Synthetic key `approvals_page` sums only the queues that the
+              // Approvals page actually surfaces (leaves + overtime + checkins).
+              // Device approvals live on their own /admin/devices page so
+              // including them here would confuse admins: the sidebar badge
+              // would always be higher than the number of items visible when
+              // they land on the Approvals page.
+              let badge;
+              if (item.badgeKey === "approvals_page" && approvalsSummary) {
+                const n = (approvalsSummary.leaves || 0)
+                        + (approvalsSummary.overtime || 0)
+                        + (approvalsSummary.checkins || 0);
+                badge = n > 0 ? n : undefined;
+              } else if (item.badgeKey) {
+                badge = approvalsSummary?.[item.badgeKey];
+              }
               return (
                 <NavItem
                   key={item.to}
