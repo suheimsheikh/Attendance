@@ -88,6 +88,8 @@ export default function Reports() {
   const [attendance, setAttendance] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [fleetFilter, setFleetFilter] = useState("");
+  const [institutionFilter, setInstitutionFilter] = useState("");
+  const [compOffOnly, setCompOffOnly] = useState(false);
   const [sortBy, setSortBy] = useState("alpha");
 
   // Drill-down hover popover state (7 Jul 2026 — replaces native
@@ -147,6 +149,12 @@ export default function Reports() {
   const exportDaily = (fmt) => downloadBlob("/reports/daily/export", `daily_${day}.${fmt}`, { on: day, fmt });
 
   const rows = useMemo(() => attendance?.rows || [], [attendance]);
+  // Distinct institutions present in the current dataset — feeds the dropdown.
+  const institutionOptions = useMemo(() => {
+    const set = new Set();
+    for (const r of rows) if (r.institution) set.add(r.institution);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [rows]);
   const displayedRows = useMemo(() => {
     let list = rows;
     if (categoryFilter === "athlete") {
@@ -163,6 +171,19 @@ export default function Reports() {
           : (r.fleet || "").toLowerCase() === fleetFilter.toLowerCase()
       );
     }
+    if (institutionFilter) {
+      list = list.filter((r) =>
+        institutionFilter === "__none__"
+          ? !r.institution
+          : (r.institution || "") === institutionFilter
+      );
+    }
+    if (compOffOnly) {
+      // Any non-zero comp-off signal earns inclusion — earned, applied, or approved/used.
+      list = list.filter((r) => (r.comp_off_earned || 0) > 0
+                              || (r.comp_off_applied || 0) > 0
+                              || (r.comp_off_used || 0) > 0);
+    }
     const sorted = [...list];
     if (sortBy === "pct_desc") {
       sorted.sort((a, b) => (b.attendance_pct || 0) - (a.attendance_pct || 0)
@@ -171,7 +192,7 @@ export default function Reports() {
       sorted.sort((a, b) => (a.member_name || "").localeCompare(b.member_name || ""));
     }
     return sorted;
-  }, [rows, categoryFilter, fleetFilter, sortBy]);
+  }, [rows, categoryFilter, fleetFilter, institutionFilter, compOffOnly, sortBy]);
 
   const fleetOptions = useMemo(() => {
     const s = new Set();
@@ -259,6 +280,33 @@ export default function Reports() {
                   ))}
                 </select>
               )}
+              {/* Institution dropdown — mirrors the Fleet dropdown but stays
+                  visible for every category, not just athletes. */}
+              {institutionOptions.length > 0 && (
+                <select
+                  data-testid="institution-filter"
+                  value={institutionFilter}
+                  onChange={(e) => setInstitutionFilter(e.target.value)}
+                  className="iu-input !w-44 !py-1 !h-8 text-xs"
+                  title="Filter by institution"
+                >
+                  <option value="">All institutions</option>
+                  <option value="__none__">(No institution)</option>
+                  {institutionOptions.map((i) => (
+                    <option key={i} value={i}>{i}</option>
+                  ))}
+                </select>
+              )}
+              {/* Comp-off-only toggle — surfaces staff who have any non-zero
+                  comp-off signal (earned / applied / used) this month. */}
+              <button
+                data-testid="comp-off-only-toggle"
+                onClick={() => setCompOffOnly((v) => !v)}
+                className={`iu-chip ${compOffOnly ? "iu-chip-active" : ""}`}
+                title="Show only rows where comp-off earned / applied / approved > 0"
+              >
+                Comp-off &gt; 0
+              </button>
             </div>
             <div className="flex items-center gap-2" data-testid="sort-options">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Sort</span>
@@ -277,7 +325,7 @@ export default function Reports() {
 
           <div className="iu-card overflow-hidden">
             <div className="overflow-auto max-h-[70vh]">
-              <table className="min-w-full text-xs" style={{ minWidth: 1500 }}>
+              <table className="min-w-full text-xs iu-table-compact" style={{ minWidth: 1300 }}>
                 <thead>
                   {/* Grouped header row + sub-header row are BOTH sticky
                       (7 Jul 2026 user-requested). Row 1 pins to top-0,
@@ -381,7 +429,7 @@ export default function Reports() {
                           <div className="text-[10px] text-slate-400 leading-tight">
                             {r.rank || ""}
                             {r.attendance_pct !== undefined && (
-                              <span className={r.rank ? "ml-1.5" : ""}>{r.attendance_pct}%</span>
+                              <span className={`font-bold text-slate-800 ${r.rank ? "ml-1.5" : ""}`}>{r.attendance_pct}%</span>
                             )}
                           </div>
                         </td>

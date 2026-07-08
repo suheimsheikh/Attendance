@@ -24,7 +24,7 @@ from __future__ import annotations
 # and stored so no historical data is lost by turning these off.
 # ---------------------------------------------------------------------------
 AUTO_APPROVAL_LATE_CHECKINS: bool = False
-AUTO_APPROVAL_OVERTIME: bool = False
+AUTO_APPROVAL_OVERTIME: bool = True
 
 
 # ---------------------------------------------------------------------------
