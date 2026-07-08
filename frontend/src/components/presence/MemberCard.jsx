@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { AlertTriangle, Clock, Coffee, ChevronDown, ChevronRight, Repeat } from "lucide-react";
+import { AlertTriangle, Clock, Coffee, ChevronDown, ChevronRight, Repeat, MapPin } from "lucide-react";
 import Avatar from "../Avatar";
 import PhotoZoom from "../PhotoZoom";
 import ParentContact from "../ParentContact";
@@ -73,6 +73,15 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
               className="inline-flex items-center px-1 h-4 rounded text-[9px] font-bold bg-sky-100 text-sky-700 max-w-[110px] truncate leading-none"
             >
               {m.institution}
+            </span>
+          )}
+          {m.site_name && (
+            <span
+              title={`Checked in at: ${m.site_name}`}
+              data-testid={`presence-site-chip-${m.id}`}
+              className="inline-flex items-center gap-0.5 px-1 h-4 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 max-w-[130px] truncate leading-none"
+            >
+              <MapPin size={8} className="shrink-0" />{m.site_name}
             </span>
           )}
         </div>

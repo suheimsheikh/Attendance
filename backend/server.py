@@ -2662,6 +2662,13 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             "fleet": u.get("fleet"),
             "status": status_v,
             "detail": detail,
+            # Training-location tag (where they were tapped into today).
+            # Only meaningful for on_campus + temp_out states — for
+            # exited/absent/on_leave/on_tour it stays None. Powers the
+            # location filter on the Presence board and the by-location
+            # widget on the Admin Dashboard.
+            "site_id": (sess or {}).get("site_id") if status_v in ("on_campus", "temp_out") else None,
+            "site_name": (sess or {}).get("site_name") if status_v in ("on_campus", "temp_out") else None,
             "since": since,
             "photo": photo,
             "flagged": bool(sess and sess.get("out_of_geofence") and status_v == "on_campus"),
@@ -2813,9 +2820,37 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             })
         escorts_present.sort(key=lambda e: ((e.get("institution") or "").lower(), (e.get("name") or "").lower()))
 
+    # ── LOCATION AGGREGATE ────────────────────────────────────────────
+    # Group presently-on-campus members by the training location they
+    # tapped into today. Members whose session predates the sites
+    # feature (or checked in at the main office) end up in "Main Club".
+    # `None` site_id + no site_name → also folded into "Main Club".
+    by_location_map: dict = {}
+    for m in result:
+        if m["status"] not in ("on_campus", "temp_out"):
+            continue
+        sid = m.get("site_id")
+        sname = m.get("site_name") or "Main Club"
+        key = sid or "__main__"
+        bucket = by_location_map.setdefault(key, {
+            "site_id": sid,
+            "site_name": sname,
+            "count": 0,
+            "by_category": {"athlete": 0, "elite": 0, "coach": 0, "staff": 0, "executive": 0},
+        })
+        bucket["count"] += 1
+        cat = m.get("category")
+        if cat in bucket["by_category"]:
+            bucket["by_category"][cat] += 1
+    by_location = sorted(
+        by_location_map.values(),
+        key=lambda b: (-b["count"], (b["site_name"] or "").lower()),
+    )
+
     return {
         "members": result,
         "counts": counts,
+        "by_location": by_location,
         "date": target_date,
         "is_historical": is_historical,
         "admin_contacts": admin_contacts,

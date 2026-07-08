@@ -19,7 +19,7 @@ import { Link } from "react-router-dom";
 import {
   Loader2, RefreshCw, Users, Cake, Sailboat, Trophy, UserCheck,
   AlertTriangle, Clock, ArrowRight, TrendingUp, ClipboardCheck,
-  IdCard, ShieldAlert, Calendar as CalendarIcon,
+  IdCard, ShieldAlert, Calendar as CalendarIcon, MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
@@ -316,6 +316,33 @@ export default function Dashboard() {
                 to="/admin/approvals"
               />
             </div>
+
+            {/* By-location strip */}
+            {(now.on_campus_by_location || []).length > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-100" data-testid="dashboard-by-location">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  <MapPin size={12} /> On campus by location
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {now.on_campus_by_location.map((loc) => (
+                    <Link
+                      key={loc.site_id || "__main__"}
+                      to={`/presence?location=${encodeURIComponent(loc.site_name)}`}
+                      className="group inline-flex items-center gap-2 pl-2 pr-3 h-8 rounded-full bg-slate-100 hover:bg-slate-200 transition text-sm"
+                      data-testid={`dashboard-location-${loc.site_id || "main"}`}
+                    >
+                      <MapPin size={12} className="text-sky-600" />
+                      <span className="text-slate-800 font-medium truncate max-w-[180px]">
+                        {loc.site_name}
+                      </span>
+                      <span className="font-mono tabular-nums font-bold text-slate-900 bg-white rounded-full px-2 min-w-[24px] text-center text-xs">
+                        {loc.count}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
           </SectionCard>
 
           {/* THIS WEEK */}

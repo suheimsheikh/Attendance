@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Search, Camera } from "lucide-react";
 import { api, showApiError } from "../api";
 import GuestCheckInModal from "../components/GuestCheckInModal";
@@ -16,6 +17,7 @@ import { EscortsStrip } from "../components/presence/EscortsStrip";
 import { SkeletonBoard } from "../components/presence/SkeletonBoard";
 import { PresenceHeader } from "../components/presence/PresenceHeader";
 import { FleetFilterRow } from "../components/presence/FleetFilterRow";
+import { LocationFilterRow } from "../components/presence/LocationFilterRow";
 
 export default function Presence() {
   const { user: currentUser } = useAuth();
@@ -26,6 +28,13 @@ export default function Presence() {
   const [error, setError] = useState(false);
   const [lateOnly, setLateOnly] = useState(false);
   const [fleetFilter, setFleetFilter] = useState("");  // "" = all fleets
+  // Location filter — set via the pill row OR deep-linked from the Admin
+  // Dashboard by-location chips (?location=Rowing%20Academy). Only applies
+  // to today's live view; historical days won't have on-campus rows anyway.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [locationFilter, setLocationFilter] = useState(
+    searchParams.get("location") || ""
+  );
   const [query, setQuery] = useState("");
   const [guests, setGuests] = useState({ active: [], completed: [], active_count: 0 });
   const [showGuestModal, setShowGuestModal] = useState(false);
@@ -192,6 +201,12 @@ export default function Presence() {
     const members = (data?.members || []).filter((m) => {
       if (lateOnly && !m.late) return false;
       if (fleetFilter && (m.fleet || "") !== fleetFilter) return false;
+      // Location filter only makes sense for statuses that carry a
+      // site_name (on_campus + temp_out). If a location is picked, hide
+      // members outside that location; a member on leave/tour/absent
+      // has no site_name so they naturally drop out — which matches the
+      // user's mental model ("who's at Rowing right now").
+      if (locationFilter && (m.site_name || "") !== locationFilter) return false;
       if (!q) return true;
       return (m.full_name || "").toLowerCase().includes(q)
         || (m.rank || "").toLowerCase().includes(q)
@@ -211,7 +226,7 @@ export default function Presence() {
       });
     }
     return buckets;
-  }, [data, lateOnly, fleetFilter, query]);
+  }, [data, lateOnly, fleetFilter, locationFilter, query]);
 
   // Distinct fleet labels present across loaded members — used to render the
   // filter pill row. Athletes without a fleet set are not surfaced here.
@@ -324,6 +339,19 @@ export default function Presence() {
         fleetOptions={fleetOptions}
         fleetFilter={fleetFilter}
         onFleetChange={setFleetFilter}
+      />
+
+      <LocationFilterRow
+        locations={data?.by_location || []}
+        locationFilter={locationFilter}
+        onLocationChange={(loc) => {
+          setLocationFilter(loc);
+          // Keep the querystring in sync so a hard refresh preserves the
+          // filter — same trick as the deep-link from Admin Dashboard.
+          const next = new URLSearchParams(searchParams);
+          if (loc) next.set("location", loc); else next.delete("location");
+          setSearchParams(next, { replace: true });
+        }}
       />
 
       {!isHistorical && missingPhotoOnCampus.length > 0 && (

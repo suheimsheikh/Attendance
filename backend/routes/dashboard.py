@@ -55,14 +55,32 @@ def make_router(db, require_admin) -> APIRouter:
         # ================== NOW (live today) ==============================
         open_sessions = await db.attendance.find(
             {"check_out_at": None},
-            {"_id": 0, "user_id": 1, "date": 1, "check_in_at": 1, "late": 1},
+            {"_id": 0, "user_id": 1, "date": 1, "check_in_at": 1, "late": 1,
+             "site_id": 1, "site_name": 1},
         ).to_list(5000)
 
         cat_buckets = {"athlete": 0, "elite": 0, "coach": 0, "staff": 0, "executive": 0}
+        # Group live on-campus members by the training location they
+        # tapped into. Sessions without a site (legacy pre-Sites data
+        # or the main office) roll into "Main Club".
+        by_location_map: dict = {}
         for s in open_sessions:
             u = users_by_id.get(s.get("user_id"))
             if u and u.get("category") in cat_buckets:
                 cat_buckets[u["category"]] += 1
+            sid = s.get("site_id")
+            sname = s.get("site_name") or "Main Club"
+            key = sid or "__main__"
+            bucket = by_location_map.setdefault(key, {
+                "site_id": sid,
+                "site_name": sname,
+                "count": 0,
+            })
+            bucket["count"] += 1
+        by_location = sorted(
+            by_location_map.values(),
+            key=lambda b: (-b["count"], (b["site_name"] or "").lower()),
+        )
 
         late_today = await db.attendance.count_documents(
             {"date": today_iso, "late": True}
@@ -274,6 +292,7 @@ def make_router(db, require_admin) -> APIRouter:
             "now": {
                 "on_campus_total": sum(cat_buckets.values()),
                 "on_campus_by_category": cat_buckets,
+                "on_campus_by_location": by_location,
                 "late_today": late_today,
                 "absent_athletes_today": athletes_absent,
                 "guests_present": guests_present,
