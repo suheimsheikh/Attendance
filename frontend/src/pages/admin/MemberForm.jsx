@@ -25,7 +25,12 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     gender: initial?.gender || "",
     fleet: initial?.fleet || "",
     photo: initial?.photo || "",
-    weekly_off: initial?.weekly_off || "monday",
+    // Don't default weekly_off to "monday" — that misrepresented unset members
+    // (like TILLU ORSU) as having Monday off when the DB actually holds null.
+    // Empty string here renders as the "— None —" option in the select; the
+    // submit handler strips empty strings so the backend correctly interprets
+    // "absent" as "unchanged / still null".
+    weekly_off: initial?.weekly_off || "",
     father_mobile: initial?.father_mobile || "",
     father_name: initial?.father_name || "",
     mother_mobile: initial?.mother_mobile || "",
@@ -234,6 +239,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
           <div>
             <label className="iu-label">Weekly off</label>
             <select data-testid="mf-weekly-off" value={form.weekly_off} onChange={(e) => set("weekly_off", e.target.value)} className="iu-input">
+              <option value="">— None —</option>
               <option value="monday">Monday</option>
               <option value="tuesday">Tuesday</option>
               <option value="wednesday">Wednesday</option>
