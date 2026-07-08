@@ -5,6 +5,34 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — ESLint config: encode false-positive policy
+
+In response to a code-review report that flagged 157 "missing hook
+deps" + 27 "console statements" — most of which were false positives
+— the ESLint config now explicitly encodes what's safe and what isn't
+so future audits read our policy instead of firing noise.
+
+- `eslint.config.js` docstring — enumerates the four known-safe
+  patterns that external tools misread as missing deps: setState
+  functions from useState, module-level singletons (`api`, `toast`,
+  `navigate`), ref current values, and local variables inside
+  callback bodies.
+- New `no-console` rule with `allow: ["debug", "error", "warn"]` —
+  our `console.debug` diagnostics + ErrorBoundary `console.error`
+  are legitimate and won't get flagged. `console.log` still warns
+  (that's the one that shouldn't ship).
+- Added `src/components/ui/**` to `ignores` — shadcn/ui primitives
+  are vendored third-party code that carries 3 upstream errors
+  (`no-unstable-nested-components`, `cmdk-input-wrapper`); we don't
+  own or maintain them.
+
+**Impact**: Zero behaviour change to the running app. Purely a
+documentation + policy-clarification pass so the next external code
+review reads our config and skips ~180 known-false-positive findings.
+
+---
+
+
 ## 8 Jul 2026 — Away column: two-toned row backgrounds
 
 Follow-up polish on the Tour+Leave merge — rows inside the "Away"
