@@ -31,7 +31,7 @@ import { BUCKET_BY_KEY, GENDER_LABEL, bucketOf, isInteractive, lastSeenLabel, le
  *   onToggleRow    — bulk-edit checkbox handler (memberId, rowIdx, shiftKey)
  *   onPhotoUpdated — fires after the InlinePhotoAvatar saves a new photo
  */
-export default function MemberRow({
+export default React.memo(function MemberRow({
   m, rowIdx, today, presenceRow, busyId, isSelected, shiftHeldRef,
   options,
   onEdit, onDelete, onToggleAttendance, onPatchField, onToggleRow,
@@ -340,4 +340,4 @@ export default function MemberRow({
       </td>
     </tr>
   );
-}
+});

@@ -222,20 +222,20 @@ export default function Members() {
     }
   }, [highlightId, loading, sortedFiltered]);
 
-  const remove = async (m) => {
+  const remove = useCallback(async (m) => {
     if (!window.confirm(`Delete ${m.full_name}? This also removes their attendance & leaves.`)) return;
     try {
       await api.del(`/members/${m.id}`);
       toast.success("Member deleted");
       load();
     } catch (err) { showApiError(err, "Failed"); }
-  };
+  }, [load]);
 
   // Inline patch — apply update locally first (optimistic) + persist to API,
   // without triggering a full reload (which would interrupt other open
   // inputs). Used by both the parent-mobile cells and the new InlineCell
   // editors for name/category/role/rank/mobile/gender/fleet/leave-balance.
-  const patchMember = async (memberId, field, value) => {
+  const patchMember = useCallback(async (memberId, field, value) => {
     // Normalise: trim strings, coerce numbers, empty string → null.
     let normalised = value;
     if (typeof value === "string") normalised = value.trim() === "" ? null : value.trim();
@@ -266,12 +266,12 @@ export default function Members() {
       load();
       throw err;
     }
-  };
+  }, [load]);
 
   // ── Bulk-edit selection ───────────────────────────────────────────────────
   // Toggle a single member id. Supports shift+click to extend a range
   // across the currently visible (`filtered`) list — Excel-style.
-  const toggleRow = (memberId, idx, shiftKey) => {
+  const toggleRow = useCallback((memberId, idx, shiftKey) => {
     // Snapshot `lastClickedIdx.current` BEFORE scheduling the state update.
     // React batches updater functions in event handlers, so by the time
     // the updater runs the `lastClickedIdx.current = idx` line below has
@@ -295,7 +295,7 @@ export default function Members() {
       return next;
     });
     lastClickedIdx.current = idx;
-  };
+  }, [sortedFiltered]);
 
   // Master checkbox in the table header — toggles every member in the
   // current filtered view. Selecting across pages of filters is intentional;
@@ -330,7 +330,7 @@ export default function Members() {
     }
   };
 
-  const toggleAttendance = async (m) => {
+  const toggleAttendance = useCallback(async (m) => {
     setBusyId(m.id);
     try {
       const res = await api.post(`/admin/attendance/toggle/${m.id}`, { reason: "Admin console override" });
@@ -338,7 +338,7 @@ export default function Members() {
       load();
     } catch (err) { showApiError(err, "Failed"); }
     finally { setBusyId(null); }
-  };
+  }, [load]);
 
   // Photo-saved callback wired into each row's InlinePhotoAvatar.
   // Optimistically merges the new photo into local state so the avatar

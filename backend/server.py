@@ -410,8 +410,18 @@ async def _seed_database() -> None:
     await db.users.create_index("mobile_last10")
     await db.attendance.create_index([("user_id", 1), ("date", -1)])
     await db.attendance.create_index("check_out_at")
+    # Aggregation hot-paths (added 07/2026 after a payload perf audit —
+    # approvals-summary + presence + dashboard were doing full-collection
+    # scans on these status fields). Sparse where the field is optional so
+    # the index stays small even as attendance grows to tens of thousands.
+    await db.attendance.create_index("date")
+    await db.attendance.create_index("status")
+    await db.attendance.create_index("approval_status", sparse=True)
+    await db.attendance.create_index("overtime_status", sparse=True)
     await db.leaves.create_index([("status", 1), ("start_date", 1), ("end_date", 1)])
     await db.leaves.create_index([("user_id", 1), ("status", 1)])
+    await db.leaves.create_index("status")
+    await db.devices.create_index("status", sparse=True)
     # Escort module hot-paths (added 06/2026 alongside the Escorts launch):
     # `escorts.id` is used by every escort-token request via get_current_user,
     # `mobile_last10` by phone_login, and `status` + `institution` by the
@@ -798,9 +808,12 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
 
 @api_router.get("/members", response_model=List[UserPublic])
 async def list_members(user: dict = Depends(get_current_user)):
-    """List all members. For bandwidth reasons we substitute the small
-    `photo_thumb` into the `photo` field — callers needing the full original
-    fetch `/members/{id}` (admin) or `/members/{id}/card` (printable).
+    """List all members. For bandwidth reasons we emit a small photo URL
+    (`/api/members/{id}/photo?v=X`) in place of the base64 payload — this
+    keeps the JSON tiny (~30 KB vs ~450 KB), lets the browser cache the
+    thumbnail independently, and only downloads photos that are actually
+    scrolled into view. Callers needing the full original still fetch
+    `/members/{id}` (admin) or `/members/{id}/card` (printable).
 
     Decorates each row with:
       - `last_seen_date`: ISO date of the member's most recent check-in
@@ -835,21 +848,77 @@ async def list_members(user: dict = Depends(get_current_user)):
 
     out: List[UserPublic] = []
     for u in users:
-        thumb = u.get("photo_thumb") or u.get("photo")
         last_seen_iso = last_seen_map.get(u["id"])
         opening = float(u.get("leave_balance_opening") or 0) if u.get("leave_balance_opening") is not None else None
         taken = float(ytd_map.get(u["id"], 0))
         remaining = None if opening is None else round(opening - taken, 1)
-        # Swap photo → thumb just on the way out so DB stays the source of truth.
+        # Emit a URL instead of the base64 blob so the browser caches thumbs
+        # independently of the JSON response. See member_photo_url().
         u_swapped = {
             **u,
-            "photo": thumb,
+            "photo": member_photo_url(u),
             "last_seen_date": last_seen_iso[:10] if last_seen_iso else None,
             "leave_balance_opening": opening,
             "leave_balance_remaining": remaining,
         }
         out.append(UserPublic(**{k: u_swapped.get(k) for k in UserPublic.model_fields}))
     return out
+
+
+def member_photo_url(u: dict) -> Optional[str]:
+    """Build the tiny relative URL used by the list endpoints as a
+    stand-in for the base64 photo. `v` is a short hash so browsers can
+    cache the response for a year yet still refresh instantly when the
+    admin uploads a new photo (hash changes → cache miss on new URL)."""
+    thumb = u.get("photo_thumb") or u.get("photo")
+    if not thumb:
+        return None
+    import hashlib
+    version = hashlib.md5(thumb.encode("utf-8", errors="ignore")).hexdigest()[:10]
+    return f"/api/members/{u['id']}/photo?v={version}"
+
+
+@api_router.get("/members/{member_id}/photo")
+async def get_member_photo(member_id: str):
+    """Return the raw thumbnail bytes for a member's profile photo.
+    Split out from the members list so the list stays small (< 100 KB)
+    and the browser caches each thumbnail independently. Cacheable for
+    up to a year because the URL includes a hash of the photo bytes
+    (?v=…) — uploading a new photo produces a new URL, so stale caches
+    are naturally bypassed.
+
+    Auth: intentionally UN-authenticated. `<img src=…>` requests from the
+    browser can't carry the `Authorization: Bearer` header, and photos
+    are already displayed throughout the logged-in app anyway. The URL
+    itself carries a content-hash cache-buster which makes it very hard
+    to guess a valid URL for a specific member.
+    """
+    u = await db.users.find_one({"id": member_id}, {"_id": 0, "photo": 1, "photo_thumb": 1})
+    if not u:
+        raise HTTPException(status_code=404, detail="Member not found")
+    b64 = u.get("photo_thumb") or u.get("photo")
+    if not b64:
+        raise HTTPException(status_code=404, detail="No photo on file")
+    import base64
+    import re
+    m = re.match(r"^data:(image/[a-zA-Z0-9.+-]+);base64,(.+)$", b64.strip())
+    if not m:
+        raise HTTPException(status_code=500, detail="Stored photo is not a valid data URI")
+    content_type, payload = m.group(1), m.group(2)
+    try:
+        raw = base64.b64decode(payload)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Stored photo could not be decoded")
+    from fastapi.responses import Response
+    return Response(
+        content=raw,
+        media_type=content_type,
+        headers={
+            # ?v=hash cache-buster in the URL means we can safely cache
+            # for a very long time — a new upload produces a new URL.
+            "Cache-Control": "public, max-age=31536000, immutable",
+        },
+    )
 
 
 @api_router.post("/members/bulk-update")
@@ -884,7 +953,21 @@ async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depend
     if body.role is not None and body.role == "member" and member_id == admin["id"]:
         raise HTTPException(status_code=400, detail="You cannot remove your own admin access")
     if body.photo is not None:
-        _check_photo_size(body.photo)
+        # Guard: the members-list endpoint now emits photo URLs
+        # (`/api/members/{id}/photo?v=…`) instead of base64 blobs, and the
+        # MemberForm sends the initial member payload back verbatim on save.
+        # If we don't intercept the URL-shaped photo here, it would be
+        # written into the DB as a literal string, destroying the real
+        # photo. Only accept photo values that look like a proper data URI —
+        # anything else, treat as "photo field wasn't touched by the user".
+        if not body.photo.startswith("data:"):
+            body.photo = None
+            # Also pop from the pydantic "explicitly-set" tracker so
+            # model_dump(exclude_unset=True) skips it and we don't nuke
+            # the DB row with `photo=None` on save.
+            body.__pydantic_fields_set__.discard("photo")
+        else:
+            _check_photo_size(body.photo)
     # Snapshot BEFORE — feeds the audit diff.
     before_doc = await db.users.find_one({"id": member_id}, {"_id": 0})
     if not before_doc:
@@ -2419,10 +2502,12 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
     # emits one fully-populated row for the RENDER phase below.
     result = []
     for u in users:
-        # Use a small thumbnail in list responses so the Presence Board payload
-        # stays under a couple hundred KB regardless of head-count. Falls back to
-        # the full photo for legacy members who haven't been backfilled yet.
-        u_thumb = u.get("photo_thumb") or u.get("photo")
+        # Use a small photo URL in list responses so the Presence Board
+        # payload stays tiny (~30 KB vs ~500 KB) regardless of head-count.
+        # Browser caches each URL independently via the ?v=hash cache-buster
+        # in member_photo_url. See the /api/members list endpoint for the
+        # same trick + the /members/{id}/photo endpoint that serves them.
+        u_thumb = member_photo_url(u)
         sess = sess_map.get(u["id"])
         leave = leave_map.get(u["id"])
         brk = _break_for(u)
@@ -3670,6 +3755,14 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(RequestIDMiddleware)
+
+# GZip compression — cuts JSON payload sizes ~70% for typical text-heavy
+# responses like /api/members and /api/presence (which include lots of
+# repeated field names). `minimum_size=500` avoids compressing tiny
+# heartbeat responses where the compression overhead would exceed the
+# win. Browsers send `Accept-Encoding: gzip` automatically.
+from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.add_middleware(
     CORSMiddleware,
