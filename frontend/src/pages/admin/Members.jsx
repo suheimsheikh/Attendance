@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
-import { Loader2, Plus, Search, FileSpreadsheet } from "lucide-react";
+import { Loader2, Plus, Search, FileSpreadsheet, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, showApiError } from "../../api";
@@ -148,6 +148,49 @@ export default function Members() {
     );
   }, [members, search, bucket, onlyAdmins, instFilter]);
 
+  // ── Column sort ───────────────────────────────────────────────────────────
+  // Click a sortable header to cycle: unsorted → asc → desc → unsorted.
+  // Sort direction preserves natural handling per column type: strings use
+  // locale-aware compare, numbers numeric compare, dates ISO compare (which
+  // is lexical == chronological for YYYY-MM-DD), booleans true>false.
+  // "Last seen" sorts by the underlying `last_seen_date` (most-recent first
+  // means desc); rows with no value sink to the bottom regardless of dir.
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState(null); // "asc" | "desc" | null
+  const toggleSort = useCallback((key) => {
+    // Cycle: different key → asc · same key asc → desc · same key desc → clear
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir("asc");
+    } else if (sortDir === "asc") {
+      setSortDir("desc");
+    } else if (sortDir === "desc") {
+      setSortKey(null);
+      setSortDir(null);
+    } else {
+      setSortDir("asc");
+    }
+  }, [sortKey, sortDir]);
+  const sortedFiltered = useMemo(() => {
+    if (!sortKey || !sortDir) return filtered;
+    const arr = [...filtered];
+    const dir = sortDir === "asc" ? 1 : -1;
+    // Push blanks to the bottom regardless of direction.
+    const blank = (v) => v == null || v === "";
+    const cmp = (a, b) => {
+      const va = a[sortKey];
+      const vb = b[sortKey];
+      if (blank(va) && blank(vb)) return 0;
+      if (blank(va)) return 1;
+      if (blank(vb)) return -1;
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      if (typeof va === "boolean" && typeof vb === "boolean") return (Number(vb) - Number(va)) * dir;
+      return String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: "base" }) * dir;
+    };
+    arr.sort(cmp);
+    return arr;
+  }, [filtered, sortKey, sortDir]);
+
   // Deep-link handling — Data Quality "Fix" buttons route here with
   // `?edit=<id>` (opens the edit modal directly) or `?highlight=<id>`
   // (scrolls the row into view and briefly tints it amber). Both
@@ -177,7 +220,7 @@ export default function Members() {
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [highlightId, loading, filtered]);
+  }, [highlightId, loading, sortedFiltered]);
 
   const remove = async (m) => {
     if (!window.confirm(`Delete ${m.full_name}? This also removes their attendance & leaves.`)) return;
@@ -240,7 +283,7 @@ export default function Members() {
       if (shiftKey && lastIdx != null && lastIdx !== idx) {
         const [a, b] = [lastIdx, idx].sort((x, y) => x - y);
         for (let i = a; i <= b; i++) {
-          const id = filtered[i]?.id;
+          const id = sortedFiltered[i]?.id;
           if (!id) continue;
           if (isAdding) next.add(id);
           else next.delete(id);
@@ -259,7 +302,7 @@ export default function Members() {
   // the bulk apply uses the actual selectedIds set, not the visible rows.
   const toggleAll = () => {
     setSelectedIds((prev) => {
-      const visibleIds = filtered.map((m) => m.id);
+      const visibleIds = sortedFiltered.map((m) => m.id);
       const allSelected = visibleIds.length > 0 && visibleIds.every((id) => prev.has(id));
       const next = new Set(prev);
       if (allSelected) visibleIds.forEach((id) => next.delete(id));
@@ -359,13 +402,13 @@ export default function Members() {
                     <input
                       type="checkbox"
                       data-testid="bulk-select-all"
-                      checked={filtered.length > 0 && filtered.every((m) => selectedIds.has(m.id))}
+                      checked={sortedFiltered.length > 0 && sortedFiltered.every((m) => selectedIds.has(m.id))}
                       // `indeterminate` isn't a React prop — set it imperatively via ref callback
                       // so the master-checkbox shows the dash glyph when only some rows are picked.
                       ref={(el) => {
                         if (!el) return;
-                        const some = filtered.some((m) => selectedIds.has(m.id));
-                        const all = filtered.length > 0 && filtered.every((m) => selectedIds.has(m.id));
+                        const some = sortedFiltered.some((m) => selectedIds.has(m.id));
+                        const all = sortedFiltered.length > 0 && sortedFiltered.every((m) => selectedIds.has(m.id));
                         el.indeterminate = some && !all;
                       }}
                       onChange={toggleAll}
@@ -373,28 +416,28 @@ export default function Members() {
                       className="w-4 h-4 cursor-pointer accent-sky-600"
                     />
                   </th>
-                  <th className="iu-table-th w-10 text-center sticky left-10 z-30 bg-slate-50">Edit</th>
-                  <th className="iu-table-th sticky left-20 z-30 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">Member</th>
-                  <th className="iu-table-th">Category</th>
-                  <th className="iu-table-th">Role</th>
-                  <th className="iu-table-th">Rank</th>
-                  <th className="iu-table-th">Gender</th>
-                  <th className="iu-table-th">Mobile</th>
-                  <th className="iu-table-th">Institution</th>
-                  <th className="iu-table-th">Fleet</th>
-                  <th className="iu-table-th">Last seen</th>
-                  <th className="iu-table-th">Leave balance</th>
-                  <th className="iu-table-th">Hours</th>
-                  <th className="iu-table-th">Weekly off</th>
-                  <th className="iu-table-th">DOB</th>
-                  <th className="iu-table-th text-center">OT</th>
-                  <th className="iu-table-th">Parents / Guardian</th>
-                  <th className="iu-table-th">Status</th>
-                  <th className="iu-table-th text-center w-12">Del</th>
+                  <th className="iu-table-th !py-3.5 !text-sm w-10 text-center sticky left-10 z-30 bg-slate-50 !text-slate-700 !font-bold" title={COL_HELP.edit}>Edit</th>
+                  <SortableTh k="full_name" className="sticky left-20 z-30 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Member</SortableTh>
+                  <SortableTh k="category" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Category</SortableTh>
+                  <SortableTh k="role" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Role</SortableTh>
+                  <SortableTh k="rank" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Rank</SortableTh>
+                  <SortableTh k="gender" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Gender</SortableTh>
+                  <SortableTh k="mobile" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Mobile</SortableTh>
+                  <SortableTh k="institution" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Institution</SortableTh>
+                  <SortableTh k="fleet" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Fleet</SortableTh>
+                  <SortableTh k="last_seen_date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Last seen</SortableTh>
+                  <SortableTh k="leave_balance_opening" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Leave balance</SortableTh>
+                  <SortableTh k="work_start" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Hours</SortableTh>
+                  <SortableTh k="weekly_off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Weekly off</SortableTh>
+                  <SortableTh k="date_of_birth" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>DOB</SortableTh>
+                  <SortableTh k="ot_eligible" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="center">OT</SortableTh>
+                  <th className="iu-table-th !py-3.5 !text-sm !text-slate-700 !font-bold" title={COL_HELP.parents}>Parents / Guardian</th>
+                  <th className="iu-table-th !py-3.5 !text-sm !text-slate-700 !font-bold" title={COL_HELP.status}>Status</th>
+                  <th className="iu-table-th !py-3.5 !text-sm text-center w-12 !text-slate-700 !font-bold" title={COL_HELP.del}>Del</th>
                 </tr>
               </thead>
               <tbody data-testid="members-table">
-                {filtered.map((m, rowIdx) => (
+                {sortedFiltered.map((m, rowIdx) => (
                   <MemberRow
                     key={m.id}
                     m={m}
@@ -414,7 +457,7 @@ export default function Members() {
                     highlighted={highlightId === m.id}
                   />
                 ))}
-                {filtered.length === 0 && (
+                {sortedFiltered.length === 0 && (
                   <tr><td colSpan={19} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
                 )}
               </tbody>
@@ -443,5 +486,66 @@ export default function Members() {
         genderOptions={GENDER_OPTS}
       />
     </div>
+  );
+}
+
+/**
+ * Descriptions shown as native title tooltips on hover. Kept as a flat
+ * lookup here so we can label BOTH sortable columns (via SortableTh) and
+ * the few non-sortable ones (Edit / Parents / Status / Del) from a single
+ * source of truth.
+ */
+const COL_HELP = {
+  edit:         "Open the full edit form for this member.",
+  full_name:    "Full name, email, and parent-contact shortcut. Click the name to rename in place.",
+  category:     "Athlete / Elite / Coach / Staff / Executive. Click the pill to reassign.",
+  role:         "Admin (has console access) or Member. Orthogonal to category — a coach can also be admin.",
+  rank:         "Job title / rank shown next to the name (e.g. Petty Officer, Head Coach).",
+  gender:       "Male / Female / Other. Powers gender-specific reporting.",
+  mobile:       "Primary mobile number used for SMS + WhatsApp notifications.",
+  institution:  "Affiliated school, college, or organisation. Manage the list under Admin → Institutions.",
+  fleet:        "Boat class — athletes only. Manage the list under Admin → Fleets.",
+  last_seen_date:"Most recent check-in date. 'Today' means already checked in today.",
+  leave_balance_opening:"Remaining / Opening annual leave balance (staff / coach / executive only).",
+  work_start:   "Working hours (start – end). Powers overtime and late-arrival calculations.",
+  weekly_off:   "Weekly off-day. Working on this day earns a compensatory off.",
+  date_of_birth:"Date of birth. Powers birthday greetings on the Check-In screen.",
+  ot_eligible:  "Overtime eligibility toggle. Athletes never accrue OT regardless of this setting.",
+  parents:      "Parent + guardian names and mobile numbers. Editable in place.",
+  status:       "Live presence — On campus, On leave, On tour, Absent, etc.",
+  del:          "Delete member. This also removes their attendance and leave history — irreversible.",
+};
+
+/**
+ * SortableTh — one column header wrapped as a clickable button that
+ * cycles through unsorted → ascending → descending → unsorted for the
+ * given member field. The parent Members page owns the sort state and
+ * passes back a `onSort(k)` handler.
+ */
+function SortableTh({ k, sortKey, sortDir, onSort, align = "left", className = "", children }) {
+  const active = sortKey === k && !!sortDir;
+  const Icon = !active ? ChevronsUpDown : sortDir === "asc" ? ChevronUp : ChevronDown;
+  const justify = align === "center" ? "justify-center" : "justify-start";
+  const desc = COL_HELP[k] || "";
+  const tip = desc
+    ? `${desc}\n\nClick to sort${active ? ` — currently ${sortDir === "asc" ? "A → Z" : "Z → A"}` : ""}.`
+    : `Sort by ${k}${active ? ` (${sortDir})` : ""} — click again to change direction`;
+  return (
+    <th className={`iu-table-th !py-3.5 !text-sm ${align === "center" ? "text-center" : ""} ${className}`}>
+      <button
+        type="button"
+        data-testid={`sort-${k}`}
+        onClick={() => onSort(k)}
+        title={tip}
+        className={`flex items-center gap-1.5 w-full ${justify} cursor-pointer select-none transition-colors hover:text-slate-900 ${active ? "text-slate-900 font-extrabold" : "text-slate-700 font-bold"}`}
+      >
+        <span className="tracking-wide">{children}</span>
+        <Icon
+          size={16}
+          strokeWidth={2.5}
+          className={active ? "text-sky-600" : "text-slate-400"}
+        />
+      </button>
+    </th>
   );
 }
