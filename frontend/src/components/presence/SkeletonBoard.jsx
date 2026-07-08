@@ -3,7 +3,7 @@ import { COLUMNS } from "./constants";
 
 export function SkeletonBoard() {
   return (
-    <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       {COLUMNS.map((col) => (
         <div key={col.key} className={`rounded-2xl ${col.soft} border border-slate-200 overflow-hidden`}>
           <div className="px-4 py-3 bg-white/70 border-b border-slate-200 h-12" />

@@ -10,7 +10,7 @@ import UpcomingThisWeek from "../components/UpcomingThisWeek";
 import EscortMissingBanner from "../components/EscortMissingBanner";
 import SelfieCapture from "../components/SelfieCapture";
 
-import { COLUMNS } from "../components/presence/constants";
+import { COLUMNS, STATUS_TO_COLUMN } from "../components/presence/constants";
 import { Column } from "../components/presence/Column";
 import { GuestStrip } from "../components/presence/GuestStrip";
 import { EscortsStrip } from "../components/presence/EscortsStrip";
@@ -216,7 +216,11 @@ export default function Presence() {
         || (m.fleet || "").toLowerCase().includes(q);
     });
     for (const m of members) {
-      if (buckets[m.status]) buckets[m.status].push(m);
+      // on_tour + on_leave both drop into the merged "away" column; the
+      // MemberCard renders a coloured pill (Tour orange / Leave amber)
+      // so admins can still tell them apart at a glance.
+      const bucketKey = STATUS_TO_COLUMN[m.status] || m.status;
+      if (buckets[bucketKey]) buckets[bucketKey].push(m);
     }
     for (const k of Object.keys(buckets)) {
       buckets[k].sort((a, b) => {
@@ -433,7 +437,7 @@ export default function Presence() {
         </div>
       ) : (
         <div
-          className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+          className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
           data-testid="presence-board"
         >
           {COLUMNS.map((col) => (

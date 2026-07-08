@@ -5,6 +5,44 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — Presence Board: merged Tour+Leave, tighter rows
+
+Presence Board went from 6 columns to 5 by merging **Tour + Leave**
+into a single **"Away"** column. This frees up horizontal space for
+the operationally-important columns (On Campus, Checked Out, Stepped
+Out, Absent) and pairs with a row-height compression so more members
+scroll into view on the same screen.
+
+- `components/presence/constants.js` — dropped the old Tour/Leave
+  entries; added a merged `away` column plus `STATUS_TO_COLUMN` map
+  (`on_tour` → `away`, `on_leave` → `away`) and `AWAY_STATUS_STYLE`
+  chip config (orange Tour vs amber Leave with dot indicators).
+- `pages/Presence.jsx` — bucketing routes both statuses through the
+  new map; grid layout `xl:grid-cols-6` → `xl:grid-cols-5`.
+- `components/presence/MemberCard.jsx` — renders a tiny "Tour" or
+  "Leave" pill next to the name for rows in the Away column so admins
+  can still tell the two statuses apart at a glance. Compressed
+  padding: `px-3 py-2.5` → `px-3 py-1.5` (Detailed) / `px-3 py-1.5`
+  → `px-2.5 py-1` (Compact). Avatar size 34 → 32 (Detailed) / 28
+  (Compact). Import `AWAY_STATUS_STYLE` from constants.
+- `components/presence/Column.jsx` — header of the "Away" column
+  shows a **Tour n · Leave n** split so the merge preserves visibility
+  of both totals. Category breakdown gets an **Elite (E rose)** chip;
+  Executive letter changed to X to avoid the clash. `data-testid=
+  "column-away-split"` + `column-away-tour-count` + `column-away-leave-count`
+  for the new chips.
+- `components/presence/SkeletonBoard.jsx` — grid updated to 5 cols.
+
+**Impact:** 5-column layout means each column widens by ~20%. Row
+compression + smaller avatars fit roughly 30% more members per screen.
+Full Presence data-testid contract preserved — no test regressions.
+
+**Tests**: 459/460 pass (`./ci.sh --all`), no new tests needed —
+existing presence tests exercise the flow.
+
+---
+
+
 ## 8 Jul 2026 — Check-in approvals, unified Approvals queue,
 Categories master CRUD, tiered test suite
 

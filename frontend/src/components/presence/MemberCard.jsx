@@ -8,6 +8,7 @@ import { categoryLabel } from "../../utils";
 import { GeoLine } from "./GeoLine";
 import { SessionTimeline } from "./SessionTimeline";
 import { ExpectedReturnPill } from "./ExpectedReturnPill";
+import { AWAY_STATUS_STYLE } from "./constants";
 
 export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick, hidden, expanded, onToggleExpand, density = "detailed" }) {
   const [zoomOpen, setZoomOpen] = useState(false);
@@ -30,7 +31,7 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
   return (
     <>
     <div
-      className={`${compact ? "px-3 py-1.5" : "px-3 py-2.5"} flex gap-2.5 items-start transition ${hidden ? "" : lateBg} ${!hidden && onDoubleClick ? "cursor-pointer select-none" : ""}`}
+      className={`${compact ? "px-2.5 py-1" : "px-3 py-1.5"} flex gap-2 items-start transition ${hidden ? "" : lateBg} ${!hidden && onDoubleClick ? "cursor-pointer select-none" : ""}`}
       data-testid={hidden ? `presence-blank-${columnKey}-${m.id}` : `presence-row-${m.id}`}
       onDoubleClick={handleDouble}
       title={!hidden && onDoubleClick ? (columnKey === "on_campus" ? "Double-click to remove from On Campus" : "Double-click to edit member") : undefined}
@@ -45,10 +46,23 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
         title={hidden ? undefined : "Click to zoom photo"}
         data-testid={hidden ? undefined : `presence-photo-${m.id}`}
       >
-        <Avatar name={m.full_name} photo={m.photo} size={34} ring={columnKey === "on_campus" ? accent : null} />
+        <Avatar name={m.full_name} photo={m.photo} size={compact ? 28 : 32} ring={columnKey === "on_campus" ? accent : null} />
       </button>
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-1.5">
+          {/* Tour vs Leave pill inside the merged Away column — kept
+              tiny and on the same line as the name so vertical rhythm
+              stays tight even in Detailed mode. */}
+          {columnKey === "away" && AWAY_STATUS_STYLE[m.status] && (
+            <span
+              className={`inline-flex items-center gap-1 px-1 h-4 rounded text-[9px] font-bold leading-none shrink-0 ${AWAY_STATUS_STYLE[m.status].chip}`}
+              data-testid={`presence-away-kind-${m.id}`}
+              title={AWAY_STATUS_STYLE[m.status].label}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${AWAY_STATUS_STYLE[m.status].dot}`} />
+              {AWAY_STATUS_STYLE[m.status].label}
+            </span>
+          )}
           <div className={`text-[13px] font-semibold leading-tight truncate flex-1 ${m.late ? "text-red-700" : "text-slate-900"}`}>{m.full_name}</div>
           <ParentContact father={m.father_mobile} mother={m.mother_mobile} guardian={m.guardian_mobile} />
           {hasTimeline && onToggleExpand && (

@@ -13,22 +13,35 @@ export function Column({ col, members, displayList, escorts, adminContacts, coac
   // are added as an "E" chip ONLY when this column passes them in,
   // since they're presence-board-relevant only in the Stepped Out
   // column (today).
-  const catCounts = { athlete: 0, coach: 0, staff: 0, executive: 0 };
+  const catCounts = { athlete: 0, elite: 0, coach: 0, staff: 0, executive: 0 };
   for (const m of members) {
     const c = (m.category || "athlete").toLowerCase();
     if (catCounts[c] !== undefined) catCounts[c] += 1;
   }
   const breakdown = [
     { key: "athlete",   letter: "A", title: "Athletes",   chip: "bg-sky-100 text-sky-700",         n: catCounts.athlete },
+    { key: "elite",     letter: "E", title: "Elite",      chip: "bg-rose-100 text-rose-700",       n: catCounts.elite },
     { key: "coach",     letter: "C", title: "Coaches",    chip: "bg-emerald-100 text-emerald-700", n: catCounts.coach },
     { key: "staff",     letter: "S", title: "Staff",      chip: "bg-amber-100 text-amber-700",     n: catCounts.staff },
-    { key: "executive", letter: "E", title: "Executives", chip: "bg-violet-100 text-violet-700",   n: catCounts.executive },
+    { key: "executive", letter: "X", title: "Executives", chip: "bg-violet-100 text-violet-700",   n: catCounts.executive },
   ];
   if (escortList.length > 0) {
     breakdown.push({
       key: "escort", letter: "Es", title: "Escorts",
       chip: "bg-teal-100 text-teal-700", n: escortList.length,
     });
+  }
+  // For the merged "Away" column, also compute a Tour vs Leave split
+  // to show as small chips in the header — reassures admins that both
+  // are still tracked even though they share one column.
+  let awaySplit = null;
+  if (col.key === "away") {
+    let tour = 0, leave = 0;
+    for (const m of members) {
+      if (m.status === "on_tour") tour += 1;
+      else if (m.status === "on_leave") leave += 1;
+    }
+    awaySplit = { tour, leave };
   }
   // Count badge reflects EVERYONE in this status, members + escorts —
   // so coaches see a single total without having to add two numbers.
@@ -69,6 +82,26 @@ export function Column({ col, members, displayList, escorts, adminContacts, coac
               <span className="tabular-nums">{b.n}</span>
             </span>
           ))}
+          {awaySplit && (
+            <div className="basis-full flex items-center gap-1.5 pt-1" data-testid="column-away-split">
+              <span
+                title={`Tour: ${awaySplit.tour}`}
+                data-testid="column-away-tour-count"
+                className={`inline-flex items-center gap-1 px-1.5 h-5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200 ${awaySplit.tour === 0 ? "opacity-40" : ""}`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                Tour <span className="tabular-nums">{awaySplit.tour}</span>
+              </span>
+              <span
+                title={`Leave: ${awaySplit.leave}`}
+                data-testid="column-away-leave-count"
+                className={`inline-flex items-center gap-1 px-1.5 h-5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 ${awaySplit.leave === 0 ? "opacity-40" : ""}`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                Leave <span className="tabular-nums">{awaySplit.leave}</span>
+              </span>
+            </div>
+          )}
         </div>
       </header>
 
