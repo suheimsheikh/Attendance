@@ -555,4 +555,88 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             "days": days_out,
         }
 
+    @router.get("/reports/escort-attendance")
+    async def escort_attendance_report(
+        start: str, end: str,
+        admin: dict = Depends(require_admin),
+    ):
+        """Escort-only attendance summary for the Reports page. Powers
+        the "Escorts" filter chip when the admin wants to see the
+        parent-escorts themselves (not the athletes they accompany).
+
+        Returns one row per escort with total present-days across the
+        window plus the specific date list for the drill-down popover.
+        """
+        rows = await db.escort_attendance.find(
+            {"date": {"$gte": start, "$lte": end}},
+            {"_id": 0, "escort_id": 1, "date": 1},
+        ).to_list(20000)
+        by_id: dict = {}
+        for r in rows:
+            d = by_id.setdefault(r["escort_id"], {"dates": set()})
+            d["dates"].add(r["date"])
+        # Hydrate escort metadata (name / institution).
+        escort_ids = list(by_id.keys())
+        escorts = {
+            e["id"]: e for e in await db.escorts.find(
+                {"id": {"$in": escort_ids}},
+                {"_id": 0, "id": 1, "name": 1, "institution": 1, "mobile": 1},
+            ).to_list(len(escort_ids) + 1)
+        }
+        out = []
+        for eid, agg in by_id.items():
+            e = escorts.get(eid, {})
+            out.append({
+                "escort_id": eid,
+                "name": e.get("name") or "(deleted)",
+                "institution": e.get("institution"),
+                "mobile": e.get("mobile"),
+                "days_present": len(agg["dates"]),
+                "dates_present": sorted(agg["dates"]),
+            })
+        out.sort(key=lambda r: (r["name"] or "").lower())
+        return {"start": start, "end": end, "rows": out}
+
+    @router.get("/reports/ot-ledger")
+    async def ot_ledger(
+        member_id: str, year: int,
+        admin: dict = Depends(require_admin),
+    ):
+        """Date-wise overtime sessions for a single member across a
+        calendar year. Powers the double-click OT drill-down modal on
+        the Comp-off columns in the Attendance report.
+
+        Returns every attendance row that had any OT minutes recorded,
+        with early / late split, start & end times, reason, and
+        approval status.
+        """
+        start = f"{year}-01-01"
+        end = f"{year}-12-31"
+        rows = await db.attendance.find(
+            {"user_id": member_id,
+             "date": {"$gte": start, "$lte": end},
+             "overtime_total_min": {"$gt": 0}},
+            {"_id": 0,
+             "date": 1, "check_in_at": 1, "check_out_at": 1,
+             "overtime_early_min": 1, "overtime_late_min": 1,
+             "overtime_total_min": 1, "overtime_reason": 1,
+             "overtime_status": 1, "overtime_admin_note": 1,
+             "work_start_at_session": 1, "work_end_at_session": 1,
+             "overtime_decided_by": 1, "overtime_decided_at": 1},
+        ).sort("date", 1).to_list(2000)
+        u = await db.users.find_one(
+            {"id": member_id},
+            {"_id": 0, "full_name": 1, "rank": 1, "category": 1},
+        )
+        total_min = sum(int(r.get("overtime_total_min") or 0) for r in rows)
+        return {
+            "member_id": member_id,
+            "member_name": (u or {}).get("full_name"),
+            "rank": (u or {}).get("rank"),
+            "category": (u or {}).get("category"),
+            "year": year,
+            "total_minutes": total_min,
+            "rows": rows,
+        }
+
     return router

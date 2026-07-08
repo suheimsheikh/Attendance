@@ -6,6 +6,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, downloadBlob } from "../../api";
 import { todayIso, shortDate, categoryLabel } from "../../utils";
 import MemberTimelineModal from "../../components/MemberTimelineModal";
+import OTLedgerModal from "./OTLedgerModal";
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 function isoDate(y, m0, d) { return `${y}-${pad2(m0 + 1)}-${pad2(d)}`; }
@@ -91,6 +92,11 @@ export default function Reports() {
   const [institutionFilter, setInstitutionFilter] = useState("");
   const [compOffOnly, setCompOffOnly] = useState(false);
   const [sortBy, setSortBy] = useState("alpha");
+  // Escort-only mode fetches a separate report (list of parent-escorts
+  // and their present-days) instead of blending with the member table.
+  const [escortReport, setEscortReport] = useState(null);
+  // Double-click OT-ledger modal state.
+  const [otLedger, setOtLedger] = useState(null); // { member_id, member_name } | null
 
   // Drill-down hover popover state (7 Jul 2026 — replaces native
   // `title` attrs which had 1-2s browser-delay and broke inside the
@@ -123,6 +129,22 @@ export default function Reports() {
     catch (err) { toast.error(err?.message || "Failed"); }
     finally { setLoading(false); }
   }, [monthIso]);
+
+  // Fetched lazily when the admin flips the Escorts filter chip.
+  // Escort attendance lives in its own collection so we hit a separate
+  // endpoint rather than trying to shoe-horn it into the member table.
+  const loadEscortReport = useCallback(async () => {
+    if (!win?.start || !win?.end) return;
+    setLoading(true);
+    try {
+      const r = await api.get("/reports/escort-attendance", { start: win.start, end: win.end });
+      setEscortReport(r);
+    } catch (err) { toast.error(err?.message || "Failed"); }
+    finally { setLoading(false); }
+  }, [win]);
+  useEffect(() => {
+    if (tab === "attendance" && categoryFilter === "escorts") loadEscortReport();
+  }, [tab, categoryFilter, loadEscortReport]);
 
   const loadDaily = useCallback(async () => {
     setLoading(true);
@@ -325,6 +347,37 @@ export default function Reports() {
 
           <div className="iu-card overflow-hidden">
             <div className="overflow-auto max-h-[70vh]">
+              {/* When the Escorts chip is active we render a completely
+                  separate slim table sourced from /reports/escort-attendance
+                  (parent-escorts, not the athletes they accompany). Keeps
+                  the two data shapes cleanly separated. */}
+              {categoryFilter === "escorts" ? (
+                <table className="min-w-full text-xs iu-table-compact" data-testid="escort-report-table">
+                  <thead className="sticky top-0 z-10 bg-slate-100 text-[10px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200">
+                    <tr>
+                      <th className="py-1.5 px-2 text-left">Escort</th>
+                      <th className="py-1.5 px-2 text-left">Institution</th>
+                      <th className="py-1.5 px-2 text-left">Mobile</th>
+                      <th className="py-1.5 px-2 text-right">Days present</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(escortReport?.rows || []).length === 0 && !loading ? (
+                      <tr><td colSpan={4} className="py-6 text-center italic text-slate-500">No escort check-ins in this window.</td></tr>
+                    ) : (escortReport?.rows || []).map((r) => (
+                      <tr key={r.escort_id} data-testid={`escort-row-${r.escort_id}`}
+                          className="border-t border-slate-100 hover:bg-slate-50/70">
+                        <td className="py-1.5 px-2 font-semibold text-slate-800">{r.name}</td>
+                        <td className="py-1.5 px-2 text-slate-600">{r.institution || "—"}</td>
+                        <td className="py-1.5 px-2 font-mono text-slate-600">{r.mobile || "—"}</td>
+                        <td className="py-1.5 px-2 text-right font-bold" title={(r.dates_present || []).join(", ")}>
+                          {r.days_present}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
               <table className="min-w-full text-xs iu-table-compact" style={{ minWidth: 1300 }}>
                 <thead>
                   {/* Grouped header row + sub-header row are BOTH sticky
@@ -448,9 +501,9 @@ export default function Reports() {
                         <td className="py-1.5 px-1.5 text-center bg-amber-50/30 border-t border-amber-100">{n(r.leave_balance_taken_ytd)}</td>
                         <td className={`py-1.5 px-1.5 text-center bg-amber-50/30 border-r border-t border-amber-100 font-extrabold ${(r.leave_balance_remaining || 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>{n(r.leave_balance_remaining)}</td>
                         {/* Comp-Off group */}
-                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100", hoverProps("Comp-off earned", r.dates_comp_off_earned))} data-testid={`comp-off-earned-${r.member_id}`}>{n(r.comp_off_earned)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 text-amber-700", hoverProps("Comp-off applied", r.dates_comp_off_applied))} data-testid={`comp-off-applied-${r.member_id}`}>{n(r.comp_off_applied)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-r border-t border-sky-100 font-extrabold text-emerald-700", hoverProps("Comp-off approved", r.dates_comp_off_used))} data-testid={`comp-off-approved-${r.member_id}`}>{n(r.comp_off_used)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 cursor-pointer hover:bg-sky-100/50", hoverProps("Comp-off earned · double-click for OT ledger", r.dates_comp_off_earned))} data-testid={`comp-off-earned-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_earned)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-t border-sky-100 text-amber-700 cursor-pointer hover:bg-sky-100/50", hoverProps("Comp-off applied · double-click for OT ledger", r.dates_comp_off_applied))} data-testid={`comp-off-applied-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_applied)}</td>
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-50/30 border-r border-t border-sky-100 font-extrabold text-emerald-700 cursor-pointer hover:bg-sky-100/50", hoverProps("Comp-off approved · double-click for OT ledger", r.dates_comp_off_used))} data-testid={`comp-off-approved-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_used)}</td>
                         {/* Overtime group */}
                         <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100", hoverProps("OT served", r.dates_overtime_served))}>{h(otServed)}</td>
                         <td {...merge("py-1.5 px-1.5 text-center bg-violet-50/30 border-t border-violet-100 text-amber-700", hoverProps("OT applied", r.dates_overtime_applied))}>{h(otApplied)}</td>
@@ -469,10 +522,20 @@ export default function Reports() {
                   )}
                 </tbody>
               </table>
+              )}
             </div>
           </div>
         </>
       )}
+
+      {/* OT-ledger drill-down — opens on double-click of any comp-off cell. */}
+      <OTLedgerModal
+        open={!!otLedger}
+        onClose={() => setOtLedger(null)}
+        memberId={otLedger?.member_id}
+        memberName={otLedger?.member_name}
+        year={year}
+      />
 
       {tab === "daily" && (
         <>
