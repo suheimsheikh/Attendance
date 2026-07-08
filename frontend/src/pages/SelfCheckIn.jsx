@@ -10,6 +10,7 @@ import DailyContent from "../components/DailyContent";
 import ReasonPicker from "../components/ReasonPicker";
 import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import OutOfGeofenceModal from "../components/OutOfGeofenceModal";
+import CorrectionRequestModal from "../components/CorrectionRequestModal";
 
 function hmNow() {
   const d = new Date();
@@ -28,6 +29,7 @@ export default function SelfCheckIn() {
   const [office, setOffice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [correctionOpen, setCorrectionOpen] = useState(false);
   const [locating, setLocating] = useState("");
   const [lastDistance, setLastDistance] = useState(null);
   const [overtimeReason, setOvertimeReason] = useState("");
@@ -344,6 +346,27 @@ export default function SelfCheckIn() {
           Distance is recorded but not enforced · Office radius {office.radius_m} m · {office.timezone || "Asia/Kolkata"}
         </p>
       )}
+
+      {/* Retro-fix entry point — small subtle link so it doesn't compete
+          with the big "I showed up" CTA. Opens the shared correction
+          modal pre-set to `missed_checkin`. 7-day window enforced
+          server-side. */}
+      <div className="mt-4 text-center">
+        <button
+          type="button"
+          data-testid="selfcheckin-request-correction"
+          onClick={() => setCorrectionOpen(true)}
+          className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2"
+        >
+          Forgot to punch in earlier? Request a correction
+        </button>
+      </div>
+      <CorrectionRequestModal
+        open={correctionOpen}
+        onClose={() => setCorrectionOpen(false)}
+        entityType="attendance"
+        initialKind="missed_checkin"
+      />
 
       {showSelfie && (
         <SelfieCapture
