@@ -5,6 +5,44 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 9 Jul 2026 — Code review triage (round 2): no new fixes needed
+
+External code review re-ran and returned the same findings as
+6-Jul-2026. Verified all previously-applied fixes are intact and no
+new violations were introduced by any file touched this session.
+
+**Prior fixes still in place:**
+- `server.py:885` — `hashlib.sha256` (not md5) ✓
+- `tests/test_smoke_launch.py:4` — expanded docstring with
+  "placeholder" clarification ✓
+
+**Confirmed false positives (documented in ESLint config):**
+- `Sites.jsx:29 — useEffect missing 'load'` — intentional on-mount-
+  only; adding `load` either loops or requires a useCallback shim
+  that defeats the intent.
+- `ParentInlineInput.jsx:36,37 — missing setName/setMobile` — React
+  guarantees useState setters are stable; allow-listed.
+- The other 178 "missing deps" findings are the same allow-listed
+  patterns (module singletons, callback locals, setState setters).
+
+**Deferred to ROADMAP (already tracked):**
+- localStorage → httpOnly cookies (P2 security).
+- Component & function complexity splits — server.py, MyLeaves,
+  Reports, Muster, Members, Presence, CorrectionRequestModal,
+  EventConflictNotice, InlineCell (P3 maintenance).
+- `holidays.py`, `daily_content.py`, `breaks.py`, `guests.py` router
+  complexity (P3, alongside server.py modular refactor).
+- Hook-dep-count hotspots — Reports.jsx:224, BulkEditBar.jsx:34,
+  auth.jsx:103 (P3, part of the split work).
+- Style-only: `is` for constant comparison (Python idiomatic —
+  false positive on `is None`), nested ternaries readability,
+  type-hint coverage (long-term).
+
+Zero new `console.log` calls introduced by the 9 files touched this
+session — all diagnostics use `.debug/.error/.warn` (allow-listed).
+
+---
+
 ## 9 Jul 2026 — Presence: wider columns, taller rows
 
 Follow-up on the Off Campus merge: with 4 columns instead of 5, each
