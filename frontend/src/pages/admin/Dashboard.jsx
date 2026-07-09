@@ -553,7 +553,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-2">
               <ShortcutBtn to="/presence" icon={Users} label="Presence" testid="shortcut-presence" />
               <ShortcutBtn to="/muster" icon={ClipboardCheck} label="Muster" testid="shortcut-muster" />
-              <ShortcutBtn to="/admin/reports" icon={TrendingUp} label="Reports" testid="shortcut-reports" />
+              <ShortcutBtn to="/admin/reports" icon={TrendingUp} label="The Grid" testid="shortcut-reports" />
               <ShortcutBtn to="/admin/data-quality" icon={ShieldAlert} label="Data quality" testid="shortcut-dq" />
               <ShortcutBtn to="/admin/audit-log" icon={ClipboardCheck} label="Audit log" testid="shortcut-audit" />
               <ShortcutBtn to="/admin/calendar" icon={CalendarIcon} label="Calendar" testid="shortcut-calendar" />

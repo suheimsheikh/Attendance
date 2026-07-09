@@ -80,7 +80,7 @@ export default function Reports() {
   // Legacy aliases: `payroll` and `hours` both fold into the merged
   // "attendance" tab (7 Jul 2026 — user-requested collapse of the two).
   const normaliseTab = (t) => (t === "payroll" || t === "hours") ? "attendance" : t;
-  const initial = VALID_TABS.has(normaliseTab(urlTab)) ? normaliseTab(urlTab) : "attendance";
+  const initial = VALID_TABS.has(normaliseTab(urlTab)) ? normaliseTab(urlTab) : "calendar";
   const [tab, setTabState] = useState(initial);
   const setTab = (t) => {
     setTabState(t);
@@ -294,13 +294,13 @@ export default function Reports() {
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <header className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Reports</h1>
-        <p className="text-slate-500 text-sm mt-1">Monthly attendance, leave balances and daily leave/tour summaries.</p>
+        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">The Grid</h1>
+        <p className="text-slate-500 text-sm mt-1">Calendar view, attendance summaries and daily leave/tour lists — all in one place.</p>
       </header>
 
       <div className="flex gap-2 mb-4">
-        <button data-testid="tab-attendance" onClick={() => setTab("attendance")} className={`iu-chip ${tab === "attendance" ? "iu-chip-active" : ""}`}>Attendance</button>
         <button data-testid="tab-calendar" onClick={() => setTab("calendar")} className={`iu-chip ${tab === "calendar" ? "iu-chip-active" : ""}`}>Calendar Grid</button>
+        <button data-testid="tab-attendance" onClick={() => setTab("attendance")} className={`iu-chip ${tab === "attendance" ? "iu-chip-active" : ""}`}>Attendance</button>
         <button data-testid="tab-daily" onClick={() => setTab("daily")} className={`iu-chip ${tab === "daily" ? "iu-chip-active" : ""}`}>Daily Leave/Tour</button>
       </div>
 
@@ -838,3 +838,4 @@ function SectionList({ title, items }) {
     </div>
   );
 }
+

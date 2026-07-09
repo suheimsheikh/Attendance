@@ -52,7 +52,7 @@ const NAV_ADMIN = [
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true },
   { to: "/admin/members", label: "Manage Members", icon: Users },
-  { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
+  { to: "/admin/reports", label: "The Grid", icon: FileBarChart2 },
   { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page" },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
