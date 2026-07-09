@@ -3,6 +3,7 @@ import { Loader2, FileDown, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob } from "../../api";
 import { categoryLabel } from "../../utils";
+import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 
 /**
  * Calendar Grid tab — one row per member, one column per day of the
@@ -32,21 +33,41 @@ const CELL_STYLE = {
   AB: { bg: "bg-red-500",        text: "text-white",       label: "AB", title: "Absent" },
 };
 
-function GridCell({ code, dow }) {
+function GridCell({ code, dow, onClick }) {
   if (!code) {
     // Future date — render an empty slot but keep it clickable-looking
     // in the same width so the grid stays aligned.
     return <td className="border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-7">·</td>;
   }
   const s = CELL_STYLE[code] || CELL_STYLE.AB;
+  const clickable = !!onClick;
   return (
     <td
-      className={`border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-7 leading-none`}
-      title={`${s.title}${dow ? " · " + dow : ""}`}
+      className={`border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-7 leading-none ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
+      title={`${s.title}${dow ? " · " + dow : ""}${clickable ? " · click to file correction" : ""}`}
+      onClick={onClick}
     >
       {s.label}
     </td>
   );
+}
+
+// Given a cell code, pick the best default correction kind + entityType
+// so the modal opens straight to the right form section. Cells that
+// don't map to a useful correction (WO / HO) return null so we don't
+// wire an onClick handler.
+function correctionForCode(code) {
+  switch (code) {
+    case "AB":               return { entityType: "attendance", initialKind: "missed_checkin" };
+    case "LT":
+    case "P":
+    case "HD":               return { entityType: "attendance", initialKind: "time_adjust" };
+    case "LV":
+    case "TR":
+    case "CO":
+    case "PS":               return { entityType: "leave", initialKind: "leave_cancel" };
+    default:                 return null;   // WO, HO — nothing sensible to correct
+  }
 }
 
 export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPrevMonth, onNextMonth, onJumpToday, MonthNav, athleteLikeKeys }) {
@@ -55,6 +76,10 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [fleetFilter, setFleetFilter] = useState("");
   const [institutionFilter, setInstitutionFilter] = useState("");
+  // Correction modal state — clicking any cell with a useful code
+  // (AB/LT/P/HD/LV/TR/CO/PS) opens the shared CorrectionRequestModal
+  // pre-filled with the member and date the admin clicked.
+  const [correction, setCorrection] = useState(null); // { member, date, entityType, initialKind } | null
 
   const isAthleteLike = useCallback(
     (r) => athleteLikeKeys.has(r?.category),
@@ -269,9 +294,30 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                       {r.rank && <div className="text-[10px] text-slate-400 leading-tight">{r.rank}</div>}
                     </td>
                     <td className="py-1 px-2 text-slate-600 hidden md:table-cell border-b border-slate-100">{categoryLabel(r.category)}</td>
-                    {r.cells.map((code, idx) => (
-                      <GridCell key={days[idx]} code={code} dow={dayHeaders[idx]?.dow} />
-                    ))}
+                    {r.cells.map((code, idx) => {
+                      const cfg = correctionForCode(code);
+                      const iso = days[idx];
+                      // Only wire onClick for past-or-today cells that
+                      // map to a useful correction. Future dates
+                      // (empty code) already skip in GridCell; WO/HO
+                      // return null cfg.
+                      const onClick = cfg
+                        ? () => setCorrection({
+                            member: { id: r.member_id, full_name: r.member_name },
+                            date: iso,
+                            entityType: cfg.entityType,
+                            initialKind: cfg.initialKind,
+                          })
+                        : undefined;
+                      return (
+                        <GridCell
+                          key={iso}
+                          code={code}
+                          dow={dayHeaders[idx]?.dow}
+                          onClick={onClick}
+                        />
+                      );
+                    })}
                   </tr>
                 );
               })}
@@ -279,6 +325,23 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
           </table>
         </div>
       </div>
+
+      {correction && (
+        <CorrectionRequestModal
+          open
+          onClose={() => setCorrection(null)}
+          onSaved={() => {
+            toast.success("Correction filed — pending admin approval");
+            setCorrection(null);
+            loadReport();
+          }}
+          entityType={correction.entityType}
+          initialKind={correction.initialKind}
+          targetDate={correction.date}
+          onBehalfOfMember={correction.member}
+          entityLabel={`${correction.member.full_name} · ${correction.date}`}
+        />
+      )}
     </>
   );
 }

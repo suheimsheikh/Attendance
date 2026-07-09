@@ -4,6 +4,47 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 9 Feb 2026 — Calendar Grid: click-any-cell to file correction
+
+**User request:** "In calendar grid Admins should be able to click on
+a cell and make a correction using the correction routine already in
+place but pre fed with the date and member."
+
+Every past-or-today cell on the Calendar Grid is now clickable — a
+single click opens the shared `CorrectionRequestModal` pre-filled with
+the member (via `onBehalfOfMember`), the date (via `targetDate`), and
+the most-appropriate correction kind based on the cell's status code:
+
+| Cell code       | Pre-selected correction kind      |
+|-----------------|-----------------------------------|
+| `AB` (absent)   | *"I forgot to punch in"* (`missed_checkin`) |
+| `LT` / `P` / `HD` | *"My check-in time is wrong"* (`time_adjust`) |
+| `LV` / `TR` / `CO` / `PS` | *"Cancel this leave"* (`leave_cancel`, entityType=`leave`) |
+| `WO` / `HO`     | not clickable (no useful correction) |
+| future dates    | not clickable                     |
+
+Clickable cells now show a subtle sky-ring hover state and the
+tooltip appends *"· click to file correction"* to nudge admins.
+Filed corrections carry `filed_by_admin_id`, so a *different* admin
+still has to approve them under `/admin/corrections` (unchanged
+double-admin-approval policy).
+
+After a successful save, the modal closes, a green toast confirms
+"Correction filed — pending admin approval", and the grid re-fetches
+so any status shift becomes visible on the next reload.
+
+Files touched: `frontend/src/pages/admin/CalendarGridTab.jsx` only —
+new `correctionForCode()` helper + `correction` state + modal render
+below the grid table. No backend changes; reuses the existing
+`POST /api/me/corrections` + `POST /api/admin/corrections` routes.
+
+Verified end-to-end via Playwright: clicked AJAY's July 1 AB cell,
+modal opened with "FILE ON BEHALF OF · AJAY" banner, "Correcting: AJAY
+· 2026-07-01" context line, kind dropdown pre-selected to "I forgot
+to punch in", and date pre-filled to 07/01/2026.
+
+
+---
 ## 9 Feb 2026 — Composite Ledger dropped → Calendar Grid ships instead
 
 **User request:** "Sorry. Please drop the composite ledger as it is
