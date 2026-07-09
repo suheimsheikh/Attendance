@@ -27,9 +27,12 @@
 - **Member (sailor/staff/coach)** — signs in via phone (browser-approved by admin) or via admin email login, checks in/out (QR or GPS), views own stats, applies for leave/tour.
 
 ## What's Implemented (Jan 2026)
-> Session-level shipments (Jun–Jul 2026) live in `CHANGELOG.md`
-> — most recent: **Chef's View + Elite category** shipped 8 Jul 2026;
-> **Single-glance Admin Dashboard (`/admin/dashboard`)** shipped 7 Jul 2026.
+> Session-level shipments (Jun 2026 – Feb 2026) live in `CHANGELOG.md`
+> — most recent: **Elite squad now visible in Muster + Fleet bulk-assign**
+> (4 Feb 2026); **Code review: brute-force protection + backup restore
+> fixes** (session before); **Chef's View + Elite category** shipped
+> 8 Jul 2026; **Single-glance Admin Dashboard (`/admin/dashboard`)**
+> shipped 7 Jul 2026.
 > alongside this file to keep PRD.md focused on the durable spec.
 
 ### Backend (reused, verified ✅)

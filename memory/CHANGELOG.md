@@ -4,6 +4,53 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 4 Feb 2026 — Elite squad members visible in Muster + Fleet bulk-assign
+
+**Bug reported:** "Badrinath and Ravikumar are not showing up in muster"
+(both are `category=elite`, not `category=athlete`).
+
+**Root cause:** Muster and Fleet-assign hardcoded `category: "athlete"`,
+silently excluding every Elite squad member. Reports/Dashboard already
+used the correct `is_athlete_like=True` lookup — muster + masters were
+missed.
+
+**Fixed:**
+- `backend/routes/muster.py` — `/api/muster/athletes`,
+  `/api/muster/checkin-bulk`, `/api/muster/checkout-bulk` now resolve
+  athlete-like keys from `categories` master (fallback to
+  `{athlete, elite}`).
+- `backend/routes/masters.py` — `/api/fleets/assign` uses the same
+  dynamic lookup, so Elite athletes are now bulk-assignable to any
+  fleet (Opti A, ILCA 4, 420, etc.).
+- `frontend/pages/admin/Fleets.jsx` — "Assign athletes" modal roster
+  now shows every athlete-like category, not just plain `athlete`.
+
+**Verified:**
+- API smoke: Badrinath, Ravikumar, Aravind now appear in
+  `/api/muster/athletes?mode=checkin`.
+- Bulk assign against Elite member returned `modified: 1` (was `0`
+  before).
+- Full muster + fleet regression suites pass (56 muster tests +
+  2 fleet/master tests, all green).
+
+**Latent bugs with the same pattern (NOT fixed this pass — flagged):**
+- `backend/breaks.py:93` — `is_athlete = category == "athlete"`
+  excludes Elite from break scoping.
+- `backend/holidays.py:102` — Elite treated as leave-tracked (opposite
+  of intent).
+- `backend/routes/data_quality.py:306` — Elite skipped in
+  photo-captured checks.
+- `backend/routes/auth.py:53,59,226` — Signup/roster imports still
+  restrict to the 4-value Literal without `elite`.
+- `backend/server.py:1436,3067` — CSV import default + dashboard
+  bucketing.
+
+Recommend a follow-up sweep to apply the athlete-like helper
+everywhere before the next payroll / photo-audit cycle.
+
+---
+
+
 
 ## 9 Jul 2026 — Code review triage (round 2): no new fixes needed
 
