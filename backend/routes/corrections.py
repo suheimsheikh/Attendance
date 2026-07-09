@@ -265,6 +265,39 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
         rows = await db.corrections.find(q, {"_id": 0}).sort("requested_at", -1).to_list(500)
         return rows
 
+    @router.get("/me/corrections/candidates")
+    async def correction_candidates(
+        user: dict = Depends(get_current_user),
+    ):
+        """Rows the current member is eligible to correct — attendance
+        rows from the last N days and their active leave/tour entries.
+        Powers the target-row picker inside the Correction request modal
+        so members can raise time_adjust / leave_date_change / leave_
+        cancel / leave_type_change corrections without first hunting
+        down the row on Check-in or Leave/Tour pages.
+
+        Only pulls rows the correction workflow can actually apply to:
+        approved leaves (cancellation / date-change / type-change) and
+        attendance rows within the 7-day window (time_adjust). Rejected
+        or pending items are hidden — they aren't valid targets.
+        """
+        cutoff = (date.today() - timedelta(days=CORRECTION_WINDOW_DAYS - 1)).isoformat()
+        atts = await db.attendance.find(
+            {"user_id": user["id"], "date": {"$gte": cutoff}},
+            {"_id": 0, "id": 1, "date": 1,
+             "check_in_at": 1, "check_out_at": 1},
+        ).sort("date", -1).to_list(30)
+        # Approved leaves that overlap the correction window on either
+        # end are candidates for corrections. Wide range so members can
+        # still cancel/adjust a leave that spans beyond the window.
+        leaves = await db.leaves.find(
+            {"user_id": user["id"], "status": "approved",
+             "end_date": {"$gte": cutoff}},
+            {"_id": 0, "id": 1, "type": 1, "start_date": 1, "end_date": 1,
+             "reason": 1},
+        ).sort("start_date", -1).to_list(50)
+        return {"attendance": atts, "leaves": leaves}
+
     @router.get("/admin/corrections")
     async def list_corrections(
         status: Optional[str] = "pending",

@@ -5,6 +5,31 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 8 Jul 2026 — My Corrections: fresh application picker for existing rows
+
+Follow-up on yesterday's "Raise correction" button: the amber hint that
+told members to "open the specific row" was a papercut. Replaced with
+an inline row picker so all four row-required kinds (time_adjust,
+leave_date_change, leave_cancel, leave_type_change) work end-to-end
+from the fresh-application flow.
+
+- **Backend**: new `/api/me/corrections/candidates` returns the
+  requester's last-7-day attendance rows plus every approved leave
+  overlapping the window. Trimmed projection — only the fields the
+  picker labels need.
+- **Modal**: fetches candidates on open (skipped when the caller
+  already bound `entityId`). A kind-aware `<select>` swaps in for the
+  amber hint — attendance rows for `time_adjust`, leaves for
+  `leave_*`. Picking a row auto-fills `target_date` so the 7-day
+  window check is always in sync. If the requester has no eligible
+  rows (fresh member, no recent activity), the hint stays.
+- Submit gates on picker selection when the kind needs a row.
+- Verified end-to-end: admin user with one seeded attendance row saw
+  `2026-07-09 · 09:15 → 17:45` in the picker and target date snapped
+  correctly on select. 446 backend tests still pass.
+
+---
+
 ## 8 Jul 2026 — My Corrections: raise a fresh correction
 
 Follow-up on the just-shipped My Corrections page: coaches noticed

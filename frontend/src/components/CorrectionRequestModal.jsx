@@ -12,7 +12,7 @@
  *  • target_date is capped to the last 7 days (server also enforces).
  *  • Submits to POST /api/corrections and toasts on success.
  */
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
@@ -63,8 +63,21 @@ export default function CorrectionRequestModal({
   const [newType, setNewType] = useState("leave");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
-
-  if (!open) return null;
+  // Candidate rows the member can pick as the correction target when
+  // launched generically (no entityId bound by the caller). Fetched once
+  // per open from /me/corrections/candidates so the picker doesn't have
+  // to hit the network on every kind switch.
+  const [candidates, setCandidates] = useState({ attendance: [], leaves: [] });
+  const [pickedId, setPickedId] = useState(entityId || "");
+  useEffect(() => {
+    if (!open || entityId) return; // skip when caller already bound a row
+    api.get("/me/corrections/candidates")
+      .then((r) => setCandidates(r || { attendance: [], leaves: [] }))
+      .catch(() => { /* silent — picker gracefully falls back to hint */ });
+  }, [open, entityId]);
+  // Reset the picked target when the user flips the kind selector so we
+  // never carry a leave-row id into an attendance kind or vice versa.
+  useEffect(() => { if (!entityId) setPickedId(""); }, [kind, entityId]);
 
   const effectiveEntityType = entityType || (KINDS_BY_ENTITY.attendance.includes(kind) ? "attendance" : "leave");
   // When the modal is opened generically (no entityType locked by the
@@ -77,9 +90,46 @@ export default function CorrectionRequestModal({
     ? (KINDS_BY_ENTITY[effectiveEntityType] || [])
     : [...KINDS_BY_ENTITY.attendance, ...KINDS_BY_ENTITY.leave];
 
+  // Kinds that require an existing row (i.e. can't create one on the fly).
+  // `missed_checkin` deliberately excluded — it materialises a new row.
+  const NEEDS_ROW = new Set(["time_adjust", "leave_date_change", "leave_cancel", "leave_type_change"]);
+  const needsRow = NEEDS_ROW.has(kind);
+  // Build picker options for the currently-selected kind — attendance
+  // rows for time_adjust, leaves for leave_*. Freshly re-derived on each
+  // render so the dropdown is always in sync with `candidates`.
+  const pickerRows = useMemo(() => {
+    if (!needsRow) return [];
+    if (kind === "time_adjust") {
+      return (candidates.attendance || []).map((r) => ({
+        id: r.id, date: r.date,
+        label: `${r.date} · ${(r.check_in_at || "").slice(11, 16) || "no check-in"}${r.check_out_at ? " → " + r.check_out_at.slice(11, 16) : ""}`,
+      }));
+    }
+    return (candidates.leaves || []).map((r) => ({
+      id: r.id, date: r.start_date,
+      label: `${r.start_date}${r.end_date && r.end_date !== r.start_date ? " → " + r.end_date : ""} · ${(r.type || "leave").replace("_", "-")}${r.reason ? " · " + r.reason.slice(0, 40) : ""}`,
+    }));
+  }, [needsRow, kind, candidates]);
+  // Auto-fill target_date from the picked row (backend enforces the
+  // 7-day window on target_date; picking a row snaps it correctly).
+  useEffect(() => {
+    if (!pickedId) return;
+    const picked = pickerRows.find((r) => r.id === pickedId);
+    if (picked?.date) setDate(picked.date);
+  }, [pickedId, pickerRows]);
+
+  if (!open) return null;
+
   const submit = async (e) => {
     e.preventDefault();
     if (!reason.trim()) { toast.error("Reason is required"); return; }
+    // For row-required kinds, either the caller bound entityId OR the
+    // member picked one from the modal picker.
+    const boundEntityId = entityId || pickedId || null;
+    if (needsRow && !boundEntityId) {
+      toast.error("Pick the row you want to correct");
+      return;
+    }
     // Assemble the kind-specific payload — only send what applies.
     const payload = {};
     if (kind === "missed_checkin" || kind === "time_adjust") {
@@ -96,7 +146,7 @@ export default function CorrectionRequestModal({
       await api.post("/corrections", {
         entity_type: effectiveEntityType,
         kind,
-        entity_id: entityId || null,
+        entity_id: boundEntityId,
         target_date: date,
         payload,
         reason: reason.trim(),
@@ -141,20 +191,35 @@ export default function CorrectionRequestModal({
                 <option key={k} value={k}>{KIND_LABELS[k]}</option>
               ))}
             </select>
-            {/* Non-missed_checkin kinds need an existing row (attendance
-                or leave) to correct — when launched generically we can't
-                bind the row here, so nudge the member back to the source
-                page. Backend also rejects at approval time if entity_id
-                is missing, but a friendly hint saves a round-trip. */}
-            {!entityType && !entityId && kind !== "missed_checkin" && (
-              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mt-1.5" data-testid="correction-row-hint">
-                Tip — this kind needs an existing row. Open{" "}
-                <b>{kind.startsWith("leave_") ? "Leave/Tour/Late" : "My Check In/Out"}</b>
-                {" "}and use the correction button on the specific entry for the fastest turnaround.
-              </p>
+            {/* Row picker — appears for kinds that need an existing row
+                (time_adjust / leave_*) when the modal is launched
+                generically. Auto-fills target_date on selection.
+                Hidden when the caller already bound an entityId. */}
+            {needsRow && !entityId && (
+              <div className="mt-3" data-testid="correction-row-picker-wrap">
+                <label className="iu-label">Which entry are you correcting?</label>
+                {pickerRows.length === 0 ? (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5" data-testid="correction-row-hint">
+                    You don&rsquo;t have any {kind === "time_adjust" ? "attendance rows in the last 7 days" : "approved leave/tour rows overlapping the window"} to correct. Log a check-in first, or contact your admin.
+                  </p>
+                ) : (
+                  <select
+                    value={pickedId}
+                    onChange={(e) => setPickedId(e.target.value)}
+                    className="iu-input"
+                    data-testid="correction-row-picker"
+                    required
+                  >
+                    <option value="">— pick one —</option>
+                    {pickerRows.map((r) => (
+                      <option key={r.id} value={r.id}>{r.label}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
             )}
           </div>
-          <div>
+            <div>
             <label className="iu-label">Which date does this apply to?</label>
             <input
               type="date" value={date}
