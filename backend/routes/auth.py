@@ -55,8 +55,11 @@ class PhoneLoginIn(BaseModel):
 
 class DeviceApproveIn(BaseModel):
     full_name: Optional[str] = None
-    role: Literal["admin", "member"] = "member"
-    category: Literal["athlete", "staff", "coach", "executive"] = "athlete"
+    # `chef` role added 4 Feb 2026 with the Roles master — kitchen staff
+    # who need read-access to Muster/Presence/Chef's View but no admin
+    # rights. Category stays as-is (Elite still on the wishlist).
+    role: Literal["admin", "member", "chef"] = "member"
+    category: Literal["athlete", "elite", "staff", "coach", "executive"] = "athlete"
     rank: Optional[str] = None
 
 

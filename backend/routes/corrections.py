@@ -54,6 +54,13 @@ class CorrectionCreate(BaseModel):
     target_date: str                   # YYYY-MM-DD — the date the correction applies to
     payload: Dict[str, Any] = Field(default_factory=dict)
     reason: str
+    # Admin-only field (4 Feb 2026) — when an admin files a correction on
+    # behalf of a member, this holds that member's user id. The persisted
+    # row still gets requester_id=<target_member> (so approvers see it in
+    # the correct member's queue and the applier mutates that member's
+    # row), but audit fields record the filing admin so the "second-admin
+    # approval" rule can enforce filer ≠ approver.
+    on_behalf_of: Optional[str] = None
 
 
 class CorrectionDecision(BaseModel):
@@ -227,6 +234,12 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
     async def create_correction(body: CorrectionCreate, user: dict = Depends(get_current_user)):
         """Member raises a correction request. Admins go through the queue
         too (per policy option 4b) — no auto-approval bypass.
+
+        Admins may additionally file corrections on behalf of any member
+        by passing `on_behalf_of=<member_id>` (4 Feb 2026). The row is
+        stored against the target member but audit fields record the
+        filing admin, and the decide endpoint enforces filer ≠ approver
+        so a second admin must still sign it off.
         """
         if body.entity_type not in VALID_ENTITY_KINDS:
             raise HTTPException(status_code=400,
@@ -236,7 +249,46 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
                                 detail=f"kind for {body.entity_type!r} must be one of {sorted(VALID_ENTITY_KINDS[body.entity_type])}")
         if not (body.reason or "").strip():
             raise HTTPException(status_code=400, detail="reason is required")
-        _enforce_window(body.target_date)
+
+        # Resolve target member — admin-on-behalf-of flow takes precedence.
+        # Only actual admins may impersonate; non-admins get a 403 rather
+        # than a silent fallback (would be a spoofing vector otherwise).
+        filed_by_admin_id: Optional[str] = None
+        filed_by_admin_name: Optional[str] = None
+        if body.on_behalf_of:
+            if user.get("role") != "admin":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only admins may file corrections on behalf of another member.",
+                )
+            target = await db.users.find_one(
+                {"id": body.on_behalf_of},
+                {"_id": 0, "id": 1, "full_name": 1},
+            )
+            if not target:
+                raise HTTPException(status_code=404, detail="Target member not found")
+            requester_id = target["id"]
+            requester_name = target["full_name"]
+            filed_by_admin_id = user["id"]
+            filed_by_admin_name = user["full_name"]
+        else:
+            requester_id = user["id"]
+            requester_name = user["full_name"]
+
+        # Admins bypass the 7-day retro window — they're often filing late
+        # corrections precisely BECAUSE the member missed the window.
+        # Non-admin self-filed requests still respect the policy.
+        if user.get("role") != "admin":
+            _enforce_window(body.target_date)
+        else:
+            # Still reject future dates even for admins — nothing to fix.
+            try:
+                td = date.fromisoformat(body.target_date)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="target_date must be YYYY-MM-DD")
+            if td > date.today():
+                raise HTTPException(status_code=400, detail="target_date cannot be in the future")
+
         doc = {
             "id": str(uuid4()),
             "entity_type": body.entity_type,
@@ -246,13 +298,16 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             "payload": body.payload or {},
             "reason": body.reason.strip(),
             "status": "pending",
-            "requester_id": user["id"],
-            "requester_name": user["full_name"],
+            "requester_id": requester_id,
+            "requester_name": requester_name,
             "requested_at": now_utc().isoformat(),
             "decided_by_id": None,
             "decided_by_name": None,
             "decided_at": None,
             "admin_note": None,
+            # New audit fields (4 Feb 2026). Nullable for legacy rows.
+            "filed_by_admin_id": filed_by_admin_id,
+            "filed_by_admin_name": filed_by_admin_name,
         }
         await db.corrections.insert_one(doc)
         return {"ok": True, "id": doc["id"]}
@@ -268,6 +323,7 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
     @router.get("/me/corrections/candidates")
     async def correction_candidates(
         user: dict = Depends(get_current_user),
+        on_behalf_of: Optional[str] = None,
     ):
         """Rows the current member is eligible to correct — attendance
         rows from the last N days and their active leave/tour entries.
@@ -280,18 +336,25 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
         approved leaves (cancellation / date-change / type-change) and
         attendance rows within the 7-day window (time_adjust). Rejected
         or pending items are hidden — they aren't valid targets.
+
+        Admins may pass `?on_behalf_of=<member_id>` to fetch candidates
+        for another member (4 Feb 2026 — supports the admin-on-behalf
+        correction flow). Non-admins get 403 if they try.
         """
+        target_id = user["id"]
+        if on_behalf_of:
+            if user.get("role") != "admin":
+                raise HTTPException(status_code=403,
+                                    detail="Only admins may look up other members' correction candidates.")
+            target_id = on_behalf_of
         cutoff = (date.today() - timedelta(days=CORRECTION_WINDOW_DAYS - 1)).isoformat()
         atts = await db.attendance.find(
-            {"user_id": user["id"], "date": {"$gte": cutoff}},
+            {"user_id": target_id, "date": {"$gte": cutoff}},
             {"_id": 0, "id": 1, "date": 1,
              "check_in_at": 1, "check_out_at": 1},
         ).sort("date", -1).to_list(30)
-        # Approved leaves that overlap the correction window on either
-        # end are candidates for corrections. Wide range so members can
-        # still cancel/adjust a leave that spans beyond the window.
         leaves = await db.leaves.find(
-            {"user_id": user["id"], "status": "approved",
+            {"user_id": target_id, "status": "approved",
              "end_date": {"$gte": cutoff}},
             {"_id": 0, "id": 1, "type": 1, "start_date": 1, "end_date": 1,
              "reason": 1},
@@ -319,11 +382,23 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
     async def _decide_one(correction: dict, decision: str, note: Optional[str], admin: dict):
         """Shared logic between single-decide and bulk-approve. Applies the
         change (when approved) and stamps decision metadata on the correction.
+
+        Second-admin rule (4 Feb 2026): if the correction was FILED by an
+        admin on behalf of a member, the approver must differ from the
+        filer. Applies to both approvals and rejections so the filing
+        admin can't withdraw + reject their own request to sneak past
+        the queue.
         """
         if correction["status"] != "pending":
             raise HTTPException(status_code=409, detail=f"Correction already {correction['status']}")
         if decision not in ("approved", "rejected"):
             raise HTTPException(status_code=400, detail="status must be approved or rejected")
+        filed_by = correction.get("filed_by_admin_id")
+        if filed_by and filed_by == admin["id"]:
+            raise HTTPException(
+                status_code=409,
+                detail="You filed this correction on behalf of the member — a different admin must approve or reject it.",
+            )
         applied: Optional[dict] = None
         if decision == "approved":
             applier = APPLIERS.get((correction["entity_type"], correction["kind"]))

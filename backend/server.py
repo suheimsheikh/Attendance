@@ -174,9 +174,23 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
 async def require_coach_or_admin(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") == "admin":
         return user
+    # Chef role — added 4 Feb 2026 with the Roles master. Chefs get the
+    # same read-only Muster / Presence access as coaches so they can
+    # plan meal counts at the check-in window.
+    if user.get("role") == "chef":
+        return user
     if user.get("category") == "coach":
         return user
-    raise HTTPException(status_code=403, detail="Coach or admin privileges required")
+    raise HTTPException(status_code=403, detail="Coach, chef, or admin privileges required")
+
+
+async def require_chef_or_admin(user: dict = Depends(get_current_user)) -> dict:
+    """Chef's View gating (4 Feb 2026). Chef's View was admin-only when
+    it shipped in Jul 2026; opening it to the dedicated `chef` role
+    lets kitchen staff plan meals without giving them admin rights."""
+    if user.get("role") in ("admin", "chef"):
+        return user
+    raise HTTPException(status_code=403, detail="Chef or admin privileges required")
 
 
 # ----------------------------------------------------------------------------
@@ -194,7 +208,7 @@ class MemberCreate(BaseModel):
     mobile: Optional[str] = None
     work_start: Optional[str] = None
     work_end: Optional[str] = None
-    role: Literal["admin", "member"] = "member"
+    role: Literal["admin", "member", "chef"] = "member"
     institution: Optional[str] = None
     gender: Optional[Literal["M", "F", "O"]] = None
     # Fleet = which boat class this athlete trains in (e.g. Optimist,
@@ -227,7 +241,7 @@ class MemberUpdate(BaseModel):
     work_end: Optional[str] = None
     photo: Optional[str] = None
     password: Optional[str] = None
-    role: Optional[Literal["admin", "member"]] = None
+    role: Optional[Literal["admin", "member", "chef"]] = None
     institution: Optional[str] = None
     gender: Optional[Literal["M", "F", "O"]] = None
     fleet: Optional[str] = None
@@ -614,6 +628,18 @@ async def _seed_database() -> None:
             except Exception as e:
                 logger.debug("category seed skipped %r: %s", row["key"], e)
         logger.info("Seeded categories master (athlete, elite, coach, staff, executive)")
+
+    # ------------------------------------------------------------------
+    # Roles master (4 Feb 2026) — seeded system roles: admin, member,
+    # chef. `is_system=True` prevents rename/delete. Chef is the new
+    # role that grants read-access to Muster/Presence/Chef's View.
+    # ------------------------------------------------------------------
+    from routes.roles import seed_default_roles
+    try:
+        await seed_default_roles(db)
+        logger.info("Seeded roles master (admin, chef, member)")
+    except Exception as e:
+        logger.debug("role seed skipped: %s", e)
 
 
 # ----------------------------------------------------------------------------
@@ -3724,7 +3750,10 @@ app.include_router(_dashboard_router(db, require_admin))
 
 # Chef's View (GET /api/admin/meals-today) + Categories master read.
 from routes.meals import make_router as _meals_router  # noqa: E402
-app.include_router(_meals_router(db, require_admin, get_current_user))
+app.include_router(_meals_router(db, require_admin, get_current_user, require_chef_or_admin))
+
+from routes.roles import make_router as _roles_router  # noqa: E402
+app.include_router(_roles_router(db, require_admin, get_current_user))
 
 # Leave / Tour routes — split out 06/2026 during the server.py refactor.
 from routes.leaves import make_router as _leaves_router  # noqa: E402

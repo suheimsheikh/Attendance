@@ -1,5 +1,5 @@
 import React from "react";
-import { Edit3, LogIn, LogOut as LogOutIcon, Loader2, Trash2, ShieldCheck } from "lucide-react";
+import { Edit3, LogIn, LogOut as LogOutIcon, Loader2, Trash2, ShieldCheck, PencilRuler } from "lucide-react";
 import InlinePhotoAvatar from "../../../components/InlinePhotoAvatar";
 import ParentContact from "../../../components/ParentContact";
 import StatusBadge from "../../../components/StatusBadge";
@@ -36,6 +36,7 @@ export default React.memo(function MemberRow({
   options,
   onEdit, onDelete, onToggleAttendance, onPatchField, onToggleRow,
   onPhotoUpdated,
+  onFileCorrection,
   highlighted,
 }) {
   const p = presenceRow;
@@ -334,9 +335,21 @@ export default React.memo(function MemberRow({
         </div>
       </td>
       <td className="iu-table-td text-center">
-        <button data-testid={`delete-member-${m.id}`} onClick={() => onDelete(m)} className="p-2 rounded-lg hover:bg-red-50 text-red-600" title="Delete member">
-          <Trash2 size={16} />
-        </button>
+        <div className="flex items-center justify-center gap-1">
+          {onFileCorrection && (
+            <button
+              data-testid={`file-correction-${m.id}`}
+              onClick={() => onFileCorrection(m)}
+              className="p-2 rounded-lg hover:bg-sky-50 text-sky-700"
+              title={`File correction on behalf of ${m.full_name}`}
+            >
+              <PencilRuler size={16} />
+            </button>
+          )}
+          <button data-testid={`delete-member-${m.id}`} onClick={() => onDelete(m)} className="p-2 rounded-lg hover:bg-red-50 text-red-600" title="Delete member">
+            <Trash2 size={16} />
+          </button>
+        </div>
       </td>
     </tr>
   );

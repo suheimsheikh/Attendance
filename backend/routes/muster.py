@@ -48,8 +48,10 @@ def _can_muster(user: dict) -> bool:
     # but only within their own institution. The institution-scoping is
     # enforced downstream in `muster_athletes` and the bulk endpoints —
     # this gate only controls "can they touch the muster surface at all".
+    # Chef role added 4 Feb 2026 — kitchen staff need to see the muster
+    # roll at meal cut-off time so they can plan portion counts.
     return (
-        user.get("role") == "admin"
+        user.get("role") in ("admin", "chef")
         or user.get("category") == "coach"
         or bool(user.get("is_escort"))
     )

@@ -13,9 +13,10 @@
  *  • Submits to POST /api/corrections and toasts on success.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
+import { useAuth } from "../auth";
 
 // Human-readable labels for the kind dropdown.
 const KIND_LABELS = {
@@ -53,7 +54,13 @@ export default function CorrectionRequestModal({
   initialKind,     // pre-select a kind in the dropdown
   targetDate,      // pre-fill the date if the caller knows it
   entityLabel,     // free-form display label so the member sees which row they're correcting
+  // Admin-on-behalf-of (4 Feb 2026). When provided the modal opens with
+  // the member pre-picked; the admin sees a "Filing on behalf of ___"
+  // banner instead of the picker. Ignored for non-admin callers.
+  onBehalfOfMember,
 }) {
+  const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "admin";
   const [kind, setKind] = useState(initialKind || (KINDS_BY_ENTITY[entityType] || KINDS_BY_ENTITY.attendance)[0]);
   const [date, setDate] = useState(targetDate || last7DaysMax());
   const [checkInTime, setCheckInTime] = useState("");
@@ -69,15 +76,47 @@ export default function CorrectionRequestModal({
   // to hit the network on every kind switch.
   const [candidates, setCandidates] = useState({ attendance: [], leaves: [] });
   const [pickedId, setPickedId] = useState(entityId || "");
+
+  // Admin-on-behalf-of state (4 Feb 2026). If the caller pre-bound a
+  // member via `onBehalfOfMember`, that pin sticks — otherwise admins
+  // get an inline picker (search-as-you-type over /members). Non-admins
+  // never see this section.
+  const [members, setMembers] = useState([]);
+  const [onBehalfId, setOnBehalfId] = useState(onBehalfOfMember?.id || "");
+  const [memberQuery, setMemberQuery] = useState("");
+  useEffect(() => {
+    if (!open || !isAdmin || onBehalfOfMember) return;
+    api.get("/members")
+      .then((rows) => setMembers(rows || []))
+      .catch(() => {});
+  }, [open, isAdmin, onBehalfOfMember]);
+  const memberOptions = useMemo(() => {
+    const q = memberQuery.trim().toLowerCase();
+    return members
+      .filter((m) => !q || (m.full_name || "").toLowerCase().includes(q))
+      .slice(0, 20);
+  }, [members, memberQuery]);
+  const onBehalfMember = useMemo(() => {
+    if (onBehalfOfMember) return onBehalfOfMember;
+    return members.find((m) => m.id === onBehalfId) || null;
+  }, [members, onBehalfId, onBehalfOfMember]);
+
   useEffect(() => {
     if (!open || entityId) return; // skip when caller already bound a row
-    api.get("/me/corrections/candidates")
+    // Admin filing on behalf → ask backend for that member's candidates.
+    // Self-filing (or admin without a picked member) → own candidates.
+    const url = onBehalfMember
+      ? `/me/corrections/candidates?on_behalf_of=${encodeURIComponent(onBehalfMember.id)}`
+      : "/me/corrections/candidates";
+    api.get(url)
       .then((r) => setCandidates(r || { attendance: [], leaves: [] }))
       .catch(() => { /* silent — picker gracefully falls back to hint */ });
-  }, [open, entityId]);
+  }, [open, entityId, onBehalfMember]);
   // Reset the picked target when the user flips the kind selector so we
   // never carry a leave-row id into an attendance kind or vice versa.
   useEffect(() => { if (!entityId) setPickedId(""); }, [kind, entityId]);
+  // Same reset when the admin switches which member they're filing for.
+  useEffect(() => { if (!entityId) setPickedId(""); }, [onBehalfMember, entityId]);
 
   const effectiveEntityType = entityType || (KINDS_BY_ENTITY.attendance.includes(kind) ? "attendance" : "leave");
   // When the modal is opened generically (no entityType locked by the
@@ -150,8 +189,15 @@ export default function CorrectionRequestModal({
         target_date: date,
         payload,
         reason: reason.trim(),
+        // Admin filing on behalf of a member — undefined otherwise so
+        // the backend treats it as a self-filed request from `user`.
+        on_behalf_of: isAdmin && onBehalfMember ? onBehalfMember.id : undefined,
       });
-      toast.success("Correction request submitted");
+      toast.success(
+        isAdmin && onBehalfMember
+          ? `Correction filed on behalf of ${onBehalfMember.full_name} — awaiting a different admin's approval`
+          : "Correction request submitted"
+      );
       onSaved?.();
       onClose?.();
     } catch (err) {
@@ -174,6 +220,73 @@ export default function CorrectionRequestModal({
           </button>
         </header>
         <div className="p-4 space-y-3">
+          {isAdmin && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50 p-3" data-testid="correction-admin-onbehalf">
+              <div className="flex items-center gap-2 mb-2">
+                <UserCog size={16} className="text-sky-700" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-sky-900">
+                  File on behalf of
+                </span>
+              </div>
+              {onBehalfOfMember ? (
+                <div className="text-sm text-sky-900">
+                  <b>{onBehalfOfMember.full_name}</b>
+                  <span className="text-sky-700 text-xs ml-2">
+                    Requires a different admin to approve.
+                  </span>
+                </div>
+              ) : (
+                <>
+                  {onBehalfMember ? (
+                    <div className="flex items-center gap-2 text-sm text-sky-900">
+                      <span className="font-semibold">{onBehalfMember.full_name}</span>
+                      <button
+                        type="button"
+                        onClick={() => { setOnBehalfId(""); setMemberQuery(""); }}
+                        className="text-xs underline text-sky-700 hover:text-sky-900"
+                        data-testid="correction-onbehalf-clear"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        value={memberQuery}
+                        onChange={(e) => setMemberQuery(e.target.value)}
+                        placeholder="Search member name (or leave empty to file for yourself)"
+                        className="iu-input text-sm"
+                        data-testid="correction-onbehalf-search"
+                      />
+                      {memberQuery.trim() && memberOptions.length > 0 && (
+                        <ul className="mt-1 max-h-40 overflow-y-auto bg-white border border-sky-200 rounded-lg divide-y">
+                          {memberOptions.map((m) => (
+                            <li key={m.id}>
+                              <button
+                                type="button"
+                                onClick={() => { setOnBehalfId(m.id); setMemberQuery(""); }}
+                                className="w-full text-left px-3 py-1.5 text-sm hover:bg-sky-50"
+                                data-testid={`correction-onbehalf-pick-${m.id}`}
+                              >
+                                {m.full_name}
+                                <span className="text-slate-400 text-xs ml-2">
+                                  {m.category}{m.role !== "member" ? ` · ${m.role}` : ""}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                  <p className="text-[11px] text-sky-700 mt-1.5">
+                    Leaving this empty files the request as your own. Filing on behalf of a member
+                    still requires a <b>different admin</b> to approve.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
           {entityLabel && (
             <p className="text-xs text-slate-600 -mt-1">
               Correcting: <span className="font-semibold text-slate-800">{entityLabel}</span>

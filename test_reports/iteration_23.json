@@ -1,0 +1,35 @@
+{
+  "summary": "Iter 23 — Phase 1 (Roles master + Chef role) + Phase 2 (admin-filed corrections with second-admin approval). Verified end-to-end via both pytest (12/12 pass) and Playwright UI checks against the preview URL. Roles page renders 3 seeded system rows (admin/chef/member) with lock badges + New role button; custom role create+delete round-trip works; system role delete blocked. Chef user creation via /api/members with role=chef succeeds; chef sidebar shows MEMBER + CHEF sections only (no ADMIN), chef routes /admin/chefs-view /muster /presence all load real data, chef navigating to /admin/members|roles|categories|dashboard redirects to '/'. MemberForm modal (opened via Add member) exposes data-testid='mf-role' select with exactly three options {admin:'Administrator', chef:'Chef', member:'Member'} — dropdown is fed from /api/masters/roles. CorrectionRequestModal on /admin/members shows sky FILE ON BEHALF OF <MemberName> banner (data-testid='correction-admin-onbehalf') with 'Requires a different admin to approve.' subhead when opened via the pencil-ruler button (data-testid='file-correction-<memberId>'); on submit toast reads 'Correction filed on behalf of <MemberName> — awaiting a different admin's approval'; row lands in /admin/approvals?tab=corrections with sky 'Filed by admin: Campus Administrator' badge (data-testid='corr-filed-by-admin-<id>'). Second-admin rule: same-admin approve returns 409 with detail 'You filed this correction on behalf of the member — a different admin must approve or reject it.'; a freshly-created second admin can reject/approve successfully (200 OK). Non-admin cannot pass on_behalf_of (403). 7-day retro window still enforced for non-admin self-file (400 'Corrections can only be requested for the last 7 days') while admin bypass on behalf of member with target_date -10 days works (200). Member self-file continues to work exactly as before with no filed_by_admin_id populated.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin/members", "issues": ["React hydration console warning: 'In HTML, whitespace text nodes cannot be a child of table' — pre-existing (not caused by these changes) but visible in all Members-page test runs. Consider tightening JSX so no whitespace text nodes land as direct <table> children."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_roles_and_admin_corrections.py",
+    "/app/test_reports/pytest/iter23_roles.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/routes/corrections.py — the second-admin guard raises 409 only when `filed_by_admin_id == current_admin_id`. The rule is correct, but if an admin edits their own admin record so that MongoDB's canonical `id` differs from the JWT's `sub` claim (unlikely but possible in migration), the check silently allows self-approval. Consider defensively comparing on both `id` and `email` at approve-time.",
+    "frontend/src/pages/admin/AdminCorrections.jsx — the KIND_LABELS/KIND_TINT tables live inline and duplicate copies exist in CorrectionRequestModal.jsx and possibly MyCorrections.jsx. Extract to `src/data/correctionKinds.js` (single source of truth) — otherwise adding a new kind requires touching three files.",
+    "frontend/src/pages/admin/Members.jsx — 136 rows render 136 `<PencilRuler>` icons that each carry a click handler with a closure over the row's memberId. On very large clubs (>1000 members) this can noticeably slow interaction; consider event-delegation on the table body (single onClick that reads data-testid) once >500 members become common.",
+    "backend/routes/roles.py — the roles master is seeded on startup; if the app restarts mid-request the seed can race and produce duplicate rows. Add a unique index on `key` in the collection (upsert-on-key rather than insert-if-missing) to make seeding idempotent.",
+    "frontend/src/components/Layout.jsx line 82 — `isChef` uses `user?.role === 'chef'` but the app also normalises the JWT-derived role in getCurrentUser(); the DRY win here is a small helper `hasRole(user, 'chef')` shared with App.js' RequireChefOrAdmin guard, mirroring the existing isAdmin helper. Not blocking.",
+    "Pre-existing warning: hydration console error 'In HTML, whitespace text nodes cannot be a child of <table>' fires on every /admin/members render. Not new to this iteration but should be cleaned up (adjacent JSX text between <table> and <thead>)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (12/12 test_roles_and_admin_corrections.py)", "frontend": "100% — every acceptance criterion in the review request verified"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (email login toggle). Chef users created dynamically via POST /api/members with role='chef', category='staff', password='Chef@1234'. NOTE: pydantic EmailStr rejects @sailors.local (reserved TLD) — always use @yachtclub.in for fresh test users.",
+  "seed_data_creation": "None permanent. All ephemeral roles/members/corrections created during testing were cleaned up (custom UI role deleted; chef test user deleted; 5 on-behalf test corrections remain pending — they carry filed_by_admin_id=Campus Administrator and can be rejected by a different admin or bulk-cleaned via approve-all).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Roles master lives at /api/masters/roles (readable by all authenticated users, writable by admin only) and is seeded on backend startup with 3 system rows (admin/chef/member). System rows carry {is_system:true, is_seeded:true} and cannot be deleted (409). MemberForm is a modal — opened by 'Add member' button on /admin/members OR by clicking an EDIT pencil in the leftmost column (per-row, 136 rendered). Data-testid mf-role on the Role <select>. Chef sidebar toggling logic in Layout.jsx: `isChef = user?.role === 'chef'` — chef bypasses NAV_ADMIN section entirely and renders NAV_CHEF instead of NAV_COACH. Admin-filed correction endpoint: POST /api/corrections with body `{ on_behalf_of: <memberId>, ... }` when admin. Backend stamps `requester_id=on_behalf_of`, `filed_by_admin_id=<admin.id>`, `filed_by_admin_name=<admin.full_name>`. Second-admin rule enforced in `_decide_one` — 409 when same admin approves. Non-admin passing on_behalf_of → 403. Admin self-file (no on_behalf_of) also allowed and bypasses the 7-day retro window. AdminCorrections is a tab under /admin/approvals?tab=corrections (NOT /admin/corrections). Preview URL: https://attendance-portal-56.preview.emergentagent.com — DO NOT test against the production yc-hyderabad domain.",
+  "rca_of_the_issue": "N/A — feature acceptance pass. Every claim in the review request was verified. One pre-existing hydration console warning surfaced but is unrelated to this iteration's changes."
+}

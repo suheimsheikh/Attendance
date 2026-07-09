@@ -148,6 +148,15 @@ export default function AdminCorrections() {
                   </span>
                   <span className="text-sm font-semibold text-slate-800">{row.requester_name}</span>
                   <span className="text-xs text-slate-500">· {row.target_date}</span>
+                  {row.filed_by_admin_id && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200"
+                      title={`Filed on behalf by ${row.filed_by_admin_name}`}
+                      data-testid={`corr-filed-by-admin-${row.id}`}
+                    >
+                      Filed by admin: {row.filed_by_admin_name}
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-slate-700 mt-1">{summariseChange(row)}</div>
                 <div className="text-xs text-slate-600 italic mt-1">“{row.reason}”</div>

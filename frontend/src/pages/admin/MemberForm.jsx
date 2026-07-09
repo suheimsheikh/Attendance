@@ -57,6 +57,14 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     { key: "staff",     label: "Staff" },
     { key: "executive", label: "Executive" },
   ]);
+  // Roles come from the Roles Master (/api/masters/roles). Falls back
+  // to the 3 seeded system roles (admin/chef/member) if the fetch
+  // fails so the form still works during backend hiccups.
+  const [roles, setRoles] = useState([
+    { key: "admin",  label: "Administrator" },
+    { key: "chef",   label: "Chef" },
+    { key: "member", label: "Member" },
+  ]);
   const formErr = useFormError();
 
   useEffect(() => {
@@ -66,6 +74,12 @@ export default function MemberForm({ initial, onClose, onSaved }) {
       .then((rows) => {
         const active = (rows || []).filter((r) => r.active !== false);
         if (active.length > 0) setCategories(active);
+      })
+      .catch(() => {});
+    api.get("/masters/roles")
+      .then((rows) => {
+        const active = (rows || []).filter((r) => r.active !== false);
+        if (active.length > 0) setRoles(active);
       })
       .catch(() => {});
   }, []);
@@ -161,8 +175,12 @@ export default function MemberForm({ initial, onClose, onSaved }) {
             <div>
               <label className="iu-label">Role</label>
               <select data-testid="mf-role" value={form.role} onChange={(e) => set("role", e.target.value)} className="iu-input">
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
+                {roles.map((r) => (
+                  <option key={r.key} value={r.key}>{r.label}</option>
+                ))}
+                {form.role && !roles.some((r) => r.key === form.role) && (
+                  <option value={form.role}>{form.role} (legacy)</option>
+                )}
               </select>
             </div>
             <div>

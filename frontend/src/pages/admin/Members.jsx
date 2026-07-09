@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, showApiError } from "../../api";
 import BulkEditBar from "../../components/BulkEditBar";
+import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 import MemberForm from "./MemberForm";
 import MemberBucketFilters from "./members/MemberBucketFilters";
 import MemberRow from "./members/MemberRow";
@@ -24,6 +25,9 @@ export default function Members() {
   const [presence, setPresence] = useState({});
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null); // member object or "new"
+  // Admin-filed correction target — when set, opens the correction
+  // modal pre-scoped to that member. Cleared on close/save.
+  const [correctingFor, setCorrectingFor] = useState(null);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState(null);
   const [bucket, setBucket] = useState("all");
@@ -453,6 +457,7 @@ export default function Members() {
                     onPatchField={patchMember}
                     onToggleRow={toggleRow}
                     onPhotoUpdated={onPhotoUpdated(m.id)}
+                    onFileCorrection={setCorrectingFor}
                     highlighted={highlightId === m.id}
                   />
                 ))}
@@ -470,6 +475,15 @@ export default function Members() {
           initial={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }}
+        />
+      )}
+
+      {correctingFor && (
+        <CorrectionRequestModal
+          open={true}
+          onClose={() => setCorrectingFor(null)}
+          onSaved={() => setCorrectingFor(null)}
+          onBehalfOfMember={correctingFor}
         />
       )}
 

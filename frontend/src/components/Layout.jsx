@@ -5,7 +5,7 @@ import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, Building2, IdCard, Sailboat, MapPin,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert, Gauge, ChefHat, PencilRuler
+  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -37,6 +37,15 @@ const NAV_COACH = [
   { to: "/presence", label: "Presence", icon: LayoutDashboard },
 ];
 
+// Chef section — visible to users with role="chef". Kitchen staff who
+// need the same operational read-access as coaches PLUS the Chef's View
+// meal-planning page. Added 4 Feb 2026 with the Roles master.
+const NAV_CHEF = [
+  { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat },
+  { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
+  { to: "/presence", label: "Presence", icon: LayoutDashboard },
+];
+
 // Members lives at the top of the ADMIN section (admin-only access). Leave
 // Balances moved into the Admin Console grid since it's not opened daily.
 // Sidebar admin entries. Presence Board (in NAV_COACH above) is now the
@@ -55,6 +64,7 @@ const NAV_ADMIN = [
   { to: "/admin/fleets", label: "Fleets", icon: Sailboat },
   { to: "/admin/categories", label: "Categories", icon: ShieldAlert },
   { to: "/admin/category-health", label: "Category Health", icon: ShieldAlert },
+  { to: "/admin/roles", label: "Roles", icon: KeyRound },
   { to: "/admin/sites", label: "Training Locations", icon: MapPin },
   { to: "/admin/office", label: "Office Settings", icon: Settings },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
@@ -69,7 +79,8 @@ export default function Layout() {
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const isAdmin = user?.role === "admin";
-  const canMuster = isAdmin || user?.category === "coach";
+  const isChef = user?.role === "chef";
+  const canMuster = isAdmin || user?.category === "coach" || isChef;
   // Escort sessions get a stripped-down sidebar — only the kiosk link,
   // Muster Roll (institution-scoped server-side), and Sign out. They have
   // no member/coach/admin permissions otherwise.
@@ -160,10 +171,18 @@ export default function Layout() {
             <NavItem key={item.to} {...item} badge={badge} onClick={() => setOpen(false)} />
           );
         })}
-        {!isEscort && canMuster && (
+        {!isEscort && canMuster && !isChef && (
           <>
             <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Coach</div>
             {NAV_COACH.map((item) => (
+              <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
+            ))}
+          </>
+        )}
+        {!isEscort && isChef && (
+          <>
+            <div className="text-base font-black uppercase tracking-widest text-amber-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(251,191,36,0.45)]">Chef</div>
+            {NAV_CHEF.map((item) => (
               <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
             ))}
           </>

@@ -77,8 +77,13 @@ def _parse_hm(cutoff: str) -> tuple[int, int]:
     return int(h), int(m)
 
 
-def make_router(db, require_admin, get_current_user) -> APIRouter:
+def make_router(db, require_admin, get_current_user, require_chef_or_admin=None) -> APIRouter:
     router = APIRouter(prefix="/api")
+    # Fallback so tests that don't pass the chef dep still work — treat
+    # chef-or-admin as admin-only. Production wires the real dep from
+    # server.py. Added 4 Feb 2026 with the Roles master.
+    if require_chef_or_admin is None:
+        require_chef_or_admin = require_admin
 
     # ------------------------------------------------------------------
     # Categories master — full CRUD (8 Jul 2026). The 5 seed categories
@@ -218,7 +223,7 @@ def make_router(db, require_admin, get_current_user) -> APIRouter:
     async def meals_today(
         cutoff: Optional[str] = Query(None, description="HH:MM meal cut-off override (defaults to office setting)"),
         date_str: Optional[str] = Query(None, alias="date", description="YYYY-MM-DD (defaults to today, office-local)"),
-        admin: dict = Depends(require_admin),
+        admin: dict = Depends(require_chef_or_admin),
     ):
         """Return meal-eligible members for a given day (defaults to today).
 

@@ -40,6 +40,7 @@ const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
 const ChefsView = lazy(() => import("./pages/admin/ChefsView"));
 const Categories = lazy(() => import("./pages/admin/Categories"));
 const CategoryHealth = lazy(() => import("./pages/admin/CategoryHealth"));
+const Roles = lazy(() => import("./pages/admin/Roles"));
 const MyCorrections = lazy(() => import("./pages/MyCorrections"));
 
 function RequireAuth({ children }) {
@@ -71,14 +72,25 @@ function RequireAdmin({ children }) {
   return children;
 }
 
+function RequireChefOrAdmin({ children }) {
+  // Chef's View — 4 Feb 2026 also accessible to users with role="chef"
+  // (kitchen staff who need meal-count planning without full admin rights).
+  const { user, loading } = useAuth();
+  if (loading) return <FullPageSpinner />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== "admin" && user.role !== "chef") return <Navigate to="/" replace />;
+  return children;
+}
+
 function RequireMuster({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <FullPageSpinner />;
   if (!user) return <Navigate to="/login" replace />;
-  // Admins, coaches, and active escorts can run muster. Escorts are
-  // scoped to their own institution server-side (see _can_muster + the
-  // bulk endpoints) — the frontend doesn't enforce additional limits.
-  const canMuster = user.role === "admin" || user.category === "coach" || user.is_escort;
+  // Admins, coaches, chefs, and active escorts can run muster. Escorts
+  // are scoped to their own institution server-side (see _can_muster
+  // + the bulk endpoints) — the frontend doesn't enforce additional limits.
+  const canMuster = user.role === "admin" || user.role === "chef"
+    || user.category === "coach" || user.is_escort;
   if (!canMuster) return <Navigate to="/" replace />;
   return children;
 }
@@ -113,9 +125,10 @@ function App() {
             <Route path="profile" element={<RequireMember><Profile /></RequireMember>} />
             <Route path="admin" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="admin/dashboard" element={<RequireAdmin><Dashboard /></RequireAdmin>} />
-            <Route path="admin/chefs-view" element={<RequireAdmin><ChefsView /></RequireAdmin>} />
+            <Route path="admin/chefs-view" element={<RequireChefOrAdmin><ChefsView /></RequireChefOrAdmin>} />
             <Route path="admin/categories" element={<RequireAdmin><Categories /></RequireAdmin>} />
             <Route path="admin/category-health" element={<RequireAdmin><CategoryHealth /></RequireAdmin>} />
+            <Route path="admin/roles" element={<RequireAdmin><Roles /></RequireAdmin>} />
             <Route path="admin/members" element={<RequireAdmin><Members /></RequireAdmin>} />
             <Route path="admin/approvals" element={<RequireAdmin><Approvals /></RequireAdmin>} />
             {/* Legacy direct links — keep deep-links working but funnel into Approvals. */}
