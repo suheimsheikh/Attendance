@@ -505,8 +505,6 @@ export default function Reports() {
                     // weekly-off + in-progress-today land in the sum.
                     const attnTotal = (r.days_present || 0) + (r.days_leave || 0) + (r.days_tour || 0) + (r.days_off || 0);
                     const otServed = r.overtime_hours_served || 0;
-                    const otApplied = r.overtime_hours_pending || 0;
-                    const otApproved = r.overtime_hours_approved || 0;
                     const n = (v) => (v ? v : "");
                     const h = (v) => (v ? `${(+v).toFixed(2).replace(/\.?0+$/, "")}h` : "");
                     // Drill-down hover props for a cell — attaches

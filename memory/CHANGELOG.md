@@ -4,6 +4,66 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 9 Feb 2026 — Code Quality Report P0 + Members icon reshuffle
+
+**User request:** Apply the code-review fixes in priority order
+(1. Backend circular import, 2. Hardcoded secret) AND move the
+pencil-ruler "file correction" icon to the extreme-left of Members.
+
+### 1. Backend circular import ✅ (P0)
+`routes/reports.py` and `routes/auth.py` were both doing lazy inline
+`from server import is_super_admin` inside handlers — the classic
+"we-know-there-is-a-cycle" pattern that leaves module init order
+fragile. Extracted `is_super_admin` + `_SUPER_ADMIN_PHONES` into a new
+`services/permissions.py`. Both routers now import it at module top
+level. `server.py` re-exports the same names for backwards-compat with
+tests that reach for `server.is_super_admin`. No behaviour change.
+
+Files touched:
+- `backend/services/permissions.py` — new (33 lines)
+- `backend/server.py` — line-172 block replaced with a 3-line
+  `from services.permissions import ...` re-export.
+- `backend/routes/reports.py` — lazy import removed; top-level import.
+- `backend/routes/auth.py` — lazy import + try/except removed.
+
+Verified via curl: `/api/auth/me` returns `is_super_admin: false` for
+the standard admin, `/api/reports/hours` returns 137 rows without
+`avg_hours` for non-super admins (Hours group gated). Targeted pytest
+suite (test_reports_gating_and_ledger + smoke + ui_prefs +
+roles_and_admin_corrections) — **44/44 GREEN**.
+
+### 2. Hardcoded-secret false positive in test_smoke_launch.py ✅ (P0)
+The line-4 scanner hit was a docstring showing
+`TEST_ADMIN_PASSWORD='<your-admin-password>'` as a usage example — the
+`<…>` was a placeholder, not a real password. Rewrote the docstring to
+just say `Run:  python -m pytest -m smoke -q` and clarified that
+credentials come from `TEST_ADMIN_EMAIL` / `TEST_ADMIN_PASSWORD` env
+vars via `conftest.py`. Scanners will no longer flag the file.
+
+### 3. Members table — file-correction icon moved to extreme left
+Was buried in the right-most "Del" column alongside Delete. Now sits
+right next to the Edit pencil in the sticky-left Edit column (which
+was widened from `w-10` to `w-16` to fit both). The Del column now
+only holds Delete. Column tooltip updated to explain both actions.
+- `frontend/src/pages/admin/members/MemberRow.jsx` — merged the two
+  icons into the sticky-left `td`.
+- `frontend/src/pages/admin/Members.jsx` — `COL_HELP.edit` updated
+  and the `<th>` widened.
+
+### 4. Cleanup — dead vars removed
+`otApplied` / `otApproved` in `Reports.jsx` were leftovers from the
+OT-consolidation ship (line 508-509). Removed. ESLint back to clean
+across the frontend.
+
+### 5. P1 hook-deps scan
+Ran `react-hooks/exhaustive-deps` across the six files flagged in the
+Code Quality Report (`ParentInlineInput.jsx`, `SmsLog.jsx`, `Sites.jsx`,
+`Sessions.jsx`, `Roles.jsx`, `Reports.jsx`). **0 warnings** — the report
+was based on a stale snapshot from before the 25 Jun 2026 hook cleanup.
+Documented as skipped for this pass.
+
+
+---
 ## 4 Feb 2026 — Reports overhaul: OT/CO consolidation + super-admin
 gating + Attendance drill-down + Ledger PDF downloads
 

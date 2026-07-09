@@ -419,7 +419,7 @@ export default function Members() {
                       className="w-4 h-4 cursor-pointer accent-sky-600"
                     />
                   </th>
-                  <th className="iu-table-th w-10 text-center sticky left-10 z-30 bg-slate-50 !text-slate-700 !font-bold" title={COL_HELP.edit}>Edit</th>
+                  <th className="iu-table-th w-16 text-center sticky left-10 z-30 bg-slate-50 !text-slate-700 !font-bold" title={COL_HELP.edit}>Edit</th>
                   <SortableTh k="full_name" className="sticky left-20 z-30 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Member</SortableTh>
                   <SortableTh k="category" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Category</SortableTh>
                   <SortableTh k="role" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Role</SortableTh>
@@ -509,7 +509,7 @@ export default function Members() {
  * source of truth.
  */
 const COL_HELP = {
-  edit:         "Open the full edit form for this member.",
+  edit:         "Open the full edit form · file a correction on the member's behalf.",
   full_name:    "Full name, email, and parent-contact shortcut. Click the name to rename in place.",
   category:     "Athlete / Elite / Coach / Staff / Executive. Click the pill to reassign.",
   role:         "Admin (has console access) or Member. Orthogonal to category — a coach can also be admin.",

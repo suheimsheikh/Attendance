@@ -86,17 +86,29 @@ export default React.memo(function MemberRow({
           className="w-4 h-4 cursor-pointer accent-sky-600"
         />
       </td>
-      {/* Edit pencil — extreme left, always visible */}
+      {/* Edit pencil + File-correction — extreme left, always visible */}
       <td className={`iu-table-td text-center relative pl-2 pr-1 sticky left-10 z-10 ${frozenBg}`}>
         <span className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r ${b.stripe}`} aria-hidden="true" />
-        <button
-          data-testid={`edit-member-${m.id}`}
-          onClick={() => onEdit(m)}
-          className="p-2 rounded-lg hover:bg-slate-100 text-slate-700"
-          title="Edit member"
-        >
-          <Edit3 size={16} />
-        </button>
+        <div className="flex items-center justify-center gap-0.5">
+          <button
+            data-testid={`edit-member-${m.id}`}
+            onClick={() => onEdit(m)}
+            className="p-2 rounded-lg hover:bg-slate-100 text-slate-700"
+            title="Edit member"
+          >
+            <Edit3 size={16} />
+          </button>
+          {onFileCorrection && (
+            <button
+              data-testid={`file-correction-${m.id}`}
+              onClick={() => onFileCorrection(m)}
+              className="p-2 rounded-lg hover:bg-sky-50 text-sky-700"
+              title={`File correction on behalf of ${m.full_name}`}
+            >
+              <PencilRuler size={16} />
+            </button>
+          )}
+        </div>
       </td>
       {/* Member: photo + name + email + parent-contact icon */}
       <td className={`iu-table-td sticky left-20 z-10 ${frozenBg} shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]`}>
@@ -336,16 +348,6 @@ export default React.memo(function MemberRow({
       </td>
       <td className="iu-table-td text-center">
         <div className="flex items-center justify-center gap-1">
-          {onFileCorrection && (
-            <button
-              data-testid={`file-correction-${m.id}`}
-              onClick={() => onFileCorrection(m)}
-              className="p-2 rounded-lg hover:bg-sky-50 text-sky-700"
-              title={`File correction on behalf of ${m.full_name}`}
-            >
-              <PencilRuler size={16} />
-            </button>
-          )}
           <button data-testid={`delete-member-${m.id}`} onClick={() => onDelete(m)} className="p-2 rounded-lg hover:bg-red-50 text-red-600" title="Delete member">
             <Trash2 size={16} />
           </button>
