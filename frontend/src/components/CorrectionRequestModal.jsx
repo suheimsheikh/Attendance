@@ -35,12 +35,18 @@ const KINDS_BY_ENTITY = {
   leave:      ["leave_date_change", "leave_cancel", "leave_type_change"],
 };
 
-function last7DaysMax() {
+function windowMaxDate() {
+  // Corrections are capped at today (future dates are never valid).
   return new Date().toISOString().slice(0, 10);
 }
-function last7DaysMin() {
+function windowMinDate() {
+  // 31-day retro window (was 7 — expanded 9 Feb 2026 per user request
+  // so admins can fix late-reported check-in times / missed punches
+  // for an entire month). Non-admin self-filed requests are still
+  // capped at 7 days by the backend `_enforce_window` guard; admins
+  // bypass that check server-side.
   const d = new Date();
-  d.setDate(d.getDate() - 7);
+  d.setDate(d.getDate() - 31);
   return d.toISOString().slice(0, 10);
 }
 
@@ -58,13 +64,19 @@ export default function CorrectionRequestModal({
   // the member pre-picked; the admin sees a "Filing on behalf of ___"
   // banner instead of the picker. Ignored for non-admin callers.
   onBehalfOfMember,
+  // Pre-fill values for the attendance-time inputs (missed_checkin /
+  // time_adjust). Typically the member's `work_start` / `work_end`
+  // so admins only have to tweak the deltas rather than type from
+  // scratch. Ignored if the user has already typed something.
+  defaultCheckInTime,
+  defaultCheckOutTime,
 }) {
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
   const [kind, setKind] = useState(initialKind || (KINDS_BY_ENTITY[entityType] || KINDS_BY_ENTITY.attendance)[0]);
-  const [date, setDate] = useState(targetDate || last7DaysMax());
-  const [checkInTime, setCheckInTime] = useState("");
-  const [checkOutTime, setCheckOutTime] = useState("");
+  const [date, setDate] = useState(targetDate || windowMaxDate());
+  const [checkInTime, setCheckInTime] = useState(defaultCheckInTime || "");
+  const [checkOutTime, setCheckOutTime] = useState(defaultCheckOutTime || "");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [newType, setNewType] = useState("leave");
@@ -313,7 +325,7 @@ export default function CorrectionRequestModal({
                 <label className="iu-label">Which entry are you correcting?</label>
                 {pickerRows.length === 0 ? (
                   <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5" data-testid="correction-row-hint">
-                    You don&rsquo;t have any {kind === "time_adjust" ? "attendance rows in the last 7 days" : "approved leave/tour rows overlapping the window"} to correct. Log a check-in first, or contact your admin.
+                    You don&rsquo;t have any {kind === "time_adjust" ? "attendance rows in the last 31 days" : "approved leave/tour rows overlapping the window"} to correct. Log a check-in first, or contact your admin.
                   </p>
                 ) : (
                   <select
@@ -336,13 +348,13 @@ export default function CorrectionRequestModal({
             <label className="iu-label">Which date does this apply to?</label>
             <input
               type="date" value={date}
-              min={last7DaysMin()} max={last7DaysMax()}
+              min={windowMinDate()} max={windowMaxDate()}
               onChange={(e) => setDate(e.target.value)}
               className="iu-input" required
               data-testid="correction-date"
             />
             <p className="text-[11px] text-slate-500 mt-1">
-              Corrections can only be requested for the last 7 days.
+              Corrections can only be requested for the last 31 days.
             </p>
           </div>
           {(kind === "missed_checkin" || kind === "time_adjust") && (

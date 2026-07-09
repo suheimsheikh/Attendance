@@ -22,7 +22,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 
-from services.time_utils import local_date_str
+from services.time_utils import local_date_str, local_now
 from services.permissions import is_super_admin
 import breaks as _breaks_module
 
@@ -818,14 +818,20 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
 
         office = await db.config.find_one({"id": "office"})
         today_iso = local_date_str(office)
+        # Live HH:MM in office tz — used below to suppress today's "AB"
+        # cell until after the check-in window opens. Before work_start
+        # the day hasn't earned an absent yet, so we render it blank.
+        now_hm = local_now(office).strftime("%H:%M")
         default_wo = ((office or {}).get("default_weekly_off") or "sunday").lower()
+        default_work_start = (office or {}).get("default_work_start") or "09:00"
         from holidays import WEEKDAY_KEY
 
         # --- Roster (same filter pills as Attendance report). ---
         users = await db.users.find(
             {"status": {"$ne": "left"}},
             {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1,
-             "fleet": 1, "institution": 1, "weekly_off": 1},
+             "fleet": 1, "institution": 1, "weekly_off": 1,
+             "work_start": 1, "work_end": 1},
         ).to_list(2000)
         athlete_like = await _athlete_like_keys(db)
         if category == "athlete":
@@ -886,7 +892,8 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             "comp_off": "CO", "late_coming": "LT",
         }
 
-        def _classify(uid: str, iso: str, dow_idx: int, weekly_off: str) -> str:
+        def _classify(uid: str, iso: str, dow_idx: int, weekly_off: str,
+                      work_start: str) -> str:
             if iso > today_iso:
                 return ""  # future
             att = att_by_user.get(uid, {}).get(iso)
@@ -904,6 +911,11 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 return "WO"
             if iso in holiday_dates:
                 return "HO"
+            # Suppress today's "AB" until the check-in window has
+            # actually opened — otherwise every 8 AM open of the app
+            # would mark the entire roster as absent for the day.
+            if iso == today_iso and now_hm < (work_start or default_work_start):
+                return ""
             return "AB"
 
         # Precompute day-of-week per iso for the month.
@@ -913,7 +925,18 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         for u in users:
             uid = u["id"]
             weekly_off = (u.get("weekly_off") or default_wo).lower()
-            cells = [_classify(uid, iso, dow_by_iso[iso], weekly_off) for iso in days]
+            work_start = u.get("work_start") or default_work_start
+            cells = [_classify(uid, iso, dow_by_iso[iso], weekly_off, work_start)
+                     for iso in days]
+            # Per-row totals — surfaces at the end of each row in the UI.
+            # Half-day + Late still count as attendance (present-like);
+            # Comp-off is bucketed with Leave (both are time-off types).
+            totals = {
+                "present":  sum(1 for c in cells if c in ("P", "HD", "LT")),
+                "absent":   sum(1 for c in cells if c == "AB"),
+                "leave":    sum(1 for c in cells if c in ("LV", "CO")),
+                "tour":     sum(1 for c in cells if c == "TR"),
+            }
             rows.append({
                 "member_id": uid,
                 "member_name": u.get("full_name"),
@@ -921,7 +944,10 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 "category": u.get("category"),
                 "fleet": u.get("fleet"),
                 "institution": u.get("institution"),
+                "work_start": u.get("work_start") or default_work_start,
+                "work_end": u.get("work_end") or ((office or {}).get("default_work_end") or "17:00"),
                 "cells": cells,
+                "totals": totals,
             })
         rows.sort(key=lambda r: (r["member_name"] or "").lower())
         return {"month": month, "start": start_iso, "end": end_iso,
@@ -940,10 +966,14 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         rows = data["rows"]
         days = data["days"]
         day_headers = [d[8:10] for d in days]  # "01", "02", ..., "31"
-        headers = ["Name", "Rank", "Category", *day_headers]
+        headers = ["Name", "Rank", "Category", *day_headers,
+                   "Present", "Absent", "Leave", "Tour"]
         table = [
             [r.get("member_name") or "", r.get("rank") or "",
-             (r.get("category") or "").title(), *r["cells"]]
+             (r.get("category") or "").title(),
+             *r["cells"],
+             str(r["totals"]["present"]), str(r["totals"]["absent"]),
+             str(r["totals"]["leave"]), str(r["totals"]["tour"])]
             for r in rows
         ]
         filename_stem = f"calendar_grid_{month}"
@@ -968,9 +998,8 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                       "HO=Holiday · AB=Absent",
             "Generated by": admin.get("full_name") or admin.get("email") or "Admin",
         }
-        # A3 landscape ~397mm usable. 34 cols max (Name+Rank+Cat + 31 days).
-        # Name 30 · Rank 18 · Cat 15 = 63mm; remaining ~334mm / 31 days ≈ 10.7mm each.
-        col_widths_mm = [30, 18, 15] + [10] * len(days)
+        # A3 landscape ~397mm usable. Name+Rank+Cat + 31 days + 4 totals.
+        col_widths_mm = [26, 14, 12] + [9] * len(days) + [12, 12, 12, 12]
         from reportlab.lib.pagesizes import A3
         pdf = _pdf_from_table(
             "Calendar Grid",

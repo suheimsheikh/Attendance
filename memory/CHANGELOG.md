@@ -4,6 +4,100 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 9 Feb 2026 — Corrections: pre-filled work hours + 31-day window
+
+**User requests:**
+1. "For corrections in checkin time the default checkin and checkout
+   times of the members should be pre fed into the modal."
+2. "Also open up the 7 day limit to 31 days."
+
+### Prior request bundled in the same ship
+- "If the app is opened prior to the checkin time like now for
+  example the calendar grid should not show absent."
+- "Also show the totals of present, absent, leave and tour at the
+  end of the row for each member."
+- "Please freeze the headers columns and meta data allowing for a
+  vertical scroll."
+
+### Changes
+
+- **Corrections window: 7 → 31 days.**
+  - Backend: `routes/corrections.py::CORRECTION_WINDOW_DAYS = 31`
+    (was 7). Admins already bypass the window; members now get a
+    full month instead of a week to self-file.
+  - Frontend: `CorrectionRequestModal` `min` date + hint copy updated
+    ("last 7 days" → "last 31 days"), helper function renamed from
+    `last7DaysMin/Max` to `windowMinDate/MaxDate` to future-proof.
+
+- **Default check-in / check-out times pre-fed.**
+  - New optional props on `CorrectionRequestModal`:
+    `defaultCheckInTime`, `defaultCheckOutTime`. When set, seed the
+    two time inputs so admins only tweak deltas.
+  - `/api/reports/calendar-grid` now returns `work_start` + `work_end`
+    on each row (fetched from the member's overrides with fallback to
+    the office defaults `default_work_start` / `default_work_end`).
+  - `CalendarGridTab` threads those through into the modal so
+    clicking an AB / LT / P / HD cell arrives with the correct times
+    already filled.
+
+- **Today's "AB" cell suppressed before check-in window opens.**
+  - Backend `_classify` now checks `now_hm < work_start` for today's
+    date and returns `""` (blank slot) instead of `"AB"`. Uses the
+    member's `work_start` (with office `default_work_start` fallback).
+    Prevents the whole roster from turning red every morning between
+    midnight and 09:00.
+
+- **Row totals (P / AB / LV / TR).**
+  - Backend emits `totals: {present, absent, leave, tour}` per row —
+    HD + LT count as present-like, LV includes CO (both time-off).
+  - Frontend renders 4 sticky-right columns at the end of each row
+    with matching colour tints (emerald / red / amber / orange).
+
+- **Sticky headers + sticky first/last columns + vertical scroll.**
+  - Table container: `overflow-auto` + `maxHeight: calc(100vh -
+    340px)` — the whole grid now scrolls vertically inside the card
+    while the header stays pinned at top.
+  - `<thead>` is `sticky top-0`.
+  - Member + Category cells are `sticky left-0` / `left-[180px]`.
+  - Row-total cells are `sticky right-0/28/56/84px` so all four
+    remain visible during horizontal scroll.
+  - Category column bumped from static to sticky-left-180 so it
+    doesn't scroll away when scanning day columns.
+
+### Files touched
+- `backend/routes/reports.py` — `calendar_grid`: fetch `work_end`,
+  compute `now_hm`, suppress AB before work_start, emit `totals`,
+  emit `work_start` + `work_end` per row.
+- `backend/routes/reports.py` — `export_calendar_grid`: added 4
+  totals columns to headers/rows + widened `col_widths_mm` for A3.
+- `backend/routes/corrections.py` — `CORRECTION_WINDOW_DAYS: int = 31`.
+  Docstring / comment updates.
+- `frontend/src/components/CorrectionRequestModal.jsx` — renamed
+  window helpers to 31-day, added `defaultCheckInTime` /
+  `defaultCheckOutTime` props, threaded into `useState` initial
+  values, hint copy updated.
+- `frontend/src/pages/admin/CalendarGridTab.jsx` — sticky header +
+  member + total columns, vertical-scroll container, 4 totals cells
+  per row, passing `work_start` / `work_end` into modal props.
+
+**Verified end-to-end via Playwright:**
+- Correction modal opened by clicking AJAY's July 1 AB cell shows
+  "Correct check-in: 09:00 AM" and "Check-out: 05:00 PM" pre-filled
+  (AJAY's office-default hours).
+- Hint text reads "Corrections can only be requested for the last
+  31 days."
+- Today's column (July 10 at 04:00 UTC ≈ 09:30 IST but still before
+  most work_starts) shows blank cells across the roster (133/137
+  members) instead of turning red AB.
+- Row totals visible on far right (ABHIRAM: P=8, AB=0, LV=0, TR=0
+  · AKHILA KOPPULA: P=1, AB=7, LV=0, TR=0).
+- Sticky header + sticky left + sticky right verified.
+- CSV export = 39 columns (Name/Rank/Cat + 31 days + 4 totals).
+- Backend regression 33/33 GREEN on smoke + roles/admin corrections
+  suites.
+
+
+---
 ## 9 Feb 2026 — Calendar Grid: click-any-cell to file correction
 
 **User request:** "In calendar grid Admins should be able to click on

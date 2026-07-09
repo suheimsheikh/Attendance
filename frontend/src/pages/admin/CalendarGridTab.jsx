@@ -248,12 +248,12 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
       </div>
 
       <div className="iu-card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 340px)" }}>
           <table className="text-xs border-collapse" data-testid="calendar-grid-table">
-            <thead className="sticky top-0 z-20 bg-slate-50">
+            <thead className="sticky top-0 z-30 bg-slate-50">
               <tr>
-                <th className="py-1.5 px-2 text-left sticky left-0 z-30 bg-slate-50 min-w-[180px] border-b border-slate-200 font-semibold text-slate-700">Member</th>
-                <th className="py-1.5 px-2 text-left bg-slate-50 min-w-[100px] hidden md:table-cell border-b border-slate-200 font-semibold text-slate-700">Category</th>
+                <th className="py-1.5 px-2 text-left sticky left-0 z-40 bg-slate-50 min-w-[180px] border-b border-slate-200 font-semibold text-slate-700">Member</th>
+                <th className="py-1.5 px-2 text-left sticky left-[180px] z-40 bg-slate-50 min-w-[100px] hidden md:table-cell border-b border-slate-200 font-semibold text-slate-700">Category</th>
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso}
@@ -264,10 +264,15 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                     {h.day}
                   </th>
                 ))}
+                {/* Sticky-right totals headers */}
+                <th className="sticky right-[84px] z-40 bg-emerald-100 text-emerald-800 h-6 min-w-[42px] text-center border-b border-l-2 border-slate-300 text-[10px] font-bold" title="Present days (incl. HD + Late)">P</th>
+                <th className="sticky right-[56px] z-40 bg-red-100 text-red-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Absent days">AB</th>
+                <th className="sticky right-[28px] z-40 bg-amber-100 text-amber-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Leave + Comp-off days">LV</th>
+                <th className="sticky right-0 z-40 bg-orange-100 text-orange-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Tour days">TR</th>
               </tr>
               <tr>
-                <th className="py-0.5 px-2 sticky left-0 z-30 bg-slate-50 text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">Name / Rank</th>
-                <th className="py-0.5 px-2 bg-slate-50 hidden md:table-cell border-b border-slate-200"></th>
+                <th className="py-0.5 px-2 sticky left-0 z-40 bg-slate-50 text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">Name / Rank</th>
+                <th className="py-0.5 px-2 sticky left-[180px] z-40 bg-slate-50 hidden md:table-cell border-b border-slate-200"></th>
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso + "-dow"}
@@ -276,24 +281,29 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                     {h.dow.slice(0, 2)}
                   </th>
                 ))}
+                {/* Sticky-right total sub-labels */}
+                <th className="sticky right-[84px] z-40 bg-emerald-50 h-4 text-[8px] uppercase font-semibold text-emerald-700 border-b border-l-2 border-slate-300 text-center">Total</th>
+                <th className="sticky right-[56px] z-40 bg-red-50 h-4 text-[8px] uppercase font-semibold text-red-600 border-b border-slate-200 text-center">Total</th>
+                <th className="sticky right-[28px] z-40 bg-amber-50 h-4 text-[8px] uppercase font-semibold text-amber-700 border-b border-slate-200 text-center">Total</th>
+                <th className="sticky right-0 z-40 bg-orange-50 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-slate-200 text-center">Total</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={2 + days.length} className="py-8 text-center text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={2 + days.length + 4} className="py-8 text-center text-slate-400">Loading…</td></tr>
               )}
               {!loading && displayedRows.length === 0 && (
-                <tr><td colSpan={2 + days.length} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
+                <tr><td colSpan={2 + days.length + 4} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
               )}
               {!loading && displayedRows.map((r, i) => {
                 const rowBg = i % 2 === 1 ? "bg-slate-100/40" : "bg-white";
                 return (
                   <tr key={r.member_id} className={`${rowBg} hover:bg-sky-50 group transition-colors`} data-testid={`calendar-row-${r.member_id}`}>
-                    <td className={`py-1 px-2 font-semibold text-slate-800 sticky left-0 z-10 ${rowBg} group-hover:bg-sky-50 border-b border-slate-100`}>
+                    <td className={`py-1 px-2 font-semibold text-slate-800 sticky left-0 z-20 ${rowBg} group-hover:bg-sky-50 border-b border-slate-100`}>
                       {r.member_name}
                       {r.rank && <div className="text-[10px] text-slate-400 leading-tight">{r.rank}</div>}
                     </td>
-                    <td className="py-1 px-2 text-slate-600 hidden md:table-cell border-b border-slate-100">{categoryLabel(r.category)}</td>
+                    <td className={`py-1 px-2 text-slate-600 hidden md:table-cell border-b border-slate-100 sticky left-[180px] z-20 ${rowBg} group-hover:bg-sky-50`}>{categoryLabel(r.category)}</td>
                     {r.cells.map((code, idx) => {
                       const cfg = correctionForCode(code);
                       const iso = days[idx];
@@ -303,7 +313,12 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                       // return null cfg.
                       const onClick = cfg
                         ? () => setCorrection({
-                            member: { id: r.member_id, full_name: r.member_name },
+                            member: {
+                              id: r.member_id,
+                              full_name: r.member_name,
+                              work_start: r.work_start,
+                              work_end: r.work_end,
+                            },
                             date: iso,
                             entityType: cfg.entityType,
                             initialKind: cfg.initialKind,
@@ -318,6 +333,11 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                         />
                       );
                     })}
+                    {/* Row totals — pinned to the right */}
+                    <td className={`sticky right-[84px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-emerald-700 font-bold tabular-nums text-[11px] border-b border-l-2 border-slate-300`} data-testid={`cal-total-p-${r.member_id}`}>{r.totals?.present || ""}</td>
+                    <td className={`sticky right-[56px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-red-600 font-bold tabular-nums text-[11px] border-b border-slate-100`} data-testid={`cal-total-ab-${r.member_id}`}>{r.totals?.absent || ""}</td>
+                    <td className={`sticky right-[28px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-amber-700 font-bold tabular-nums text-[11px] border-b border-slate-100`} data-testid={`cal-total-lv-${r.member_id}`}>{r.totals?.leave || ""}</td>
+                    <td className={`sticky right-0 z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100`} data-testid={`cal-total-tr-${r.member_id}`}>{r.totals?.tour || ""}</td>
                   </tr>
                 );
               })}
@@ -340,6 +360,8 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
           targetDate={correction.date}
           onBehalfOfMember={correction.member}
           entityLabel={`${correction.member.full_name} · ${correction.date}`}
+          defaultCheckInTime={correction.member.work_start}
+          defaultCheckOutTime={correction.member.work_end}
         />
       )}
     </>

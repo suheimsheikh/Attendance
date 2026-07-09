@@ -9,7 +9,7 @@ Design goals:
   * Only members (not admins) can raise a correction. Admins process the
     queue. Corrections raised by an admin still go through the queue for a
     paper trail (per user policy).
-  * 7-day retro window enforced server-side.
+  * 31-day retro window enforced server-side.
   * Rich audit trail — every decision writes to the audit collection.
 
 Kinds shipped in v1 (identified by `entity_type` × `kind`):
@@ -36,7 +36,7 @@ from services.time_utils import now_utc, local_date_str
 
 # Rolling window in which members may request a correction. Fits the
 # "same-week retrospective" policy chosen by admin (option 2b).
-CORRECTION_WINDOW_DAYS: int = 7
+CORRECTION_WINDOW_DAYS: int = 31
 
 VALID_ENTITY_KINDS: Dict[str, set] = {
     "attendance": {"missed_checkin", "time_adjust"},
@@ -275,7 +275,7 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             requester_id = user["id"]
             requester_name = user["full_name"]
 
-        # Admins bypass the 7-day retro window — they're often filing late
+        # Admins bypass the retro window — they're often filing late
         # corrections precisely BECAUSE the member missed the window.
         # Non-admin self-filed requests still respect the policy.
         if user.get("role") != "admin":
@@ -334,7 +334,7 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
 
         Only pulls rows the correction workflow can actually apply to:
         approved leaves (cancellation / date-change / type-change) and
-        attendance rows within the 7-day window (time_adjust). Rejected
+        attendance rows within the retro window (time_adjust). Rejected
         or pending items are hidden — they aren't valid targets.
 
         Admins may pass `?on_behalf_of=<member_id>` to fetch candidates
