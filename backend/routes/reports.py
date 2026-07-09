@@ -333,6 +333,11 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                           institution: Optional[str] = None,
                           admin: dict = Depends(require_admin)):
         rows = await compute_hours_report(start, end)
+        # Super-admin gating (04 Feb 2026). The Hours group (Total/Avg
+        # hours) is privacy-sensitive. Regular admins get the same
+        # 17-column report minus the last 2 columns.
+        from server import is_super_admin
+        show_hours = is_super_admin(admin)
 
         # Apply the same filters the admin has set on the UI so the
         # downloaded PDF/CSV matches what they see (30 Jun 2026 late).
@@ -356,10 +361,12 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             rows = [r for r in rows if (r.get("institution") or "") == institution]
 
         # 4 Feb 2026 — column set expanded to mirror the on-screen table
-        # exactly (21 columns, grouped). Escort columns were removed at
-        # the user's request ("not sure why they are there"). Grouped
-        # header row above the sub-headers matches the screen tinting
-        # so a printed sheet is visually identical.
+        # exactly (17 columns, grouped). Escort columns were removed at
+        # the user's request ("not sure why they are there"). Overtime
+        # + Comp-Off collapsed from 3 sub-columns each to a single
+        # column each (04 Feb 2026 later request) — the OT and CO
+        # ledger drill-downs still carry the full applied/approved
+        # breakdown per session.
         def _attn_tot(r):
             return (r.get("days_present", 0) + r.get("days_leave", 0)
                     + r.get("days_tour", 0) + r.get("days_off", 0))
@@ -385,45 +392,49 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         def _lv_close(r):
             return _lv_total(r) - _lv_avld(r)
 
-        # 21 column headers matching on-screen sub-header row.
+        # 17 column headers matching on-screen sub-header row. Hours
+        # group (last 2) omitted for non-super-admins.
         headers = [
             "Member", "Cat",
             # Attendance (8) — group tint emerald
             "Pres", "Lv", "Tour", "Off", "Late", "Half", "Abs", "Tot",
             # Leave (5) — amber
             "Open", "COff", "Total", "Avld", "Close",
-            # Overtime (3) — violet
-            "OT Srvd", "OT Appl", "OT Apprv",
-            # Comp-Off (3) — sky
-            "CO Srvd", "CO Appl", "CO Apprv",
-            # Hours (2) — indigo
-            "Tot h", "Avg h",
+            # Overtime (1) — violet
+            "OT",
+            # Comp-Off (1) — sky
+            "CO",
         ]
-        table = [[
-            r["member_name"],
-            (r.get("category") or "").title(),
-            _n(r.get("days_present", 0)),
-            _n(r.get("days_leave", 0)),
-            _n(r.get("days_tour", 0)),
-            _n(r.get("days_off", 0)),
-            _n(r.get("late_days", 0)),
-            _n(r.get("half_days", 0)),
-            _n(r.get("days_absent", 0)),
-            _n(_attn_tot(r)),
-            _n(_lv_open(r)),
-            _n(_lv_coff(r)),
-            _n(_lv_total(r)),
-            _n(_lv_avld(r)),
-            _n(_lv_close(r)),
-            _h(r.get("overtime_hours_served", 0)),
-            _h(r.get("overtime_hours_pending", 0)),
-            _h(r.get("overtime_hours_approved", 0)),
-            _n(r.get("comp_off_earned", 0)),
-            _n(r.get("comp_off_applied", 0)),
-            _n(r.get("comp_off_used", 0)),
-            _h(r.get("total_hours", 0)),
-            _h(r.get("avg_hours_per_day", 0)),
-        ] for r in rows]
+        if show_hours:
+            headers += ["Tot h", "Avg h"]
+
+        def _row(r):
+            base = [
+                r["member_name"],
+                (r.get("category") or "").title(),
+                _n(r.get("days_present", 0)),
+                _n(r.get("days_leave", 0)),
+                _n(r.get("days_tour", 0)),
+                _n(r.get("days_off", 0)),
+                _n(r.get("late_days", 0)),
+                _n(r.get("half_days", 0)),
+                _n(r.get("days_absent", 0)),
+                _n(_attn_tot(r)),
+                _n(_lv_open(r)),
+                _n(_lv_coff(r)),
+                _n(_lv_total(r)),
+                _n(_lv_avld(r)),
+                _n(_lv_close(r)),
+                _h(r.get("overtime_hours_served", 0)),
+                _n(r.get("comp_off_earned", 0)),
+            ]
+            if show_hours:
+                base += [
+                    _h(r.get("total_hours", 0)),
+                    _h(r.get("avg_hours_per_day", 0)),
+                ]
+            return base
+        table = [_row(r) for r in rows]
 
         if fmt == "pdf":
             from reportlab.lib.pagesizes import A3
@@ -460,34 +471,34 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 "Members": str(len(rows)),
                 "Generated by": admin.get("full_name") or admin.get("email") or "Admin",
             }
-            # A3 landscape (~420mm × 297mm) fits 21 tight columns
-            # without eating the Name column. Widths sum to ~395mm —
-            # ReportLab absorbs the small slack.
-            #                Mem  Cat |  Pres Lv Tour Off Late Half Abs Tot |  Open COff Total Avld Close |  Srvd Appl Apprv |  Srvd Appl Apprv |  Toth  Avgh
-            col_widths_mm = [55, 22,
-                             15, 12, 14, 12, 14, 14, 14, 18,
-                             16, 16, 18, 16, 18,
-                             18, 18, 20,
-                             18, 18, 20,
-                             18, 18]
-            grouped_headers = [
+            # Column widths (mm) matched to the header count.
+            base_widths = [45, 22,
+                           15, 12, 14, 12, 14, 14, 14, 16,
+                           15, 15, 17, 15, 17,
+                           22,
+                           22]
+            base_groups = [
                 ("", 2, None),
                 ("Attendance", 8, "#D1FAE5"),   # emerald-100
                 ("Leave", 5, "#FEF3C7"),         # amber-100
-                ("Overtime", 3, "#EDE9FE"),      # violet-100
-                ("Comp-Off", 3, "#E0F2FE"),      # sky-100
-                ("Hours", 2, "#E0E7FF"),         # indigo-100
+                ("Overtime", 1, "#EDE9FE"),      # violet-100
+                ("Comp-Off", 1, "#E0F2FE"),      # sky-100
             ]
+            if show_hours:
+                col_widths_mm = base_widths + [15, 15]
+                grouped_headers = base_groups + [("Hours", 2, "#E0E7FF")]
+            else:
+                col_widths_mm = base_widths
+                grouped_headers = base_groups
             pdf = _pdf_from_table(
                 "Attendance Report",
                 headers, table,
                 subtitle=period_disp,
                 orientation="landscape",
-                pagesize_override=landscape(A3),
                 col_widths=[w * mm for w in col_widths_mm],
                 meta=meta,
                 grouped_headers=grouped_headers,
-                font_size=7,
+                font_size=8,
             )
             return Response(content=pdf, media_type="application/pdf",
                             headers={"Content-Disposition": f"attachment; filename=attendance_{start}_{end}.pdf"})
@@ -768,6 +779,135 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             })
         out.sort(key=lambda r: (r["name"] or "").lower())
         return {"start": start, "end": end, "rows": out}
+
+    @router.get("/reports/attendance-ledger")
+    async def attendance_ledger(
+        member_id: str, start: str, end: str,
+        admin: dict = Depends(require_admin),
+    ):
+        """Date-wise attendance detail for one member across a range,
+        used by the double-click drill-down modal on the Attendance
+        report (04 Feb 2026). One row per calendar date in the range,
+        classified as:
+          • Present / Half day / Late — has an attendance row
+          • Leave / Tour / Posting    — covered by an approved leave
+          • Weekly off                — matches the member's weekly_off
+          • Holiday                   — matches the office holiday list
+          • Absent                    — none of the above
+
+        Rows carry check-in/out times where relevant, and the leave
+        reason where applicable. Range is inclusive of both ends.
+        """
+        try:
+            d0 = date.fromisoformat(start)
+            d1 = date.fromisoformat(end)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="start/end must be YYYY-MM-DD")
+        if d1 < d0:
+            raise HTTPException(status_code=400, detail="end must be >= start")
+        u = await db.users.find_one(
+            {"id": member_id},
+            {"_id": 0, "full_name": 1, "category": 1, "weekly_off": 1, "rank": 1},
+        )
+        if not u:
+            raise HTTPException(status_code=404, detail="Member not found")
+
+        office = await db.config.find_one({"id": "office"})
+        default_wo = ((office or {}).get("default_weekly_off") or "sunday").lower()
+        weekly_off = (u.get("weekly_off") or default_wo).lower()
+        from holidays import WEEKDAY_KEY  # local import — module-scoped constant
+        DOW_LABEL = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+        atts = {a["date"]: a for a in await db.attendance.find(
+            {"user_id": member_id, "date": {"$gte": start, "$lte": end}},
+            {"_id": 0, "date": 1, "check_in_at": 1, "check_out_at": 1,
+             "is_late": 1, "is_half_day": 1, "overtime_total_min": 1,
+             "work_start_at_session": 1, "work_end_at_session": 1},
+        ).to_list(400)}
+        leaves = await db.leaves.find(
+            {"user_id": member_id, "status": "approved",
+             "start_date": {"$lte": end}, "end_date": {"$gte": start}},
+            {"_id": 0, "type": 1, "start_date": 1, "end_date": 1, "reason": 1},
+        ).to_list(200)
+        # Holiday list — pull all holidays that fall in the range (small
+        # collection, no index concerns).
+        hols = {h["date"]: h.get("label") for h in await db.holidays.find(
+            {"date": {"$gte": start, "$lte": end}},
+            {"_id": 0, "date": 1, "label": 1},
+        ).to_list(200)}
+
+        def _hhmm(iso):
+            return iso[11:16] if iso and len(iso) >= 16 else ""
+
+        def _leave_on(iso):
+            for lv in leaves:
+                if lv["start_date"] <= iso <= lv["end_date"]:
+                    return lv
+            return None
+
+        rows = []
+        cur = d0
+        counts = {"Present": 0, "Half day": 0, "Late": 0,
+                  "Leave": 0, "Tour": 0, "Posting": 0,
+                  "Comp-off": 0, "Weekly off": 0, "Holiday": 0, "Absent": 0}
+        while cur <= d1:
+            iso = cur.isoformat()
+            dow_idx = cur.weekday()          # 0=Mon
+            dow_lbl = DOW_LABEL[dow_idx]
+            att = atts.get(iso)
+            lv = _leave_on(iso)
+            holiday_label = hols.get(iso)
+
+            status = None
+            check_in = check_out = reason = ""
+            if att and att.get("check_in_at"):
+                check_in = _hhmm(att.get("check_in_at"))
+                check_out = _hhmm(att.get("check_out_at"))
+                if att.get("is_half_day"):
+                    status = "Half day"
+                elif att.get("is_late"):
+                    status = "Late"
+                else:
+                    status = "Present"
+            elif lv:
+                lt = (lv.get("type") or "").lower()
+                if lt == "tour":
+                    status = "Tour"
+                elif lt == "posting":
+                    status = "Posting"
+                elif lt == "comp_off":
+                    status = "Comp-off"
+                else:
+                    status = "Leave"
+                reason = lv.get("reason") or ""
+            elif WEEKDAY_KEY[dow_idx] == weekly_off:
+                status = "Weekly off"
+            elif holiday_label:
+                status = "Holiday"
+                reason = holiday_label
+            else:
+                status = "Absent"
+            counts[status] = counts.get(status, 0) + 1
+            rows.append({
+                "date": iso,
+                "dow": dow_lbl,
+                "status": status,
+                "check_in": check_in,
+                "check_out": check_out,
+                "reason": reason,
+            })
+            cur += timedelta(days=1)
+
+        return {
+            "member_id": member_id,
+            "member_name": u.get("full_name"),
+            "category": u.get("category"),
+            "start": start,
+            "end": end,
+            "weekly_off": weekly_off,
+            "counts": counts,
+            "rows": rows,
+        }
 
     @router.get("/reports/ot-ledger")
     async def ot_ledger(
@@ -1198,5 +1338,126 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             "totals": totals,
             "rows": rows,
         }
+
+    def _ddmmyyyy(iso: str) -> str:
+        try:
+            y, m, d = iso.split("-")
+            return f"{d}/{m}/{y}"
+        except Exception:
+            return iso
+
+    @router.get("/reports/comp-off-ledger/export")
+    async def export_comp_off_ledger(
+        member_id: str, year: int, fmt: str = "pdf",
+        admin: dict = Depends(require_admin),
+    ):
+        """PDF/CSV of the comp-off ledger — mirrors the on-screen modal.
+        Added 04 Feb 2026 alongside OT-ledger download so admins can hand
+        a printable balance to any member applying for leave."""
+        data = await comp_off_ledger(member_id, year, admin)
+        rows = data["rows"]
+        totals = data["totals"]
+        member_name = data.get("member_name") or "Member"
+        headers = ["Date", "Day", "Kind", "Qty", "Note"]
+        table = [[
+            _ddmmyyyy(r.get("date", "")), r.get("dow", ""),
+            (r.get("kind") or "").title(), str(r.get("qty") or ""),
+            r.get("note") or "",
+        ] for r in rows]
+        # Totals summary row.
+        table.append([
+            "Totals", "", "",
+            f"E:{totals.get('earned',0)} A:{totals.get('applied',0)} Apv:{totals.get('approved',0)} Avail:{totals.get('available',0)}",
+            "",
+        ])
+        if fmt == "csv":
+            return _csv_response(headers, table, f"comp_off_ledger_{member_id}_{year}.csv")
+        office = await db.config.find_one({"id": "office"})
+        academy = (office or {}).get("office_name") or "iShowedUp"
+        meta = {
+            "Academy": academy,
+            "Member": member_name,
+            "Category": ((data or {}).get("category") or "").title() or "—",
+            "Year": str(year),
+            "Weekly off": (data.get("weekly_off") or "").title(),
+            "Earned": str(totals.get("earned", 0)),
+            "Approved (used)": str(totals.get("approved", 0)),
+            "Available": str(totals.get("available", 0)),
+            "Generated by": admin.get("full_name") or admin.get("email") or "Admin",
+        }
+        col_widths_mm = [25, 18, 32, 25, 130]
+        pdf = _pdf_from_table(
+            f"Comp-off Ledger — {member_name}",
+            headers, table,
+            subtitle=f"Calendar year {year}",
+            orientation="landscape",
+            col_widths=[w * mm for w in col_widths_mm],
+            meta=meta,
+            font_size=8,
+        )
+        return Response(
+            content=pdf, media_type="application/pdf",
+            headers={"Content-Disposition":
+                     f"attachment; filename=comp_off_ledger_{member_name.replace(' ', '_')}_{year}.pdf"},
+        )
+
+    @router.get("/reports/leave-ledger/export")
+    async def export_leave_ledger(
+        member_id: str, year: int, fmt: str = "pdf",
+        admin: dict = Depends(require_admin),
+    ):
+        """PDF/CSV of the leave ledger — mirrors the on-screen modal."""
+        data = await leave_ledger(member_id, year, admin)
+        rows = data["rows"]
+        totals = data["totals"]
+        member_name = data.get("member_name") or "Member"
+        headers = ["Start", "End", "Day", "Type", "Kind", "Qty", "Paid", "Comp-off", "LOP", "Reason", "Admin note"]
+        table = [[
+            _ddmmyyyy(r.get("start_date", "")),
+            _ddmmyyyy(r.get("end_date", "")),
+            r.get("dow", ""),
+            (r.get("type") or "").title(),
+            (r.get("kind") or "").title(),
+            str(r.get("qty") or ""),
+            f"{r.get('paid_leave_used') or 0:.1f}",
+            str(r.get("comp_off_used") or 0),
+            f"{r.get('lop_days') or 0:.1f}",
+            r.get("reason") or "",
+            r.get("admin_note") or "",
+        ] for r in rows]
+        table.append([
+            "Totals", "", "", "", "",
+            f"Applied:{totals.get('applied',0)} Availed:{totals.get('availed',0)} Rejected:{totals.get('rejected',0)}",
+            "", "", "", "", "",
+        ])
+        if fmt == "csv":
+            return _csv_response(headers, table, f"leave_ledger_{member_id}_{year}.csv")
+        office = await db.config.find_one({"id": "office"})
+        academy = (office or {}).get("office_name") or "iShowedUp"
+        meta = {
+            "Academy": academy,
+            "Member": member_name,
+            "Category": ((data or {}).get("category") or "").title() or "—",
+            "Year": str(year),
+            "Opening balance": str(totals.get("opening", 0)),
+            "Taken YTD": str(totals.get("taken_ytd", 0)),
+            "Remaining": str(totals.get("remaining", 0)),
+            "Generated by": admin.get("full_name") or admin.get("email") or "Admin",
+        }
+        col_widths_mm = [22, 22, 15, 22, 22, 15, 15, 20, 15, 55, 45]
+        pdf = _pdf_from_table(
+            f"Leave Ledger — {member_name}",
+            headers, table,
+            subtitle=f"Calendar year {year}",
+            orientation="landscape",
+            col_widths=[w * mm for w in col_widths_mm],
+            meta=meta,
+            font_size=7,
+        )
+        return Response(
+            content=pdf, media_type="application/pdf",
+            headers={"Content-Disposition":
+                     f"attachment; filename=leave_ledger_{member_name.replace(' ', '_')}_{year}.pdf"},
+        )
 
     return router

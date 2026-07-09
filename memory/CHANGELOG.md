@@ -4,6 +4,73 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 4 Feb 2026 — Reports overhaul: OT/CO consolidation + super-admin
+gating + Attendance drill-down + Ledger PDF downloads
+
+**User requests bundled in this ship:**
+1. "OT Served/Applied/Approved needs to be replaced with only OT
+   which is the system calculated OT (=served). Same with Comp-off."
+2. "Double-click on the attendance columns should show a table with
+   the month's data of the said member date wise clearly indicating
+   tour and leave and absent etc."
+3. "Total hours and average hours should be visible only to me as
+   super admin login 9849002111."
+4. (Pot improv) "PDF button on Comp-Off Ledger and Leave Ledger
+   modals — same style as OT Ledger."
+
+**Backend:**
+- `is_super_admin(user)` helper (`server.py`) — checks `mobile`
+  against env whitelist `SUPER_ADMIN_PHONES` (default
+  `"9849002111"`). Stamped onto `/auth/me` response as
+  `is_super_admin: true|false`.
+- `models.UserPublic` — new nullable `is_super_admin` field so the
+  flag round-trips through the response model.
+- `/api/reports/hours/export` — checks `is_super_admin`; strips
+  the Hours group (Total h + Avg h columns + grouped-header span)
+  for regular admins. Result: 17-col table for admins, 19-col
+  table for super admins.
+- `/api/reports/attendance-ledger?member_id=X&start=Y&end=Z` —
+  new endpoint returning one row per calendar day with `status`
+  bucketed as Present / Late / Half day / Leave / Tour / Posting /
+  Comp-off / Weekly off / Holiday / Absent. Uses each member's
+  configured `weekly_off` (falls back to office default) + the
+  holidays master to classify non-attendance days.
+- `/api/reports/comp-off-ledger/export` + `/api/reports/leave-ledger/export`
+  — PDF/CSV mirrors of the on-screen modals with totals row and
+  meta block (same pattern as OT-ledger export shipped earlier
+  today).
+
+**Frontend:**
+- `Reports.jsx` — Overtime group span 3→1, Comp-Off group span 3→1;
+  8-cell OT/CO removed; single bold OT/CO cells. Table minWidth
+  1300→1100 px. Hours group header + sub-headers + tds gated on
+  `useAuth().user.is_super_admin`. Empty-state colSpan now
+  computed dynamically (17 or 19).
+- All 8 attendance cells (Pres/Lv/Tour/Off/Late/Half/Abs/Tot) get
+  `onDoubleClick` handlers opening the new AttendanceLedgerModal
+  scoped to the current report window.
+- New `AttendanceLedgerModal.jsx` — read-only drill-down showing
+  colored status chips summary + date-wise table.
+- `CompOffLedgerModal.jsx` + `LeaveLedgerModal.jsx` — new PDF
+  download button in the header (same style as OT Ledger).
+
+**Tests:**
+- New: `tests/test_reports_gating_and_ledger.py` (5 tests) covers
+  17-col default export, `is_super_admin=false` for default admin,
+  attendance-ledger daily rows + range validation.
+- Updated: `test_routes_reports.py`, `test_smoke_flows.py`,
+  `test_review_iter3.py` to expect the new single-OT/CO shape.
+- 27/27 relevant regression tests pass.
+
+**Verified:**
+- 4-state end-to-end curl: default admin gets 17 cols, super admin
+  (mobile=9849002111) gets 19, reset back to 17. Behavior lint-clean.
+- UI screenshot of AttendanceLedgerModal on ABHIRAM shows 9-day
+  window with Monday correctly marked "Weekly off".
+
+---
+
+
 ## 4 Feb 2026 — OT Ledger download-as-PDF
 
 Small but useful — admins can now hand a member a printable copy of

@@ -265,12 +265,11 @@ def test_15_reports_csv_export(admin_s):
     header = next(reader, [])
     header_norm = [h.strip().lower() for h in header]
     # 4 Feb 2026 — headers now mirror the on-screen grouped table
-    # (user request). "Name" → "Member", "Category" → "Cat", grouped
-    # Attendance/Leave/Overtime/Comp-Off/Hours sub-headers.
+    # (user request). OT/CO collapsed to single columns; Hours hidden
+    # from non-super-admin.
     assert any("member" == h for h in header_norm), f"no Member column: {header}"
     assert any("cat" == h for h in header_norm), f"no Cat column: {header}"
-    # OT Approved column is what remains for payroll-adjacent reporting.
-    assert any("apprv" in h for h in header_norm), f"no OT/CO Apprv col: {header}"
+    assert any(h == "ot" for h in header_norm), f"no OT col: {header}"
 
 
 # ---------- 13. Self check-in geo-toggle ----------

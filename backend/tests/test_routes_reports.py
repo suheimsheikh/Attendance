@@ -202,15 +202,11 @@ def test_hours_export_csv_has_correct_header_row(admin_client, base_url):
     reader = csv.reader(io.StringIO(r.text))
     headers = next(reader)
     # These headers are referenced by the frontend's Reports page — keep stable.
-    # 4 Feb 2026 — CSV/PDF expanded to mirror the on-screen grouped
-    # table exactly (user request). The Attendance %, OT Hrs, and
-    # Rank columns dropped; grouped Attendance/Leave/Overtime/Comp-
-    # Off/Hours sub-headers used instead.
+    # 4 Feb 2026 (later) — OT/CO collapsed to single columns and Hours
+    # hidden for non-super-admin per user request.
     for required in ("Member", "Cat", "Pres", "Lv", "Tour", "Off",
                      "Late", "Half", "Abs", "Tot",
-                     "OT Srvd", "OT Apprv",
-                     "CO Srvd", "CO Apprv",
-                     "Tot h", "Avg h"):
+                     "OT", "CO"):
         assert required in headers, f"Missing CSV header: {required}"
 
 

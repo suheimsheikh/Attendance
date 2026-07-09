@@ -9,8 +9,8 @@
  * classifications with totals in the header.
  */
 import React, { useEffect, useState } from "react";
-import { X, Loader2 } from "lucide-react";
-import { api, showApiError } from "../../api";
+import { X, Loader2, Download } from "lucide-react";
+import { api, showApiError, downloadBlob } from "../../api";
 
 const KIND_TINT = {
   applied:  "bg-amber-100 text-amber-800 border-amber-200",
@@ -55,9 +55,25 @@ export default function LeaveLedgerModal({ open, onClose, memberId, memberName, 
               &nbsp;·&nbsp; Remaining <b className={(totals.remaining ?? 0) < 0 ? "text-red-600" : "text-emerald-700"}>{totals.remaining ?? 0}</b>
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700" data-testid="leave-ledger-close">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {rows.length > 0 && (
+              <button
+                onClick={() => downloadBlob(
+                  "/reports/leave-ledger/export",
+                  `leave_ledger_${(memberName || "member").replace(/\s+/g, "_")}_${year}.pdf`,
+                  { member_id: memberId, year, fmt: "pdf" },
+                )}
+                className="iu-btn-secondary text-xs"
+                data-testid="leave-ledger-download-pdf"
+                title="Download this ledger as a PDF"
+              >
+                <Download size={14} /> PDF
+              </button>
+            )}
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1" data-testid="leave-ledger-close">
+              <X size={18} />
+            </button>
+          </div>
         </header>
         <div className="max-h-[70vh] overflow-auto p-4">
           {loading ? (

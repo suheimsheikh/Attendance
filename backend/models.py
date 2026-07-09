@@ -53,6 +53,12 @@ class UserPublic(BaseModel):
     # unused comp-off carries forward). Same silent-strip fix as
     # weekly_off above.
     comp_off_opening: Optional[float] = None
+    # Superuser flag (04 Feb 2026). True when the user's phone number
+    # matches a comma-separated env whitelist (`SUPER_ADMIN_PHONES`).
+    # Powers the "Hours" columns gating in Reports — only super admins
+    # see Total Hours / Avg Hours. Nullable so non-enriched serialised
+    # snapshots (e.g. from admin CSV import) don't break the model.
+    is_super_admin: Optional[bool] = None
     # Optional decorated fields — populated by GET /members for the admin
     # Members page (Fleet / Last seen / Leave balance columns). Other
     # endpoints that return UserPublic just leave these as None.

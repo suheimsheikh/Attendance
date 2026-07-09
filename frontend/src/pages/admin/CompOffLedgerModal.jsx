@@ -8,8 +8,8 @@
  * /api/reports/comp-off-ledger.
  */
 import React, { useEffect, useState } from "react";
-import { X, Loader2 } from "lucide-react";
-import { api, showApiError } from "../../api";
+import { X, Loader2, Download } from "lucide-react";
+import { api, showApiError, downloadBlob } from "../../api";
 
 const KIND_TINT = {
   earned:   "bg-sky-100 text-sky-800 border-sky-200",
@@ -53,9 +53,25 @@ export default function CompOffLedgerModal({ open, onClose, memberId, memberName
               &nbsp;·&nbsp; Available <b>{totals.available || 0}</b>
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700" data-testid="comp-off-ledger-close">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {rows.length > 0 && (
+              <button
+                onClick={() => downloadBlob(
+                  "/reports/comp-off-ledger/export",
+                  `comp_off_ledger_${(memberName || "member").replace(/\s+/g, "_")}_${year}.pdf`,
+                  { member_id: memberId, year, fmt: "pdf" },
+                )}
+                className="iu-btn-secondary text-xs"
+                data-testid="comp-off-ledger-download-pdf"
+                title="Download this ledger as a PDF"
+              >
+                <Download size={14} /> PDF
+              </button>
+            )}
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1" data-testid="comp-off-ledger-close">
+              <X size={18} />
+            </button>
+          </div>
         </header>
         <div className="max-h-[70vh] overflow-auto p-4">
           {loading ? (

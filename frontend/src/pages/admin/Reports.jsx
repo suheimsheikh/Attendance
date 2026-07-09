@@ -4,9 +4,11 @@ import { Loader2, FileDown, FileText, RefreshCw, ChevronLeft, ChevronRight } fro
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 import { api, downloadBlob } from "../../api";
+import { useAuth } from "../../auth";
 import { todayIso, shortDate, categoryLabel } from "../../utils";
 import MemberTimelineModal from "../../components/MemberTimelineModal";
 import OTLedgerModal from "./OTLedgerModal";
+import AttendanceLedgerModal from "./AttendanceLedgerModal";
 import CompOffLedgerModal from "./CompOffLedgerModal";
 import LeaveLedgerModal from "./LeaveLedgerModal";
 
@@ -92,6 +94,12 @@ export default function Reports() {
 
   const [loading, setLoading] = useState(false);
   const [day, setDay] = useState(todayIso());
+  // Super-admin gating — the Hours group (Total Hours + Avg Hours) is
+  // privacy-sensitive and only the top-of-org account should see it.
+  // Flag is stamped on /auth/me from an env whitelist of phone numbers
+  // (SUPER_ADMIN_PHONES). 04 Feb 2026 user request.
+  const { user: currentUser } = useAuth();
+  const showHours = !!currentUser?.is_super_admin;
   const [daily, setDaily] = useState(null);
   const [attendance, setAttendance] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -141,6 +149,11 @@ export default function Reports() {
   // diff rows chronologically of Leave applied, Leave availed Leave
   // rejected and totals thereof").
   const [lvLedger, setLvLedger] = useState(null); // { member_id, member_name } | null
+  // Double-click Attendance ledger modal state (04 Feb 2026 user request:
+  // "Double click on the attendance columns should show a table with
+  // the months data of the said member date wise clearly indicating
+  // tour and leave and absent etc").
+  const [attnLedger, setAttnLedger] = useState(null); // { member_id, member_name } | null
 
   // Drill-down hover popover state (7 Jul 2026 — replaces native
   // `title` attrs which had 1-2s browser-delay and broke inside the
@@ -432,7 +445,7 @@ export default function Reports() {
                   </tbody>
                 </table>
               ) : (
-              <table className="min-w-full text-xs iu-table-compact" style={{ minWidth: 1300 }}>
+              <table className="min-w-full text-xs iu-table-compact" style={{ minWidth: 1100 }}>
                 <thead>
                   {/* Grouped header row + sub-header row are BOTH sticky
                       (7 Jul 2026 user-requested). Row 1 pins to top-0,
@@ -443,9 +456,11 @@ export default function Reports() {
                     <th className="py-1.5 px-2 text-left sticky left-0 z-40 bg-slate-100" colSpan={2}>&nbsp;</th>
                     <th className="py-1.5 px-2 text-center bg-emerald-50 border-l border-r border-emerald-200 text-emerald-800" colSpan={8}>Attendance</th>
                     <th className="py-1.5 px-2 text-center bg-amber-50 border-r border-amber-200 text-amber-800" colSpan={5}>Leave</th>
-                    <th className="py-1.5 px-2 text-center bg-violet-50 border-r border-violet-200 text-violet-800" colSpan={3}>Overtime</th>
-                    <th className="py-1.5 px-2 text-center bg-sky-50 border-r border-sky-200 text-sky-800" colSpan={3}>Comp-Off</th>
-                    <th className="py-1.5 px-2 text-center bg-indigo-50 border-r border-indigo-200 text-indigo-800" colSpan={2}>Hours</th>
+                    <th className="py-1.5 px-2 text-center bg-violet-50 border-r border-violet-200 text-violet-800" colSpan={1}>Overtime</th>
+                    <th className="py-1.5 px-2 text-center bg-sky-50 border-r border-sky-200 text-sky-800" colSpan={1}>Comp-Off</th>
+                    {showHours && (
+                      <th className="py-1.5 px-2 text-center bg-indigo-50 border-r border-indigo-200 text-indigo-800" colSpan={2}>Hours</th>
+                    )}
                   </tr>
                   <tr className="sticky top-7 z-30 bg-slate-50 shadow-sm text-[10px] uppercase tracking-wider font-bold text-slate-500">
                     <th className="py-1.5 px-2 text-left sticky left-0 z-40 bg-slate-50">Member</th>
@@ -463,14 +478,14 @@ export default function Reports() {
                     <th className="py-1.5 px-1.5 text-center bg-amber-200/50" title="Total = Open + COff (all leave credit available this year)">Total</th>
                     <th className="py-1.5 px-1.5 text-center bg-amber-200/50" title="Availed = leave taken YTD">Avld</th>
                     <th className="py-1.5 px-1.5 text-center bg-amber-200/50 border-r border-amber-100 font-extrabold" title="Closing = Total − Avld">Close</th>
-                    <th className="py-1.5 px-1.5 text-center bg-violet-200/50">Srvd</th>
-                    <th className="py-1.5 px-1.5 text-center bg-violet-200/50">Appl</th>
-                    <th className="py-1.5 px-1.5 text-center bg-violet-200/50 border-r border-violet-100 font-extrabold">Apprv</th>
-                    <th className="py-1.5 px-1.5 text-center bg-sky-200/50">Srvd</th>
-                    <th className="py-1.5 px-1.5 text-center bg-sky-200/50">Appl</th>
-                    <th className="py-1.5 px-1.5 text-center bg-sky-200/50 border-r border-sky-100 font-extrabold">Apprv</th>
-                    <th className="py-1.5 px-1.5 text-center bg-indigo-200/50">Tot h</th>
-                    <th className="py-1.5 px-1.5 text-center bg-indigo-200/50 border-r border-indigo-100">Avg h</th>
+                    <th className="py-1.5 px-1.5 text-center bg-violet-200/50 border-r border-violet-100 font-extrabold">OT</th>
+                    <th className="py-1.5 px-1.5 text-center bg-sky-200/50 border-r border-sky-100 font-extrabold">CO</th>
+                    {showHours && (
+                      <>
+                        <th className="py-1.5 px-1.5 text-center bg-indigo-200/50">Tot h</th>
+                        <th className="py-1.5 px-1.5 text-center bg-indigo-200/50 border-r border-indigo-100">Avg h</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -541,14 +556,26 @@ export default function Reports() {
                         </td>
                         <td className={`py-1.5 px-2 hidden md:table-cell text-slate-600 border-t border-slate-100 sticky left-[140px] z-10 ${rowBg} group-hover:bg-sky-50`}>{categoryLabel(r.category)}</td>
                         {/* Attendance group */}
-                        <td {...merge("py-1.5 px-1.5 text-center bg-emerald-200/50 border-l border-t border-emerald-100 font-semibold text-emerald-700", hoverProps("Present", r.dates_present))} data-testid={`days-present-${r.member_id}`}>{n(r.days_present)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-emerald-200/50 border-t border-emerald-100 text-amber-700", hoverProps("Leave", r.dates_leave))} data-testid={`days-leave-${r.member_id}`}>{n(r.days_leave)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-emerald-200/50 border-t border-emerald-100 text-orange-700", hoverProps("Tour", r.dates_tour))} data-testid={`days-tour-${r.member_id}`}>{n(r.days_tour)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-emerald-200/50 border-t border-emerald-100 text-slate-500", hoverProps("Off", r.dates_off))} data-testid={`days-off-${r.member_id}`}>{n(r.days_off)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-emerald-200/50 border-t border-emerald-100 text-amber-600", hoverProps("Late", r.dates_late))} data-testid={`late-days-${r.member_id}`}>{n(r.late_days)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-emerald-200/50 border-t border-emerald-100", hoverProps("Half-day", r.dates_half_day))} data-testid={`half-days-${r.member_id}`}>{n(r.half_days)}</td>
-                        <td {...merge(`py-1.5 px-1.5 text-center bg-emerald-200/50 border-t border-emerald-100 font-semibold ${(r.days_absent || 0) > 0 ? "text-red-600" : "text-slate-400"}`, hoverProps("Absent", r.dates_absent))} data-testid={`days-absent-${r.member_id}`}>{n(r.days_absent)}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-emerald-200/50 border-r border-t border-emerald-100 font-extrabold text-slate-900" data-testid={`days-total-${r.member_id}`}>{n(attnTotal)}</td>
+                        {/* Attendance group — double-clicking ANY of these 8
+                            cells opens the date-wise Attendance Ledger for
+                            this member across the current reporting range
+                            (04 Feb 2026 user request). */}
+                        {(() => {
+                          const openAttn = () => setAttnLedger({ member_id: r.member_id, member_name: r.member_name });
+                          const attnCell = "cursor-pointer hover:bg-emerald-200/70";
+                          return (
+                            <>
+                        <td {...merge(`py-1.5 px-1.5 text-center bg-emerald-200/50 border-l border-t border-emerald-100 font-semibold text-emerald-700 ${attnCell}`, hoverProps("Present · double-click for daily ledger", r.dates_present))} data-testid={`days-present-${r.member_id}`} onDoubleClick={openAttn}>{n(r.days_present)}</td>
+                        <td {...merge(`py-1.5 px-1.5 text-center bg-emerald-200/50 border-t border-emerald-100 text-amber-700 ${attnCell}`, hoverProps("Leave · double-click for daily ledger", r.dates_leave))} data-testid={`days-leave-${r.member_id}`} onDoubleClick={openAttn}>{n(r.days_leave)}</td>
+                        <td {...merge(`py-1.5 px-1.5 text-center bg-emerald-200/50 border-t border-emerald-100 text-orange-700 ${attnCell}`, hoverProps("Tour · double-click for daily ledger", r.dates_tour))} data-testid={`days-tour-${r.member_id}`} onDoubleClick={openAttn}>{n(r.days_tour)}</td>
+                        <td {...merge(`py-1.5 px-1.5 text-center bg-emerald-200/50 border-t border-emerald-100 text-slate-500 ${attnCell}`, hoverProps("Off · double-click for daily ledger", r.dates_off))} data-testid={`days-off-${r.member_id}`} onDoubleClick={openAttn}>{n(r.days_off)}</td>
+                        <td {...merge(`py-1.5 px-1.5 text-center bg-emerald-200/50 border-t border-emerald-100 text-amber-600 ${attnCell}`, hoverProps("Late · double-click for daily ledger", r.dates_late))} data-testid={`late-days-${r.member_id}`} onDoubleClick={openAttn}>{n(r.late_days)}</td>
+                        <td {...merge(`py-1.5 px-1.5 text-center bg-emerald-200/50 border-t border-emerald-100 ${attnCell}`, hoverProps("Half-day · double-click for daily ledger", r.dates_half_day))} data-testid={`half-days-${r.member_id}`} onDoubleClick={openAttn}>{n(r.half_days)}</td>
+                        <td {...merge(`py-1.5 px-1.5 text-center bg-emerald-200/50 border-t border-emerald-100 font-semibold ${(r.days_absent || 0) > 0 ? "text-red-600" : "text-slate-400"} ${attnCell}`, hoverProps("Absent · double-click for daily ledger", r.dates_absent))} data-testid={`days-absent-${r.member_id}`} onDoubleClick={openAttn}>{n(r.days_absent)}</td>
+                        <td className={`py-1.5 px-1.5 text-center bg-emerald-200/50 border-r border-t border-emerald-100 font-extrabold text-slate-900 ${attnCell}`} data-testid={`days-total-${r.member_id}`} onDoubleClick={openAttn} title="Double-click for daily ledger">{n(attnTotal)}</td>
+                            </>
+                          );
+                        })()}
                         {/* Leave group — 5 columns (8 Jul 2026 user
                             request: Open · COff · Total · Avld · Close).
                             COff is comp-off available YTD, pulled from
@@ -586,24 +613,35 @@ export default function Reports() {
                             2026 user request "shift OT one left"). Double-
                             clicking any OT cell opens the year's OT ledger
                             for this member. */}
-                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-200/50 border-t border-violet-100 cursor-pointer hover:bg-violet-200/50", hoverProps("OT served · double-click for OT ledger", r.dates_overtime_served))} data-testid={`ot-served-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{h(otServed)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-200/50 border-t border-violet-100 text-amber-700 cursor-pointer hover:bg-violet-200/50", hoverProps("OT applied · double-click for OT ledger", r.dates_overtime_applied))} data-testid={`ot-applied-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{h(otApplied)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-200/50 border-r border-t border-violet-100 font-extrabold text-emerald-700 cursor-pointer hover:bg-violet-200/50", hoverProps("OT approved · double-click for OT ledger", r.dates_overtime_approved))} data-testid={`ot-approved-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{h(otApproved)}</td>
+                        {/* Overtime — single column showing the system-calculated
+                            OT (= served/earned). Applied + Approved columns
+                            removed 04 Feb 2026 per user request; the OT
+                            Ledger (double-click) still shows the full
+                            applied/approved breakdown per session. */}
+                        <td {...merge("py-1.5 px-1.5 text-center bg-violet-200/50 border-r border-t border-violet-100 font-extrabold cursor-pointer hover:bg-violet-200/50", hoverProps("OT earned by the system · double-click for OT ledger", r.dates_overtime_served))} data-testid={`ot-served-${r.member_id}`} onDoubleClick={() => setOtLedger({ member_id: r.member_id, member_name: r.member_name })}>{h(otServed)}</td>
                         {/* Comp-off group — double-clicking any cell
                             opens the year's comp-off ledger (Earned /
                             Applied / Approved with DOW). Hover tooltip
                             still shows the month's dates inline. */}
-                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-200/50 border-t border-sky-100 cursor-pointer hover:bg-sky-200/50", hoverProps("Comp-off earned · double-click for ledger", r.dates_comp_off_earned))} data-testid={`comp-off-earned-${r.member_id}`} onDoubleClick={() => setCoLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_earned)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-200/50 border-t border-sky-100 text-amber-700 cursor-pointer hover:bg-sky-200/50", hoverProps("Comp-off applied · double-click for ledger", r.dates_comp_off_applied))} data-testid={`comp-off-applied-${r.member_id}`} onDoubleClick={() => setCoLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_applied)}</td>
-                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-200/50 border-r border-t border-sky-100 font-extrabold text-emerald-700 cursor-pointer hover:bg-sky-200/50", hoverProps("Comp-off approved · double-click for ledger", r.dates_comp_off_used))} data-testid={`comp-off-approved-${r.member_id}`} onDoubleClick={() => setCoLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_used)}</td>
+                        {/* Comp-off — single column showing earned (system-
+                            calculated). Applied + Approved removed 04 Feb
+                            2026; the ledger drill-down still carries the
+                            full applied/approved detail. */}
+                        <td {...merge("py-1.5 px-1.5 text-center bg-sky-200/50 border-r border-t border-sky-100 font-extrabold cursor-pointer hover:bg-sky-200/50", hoverProps("Comp-off earned · double-click for ledger", r.dates_comp_off_earned))} data-testid={`comp-off-earned-${r.member_id}`} onDoubleClick={() => setCoLedger({ member_id: r.member_id, member_name: r.member_name })}>{n(r.comp_off_earned)}</td>
                         {/* Hours group */}
-                        <td className="py-1.5 px-1.5 text-center bg-indigo-200/50 border-t border-indigo-100">{r.total_hours ? `${r.total_hours}h` : ""}</td>
-                        <td className="py-1.5 px-1.5 text-center bg-indigo-200/50 border-r border-t border-indigo-100 text-slate-600">{r.avg_hours_per_day ? `${r.avg_hours_per_day}h` : ""}</td>
+                        {/* Hours group — super-admin only. Hidden from
+                            regular admins per 04 Feb 2026 privacy request. */}
+                        {showHours && (
+                          <>
+                            <td className="py-1.5 px-1.5 text-center bg-indigo-200/50 border-t border-indigo-100">{r.total_hours ? `${r.total_hours}h` : ""}</td>
+                            <td className="py-1.5 px-1.5 text-center bg-indigo-200/50 border-r border-t border-indigo-100 text-slate-600">{r.avg_hours_per_day ? `${r.avg_hours_per_day}h` : ""}</td>
+                          </>
+                        )}
                       </tr>
                     );
                   })}
                   {!loading && displayedRows.length === 0 && (
-                    <tr><td colSpan={23} className="text-center py-10 text-slate-500">No data.</td></tr>
+                    <tr><td colSpan={showHours ? 19 : 17} className="text-center py-10 text-slate-500">No data.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -640,6 +678,18 @@ export default function Reports() {
         memberId={lvLedger?.member_id}
         memberName={lvLedger?.member_name}
         year={year}
+      />
+
+      {/* Attendance ledger drill-down — opens on double-click of any
+          Attendance cell (Pres / Lv / Tour / Off / Late / Half / Abs /
+          Tot). Scoped to the current report's start-end window. */}
+      <AttendanceLedgerModal
+        open={!!attnLedger}
+        onClose={() => setAttnLedger(null)}
+        memberId={attnLedger?.member_id}
+        memberName={attnLedger?.member_name}
+        start={attendance?.start}
+        end={attendance?.end}
       />
 
       {tab === "daily" && (

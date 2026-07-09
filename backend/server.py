@@ -171,6 +171,30 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     return user
 
 
+# Super-admin gating (04 Feb 2026). Env var `SUPER_ADMIN_PHONES` is a
+# comma-separated whitelist of phone numbers whose owners see the
+# `Total Hours` and `Average Hours per Day` columns on Reports. Kept
+# out of the database so ops can seed it via .env — the DB user
+# document still just carries `role="admin"`.
+_SUPER_ADMIN_PHONES = frozenset(
+    p.strip() for p in (os.environ.get("SUPER_ADMIN_PHONES") or "9849002111").split(",")
+    if p.strip()
+)
+
+
+def is_super_admin(user: dict) -> bool:
+    """True when the user is an admin AND their mobile matches the env
+    whitelist. Guards a small set of privacy-sensitive columns (hours
+    worked) that only the top-of-org account should see. The field is
+    stored as ``mobile`` on the user document (legacy naming); we also
+    check ``phone`` for enriched dicts coming from client-side.
+    """
+    if not user or user.get("role") != "admin":
+        return False
+    mob = str(user.get("mobile") or user.get("phone") or "").strip()
+    return bool(mob) and mob in _SUPER_ADMIN_PHONES
+
+
 async def require_coach_or_admin(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") == "admin":
         return user

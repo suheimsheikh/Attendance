@@ -166,11 +166,11 @@ def test_hours_csv_export_returns_csv_with_headers(admin_client, base_url):
     text = r.text
     reader = csv.reader(io.StringIO(text))
     headers = next(reader)
-    # 4 Feb 2026 — headers mirror the on-screen grouped table
-    # (user request: PDF/CSV should look exactly like the screen).
+    # 4 Feb 2026 (later) — OT/CO collapsed to single columns; Hours
+    # hidden from non-super-admin per user request.
     assert "Member" in headers
     assert "Cat" in headers
-    assert "OT Apprv" in headers
+    assert "OT" in headers
 
 
 def test_changelog_is_public(base_url):
