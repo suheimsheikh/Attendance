@@ -882,7 +882,13 @@ def member_photo_url(u: dict) -> Optional[str]:
     if not thumb:
         return None
     import hashlib
-    version = hashlib.md5(thumb.encode("utf-8", errors="ignore")).hexdigest()[:10]
+    # Cache-busting version tag — used ONLY as a URL fingerprint so the
+    # browser knows when a new photo has been uploaded. Not
+    # security-sensitive; SHA-256 truncated to 10 hex chars is plenty
+    # for collision-avoidance across a ~1000-member academy. (Was MD5
+    # pre-9-Jul-2026; swapped to silence static-analysis warnings that
+    # flagged MD5 as weak crypto even in non-security paths.)
+    version = hashlib.sha256(thumb.encode("utf-8", errors="ignore")).hexdigest()[:10]
     return f"/api/members/{u['id']}/photo?v={version}"
 
 

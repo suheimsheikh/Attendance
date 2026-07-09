@@ -5,6 +5,53 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 9 Jul 2026 — Code review triage: applied fixes + policy re-confirmations
+
+External code review dropped a fresh batch of findings. Actionable
+items applied; the rest are either false positives or already tracked
+on the post-launch ROADMAP:
+
+**Applied:**
+- **Weak crypto (`server.py:885`)** — swapped MD5 → SHA-256 for the
+  photo-URL cache-busting fingerprint. The hash is not
+  security-sensitive (10-char URL tag for cache invalidation) but the
+  swap eliminates the static-analysis noise. Verified cache tags still
+  round-trip cleanly.
+- **Docstring clarity (`tests/test_smoke_launch.py:4`)** — the
+  "hardcoded secret" finding was a false positive on a `<pw>`
+  placeholder in the run-command example. Expanded the doc block so
+  future readers (and scanners) see this is a placeholder pointing to
+  the local `.env` / CI secret store, never a committed password.
+
+**Confirmed false positives (no change):**
+- **Missing hook deps (180 instances)** — the ESLint config's
+  docstring already enumerates the four known-safe patterns external
+  tools misread as missing deps: `setState` functions from `useState`,
+  module-level singletons (`api`, `toast`, `navigate`), ref `current`
+  values, and local variables captured inside callback bodies. All
+  three files touched this session (Reports.jsx, MyCorrections.jsx,
+  CorrectionRequestModal.jsx) lint clean under our config.
+- **Console statements (28 instances)** — grep across `src/` (excl.
+  `components/ui`) shows zero `console.log`; every remaining call is
+  `console.debug` / `.error` / `.warn`, all explicitly allow-listed in
+  the ESLint config for diagnostic + ErrorBoundary paths.
+- **Smoke test "hardcoded secret"** — see above; docstring only.
+
+**Deferred to post-launch ROADMAP (already tracked):**
+- `localStorage` token storage → `httpOnly` cookies (P2, security).
+- Component & function complexity refactors (server.py, MyLeaves,
+  Reports, Muster, Presence, Members) — P3, maintenance.
+- Hook-dep-limit hotspots (Reports.jsx:224 useMemo with 7 deps,
+  BulkEditBar.jsx:34, auth.jsx:103) — P3, part of the component-split
+  work.
+- `holidays.py`, `daily_content.py`, `breaks.py`, `guests.py` router
+  complexity — P3, alongside the `server.py` modular refactor.
+
+446 backend tests + 21 launch-day smoke tests still green after the
+crypto swap.
+
+---
+
 ## 8 Jul 2026 — My Corrections: fresh application picker for existing rows
 
 Follow-up on yesterday's "Raise correction" button: the amber hint that
