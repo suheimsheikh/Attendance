@@ -42,6 +42,7 @@ export function lastSeenLabel(iso, today) {
 // Render the "Leave balance" column. Only meaningful for non-athletes
 // (the leave-tracked cohort = coach + staff + executive). Athletes AND
 // Elite use the Breaks workflow instead so we deliberately show em-dash.
+// cat-health-ok — explicit multi-key handling below covers both.
 export function leaveBalanceLabel(m) {
   if (m.category === "athlete" || m.category === "elite") return <span className="text-slate-300">—</span>;
   const opening = m.leave_balance_opening;

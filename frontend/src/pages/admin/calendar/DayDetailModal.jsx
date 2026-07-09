@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { Tent, Sailboat, Coffee, Globe } from "lucide-react";
 import { useEscape } from "../../../hooks/useEscape";
+import { useAthleteLikeKeys } from "../../../hooks/useAthleteLikeKeys";
 import { formatDate } from "../../../utils";
 import { LEVEL_STYLE, scopeLabel } from "./helpers";
 
@@ -16,6 +17,7 @@ export default function DayDetailModal({
   onClose, onEditRegatta, onEditCamp, onEditBreak,
 }) {
   useEscape(onClose);
+  const athleteLikeKeys = useAthleteLikeKeys();
   const camps_ = dayData?.camps || [];
   const regs_  = dayData?.regattas || [];
   const breaks_ = dayData?.breaks || [];
@@ -25,11 +27,14 @@ export default function DayDetailModal({
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 
-  // Resolve "enrolled count" per camp — explicit member_ids OR all athletes in
-  // the institution (mirrors the backend `camp_applies_to` rule).
+  // Resolve "enrolled count" per camp — explicit member_ids OR all
+  // athlete-like members in the institution (mirrors the backend
+  // `camp_applies_to` rule). Uses is_athlete_like from the categories
+  // master so Elite squad members are counted too (was athlete-only
+  // before 04 Feb 2026).
   const enrolledFor = (c) => {
     if ((c.member_ids || []).length) return c.member_ids.length;
-    if (c.institution) return members.filter((m) => m.category === "athlete" && (m.institution || "") === c.institution).length;
+    if (c.institution) return members.filter((m) => athleteLikeKeys.has(m.category) && (m.institution || "") === c.institution).length;
     return 0;
   };
   const enrolledMembersFor = (c) => {
@@ -37,7 +42,7 @@ export default function DayDetailModal({
       return c.member_ids.map((id) => memberById[id]).filter(Boolean);
     }
     if (c.institution) {
-      return members.filter((m) => m.category === "athlete" && (m.institution || "") === c.institution);
+      return members.filter((m) => athleteLikeKeys.has(m.category) && (m.institution || "") === c.institution);
     }
     return [];
   };

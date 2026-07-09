@@ -198,6 +198,9 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         # report "In the staff and coaches filter a lot of athletes appear".
         athlete_like = await _athlete_like_keys(db)
         # Category filter — merged 7 Jul 2026 to match /reports/hours.
+        # `category` here is a QUERY PARAM string (`?category=athlete`),
+        # not a DB field. Actual filter on the next line uses the
+        # athlete-like set correctly. cat-health-ok
         if category == "athlete":
             rows = [r for r in rows if r.get("category") in athlete_like]
         elif category == "rest":
@@ -261,6 +264,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
 
         # Apply the same filters the admin has set on the UI so the
         # downloaded PDF/CSV matches what they see (30 Jun 2026 late).
+        # `category` is a QUERY PARAM, not a DB field. cat-health-ok
         athlete_like = await _athlete_like_keys(db)
         if category == "athlete":
             rows = [r for r in rows if r.get("category") in athlete_like]

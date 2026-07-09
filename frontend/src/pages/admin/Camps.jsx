@@ -6,6 +6,7 @@ import { useEscape } from "../../hooks/useEscape";
 import { formatDate } from "../../utils";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
+import { useAthleteLikeKeys } from "../../hooks/useAthleteLikeKeys";
 
 const WEEKDAYS = [
   { key: "mon", label: "Mon" }, { key: "tue", label: "Tue" }, { key: "wed", label: "Wed" },
@@ -157,6 +158,10 @@ export function CampForm({ initial, onClose, onSaved }) {
   const [memberSearch, setMemberSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const formErr = useFormError();
+  // Camp enrollment is open to every athlete-like category (athlete
+  // + elite + any custom athlete-like key) — Elite squad members were
+  // silently excluded before 04 Feb 2026.
+  const athleteLikeKeys = useAthleteLikeKeys();
 
   useEffect(() => {
     Promise.all([api.get("/members"), api.get("/institutions").catch(() => [])])
@@ -179,10 +184,10 @@ export function CampForm({ initial, onClose, onSaved }) {
   const filteredMembers = useMemo(() => {
     const q = memberSearch.trim().toLowerCase();
     return members
-      .filter((m) => m.category === "athlete")
+      .filter((m) => athleteLikeKeys.has(m.category))
       .filter((m) => !form.institution || (m.institution || "") === form.institution)
       .filter((m) => !q || (m.full_name || "").toLowerCase().includes(q));
-  }, [members, memberSearch, form.institution]);
+  }, [members, memberSearch, form.institution, athleteLikeKeys]);
 
   const submit = async (e) => {
     e?.preventDefault?.();

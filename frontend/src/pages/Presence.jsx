@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import UpcomingThisWeek from "../components/UpcomingThisWeek";
 import EscortMissingBanner from "../components/EscortMissingBanner";
 import SelfieCapture from "../components/SelfieCapture";
+import { useAthleteLikeKeys } from "../hooks/useAthleteLikeKeys";
 
 import { COLUMNS, STATUS_TO_COLUMN } from "../components/presence/constants";
 import { Column } from "../components/presence/Column";
@@ -23,6 +24,10 @@ export default function Presence() {
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
   const canManageGuests = isAdmin || currentUser?.category === "coach";
+  // Athlete-like categories (athlete + elite + any custom athlete-like
+  // category) — powers the "missing photo on campus" strip filter below
+  // so Elite squad members show up in the drainage queue too.
+  const athleteLikeKeys = useAthleteLikeKeys();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -284,10 +289,10 @@ export default function Presence() {
   const missingPhotoOnCampus = useMemo(() => (
     (data?.members || [])
       .filter((m) => m.status === "on_campus"
-        && (m.category === "athlete" || !m.category)
+        && (athleteLikeKeys.has(m.category) || !m.category)
         && !m.photo)
       .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""))
-  ), [data]);
+  ), [data, athleteLikeKeys]);
 
   const [photoTarget, setPhotoTarget] = useState(null);
   const [photoQueue, setPhotoQueue] = useState([]);

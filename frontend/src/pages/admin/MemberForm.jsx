@@ -204,7 +204,20 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               )}
             </select>
           </div>
-          {form.category === "athlete" && (
+          {(() => {
+            // Fleet dropdown is shown for every athlete-like category
+            // (athlete + elite + any admin-added athlete-like custom
+            // key). Sourced from the categories master already loaded
+            // above so we stay in sync with what admins configure.
+            // Fallback below is a defensive default when categories
+            // hasn't loaded yet — the dynamic check is the primary
+            // path. cat-health-ok
+            const selectedCat = categories.find((c) => c.key === form.category);
+            const showFleet = selectedCat
+              ? !!selectedCat.is_athlete_like
+              : form.category === "athlete" || form.category === "elite";  // cat-health-ok — fallback for pre-load
+            if (!showFleet) return null;
+            return (
             <div>
               <label className="iu-label">Fleet <span className="text-slate-400 font-normal text-[10px]">(boat class)</span></label>
               <select
@@ -225,7 +238,8 @@ export default function MemberForm({ initial, onClose, onSaved }) {
                 Manage the list under <b>Admin → Fleets</b>. Used for break-on-fleet, filtering and bulk actions.
               </p>
             </div>
-          )}
+            );
+          })()}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="iu-label">Work start</label>

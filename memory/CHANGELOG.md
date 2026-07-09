@@ -4,6 +4,57 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 4 Feb 2026 — Elite squad sweep: 4 hotspot fixes + pragma suppression
+
+Follow-on to the Muster/Fleet-assign Elite fix. Used the newly-shipped
+Category Health tool to hunt down and fix the remaining places where
+Elite squad members were silently mishandled.
+
+**Fixed (real bugs):**
+- `frontend/pages/Presence.jsx` — "missing photo on campus" strip now
+  includes Elite athletes in the drainage queue.
+- `frontend/pages/admin/Camps.jsx` — camp enrollment picker now shows
+  Elite squad members so admins can enroll them into camps.
+- `frontend/pages/admin/MemberForm.jsx` — Fleet dropdown now surfaces
+  for Elite category (previously hidden; existing Elite members like
+  Badrinath already had fleet=International 420 set via a workaround).
+- `frontend/pages/admin/calendar/DayDetailModal.jsx` — camp enrolled-
+  count on the calendar day drill-down now counts Elite members.
+
+**Added:**
+- `frontend/hooks/useAthleteLikeKeys.js` — shared, memoised hook that
+  fetches `is_athlete_like=True` category keys once per page load.
+  Now used by Presence, Camps, DayDetailModal (MemberForm reuses the
+  categories master it already loads). Any future custom athlete-like
+  category propagates through all 4 sites without a code change.
+
+**Scanner improvements (`/api/admin/category-health`):**
+- Added `cat-health-ok` pragma support (like `# noqa`). Same-line OR
+  within 3 lines above the match — lets legitimate false-positives
+  be marked with an inline rationale.
+- Excludes the scanner's own file and CategoryHealth.jsx (self-refs).
+- Skips lines starting with comment prefixes (`#`, `//`, `*`, `"""`,
+  `'''`, `/*`) so descriptive prose doesn't false-trigger.
+
+**Pragma-annotated (verified false positives):**
+- `backend/routes/reports.py:204/269` — `category` is a query-param
+  string, not a DB field; actual filter uses `athlete_like` set.
+- `frontend/pages/admin/members/helpers.js:47` — explicit multi-key
+  handling of athlete + elite, intentionally correct.
+- `frontend/pages/admin/MemberForm.jsx:218` — defensive fallback for
+  pre-categories-load; dynamic `is_athlete_like` check is primary.
+
+**Verified:**
+- `/api/admin/category-health` returns `warn_count: 0, hotspot_count: 0`
+  (was 8 warn before this pass).
+- Lint clean on all 6 changed files + the new hook.
+- Full report/muster/camp/fleet regression suites (62 tests) pass.
+- UI screenshot: Category Health page renders the clean state
+  ("codebase is clean") with emerald success card.
+
+---
+
+
 ## 4 Feb 2026 — Admin → Category Health diagnostic page
 
 Follow-on to the Muster + Fleet-assign Elite fix. Admin can now spot

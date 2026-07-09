@@ -564,6 +564,13 @@ def make_router(db, require_admin) -> APIRouter:
         # deliberately treat `#` (Python), `//` (JS), `*` (JSDoc middle),
         # and triple-quote strings as noise.
         COMMENT_PREFIXES = ("#", "//", "*", '"""', "'''", "/*")
+        # Pragma suppression: any line containing `cat-health-ok` in a
+        # comment is treated as a deliberate false-positive marker. Same
+        # convention as `# noqa` for lint. Use sparingly and always with
+        # a rationale explaining WHY the raw `category == "athlete"` is
+        # semantically correct at that spot (usually: it's comparing a
+        # query-param value, not a member DB field).
+        PRAGMA = "cat-health-ok"
         hotspots = []
         for root in ROOTS:
             for dirpath, dirnames, filenames in os.walk(root):
@@ -577,13 +584,21 @@ def make_router(db, require_admin) -> APIRouter:
                         continue
                     try:
                         with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
-                            for lineno, line in enumerate(fh, start=1):
-                                if not pattern.search(line):
-                                    continue
-                                stripped = line.strip()
-                                if stripped.startswith(COMMENT_PREFIXES):
-                                    continue
-                                hotspots.append({
+                            file_lines = fh.readlines()
+                        for lineno, line in enumerate(file_lines, start=1):
+                            if not pattern.search(line):
+                                continue
+                            stripped = line.strip()
+                            if stripped.startswith(COMMENT_PREFIXES):
+                                continue
+                            # Pragma may live on the same line OR anywhere
+                            # in the 3 lines immediately above (typical
+                            # "# cat-health-ok — reason" comment block).
+                            window_start = max(0, lineno - 4)
+                            window = "".join(file_lines[window_start:lineno])
+                            if PRAGMA in window:
+                                continue
+                            hotspots.append({
                                     "file": rel,
                                     "line": lineno,
                                     "snippet": stripped[:200],
