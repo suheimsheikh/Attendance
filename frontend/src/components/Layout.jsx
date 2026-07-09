@@ -54,6 +54,7 @@ const NAV_ADMIN = [
   { to: "/admin/institutions", label: "Institutions", icon: Building2 },
   { to: "/admin/fleets", label: "Fleets", icon: Sailboat },
   { to: "/admin/categories", label: "Categories", icon: ShieldAlert },
+  { to: "/admin/category-health", label: "Category Health", icon: ShieldAlert },
   { to: "/admin/sites", label: "Training Locations", icon: MapPin },
   { to: "/admin/office", label: "Office Settings", icon: Settings },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },

@@ -499,4 +499,116 @@ def make_router(db, require_admin) -> APIRouter:
             },
         }
 
+    @router.get("/admin/category-health")
+    async def category_health(admin: dict = Depends(require_admin)):
+        """Diagnostic sweep: surfaces places where Elite (or any future
+        athlete-like custom category) may be silently mishandled because
+        the code hardcodes `category == "athlete"` instead of consulting
+        the `is_athlete_like` flag on the categories master.
+
+        Returns:
+          - athlete_like_keys: keys currently flagged is_athlete_like=True
+          - categories: [{key, label, count, is_athlete_like}] roster
+          - hotspots: [{file, line, snippet, severity}] — grep for the
+            legacy hardcoded pattern across the backend + frontend so
+            new regressions are caught without a code review.
+
+        Read-only. Safe to hit as often as needed.
+        """
+        # 1. Master state
+        cats = await db.categories.find({}, {"_id": 0}).to_list(200)
+        cats.sort(key=lambda c: c.get("sort_order") or 0)
+        athlete_like_keys = [c["key"] for c in cats if c.get("is_athlete_like")]
+
+        # 2. Per-category member counts (fast — collection is small)
+        cat_summary = []
+        for c in cats:
+            n = await db.users.count_documents({"category": c["key"]})
+            cat_summary.append({
+                "key": c["key"],
+                "label": c.get("label") or c["key"],
+                "count": n,
+                "is_athlete_like": bool(c.get("is_athlete_like")),
+                "meal_eligible": bool(c.get("meal_eligible")),
+                "active": c.get("active", True),
+            })
+
+        # 3. Static code sweep — grep the backend + frontend for the
+        # legacy hardcoded filter. Anything matched with a category other
+        # than "athlete" hardcoded gets flagged. We deliberately DO NOT
+        # follow file references or check git blame here — this is a
+        # regression tripwire, not a full linter.
+        import os
+        import re
+
+        ROOTS = [
+            "/app/backend",
+            "/app/frontend/src",
+        ]
+        SKIP_DIRS = {"node_modules", "__pycache__", "tests", "test_reports", ".git", "build", "dist"}
+        # Self-reference: skip the diagnostic files themselves — they
+        # legitimately mention the pattern in prose / regex to detect it.
+        SKIP_FILES = {
+            "backend/routes/admin_tools.py",  # this file itself
+            "frontend/src/pages/admin/CategoryHealth.jsx",  # sibling page
+        }
+        # matches:  "category": "athlete"     |    category == "athlete"
+        #        |  category === "athlete"    |    'category': 'athlete'
+        pattern = re.compile(
+            r"""(["']category["']\s*:\s*["']athlete["']|"""
+            r"""category\s*={2,3}\s*["']athlete["'])""",
+            re.IGNORECASE,
+        )
+        # Comment / docstring prefixes — anything starting with these
+        # (post-strip) is descriptive prose, not a live filter. We
+        # deliberately treat `#` (Python), `//` (JS), `*` (JSDoc middle),
+        # and triple-quote strings as noise.
+        COMMENT_PREFIXES = ("#", "//", "*", '"""', "'''", "/*")
+        hotspots = []
+        for root in ROOTS:
+            for dirpath, dirnames, filenames in os.walk(root):
+                dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+                for fn in filenames:
+                    if not fn.endswith((".py", ".jsx", ".js", ".ts", ".tsx")):
+                        continue
+                    fpath = os.path.join(dirpath, fn)
+                    rel = fpath.replace("/app/", "")
+                    if rel in SKIP_FILES:
+                        continue
+                    try:
+                        with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+                            for lineno, line in enumerate(fh, start=1):
+                                if not pattern.search(line):
+                                    continue
+                                stripped = line.strip()
+                                if stripped.startswith(COMMENT_PREFIXES):
+                                    continue
+                                hotspots.append({
+                                    "file": rel,
+                                    "line": lineno,
+                                    "snippet": stripped[:200],
+                                    # High if it's an active filter in a
+                                    # route/component; Info otherwise
+                                    # (test fixtures, scripts). We can't
+                                    # tell reliably from a grep, so we
+                                    # down-rank obvious safe zones.
+                                    "severity": (
+                                        "info"
+                                        if any(x in rel for x in ("/tests/", "test_", "/scripts/"))
+                                        else "warn"
+                                    ),
+                                })
+                    except Exception:  # noqa: BLE001
+                        continue
+        hotspots.sort(key=lambda h: (h["severity"] != "warn", h["file"], h["line"]))
+
+        return {
+            "generated_at": now_utc().isoformat(),
+            "athlete_like_keys": athlete_like_keys,
+            "categories": cat_summary,
+            "hotspots": hotspots,
+            "hotspot_count": len(hotspots),
+            "warn_count": sum(1 for h in hotspots if h["severity"] == "warn"),
+        }
+
     return router

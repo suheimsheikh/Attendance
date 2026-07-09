@@ -4,6 +4,39 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 4 Feb 2026 — Admin → Category Health diagnostic page
+
+Follow-on to the Muster + Fleet-assign Elite fix. Admin can now spot
+future regressions of the same class WITHOUT waiting for a user
+complaint.
+
+**Added:**
+- `GET /api/admin/category-health` (admin-only, read-only). Returns:
+  - `athlete_like_keys` — the ground-truth list from `categories` master
+  - `categories` — key/label/count/is_athlete_like/meal_eligible/active
+  - `hotspots` — file:line:snippet grep of every code path still
+    hardcoding `category == "athlete"` across backend + frontend
+  - Skips comments, docstrings, test dirs, and the diagnostic files
+    themselves to keep signal high.
+- New sidebar item **Admin → Category Health** (`ShieldAlert` icon).
+- New page `/admin/category-health` with 3 stat cards + categories
+  roster + filterable hotspots list.
+
+**Current preview scan:** 8 warn hotspots — most legitimate follow-ups
+already flagged in the previous CHANGELOG entry; two are UI/helpers
+that already handle both athlete + elite (acceptable false positives
+for a grep-based tripwire).
+
+**Verified:**
+- Curl smoke: `/api/admin/category-health` returns
+  `{athlete_like_keys: [athlete, elite], hotspot_count: 8, warn: 8}`.
+- UI screenshot confirms stat cards, categories table, and hotspots
+  list render correctly.
+- Lint clean on both backend and frontend.
+
+---
+
+
 ## 4 Feb 2026 — Elite squad members visible in Muster + Fleet bulk-assign
 
 **Bug reported:** "Badrinath and Ravikumar are not showing up in muster"

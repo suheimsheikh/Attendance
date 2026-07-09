@@ -39,6 +39,7 @@ const DataQuality = lazy(() => import("./pages/admin/DataQuality"));
 const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
 const ChefsView = lazy(() => import("./pages/admin/ChefsView"));
 const Categories = lazy(() => import("./pages/admin/Categories"));
+const CategoryHealth = lazy(() => import("./pages/admin/CategoryHealth"));
 const MyCorrections = lazy(() => import("./pages/MyCorrections"));
 
 function RequireAuth({ children }) {
@@ -114,6 +115,7 @@ function App() {
             <Route path="admin/dashboard" element={<RequireAdmin><Dashboard /></RequireAdmin>} />
             <Route path="admin/chefs-view" element={<RequireAdmin><ChefsView /></RequireAdmin>} />
             <Route path="admin/categories" element={<RequireAdmin><Categories /></RequireAdmin>} />
+            <Route path="admin/category-health" element={<RequireAdmin><CategoryHealth /></RequireAdmin>} />
             <Route path="admin/members" element={<RequireAdmin><Members /></RequireAdmin>} />
             <Route path="admin/approvals" element={<RequireAdmin><Approvals /></RequireAdmin>} />
             {/* Legacy direct links — keep deep-links working but funnel into Approvals. */}
