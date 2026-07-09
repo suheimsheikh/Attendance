@@ -4,6 +4,69 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 4 Feb 2026 — Roles master + Chef role + Admin-filed corrections
+
+**Feature 1 — Roles Master (Phase 1 of RBAC):**
+- New `roles` collection with 3 seeded system rows: `admin`, `chef`,
+  `member`. Unique index on `key` + upsert-safe seeding.
+- Admin CRUD at `/api/masters/roles`; every authenticated user can
+  list (so the Member form dropdown works).
+- System rows locked from delete + deactivate; label/description
+  editable. Custom roles are selectable in the Member form but
+  behave like `member` for permissions until full RBAC ships (Q2).
+
+**Feature 2 — Chef Role:**
+- New role for kitchen staff. Superset of `member`:
+  - Read access to `/api/admin/meals-today` (Chef's View).
+  - Read access to `/api/muster/*` (portion planning at cut-off).
+  - Read access to `/api/presence` (situational awareness).
+  - Explicitly blocked from admin-only routes (members, categories,
+    roles CRUD, dashboard etc.) — returns 403.
+- Backend: new `require_chef_or_admin` dep on meals-today;
+  `require_coach_or_admin` and `_can_muster` widened to accept chef.
+- Frontend: new `RequireChefOrAdmin` route guard; `RequireMuster`
+  widened. Layout sidebar shows a "CHEF" section (Chef's View +
+  Muster + Presence) when `user.role === "chef"`; skips the ADMIN
+  section entirely.
+
+**Feature 3 — Admin-filed Corrections (same workflow):**
+- `POST /api/corrections` now accepts optional `on_behalf_of` when
+  the caller is admin. Row is stored against the target member
+  (`requester_id`) but audit fields `filed_by_admin_id` +
+  `filed_by_admin_name` record the filing admin.
+- `_decide_one` enforces filer ≠ approver — same admin gets 409
+  when trying to approve/reject their own on-behalf request.
+- Admins bypass the 7-day retro window (they typically file late
+  precisely because a member missed it). Non-admins unchanged.
+- Non-admins passing `on_behalf_of` get 403 (no silent fallback).
+- Frontend: PencilRuler icon on every member row in Manage Members
+  → opens `CorrectionRequestModal` pre-scoped to that member with
+  a sky "File on behalf of ___" banner and "Requires a different
+  admin to approve" hint. Admin can also file for themselves or
+  pick any member from a search-as-you-type list.
+- `AdminCorrections` list now shows a sky "Filed by admin: <name>"
+  badge on rows with `filed_by_admin_id` set.
+
+**Files:**
+- Backend new: `routes/roles.py`, `tests/test_roles_and_admin_corrections.py` (12 tests).
+- Backend changed: `server.py` (Literal + helper + registration + seed hook), `routes/corrections.py` (on_behalf_of + filer≠approver), `routes/muster.py` (_can_muster widened), `routes/meals.py` (require_chef_or_admin), `routes/auth.py` (Literal widened).
+- Frontend new: `pages/admin/Roles.jsx`.
+- Frontend changed: `App.js` (guards + route), `components/Layout.jsx` (NAV_CHEF), `components/CorrectionRequestModal.jsx` (onBehalfOfMember prop + picker), `pages/admin/Members.jsx` (wire + modal), `pages/admin/members/MemberRow.jsx` (pencil-ruler action), `pages/admin/AdminCorrections.jsx` (badge), `pages/admin/MemberForm.jsx` (role dropdown fetched from master).
+
+**Verified:**
+- Backend: 12/12 new pytest tests + 32/32 relevant existing (correction/muster/meal/role) tests pass.
+- Frontend: testing_agent_v3_fork iter 23 — 100% acceptance on all 6 user-facing scenarios (Roles CRUD, chef nav + route gating, MemberForm dropdown, admin on-behalf filing, second-admin rule, self-filing unchanged). No blocking issues.
+- Lint clean across all 12 touched files.
+- UI screenshot confirms Roles page renders with the 3 seeded system rows and lock badges.
+
+**Non-blocking review notes (deferred, not blocking):**
+- Extract shared `KIND_LABELS/KIND_TINT` from Corrections modal + list + MyCorrections into `data/correctionKinds.js`.
+- Fix pre-existing hydration warning "whitespace text nodes cannot be a child of `<table>`" on `/admin/members`.
+- Consider event delegation on the Members table when >500 rows (currently 136).
+
+---
+
+
 ## 4 Feb 2026 — Elite squad sweep: 4 hotspot fixes + pragma suppression
 
 Follow-on to the Muster/Fleet-assign Elite fix. Used the newly-shipped

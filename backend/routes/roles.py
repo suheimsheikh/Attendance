@@ -79,21 +79,34 @@ class RolePatch(BaseModel):
 async def seed_default_roles(db) -> None:
     """Insert any missing seed roles on startup. Idempotent — safe to
     call every boot. Preserves any edits the admin has made to the
-    `label` / `description` of existing seeded rows."""
+    `label` / `description` of existing seeded rows.
+
+    Uses a unique index on `key` + upsert semantics so multiple worker
+    processes booting simultaneously (or a restart mid-request) can't
+    produce duplicate rows. Added 4 Feb 2026 after Iter 23 review."""
+    try:
+        await db.roles.create_index("key", unique=True)
+    except Exception:
+        # Already exists — normal after the first boot.
+        pass
     for seed in DEFAULT_SEEDS:
         existing = await db.roles.find_one({"key": seed["key"]})
         if existing:
             continue
-        await db.roles.insert_one({
-            "id": str(uuid.uuid4()),
-            "key": seed["key"],
-            "label": seed["label"],
-            "description": seed["description"],
-            "sort_order": seed["sort_order"],
-            "is_system": True,
-            "active": True,
-            "created_at": now_utc().isoformat(),
-        })
+        try:
+            await db.roles.insert_one({
+                "id": str(uuid.uuid4()),
+                "key": seed["key"],
+                "label": seed["label"],
+                "description": seed["description"],
+                "sort_order": seed["sort_order"],
+                "is_system": True,
+                "active": True,
+                "created_at": now_utc().isoformat(),
+            })
+        except Exception:
+            # Duplicate key — another worker won the race. Safe to swallow.
+            pass
 
 
 def make_router(db, require_admin, get_current_user) -> APIRouter:
