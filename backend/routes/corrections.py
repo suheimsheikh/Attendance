@@ -202,6 +202,100 @@ APPLIERS: Dict[tuple, Any] = {
 }
 
 
+# --- Reversers (undo) ------------------------------------------------------
+# Each reverser reads the correction row + its `applied` payload, then
+# restores the pre-change state. Called ONLY for auto-approved rows
+# (admin-filed) where the applier already stashed `corrected_from` on
+# the target document. Idempotent — re-calling on an already-undone row
+# is a no-op.
+
+
+async def _undo_missed_checkin(db, c: dict) -> dict:
+    """Delete the attendance row that was materialised by the applier."""
+    att_id = ((c.get("applied") or {}).get("attendance_id"))
+    if not att_id:
+        raise HTTPException(status_code=400, detail="Nothing to undo — no attendance was created")
+    res = await db.attendance.delete_one({"id": att_id, "corrected_via": c["id"]})
+    return {"attendance_id": att_id, "deleted": res.deleted_count}
+
+
+async def _undo_time_adjust(db, c: dict) -> dict:
+    """Restore check_in_at / check_out_at from `corrected_from`."""
+    att_id = c.get("entity_id") or (c.get("applied") or {}).get("attendance_id")
+    row = await db.attendance.find_one({"id": att_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=404, detail="Target attendance row no longer exists")
+    prior = row.get("corrected_from") or {}
+    restore = {
+        "check_in_at": prior.get("check_in_at"),
+        "check_out_at": prior.get("check_out_at"),
+        "corrected": False,
+    }
+    await db.attendance.update_one(
+        {"id": att_id},
+        {"$set": restore,
+         "$unset": {"corrected_via": "", "corrected_by": "",
+                    "corrected_at": "", "corrected_from": ""}},
+    )
+    return {"attendance_id": att_id, "restored": True}
+
+
+async def _undo_leave_date_change(db, c: dict) -> dict:
+    leave = await db.leaves.find_one({"id": c["entity_id"]}, {"_id": 0})
+    if not leave:
+        raise HTTPException(status_code=404, detail="Target leave no longer exists")
+    prior = leave.get("corrected_from") or {}
+    await db.leaves.update_one(
+        {"id": c["entity_id"]},
+        {"$set": {
+            "start_date": prior.get("start_date") or leave.get("start_date"),
+            "end_date": prior.get("end_date") or leave.get("end_date"),
+            "corrected": False,
+        },
+         "$unset": {"corrected_via": "", "corrected_by": "",
+                    "corrected_at": "", "corrected_from": ""}},
+    )
+    return {"leave_id": c["entity_id"], "restored": True}
+
+
+async def _undo_leave_cancel(db, c: dict) -> dict:
+    """Flip a cancelled leave back to approved."""
+    res = await db.leaves.update_one(
+        {"id": c["entity_id"], "cancelled_via": c["id"]},
+        {"$set": {"status": "approved"},
+         "$unset": {"cancelled_by": "", "cancelled_via": "", "cancelled_at": ""}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Leave already restored or no longer exists")
+    return {"leave_id": c["entity_id"], "restored": True}
+
+
+async def _undo_leave_type_change(db, c: dict) -> dict:
+    leave = await db.leaves.find_one({"id": c["entity_id"]}, {"_id": 0})
+    if not leave:
+        raise HTTPException(status_code=404, detail="Target leave no longer exists")
+    prior = leave.get("corrected_from") or {}
+    old_type = prior.get("type")
+    if not old_type:
+        raise HTTPException(status_code=400, detail="Original type not recorded — cannot undo")
+    await db.leaves.update_one(
+        {"id": c["entity_id"]},
+        {"$set": {"type": old_type, "corrected": False},
+         "$unset": {"corrected_via": "", "corrected_by": "",
+                    "corrected_at": "", "corrected_from": ""}},
+    )
+    return {"leave_id": c["entity_id"], "restored_type": old_type}
+
+
+REVERSERS: Dict[tuple, Any] = {
+    ("attendance", "missed_checkin"):    _undo_missed_checkin,
+    ("attendance", "time_adjust"):       _undo_time_adjust,
+    ("leave",      "leave_date_change"): _undo_leave_date_change,
+    ("leave",      "leave_cancel"):      _undo_leave_cancel,
+    ("leave",      "leave_type_change"): _undo_leave_type_change,
+}
+
+
 # --- Router factory --------------------------------------------------------
 
 def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
@@ -480,5 +574,65 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             except HTTPException as e:
                 errors.append({"id": c["id"], "detail": e.detail})
         return {"ok": True, "approved": approved, "skipped": len(errors), "errors": errors}
+
+    @router.get("/admin/corrections/month")
+    async def month_corrections(month: str, admin: dict = Depends(require_admin)):
+        """All corrections `requested_at` within the given calendar
+        month (YYYY-MM). Any status — powers the Dashboard scroll box
+        so admins can see (and undo) recent activity at a glance.
+        """
+        try:
+            y, m = (int(x) for x in month.split("-"))
+            start_iso = f"{y:04d}-{m:02d}-01T00:00:00"
+            end_iso = f"{y+1:04d}-01-01T00:00:00" if m == 12 else f"{y:04d}-{m+1:02d}-01T00:00:00"
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+        rows = await db.corrections.find(
+            {"requested_at": {"$gte": start_iso, "$lt": end_iso}},
+            {"_id": 0},
+        ).sort("requested_at", -1).to_list(2000)
+        return {"month": month, "count": len(rows), "rows": rows}
+
+    @router.post("/admin/corrections/{cid}/undo")
+    async def undo_correction(cid: str, admin: dict = Depends(require_admin)):
+        """Reverse an approved correction. Only works for admin-filed
+        (auto-approved) rows where `corrected_from` was stashed by the
+        applier. Marks the correction row with `undone=True` +
+        `undone_by/at` so it stays in the ledger for audit.
+        """
+        c = await _load_correction(cid)
+        if c.get("undone"):
+            raise HTTPException(status_code=409, detail="Correction already undone")
+        if c["status"] != "approved":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Only approved corrections can be undone (this row is {c['status']})",
+            )
+        reverser = REVERSERS.get((c["entity_type"], c["kind"]))
+        if not reverser:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No undo registered for {c['entity_type']}/{c['kind']}",
+            )
+        reversed_payload = await reverser(db, c)
+        now_iso = now_utc().isoformat()
+        await db.corrections.update_one({"id": cid}, {"$set": {
+            "undone": True,
+            "undone_by_id": admin["id"],
+            "undone_by_name": admin["full_name"],
+            "undone_at": now_iso,
+            "reversed": reversed_payload,
+        }})
+        await write_audit(
+            db, actor=admin,
+            action="correction_undone",
+            entity_type="correction",
+            entity_id=cid,
+            entity_name=f"{c['entity_type']}/{c['kind']} · {c['requester_name']} · {c['target_date']}",
+            before={"status": "approved", "applied": c.get("applied")},
+            after={"undone": True, "reversed": reversed_payload},
+            reason="Undo requested by admin",
+        )
+        return {"ok": True, "id": cid, "reversed": reversed_payload}
 
     return router

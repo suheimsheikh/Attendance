@@ -4,6 +4,77 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 9 Feb 2026 — Dashboard: Corrections-this-month scroll box + Undo
+
+**User request:** "Do potential improvement but not just for last 5.
+Can we have a scroll box to enlist all corrections for the month."
+
+### New Dashboard widget — "Corrections this month"
+Right-rail card lists every correction filed during the selected
+month, with an inline **Undo** button on each admin-approved row.
+
+- **Month picker** (`<input type="month">`) — defaults to current
+  month, switchable to any prior month.
+- **Count chips**: Total / Active (approved & not undone) / Pending /
+  Undone.
+- **Scrollable list** (`maxHeight: 24rem`) rendering member name,
+  correction kind + target date, filed-by admin, reason quote,
+  status badge (approved / pending / rejected / undone).
+- **Undo icon (Undo2)** on each row where `status=approved` and
+  `undone=false`. Confirmation dialog before firing.
+- Sub-link "Full corrections queue →" jumps to `/admin/corrections`.
+- Undone rows dim to 60% opacity and swap badge → "UNDONE".
+
+### Backend — two new endpoints
+- `GET /api/admin/corrections/month?month=YYYY-MM` — returns
+  `{month, count, rows: [...]}` with every correction whose
+  `requested_at` falls in that calendar month. Any status.
+- `POST /api/admin/corrections/{cid}/undo` — reverses the applied
+  change:
+  - `missed_checkin` → deletes the attendance row that was
+    materialised (matched by `corrected_via=cid`).
+  - `time_adjust` → restores `check_in_at` / `check_out_at` from
+    `corrected_from`.
+  - `leave_cancel` → flips status back to `approved`.
+  - `leave_date_change` → restores `start_date` / `end_date` from
+    `corrected_from`.
+  - `leave_type_change` → restores original `type`.
+
+  Stamps the correction with `undone=true`, `undone_by_id`,
+  `undone_by_name`, `undone_at`, and the raw `reversed` payload.
+  Writes a `correction_undone` audit line. Idempotent — a second
+  undo returns 409.
+
+### Implementation notes
+- Each existing applier already stashed `corrected_from` on the
+  target document (attendance / leave) — the new reversers just
+  read it back and restore. No schema migration needed.
+- Undo only works on `status=approved` rows. Rejected / pending
+  rows return 409 with a helpful message.
+- Confirmation dialog uses `window.confirm` (matches the existing
+  simple Undo patterns elsewhere in the app — no additional modal
+  library needed).
+
+### Files touched
+- `backend/routes/corrections.py` — 5 new `_undo_*` reversers + a
+  `REVERSERS` registry, and two new router endpoints.
+- `frontend/src/pages/admin/dashboard/MonthCorrectionsCard.jsx` —
+  new self-contained widget (~180 lines).
+- `frontend/src/pages/admin/Dashboard.jsx` — import + one JSX line
+  in the aside after Shortcuts.
+
+### Verified end-to-end
+- Playwright screenshot confirms the card renders with 42 rows,
+  Total 42 · Active 8 · Pending 19 chips, and 8 Undo buttons across
+  the approved-not-undone rows.
+- curl-based undo of a `missed_checkin` correction returned
+  `{ok:true, reversed: {attendance_id, deleted:1}}` and the second
+  call correctly returned 409 "Correction already undone".
+- Backend regression 38/38 GREEN (roles+corrections + smoke +
+  reports gating & ledger).
+
+
+---
 ## 9 Feb 2026 — Admin-filed corrections now auto-apply
 
 **User request:** "When admins make a correction there should be no

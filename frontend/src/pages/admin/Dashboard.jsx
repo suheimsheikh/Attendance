@@ -24,6 +24,7 @@ import {
 import { toast } from "sonner";
 import { api } from "../../api";
 import Avatar from "../../components/Avatar";
+import MonthCorrectionsCard from "./dashboard/MonthCorrectionsCard";
 
 const CATEGORY_COLOR = {
   athlete:   "bg-sky-100 text-sky-800",
@@ -558,6 +559,8 @@ export default function Dashboard() {
               <ShortcutBtn to="/admin/calendar" icon={CalendarIcon} label="Calendar" testid="shortcut-calendar" />
             </div>
           </SectionCard>
+
+          <MonthCorrectionsCard />
         </aside>
       </div>
     </div>
