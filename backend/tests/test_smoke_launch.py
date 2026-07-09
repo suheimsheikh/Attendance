@@ -1,10 +1,11 @@
 """Launch-day smoke test — one command to verify every critical
 user-facing flow is alive before opening the doors to real users.
 
-Run:  TEST_ADMIN_PASSWORD='<your-admin-password>' python -m pytest -m smoke -q
-      (the <…> in the example above is a placeholder — replace with the
-      actual admin credentials from your local `.env` or CI secret
-      store. Never commit a real password to this file.)
+Run:  python -m pytest -m smoke -q
+
+Credentials are read from ``conftest.py`` which in turn reads the
+``TEST_ADMIN_EMAIL`` / ``TEST_ADMIN_PASSWORD`` env vars (never hard-code
+a password in this file — CI stores them as secrets).
 
 Target: ~15s total wall clock. Every test hits the live preview
 backend via the public URL (mirrors what browsers actually do).

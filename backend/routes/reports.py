@@ -23,6 +23,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 
 from services.time_utils import local_date_str
+from services.permissions import is_super_admin
 import breaks as _breaks_module
 
 
@@ -336,7 +337,6 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         # Super-admin gating (04 Feb 2026). The Hours group (Total/Avg
         # hours) is privacy-sensitive. Regular admins get the same
         # 17-column report minus the last 2 columns.
-        from server import is_super_admin
         show_hours = is_super_admin(admin)
 
         # Apply the same filters the admin has set on the UI so the

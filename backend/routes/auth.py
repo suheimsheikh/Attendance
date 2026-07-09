@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 
 from models import UserPublic
+from services.permissions import is_super_admin
 from services.time_utils import now_utc, local_date_str
 from services.phone import normalize_phone, phone_key
 
@@ -249,11 +250,7 @@ def make_router(
         # Super-admin flag (04 Feb 2026) — driven by env whitelist,
         # NOT stored in the DB. Frontend uses this to hide the Hours
         # columns on Reports for regular admins.
-        try:
-            from server import is_super_admin as _is_sa
-            enriched["is_super_admin"] = _is_sa(enriched)
-        except Exception:
-            enriched["is_super_admin"] = False
+        enriched["is_super_admin"] = is_super_admin(enriched)
         return UserPublic(**{k: enriched.get(k) for k in UserPublic.model_fields})
 
     @router.post("/auth/phone")
