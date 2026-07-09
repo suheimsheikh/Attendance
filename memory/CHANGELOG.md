@@ -1368,3 +1368,36 @@ custom hover popover (`DrillDownBubble`):
   Overtime / Escorts groups.
 
 ---
+
+## 2026-06 — Full-codebase code review + critical fixes
+
+**Review scope**: backend (server.py + all routes) & frontend, prioritizing
+security, bugs, performance, quality. 466-test suite used as regression gate.
+
+**Fixed (P1)**
+- Merge-restore duplicated `sms_log` rows: docs had no `id` field so
+  merge dedup could never skip them. Fix: `id` added at insert (sms.py),
+  startup backfill for legacy rows, and content-match dedup fallback in
+  `/api/admin/restore` for id-less docs (protects old backups too).
+- Email/password backdoor: users auto-created via device approval got
+  `password = phone digits` (guessable). Now random uuid hex; one-time
+  startup backfill randomizes existing weak hashes (guarded by
+  `sec_backfill_phone_pwd` config marker).
+- Brute-force protection on `POST /api/auth/login`: 5 failed attempts per
+  (ip,email) in a 15-min sliding window → 429. Backed by new
+  `login_attempts` collection + index. Success clears the counter.
+
+**Fixed (P2)**
+- `Presence.jsx` `byColumn` useMemo missing `isHistorical` dep.
+- `ChefsView.jsx` `cats`/`membersRaw` wrapped in useMemo (render-stable deps).
+
+**Verified clean**
+- All API endpoints auth-gated (only /members/{id}/photo public by design,
+  UUID-keyed cacheable thumbs); no ObjectId leaks; no $regex injection;
+  CORS `allow_credentials=False`; device_id uses crypto.randomUUID;
+  ESLint: only stock shadcn use-toast warning remains.
+- Full pytest suite: 466/466 passed post-fix.
+
+**Known/deferred (unchanged)**: JWT in localStorage (P2 post-launch),
+server.py size + large component splits (P3), `<option>` hydration warning
+not reproducible in current codebase (no nested spans found).

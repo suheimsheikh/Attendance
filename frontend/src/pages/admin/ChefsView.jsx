@@ -86,9 +86,9 @@ export default function ChefsView() {
 
   useEffect(() => { load(); }, [load]);
 
-  const cats = data?.categories || [];
+  const cats = useMemo(() => data?.categories || [], [data]);
   const counts = data?.counts || {};
-  const membersRaw = data?.members || [];
+  const membersRaw = useMemo(() => data?.members || [], [data]);
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();

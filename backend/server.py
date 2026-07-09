@@ -498,6 +498,35 @@ async def _seed_database() -> None:
             last10_filled += 1
     if last10_filled:
         logger.info("Backfilled mobile_last10 on %d user(s)", last10_filled)
+    # Backfill `id` on legacy sms_log rows so merge-mode restore can dedupe them.
+    sms_ids = 0
+    async for row in db.sms_log.find({"id": {"$exists": False}}, {"_id": 1}):
+        await db.sms_log.update_one({"_id": row["_id"]}, {"$set": {"id": str(uuid.uuid4())}})
+        sms_ids += 1
+    if sms_ids:
+        logger.info("Backfilled id on %d sms_log row(s)", sms_ids)
+    await db.login_attempts.create_index("identifier")
+    # One-time security backfill: auto-created phone-login users used to get
+    # their phone number as the email/password credential. Randomize those
+    # hashes so the email login path can't be used as a backdoor. Guarded by
+    # a config marker — bcrypt checks are slow, run once.
+    if not await db.config.find_one({"id": "sec_backfill_phone_pwd"}):
+        randomized = 0
+        async for u in db.users.find(
+            {"email": {"$regex": r"^\d+(-[0-9a-f]{4})?@attendance\.app$"}},
+            {"_id": 0, "id": 1, "email": 1, "mobile": 1, "hashed_password": 1},
+        ):
+            digits = (u.get("mobile") or u["email"].split("@")[0].split("-")[0]) or ""
+            if digits and verify_password(digits, u.get("hashed_password") or ""):
+                await db.users.update_one(
+                    {"id": u["id"]},
+                    {"$set": {"hashed_password": hash_password(uuid.uuid4().hex)}},
+                )
+                randomized += 1
+        await db.config.insert_one({"id": "sec_backfill_phone_pwd",
+                                    "at": now_utc().isoformat(), "randomized": randomized})
+        if randomized:
+            logger.info("Randomized weak phone-number passwords on %d user(s)", randomized)
     # Backfill escort validity-from for legacy escort rows that pre-date
     # the 28 Jun 2026 validity-window feature. Sets `valid_from` to the
     # escort's recorded `start_date` (or `created_at` if missing) and

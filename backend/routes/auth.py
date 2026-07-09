@@ -24,7 +24,7 @@ from datetime import date, timedelta
 from typing import List, Literal, Optional
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 
 from models import UserPublic
@@ -180,11 +180,32 @@ def make_router(
     # ------------------------------------------------------------------
     # Auth routes
     # ------------------------------------------------------------------
+    LOGIN_MAX_ATTEMPTS = 5
+    LOGIN_WINDOW_MIN = 15
+
     @router.post("/auth/login")
-    async def login(body: LoginIn):
+    async def login(body: LoginIn, request: Request):
+        # Brute-force guard: 5 failed attempts per (ip, email) in a 15-min
+        # sliding window → 429. Attempts clear on successful login.
+        ip = (request.headers.get("x-forwarded-for")
+              or (request.client.host if request.client else "unknown")).split(",")[0].strip()
+        identifier = f"{ip}:{body.email.lower()}"
+        now = now_utc()
+        cutoff = (now - timedelta(minutes=LOGIN_WINDOW_MIN)).isoformat()
+        rec = await db.login_attempts.find_one({"identifier": identifier}, {"_id": 0})
+        recent = [t for t in (rec or {}).get("attempts", []) if t >= cutoff]
+        if len(recent) >= LOGIN_MAX_ATTEMPTS:
+            raise HTTPException(status_code=429,
+                                detail="Too many failed attempts. Try again in 15 minutes.")
         user = await db.users.find_one({"email": body.email})
         if not user or not verify_password(body.password, user["hashed_password"]):
+            await db.login_attempts.update_one(
+                {"identifier": identifier},
+                {"$set": {"identifier": identifier, "attempts": recent + [now.isoformat()]}},
+                upsert=True,
+            )
             raise HTTPException(status_code=401, detail="Incorrect email or password")
+        await db.login_attempts.delete_one({"identifier": identifier})
         token = create_token(user["id"], user.get("role", "member"))
         return {
             "access_token": token,
@@ -427,7 +448,10 @@ def make_router(
                 "work_end": None,
                 "photo": None,
                 "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
-                "hashed_password": hash_password(digits or uuid.uuid4().hex[:8]),
+                # Random unguessable password — members sign in via phone;
+                # the email/password path must never work with the phone
+                # number as a guessable credential.
+                "hashed_password": hash_password(uuid.uuid4().hex),
                 "created_at": now,
             }
             await db.users.insert_one(new_user)

@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
@@ -174,6 +175,7 @@ async def send_sms(*, db, to_e164: str, body: str, institution: Optional[str] = 
         raise HTTPException(status_code=500, detail=f"Twilio failure: {exc}")
 
     audit = {
+        "id": str(uuid.uuid4()),
         "kind": "sms",
         "to": to_e164,
         "from": from_number,
@@ -218,6 +220,7 @@ async def make_voice_call(*, db, to_e164: str, body_en: str, body_te: str, insti
         raise HTTPException(status_code=400, detail=f"Twilio rejected the call: {exc.msg}")
 
     audit = {
+        "id": str(uuid.uuid4()),
         "kind": "voice",
         "to": to_e164,
         "from": from_number,

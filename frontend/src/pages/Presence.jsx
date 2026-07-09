@@ -231,7 +231,7 @@ export default function Presence() {
       });
     }
     return buckets;
-  }, [data, lateOnly, fleetFilter, locationFilter, query]);
+  }, [data, lateOnly, fleetFilter, locationFilter, query, isHistorical]);
 
   // Distinct fleet labels present across loaded members — used to render the
   // filter pill row. Athletes without a fleet set are not surfaced here.

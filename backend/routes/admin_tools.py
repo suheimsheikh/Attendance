@@ -177,8 +177,18 @@ def make_router(db, require_admin) -> APIRouter:
                     if ids_in_chunk:
                         async for row in col.find({"id": {"$in": ids_in_chunk}}, {"_id": 0, "id": 1}):
                             existing_ids.add(row["id"])
-                ops = [InsertOne(d) for d in chunk
-                       if not (mode == "merge" and d.get("id") and d["id"] in existing_ids)]
+                ops = []
+                for d in chunk:
+                    if mode == "merge":
+                        if d.get("id"):
+                            if d["id"] in existing_ids:
+                                continue
+                        # Docs without a stable `id` (legacy sms_log rows etc.)
+                        # dedupe by exact content match so re-restoring the
+                        # same backup doesn't multiply them.
+                        elif await col.find_one(d):
+                            continue
+                    ops.append(InsertOne(d))
                 if not ops:
                     continue
                 try:
