@@ -780,6 +780,325 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         out.sort(key=lambda r: (r["name"] or "").lower())
         return {"start": start, "end": end, "rows": out}
 
+    @router.get("/reports/monthly-composite")
+    async def monthly_composite(
+        month: str,
+        category: Optional[str] = None,
+        fleet: Optional[str] = None,
+        institution: Optional[str] = None,
+        admin: dict = Depends(require_admin),
+    ):
+        """Composite monthly report — one row per member with the exact
+        figures that show in each per-member ledger (Attendance,
+        Overtime, Comp-off, Leave), scoped to a calendar month.
+
+        Column groups follow the ledger modals:
+          • **Attendance** — Present, Half day, Late, Leave, Tour,
+            Posting, Comp-off, Weekly off, Holiday, Absent.
+          • **Overtime** — sessions (rows with OT > 0) + total minutes.
+          • **Comp-off** — earned only (user request: no availed).
+          • **Leave** — applied, availed, rejected (leaves of type=leave
+            with start_date touching the month).
+
+        `month` must be YYYY-MM. Filter params mirror the Attendance
+        report's category/fleet/institution pills.
+        """
+        try:
+            y, m = (int(x) for x in month.split("-"))
+            start_d = date(y, m, 1)
+            end_d = (date(y + 1, 1, 1) if m == 12 else date(y, m + 1, 1)) - timedelta(days=1)
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+        start_iso, end_iso = start_d.isoformat(), end_d.isoformat()
+
+        # --- Roster gate — matches Attendance report filter pills. ---
+        users = await db.users.find(
+            {"status": {"$ne": "left"}},
+            {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1,
+             "fleet": 1, "institution": 1, "weekly_off": 1, "email": 1},
+        ).to_list(2000)
+        athlete_like = await _athlete_like_keys(db)
+        if category == "athlete":
+            users = [u for u in users if u.get("category") in athlete_like]
+        elif category == "elite":
+            users = [u for u in users if u.get("category") == "elite"]
+        elif category == "rest":
+            users = [u for u in users if u.get("category") not in athlete_like]
+        elif category == "payroll":
+            users = [u for u in users if u.get("category") in {"staff", "coach"}]
+        if fleet:
+            if fleet == "__none__":
+                users = [u for u in users if not u.get("fleet")]
+            else:
+                users = [u for u in users if (u.get("fleet") or "").lower() == fleet.lower()]
+        if institution:
+            if institution == "__none__":
+                users = [u for u in users if not u.get("institution")]
+            else:
+                users = [u for u in users if u.get("institution") == institution]
+
+        user_ids = [u["id"] for u in users]
+        if not user_ids:
+            return {"month": month, "start": start_iso, "end": end_iso, "rows": []}
+
+        # --- Bulk fetches — one query per collection, in-memory bucket per user. ---
+        office = await db.config.find_one({"id": "office"})
+        default_wo = ((office or {}).get("default_weekly_off") or "sunday").lower()
+        from holidays import WEEKDAY_KEY  # module constant
+
+        att_docs = await db.attendance.find(
+            {"user_id": {"$in": user_ids},
+             "date": {"$gte": start_iso, "$lte": end_iso}},
+            {"_id": 0, "user_id": 1, "date": 1, "check_in_at": 1,
+             "is_late": 1, "is_half_day": 1, "overtime_total_min": 1},
+        ).to_list(20000)
+        leave_docs = await db.leaves.find(
+            {"user_id": {"$in": user_ids},
+             "start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
+            {"_id": 0, "user_id": 1, "type": 1, "status": 1,
+             "start_date": 1, "end_date": 1, "comp_off_used": 1},
+        ).to_list(20000)
+        holidays_docs = await db.holidays.find(
+            {"date": {"$gte": start_iso, "$lte": end_iso}},
+            {"_id": 0, "date": 1},
+        ).to_list(200)
+        holiday_dates = {h["date"] for h in holidays_docs}
+        # Posting date-set per user for the month (comp-off doesn't accrue during postings).
+        posting_by_user: dict = {}
+        for L in leave_docs:
+            if L.get("type") == "posting" and L.get("status") == "approved":
+                try:
+                    s = max(date.fromisoformat(L["start_date"]), start_d)
+                    e = min(date.fromisoformat(L["end_date"]), end_d)
+                except (ValueError, KeyError):
+                    continue
+                dset = posting_by_user.setdefault(L["user_id"], set())
+                cur = s
+                while cur <= e:
+                    dset.add(cur.isoformat())
+                    cur += timedelta(days=1)
+
+        # Bucket attendance + leaves by user for O(1) per-user lookups below.
+        att_by_user: dict = {}
+        for a in att_docs:
+            att_by_user.setdefault(a["user_id"], []).append(a)
+        leaves_by_user: dict = {}
+        for L in leave_docs:
+            leaves_by_user.setdefault(L["user_id"], []).append(L)
+
+        def _leave_on(uid: str, iso: str) -> Optional[dict]:
+            for L in leaves_by_user.get(uid, []):
+                if (L.get("status") == "approved"
+                        and L.get("start_date") <= iso <= L.get("end_date")):
+                    return L
+            return None
+
+        out = []
+        for u in users:
+            uid = u["id"]
+            weekly_off = (u.get("weekly_off") or default_wo).lower()
+            atts = {a["date"]: a for a in att_by_user.get(uid, [])}
+            posting_set = posting_by_user.get(uid, set())
+
+            # --- Attendance ledger counts (same classification as the
+            #     per-member modal). ---
+            counts = {
+                "Present": 0, "Half day": 0, "Late": 0,
+                "Leave": 0, "Tour": 0, "Posting": 0, "Comp-off": 0,
+                "Weekly off": 0, "Holiday": 0, "Absent": 0,
+            }
+            ot_sessions = 0
+            ot_minutes = 0
+            comp_off_earned = 0
+            cur = start_d
+            while cur <= end_d:
+                iso = cur.isoformat()
+                dow_idx = cur.weekday()
+                att = atts.get(iso)
+                lv = _leave_on(uid, iso)
+                on_weekly_off = WEEKDAY_KEY[dow_idx] == weekly_off
+
+                if att and att.get("check_in_at"):
+                    if att.get("is_half_day"):
+                        counts["Half day"] += 1
+                    elif att.get("is_late"):
+                        counts["Late"] += 1
+                    else:
+                        counts["Present"] += 1
+                    ot_min = int(att.get("overtime_total_min") or 0)
+                    if ot_min > 0:
+                        ot_sessions += 1
+                        ot_minutes += ot_min
+                    # Comp-off earned — attendance on weekly-off outside
+                    # posting windows (mirrors the comp-off ledger).
+                    if on_weekly_off and iso not in posting_set:
+                        comp_off_earned += 1
+                elif lv:
+                    lt = (lv.get("type") or "").lower()
+                    if lt == "tour":
+                        counts["Tour"] += 1
+                        # Tour on weekly-off also accrues (mirrors ledger).
+                        if on_weekly_off:
+                            comp_off_earned += 1
+                    elif lt == "posting":
+                        counts["Posting"] += 1
+                    elif lt == "comp_off":
+                        counts["Comp-off"] += 1
+                    else:
+                        counts["Leave"] += 1
+                elif on_weekly_off:
+                    counts["Weekly off"] += 1
+                elif iso in holiday_dates:
+                    counts["Holiday"] += 1
+                else:
+                    counts["Absent"] += 1
+                cur += timedelta(days=1)
+
+            # --- Leave ledger counts (only type=leave, split by status). ---
+            leave_applied = leave_availed = leave_rejected = 0
+            for L in leaves_by_user.get(uid, []):
+                if (L.get("type") or "").lower() != "leave":
+                    continue
+                # Clamp to month window.
+                try:
+                    s = max(date.fromisoformat(L["start_date"]), start_d)
+                    e = min(date.fromisoformat(L["end_date"]), end_d)
+                except (ValueError, KeyError):
+                    continue
+                if e < s:
+                    continue
+                qty = (e - s).days + 1
+                status = (L.get("status") or "pending").lower()
+                if status == "approved":
+                    leave_availed += qty
+                elif status == "rejected":
+                    leave_rejected += qty
+                else:
+                    leave_applied += qty
+
+            out.append({
+                "member_id": uid,
+                "member_name": u.get("full_name"),
+                "rank": u.get("rank"),
+                "category": u.get("category"),
+                "fleet": u.get("fleet"),
+                "institution": u.get("institution"),
+                # Attendance figures
+                "present": counts["Present"],
+                "half_day": counts["Half day"],
+                "late": counts["Late"],
+                "leave_days": counts["Leave"],
+                "tour": counts["Tour"],
+                "posting": counts["Posting"],
+                "comp_off_days": counts["Comp-off"],
+                "weekly_off": counts["Weekly off"],
+                "holiday": counts["Holiday"],
+                "absent": counts["Absent"],
+                # Overtime figures
+                "ot_sessions": ot_sessions,
+                "ot_minutes": ot_minutes,
+                # Comp-off ledger (earned only, per user request)
+                "comp_off_earned": comp_off_earned,
+                # Leave ledger figures
+                "leave_applied": leave_applied,
+                "leave_availed": leave_availed,
+                "leave_rejected": leave_rejected,
+            })
+
+        out.sort(key=lambda r: (r["member_name"] or "").lower())
+        return {"month": month, "start": start_iso, "end": end_iso, "rows": out}
+
+    @router.get("/reports/monthly-composite/export")
+    async def export_monthly_composite(
+        month: str, fmt: str = "csv",
+        category: Optional[str] = None,
+        fleet: Optional[str] = None,
+        institution: Optional[str] = None,
+        admin: dict = Depends(require_admin),
+    ):
+        """CSV / PDF export of the composite monthly report — matches
+        the on-screen table columns 1:1."""
+        data = await monthly_composite(month, category, fleet, institution, admin)
+        rows = data["rows"]
+
+        def _hm(minutes: int) -> str:
+            if not minutes:
+                return "—"
+            h, mm = divmod(int(minutes), 60)
+            return f"{h}h {mm}m" if h > 0 else f"{mm}m"
+
+        headers = [
+            "Name", "Rank", "Category",
+            # Attendance
+            "Present", "Half day", "Late", "Absent",
+            "Leave", "Tour", "Posting", "Comp-off", "Weekly off", "Holiday",
+            # Overtime
+            "OT sessions", "OT total",
+            # Comp-off
+            "CO earned",
+            # Leave
+            "Lv applied", "Lv availed", "Lv rejected",
+        ]
+        table = []
+        for r in rows:
+            table.append([
+                r.get("member_name") or "",
+                r.get("rank") or "",
+                (r.get("category") or "").title(),
+                str(r["present"]), str(r["half_day"]), str(r["late"]), str(r["absent"]),
+                str(r["leave_days"]), str(r["tour"]), str(r["posting"]),
+                str(r["comp_off_days"]), str(r["weekly_off"]), str(r["holiday"]),
+                str(r["ot_sessions"]), _hm(r["ot_minutes"]),
+                str(r["comp_off_earned"]),
+                str(r["leave_applied"]), str(r["leave_availed"]), str(r["leave_rejected"]),
+            ])
+
+        filename_stem = f"monthly_composite_{month}"
+        if fmt == "csv":
+            return _csv_response(headers, table, f"{filename_stem}.csv")
+
+        office = await db.config.find_one({"id": "office"})
+        academy = (office or {}).get("office_name") or "iShowedUp"
+        meta = {
+            "Academy": academy,
+            "Report": "Monthly Composite Ledger",
+            "Month": month,
+            "Range": f"{data['start']} → {data['end']}",
+            "Members": str(len(rows)),
+            "Filters": ", ".join(filter(None, [
+                f"Category: {category}" if category else None,
+                f"Fleet: {fleet}" if fleet else None,
+                f"Institution: {institution}" if institution else None,
+            ])) or "None",
+            "Generated by": admin.get("full_name") or admin.get("email") or "Admin",
+        }
+        # 19 columns @ A3-landscape (420 mm usable ~= 410mm printable).
+        col_widths_mm = [
+            42, 22, 22,                          # Name / Rank / Category
+            14, 14, 12, 14,                      # Attendance base
+            14, 12, 14, 14, 16, 14,              # Leave/Tour/Posting/CO/Wk-off/Hol
+            18, 22,                              # OT sessions / total
+            18,                                  # CO earned
+            18, 18, 20,                          # Leave applied/availed/rejected
+        ]
+        # A3 landscape — table is wide even after tight cols.
+        from reportlab.lib.pagesizes import A3
+        pdf = _pdf_from_table(
+            "Monthly Composite Report",
+            headers, table,
+            subtitle=f"{month} · {len(rows)} members",
+            orientation="landscape",
+            col_widths=[w * mm for w in col_widths_mm],
+            meta=meta,
+            pagesize_override=landscape(A3),
+            font_size=7,
+        )
+        return Response(
+            content=pdf, media_type="application/pdf",
+            headers={"Content-Disposition":
+                     f"attachment; filename={filename_stem}.pdf"},
+        )
+
     @router.get("/reports/attendance-ledger")
     async def attendance_ledger(
         member_id: str, start: str, end: str,

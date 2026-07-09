@@ -4,6 +4,60 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 9 Feb 2026 — Monthly Composite Ledger report
+
+**User request:** "Can you make a composite report of the attendance
+ledger, leave ledger, ot ledger and comp off ledger for all employees
+for the entire month. Names on the left, columns are the ledger values
+for the entire month. The option should reside in reports as a new
+option. Use same filter pills as Attendance report. Just use the
+figures that appear in each ledger. DON'T use Comp-off availed:
+Only earned."
+
+New tab **Composite Ledger** at `/admin/reports?tab=composite` — one
+row per member with 17 monthly-scoped figures pulled straight from the
+per-member ledger endpoints:
+
+- **Attendance ledger** — Present, Half day, Late, Absent
+- **Leave / Off** — Leave, Tour, Posting, Comp-off, Weekly off, Holiday
+- **OT ledger** — OT sessions, OT total (h m)
+- **Comp-off ledger** — CO earned (only — user-specified, no "availed")
+- **Leave ledger** — Applied, Availed, Rejected (days, type=leave only)
+
+Filter pills mirror the Attendance tab: All / Athletes / Elite / Staff
+& Coaches, plus Fleet dropdown (athletes only) and Institution
+dropdown. Sticky-left name column, group-tinted headers, sticky totals
+row at the bottom. Month navigator uses the same `MonthNav` component.
+
+**Endpoints:**
+- `GET /api/reports/monthly-composite?month=YYYY-MM&category=…&fleet=…&institution=…`
+- `GET /api/reports/monthly-composite/export?month=…&fmt=csv|pdf&…`
+
+Implementation is single-pass: 3 bulk `find()` calls (users +
+attendance + leaves + holidays), then in-memory per-user aggregation
+that mirrors the exact classification logic in each of the 4 existing
+ledger endpoints — so the numbers match cell-for-cell what admins see
+when they drill into an individual ledger modal. PDF export uses A3
+landscape to fit all 17 columns.
+
+**Files:**
+- `backend/routes/reports.py` — 2 new handlers (`monthly_composite`
+  + `export_monthly_composite`), ~230 lines inserted before
+  `attendance_ledger`.
+- `frontend/src/pages/admin/CompositeLedgerTab.jsx` — new file
+  (~300 lines) hosting the tab UI.
+- `frontend/src/pages/admin/Reports.jsx` — added `"composite"` to
+  `VALID_TABS`, wired the tab button + the CompositeLedgerTab mount
+  (passes `MonthNav` + `athleteLikeKeys` down as props).
+
+**Verified end-to-end:** curl returned 137 rows for Feb (all members),
+46 rows with `category=rest` filter (staff/coach/executive only),
+CSV export = 17-column table + PDF export = 23 KB A3. Playwright
+screenshot confirms table renders with grouped headers + tinted
+columns + filter pills. Backend regression suite 44/44 GREEN.
+
+
+---
 ## 9 Feb 2026 — Code Quality Report P0 + Members icon reshuffle
 
 **User request:** Apply the code-review fixes in priority order

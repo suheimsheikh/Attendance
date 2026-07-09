@@ -11,6 +11,7 @@ import OTLedgerModal from "./OTLedgerModal";
 import AttendanceLedgerModal from "./AttendanceLedgerModal";
 import CompOffLedgerModal from "./CompOffLedgerModal";
 import LeaveLedgerModal from "./LeaveLedgerModal";
+import CompositeLedgerTab from "./CompositeLedgerTab";
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 function isoDate(y, m0, d) { return `${y}-${pad2(m0 + 1)}-${pad2(d)}`; }
@@ -52,7 +53,7 @@ const SORT_OPTIONS = [
   { key: "pct_desc", label: "Attendance %" },
 ];
 
-const VALID_TABS = new Set(["attendance", "daily"]);
+const VALID_TABS = new Set(["attendance", "composite", "daily"]);
 
 export default function Reports() {
   // Month-navigator state (30 Jun 2026): admins think in months, not
@@ -299,6 +300,7 @@ export default function Reports() {
 
       <div className="flex gap-2 mb-4">
         <button data-testid="tab-attendance" onClick={() => setTab("attendance")} className={`iu-chip ${tab === "attendance" ? "iu-chip-active" : ""}`}>Attendance</button>
+        <button data-testid="tab-composite" onClick={() => setTab("composite")} className={`iu-chip ${tab === "composite" ? "iu-chip-active" : ""}`}>Composite Ledger</button>
         <button data-testid="tab-daily" onClick={() => setTab("daily")} className={`iu-chip ${tab === "daily" ? "iu-chip-active" : ""}`}>Daily Leave/Tour</button>
       </div>
 
@@ -715,6 +717,19 @@ export default function Reports() {
       {tip && ReactDOM.createPortal(
         <DrillDownBubble tip={tip} />,
         document.body
+      )}
+
+      {tab === "composite" && (
+        <CompositeLedgerTab
+          monthIso={monthIso}
+          monthLabel={monthLabel}
+          isCurrent={isCurrent}
+          onPrevMonth={() => stepMonth(-1)}
+          onNextMonth={() => stepMonth(1)}
+          onJumpToday={jumpToday}
+          MonthNav={MonthNav}
+          athleteLikeKeys={athleteLikeKeys}
+        />
       )}
 
       {timelineMember && attendance && (
