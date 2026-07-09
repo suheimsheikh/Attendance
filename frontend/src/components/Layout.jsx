@@ -12,6 +12,7 @@ import StaleSessionPrompt from "./StaleSessionPrompt";
 import InstallPrompt from "./InstallPrompt";
 import OfflineBanner from "./OfflineBanner";
 import { api } from "../api";
+import { useUiPrefs } from "../hooks/useUiPrefs";
 
 const NAV_MEMBER = [
   { to: "/", label: "My Check In/Out", icon: ScanLine, end: true },
@@ -111,25 +112,20 @@ export default function Layout() {
     return () => { cancelled = true; clearInterval(t); };
   }, [isAdmin, isEscort]);
 
-  // Collapsible sidebar sections (04 Feb 2026). State is a Set of section
-  // keys the user has collapsed; persisted in localStorage so the layout
-  // sticks across reloads. MEMBER stays always-open (no toggle) because
-  // it's the only guaranteed-visible section for every user role.
-  const COLLAPSE_KEY = "ishowedup_sidebar_collapsed";
-  const [collapsed, setCollapsed] = React.useState(() => {
-    try {
-      const raw = localStorage.getItem(COLLAPSE_KEY);
-      return new Set(raw ? JSON.parse(raw) : []);
-    } catch { return new Set(); }
-  });
+  // Collapsible sidebar sections (04 Feb 2026). Backed by useUiPrefs
+  // so an admin's collapse choice syncs across devices — laptop and
+  // phone remember which sections they hide. Falls back to
+  // localStorage-only when offline / unauthenticated.
+  const [uiPrefs, patchUiPrefs] = useUiPrefs({ sidebar_collapsed: [] });
+  const collapsed = React.useMemo(
+    () => new Set(uiPrefs.sidebar_collapsed || []),
+    [uiPrefs.sidebar_collapsed],
+  );
   const toggleSection = React.useCallback((key) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next])); } catch { /* quota — ignore */ }
-      return next;
-    });
-  }, []);
+    const next = new Set(collapsed);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    patchUiPrefs({ sidebar_collapsed: [...next] });
+  }, [collapsed, patchUiPrefs]);
   const isOpen = (key) => !collapsed.has(key);
 
   // Member-side pending-corrections badge. Polled every 60 s alongside

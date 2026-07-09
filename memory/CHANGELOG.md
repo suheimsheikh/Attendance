@@ -4,6 +4,43 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 4 Feb 2026 — Per-user UI preferences (cross-device sync)
+
+Follow-on to the collapsible sidebar. Sidebar collapse (and any
+future UI toggle) now syncs across every device the admin logs in
+from — no more re-collapsing MASTERS/SYSTEM on the phone every
+time.
+
+**Added:**
+- `GET  /api/me/ui-prefs` — returns the current user's prefs blob
+  (`{}` when unset).
+- `PATCH /api/me/ui-prefs` — merge-patches; null values un-set a
+  key; 4 KB size cap enforced with 413.
+- `frontend/src/hooks/useUiPrefs.js` — shared hook. Optimistic
+  local apply + localStorage cache + debounced (400 ms) server
+  flush. Server load on mount is the cross-device truth; falls
+  back gracefully when unauth / offline.
+- Layout.jsx sidebar collapse now backed by useUiPrefs (was raw
+  localStorage). Same UX, now cross-device.
+
+**Verified:**
+- 6/6 new pytest tests (`test_ui_prefs.py`) + 12 previous role/
+  correction tests → 18/18 pass.
+- End-to-end UI: collapsed MASTERS + SYSTEM, waited for debounce,
+  cleared localStorage entirely, hard-reloaded → sidebar came back
+  with both sections collapsed (`aria-expanded="false"` verified).
+  Proves the state is loaded from the server, not the browser cache.
+- Lint clean on all 3 touched files.
+
+**Files:**
+- Backend new: `routes/prefs.py`, `tests/test_ui_prefs.py`.
+- Backend changed: `server.py` (router registration).
+- Frontend new: `hooks/useUiPrefs.js`.
+- Frontend changed: `components/Layout.jsx` (adopt hook).
+
+---
+
+
 ## 4 Feb 2026 — Independent sidebar scroll + collapsible sections
 
 **Independent scrolling:**

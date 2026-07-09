@@ -3759,6 +3759,9 @@ app.include_router(_meals_router(db, require_admin, get_current_user, require_ch
 from routes.roles import make_router as _roles_router  # noqa: E402
 app.include_router(_roles_router(db, require_admin, get_current_user))
 
+from routes.prefs import make_router as _prefs_router  # noqa: E402
+app.include_router(_prefs_router(db, get_current_user))
+
 # Leave / Tour routes — split out 06/2026 during the server.py refactor.
 from routes.leaves import make_router as _leaves_router  # noqa: E402
 from holidays import (
