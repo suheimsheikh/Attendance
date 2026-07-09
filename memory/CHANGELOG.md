@@ -4,6 +4,61 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 9 Feb 2026 — Composite Ledger dropped → Calendar Grid ships instead
+
+**User request:** "Sorry. Please drop the composite ledger as it is
+identical to the attendance report. Instead I want the first col to
+be the member and the rest of the cols to be the days of the month
+from 1 to 31 and each cell thereof should contain a two letter code
+if special like LV for leave, AB in red for absent, TR for tour, and
+fill with green if present."
+
+### Removed
+- `frontend/src/pages/admin/CompositeLedgerTab.jsx` — deleted.
+- `backend/routes/reports.py`: `monthly_composite` and
+  `export_monthly_composite` endpoints deleted (~398 lines).
+- `Reports.jsx`: `composite` tab replaced with `calendar` tab.
+
+### Added — Calendar Grid tab (`/admin/reports?tab=calendar`)
+
+**Backend endpoint** `GET /api/reports/calendar-grid?month=YYYY-MM&…`
+returns `{month, start, end, today, days: [iso...], rows: [{member,
+cells: [code, ...]}]}` where each cell is one of:
+  • `P`  = Present (rendered filled-green)
+  • `HD` = Half day (amber)
+  • `LT` = Late (green with amber text)
+  • `LV` = Leave (amber)
+  • `TR` = Tour (orange)
+  • `PS` = Posting (slate)
+  • `CO` = Comp-off availed (sky)
+  • `WO` = Weekly off (slate light)
+  • `HO` = Holiday (violet)
+  • `AB` = Absent (red filled)
+  • `""` = future date (blank slot with dot placeholder)
+
+Classification mirrors the per-day logic in `attendance_ledger` — same
+attendance → approved-leave → weekly-off → holiday → absent waterfall,
+so numbers match the double-click drill-down modal cell-for-cell.
+Companion `.../export` endpoint returns CSV or PDF (A3 landscape).
+
+**Frontend** — `CalendarGridTab.jsx`:
+- 31 day columns with day-number + weekday sub-header (Mo/Tu/…).
+- Weekend column headers greyed; **today's column highlighted sky-blue**.
+- Sticky-left Name+Rank column; Category column beside it (desktop only).
+- Legend row above the grid documents every code.
+- Same filter pills as the Attendance report (All / Athletes / Elite /
+  Staff & Coaches + Fleet dropdown + Institution dropdown).
+- CSV/PDF export buttons honour the filters.
+
+**Verified end-to-end:** curl on July 2026 returns 31 days per member
+(9 populated + 22 empty for today = July 9). Real-DB Playwright
+screenshot confirms grid renders with correct green-P for present days,
+red-AB for absent, amber-LV for leave, slate-WO for Sundays, sky-blue
+today column, and empty future dates. CSV = 34 columns (Name/Rank/Cat +
+31 days). PDF = 34 KB A3-landscape. Backend regression 44/44 GREEN.
+
+
+---
 ## 9 Feb 2026 — Composite Ledger: MTD scope + full ledger detail
 
 **User request:** "THE COMPOSITE LEDGER MUST HAVE FULL DETAILS AND
