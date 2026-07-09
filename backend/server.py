@@ -2626,15 +2626,12 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                 detail = f"Till {end_disp}"
             since = leave["start_date"]
             photo = u_thumb
-        elif brk:
-            # On break — same precedence as an approved leave. Surfaces under
-            # the Leave column with an "On break" tag so coaches can distinguish
-            # group breaks from individual leaves at a glance.
-            status_v = "on_leave"
-            detail = f"On break · {brk.get('name', '')}".rstrip(" ·")
-            since = brk.get("start_date")
-            photo = u_thumb
         elif sess:
+            # Physical check-in ALWAYS wins over a scheduled break
+            # (moved above the `brk` branch 9 Jul 2026 after a scope=all
+            # break wiped the On Campus column even for members who'd
+            # actually checked in). The break context is still preserved
+            # in the detail string so coaches see the anomaly.
             open_exc = _open_excursion(sess)
             if open_exc:
                 status_v = "temp_out"
@@ -2643,7 +2640,13 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                 photo = u_thumb
             else:
                 status_v = "on_campus"
-                detail = "Since " + local_hm(office, sess["check_in_at"])
+                base_detail = "Since " + local_hm(office, sess["check_in_at"])
+                # Overlay: "…even though today is a break" — small nudge
+                # so admins notice someone came in on a rest day.
+                if brk:
+                    detail = f"{base_detail} · on break: {brk.get('name', '').strip()}".rstrip(" :")
+                else:
+                    detail = base_detail
                 since = sess["check_in_at"]
                 photo = sess.get("check_in_photo_thumb") or u_thumb
             geo_in = {
@@ -2659,6 +2662,14 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                 "site_id": sess.get("site_id"),
                 "site_name": sess.get("site_name"),
             }
+        elif brk:
+            # On break — same precedence as an approved leave. Surfaces under
+            # the Leave column with an "On break" tag so coaches can distinguish
+            # group breaks from individual leaves at a glance.
+            status_v = "on_leave"
+            detail = f"On break · {brk.get('name', '')}".rstrip(" ·")
+            since = brk.get("start_date")
+            photo = u_thumb
         else:
             last = last_map.get(u["id"])
             # Has the member shown any session on the target date? `last`

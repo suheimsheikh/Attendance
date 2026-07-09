@@ -5,6 +5,37 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 9 Jul 2026 — Presence: scope=all break was wiping On Campus column
+
+User report: "I entered a break in preview and the presence on campus
+data has disappeared."
+
+Root cause: the presence-resolution chain evaluated `elif brk:` before
+`elif sess:`, so any active break that applied to a member forced
+`status = on_leave` even when they had a live check-in session. On
+preview a `scope=all` break covering today pushed all 133 members
+into the Away column, leaving On Campus empty.
+
+**Fix — physical check-in now beats a scheduled break.** Reordered the
+elif branches in `server.py`:
+
+- Live session (`sess`) is now matched **before** `brk`.
+- Break context is preserved as an overlay in the `detail` string —
+  e.g. "Since 06:03 · on break: General Break" — so coaches see the
+  anomaly (someone came in on a rest day) without losing them from
+  the roster.
+- Members with no live session on a break-day still fall through to
+  the `elif brk:` branch and appear under Away, unchanged behaviour.
+
+Verified live on preview: was 0 on_campus / 130 on_leave; is now
+35 on_campus / 95 on_leave. New regression test
+`test_scope_all_break_does_not_wipe_on_campus` creates a temporary
+scope=all break, asserts the previously-on-campus roster survives,
+and cleans up. 22 smoke tests pass (was 21 — new test joined the
+core suite).
+
+---
+
 ## 9 Jul 2026 — Presence: merge Stepped Out + Checked Out into "Off Campus"
 
 User request: "In presence show Stepped out and checked out in the
