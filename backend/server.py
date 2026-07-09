@@ -2652,6 +2652,12 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                 "out_of_geofence": bool(sess.get("out_of_geofence")),
                 "geo_unavailable": bool(sess.get("geo_unavailable")),
                 "by": sess.get("checked_in_by"),
+                # Which Training Location did they check in from?
+                # Stamped at check-in via _resolve_site_for — surfaces on
+                # the Presence Board so coaches can tell rowing-boathouse
+                # from gym at a glance (9 Jul 2026 user request).
+                "site_id": sess.get("site_id"),
+                "site_name": sess.get("site_name"),
             }
         else:
             last = last_map.get(u["id"])
