@@ -4,6 +4,63 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 9 Feb 2026 — Composite Ledger: MTD scope + full ledger detail
+
+**User request:** "THE COMPOSITE LEDGER MUST HAVE FULL DETAILS AND
+MUST ONLY RUN FROM 1ST TODATE AND NOT FOR THE ENTIRE MONTH. It is
+similar to the attendance report but with FULL details."
+
+### Two changes on top of the initial Composite Ledger ship:
+
+1. **Window clamped to 1st → today.** Backend now reads
+   `local_date_str(office)` and, when the requested month contains
+   today, clamps `end_d` to today (same logic as `/reports/payroll`
+   already uses on the Attendance tab). Past months keep their full
+   span; future months roll over on the 1st.
+
+2. **Column set expanded from 17 → 29** — mirrors every numeric field
+   shown in each ledger modal header:
+   - **Overtime (6 cols):** OT sessions · Early · Late · **Total** ·
+     Approved · Pending. Was: sessions + total only.
+   - **Leave · Deductions (3 cols, new):** Paid-leave used · Comp-off
+     used (in leaves) · LOP days — pulled straight from the availed
+     leave rows in the month.
+   - **Leave · YTD Balance (3 cols, new):** Opening (from
+     `leave_balance_opening`) · Taken YTD (sum of `paid_leave_used`
+     for Jan-1 → today approved leaves) · Remaining. Matches the
+     LeaveLedgerModal header's Opening/Taken/Remaining fields.
+   - Comp-off column stays **Earned only** per prior instruction.
+
+### Files touched
+- `backend/routes/reports.py`:
+  - `monthly_composite`: added `today_iso` clamp, expanded attendance
+    query projection to include `overtime_early_min` / `overtime_late_min`
+    / `overtime_status`, expanded leave query to include
+    `paid_leave_used` / `lop_days`, added a separate YTD-leaves fetch
+    to compute `leave_taken_ytd`. Aggregation loop now emits 17 new
+    fields per row.
+  - `export_monthly_composite`: headers, table cells, and PDF column
+    widths rebuilt for the 29-column layout. A3 landscape, font_size=6.
+- `frontend/src/pages/admin/CompositeLedgerTab.jsx`:
+  - Group header row now has 8 groups (was 5): Member · Attendance ·
+    Leave/Off · Overtime · Comp-off · Leave·Month · Leave·Deductions ·
+    Leave·YTD. Each group tinted a distinct hue.
+  - Sub-header row + body cells + totals row all rebuilt for 28 data
+    columns.
+  - `totals` memo expanded to include the new OT/Paid/CO-used/LOP
+    accumulators. YTD balance columns show `—` on the totals row
+    (opening/taken/remaining don't sum meaningfully across a roster).
+
+**Verified end-to-end:** curl on July 2026 returns range clamped to
+`2026-07-01 → 2026-07-09` (today), sample row shows
+`OT sess:1 · early:91 · late:0 · total:91 · approved:0 · pending:91`,
+Leave YTD `opening:20 · taken:1 · remaining:19`. CSV has all 29
+headers, PDF renders 31 KB on A3-landscape. 44/44 regression pytest
+GREEN. Playwright screenshot confirms all 8 groups render with distinct
+tints and the totals row lines up.
+
+
+---
 ## 9 Feb 2026 — Monthly Composite Ledger report
 
 **User request:** "Can you make a composite report of the attendance

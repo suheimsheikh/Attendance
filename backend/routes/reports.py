@@ -788,34 +788,47 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         institution: Optional[str] = None,
         admin: dict = Depends(require_admin),
     ):
-        """Composite monthly report — one row per member with the exact
-        figures that show in each per-member ledger (Attendance,
-        Overtime, Comp-off, Leave), scoped to a calendar month.
+        """Composite month-to-date report — one row per member with the
+        full set of numeric fields that show in each per-member ledger
+        modal (Attendance, Overtime, Comp-off, Leave), scoped to the
+        1st of the month → today.
 
         Column groups follow the ledger modals:
           • **Attendance** — Present, Half day, Late, Leave, Tour,
             Posting, Comp-off, Weekly off, Holiday, Absent.
-          • **Overtime** — sessions (rows with OT > 0) + total minutes.
+          • **Overtime** — sessions (rows with OT > 0), early minutes,
+            late minutes, total minutes, approved minutes.
           • **Comp-off** — earned only (user request: no availed).
-          • **Leave** — applied, availed, rejected (leaves of type=leave
-            with start_date touching the month).
+          • **Leave** — applied days, availed days, rejected days,
+            paid-leave used, comp-off used, LOP days, opening balance
+            (YTD annual), taken YTD, remaining.
 
-        `month` must be YYYY-MM. Filter params mirror the Attendance
-        report's category/fleet/institution pills.
+        `month` must be YYYY-MM. The report window is always **1st of
+        the month → today** (never the whole future month) — matches
+        the Attendance report clamp. Filter params mirror the
+        Attendance report's category/fleet/institution pills.
         """
         try:
             y, m = (int(x) for x in month.split("-"))
             start_d = date(y, m, 1)
-            end_d = (date(y + 1, 1, 1) if m == 12 else date(y, m + 1, 1)) - timedelta(days=1)
+            end_full = (date(y + 1, 1, 1) if m == 12 else date(y, m + 1, 1)) - timedelta(days=1)
         except (ValueError, AttributeError):
             raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+        # Clamp end date to today when the requested month is the
+        # current one — otherwise mid-month runs would over-count
+        # Absent days for the future portion of the month.
+        office = await db.config.find_one({"id": "office"})
+        today_iso = local_date_str(office)
+        today_d = date.fromisoformat(today_iso)
+        end_d = min(end_full, today_d) if start_d <= today_d <= end_full else end_full
         start_iso, end_iso = start_d.isoformat(), end_d.isoformat()
 
         # --- Roster gate — matches Attendance report filter pills. ---
         users = await db.users.find(
             {"status": {"$ne": "left"}},
             {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1,
-             "fleet": 1, "institution": 1, "weekly_off": 1, "email": 1},
+             "fleet": 1, "institution": 1, "weekly_off": 1, "email": 1,
+             "leave_balance_opening": 1},
         ).to_list(2000)
         athlete_like = await _athlete_like_keys(db)
         if category == "athlete":
@@ -842,7 +855,6 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             return {"month": month, "start": start_iso, "end": end_iso, "rows": []}
 
         # --- Bulk fetches — one query per collection, in-memory bucket per user. ---
-        office = await db.config.find_one({"id": "office"})
         default_wo = ((office or {}).get("default_weekly_off") or "sunday").lower()
         from holidays import WEEKDAY_KEY  # module constant
 
@@ -850,14 +862,39 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             {"user_id": {"$in": user_ids},
              "date": {"$gte": start_iso, "$lte": end_iso}},
             {"_id": 0, "user_id": 1, "date": 1, "check_in_at": 1,
-             "is_late": 1, "is_half_day": 1, "overtime_total_min": 1},
+             "is_late": 1, "is_half_day": 1,
+             "overtime_total_min": 1, "overtime_early_min": 1,
+             "overtime_late_min": 1, "overtime_status": 1},
         ).to_list(20000)
         leave_docs = await db.leaves.find(
             {"user_id": {"$in": user_ids},
              "start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
             {"_id": 0, "user_id": 1, "type": 1, "status": 1,
-             "start_date": 1, "end_date": 1, "comp_off_used": 1},
+             "start_date": 1, "end_date": 1, "comp_off_used": 1,
+             "paid_leave_used": 1, "lop_days": 1},
         ).to_list(20000)
+        # YTD approved leaves (Jan 1 — today) to compute leave-balance
+        # remaining, same math as /reports/payroll and the LeaveLedger
+        # modal's totals.opening / totals.remaining fields.
+        ytd_start = f"{y}-01-01"
+        ytd_leaves = await db.leaves.find(
+            {"user_id": {"$in": user_ids},
+             "type": "leave", "status": "approved",
+             "start_date": {"$lte": today_iso}, "end_date": {"$gte": ytd_start}},
+            {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1,
+             "paid_leave_used": 1},
+        ).to_list(20000)
+        ytd_taken_by_user: dict = {}
+        for L in ytd_leaves:
+            if L.get("paid_leave_used") is not None:
+                n = float(L["paid_leave_used"])
+            else:
+                try:
+                    n = (date.fromisoformat(L["end_date"])
+                         - date.fromisoformat(L["start_date"])).days + 1
+                except (ValueError, KeyError):
+                    n = 1
+            ytd_taken_by_user[L["user_id"]] = ytd_taken_by_user.get(L["user_id"], 0.0) + n
         holidays_docs = await db.holidays.find(
             {"date": {"$gte": start_iso, "$lte": end_iso}},
             {"_id": 0, "date": 1},
@@ -909,6 +946,10 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             }
             ot_sessions = 0
             ot_minutes = 0
+            ot_early_min = 0
+            ot_late_min = 0
+            ot_approved_min = 0
+            ot_pending_min = 0
             comp_off_earned = 0
             cur = start_d
             while cur <= end_d:
@@ -929,6 +970,13 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                     if ot_min > 0:
                         ot_sessions += 1
                         ot_minutes += ot_min
+                        ot_early_min += int(att.get("overtime_early_min") or 0)
+                        ot_late_min += int(att.get("overtime_late_min") or 0)
+                        ot_status = (att.get("overtime_status") or "").lower()
+                        if ot_status == "approved":
+                            ot_approved_min += ot_min
+                        elif ot_status in ("pending", ""):
+                            ot_pending_min += ot_min
                     # Comp-off earned — attendance on weekly-off outside
                     # posting windows (mirrors the comp-off ledger).
                     if on_weekly_off and iso not in posting_set:
@@ -956,6 +1004,9 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
 
             # --- Leave ledger counts (only type=leave, split by status). ---
             leave_applied = leave_availed = leave_rejected = 0
+            paid_leave_used = 0.0
+            comp_off_used_in_leaves = 0
+            lop_days = 0.0
             for L in leaves_by_user.get(uid, []):
                 if (L.get("type") or "").lower() != "leave":
                     continue
@@ -971,10 +1022,17 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 status = (L.get("status") or "pending").lower()
                 if status == "approved":
                     leave_availed += qty
+                    paid_leave_used += float(L.get("paid_leave_used") or 0)
+                    comp_off_used_in_leaves += int(L.get("comp_off_used") or 0)
+                    lop_days += float(L.get("lop_days") or 0)
                 elif status == "rejected":
                     leave_rejected += qty
                 else:
                     leave_applied += qty
+
+            opening = float(u.get("leave_balance_opening") or 0)
+            taken_ytd = round(ytd_taken_by_user.get(uid, 0.0), 1)
+            remaining = round(opening - taken_ytd, 1)
 
             out.append({
                 "member_id": uid,
@@ -997,12 +1055,22 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 # Overtime figures
                 "ot_sessions": ot_sessions,
                 "ot_minutes": ot_minutes,
+                "ot_early_min": ot_early_min,
+                "ot_late_min": ot_late_min,
+                "ot_approved_min": ot_approved_min,
+                "ot_pending_min": ot_pending_min,
                 # Comp-off ledger (earned only, per user request)
                 "comp_off_earned": comp_off_earned,
                 # Leave ledger figures
                 "leave_applied": leave_applied,
                 "leave_availed": leave_availed,
                 "leave_rejected": leave_rejected,
+                "paid_leave_used": round(paid_leave_used, 1),
+                "comp_off_used": comp_off_used_in_leaves,
+                "lop_days": round(lop_days, 1),
+                "leave_opening": opening,
+                "leave_taken_ytd": taken_ytd,
+                "leave_remaining": remaining,
             })
 
         out.sort(key=lambda r: (r["member_name"] or "").lower())
@@ -1032,12 +1100,14 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             # Attendance
             "Present", "Half day", "Late", "Absent",
             "Leave", "Tour", "Posting", "Comp-off", "Weekly off", "Holiday",
-            # Overtime
-            "OT sessions", "OT total",
-            # Comp-off
+            # Overtime — full detail
+            "OT sess", "OT early", "OT late", "OT total", "OT approved", "OT pending",
+            # Comp-off (earned only)
             "CO earned",
-            # Leave
+            # Leave ledger — full detail
             "Lv applied", "Lv availed", "Lv rejected",
+            "Paid used", "CO used", "LOP",
+            "Lv opening", "Lv taken YTD", "Lv remaining",
         ]
         table = []
         for r in rows:
@@ -1048,9 +1118,16 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 str(r["present"]), str(r["half_day"]), str(r["late"]), str(r["absent"]),
                 str(r["leave_days"]), str(r["tour"]), str(r["posting"]),
                 str(r["comp_off_days"]), str(r["weekly_off"]), str(r["holiday"]),
-                str(r["ot_sessions"]), _hm(r["ot_minutes"]),
+                str(r["ot_sessions"]),
+                _hm(r["ot_early_min"]), _hm(r["ot_late_min"]),
+                _hm(r["ot_minutes"]),
+                _hm(r["ot_approved_min"]), _hm(r["ot_pending_min"]),
                 str(r["comp_off_earned"]),
                 str(r["leave_applied"]), str(r["leave_availed"]), str(r["leave_rejected"]),
+                f"{r['paid_leave_used']:.1f}", str(r["comp_off_used"]),
+                f"{r['lop_days']:.1f}",
+                f"{r['leave_opening']:.1f}", f"{r['leave_taken_ytd']:.1f}",
+                f"{r['leave_remaining']:.1f}",
             ])
 
         filename_stem = f"monthly_composite_{month}"
@@ -1061,7 +1138,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         academy = (office or {}).get("office_name") or "iShowedUp"
         meta = {
             "Academy": academy,
-            "Report": "Monthly Composite Ledger",
+            "Report": "Monthly Composite Ledger (MTD)",
             "Month": month,
             "Range": f"{data['start']} → {data['end']}",
             "Members": str(len(rows)),
@@ -1072,14 +1149,16 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             ])) or "None",
             "Generated by": admin.get("full_name") or admin.get("email") or "Admin",
         }
-        # 19 columns @ A3-landscape (420 mm usable ~= 410mm printable).
+        # 29 columns @ A3-landscape (~397mm usable). Tight but fits at font_size=6.
         col_widths_mm = [
-            42, 22, 22,                          # Name / Rank / Category
-            14, 14, 12, 14,                      # Attendance base
-            14, 12, 14, 14, 16, 14,              # Leave/Tour/Posting/CO/Wk-off/Hol
-            18, 22,                              # OT sessions / total
-            18,                                  # CO earned
-            18, 18, 20,                          # Leave applied/availed/rejected
+            32, 16, 14,                              # Name / Rank / Category
+            10, 10, 10, 10,                          # Attendance base (4)
+            10, 10, 10, 10, 12, 10,                  # Leave/Off group (6)
+            11, 14, 14, 14, 15, 15,                  # OT (6)
+            12,                                      # CO earned (1)
+            12, 12, 12,                              # Lv applied/availed/rejected (3)
+            12, 11, 11,                              # Paid / CO used / LOP (3)
+            12, 12, 12,                              # Lv opening / taken / remaining (3)
         ]
         # A3 landscape — table is wide even after tight cols.
         from reportlab.lib.pagesizes import A3
@@ -1091,7 +1170,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             col_widths=[w * mm for w in col_widths_mm],
             meta=meta,
             pagesize_override=landscape(A3),
-            font_size=7,
+            font_size=6,
         )
         return Response(
             content=pdf, media_type="application/pdf",

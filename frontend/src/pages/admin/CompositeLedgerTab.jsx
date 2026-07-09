@@ -119,9 +119,11 @@ export default function CompositeLedgerTab({ monthIso, monthLabel, isCurrent, on
       present: 0, half_day: 0, late: 0, absent: 0,
       leave_days: 0, tour: 0, posting: 0, comp_off_days: 0,
       weekly_off: 0, holiday: 0,
-      ot_sessions: 0, ot_minutes: 0,
+      ot_sessions: 0, ot_minutes: 0, ot_early_min: 0, ot_late_min: 0,
+      ot_approved_min: 0, ot_pending_min: 0,
       comp_off_earned: 0,
       leave_applied: 0, leave_availed: 0, leave_rejected: 0,
+      paid_leave_used: 0, comp_off_used: 0, lop_days: 0,
     };
     for (const r of displayedRows) {
       for (const k of Object.keys(t)) t[k] += r[k] || 0;
@@ -215,9 +217,11 @@ export default function CompositeLedgerTab({ monthIso, monthLabel, isCurrent, on
                 <th className="py-2 px-2 text-left sticky left-0 z-10 bg-slate-50" colSpan={2}>Member</th>
                 <th className="py-2 px-2 text-center bg-emerald-50" colSpan={4}>Attendance</th>
                 <th className="py-2 px-2 text-center bg-amber-50" colSpan={6}>Leave / Off</th>
-                <th className="py-2 px-2 text-center bg-orange-50" colSpan={2}>Overtime</th>
+                <th className="py-2 px-2 text-center bg-orange-50" colSpan={6}>Overtime</th>
                 <th className="py-2 px-2 text-center bg-sky-50" colSpan={1}>Comp-off</th>
-                <th className="py-2 px-2 text-center bg-violet-50" colSpan={3}>Leave Ledger</th>
+                <th className="py-2 px-2 text-center bg-violet-50" colSpan={3}>Leave · Month</th>
+                <th className="py-2 px-2 text-center bg-fuchsia-50" colSpan={3}>Leave · Deductions</th>
+                <th className="py-2 px-2 text-center bg-rose-50" colSpan={3}>Leave · YTD Balance</th>
               </tr>
               <tr className="text-slate-600 text-[11px] border-t border-slate-100">
                 <th className="py-1.5 px-2 text-left sticky left-0 z-10 bg-slate-50 font-semibold">Name</th>
@@ -234,27 +238,40 @@ export default function CompositeLedgerTab({ monthIso, monthLabel, isCurrent, on
                 <th className="py-1.5 px-1.5 text-center bg-amber-50/70 text-sky-700" title="Comp-off availed">CO</th>
                 <th className="py-1.5 px-1.5 text-center bg-amber-50/70 text-slate-500" title="Weekly off">Wk-off</th>
                 <th className="py-1.5 px-1.5 text-center bg-amber-50/70 text-slate-500" title="Holiday">Hol</th>
-                {/* Overtime */}
-                <th className="py-1.5 px-1.5 text-center bg-orange-50/70 text-orange-700" title="OT sessions">OT sess</th>
-                <th className="py-1.5 px-1.5 text-center bg-orange-50/70 text-orange-700" title="OT total time">OT total</th>
+                {/* Overtime — full detail */}
+                <th className="py-1.5 px-1.5 text-center bg-orange-50/70 text-orange-700" title="OT sessions">Sess</th>
+                <th className="py-1.5 px-1.5 text-center bg-orange-50/70 text-emerald-700" title="OT — early arrival minutes">Early</th>
+                <th className="py-1.5 px-1.5 text-center bg-orange-50/70 text-amber-700" title="OT — late departure minutes">Late</th>
+                <th className="py-1.5 px-1.5 text-center bg-orange-50/70 text-orange-700 font-bold" title="OT — grand total">Total</th>
+                <th className="py-1.5 px-1.5 text-center bg-orange-50/70 text-emerald-600" title="OT — admin-approved">Appr</th>
+                <th className="py-1.5 px-1.5 text-center bg-orange-50/70 text-amber-600" title="OT — awaiting approval">Pend</th>
                 {/* Comp-off (earned only) */}
                 <th className="py-1.5 px-1.5 text-center bg-sky-50/70 text-sky-700" title="Comp-off earned this month">CO earned</th>
-                {/* Leave ledger */}
+                {/* Leave ledger — month rows */}
                 <th className="py-1.5 px-1.5 text-center bg-violet-50/70 text-violet-700" title="Leaves applied (pending) — days">App</th>
-                <th className="py-1.5 px-1.5 text-center bg-violet-50/70 text-violet-700" title="Leaves availed (approved) — days">Avld</th>
-                <th className="py-1.5 px-1.5 text-center bg-violet-50/70 text-violet-700" title="Leaves rejected — days">Rej</th>
+                <th className="py-1.5 px-1.5 text-center bg-violet-50/70 text-violet-700 font-bold" title="Leaves availed (approved) — days">Avld</th>
+                <th className="py-1.5 px-1.5 text-center bg-violet-50/70 text-slate-500" title="Leaves rejected — days">Rej</th>
+                {/* Leave deductions (from availed leaves this month) */}
+                <th className="py-1.5 px-1.5 text-center bg-fuchsia-50/70 text-fuchsia-700" title="Days deducted from paid leave pool">Paid</th>
+                <th className="py-1.5 px-1.5 text-center bg-fuchsia-50/70 text-sky-700" title="Days deducted from comp-off pool">CO used</th>
+                <th className="py-1.5 px-1.5 text-center bg-fuchsia-50/70 text-red-600" title="Loss of pay days">LOP</th>
+                {/* Leave YTD balance */}
+                <th className="py-1.5 px-1.5 text-center bg-rose-50/70 text-slate-600" title="Annual leave opening balance">Open</th>
+                <th className="py-1.5 px-1.5 text-center bg-rose-50/70 text-slate-600" title="Leave days taken so far this year">Taken</th>
+                <th className="py-1.5 px-1.5 text-center bg-rose-50/70 text-emerald-700 font-bold" title="Remaining annual leave balance">Rem</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={17} className="py-8 text-center text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={28} className="py-8 text-center text-slate-400">Loading…</td></tr>
               )}
               {!loading && displayedRows.length === 0 && (
-                <tr><td colSpan={17} className="py-8 text-center text-slate-400" data-testid="composite-empty">No members match the current filters.</td></tr>
+                <tr><td colSpan={28} className="py-8 text-center text-slate-400" data-testid="composite-empty">No members match the current filters.</td></tr>
               )}
               {!loading && displayedRows.map((r, i) => {
                 const rowBg = i % 2 === 1 ? "bg-slate-200/60" : "bg-white";
                 const n = (v) => (v ? v : "");
+                const nf = (v, digits = 1) => (v ? Number(v).toFixed(digits).replace(/\.?0+$/, "") : "");
                 return (
                   <tr key={r.member_id} className={`${rowBg} hover:bg-sky-50 group transition-colors`} data-testid={`composite-row-${r.member_id}`}>
                     <td className={`py-1.5 px-2 font-semibold text-slate-800 border-t border-slate-100 sticky left-0 z-10 ${rowBg} group-hover:bg-sky-50`}>
@@ -274,15 +291,27 @@ export default function CompositeLedgerTab({ monthIso, monthLabel, isCurrent, on
                     <td className="py-1.5 px-1.5 text-center bg-amber-100/40 border-t border-amber-100 text-sky-700">{n(r.comp_off_days)}</td>
                     <td className="py-1.5 px-1.5 text-center bg-amber-100/40 border-t border-amber-100 text-slate-500">{n(r.weekly_off)}</td>
                     <td className="py-1.5 px-1.5 text-center bg-amber-100/40 border-t border-amber-100 text-slate-500">{n(r.holiday)}</td>
-                    {/* Overtime */}
+                    {/* Overtime — 6 columns */}
                     <td className="py-1.5 px-1.5 text-center bg-orange-100/40 border-l border-t border-orange-100 text-orange-700">{n(r.ot_sessions)}</td>
-                    <td className="py-1.5 px-1.5 text-center bg-orange-100/40 border-t border-orange-100 text-orange-700 tabular-nums">{fmtHM(r.ot_minutes)}</td>
+                    <td className="py-1.5 px-1.5 text-center bg-orange-100/40 border-t border-orange-100 text-emerald-700 tabular-nums">{fmtHM(r.ot_early_min)}</td>
+                    <td className="py-1.5 px-1.5 text-center bg-orange-100/40 border-t border-orange-100 text-amber-700 tabular-nums">{fmtHM(r.ot_late_min)}</td>
+                    <td className="py-1.5 px-1.5 text-center bg-orange-100/40 border-t border-orange-100 text-orange-700 font-bold tabular-nums">{fmtHM(r.ot_minutes)}</td>
+                    <td className="py-1.5 px-1.5 text-center bg-orange-100/40 border-t border-orange-100 text-emerald-600 tabular-nums">{fmtHM(r.ot_approved_min)}</td>
+                    <td className="py-1.5 px-1.5 text-center bg-orange-100/40 border-t border-orange-100 text-amber-600 tabular-nums">{fmtHM(r.ot_pending_min)}</td>
                     {/* Comp-off earned */}
                     <td className="py-1.5 px-1.5 text-center bg-sky-100/40 border-l border-t border-sky-100 text-sky-700 font-semibold">{n(r.comp_off_earned)}</td>
-                    {/* Leave ledger */}
+                    {/* Leave · Month */}
                     <td className="py-1.5 px-1.5 text-center bg-violet-100/40 border-l border-t border-violet-100 text-violet-700">{n(r.leave_applied)}</td>
                     <td className="py-1.5 px-1.5 text-center bg-violet-100/40 border-t border-violet-100 text-violet-700 font-semibold">{n(r.leave_availed)}</td>
                     <td className="py-1.5 px-1.5 text-center bg-violet-100/40 border-t border-violet-100 text-slate-500">{n(r.leave_rejected)}</td>
+                    {/* Leave · Deductions */}
+                    <td className="py-1.5 px-1.5 text-center bg-fuchsia-100/40 border-l border-t border-fuchsia-100 text-fuchsia-700 tabular-nums">{nf(r.paid_leave_used)}</td>
+                    <td className="py-1.5 px-1.5 text-center bg-fuchsia-100/40 border-t border-fuchsia-100 text-sky-700 tabular-nums">{n(r.comp_off_used)}</td>
+                    <td className="py-1.5 px-1.5 text-center bg-fuchsia-100/40 border-t border-fuchsia-100 text-red-600 tabular-nums">{nf(r.lop_days)}</td>
+                    {/* Leave · YTD Balance */}
+                    <td className="py-1.5 px-1.5 text-center bg-rose-100/40 border-l border-t border-rose-100 text-slate-600 tabular-nums">{nf(r.leave_opening)}</td>
+                    <td className="py-1.5 px-1.5 text-center bg-rose-100/40 border-t border-rose-100 text-slate-600 tabular-nums">{nf(r.leave_taken_ytd)}</td>
+                    <td className={`py-1.5 px-1.5 text-center bg-rose-100/40 border-t border-rose-100 font-bold tabular-nums ${r.leave_remaining < 0 ? "text-red-600" : "text-emerald-700"}`}>{nf(r.leave_remaining)}</td>
                   </tr>
                 );
               })}
@@ -300,11 +329,22 @@ export default function CompositeLedgerTab({ monthIso, monthLabel, isCurrent, on
                   <td className="py-2 px-1.5 text-center bg-amber-200/50">{totals.weekly_off || ""}</td>
                   <td className="py-2 px-1.5 text-center bg-amber-200/50">{totals.holiday || ""}</td>
                   <td className="py-2 px-1.5 text-center bg-orange-200/50">{totals.ot_sessions || ""}</td>
+                  <td className="py-2 px-1.5 text-center bg-orange-200/50 tabular-nums">{fmtHM(totals.ot_early_min)}</td>
+                  <td className="py-2 px-1.5 text-center bg-orange-200/50 tabular-nums">{fmtHM(totals.ot_late_min)}</td>
                   <td className="py-2 px-1.5 text-center bg-orange-200/50 tabular-nums">{fmtHM(totals.ot_minutes)}</td>
+                  <td className="py-2 px-1.5 text-center bg-orange-200/50 tabular-nums">{fmtHM(totals.ot_approved_min)}</td>
+                  <td className="py-2 px-1.5 text-center bg-orange-200/50 tabular-nums">{fmtHM(totals.ot_pending_min)}</td>
                   <td className="py-2 px-1.5 text-center bg-sky-200/50">{totals.comp_off_earned || ""}</td>
                   <td className="py-2 px-1.5 text-center bg-violet-200/50">{totals.leave_applied || ""}</td>
                   <td className="py-2 px-1.5 text-center bg-violet-200/50">{totals.leave_availed || ""}</td>
                   <td className="py-2 px-1.5 text-center bg-violet-200/50">{totals.leave_rejected || ""}</td>
+                  <td className="py-2 px-1.5 text-center bg-fuchsia-200/50 tabular-nums">{totals.paid_leave_used ? totals.paid_leave_used.toFixed(1) : ""}</td>
+                  <td className="py-2 px-1.5 text-center bg-fuchsia-200/50 tabular-nums">{totals.comp_off_used || ""}</td>
+                  <td className="py-2 px-1.5 text-center bg-fuchsia-200/50 tabular-nums">{totals.lop_days ? totals.lop_days.toFixed(1) : ""}</td>
+                  {/* YTD totals across roster don't sum to a meaningful org-wide value — leave blank. */}
+                  <td className="py-2 px-1.5 text-center bg-rose-200/50 text-slate-400">—</td>
+                  <td className="py-2 px-1.5 text-center bg-rose-200/50 text-slate-400">—</td>
+                  <td className="py-2 px-1.5 text-center bg-rose-200/50 text-slate-400">—</td>
                 </tr>
               )}
             </tbody>
