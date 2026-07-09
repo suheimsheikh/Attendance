@@ -43,6 +43,17 @@ export function Column({ col, members, displayList, escorts, adminContacts, coac
     }
     awaySplit = { tour, leave };
   }
+  // Sibling split for the merged "Off Campus" column — Stepped-Out
+  // vs Checked-Out counts, chips in the header (9 Jul 2026 user request).
+  let offCampusSplit = null;
+  if (col.key === "off_campus") {
+    let stepped = 0, checkedOut = 0;
+    for (const m of members) {
+      if (m.status === "temp_out") stepped += 1;
+      else if (m.status === "exited") checkedOut += 1;
+    }
+    offCampusSplit = { stepped, checkedOut };
+  }
   // Count badge reflects EVERYONE in this status, members + escorts —
   // so coaches see a single total without having to add two numbers.
   const totalCount = members.length + escortList.length;
@@ -99,6 +110,26 @@ export function Column({ col, members, displayList, escorts, adminContacts, coac
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                 Leave <span className="tabular-nums">{awaySplit.leave}</span>
+              </span>
+            </div>
+          )}
+          {offCampusSplit && (
+            <div className="basis-full flex items-center gap-1.5 pt-1" data-testid="column-off-campus-split">
+              <span
+                title={`Stepped Out: ${offCampusSplit.stepped}`}
+                data-testid="column-off-campus-stepped-count"
+                className={`inline-flex items-center gap-1 px-1.5 h-5 rounded text-[10px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-300 ${offCampusSplit.stepped === 0 ? "opacity-40" : ""}`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
+                Stepped Out <span className="tabular-nums">{offCampusSplit.stepped}</span>
+              </span>
+              <span
+                title={`Checked Out: ${offCampusSplit.checkedOut}`}
+                data-testid="column-off-campus-exited-count"
+                className={`inline-flex items-center gap-1 px-1.5 h-5 rounded text-[10px] font-bold bg-slate-200 text-slate-700 border border-slate-300 ${offCampusSplit.checkedOut === 0 ? "opacity-40" : ""}`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                Checked Out <span className="tabular-nums">{offCampusSplit.checkedOut}</span>
               </span>
             </div>
           )}

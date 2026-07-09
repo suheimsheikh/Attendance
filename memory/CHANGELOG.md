@@ -5,6 +5,32 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 9 Jul 2026 — Presence: merge Stepped Out + Checked Out into "Off Campus"
+
+User request: "In presence show Stepped out and checked out in the
+same column, Merge them and show diff contrasty colours for each."
+
+- `COLUMNS` (constants.js): the two independent columns collapsed into
+  a single **Off Campus** column. Follows the same pattern as the
+  earlier Tour + Leave → Away merge (8 Jul 2026) so admins reclaim
+  horizontal space for the operationally-important columns.
+- `STATUS_TO_COLUMN`: `temp_out` and `exited` both now route to
+  `off_campus`.
+- New `OFF_CAMPUS_STATUS_STYLE` in `constants.js` — cyan pill for
+  Stepped Out (in-day pause, coming back), slate pill for Checked
+  Out (done for the day). Deliberately cross-hue so the two states
+  read at a glance even before the pill text.
+- `MemberCard.jsx`: renders the per-status pill on the name line
+  (same slot as the Tour/Leave pill) plus a row background tint
+  matching the pill hue.
+- `Column.jsx`: header now shows a Stepped-Out vs Checked-Out split
+  with dimmed-when-zero chips, mirroring the Away column's split.
+- 4 presence columns total now (was 5): On Campus, Off Campus, Away,
+  Absent. Escort mini-panels inside each column keep their existing
+  temp_out / exited bucketing — separate visualisation, untouched.
+
+---
+
 ## 9 Jul 2026 — Code review triage: applied fixes + policy re-confirmations
 
 External code review dropped a fresh batch of findings. Actionable

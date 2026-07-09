@@ -8,7 +8,7 @@ import { categoryLabel } from "../../utils";
 import { GeoLine } from "./GeoLine";
 import { SessionTimeline } from "./SessionTimeline";
 import { ExpectedReturnPill } from "./ExpectedReturnPill";
-import { AWAY_STATUS_STYLE } from "./constants";
+import { AWAY_STATUS_STYLE, OFF_CAMPUS_STATUS_STYLE } from "./constants";
 
 export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, onSent, onDoubleClick, hidden, expanded, onToggleExpand, density = "detailed" }) {
   const [zoomOpen, setZoomOpen] = useState(false);
@@ -27,6 +27,13 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
   } else if (columnKey === "away") {
     if (m.status === "on_tour") lateBg = "bg-orange-100 hover:bg-orange-200";
     else if (m.status === "on_leave") lateBg = "bg-violet-100 hover:bg-violet-200";
+  } else if (columnKey === "off_campus") {
+    // Merged Stepped-Out + Checked-Out column: cross-hue row tints so
+    // the two sub-states stay legible without reading the pill.
+    //   Stepped Out → cyan-100 (in-day pause, coming back)
+    //   Checked Out → slate-100 (done for the day)
+    if (m.status === "temp_out")    lateBg = "bg-cyan-100 hover:bg-cyan-200";
+    else if (m.status === "exited") lateBg = "bg-slate-100 hover:bg-slate-200";
   }
   const notifyDueType = m.notify_due?.not_arrived
     ? "not_arrived"
@@ -75,6 +82,19 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
             >
               <span className={`w-1.5 h-1.5 rounded-full ${AWAY_STATUS_STYLE[m.status].dot}`} />
               {AWAY_STATUS_STYLE[m.status].label}
+            </span>
+          )}
+          {/* Stepped-Out vs Checked-Out pill inside the merged Off
+              Campus column (9 Jul 2026 user request). Same treatment
+              as the Away column above. */}
+          {columnKey === "off_campus" && OFF_CAMPUS_STATUS_STYLE[m.status] && (
+            <span
+              className={`inline-flex items-center gap-1 px-1 h-4 rounded text-[9px] font-bold leading-none shrink-0 ${OFF_CAMPUS_STATUS_STYLE[m.status].chip}`}
+              data-testid={`presence-off-campus-kind-${m.id}`}
+              title={OFF_CAMPUS_STATUS_STYLE[m.status].label}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${OFF_CAMPUS_STATUS_STYLE[m.status].dot}`} />
+              {OFF_CAMPUS_STATUS_STYLE[m.status].label}
             </span>
           )}
           <div className={`text-[13px] font-semibold leading-tight truncate flex-1 ${m.late ? "text-red-700" : "text-slate-900"}`}>{m.full_name}</div>
