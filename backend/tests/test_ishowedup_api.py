@@ -303,10 +303,13 @@ def test_18_reports_hours_export(admin_client, base_url):
                          timeout=60)
     assert rc.status_code == 200, rc.text[:200]
     assert "text/csv" in rc.headers.get("content-type", ""), rc.headers
-    # Header contract refreshed on 3 Jul 2026 — user-requested column
-    # trim. Now: Name,Category,Attendance %,Present,Leave,Tour,Absent,
-    # Late,OT Hrs,CO Earned,CO Used.
-    assert rc.content.startswith(b"Name,Category,Attendance %")
+    # 4 Feb 2026 — CSV/PDF header contract expanded to mirror the on-
+    # screen grouped table (user request "pdf should be exactly the
+    # same as what's on screen"). Now:
+    # Member,Cat, Pres,Lv,Tour,Off,Late,Half,Abs,Tot,
+    # Open,COff,Total,Avld,Close, OT Srvd,OT Appl,OT Apprv,
+    # CO Srvd,CO Appl,CO Apprv, Tot h,Avg h
+    assert rc.content.startswith(b"Member,Cat,")
 
     rp = admin_client.get(f"{base_url}/api/reports/hours/export",
                          params={"start": "2026-01-01", "end": "2026-01-31", "fmt": "pdf"},

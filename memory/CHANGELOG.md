@@ -4,6 +4,67 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 4 Feb 2026 — Reports: Escort columns removed + PDF/CSV mirror screen
+
+**User requests:**
+1. "Attendance reports under Reports need not contain the last two
+   columns on Escorts (Not sure why they are there)."
+2. "The PDF when printed should be exactly the same as what's on
+   screen including filters."
+
+**Fixed:**
+- Removed the `Escorts` grouped header and its two sub-columns
+  (`Dut` = escort days, `Ovr` = overstays) from the on-screen
+  attendance table. The table minWidth trimmed from 1420 → 1300 px
+  to reclaim the space. Empty-state colspan updated 25 → 23.
+- Rewrote the PDF/CSV export at `/api/reports/hours/export` so the
+  output is a 1:1 mirror of the on-screen table:
+  - 21 columns matching the on-screen sub-headers exactly:
+    Member, Cat, Pres/Lv/Tour/Off/Late/Half/Abs/Tot,
+    Open/COff/Total/Avld/Close, OT Srvd/Appl/Apprv,
+    CO Srvd/Appl/Apprv, Tot h/Avg h.
+  - Grouped super-header row (Attendance/Leave/Overtime/Comp-Off/
+    Hours) with matching pastel tints (emerald/amber/violet/sky/
+    indigo) — same visual chunking as the screen.
+  - Meta block now shows every active filter: Category, Fleet,
+    Institution. Was previously Category + Fleet only.
+  - Landscape A3 (was A4) so the 21 columns fit without clipping
+    the Member name column. 7pt body font for the wide grid.
+- Backend endpoint now accepts `institution` query param and
+  handles the `elite` category chip as a distinct filter (the
+  Reports.jsx UI has them client-side too).
+- Frontend `exportAttendance` sends institution + category (incl.
+  elite) to the endpoint so the PDF matches the on-screen chips.
+
+**Helper upgrade:**
+- `_pdf_from_table()` gained three optional params: `grouped_
+  headers` (list of `(label, span, tint_hex)` tuples for the super-
+  header row), `pagesize_override` (for A3), and `font_size`.
+  Legacy calls (daily leave export) unchanged.
+
+**Tests refreshed:**
+- 5 legacy tests that hardcoded the OLD column headers ("Name",
+  "Category", "OT Hrs", "Attendance %") were updated to the new
+  contract ("Member", "Cat", "OT Apprv", grouped headers).
+- 23/23 relevant tests pass (5 updated + 18 prior).
+
+**Files:**
+- Backend: `routes/reports.py` (`_pdf_from_table`, `export_hours`).
+- Frontend: `pages/admin/Reports.jsx` (escort cols removed, all 3
+  filters sent to export).
+- Tests: `test_ishowedup_api.py`, `test_review_iter3.py`,
+  `test_routes_reports.py`, `test_smoke_flows.py`.
+
+**Verified:**
+- PDF structure analyzer confirms grouped super-headers, 21 sub-
+  headers matching screen, no Escort columns, all filter meta.
+- UI screenshot: on-screen table shows Attendance/Leave/Overtime/
+  Comp-Off groups only, Escorts group gone.
+- Lint clean on both changed files.
+
+---
+
+
 ## 4 Feb 2026 — Per-user UI preferences (cross-device sync)
 
 Follow-on to the collapsible sidebar. Sidebar collapse (and any

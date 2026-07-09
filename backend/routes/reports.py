@@ -28,13 +28,17 @@ import breaks as _breaks_module
 
 def _pdf_from_table(
     title: str,
-    headers: List[str],
+    headers,
     data: List[List[str]],
     subtitle: str = "",
     *,
     orientation: str = "portrait",
     col_widths: Optional[List[float]] = None,
     meta: Optional[dict] = None,
+    grouped_headers: Optional[List[tuple]] = None,
+    group_colors: Optional[List[str]] = None,
+    pagesize_override=None,
+    font_size: int = 8,
 ) -> bytes:
     """Build a tabular PDF. ``orientation`` accepts "portrait" (default)
     or "landscape"; landscape is what wide attendance tables want so the
@@ -44,9 +48,25 @@ def _pdf_from_table(
     table — used by the monthly attendance report to declare the period,
     generation timestamp, and record count so a printed sheet is
     self-explanatory when it lands on the treasurer's desk.
+
+    ``grouped_headers`` optionally renders a super-header row above the
+    column headers (e.g. Attendance / Leave / Overtime / Comp-Off /
+    Hours) matching the on-screen grouped table. Format: list of
+    (label, span, tint_hex) tuples. Span sums must equal len(headers).
+    ``group_colors`` optionally tints the column headers row per group.
+
+    ``pagesize_override`` lets the caller pass an explicit ReportLab
+    pagesize (e.g. A3 in landscape when the table is very wide). If
+    None, uses A4 in the given orientation.
+
+    ``font_size`` sets the body font size — the wide monthly attendance
+    PDF uses 7pt to fit 21 columns on A4 landscape.
     """
     buf = io.BytesIO()
-    pagesize = landscape(A4) if orientation == "landscape" else A4
+    if pagesize_override is not None:
+        pagesize = pagesize_override
+    else:
+        pagesize = landscape(A4) if orientation == "landscape" else A4
     doc = SimpleDocTemplate(
         buf, pagesize=pagesize,
         topMargin=15 * mm, bottomMargin=12 * mm,
@@ -81,23 +101,74 @@ def _pdf_from_table(
         elems.append(Spacer(1, 3 * mm))
         elems.append(mtbl)
     elems.append(Spacer(1, 5 * mm))
-    table_data = [headers] + (data if data else [["No records"] + [""] * (len(headers) - 1)])
-    t = Table(table_data, repeatRows=1, colWidths=col_widths)
-    t.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F2937")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTSIZE", (0, 0), (-1, 0), 9),
-        ("FONTSIZE", (0, 1), (-1, -1), 8),
+    # Build the data table. When `grouped_headers` is provided we prepend
+    # a super-header row (spanning across sub-headers) matching the
+    # on-screen grouped layout — critical so the printed PDF is visually
+    # identical to what admins see in the browser (04 Feb 2026 user
+    # request "the pdf should be exactly the same as what's on screen
+    # including filters").
+    header_rows: List[List] = []
+    style_ops: List[tuple] = [
+        ("FONTSIZE", (0, 0), (-1, -1), font_size),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D1D5DB")),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F3F4F6")]),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        # Left-align the Name column (col 0 in the reordered layout)
-        # for readability; right-align the rest for number columns.
-        ("ALIGN", (0, 1), (0, -1), "LEFT"),
-        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
-    ]))
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]
+    if grouped_headers:
+        # Row 0 = super-headers (spans). Fill each cell with the label
+        # at the start of the span; empty strings after that get merged
+        # via a SPAN op.
+        super_row: List[str] = []
+        col = 0
+        # 4 Feb 2026: build the merged super-header spans. Each entry is
+        # (label, span, hex_bg_or_None). Label lands in the first cell
+        # of the span; the rest are blanked then SPAN-merged.
+        for label, span, tint in grouped_headers:
+            super_row.append(label)
+            for _ in range(span - 1):
+                super_row.append("")
+            if span > 1:
+                style_ops.append(("SPAN", (col, 0), (col + span - 1, 0)))
+            if tint:
+                style_ops.append(("BACKGROUND", (col, 0), (col + span - 1, 0), colors.HexColor(tint)))
+                style_ops.append(("TEXTCOLOR", (col, 0), (col + span - 1, 0), colors.HexColor("#334155")))
+            style_ops.append(("ALIGN", (col, 0), (col + span - 1, 0), "CENTER"))
+            col += span
+        header_rows.append(super_row)
+        # Row 1 = column headers themselves.
+        header_rows.append(list(headers))
+        header_rows_count = 2
+    else:
+        header_rows.append(list(headers))
+        header_rows_count = 1
+    # Style the column-header row (last of the header rows).
+    hdr_row_idx = header_rows_count - 1
+    style_ops.extend([
+        ("BACKGROUND", (0, hdr_row_idx), (-1, hdr_row_idx), colors.HexColor("#1F2937")),
+        ("TEXTCOLOR", (0, hdr_row_idx), (-1, hdr_row_idx), colors.white),
+        ("FONTSIZE", (0, hdr_row_idx), (-1, hdr_row_idx), max(font_size, 7)),
+        ("FONTNAME", (0, hdr_row_idx), (-1, hdr_row_idx), "Helvetica-Bold"),
+    ])
+    if grouped_headers:
+        # Bold the super-header row too, with a slightly larger font
+        # so admins can eyeball the group at a glance.
+        style_ops.extend([
+            ("FONTSIZE", (0, 0), (-1, 0), max(font_size + 1, 8)),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ])
+    # Row banding on data rows (start = header count).
+    style_ops.extend([
+        ("ROWBACKGROUNDS", (0, header_rows_count), (-1, -1),
+         [colors.white, colors.HexColor("#F3F4F6")]),
+        # Left-align the Name column for readability; center-align the
+        # rest for tight number columns.
+        ("ALIGN", (0, header_rows_count), (0, -1), "LEFT"),
+        ("ALIGN", (1, header_rows_count), (-1, -1), "CENTER"),
+    ])
+    table_data = header_rows + (data if data else [["No records"] + [""] * (len(headers) - 1)])
+    t = Table(table_data, repeatRows=header_rows_count, colWidths=col_widths)
+    t.setStyle(TableStyle(style_ops))
     elems.append(t)
 
     # Small footer with generation timestamp — printed sheets tend to
@@ -259,15 +330,21 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
     async def export_hours(start: str, end: str, fmt: str = "csv",
                           category: Optional[str] = None,
                           fleet: Optional[str] = None,
+                          institution: Optional[str] = None,
                           admin: dict = Depends(require_admin)):
         rows = await compute_hours_report(start, end)
 
         # Apply the same filters the admin has set on the UI so the
         # downloaded PDF/CSV matches what they see (30 Jun 2026 late).
-        # `category` is a QUERY PARAM, not a DB field. cat-health-ok
+        # `category` is a QUERY PARAM, not a DB field. Values map to
+        # the on-screen chip clicks: 'athlete' + 'elite' + 'rest'
+        # + 'escorts' + any custom key. 04 Feb 2026: elite added as a
+        # distinct chip; institution filter added. cat-health-ok
         athlete_like = await _athlete_like_keys(db)
         if category == "athlete":
             rows = [r for r in rows if r.get("category") in athlete_like]
+        elif category == "elite":
+            rows = [r for r in rows if r.get("category") == "elite"]
         elif category == "rest":
             rows = [r for r in rows if r.get("category") not in athlete_like]
         if fleet:
@@ -275,30 +352,83 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 rows = [r for r in rows if not r.get("fleet")]
             else:
                 rows = [r for r in rows if (r.get("fleet") or "").lower() == fleet.lower()]
+        if institution:
+            rows = [r for r in rows if (r.get("institution") or "") == institution]
 
-        # Trimmed column set (user-requested 3 Jul 2026): Name leads,
-        # Weekly-off / Rank / Hours / OT-pending / Overstays / CO-Pending
-        # dropped. Fewer, wider columns → no more Name clipping.
-        headers = ["Name", "Category", "Attendance %",
-                   "Present", "Leave", "Tour", "Absent",
-                   "Late", "OT Hrs", "CO Earned", "CO Used"]
+        # 4 Feb 2026 — column set expanded to mirror the on-screen table
+        # exactly (21 columns, grouped). Escort columns were removed at
+        # the user's request ("not sure why they are there"). Grouped
+        # header row above the sub-headers matches the screen tinting
+        # so a printed sheet is visually identical.
+        def _attn_tot(r):
+            return (r.get("days_present", 0) + r.get("days_leave", 0)
+                    + r.get("days_tour", 0) + r.get("days_off", 0))
+        def _n(v):
+            return v if v else ""
+        def _h(v):
+            if not v:
+                return ""
+            f = float(v)
+            s = f"{f:.2f}".rstrip("0").rstrip(".")
+            return f"{s}h"
+        # Leave / Comp-Off derived fields — mirror the calcs in the
+        # Reports.jsx table so the printed values line up with what
+        # admins see on-screen.
+        def _lv_open(r):
+            return r.get("leave_opening_balance", 0)
+        def _lv_coff(r):
+            return max(0, r.get("comp_off_earned", 0) - r.get("comp_off_used", 0))
+        def _lv_total(r):
+            return _lv_open(r) + _lv_coff(r)
+        def _lv_avld(r):
+            return r.get("days_leave", 0)
+        def _lv_close(r):
+            return _lv_total(r) - _lv_avld(r)
+
+        # 21 column headers matching on-screen sub-header row.
+        headers = [
+            "Member", "Cat",
+            # Attendance (8) — group tint emerald
+            "Pres", "Lv", "Tour", "Off", "Late", "Half", "Abs", "Tot",
+            # Leave (5) — amber
+            "Open", "COff", "Total", "Avld", "Close",
+            # Overtime (3) — violet
+            "OT Srvd", "OT Appl", "OT Apprv",
+            # Comp-Off (3) — sky
+            "CO Srvd", "CO Appl", "CO Apprv",
+            # Hours (2) — indigo
+            "Tot h", "Avg h",
+        ]
         table = [[
-            r["member_name"], (r.get("category") or "").title(),
-            f"{r['attendance_pct']}%",
-            r["days_present"],
-            (r.get("days_leave", 0) + r.get("days_break", 0)),
-            r.get("days_tour", 0),
-            r.get("days_absent", 0),
-            r.get("late_days", 0),
-            r.get("overtime_hours_approved", 0),
-            r.get("comp_off_earned", 0),
-            r.get("comp_off_used", 0),
+            r["member_name"],
+            (r.get("category") or "").title(),
+            _n(r.get("days_present", 0)),
+            _n(r.get("days_leave", 0)),
+            _n(r.get("days_tour", 0)),
+            _n(r.get("days_off", 0)),
+            _n(r.get("late_days", 0)),
+            _n(r.get("half_days", 0)),
+            _n(r.get("days_absent", 0)),
+            _n(_attn_tot(r)),
+            _n(_lv_open(r)),
+            _n(_lv_coff(r)),
+            _n(_lv_total(r)),
+            _n(_lv_avld(r)),
+            _n(_lv_close(r)),
+            _h(r.get("overtime_hours_served", 0)),
+            _h(r.get("overtime_hours_pending", 0)),
+            _h(r.get("overtime_hours_approved", 0)),
+            _n(r.get("comp_off_earned", 0)),
+            _n(r.get("comp_off_applied", 0)),
+            _n(r.get("comp_off_used", 0)),
+            _h(r.get("total_hours", 0)),
+            _h(r.get("avg_hours_per_day", 0)),
         ] for r in rows]
 
         if fmt == "pdf":
+            from reportlab.lib.pagesizes import A3
             office = await db.config.find_one({"id": "office"})
             academy = (office or {}).get("office_name") or "iShowedUp"
-            # dd/mm/yyyy display for the meta block + subtitle.
             def _ddmmyyyy(iso: str) -> str:
                 try:
                     y, m, d = iso.split("-")
@@ -306,43 +436,62 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 except Exception:
                     return iso
             period_disp = f"{_ddmmyyyy(start)}  to  {_ddmmyyyy(end)}"
-            # Days elapsed in the reporting window (inclusive both ends).
             try:
                 d0 = date.fromisoformat(start)
                 d1 = date.fromisoformat(end)
                 elapsed = (d1 - d0).days + 1
             except Exception:
                 elapsed = 0
-            # Human filter descriptors so the report is self-describing.
-            cat_label = {"athlete": "Athletes",
-                         "rest": "Staff & Coaches (incl. Executive)"}.get(category, "All")
-            filter_label = cat_label
-            if fleet:
-                filter_label += f" · Fleet: {'(No fleet)' if fleet == '__none__' else fleet}"
+            # Filter descriptor — mirrors the chip label on-screen so
+            # the printed sheet is self-describing.
+            cat_label = {
+                "athlete": "Athletes",
+                "elite":   "Elite Squad",
+                "rest":    "Staff & Coaches (incl. Executive)",
+                "escorts": "Escorts (separate table on-screen)",
+            }.get(category, "All")
             meta = {
                 "Academy": academy,
                 "Period": period_disp,
                 "Days elapsed": str(elapsed),
-                "Filter": filter_label,
+                "Category": cat_label,
+                "Fleet": "(No fleet)" if fleet == "__none__" else (fleet or "All"),
+                "Institution": institution or "All",
                 "Members": str(len(rows)),
                 "Generated by": admin.get("full_name") or admin.get("email") or "Admin",
             }
-            # Column widths (mm) for landscape A4 (usable ~277 mm after
-            # margins). Sum here = 265 mm — leaves comfortable slack so
-            # ReportLab doesn't force-shrink the leftmost cells.
-            #   Name   Cat  Att%  Pres Leave Tour Abs  Late OT  COe  COu
-            col_widths_mm = [55,   28,   22,   19,   19,   16,  19,  16,  22, 25, 24]
+            # A3 landscape (~420mm × 297mm) fits 21 tight columns
+            # without eating the Name column. Widths sum to ~395mm —
+            # ReportLab absorbs the small slack.
+            #                Mem  Cat |  Pres Lv Tour Off Late Half Abs Tot |  Open COff Total Avld Close |  Srvd Appl Apprv |  Srvd Appl Apprv |  Toth  Avgh
+            col_widths_mm = [55, 22,
+                             15, 12, 14, 12, 14, 14, 14, 18,
+                             16, 16, 18, 16, 18,
+                             18, 18, 20,
+                             18, 18, 20,
+                             18, 18]
+            grouped_headers = [
+                ("", 2, None),
+                ("Attendance", 8, "#D1FAE5"),   # emerald-100
+                ("Leave", 5, "#FEF3C7"),         # amber-100
+                ("Overtime", 3, "#EDE9FE"),      # violet-100
+                ("Comp-Off", 3, "#E0F2FE"),      # sky-100
+                ("Hours", 2, "#E0E7FF"),         # indigo-100
+            ]
             pdf = _pdf_from_table(
                 "Attendance Report",
                 headers, table,
                 subtitle=period_disp,
                 orientation="landscape",
+                pagesize_override=landscape(A3),
                 col_widths=[w * mm for w in col_widths_mm],
                 meta=meta,
+                grouped_headers=grouped_headers,
+                font_size=7,
             )
             return Response(content=pdf, media_type="application/pdf",
-                            headers={"Content-Disposition": f"attachment; filename=hours_{start}_{end}.pdf"})
-        return _csv_response(headers, table, f"hours_{start}_{end}.csv")
+                            headers={"Content-Disposition": f"attachment; filename=attendance_{start}_{end}.pdf"})
+        return _csv_response(headers, table, f"attendance_{start}_{end}.csv")
 
     @router.get("/reports/daily/export")
     async def export_daily(on: Optional[str] = None, fmt: str = "csv", user: dict = Depends(get_current_user)):

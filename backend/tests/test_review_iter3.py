@@ -264,12 +264,13 @@ def test_15_reports_csv_export(admin_s):
     reader = csv.reader(io.StringIO(txt))
     header = next(reader, [])
     header_norm = [h.strip().lower() for h in header]
-    assert any("name" == h for h in header_norm), f"no Name column: {header}"
-    assert any("category" == h for h in header_norm), f"no Category column: {header}"
-    # "Total hrs" was dropped from the export on 3 Jul 2026 as part of
-    # the user-requested column trim. OT Hrs is what remains for
-    # payroll-adjacent reporting.
-    assert any("ot hrs" in h for h in header_norm), f"no OT Hrs col: {header}"
+    # 4 Feb 2026 — headers now mirror the on-screen grouped table
+    # (user request). "Name" → "Member", "Category" → "Cat", grouped
+    # Attendance/Leave/Overtime/Comp-Off/Hours sub-headers.
+    assert any("member" == h for h in header_norm), f"no Member column: {header}"
+    assert any("cat" == h for h in header_norm), f"no Cat column: {header}"
+    # OT Approved column is what remains for payroll-adjacent reporting.
+    assert any("apprv" in h for h in header_norm), f"no OT/CO Apprv col: {header}"
 
 
 # ---------- 13. Self check-in geo-toggle ----------

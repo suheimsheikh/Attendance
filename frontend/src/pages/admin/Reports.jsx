@@ -204,12 +204,14 @@ export default function Reports() {
 
   const exportAttendance = (fmt) => {
     if (!attendance) return;
-    // Reuse the /hours/export endpoint (same underlying data) — pass
-    // the month's start/end + the on-screen category/fleet filters so
-    // the CSV/PDF matches what the admin sees.
+    // Reuse the /hours/export endpoint — pass every on-screen filter so
+    // the CSV/PDF matches exactly what the admin sees (including
+    // Institution + Elite, which used to be client-only). The backend
+    // applies the same filter logic before rendering the table.
     const params = { start: attendance.start, end: attendance.end, fmt };
     if (categoryFilter && categoryFilter !== "all") params.category = categoryFilter;
     if (fleetFilter) params.fleet = fleetFilter;
+    if (institutionFilter) params.institution = institutionFilter;
     return downloadBlob("/reports/hours/export", `attendance_${monthIso}.${fmt}`, params);
   };
   const exportDaily = (fmt) => downloadBlob("/reports/daily/export", `daily_${day}.${fmt}`, { on: day, fmt });
@@ -430,7 +432,7 @@ export default function Reports() {
                   </tbody>
                 </table>
               ) : (
-              <table className="min-w-full text-xs iu-table-compact" style={{ minWidth: 1420 }}>
+              <table className="min-w-full text-xs iu-table-compact" style={{ minWidth: 1300 }}>
                 <thead>
                   {/* Grouped header row + sub-header row are BOTH sticky
                       (7 Jul 2026 user-requested). Row 1 pins to top-0,
@@ -444,7 +446,6 @@ export default function Reports() {
                     <th className="py-1.5 px-2 text-center bg-violet-50 border-r border-violet-200 text-violet-800" colSpan={3}>Overtime</th>
                     <th className="py-1.5 px-2 text-center bg-sky-50 border-r border-sky-200 text-sky-800" colSpan={3}>Comp-Off</th>
                     <th className="py-1.5 px-2 text-center bg-indigo-50 border-r border-indigo-200 text-indigo-800" colSpan={2}>Hours</th>
-                    <th className="py-1.5 px-2 text-center bg-teal-50 border-r border-teal-200 text-teal-800" colSpan={2}>Escorts</th>
                   </tr>
                   <tr className="sticky top-7 z-30 bg-slate-50 shadow-sm text-[10px] uppercase tracking-wider font-bold text-slate-500">
                     <th className="py-1.5 px-2 text-left sticky left-0 z-40 bg-slate-50">Member</th>
@@ -470,8 +471,6 @@ export default function Reports() {
                     <th className="py-1.5 px-1.5 text-center bg-sky-200/50 border-r border-sky-100 font-extrabold">Apprv</th>
                     <th className="py-1.5 px-1.5 text-center bg-indigo-200/50">Tot h</th>
                     <th className="py-1.5 px-1.5 text-center bg-indigo-200/50 border-r border-indigo-100">Avg h</th>
-                    <th className="py-1.5 px-1.5 text-center bg-teal-200/50">Dut</th>
-                    <th className="py-1.5 px-1.5 text-center bg-teal-200/50 border-r border-teal-100">Ovr</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -600,14 +599,11 @@ export default function Reports() {
                         {/* Hours group */}
                         <td className="py-1.5 px-1.5 text-center bg-indigo-200/50 border-t border-indigo-100">{r.total_hours ? `${r.total_hours}h` : ""}</td>
                         <td className="py-1.5 px-1.5 text-center bg-indigo-200/50 border-r border-t border-indigo-100 text-slate-600">{r.avg_hours_per_day ? `${r.avg_hours_per_day}h` : ""}</td>
-                        {/* Escorts group */}
-                        <td {...merge("py-1.5 px-1.5 text-center bg-teal-200/50 border-t border-teal-100 text-teal-700 font-semibold", hoverProps("Escort days", r.dates_escort))} data-testid={`escort-days-${r.member_id}`}>{n(r.escort_days)}</td>
-                        <td className={`py-1.5 px-1.5 text-center bg-teal-200/50 border-r border-t border-teal-100 ${(r.overstays || 0) > 0 ? "text-red-600 font-semibold" : ""}`} data-testid={`overstays-${r.member_id}`}>{n(r.overstays)}</td>
                       </tr>
                     );
                   })}
                   {!loading && displayedRows.length === 0 && (
-                    <tr><td colSpan={25} className="text-center py-10 text-slate-500">No data.</td></tr>
+                    <tr><td colSpan={23} className="text-center py-10 text-slate-500">No data.</td></tr>
                   )}
                 </tbody>
               </table>
