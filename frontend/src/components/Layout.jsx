@@ -5,7 +5,7 @@ import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, Building2, IdCard, Sailboat,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound
+  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -111,6 +111,27 @@ export default function Layout() {
     return () => { cancelled = true; clearInterval(t); };
   }, [isAdmin, isEscort]);
 
+  // Collapsible sidebar sections (04 Feb 2026). State is a Set of section
+  // keys the user has collapsed; persisted in localStorage so the layout
+  // sticks across reloads. MEMBER stays always-open (no toggle) because
+  // it's the only guaranteed-visible section for every user role.
+  const COLLAPSE_KEY = "ishowedup_sidebar_collapsed";
+  const [collapsed, setCollapsed] = React.useState(() => {
+    try {
+      const raw = localStorage.getItem(COLLAPSE_KEY);
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch { return new Set(); }
+  });
+  const toggleSection = React.useCallback((key) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next])); } catch { /* quota — ignore */ }
+      return next;
+    });
+  }, []);
+  const isOpen = (key) => !collapsed.has(key);
+
   // Member-side pending-corrections badge. Polled every 60 s alongside
   // the admin summary above. Skipped for escort tokens (they have no
   // corrections page anyway). 8 Jul 2026 user request "bring all
@@ -154,7 +175,7 @@ export default function Layout() {
   };
 
   const sidebar = (
-    <aside className="w-64 shrink-0 bg-slate-900 text-slate-100 flex flex-col" data-testid="app-sidebar">
+    <aside className="w-64 shrink-0 bg-slate-900 text-slate-100 flex flex-col h-screen" data-testid="app-sidebar">
       <div className="flex items-center gap-2.5 px-5 h-16 border-b border-slate-800">
         <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center overflow-hidden">
           <img src="/favicon.png" alt="YCH" className="w-8 h-8 object-contain" />
@@ -178,24 +199,39 @@ export default function Layout() {
         })}
         {!isEscort && canMuster && !isChef && (
           <>
-            <div className="text-[13px] font-black uppercase tracking-widest text-cyan-300 px-3 py-1.5 mt-2 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Coaches</div>
-            {NAV_COACH.map((item) => (
+            <SectionHeader
+              label="Coaches"
+              open={isOpen("coaches")}
+              onToggle={() => toggleSection("coaches")}
+              tone="cyan"
+            />
+            {isOpen("coaches") && NAV_COACH.map((item) => (
               <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
             ))}
           </>
         )}
         {!isEscort && isChef && (
           <>
-            <div className="text-[13px] font-black uppercase tracking-widest text-amber-300 px-3 py-1.5 mt-2 drop-shadow-[0_0_8px_rgba(251,191,36,0.45)]">Chef</div>
-            {NAV_CHEF.map((item) => (
+            <SectionHeader
+              label="Chef"
+              open={isOpen("chef")}
+              onToggle={() => toggleSection("chef")}
+              tone="amber"
+            />
+            {isOpen("chef") && NAV_CHEF.map((item) => (
               <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
             ))}
           </>
         )}
         {!isEscort && isAdmin && (
           <>
-            <div className="text-[13px] font-black uppercase tracking-widest text-cyan-300 px-3 py-1.5 mt-2 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Admin</div>
-            {NAV_ADMIN.map((item) => {
+            <SectionHeader
+              label="Admin"
+              open={isOpen("admin")}
+              onToggle={() => toggleSection("admin")}
+              tone="cyan"
+            />
+            {isOpen("admin") && NAV_ADMIN.map((item) => {
               // Synthetic key `approvals_page` sums only the queues that the
               // Approvals page actually surfaces (leaves + overtime + checkins
               // + corrections). Device approvals live on their own
@@ -221,12 +257,22 @@ export default function Layout() {
                 />
               );
             })}
-            <div className="text-[13px] font-black uppercase tracking-widest text-cyan-300 px-3 py-1.5 mt-2 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Masters</div>
-            {NAV_MASTERS.map((item) => (
+            <SectionHeader
+              label="Masters"
+              open={isOpen("masters")}
+              onToggle={() => toggleSection("masters")}
+              tone="cyan"
+            />
+            {isOpen("masters") && NAV_MASTERS.map((item) => (
               <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
             ))}
-            <div className="text-[13px] font-black uppercase tracking-widest text-cyan-300 px-3 py-1.5 mt-2 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">System</div>
-            {NAV_SYSTEM.map((item) => (
+            <SectionHeader
+              label="System"
+              open={isOpen("system")}
+              onToggle={() => toggleSection("system")}
+              tone="cyan"
+            />
+            {isOpen("system") && NAV_SYSTEM.map((item) => (
               <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
             ))}
           </>
@@ -265,9 +311,9 @@ export default function Layout() {
   );
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="h-screen overflow-hidden flex bg-slate-50">
       {/* Desktop sidebar */}
-      <div className="hidden md:block">{sidebar}</div>
+      <div className="hidden md:block h-screen">{sidebar}</div>
 
       {/* Mobile sidebar drawer */}
       {open && (
@@ -279,9 +325,9 @@ export default function Layout() {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-screen">
         {/* Mobile header */}
-        <header className="md:hidden h-14 bg-white border-b border-slate-200 flex items-center px-4 sticky top-0 z-30">
+        <header className="md:hidden h-14 bg-white border-b border-slate-200 flex items-center px-4 shrink-0 z-30">
           <button data-testid="open-sidebar-button" onClick={() => setOpen(true)} className="p-2 -ml-2 rounded-lg hover:bg-slate-100">
             <Menu size={22} />
           </button>
@@ -301,6 +347,28 @@ export default function Layout() {
       <InstallPrompt />
       <OfflineBanner />
     </div>
+  );
+}
+
+function SectionHeader({ label, open, onToggle, tone = "cyan" }) {
+  // Collapsible section divider. Chevron indicates state, glow tint
+  // matches the sidebar accent (cyan for member/coach/admin/masters/
+  // system; amber for chef). Chevron rotation avoids re-rendering the
+  // whole child list on state flips.
+  const glow = tone === "amber"
+    ? "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.45)]"
+    : "text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]";
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      data-testid={`section-${label.toLowerCase()}-toggle`}
+      aria-expanded={open}
+      className={`w-full flex items-center gap-1 text-[13px] font-black uppercase tracking-widest px-3 py-1.5 mt-2 hover:bg-white/5 rounded-md transition ${glow}`}
+    >
+      {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+      <span>{label}</span>
+    </button>
   );
 }
 

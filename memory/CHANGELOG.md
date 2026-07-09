@@ -4,6 +4,38 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 4 Feb 2026 — Independent sidebar scroll + collapsible sections
+
+**Independent scrolling:**
+- Wrapper changed from `min-h-screen flex` → `h-screen overflow-hidden flex`;
+  sidebar and main both get `h-screen`. Result: sidebar stays fully
+  anchored (user avatar + Sign out always visible at the bottom)
+  while the main content scrolls independently.
+- Mobile header stops using `sticky top-0` — main region now owns the
+  scroll; header is a flex `shrink-0`.
+
+**Collapsible section headers (pot-improv):**
+- Every non-Member section header (Coaches / Chef / Admin / Masters /
+  System) is now a `<button>` with a chevron. Click to collapse or
+  expand — child items hide with no animation delay.
+- State persisted in `localStorage` under `ishowedup_sidebar_collapsed`
+  as a JSON array of section keys. Survives reloads.
+- Member section deliberately stays always-open — it's the only
+  section guaranteed to be visible for every user role and doubles
+  as the visual anchor for the sidebar identity.
+- New `SectionHeader` component below `NavItem` in `Layout.jsx`;
+  supports `tone` prop ("cyan" default; "amber" for chef).
+
+**Verified:**
+- UI screenshot confirms MASTERS collapsed to a single row (chevron
+  right), other sections open (chevron down), and the sidebar avatar
+  + Sign out block is anchored to the bottom while main content
+  scrolls independently.
+- 12/12 pytest regression pass, lint clean.
+
+---
+
+
 ## 4 Feb 2026 — Sidebar restructure: Coaches / Admin / Masters / System
 
 **Changed:**
