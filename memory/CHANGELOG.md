@@ -4,6 +4,38 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 4 Feb 2026 — OT Ledger polish
+
+Small readability pass on the OT Ledger modal (opens on double-click
+of any OT cell in the Attendance report).
+
+**Changed (all user-requested):**
+- `Early` → **Early Arrival**, `Late` → **Late Departures**. Tooltips
+  on both headers explain what the minutes represent (minutes credited
+  for arriving before / staying past scheduled work times).
+- Date column now renders `dd/mm/yyyy` (matches the rest of the
+  Reports PDF output). Old `YYYY-MM-DD` format was hard to scan.
+- Split the old `Session` column into two dedicated columns —
+  **Check-in** and **Check-out**. Session was just "check-in – check-out"
+  crammed into one cell; the two-column form is clearer and matches
+  the terminology used elsewhere in the app.
+- New **Totals** row at the bottom sums Early Arrival minutes, Late
+  Departures minutes, and Total across every session shown. Sticky
+  at the bottom of the scroll area so long ledgers stay easy to read.
+
+**Files:**
+- `frontend/src/pages/admin/OTLedgerModal.jsx` — headers, date fmt,
+  session split, totals row + `fmtDDMMYYYY` helper.
+
+**Verified:**
+- UI screenshot on AINUL HAQUE (1 session, 1h 31m early arrival)
+  confirms every change: `02/07/2026 · 02:29 · 12:32 · 1h 31m · — · 1h 31m`
+  data row + `Totals · 1h 31m · — · 1h 31m` footer row.
+- Lint clean.
+
+---
+
+
 ## 4 Feb 2026 — Reports: Escort columns removed + PDF/CSV mirror screen
 
 **User requests:**

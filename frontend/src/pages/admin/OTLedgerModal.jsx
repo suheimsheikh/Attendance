@@ -25,6 +25,16 @@ function timeOnly(iso) {
   if (!iso) return "—";
   return iso.slice(11, 16);
 }
+// dd/mm/yyyy — matches the format used across the rest of the reports
+// (see reports.py `_ddmmyyyy`). Falls back to the raw string if the
+// date isn't in ISO shape.
+function fmtDDMMYYYY(iso) {
+  if (!iso) return "—";
+  const parts = String(iso).split("-");
+  if (parts.length !== 3) return iso;
+  const [y, m, d] = parts;
+  return `${d}/${m}/${y}`;
+}
 
 export default function OTLedgerModal({ open, onClose, memberId, memberName, year }) {
   const [rows, setRows] = useState([]);
@@ -71,14 +81,15 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
             <table className="w-full text-xs iu-table-compact">
               <thead className="sticky top-0 bg-slate-50 z-10">
                 <tr className="text-left text-slate-600 font-semibold">
-                  <th>Date</th>
-                  <th className="text-right">Early</th>
-                  <th className="text-right">Late</th>
-                  <th className="text-right">Total</th>
-                  <th>Session</th>
-                  <th>Early reason</th>
-                  <th>Late reason</th>
-                  <th>Status</th>
+                  <th className="py-1.5 pr-3">Date</th>
+                  <th className="py-1.5 pr-3">Check-in</th>
+                  <th className="py-1.5 pr-3">Check-out</th>
+                  <th className="py-1.5 pr-3 text-right" title="Minutes credited for arriving before your work-start time on this date.">Early Arrival</th>
+                  <th className="py-1.5 pr-3 text-right" title="Minutes credited for staying past your work-end time on this date.">Late Departures</th>
+                  <th className="py-1.5 pr-3 text-right">Total</th>
+                  <th className="py-1.5 pr-3">Early reason</th>
+                  <th className="py-1.5 pr-3">Late reason</th>
+                  <th className="py-1.5">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -94,20 +105,21 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
                   return (
                     <tr key={r.date + (r.check_in_at || "")} className="border-t border-slate-100 hover:bg-slate-50/60"
                         data-testid={`ot-ledger-row-${r.date}`}>
-                      <td className="font-mono">{r.date}</td>
-                      <td className="text-right text-emerald-700">{fmtMin(r.overtime_early_min)}</td>
-                      <td className="text-right text-amber-700">{fmtMin(r.overtime_late_min)}</td>
-                      <td className="text-right font-bold">{fmtMin(r.overtime_total_min)}</td>
-                      <td className="text-slate-600">{timeOnly(r.check_in_at)} – {timeOnly(r.check_out_at)}</td>
-                      <td className="text-slate-600 italic max-w-[160px] truncate" title={earlyReason || ""}
+                      <td className="py-1.5 pr-3 font-mono">{fmtDDMMYYYY(r.date)}</td>
+                      <td className="py-1.5 pr-3 font-mono text-slate-600">{timeOnly(r.check_in_at)}</td>
+                      <td className="py-1.5 pr-3 font-mono text-slate-600">{timeOnly(r.check_out_at)}</td>
+                      <td className="py-1.5 pr-3 text-right text-emerald-700">{fmtMin(r.overtime_early_min)}</td>
+                      <td className="py-1.5 pr-3 text-right text-amber-700">{fmtMin(r.overtime_late_min)}</td>
+                      <td className="py-1.5 pr-3 text-right font-bold">{fmtMin(r.overtime_total_min)}</td>
+                      <td className="py-1.5 pr-3 text-slate-600 italic max-w-[160px] truncate" title={earlyReason || ""}
                           data-testid={`ot-ledger-early-reason-${r.date}`}>
                         {earlyReason || <span className="not-italic text-slate-300">—</span>}
                       </td>
-                      <td className="text-slate-600 italic max-w-[160px] truncate" title={lateReason || ""}
+                      <td className="py-1.5 pr-3 text-slate-600 italic max-w-[160px] truncate" title={lateReason || ""}
                           data-testid={`ot-ledger-late-reason-${r.date}`}>
                         {lateReason || <span className="not-italic text-slate-300">—</span>}
                       </td>
-                      <td>
+                      <td className="py-1.5">
                         <span className={`inline-flex px-2 h-5 rounded-full text-[10px] font-bold border ${STATUS_TINT[r.overtime_status] || "bg-slate-50 text-slate-600 border-slate-200"}`}>
                           {r.overtime_status || "—"}
                         </span>
@@ -119,6 +131,24 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
                   );
                 })}
               </tbody>
+              {/* Totals row (04 Feb 2026 user-requested). Sums minutes
+                  across every row shown; empty cells for date/session
+                  cols so the row reads clean. */}
+              <tfoot className="sticky bottom-0 bg-slate-100 border-t-2 border-slate-300">
+                <tr className="font-bold text-slate-800" data-testid="ot-ledger-totals">
+                  <td className="py-2 pr-3" colSpan={3}>Totals</td>
+                  <td className="py-2 pr-3 text-right text-emerald-800">
+                    {fmtMin(rows.reduce((s, r) => s + (r.overtime_early_min || 0), 0))}
+                  </td>
+                  <td className="py-2 pr-3 text-right text-amber-800">
+                    {fmtMin(rows.reduce((s, r) => s + (r.overtime_late_min || 0), 0))}
+                  </td>
+                  <td className="py-2 pr-3 text-right">
+                    {fmtMin(rows.reduce((s, r) => s + (r.overtime_total_min || 0), 0))}
+                  </td>
+                  <td colSpan={3} />
+                </tr>
+              </tfoot>
             </table>
           )}
         </div>
