@@ -178,36 +178,41 @@ def test_chef_cannot_create_role(chef_session, base_url):
 
 def test_admin_files_correction_on_behalf_of_member(admin_client, base_url, athlete):
     """Admin files a missed_checkin correction on behalf of an athlete.
-    Row must carry filed_by_admin_id / filed_by_admin_name."""
-    # Pick a date far enough back that the applier can create a row
-    # without colliding with existing attendance for `athlete`. Use
-    # 3 days back if possible; adjust downward until a clean date is
-    # found (or bail if all 7 days are populated).
+    9 Feb 2026: admin-filed rows auto-approve — response carries
+    `auto_approved: true` and the persisted row is status='approved'
+    with filed_by_admin fields populated."""
+    # The missed_checkin applier fails with 409 if an attendance row
+    # already exists for that date, so retry across older dates until
+    # we hit a clean slot.
     target_date = None
-    for delta in range(2, 8):
+    cid = None
+    body = None
+    for delta in range(2, 25):
         d = (date.today() - timedelta(days=delta)).isoformat()
-        # if there's already an attendance row on this date, skip
-        # (we're targeting the shared session athlete, so collisions
-        # from other tests are likely).
-        target_date = d
-        break
-    r = admin_client.post(f"{base_url}/api/corrections", json={
-        "entity_type": "attendance",
-        "kind": "missed_checkin",
-        "target_date": target_date,
-        "payload": {"check_in_time": "09:00", "check_out_time": "18:00"},
-        "reason": "Admin-on-behalf regression test",
-        "on_behalf_of": athlete["id"],
-    }, timeout=15)
-    assert r.status_code == 200, r.text
-    cid = r.json()["id"]
+        r = admin_client.post(f"{base_url}/api/corrections", json={
+            "entity_type": "attendance",
+            "kind": "missed_checkin",
+            "target_date": d,
+            "payload": {"check_in_time": "09:00", "check_out_time": "18:00"},
+            "reason": "Admin-on-behalf regression test",
+            "on_behalf_of": athlete["id"],
+        }, timeout=15)
+        if r.status_code == 200:
+            target_date = d
+            body = r.json()
+            cid = body["id"]
+            break
+    assert cid, "couldn't find a clean date within the 25-day retro window"
+    # Auto-approval contract: admins skip the pending queue.
+    assert body.get("auto_approved") is True
+    assert body.get("applied"), "applied payload should be present"
 
-    # Verify the persisted row has both requester_id = target member
-    # AND filed_by_admin fields populated.
-    rows = admin_client.get(f"{base_url}/api/admin/corrections?status=pending",
+    # Persisted row must be status='approved' with filed_by fields set.
+    rows = admin_client.get(f"{base_url}/api/admin/corrections?status=approved",
                             timeout=15).json()
     row = next((x for x in rows if x["id"] == cid), None)
     assert row, "correction not returned by /admin/corrections"
+    assert row["status"] == "approved"
     assert row["requester_id"] == athlete["id"]
     assert row["filed_by_admin_id"], "filed_by_admin_id must be set"
     assert row["filed_by_admin_name"], "filed_by_admin_name must be set"
@@ -227,40 +232,30 @@ def test_non_admin_cannot_use_on_behalf_of(chef_session, base_url, athlete):
     assert r.status_code == 403
 
 
-# ---------------------------------------------------------------- 5. second-admin rule
+# ---------------------------------------------------------------- 5. admin auto-apply
 
 
-def test_filer_admin_cannot_approve_own_on_behalf_correction(
+def test_admin_correction_auto_applies_and_writes_audit(
     admin_client, base_url, athlete,
 ):
-    """The admin who filed on behalf of a member must NOT be able to
-    approve or reject their own request. A different admin must do it."""
-    target_date = (date.today() - timedelta(days=4)).isoformat()
-    r = admin_client.post(f"{base_url}/api/corrections", json={
-        "entity_type": "attendance",
-        "kind": "missed_checkin",
-        "target_date": target_date,
-        "payload": {"check_in_time": "09:00"},
-        "reason": "Second-admin rule regression",
-        "on_behalf_of": athlete["id"],
-    }, timeout=15)
-    assert r.status_code == 200, r.text
-    cid = r.json()["id"]
-
-    # Filing admin tries to approve — must be 409.
-    d = admin_client.post(f"{base_url}/api/admin/corrections/{cid}/decide",
-                          json={"status": "approved"}, timeout=15)
-    assert d.status_code == 409
-    # Sanity: error mentions the different-admin rule.
-    assert "different admin" in d.text or "filed" in d.text.lower()
-
-    # A second admin should be able to reject it.
-    _e, _p, uid, _t, admin2 = _new_admin(admin_client, base_url)
-    try:
-        d2 = admin2.post(f"{base_url}/api/admin/corrections/{cid}/decide",
-                         json={"status": "rejected",
-                               "admin_note": "reg test"},
-                         timeout=15)
-        assert d2.status_code == 200, d2.text
-    finally:
-        _cleanup(admin_client, base_url, uid)
+    """9 Feb 2026: admin-filed corrections apply instantly — no second
+    admin required. This replaces the older 'filer ≠ approver' rule
+    which was dropped per user request."""
+    # Search backwards until we find a date without existing attendance.
+    cid = None
+    for delta in range(2, 30):
+        d = (date.today() - timedelta(days=delta)).isoformat()
+        r = admin_client.post(f"{base_url}/api/corrections", json={
+            "entity_type": "attendance",
+            "kind": "missed_checkin",
+            "target_date": d,
+            "payload": {"check_in_time": "09:00"},
+            "reason": "Admin auto-apply regression",
+            "on_behalf_of": athlete["id"],
+        }, timeout=15)
+        if r.status_code == 200:
+            body = r.json()
+            assert body.get("auto_approved") is True
+            cid = body["id"]
+            break
+    assert cid, "couldn't find a clean date within the 30-day window"

@@ -232,14 +232,16 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
 
     @router.post("/corrections")
     async def create_correction(body: CorrectionCreate, user: dict = Depends(get_current_user)):
-        """Member raises a correction request. Admins go through the queue
-        too (per policy option 4b) — no auto-approval bypass.
+        """Member raises a correction request. Members' requests go into
+        the pending queue for admin review.
 
-        Admins may additionally file corrections on behalf of any member
-        by passing `on_behalf_of=<member_id>` (4 Feb 2026). The row is
-        stored against the target member but audit fields record the
-        filing admin, and the decide endpoint enforces filer ≠ approver
-        so a second admin must still sign it off.
+        **Admin auto-apply (9 Feb 2026):** when the requester is an
+        admin — either self-filing or filing on behalf of a member
+        via `on_behalf_of` — the correction is applied immediately and
+        the row is stamped ``status="approved"`` with the admin as
+        both filer and decider. Second-admin-approval policy is
+        dropped per user request: "When admins make a correction there
+        should be no need for approval."
         """
         if body.entity_type not in VALID_ENTITY_KINDS:
             raise HTTPException(status_code=400,
@@ -309,8 +311,44 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             "filed_by_admin_id": filed_by_admin_id,
             "filed_by_admin_name": filed_by_admin_name,
         }
+
+        # Admin auto-apply (9 Feb 2026). If the requester is an admin,
+        # skip the pending queue entirely — apply the change now and
+        # stamp the row as approved. Audit rows are still written by
+        # each applier + the audit line below.
+        applied: Optional[dict] = None
+        if user.get("role") == "admin":
+            applier = APPLIERS.get((body.entity_type, body.kind))
+            if not applier:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"No applier registered for {body.entity_type}/{body.kind}",
+                )
+            applied = await applier(db, doc, user)
+            now_iso = now_utc().isoformat()
+            doc.update({
+                "status": "approved",
+                "decided_by_id": user["id"],
+                "decided_by_name": user["full_name"],
+                "decided_at": now_iso,
+                "admin_note": "Auto-approved (admin-filed)",
+                "applied": applied,
+            })
+            await db.corrections.insert_one(doc)
+            await write_audit(
+                db, actor=user,
+                action="correction_auto_approved",
+                entity_type="correction",
+                entity_id=doc["id"],
+                entity_name=f"{doc['entity_type']}/{doc['kind']} · {doc['requester_name']} · {doc['target_date']}",
+                before=None,
+                after={"status": "approved", "applied": applied},
+                reason=doc["reason"],
+            )
+            return {"ok": True, "id": doc["id"], "auto_approved": True, "applied": applied}
+
         await db.corrections.insert_one(doc)
-        return {"ok": True, "id": doc["id"]}
+        return {"ok": True, "id": doc["id"], "auto_approved": False}
 
     @router.get("/me/corrections")
     async def my_corrections(user: dict = Depends(get_current_user), status: Optional[str] = None):
@@ -383,22 +421,15 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
         """Shared logic between single-decide and bulk-approve. Applies the
         change (when approved) and stamps decision metadata on the correction.
 
-        Second-admin rule (4 Feb 2026): if the correction was FILED by an
-        admin on behalf of a member, the approver must differ from the
-        filer. Applies to both approvals and rejections so the filing
-        admin can't withdraw + reject their own request to sneak past
-        the queue.
+        Historical note (9 Feb 2026): the "second admin must approve
+        admin-filed corrections" rule was dropped per user request —
+        admin-filed rows now auto-approve on creation. This endpoint
+        still handles decisions on any legacy pending rows.
         """
         if correction["status"] != "pending":
             raise HTTPException(status_code=409, detail=f"Correction already {correction['status']}")
         if decision not in ("approved", "rejected"):
             raise HTTPException(status_code=400, detail="status must be approved or rejected")
-        filed_by = correction.get("filed_by_admin_id")
-        if filed_by and filed_by == admin["id"]:
-            raise HTTPException(
-                status_code=409,
-                detail="You filed this correction on behalf of the member — a different admin must approve or reject it.",
-            )
         applied: Optional[dict] = None
         if decision == "approved":
             applier = APPLIERS.get((correction["entity_type"], correction["kind"]))

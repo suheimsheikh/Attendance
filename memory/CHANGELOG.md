@@ -4,6 +4,83 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 9 Feb 2026 — Admin-filed corrections now auto-apply
+
+**User request:** "When admins make a correction there should be no
+need for approval."
+
+Admin-filed corrections (both self-filed and `on_behalf_of` filings)
+now apply the change immediately on `POST /api/corrections` and land
+in the DB with `status="approved"` — no more sitting in a pending
+queue waiting for a second admin's sign-off.
+
+### Behaviour change
+- **Old flow (4 Feb 2026):** admin files → row stored `pending` →
+  different admin decides via `/api/admin/corrections/{cid}/decide` →
+  applier runs → row updated to `approved`.
+- **New flow (9 Feb 2026):** admin files → applier runs synchronously
+  during `POST /corrections` → row stored `approved` with the filing
+  admin as both `filed_by_admin_id` and `decided_by_id`. Response
+  body includes `auto_approved: true` and `applied: {…}`. Member
+  self-filed corrections still go through the pending queue.
+
+Because the applier runs during creation, any applier-level failures
+(e.g. `missed_checkin` for a date that already has attendance) now
+surface as **immediate 4xx errors** at the point of filing rather
+than as a stuck pending row — which is a UX improvement for admins
+using the Calendar Grid click-to-fix flow.
+
+### Second-admin rule dropped
+The "filer ≠ approver" 409 guard in `/admin/corrections/{cid}/decide`
+was removed since admin-filed rows no longer reach the decide
+endpoint at all. Any legacy pending admin-filed rows can now be
+approved by anyone with admin rights (they were previously trapped
+if the original filer was the only admin still active).
+
+### Frontend updates
+- `CorrectionRequestModal`:
+  - `POST /corrections` response is now inspected — toast reads
+    *"Correction applied"* on auto-approval, *"Correction request
+    submitted — pending approval"* otherwise.
+  - `onSaved` callback now receives the response so parents can
+    branch on `auto_approved`.
+  - On-behalf-of banner: *"Requires a different admin to approve"*
+    → *"Applied instantly — no second approval needed"*.
+- `CalendarGridTab`: pass-through toast reflects the new response
+  and re-fetches the grid so the fixed cell changes state
+  immediately (e.g. AB → P).
+
+### Test suite
+- `test_admin_files_correction_on_behalf_of_member` rewritten:
+  asserts `auto_approved: true`, `applied` payload present, and the
+  persisted row is `status=approved` with `filed_by_admin_*` still
+  populated. Search-loop finds a clean date so the applier doesn't
+  409 on existing attendance.
+- `test_filer_admin_cannot_approve_own_on_behalf_correction`
+  **replaced** with `test_admin_correction_auto_applies_and_writes_audit`
+  which asserts the new instant-apply contract instead of the
+  now-defunct second-admin guard.
+- Full suite: 38/38 GREEN (roles+corrections + smoke + reports
+  gating & ledger).
+
+### Files touched
+- `backend/routes/corrections.py` — `create_correction` runs
+  applier when `user.role == "admin"`, writes `correction_auto_approved`
+  audit line; `_decide_one` no longer checks filer ≠ approver.
+- `frontend/src/components/CorrectionRequestModal.jsx` — response
+  handling, toast copy, banner copy.
+- `frontend/src/pages/admin/CalendarGridTab.jsx` — onSaved receives
+  response; toast branches.
+- `backend/tests/test_roles_and_admin_corrections.py` — 2 tests
+  rewritten.
+
+**Verified via Playwright:** modal banner shows "AJAY · Applied
+instantly — no second approval needed" on the on-behalf-of flow. All
+prior context (pre-filled times, 31-day window, click-to-correct,
+calendar cell states) unchanged.
+
+
+---
 ## 9 Feb 2026 — Corrections: pre-filled work hours + 31-day window
 
 **User requests:**

@@ -194,7 +194,7 @@ export default function CorrectionRequestModal({
     }
     setSaving(true);
     try {
-      await api.post("/corrections", {
+      const res = await api.post("/corrections", {
         entity_type: effectiveEntityType,
         kind,
         entity_id: boundEntityId,
@@ -205,12 +205,17 @@ export default function CorrectionRequestModal({
         // the backend treats it as a self-filed request from `user`.
         on_behalf_of: isAdmin && onBehalfMember ? onBehalfMember.id : undefined,
       });
+      // Backend auto-approves admin-filed corrections (9 Feb 2026) —
+      // reflect that in the toast so admins get instant feedback.
+      const autoApproved = !!res?.auto_approved;
       toast.success(
-        isAdmin && onBehalfMember
-          ? `Correction filed on behalf of ${onBehalfMember.full_name} — awaiting a different admin's approval`
-          : "Correction request submitted"
+        autoApproved
+          ? (onBehalfMember
+              ? `Correction applied for ${onBehalfMember.full_name}`
+              : "Correction applied")
+          : "Correction request submitted — pending approval"
       );
-      onSaved?.();
+      onSaved?.(res);
       onClose?.();
     } catch (err) {
       showApiError(err, "Could not submit correction");
@@ -244,7 +249,7 @@ export default function CorrectionRequestModal({
                 <div className="text-sm text-sky-900">
                   <b>{onBehalfOfMember.full_name}</b>
                   <span className="text-sky-700 text-xs ml-2">
-                    Requires a different admin to approve.
+                    Applied instantly &mdash; no second approval needed.
                   </span>
                 </div>
               ) : (

@@ -350,8 +350,11 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
         <CorrectionRequestModal
           open
           onClose={() => setCorrection(null)}
-          onSaved={() => {
-            toast.success("Correction filed — pending admin approval");
+          onSaved={(res) => {
+            const msg = res?.auto_approved
+              ? "Correction applied"
+              : "Correction filed — pending admin approval";
+            toast.success(msg);
             setCorrection(null);
             loadReport();
           }}
