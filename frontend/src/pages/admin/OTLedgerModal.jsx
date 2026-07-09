@@ -6,8 +6,8 @@
  * Read-only. Server does all the aggregation via /api/reports/ot-ledger.
  */
 import React, { useEffect, useState } from "react";
-import { X, Loader2 } from "lucide-react";
-import { api, showApiError } from "../../api";
+import { X, Loader2, Download } from "lucide-react";
+import { api, showApiError, downloadBlob } from "../../api";
 
 const STATUS_TINT = {
   pending:  "bg-amber-100 text-amber-800 border-amber-200",
@@ -59,16 +59,32 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
       onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose?.(); }}
     >
       <div className="iu-modal-card max-w-4xl" onClick={(e) => e.stopPropagation()}>
-        <header className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold">Overtime ledger — {memberName || meta.member_name}</h2>
+        <header className="p-4 border-b border-slate-100 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold truncate">Overtime ledger — {memberName || meta.member_name}</h2>
             <p className="text-xs text-slate-500 mt-0.5">
               {year} · {rows.length} session{rows.length === 1 ? "" : "s"} · <b>{fmtMin(meta.total_minutes)}</b> total
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700" data-testid="ot-ledger-close">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {rows.length > 0 && (
+              <button
+                onClick={() => downloadBlob(
+                  "/reports/ot-ledger/export",
+                  `ot_ledger_${(memberName || "member").replace(/\s+/g, "_")}_${year}.pdf`,
+                  { member_id: memberId, year, fmt: "pdf" },
+                )}
+                className="iu-btn-secondary text-xs"
+                data-testid="ot-ledger-download-pdf"
+                title="Download this ledger as a PDF"
+              >
+                <Download size={14} /> PDF
+              </button>
+            )}
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1" data-testid="ot-ledger-close">
+              <X size={18} />
+            </button>
+          </div>
         </header>
         <div className="max-h-[70vh] overflow-auto p-4">
           {loading ? (
