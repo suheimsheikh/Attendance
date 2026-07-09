@@ -22,12 +22,24 @@ export default function Fleets() {
   const load = async () => {
     setLoading(true);
     try {
-      const [fl, athl] = await Promise.all([
+      // Resolve athlete-like category keys from the categories master so
+      // both Athlete and Elite (and any future admin-added athlete-like
+      // category) are pickable in the bulk-assign modal. Previously
+      // filtered on `category === "athlete"` only, which hid Elite
+      // squad members from the assign roster (bug fixed 04 Feb 2026).
+      const [fl, cats, all] = await Promise.all([
         api.get("/fleets"),
-        api.get("/members").then((all) => (all || []).filter((m) => m.category === "athlete")),
+        api.get("/masters/categories").catch(() => []),
+        api.get("/members"),
       ]);
+      const catRows = Array.isArray(cats) ? cats : (cats?.items || []);
+      const athleteKeys = new Set(
+        catRows.filter((c) => c.is_athlete_like).map((c) => c.key)
+      );
+      if (athleteKeys.size === 0) { athleteKeys.add("athlete"); athleteKeys.add("elite"); }
+      const athl = (all || []).filter((m) => athleteKeys.has(m.category));
       setFleets(fl || []);
-      setAthletes(athl || []);
+      setAthletes(athl);
     } catch (err) {
       toast.error(err?.message || "Failed to load fleets");
     } finally { setLoading(false); }

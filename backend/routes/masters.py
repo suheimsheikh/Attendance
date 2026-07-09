@@ -211,8 +211,19 @@ def make_router(db, require_admin, get_current_user) -> APIRouter:
                     status_code=404,
                     detail=f"Fleet '{target}' not in master — create it first.",
                 )
+        # Include every athlete-like category (Athlete + Elite + any custom
+        # athlete-like category the admin has added). Previously hardcoded
+        # to "athlete" only, which silently skipped Elite squad members
+        # during bulk fleet assignment (bug reported 04 Feb 2026).
+        athlete_keys = set()
+        async for c in db.categories.find({"is_athlete_like": True}, {"_id": 0, "key": 1}):
+            k = c.get("key")
+            if k:
+                athlete_keys.add(k)
+        if not athlete_keys:
+            athlete_keys = {"athlete", "elite"}
         res = await db.users.update_many(
-            {"id": {"$in": body.member_ids}, "category": "athlete"},
+            {"id": {"$in": body.member_ids}, "category": {"$in": list(athlete_keys)}},
             {"$set": {"fleet": target}},
         )
         return {"modified": res.modified_count}
