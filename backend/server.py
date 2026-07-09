@@ -187,10 +187,14 @@ async def require_coach_or_admin(user: dict = Depends(get_current_user)) -> dict
 async def require_chef_or_admin(user: dict = Depends(get_current_user)) -> dict:
     """Chef's View gating (4 Feb 2026). Chef's View was admin-only when
     it shipped in Jul 2026; opening it to the dedicated `chef` role
-    lets kitchen staff plan meals without giving them admin rights."""
+    lets kitchen staff plan meals without giving them admin rights.
+    Coaches also included (updated 4 Feb 2026) so on-the-ground staff
+    can see meal counts alongside Muster / Presence."""
     if user.get("role") in ("admin", "chef"):
         return user
-    raise HTTPException(status_code=403, detail="Chef or admin privileges required")
+    if user.get("category") == "coach":
+        return user
+    raise HTTPException(status_code=403, detail="Chef, coach, or admin privileges required")
 
 
 # ----------------------------------------------------------------------------

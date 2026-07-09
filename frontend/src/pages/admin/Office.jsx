@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Save, MapPin, MessageSquare, Phone, KeyRound, RefreshCw } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Loader2, Save, MapPin, MessageSquare, Phone, KeyRound, RefreshCw, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { getLocation } from "../../utils";
@@ -121,6 +122,27 @@ export default function OfficeSettings() {
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Office Settings</h1>
         <p className="text-slate-500 text-sm mt-1">Geofence, work hours, and timezone.</p>
       </header>
+
+      {/* Training Locations shortcut — moved out of the sidebar (04 Feb 2026)
+          because it's rarely edited but always needs to be discoverable
+          alongside the main geofence config. */}
+      <Link
+        to="/admin/sites"
+        data-testid="office-training-locations-link"
+        className="iu-card p-4 md:p-5 mb-4 flex items-center gap-4 hover:border-sky-300 hover:shadow-md transition group"
+      >
+        <div className="w-11 h-11 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+          <MapPin size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-slate-800">Training Locations</div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Add or edit off-site training locations (Necklace Road, Miyapur Pond, …). Each location
+            gets its own geofence and shows up on Muster + Check-in as a pickable site.
+          </p>
+        </div>
+        <ArrowRight size={18} className="text-slate-400 group-hover:text-sky-600 shrink-0" />
+      </Link>
 
       <form onSubmit={save} className="iu-card p-5 md:p-6 space-y-4" data-testid="office-form">
         <div>

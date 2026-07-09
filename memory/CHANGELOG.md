@@ -4,6 +4,46 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 4 Feb 2026 — Sidebar restructure: Coaches / Admin / Masters / System
+
+**Changed:**
+- Removed **Training Locations** from the sidebar; added a prominent
+  card at the top of Office Settings that links to `/admin/sites`.
+  The route itself is unchanged.
+- Renamed sidebar section **Coach → Coaches** and reordered items to
+  Muster Roll → Chef's View → Presence (per user spec 4 Feb 2026).
+- Chef's View now visible under **Coaches** for coaches too (not just
+  chefs/admins). Backend `require_chef_or_admin` widened to accept
+  `category=="coach"`; frontend `RequireChefOrAdmin` route guard
+  matches.
+- Split the previous single **ADMIN** section into 3 groups:
+  - **ADMIN** — Calendar, Dashboard, Manage Members, Reports,
+    Approvals, Access Requests, Leave Balances, SMS Log.
+  - **MASTERS** — Institutions, Fleets, Categories, Roles.
+  - **SYSTEM** — Office Settings, Data Quality, Category Health,
+    Escort Photo Cleanup, Audit Log, Backup & Restore.
+- Vertical compression: nav item height `h-10 → h-9`, section header
+  padding `py-2.5 → py-1.5`, icon `17 → 16`, font `text-sm → 13px`,
+  gap `mb-0.5 → mb-px`. About 15-20% less vertical space overall.
+
+**Files:**
+- `backend/server.py` — `require_chef_or_admin` widened.
+- `frontend/src/App.js` — `RequireChefOrAdmin` widened to accept coaches.
+- `frontend/src/components/Layout.jsx` — split NAV_ADMIN into
+  NAV_ADMIN + NAV_MASTERS + NAV_SYSTEM; NAV_COACH reordered + carries
+  Chef's View; compressed NavItem sizing.
+- `frontend/src/pages/admin/Office.jsx` — Training Locations shortcut
+  card at top.
+
+**Verified:**
+- 12/12 pytest regression tests still pass.
+- UI screenshots confirm sidebar shape matches user spec exactly on
+  both /admin/dashboard and /admin/office.
+- Lint clean on all 4 changed files.
+
+---
+
+
 ## 4 Feb 2026 — Roles master + Chef role + Admin-filed corrections
 
 **Feature 1 — Roles Master (Phase 1 of RBAC):**

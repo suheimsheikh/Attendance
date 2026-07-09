@@ -73,12 +73,14 @@ function RequireAdmin({ children }) {
 }
 
 function RequireChefOrAdmin({ children }) {
-  // Chef's View — 4 Feb 2026 also accessible to users with role="chef"
-  // (kitchen staff who need meal-count planning without full admin rights).
+  // Chef's View — 4 Feb 2026 accessible to users with role="chef" and
+  // to coaches (category="coach") so on-the-ground staff can plan
+  // meal counts alongside Muster / Presence.
   const { user, loading } = useAuth();
   if (loading) return <FullPageSpinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== "admin" && user.role !== "chef") return <Navigate to="/" replace />;
+  const allow = user.role === "admin" || user.role === "chef" || user.category === "coach";
+  if (!allow) return <Navigate to="/" replace />;
   return children;
 }
 

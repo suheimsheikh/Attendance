@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
-  CalendarCheck2, Building2, IdCard, Sailboat, MapPin,
+  CalendarCheck2, Building2, IdCard, Sailboat,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
   ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound
 } from "lucide-react";
@@ -29,47 +29,52 @@ const NAV_MEMBER = [
   { to: "/profile", label: "My Profile", icon: UserCog },
 ];
 
-// Coach section — visible to coaches & admins only. Presence and Muster were
-// previously visible to every signed-in user; moving them here makes it
-// explicit that they're operational tools, not member-tier features.
+// Coach + Chef sections — visible to coaches, chefs & admins per role.
+// Ordered per user spec (04 Feb 2026): Muster Roll → Chef's View → Presence.
+// Chef's View is now shared across coaches/chefs/admins so on-the-ground
+// staff can see meal counts alongside the muster.
 const NAV_COACH = [
   { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
-  { to: "/presence", label: "Presence", icon: LayoutDashboard },
-];
-
-// Chef section — visible to users with role="chef". Kitchen staff who
-// need the same operational read-access as coaches PLUS the Chef's View
-// meal-planning page. Added 4 Feb 2026 with the Roles master.
-const NAV_CHEF = [
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat },
-  { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
   { to: "/presence", label: "Presence", icon: LayoutDashboard },
 ];
 
-// Members lives at the top of the ADMIN section (admin-only access). Leave
-// Balances moved into the Admin Console grid since it's not opened daily.
-// Sidebar admin entries. Presence Board (in NAV_COACH above) is now the
-// landing page for admins — it carries the OT banners + "Coming up this week"
-// strip that used to live on the Admin Console.
+const NAV_CHEF = [
+  { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
+  { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat },
+  { to: "/presence", label: "Presence", icon: LayoutDashboard },
+];
+
+// ADMIN section — day-to-day operational surfaces. Kept intentionally
+// short so the sidebar stays scannable; masters + system live below.
 const NAV_ADMIN = [
+  { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true },
   { to: "/admin/members", label: "Manage Members", icon: Users },
-  { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat },
-  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page" },
-  { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
-  { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
+  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page" },
+  { to: "/admin/devices", label: "Access Requests", icon: IdCard },
+  { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
   { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare },
+];
+
+// MASTERS section — reference data admins tune occasionally.
+const NAV_MASTERS = [
   { to: "/admin/institutions", label: "Institutions", icon: Building2 },
   { to: "/admin/fleets", label: "Fleets", icon: Sailboat },
   { to: "/admin/categories", label: "Categories", icon: ShieldAlert },
-  { to: "/admin/category-health", label: "Category Health", icon: ShieldAlert },
   { to: "/admin/roles", label: "Roles", icon: KeyRound },
-  { to: "/admin/sites", label: "Training Locations", icon: MapPin },
+];
+
+// SYSTEM section — configuration, diagnostics, and safety nets.
+// Training Locations moved into Office Settings (04 Feb 2026); the
+// /admin/sites route still works but is reached via a card inside the
+// Office Settings page, not the sidebar.
+const NAV_SYSTEM = [
   { to: "/admin/office", label: "Office Settings", icon: Settings },
-  { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
-  { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera },
   { to: "/admin/data-quality", label: "Data Quality", icon: ShieldAlert },
+  { to: "/admin/category-health", label: "Category Health", icon: ShieldAlert },
+  { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera },
   { to: "/admin/audit-log", label: "Audit Log", icon: ScanLine },
   { to: "/admin/backup", label: "Backup & Restore", icon: Database },
 ];
@@ -160,8 +165,8 @@ export default function Layout() {
         </div>
       </div>
 
-      <nav className="px-3 py-4 flex-1 overflow-y-auto">
-        <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Member</div>
+      <nav className="px-3 py-3 flex-1 overflow-y-auto">
+        <div className="text-[13px] font-black uppercase tracking-widest text-cyan-300 px-3 py-1.5 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Member</div>
         {memberNav.map((item) => {
           // Member section's only badged item today is My Corrections.
           const badge = item.badgeKey === "my_corrections"
@@ -173,7 +178,7 @@ export default function Layout() {
         })}
         {!isEscort && canMuster && !isChef && (
           <>
-            <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Coach</div>
+            <div className="text-[13px] font-black uppercase tracking-widest text-cyan-300 px-3 py-1.5 mt-2 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Coaches</div>
             {NAV_COACH.map((item) => (
               <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
             ))}
@@ -181,7 +186,7 @@ export default function Layout() {
         )}
         {!isEscort && isChef && (
           <>
-            <div className="text-base font-black uppercase tracking-widest text-amber-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(251,191,36,0.45)]">Chef</div>
+            <div className="text-[13px] font-black uppercase tracking-widest text-amber-300 px-3 py-1.5 mt-2 drop-shadow-[0_0_8px_rgba(251,191,36,0.45)]">Chef</div>
             {NAV_CHEF.map((item) => (
               <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
             ))}
@@ -189,7 +194,7 @@ export default function Layout() {
         )}
         {!isEscort && isAdmin && (
           <>
-            <div className="text-base font-black uppercase tracking-widest text-cyan-300 px-3 py-2.5 mt-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Admin</div>
+            <div className="text-[13px] font-black uppercase tracking-widest text-cyan-300 px-3 py-1.5 mt-2 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Admin</div>
             {NAV_ADMIN.map((item) => {
               // Synthetic key `approvals_page` sums only the queues that the
               // Approvals page actually surfaces (leaves + overtime + checkins
@@ -216,6 +221,14 @@ export default function Layout() {
                 />
               );
             })}
+            <div className="text-[13px] font-black uppercase tracking-widest text-cyan-300 px-3 py-1.5 mt-2 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">Masters</div>
+            {NAV_MASTERS.map((item) => (
+              <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
+            ))}
+            <div className="text-[13px] font-black uppercase tracking-widest text-cyan-300 px-3 py-1.5 mt-2 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]">System</div>
+            {NAV_SYSTEM.map((item) => (
+              <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
+            ))}
           </>
         )}
       </nav>
@@ -297,9 +310,9 @@ function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason
       <div
         title={disabledReason || "Disabled"}
         data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-disabled`}
-        className="flex items-center gap-3 px-3 h-10 rounded-lg text-sm font-medium mb-0.5 text-slate-500 opacity-50 cursor-not-allowed select-none"
+        className="flex items-center gap-3 px-3 h-9 rounded-lg text-[13px] font-medium mb-px text-slate-500 opacity-50 cursor-not-allowed select-none"
       >
-        <Icon size={17} />
+        <Icon size={16} />
         <span className="flex-1">{label}</span>
         <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">Off</span>
       </div>
@@ -316,7 +329,7 @@ function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason
         // so it stays visually loud (there's always work to review). When
         // active it gets an even stronger amber background so admins
         // don't lose their place.
-        `flex items-center gap-3 px-3 h-10 rounded-lg text-sm font-medium transition mb-0.5 ${
+        `flex items-center gap-3 px-3 h-9 rounded-lg text-[13px] font-medium transition mb-px ${
           highlight
             ? isActive
               ? "bg-amber-500/25 text-amber-100 ring-1 ring-amber-400/60"
@@ -327,7 +340,7 @@ function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason
         }`
       }
     >
-      <Icon size={17} />
+      <Icon size={16} />
       <span className="flex-1">{label}</span>
       {typeof badge === "number" && badge > 0 && (
         <span
