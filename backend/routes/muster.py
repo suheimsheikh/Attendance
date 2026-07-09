@@ -66,6 +66,22 @@ def _require_muster(user: dict) -> None:
 def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIRouter:
     router = APIRouter(prefix="/api")
 
+    async def _athlete_like_keys() -> list:
+        """Category keys flagged `is_athlete_like=True` in the categories
+        master. Both 'athlete' and 'elite' qualify — historically muster
+        only queried 'athlete' which silently hid Elite squad members
+        (bug reported 04 Feb 2026: Badrinath & Ravikumar not showing).
+        Falls back to {athlete, elite} if the master collection is empty
+        (fresh install / test env)."""
+        keys = set()
+        async for c in db.categories.find({"is_athlete_like": True}, {"_id": 0, "key": 1}):
+            k = c.get("key")
+            if k:
+                keys.add(k)
+        if not keys:
+            keys = {"athlete", "elite"}
+        return list(keys)
+
     async def _enforce_escort_window(user: dict) -> None:
         """If the caller is an escort-token, refuse the request when the
         underlying escort row is now outside its [valid_from, valid_until]
@@ -102,7 +118,8 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
 
         # Escorts can only muster athletes from their own institution. Coaches
         # and admins see the full roster.
-        athlete_query: dict = {"category": "athlete"}
+        athlete_keys = await _athlete_like_keys()
+        athlete_query: dict = {"category": {"$in": athlete_keys}}
         if user.get("is_escort"):
             inst = (user.get("institution") or "").strip()
             if not inst:
@@ -195,13 +212,14 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             geo_unavailable = True
 
         done, skipped = [], []
+        athlete_keys = await _athlete_like_keys()
         # Escorts may only muster within their assigned institution. We
         # silently skip athletes outside that institution rather than 403
         # the whole batch — keeps the muster UX forgiving if a stale id
         # slips into the request.
         escort_inst = (user.get("institution") or "").strip() if user.get("is_escort") else None
         for sid in body.athlete_ids:
-            athlete = await db.users.find_one({"id": sid, "category": "athlete"}, {"_id": 0})
+            athlete = await db.users.find_one({"id": sid, "category": {"$in": athlete_keys}}, {"_id": 0})
             if not athlete:
                 skipped.append({"id": sid, "reason": "not an athlete"})
                 continue
@@ -289,9 +307,10 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             stamped_lat, stamped_lng = None, None
 
         done, skipped = [], []
+        athlete_keys = await _athlete_like_keys()
         escort_inst = (user.get("institution") or "").strip() if user.get("is_escort") else None
         for sid in body.athlete_ids:
-            athlete = await db.users.find_one({"id": sid, "category": "athlete"}, {"_id": 0})
+            athlete = await db.users.find_one({"id": sid, "category": {"$in": athlete_keys}}, {"_id": 0})
             if not athlete:
                 skipped.append({"id": sid, "reason": "not an athlete"})
                 continue
