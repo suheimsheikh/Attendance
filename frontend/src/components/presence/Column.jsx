@@ -136,7 +136,14 @@ export function Column({ col, members, displayList, escorts, adminContacts, coac
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto max-h-[calc(100vh-220px)] min-h-[120px] divide-y divide-slate-100 bg-white">
+      {/* Column body — scrolls internally once the viewport height is
+          exhausted. The 100vh-160px offset leaves just enough room for
+          the compact page chrome (toolbar + column header) so ~14–18
+          rows fit before scrolling — was ~10 pre-9-Jul-2026 with the
+          old 220px offset (bumped after the Stepped-Out/Checked-Out
+          merge freed up horizontal space and let coaches ask for
+          more vertical rows). */}
+      <div className="flex-1 overflow-y-auto max-h-[calc(100vh-160px)] min-h-[220px] divide-y divide-slate-100 bg-white">
         {displayList ? (
           displayList.length === 0 && escortList.length === 0 ? (
             <div className="px-4 py-8 text-center text-xs text-slate-400">No one here.</div>

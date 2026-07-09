@@ -5,6 +5,28 @@ problem statement + user personas; long-form change history lives here.
 
 ---
 
+## 9 Jul 2026 — Presence: wider columns, taller rows
+
+Follow-up on the Off Campus merge: with 4 columns instead of 5, each
+column can be ~35% wider on XL screens. Coach request also asked for
+more rows visible before the internal scroll kicks in.
+
+- **Grid**: Presence.jsx swapped `xl:grid-cols-5` → `xl:grid-cols-4`.
+  Column width jumps ~280 px → ~380 px on a 1920-wide viewport —
+  enough breathing room for the full name, institution chip, and
+  Training Location chip to sit on one line each.
+- **Vertical**: Column.jsx bumped column body from
+  `max-h-[calc(100vh-220px)] min-h-[120px]` →
+  `max-h-[calc(100vh-160px)] min-h-[220px]`. Reclaims ~60 px of
+  vertical space per column (about 2 extra rows visible pre-scroll)
+  and stops short columns (like an empty Off Campus) looking stubby.
+
+Verified live: On Campus column now shows 4 full rows before scroll
+(was ~3), site chips + institution chips + rank chip all fit on the
+name-row without truncation.
+
+---
+
 ## 9 Jul 2026 — Presence: scope=all break was wiping On Campus column
 
 User report: "I entered a break in preview and the presence on campus
