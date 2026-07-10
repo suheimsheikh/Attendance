@@ -1,14 +1,13 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { Loader2, Search, RefreshCw, CheckSquare, Square, LogIn, LogOut as LogOutIcon, Users, Camera } from "lucide-react";
+import { Loader2, Search, RefreshCw, CheckSquare, Square, LogIn, LogOut as LogOutIcon, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
-import Avatar from "../components/Avatar";
-import ParentContact from "../components/ParentContact";
 import { useAuth } from "../auth";
 import SelfieCapture from "../components/SelfieCapture";
 import { formatDate, getLocation, resolveNearestSite } from "../utils";
 import { useGeoPermission } from "../hooks/useGeoPermission";
 import GeoPermissionBanner from "../components/GeoPermissionBanner";
+import MusterRow from "./muster/MusterRow";
 
 const MODES = [
   { key: "checkin",  label: "Check in",  Icon: LogIn,        verb: "Check in",  color: "#10B981" },
@@ -528,102 +527,19 @@ export default function Muster() {
           {filtered.map((s) => {
             const isPicked = picked.has(s.id);
             const isLocked = mode === "checkin" && s.already_checked_in;
-            const inAt = s.check_in_at
-              ? new Date(s.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-              : null;
             return (
-              <li
+              <MusterRow
                 key={s.id}
-                onClick={() => toggle(s.id)}
-                className={`flex items-center gap-3 px-4 py-3 transition ${
-                  isLocked
-                    ? "bg-slate-100 text-slate-500 cursor-not-allowed"
-                    : isPicked
-                      ? "bg-emerald-50 cursor-pointer"
-                      : "hover:bg-slate-50 cursor-pointer"
-                }`}
-                data-testid={`muster-row-${s.id}`}
-                aria-disabled={isLocked || undefined}
-              >
-                <div
-                  className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 ${
-                    isLocked
-                      ? "bg-slate-200 border-slate-300 text-slate-400"
-                      : isPicked
-                        ? "bg-emerald-600 border-emerald-600 text-white"
-                        : "border-slate-300"
-                  }`}
-                  data-testid={`muster-checkbox-${s.id}`}
-                >
-                  {(isPicked || isLocked) && <CheckSquare size={14}/>}
-                </div>
-                <Avatar name={s.full_name} photo={s.photo} size={48} ring={isPicked ? "#10B981" : null} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <div className="font-semibold text-slate-900 truncate flex-1">{s.full_name}</div>
-                    {isAdmin && s.category && s.category !== "athlete" && (
-                      <span
-                        title={`Category: ${s.category}`}
-                        data-testid={`muster-category-chip-${s.id}`}
-                        className={`inline-flex items-center px-1.5 h-5 rounded text-[10px] font-bold shrink-0 capitalize ${CATEGORY_CHIP_STYLE[s.category] || "bg-slate-100 text-slate-700"}`}
-                      >
-                        {s.category}
-                      </span>
-                    )}
-                    {isLocked && (
-                      <span
-                        title={inAt ? `Checked in at ${inAt}` : "Already checked in"}
-                        data-testid={`muster-already-in-${s.id}`}
-                        className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[10px] font-bold bg-slate-200 text-slate-600 shrink-0"
-                      >
-                        ✓ {inAt ? `In · ${inAt}` : "Already in"}
-                      </span>
-                    )}
-                    {s.institution && (
-                      <span
-                        title={`Institution: ${s.institution}`}
-                        data-testid={`muster-institution-chip-${s.id}`}
-                        className="inline-flex items-center px-1.5 h-5 rounded text-[10px] font-bold bg-sky-100 text-sky-700 shrink-0 max-w-[110px] truncate"
-                      >
-                        {s.institution}
-                      </span>
-                    )}
-                    <ParentContact father={s.father_mobile} mother={s.mother_mobile} guardian={s.guardian_mobile} />
-                  </div>
-                  {s.rank && (
-                    <div className="text-xs text-slate-500 truncate">{s.rank}</div>
-                  )}
-                </div>
-                {!s.photo && !isLocked && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setPhotoTarget({ id: s.id, full_name: s.full_name }); }}
-                    className="ml-2 inline-flex items-center gap-1 px-2 h-7 rounded-full bg-amber-100 text-amber-700 text-[11px] font-bold hover:bg-amber-200 shrink-0"
-                    data-testid={`muster-photo-${s.id}`}
-                  >
-                    <Camera size={11} /> Add photo
-                  </button>
-                )}
-                {/* Inline check-out on already-in rows — lets admins
-                    close a stale open session directly from the
-                    check-in view without switching modes. Admin-only:
-                    coaches/escorts still see the "In · HH:MM" chip
-                    as read-only. */}
-                {isLocked && isAdmin && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); inlineCheckout(s); }}
-                    disabled={singleCheckoutId === s.id}
-                    className="ml-2 inline-flex items-center gap-1 px-2 h-7 rounded-full bg-slate-800 text-white text-[11px] font-bold hover:bg-slate-900 shrink-0 cursor-pointer disabled:opacity-60"
-                    data-testid={`muster-inline-checkout-${s.id}`}
-                    title="Check this member out now"
-                  >
-                    {singleCheckoutId === s.id
-                      ? <Loader2 size={11} className="animate-spin" />
-                      : <LogOutIcon size={11} />} Check out
-                  </button>
-                )}
-              </li>
+                member={s}
+                isPicked={isPicked}
+                isLocked={isLocked}
+                isAdmin={isAdmin}
+                singleCheckoutBusy={singleCheckoutId === s.id}
+                onToggle={toggle}
+                onAddPhoto={(m) => setPhotoTarget({ id: m.id, full_name: m.full_name })}
+                onInlineCheckout={inlineCheckout}
+                categoryChipStyle={CATEGORY_CHIP_STYLE}
+              />
             );
           })}
         </ul>
