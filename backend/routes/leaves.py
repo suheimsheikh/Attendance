@@ -10,6 +10,7 @@ module has no import-cycle with `server.py`.
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date as _date_cls
 from typing import List, Literal, Optional
@@ -18,6 +19,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from services.time_utils import now_utc, local_date_str
+
+logger = logging.getLogger(__name__)
 from holidays import _days_inclusive
 
 
@@ -101,7 +104,17 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
         users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0}).to_list(2000)
         umap = {u["id"]: u for u in users}
         for leave in leaves:
-            u = umap.get(leave.get("user_id"), {}) if leave.get("user_id") else {}
+            if not leave.get("user_id"):
+                # Legacy orphan row — enrich as Unknown and warn so the
+                # data-quality scan can surface it. Previously this raised
+                # KeyError → whole /leaves endpoint 500'd, which produced
+                # the phantom "82 pending" sidebar badge bug (Feb 2026).
+                logger.warning("[enrich_leaves] leave %s has no user_id — orphan row", leave.get("id"))
+                leave["member_name"] = "Unknown"
+                leave["member_category"] = None
+                leave["member_rank"] = None
+                continue
+            u = umap.get(leave.get("user_id"), {})
             leave["member_name"] = u.get("full_name", "Unknown")
             leave["member_category"] = u.get("category")
             leave["member_rank"] = u.get("rank")

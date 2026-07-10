@@ -4,6 +4,57 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 
+
+---
+## 20 Feb 2026 — Phantom approvals badge + Grid tooltips + Churn-risk report
+
+**User requests:**
+1. **P0:** "In prod, despite the approvals-pending list showing zero, the number near the Approvals option in the main menu shows 82."
+2. **P1 (potential improvement):** "Do potential improvement and add tooltips across the board where appropriate" — specifically Grid BK cells should show who applied the break and when.
+3. **P2 (backlog):** Implement the No-show / churn early-warning report — flag members whose attendance drops >40%, surface parent contact for a follow-up call.
+
+### Fix 1 — Approvals badge reconciliation
+Root cause: `/api/admin/approvals-summary` counted *all* pending rows regardless of whether the linked user still existed, but the Approvals page's `Promise.all` couldn't complete because `/api/leaves` was 500'ing on legacy rows missing `user_id` (KeyError in `enrich_leaves`). Net effect in prod: sidebar counted phantom rows the admin could never clear.
+
+Backend:
+- `routes/leaves.py::enrich_leaves` — defensive against missing `user_id`. Now returns "Unknown" for orphans and logs a warning so the data-quality scan can surface them.
+- `routes/checkin_approvals.py::approvals_summary` — reconciles pending counts against the live users collection. Orphaned pending rows are excluded so the badge never exceeds the actual queue length.
+
+Frontend:
+- `pages/admin/ApprovalsUnified.jsx` — `Promise.all` → `Promise.allSettled`. One 500'ing queue no longer blanks the whole page; a per-queue error toast fires with the queue name.
+
+### Fix 2 — Grid cell tooltips
+Backend (`routes/reports.py::calendar_grid`):
+- Attendance query now also fetches `check_out_at`, `late_minutes`.
+- Leaves query now also fetches `reason`, `half_day`, `decided_by`.
+- `breaks_by_user` restructured to store the *break doc* per date (not just a set of dates), so we can hand back its name/window/applier.
+- Resolves `break.created_by` → admin `full_name` via a single `db.users.find({id: {$in: admin_ids}})`.
+- New `row.cell_meta` — dict keyed by ISO date with only the entries worth surfacing:
+  - `BK` → `{break_name, range, applied_by, applied_at}`
+  - `LV / TR / CO / PS` → `{reason, half_day, range, approved_by}`
+  - `P / LT / HD` → `{check_in_at, check_out_at, late_minutes, ot_minutes}`
+
+Frontend (`pages/admin/calendar-grid/gridHelpers.jsx`):
+- `GridCell` now takes `meta` + `iso` props; extracted `buildCellTooltip()` composes a multi-line native `title=` attribute. Multi-line so the OS-level tooltip stacks nicely without needing a JS popover library (kept the grid render cheap across 100+ rows × 31 days).
+
+### Feature 3 — No-show / Churn-risk report (P2 backlog)
+Backend: new `GET /api/reports/churn-risk?window_days&threshold&category&institution&min_scheduled` at `routes/reports.py`.
+- Computes *scheduled* days per member (window minus weekly-offs, holidays, approved leaves, breaks).
+- Flags anyone with `miss_pct >= threshold` OR trailing consecutive-absent streak `>= 3` on scheduled days.
+- Sorts worst-first (miss_pct desc → streak desc).
+- Row payload: `{member_id, member_name, rank, category, institution, fleet, scheduled, present, missed, miss_pct, attendance_pct, streak, last_seen, absent_days[-10:], absent_days_total, contact:{relation,name,mobile}, risk_band}`.
+- Contact fallback ladder: father → mother → guardian → self mobile. Tel-links are one-tap from the UI.
+- Risk bands: `critical` (miss >=75% or streak >=7), `high` (miss >=50% or streak >=5), else `watch`.
+- Param guards: `threshold ∈ [0,1]` (else 400); `window_days` clamped to 1..180.
+
+Frontend: new `/admin/churn-risk` page (`pages/admin/ChurnRisk.jsx`), lazy-loaded and nav-linked under Admin in `Layout.jsx` between "Approvals" and "Access Requests". Controls: window (14/30/60/90), threshold (25/40/50/75%), category chips, band chips, CSV export.
+
+### Tests
+- New `tests/test_churn_and_approvals_summary.py` — 7 tests: churn-risk shape, sort invariant, param validation, unauth guard, approvals-summary shape + reconciliation invariant, calendar-grid cell_meta presence.
+- Testing subagent added `tests/test_review_iter24.py` — 9 tests covering the same surfaces at deeper granularity.
+- Combined: **16/16 passing**.
+
+
 ---
 ## 15 Feb 2026 (part 5) — OT approval workflow removed
 

@@ -1383,6 +1383,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 "streak": streak,
                 "last_seen": max(att_set) if att_set else None,
                 "absent_days": absent_days[-10:],  # cap payload
+                "absent_days_total": len(absent_days),  # so UI can note truncation
                 "contact": contact,
                 "risk_band": band,
             })
