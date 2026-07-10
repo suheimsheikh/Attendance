@@ -52,11 +52,9 @@ function fmtCheckIn(iso) {
 
 export default function ChefsView() {
   const [date, setDate] = useState(todayIso());
-  // Cut-off starts blank — the first API response tells us what the
-  // office setting is (from `configured_cutoff`), which we use as the
-  // initial picker value. Admins tune the office-wide default under
-  // Office Settings → Breakfast eligibility cut-off.
-  const [cutoff, setCutoff] = useState("");
+  // Which meal window is being displayed. Breakfast is the historical
+  // default; lunch/dinner added 10 Feb 2026 per user request.
+  const [meal, setMeal] = useState("breakfast");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -67,28 +65,23 @@ export default function ChefsView() {
     inflightRef.current = true;
     setLoading(true);
     try {
-      // If the picker is blank, omit the query param so the backend
-      // uses the office-configured cutoff. Otherwise pass it explicitly.
       const qs = new URLSearchParams({ date });
-      if (cutoff) qs.set("cutoff", cutoff);
       const r = await api.get(`/admin/meals-today?${qs}`);
       setData(r);
-      // Hydrate the picker on first successful load so admins see the
-      // office value they configured (and can override it locally).
-      if (!cutoff && r?.cutoff) setCutoff(r.cutoff);
     } catch (err) {
       toast.error(err?.message || "Failed to load meals data");
     } finally {
       setLoading(false);
       inflightRef.current = false;
     }
-  }, [date, cutoff]);
+  }, [date]);
 
   useEffect(() => { load(); }, [load]);
 
   const cats = useMemo(() => data?.categories || [], [data]);
-  const counts = data?.counts || {};
-  const membersRaw = useMemo(() => data?.members || [], [data]);
+  const bucket = data?.[meal] || {};
+  const counts = bucket.counts || {};
+  const membersRaw = useMemo(() => bucket.members || [], [bucket]);
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -111,7 +104,7 @@ export default function ChefsView() {
     return groups;
   }, [filteredMembers, cats]);
 
-  const total = data?.total ?? 0;
+  const total = bucket.total ?? 0;
   const filteredTotal = filteredMembers.length;
 
   return (
@@ -127,7 +120,7 @@ export default function ChefsView() {
               Chef&apos;s View
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Meal count for members who checked in on or before the cut-off.
+              Meal counts split into breakfast, lunch and dinner windows.
             </p>
           </div>
         </div>
@@ -141,17 +134,6 @@ export default function ChefsView() {
               onChange={(e) => setDate(e.target.value)}
               className="outline-none bg-transparent"
               data-testid="chefs-date-input"
-            />
-          </label>
-          <label className="inline-flex items-center gap-1.5 h-9 px-2 rounded-lg border border-slate-200 bg-white text-sm">
-            <Clock size={14} className="text-slate-400" />
-            <input
-              type="time"
-              value={cutoff}
-              onChange={(e) => setCutoff(e.target.value)}
-              className="outline-none bg-transparent w-20"
-              data-testid="chefs-cutoff-input"
-              title={data?.configured_cutoff ? `Office setting: ${data.configured_cutoff} (change on Office Settings)` : "Loading office setting…"}
             />
           </label>
           <button
@@ -175,6 +157,37 @@ export default function ChefsView() {
             <Printer size={14} /> Print
           </button>
         </div>
+      </div>
+
+      {/* Meal-window tabs — breakfast / lunch / dinner */}
+      <div className="flex flex-wrap gap-2 mb-4" data-testid="chefs-meal-tabs">
+        {[
+          { key: "breakfast", label: "Breakfast", hint: `≤ ${data?.cutoffs?.breakfast || "07:00"}` },
+          { key: "lunch",     label: "Lunch",     hint: `on campus @ ${data?.cutoffs?.lunch || "10:00"}` },
+          { key: "dinner",    label: "Dinner",    hint: `on campus @ ${data?.cutoffs?.dinner || "18:00"}` },
+        ].map((m) => {
+          const active = meal === m.key;
+          const total = data?.[m.key]?.total ?? 0;
+          return (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => setMeal(m.key)}
+              className={`inline-flex items-center gap-2 px-3 h-10 rounded-xl text-sm font-semibold border transition ${
+                active
+                  ? "bg-orange-600 text-white border-orange-700 shadow"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+              }`}
+              data-testid={`chefs-meal-tab-${m.key}`}
+            >
+              <span className="capitalize">{m.label}</span>
+              <span className={`min-w-[26px] h-6 px-1.5 rounded-full text-[11px] flex items-center justify-center font-bold tabular-nums ${
+                active ? "bg-white/20 text-white" : "bg-orange-100 text-orange-700"
+              }`}>{total}</span>
+              <span className={`text-[10px] ${active ? "opacity-90" : "text-slate-400"}`}>{m.hint}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Colored count tickets */}
@@ -222,7 +235,7 @@ export default function ChefsView() {
                 <div className="text-5xl font-black leading-none tabular-nums drop-shadow-sm" data-testid="chefs-count-total">
                   {total}
                 </div>
-                <div className="text-[11px] font-semibold opacity-90 mt-1">meals · cut-off {data?.cutoff}</div>
+                <div className="text-[11px] font-semibold opacity-90 mt-1">meals · {meal} @ {data?.cutoffs?.[meal] || "—"}</div>
               </div>
             </div>
           </div>
@@ -250,7 +263,7 @@ export default function ChefsView() {
             {filteredTotal === 0 ? (
               <div className="text-sm text-slate-400 italic py-8 text-center" data-testid="chefs-empty">
                 {total === 0
-                  ? `No one checked in before ${data?.cutoff} on ${data?.today}.`
+                  ? `No one on campus at ${data?.cutoffs?.[meal] || "—"} on ${data?.today}.`
                   : "No matches for your search."}
               </div>
             ) : (

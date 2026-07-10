@@ -29,6 +29,8 @@ from services.time_utils import local_date_str, now_utc, office_tz
 
 
 DEFAULT_MEAL_CUTOFF = "07:00"
+DEFAULT_LUNCH_CUTOFF = "10:00"
+DEFAULT_DINNER_CUTOFF = "18:00"
 SEEDED_CATEGORY_KEYS = {"athlete", "elite", "coach", "staff", "executive"}
 VALID_COLORS = {"sky", "rose", "emerald", "amber", "violet", "slate"}
 
@@ -221,39 +223,46 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     # ------------------------------------------------------------------
     @router.get("/admin/meals-today")
     async def meals_today(
-        cutoff: Optional[str] = Query(None, description="HH:MM meal cut-off override (defaults to office setting)"),
+        cutoff: Optional[str] = Query(None, description="HH:MM breakfast cut-off override (defaults to office setting)"),
+        lunch_cutoff: Optional[str] = Query(None, description="HH:MM lunch anchor time — members still on campus at this time count"),
+        dinner_cutoff: Optional[str] = Query(None, description="HH:MM dinner anchor time — members still on campus at this time count"),
         date_str: Optional[str] = Query(None, alias="date", description="YYYY-MM-DD (defaults to today, office-local)"),
         admin: dict = Depends(require_chef_or_admin),
     ):
-        """Return meal-eligible members for a given day (defaults to today).
+        """Return meal-eligible members split across the three daily
+        meal windows (breakfast / lunch / dinner).
 
-        A member is meal-eligible if:
-          • Their category is `meal_eligible=True` in the categories master
-            (all 5 seeded categories are eligible by default), AND
-          • They have an attendance row for the target date with
-            `check_in_at` translating to office-local ≤ `cutoff`.
+        Rules:
+          • **Breakfast** — members whose earliest check-in is ≤
+            `breakfast_cutoff` (e.g. 07:00). Same rule as the original
+            Chef's View.
+          • **Lunch** — members "still on campus at `lunch_cutoff`"
+            (default 10:00). I.e. any attendance session with
+            `check_in_at ≤ lunch_cutoff` AND (no `check_out_at` yet OR
+            `check_out_at > lunch_cutoff`).
+          • **Dinner** — same rule as lunch but anchored to
+            `dinner_cutoff` (default 18:00).
 
-        Cutoff resolution: query param > office.meal_breakfast_cutoff >
-        DEFAULT_MEAL_CUTOFF ("07:00"). Admins tune the office-wide default
-        on the Office Settings page.
-
-        Returns counts per category + a flat member list (photo + name +
-        institution + fleet + check-in time) for the chef's printable
-        drill-down.
+        Cut-off resolution: query param > office setting > module
+        default. Config keys on `office`: `meal_breakfast_cutoff`,
+        `meal_lunch_cutoff`, `meal_dinner_cutoff`.
         """
         office = await db.config.find_one({"id": "office"})
-        # Resolution order: explicit query param → office setting → default.
-        # An explicit BAD query param 400s (catches frontend bugs). A bad
-        # office setting silently falls back (so the admin can still open
-        # the page and fix the setting).
-        if cutoff is not None:
-            h, m = _parse_hm(cutoff)          # raises 400 on bad input
-            effective_cutoff = f"{h:02d}:{m:02d}"
-        else:
-            effective_cutoff = (office or {}).get("meal_breakfast_cutoff") or DEFAULT_MEAL_CUTOFF
-            if not _valid_hm(effective_cutoff):
-                effective_cutoff = DEFAULT_MEAL_CUTOFF
-            h, m = _parse_hm(effective_cutoff)
+
+        def _resolve(param: Optional[str], office_key: str, default: str) -> tuple[str, int, int]:
+            if param is not None:
+                h, m = _parse_hm(param)
+                return f"{h:02d}:{m:02d}", h, m
+            cfg = (office or {}).get(office_key) or default
+            if not _valid_hm(cfg):
+                cfg = default
+            h, m = _parse_hm(cfg)
+            return cfg, h, m
+
+        bf_str, bf_h, bf_m = _resolve(cutoff,        "meal_breakfast_cutoff", DEFAULT_MEAL_CUTOFF)
+        lu_str, lu_h, lu_m = _resolve(lunch_cutoff,  "meal_lunch_cutoff",     DEFAULT_LUNCH_CUTOFF)
+        di_str, di_h, di_m = _resolve(dinner_cutoff, "meal_dinner_cutoff",    DEFAULT_DINNER_CUTOFF)
+
         if date_str:
             try:
                 today_d = date.fromisoformat(date_str)
@@ -265,83 +274,120 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             today_d = date.fromisoformat(today_iso)
         tz = office_tz(office)
 
-        # Build the office-local cut-off moment for the target day, then
-        # convert to UTC for a fast ISO-string range comparison on
-        # `check_in_at` (both sides are stored/compared as UTC ISO 8601 strings).
-        cutoff_local = datetime(today_d.year, today_d.month, today_d.day,
-                                h, m, 0, tzinfo=tz)
+        # Build the three cut-off moments in office-local time then
+        # convert to UTC ISO strings (attendance rows store UTC ISO).
         from datetime import timezone as _tz
-        cutoff_utc_str = cutoff_local.astimezone(_tz.utc).isoformat()
+        def _to_utc_iso(h: int, m: int) -> str:
+            dt = datetime(today_d.year, today_d.month, today_d.day, h, m, 0, tzinfo=tz)
+            return dt.astimezone(_tz.utc).isoformat()
+        bf_utc = _to_utc_iso(bf_h, bf_m)
+        lu_utc = _to_utc_iso(lu_h, lu_m)
+        di_utc = _to_utc_iso(di_h, di_m)
 
-        # Pull today's earliest check-in per user (a member can have
-        # multiple sessions if they check out & back in — the first one
-        # is what counts for the meal window).
+        # One fetch covering every session in the day — we bucket
+        # in-memory per meal window.
         attendances = await db.attendance.find(
-            {"date": today_iso, "check_in_at": {"$ne": None, "$lte": cutoff_utc_str}},
-            {"_id": 0, "user_id": 1, "check_in_at": 1},
-        ).to_list(5000)
+            {"date": today_iso, "check_in_at": {"$ne": None}},
+            {"_id": 0, "user_id": 1, "check_in_at": 1, "check_out_at": 1},
+        ).to_list(10000)
 
-        earliest_by_user: dict[str, str] = {}
+        # Bucket sessions by user.
+        by_user: dict[str, list[dict]] = {}
         for row in attendances:
             uid = row.get("user_id")
-            ci = row.get("check_in_at")
-            if not uid or not ci:
-                continue
-            if uid not in earliest_by_user or ci < earliest_by_user[uid]:
-                earliest_by_user[uid] = ci
+            if uid:
+                by_user.setdefault(uid, []).append(row)
 
-        # Fetch matching users + their category metadata.
-        user_ids = list(earliest_by_user.keys())
-        users = []
+        # Meal-window membership functions.
+        def _breakfast_eligible(sessions: list[dict]) -> Optional[str]:
+            """Earliest check_in_at if it's ≤ breakfast cut-off."""
+            cis = sorted([s["check_in_at"] for s in sessions if s.get("check_in_at")])
+            if cis and cis[0] <= bf_utc:
+                return cis[0]
+            return None
+
+        def _still_on_campus_at(sessions: list[dict], anchor_utc: str) -> Optional[str]:
+            """Return the check_in_at of the covering session, or None."""
+            for s in sessions:
+                ci = s.get("check_in_at")
+                co = s.get("check_out_at")
+                if not ci or ci > anchor_utc:
+                    continue
+                if co is None or co > anchor_utc:
+                    return ci
+            return None
+
+        # Fetch users + categories master (one shot, shared across
+        # all three buckets).
+        user_ids = list(by_user.keys())
+        users_by_id: dict[str, dict] = {}
         if user_ids:
             users = await db.users.find(
                 {"id": {"$in": user_ids}},
-                {"_id": 0, "id": 1, "full_name": 1, "category": 1, "photo_thumb": 1,
-                 "institution": 1, "fleet": 1},
+                {"_id": 0, "id": 1, "full_name": 1, "category": 1,
+                 "photo_thumb": 1, "institution": 1, "fleet": 1},
             ).to_list(5000)
-
-        # Pull categories master so the tile colors + labels come from
-        # a single source of truth (rather than hard-coded on the front-end).
+            users_by_id = {u["id"]: u for u in users}
         cats = await db.categories.find(
             {"active": True, "meal_eligible": True},
             {"_id": 0, "key": 1, "label": 1, "color": 1, "sort_order": 1},
         ).sort("sort_order", 1).to_list(50)
         cat_by_key = {c["key"]: c for c in cats}
-
-        # Filter out users whose category is not meal-eligible (defense
-        # in depth — every seeded category is currently eligible).
-        members = []
-        counts: dict[str, int] = {c["key"]: 0 for c in cats}
-        for u in users:
-            key = u.get("category")
-            if key not in cat_by_key:
-                continue
-            counts[key] += 1
-            members.append({
-                "id": u["id"],
-                "full_name": u.get("full_name"),
-                "category": key,
-                "photo_thumb": u.get("photo_thumb"),
-                "institution": u.get("institution"),
-                "fleet": u.get("fleet"),
-                "check_in_at": earliest_by_user.get(u["id"]),
-            })
-
-        # Sort members: by category sort_order, then alphabetically —
-        # matches how the drill-down groups on the frontend.
         cat_order = {c["key"]: c.get("sort_order", 999) for c in cats}
-        members.sort(key=lambda x: (cat_order.get(x["category"], 999),
-                                     (x["full_name"] or "").lower()))
+
+        def _bucket(picker) -> dict:
+            """Run `picker(sessions) -> Optional[check_in_at]` on every
+            user and package into the shape the frontend expects."""
+            members = []
+            counts: dict[str, int] = {c["key"]: 0 for c in cats}
+            for uid, sessions in by_user.items():
+                ci = picker(sessions)
+                if not ci:
+                    continue
+                u = users_by_id.get(uid)
+                if not u:
+                    continue
+                key = u.get("category")
+                if key not in cat_by_key:
+                    continue
+                counts[key] += 1
+                members.append({
+                    "id": uid,
+                    "full_name": u.get("full_name"),
+                    "category": key,
+                    "photo_thumb": u.get("photo_thumb"),
+                    "institution": u.get("institution"),
+                    "fleet": u.get("fleet"),
+                    "check_in_at": ci,
+                })
+            members.sort(key=lambda x: (cat_order.get(x["category"], 999),
+                                         (x["full_name"] or "").lower()))
+            return {"counts": counts, "total": sum(counts.values()), "members": members}
+
+        breakfast = _bucket(_breakfast_eligible)
+        lunch     = _bucket(lambda s: _still_on_campus_at(s, lu_utc))
+        dinner    = _bucket(lambda s: _still_on_campus_at(s, di_utc))
 
         return {
             "today": today_iso,
-            "cutoff": f"{h:02d}:{m:02d}",
-            "configured_cutoff": (office or {}).get("meal_breakfast_cutoff") or DEFAULT_MEAL_CUTOFF,
             "generated_at": now_utc().isoformat(),
-            "categories": cats,   # ordered, with colors/labels
-            "counts": counts,      # {category_key: n}
-            "total": sum(counts.values()),
-            "members": members,
+            "categories": cats,
+            "cutoffs": {
+                "breakfast": bf_str,
+                "lunch":     lu_str,
+                "dinner":    di_str,
+            },
+            "breakfast": breakfast,
+            "lunch":     lunch,
+            "dinner":    dinner,
+            # --- Legacy top-level fields — kept so any older client that
+            # still reads `counts` / `members` / `total` / `cutoff` on
+            # the root of the payload keeps working during rollout.
+            "cutoff": bf_str,
+            "configured_cutoff": (office or {}).get("meal_breakfast_cutoff") or DEFAULT_MEAL_CUTOFF,
+            "counts": breakfast["counts"],
+            "total":  breakfast["total"],
+            "members": breakfast["members"],
         }
 
     return router
