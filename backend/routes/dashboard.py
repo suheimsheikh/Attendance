@@ -137,7 +137,8 @@ def make_router(db, require_admin) -> APIRouter:
 
         week_atts = await db.attendance.find(
             {"date": {"$gte": week_start, "$lte": today_iso}},
-            {"_id": 0, "user_id": 1, "date": 1, "late": 1},
+            {"_id": 0, "user_id": 1, "date": 1, "late": 1,
+             "overtime_total_min": 1},
         ).to_list(30000)
 
         # Sparkline: unique members present per day, split staff-side vs athletes.
@@ -184,6 +185,32 @@ def make_router(db, require_admin) -> APIRouter:
                 "category": u.get("category"),
                 "photo": u.get("photo_thumb"),
                 "late_days": cnt,
+            })
+
+        # Top 5 by OT minutes accumulated this week — surfaces payroll
+        # pressure points + potential burnout / data-entry errors at a
+        # glance (15 Feb 2026 user request after Shiva's 50h+ OT month
+        # showed up in The Grid). Sums across all attendance rows in
+        # the window regardless of `overtime_status` so admins see the
+        # raw signal before approvals are cleared.
+        ot_by_user: dict[str, int] = {}
+        for r in week_atts:
+            mins = int(r.get("overtime_total_min") or 0)
+            if mins > 0:
+                uid = r["user_id"]
+                ot_by_user[uid] = ot_by_user.get(uid, 0) + mins
+        ot_ranked = sorted(ot_by_user.items(), key=lambda x: -x[1])[:5]
+        top_ot = []
+        for uid, mins in ot_ranked:
+            u = users_by_id.get(uid)
+            if not u:
+                continue
+            top_ot.append({
+                "member_id": uid,
+                "name": u.get("full_name"),
+                "category": u.get("category"),
+                "photo": u.get("photo_thumb"),
+                "ot_minutes": mins,
             })
 
         # Birthdays this week (MM-DD match against date_of_birth).
@@ -308,6 +335,7 @@ def make_router(db, require_admin) -> APIRouter:
                 "end_date": today_iso,
                 "sparkline": sparkline,
                 "top_late": top_late,
+                "top_ot": top_ot,
                 "birthdays": birthdays,
                 "events": events,
             },

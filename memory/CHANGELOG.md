@@ -5,6 +5,36 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 15 Feb 2026 (part 3) — Top 5 OT this week widget on Admin Dashboard
+
+**Follow-on** to the OT-hours-on-The-Grid feature: surface the same
+signal on the single-glance Admin Dashboard so payroll pressure points
+(and possible burnout / data-entry errors) are visible without
+drilling into The Grid.
+
+### Backend — `routes/dashboard.py`
+- Fetched `overtime_total_min` alongside `late` in the weekly
+  attendance projection.
+- New `week.top_ot`: top 5 members by total OT minutes accumulated in
+  the last 7 days (incl. today), desc-sorted. Same shape as
+  `top_late`: `{ member_id, name, category, photo, ot_minutes }`.
+- Sums across ALL statuses (pending + approved) so admins see the
+  raw signal before approvals are cleared — matches how the Grid
+  presents OT.
+
+### Frontend — `pages/admin/Dashboard.jsx`
+- New **Top 5 OT this week** widget in the "This week" band, right
+  under Daily Attendance. Format: avatar · name · category chip ·
+  `Xh Ym` (violet). Empty-state: "No overtime this week."
+- Icon = `TrendingUp` (matches the OT column icon on The Grid).
+
+### Tests — `tests/test_dashboard_top_ot.py` (new)
+- `week.top_ot` present, ≤ 5 rows, each row has the widget shape,
+  desc-sorted by `ot_minutes`.
+
+
+
+---
 ## 15 Feb 2026 (part 2) — OT hours on The Grid + inline Check-out on Muster
 
 **User requests:**

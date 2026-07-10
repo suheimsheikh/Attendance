@@ -392,6 +392,44 @@ export default function Dashboard() {
                 )}
               </div>
 
+              {/* Top OT this week — surfaces payroll pressure points +
+                  possible burnout / data-entry errors. Double-click a
+                  row to jump to that member's OT ledger. */}
+              <div data-testid="dashboard-top-ot">
+                <div className="text-xs font-bold uppercase text-slate-500 mb-2 flex items-center gap-1.5">
+                  <TrendingUp size={13} /> Top 5 OT this week
+                </div>
+                {(week.top_ot || []).length === 0 ? (
+                  <div className="text-xs text-slate-400 italic py-2">No overtime this week.</div>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {(week.top_ot || []).map((m) => {
+                      const h = Math.floor((m.ot_minutes || 0) / 60);
+                      const mm = (m.ot_minutes || 0) % 60;
+                      const label = h > 0 ? (mm ? `${h}h ${mm}m` : `${h}h`) : `${mm}m`;
+                      return (
+                        <li
+                          key={m.member_id}
+                          className="flex items-center gap-2 text-sm"
+                          data-testid={`dashboard-top-ot-row-${m.member_id}`}
+                        >
+                          <Avatar name={m.name} photo={m.photo} size={28} />
+                          <span className="flex-1 truncate text-slate-800">{m.name}</span>
+                          <span
+                            className={`inline-flex px-1.5 py-0.5 rounded font-mono text-[10px] font-bold ${CATEGORY_COLOR[m.category] || "bg-slate-100 text-slate-700"}`}
+                          >
+                            {m.category?.[0]?.toUpperCase() || "?"}
+                          </span>
+                          <span className="text-xs font-bold text-violet-700 tabular-nums">
+                            {label}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
               {/* Birthdays */}
               <div data-testid="dashboard-birthdays">
                 <div className="text-xs font-bold uppercase text-slate-500 mb-2 flex items-center gap-1.5">
