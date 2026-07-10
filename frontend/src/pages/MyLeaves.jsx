@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw, Clock, Search, Check, Briefcase } from "lucide-react";
+import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw, Clock, Check, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
-import Avatar from "../components/Avatar";
 import LeaveBalanceNotice from "../components/LeaveBalanceNotice";
 import OverlapNotice from "../components/OverlapNotice";
 import EventConflictNotice from "../components/EventConflictNotice";
@@ -13,6 +12,8 @@ import FormErrorBanner from "../components/FormErrorBanner";
 import { useFormError } from "../hooks/useFormError";
 import { shortDate, todayIso, tomorrowIso } from "../utils";
 import { useEscape } from "../hooks/useEscape";
+import MemberMultiPicker from "./leaves/MemberMultiPicker";
+import HalfDayPicker from "./leaves/HalfDayPicker";
 
 const TYPE_LABELS = {
   leave:        { label: "Leave",        color: "#F59E0B", Icon: Bed },
@@ -669,85 +670,20 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
         </div>
         <form onSubmit={submit} className="space-y-4">
           {asAdmin && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <label className="iu-label !mb-0">Pick members ({picked.size} selected)</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={pickAllFiltered}
-                    data-testid="ob-pick-all"
-                    className="iu-btn-secondary !h-8 !px-2 !text-xs"
-                  >Pick all ({filteredMembers.length})</button>
-                  <button
-                    type="button"
-                    onClick={clearPicked}
-                    data-testid="ob-clear"
-                    className="iu-btn-secondary !h-8 !px-2 !text-xs"
-                    disabled={picked.size === 0}
-                  >Clear</button>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-2 px-2 h-9 rounded-lg border border-slate-200 bg-white">
-                  <Search size={14} className="text-slate-400" />
-                  <input
-                    data-testid="ob-search"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search by name, rank or email…"
-                    className="flex-1 outline-none bg-transparent text-sm"
-                  />
-                </div>
-                <select
-                  data-testid="ob-inst-filter"
-                  value={instFilter}
-                  onChange={(e) => setInstFilter(e.target.value)}
-                  className="iu-input !h-9 !w-44"
-                >
-                  <option value="">All institutions</option>
-                  {institutions.map((i) => <option key={i.id} value={i.name}>{i.name}</option>)}
-                </select>
-              </div>
-              <div className="bg-white rounded-lg border border-slate-200 max-h-[34vh] overflow-auto divide-y divide-slate-100" data-testid="ob-member-list">
-                {filteredMembers.length === 0 ? (
-                  <div className="px-3 py-6 text-center text-sm text-slate-500">No members match.</div>
-                ) : filteredMembers.map((m) => {
-                  const on = picked.has(m.id);
-                  return (
-                    <label
-                      key={m.id}
-                      className={`px-3 py-2 flex items-center gap-3 cursor-pointer transition ${on ? "bg-emerald-50/70" : "hover:bg-slate-50"}`}
-                      data-testid={`ob-row-${m.id}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={on}
-                        onChange={() => togglePick(m.id)}
-                        data-testid={`ob-checkbox-${m.id}`}
-                      />
-                      <Avatar name={m.full_name} photo={m.photo} size={28} />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-sm text-slate-900 truncate">{m.full_name}</div>
-                        <div className="text-[11px] text-slate-500 truncate">
-                          {m.rank ? `${m.rank} · ` : ""}{m.institution || "—"}
-                        </div>
-                      </div>
-                      {on && <Check size={14} className="text-emerald-600" />}
-                    </label>
-                  );
-                })}
-              </div>
-              <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={autoApprove}
-                  onChange={(e) => setAutoApprove(e.target.checked)}
-                  data-testid="ob-auto-approve"
-                />
-                Auto-approve (skip the pending queue)
-              </label>
-            </div>
+            <MemberMultiPicker
+              members={filteredMembers}
+              institutions={institutions}
+              instFilter={instFilter}
+              onInstFilter={setInstFilter}
+              search={search}
+              onSearch={setSearch}
+              picked={picked}
+              onTogglePick={togglePick}
+              onPickAllFiltered={pickAllFiltered}
+              onClearPicked={clearPicked}
+              autoApprove={autoApprove}
+              onAutoApprove={setAutoApprove}
+            />
           )}
           <div>
             <label className="iu-label">Type</label>
@@ -765,40 +701,11 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
               <p className="text-[11px] text-slate-500 mt-1.5">Days are deducted from your Comp-Off balance first, then your Paid Leave. Anything left is treated as Loss of Pay.</p>
             )}
             {type === "leave" && (
-              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5" data-testid="half-day-block">
-                <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-slate-800 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={!!halfDay}
-                    onChange={(e) => setHalfDay(e.target.checked ? "FN" : null)}
-                    data-testid="half-day-toggle"
-                  />
-                  Half-day only (single day, consumes 0.5 from balance)
-                </label>
-                {halfDay && (
-                  <div className="mt-2 flex flex-wrap gap-2 items-center">
-                    <button
-                      type="button"
-                      onClick={() => setHalfDay("FN")}
-                      data-testid="half-day-fn"
-                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition ${halfDay === "FN" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:border-slate-500"}`}
-                    >
-                      Forenoon · {halfDayWindows.fn}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setHalfDay("PN")}
-                      data-testid="half-day-pn"
-                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition ${halfDay === "PN" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:border-slate-500"}`}
-                    >
-                      Postnoon · {halfDayWindows.pn}
-                    </button>
-                    <span className="text-[11px] text-slate-500">
-                      End date will be locked to the start date.
-                    </span>
-                  </div>
-                )}
-              </div>
+              <HalfDayPicker
+                halfDay={halfDay}
+                onChange={setHalfDay}
+                windows={halfDayWindows}
+              />
             )}
             {type === "late_coming" && (
               <p className="text-[11px] text-slate-500 mt-1.5">Use this when you&apos;ll arrive late today or tomorrow. Admin gets pinged so you&apos;re not flagged as absent. <span className="text-slate-400">Defaults to tomorrow — flip to today via the date picker if needed.</span></p>
