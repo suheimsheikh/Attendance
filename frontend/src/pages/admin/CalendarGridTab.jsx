@@ -433,7 +433,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
           onClose={() => setOtLedger(null)}
           memberId={otLedger.member_id}
           memberName={otLedger.member_name}
-          year={monthIso?.slice(0, 4)}
+          month={monthIso}
         />
       )}
 

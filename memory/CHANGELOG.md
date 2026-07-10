@@ -5,6 +5,52 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 15 Feb 2026 (part 4) — All ledgers restricted to the current month
+
+**User request:** "All ledgers should be restricted to the current month."
+
+Previously, the OT / Leave / Comp-off ledger modals fetched the WHOLE
+year — a July click on The Grid would show sessions all the way from
+January. Admins wanted month-scoped drill-downs so the totals in the
+modal footer match the totals in the row that opened it.
+
+### Backend — `routes/reports.py`
+- New shared `_ledger_window(year, month)` helper — accepts either
+  `year=YYYY` (back-compat) or `month=YYYY-MM` and returns
+  `(start_iso, end_iso, label)`. Neither → HTTP 400 (guards against
+  silent full-history dumps).
+- `GET /reports/ot-ledger`, `/leave-ledger`, `/comp-off-ledger` now
+  accept both `?month=YYYY-MM` and `?year=YYYY`; month wins if both
+  given. Responses now carry `window_label`, `start`, `end` so the
+  modal can echo the effective window in its header.
+- Export endpoints (PDF/CSV) for all three ledgers mirror the same
+  contract. Filenames + PDF subtitle now use the effective window.
+
+### Frontend
+- `OTLedgerModal.jsx`, `LeaveLedgerModal.jsx`, `CompOffLedgerModal.jsx`
+  now accept a `month` prop and pass `?month=` when set. Empty-state
+  copy + header line + PDF download filename all use the window label.
+- `CalendarGridTab.jsx` (The Grid) passes `month={monthIso}` when
+  opening the OT ledger — the ledger auto-matches the month the grid
+  is showing.
+- `Reports.jsx` also passes `month={monthIso}` to OT/Leave/CompOff
+  modals so the classic Attendance report's drill-downs also stay
+  month-scoped.
+
+### Tests — `tests/test_ledger_month_scope.py` (new, 4 tests)
+- OT ledger with `?month=` returns ≤ rows than `?year=`, all rows land
+  inside the month, `window_label` echoes the month.
+- Leave + Comp-off endpoints accept `?month=`.
+- All three endpoints refuse requests missing both `year` AND `month`
+  with a 400 (prevents accidental full-history queries).
+
+Screenshot verified: Shiva's OT ledger now reads
+"2026-07 · 9 sessions · 35h 45m total" instead of the previous
+15-session year-wide dump.
+
+
+
+---
 ## 15 Feb 2026 (part 3) — Top 5 OT this week widget on Admin Dashboard
 
 **Follow-on** to the OT-hours-on-The-Grid feature: surface the same

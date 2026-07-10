@@ -651,13 +651,14 @@ export default function Reports() {
         </>
       )}
 
-      {/* OT-ledger drill-down — opens on double-click of any OT cell. */}
+      {/* OT-ledger drill-down — opens on double-click of any OT cell.
+          Month-scoped (15 Feb 2026 user request). */}
       <OTLedgerModal
         open={!!otLedger}
         onClose={() => setOtLedger(null)}
         memberId={otLedger?.member_id}
         memberName={otLedger?.member_name}
-        year={year}
+        month={monthIso}
       />
 
       {/* Comp-off ledger drill-down — opens on double-click of any
@@ -667,7 +668,7 @@ export default function Reports() {
         onClose={() => setCoLedger(null)}
         memberId={coLedger?.member_id}
         memberName={coLedger?.member_name}
-        year={year}
+        month={monthIso}
       />
 
       {/* Leave ledger drill-down — opens on double-click of any Leave
@@ -677,7 +678,7 @@ export default function Reports() {
         onClose={() => setLvLedger(null)}
         memberId={lvLedger?.member_id}
         memberName={lvLedger?.member_name}
-        year={year}
+        month={monthIso}
       />
 
       {/* Attendance ledger drill-down — opens on double-click of any

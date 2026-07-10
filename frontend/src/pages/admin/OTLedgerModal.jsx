@@ -44,7 +44,7 @@ function fmtDDMMYYYY(iso) {
   return `${d}/${m}/${y.slice(-2)}`;
 }
 
-export default function OTLedgerModal({ open, onClose, memberId, memberName, year }) {
+export default function OTLedgerModal({ open, onClose, memberId, memberName, year, month }) {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({});
   const [loading, setLoading] = useState(false);
@@ -52,13 +52,18 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
   useEffect(() => {
     if (!open || !memberId) return;
     setLoading(true);
-    api.get(`/reports/ot-ledger?member_id=${memberId}&year=${year}`)
+    // Month-scoped by default (15 Feb 2026 user request: "All ledgers
+    // should be restricted to the current month"). Callers can still
+    // fall back to year-wide by omitting `month`.
+    const qs = month ? `month=${month}` : `year=${year}`;
+    api.get(`/reports/ot-ledger?member_id=${memberId}&${qs}`)
       .then((r) => { setRows(r?.rows || []); setMeta(r || {}); })
       .catch((err) => showApiError(err, "Load failed"))
       .finally(() => setLoading(false));
-  }, [open, memberId, year]);
+  }, [open, memberId, year, month]);
 
   if (!open) return null;
+  const windowLabel = meta.window_label || month || String(year || "");
 
   return (
     <div
@@ -71,7 +76,7 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
           <div className="min-w-0">
             <h2 className="text-lg font-bold truncate">Overtime ledger — {memberName || meta.member_name}</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              {year} · {rows.length} session{rows.length === 1 ? "" : "s"} · <b>{fmtMin(meta.total_minutes)}</b> total
+              {windowLabel} · {rows.length} session{rows.length === 1 ? "" : "s"} · <b>{fmtMin(meta.total_minutes)}</b> total
             </p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -79,8 +84,10 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
               <button
                 onClick={() => downloadBlob(
                   "/reports/ot-ledger/export",
-                  `ot_ledger_${(memberName || "member").replace(/\s+/g, "_")}_${year}.pdf`,
-                  { member_id: memberId, year, fmt: "pdf" },
+                  `ot_ledger_${(memberName || "member").replace(/\s+/g, "_")}_${windowLabel}.pdf`,
+                  month
+                    ? { member_id: memberId, month, fmt: "pdf" }
+                    : { member_id: memberId, year, fmt: "pdf" },
                 )}
                 className="iu-btn-secondary text-xs"
                 data-testid="ot-ledger-download-pdf"
@@ -100,7 +107,7 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
               <Loader2 size={14} className="animate-spin" /> Loading…
             </div>
           ) : rows.length === 0 ? (
-            <p className="text-slate-500 text-sm italic">No overtime recorded for {year}.</p>
+            <p className="text-slate-500 text-sm italic">No overtime recorded for {windowLabel}.</p>
           ) : (
             <table className="w-full text-xs iu-table-compact">
               <thead className="sticky top-0 bg-slate-50 z-10">

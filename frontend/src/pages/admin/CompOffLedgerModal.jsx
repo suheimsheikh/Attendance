@@ -18,7 +18,7 @@ const KIND_TINT = {
   rejected: "bg-rose-100 text-rose-800 border-rose-200",
 };
 
-export default function CompOffLedgerModal({ open, onClose, memberId, memberName, year }) {
+export default function CompOffLedgerModal({ open, onClose, memberId, memberName, year, month }) {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({});
   const [loading, setLoading] = useState(false);
@@ -26,15 +26,18 @@ export default function CompOffLedgerModal({ open, onClose, memberId, memberName
   useEffect(() => {
     if (!open || !memberId) return;
     setLoading(true);
-    api.get(`/reports/comp-off-ledger?member_id=${memberId}&year=${year}`)
+    // Month-scoped by default (15 Feb 2026 user request).
+    const qs = month ? `month=${month}` : `year=${year}`;
+    api.get(`/reports/comp-off-ledger?member_id=${memberId}&${qs}`)
       .then((r) => { setRows(r?.rows || []); setMeta(r || {}); })
       .catch((err) => showApiError(err, "Load failed"))
       .finally(() => setLoading(false));
-  }, [open, memberId, year]);
+  }, [open, memberId, year, month]);
 
   if (!open) return null;
 
   const totals = meta.totals || {};
+  const windowLabel = meta.window_label || month || String(year || "");
   return (
     <div
       className="iu-modal"
@@ -46,7 +49,7 @@ export default function CompOffLedgerModal({ open, onClose, memberId, memberName
           <div>
             <h2 className="text-lg font-bold">Comp-off ledger — {memberName || meta.member_name}</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              {year} · weekly-off <b className="capitalize">{meta.weekly_off || "—"}</b>
+              {windowLabel} · weekly-off <b className="capitalize">{meta.weekly_off || "—"}</b>
               &nbsp;·&nbsp; Earned <b className="text-sky-700">{totals.earned || 0}</b>
               &nbsp;·&nbsp; Applied <b className="text-amber-700">{totals.applied || 0}</b>
               &nbsp;·&nbsp; Approved <b className="text-emerald-700">{totals.approved || 0}</b>
@@ -58,8 +61,10 @@ export default function CompOffLedgerModal({ open, onClose, memberId, memberName
               <button
                 onClick={() => downloadBlob(
                   "/reports/comp-off-ledger/export",
-                  `comp_off_ledger_${(memberName || "member").replace(/\s+/g, "_")}_${year}.pdf`,
-                  { member_id: memberId, year, fmt: "pdf" },
+                  `comp_off_ledger_${(memberName || "member").replace(/\s+/g, "_")}_${windowLabel}.pdf`,
+                  month
+                    ? { member_id: memberId, month, fmt: "pdf" }
+                    : { member_id: memberId, year, fmt: "pdf" },
                 )}
                 className="iu-btn-secondary text-xs"
                 data-testid="comp-off-ledger-download-pdf"
@@ -79,7 +84,7 @@ export default function CompOffLedgerModal({ open, onClose, memberId, memberName
               <Loader2 size={14} className="animate-spin" /> Loading…
             </div>
           ) : rows.length === 0 ? (
-            <p className="text-slate-500 text-sm italic">No comp-off activity recorded for {year}.</p>
+            <p className="text-slate-500 text-sm italic">No comp-off activity recorded for {windowLabel}.</p>
           ) : (
             <table className="w-full text-xs iu-table-compact">
               <thead className="sticky top-0 bg-slate-50 z-10">
