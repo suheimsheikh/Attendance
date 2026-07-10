@@ -14,10 +14,12 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCw, Check, X, Plane, LogIn, PencilRuler } from "lucide-react";
+import { Loader2, RefreshCw, Check, X, Plane, LogIn, PencilRuler, Plus, Coffee } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
 import { formatDate, formatTime } from "../../utils";
+import { ApplyForm } from "../MyLeaves";
+import { BreakForm } from "./Calendar";
 
 const KIND_META = {
   leave:      { label: "Leave/Tour",  Icon: Plane,          tone: "bg-amber-100 text-amber-700" },
@@ -118,6 +120,30 @@ export default function ApprovalsUnified() {
   const [filter, setFilter] = useState("all");
   const [busyId, setBusyId] = useState(null);
   const queryClient = useQueryClient();
+
+  // "Apply on behalf" + "Apply break" modals — moved onto this page
+  // 20 Feb 2026 after the sidebar "Leave & Tour" nav was removed and
+  // admins reported they could no longer find how to file a leave for a
+  // member. The old /admin/leaves-page route still works but the two
+  // primary admin CTAs now live where they'll be found.
+  const [showOnBehalf, setShowOnBehalf] = useState(false);
+  const [showBreak, setShowBreak] = useState(false);
+  const [breakDeps, setBreakDeps] = useState({ members: [], institutions: [] });
+
+  const openBreakModal = useCallback(async () => {
+    setShowBreak(true);
+    if (breakDeps.members.length === 0) {
+      try {
+        const [members, institutions] = await Promise.all([
+          api.get("/members").catch(() => []),
+          api.get("/institutions").catch(() => []),
+        ]);
+        setBreakDeps({ members: members || [], institutions: institutions || [] });
+      } catch (err) {
+        console.debug("Break modal pre-load failed (non-blocking):", err);
+      }
+    }
+  }, [breakDeps.members.length]);
 
   // Three independent queues rendered in one table. `useQueries` lets us
   // cache each response individually — a decision on a leave invalidates
@@ -244,14 +270,30 @@ export default function ApprovalsUnified() {
             One table for every pending request — sorted latest first.
           </p>
         </div>
-        <button
-          onClick={load}
-          className="iu-btn-secondary"
-          disabled={loading}
-          data-testid="approvals-refresh"
-        >
-          {loading ? <Loader2 className="animate-spin" size={14}/> : <RefreshCw size={14}/>} Refresh
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={openBreakModal}
+            className="iu-btn-secondary !bg-amber-50 !text-amber-800 hover:!bg-amber-100 !border-amber-200"
+            data-testid="apply-break"
+          >
+            <Coffee size={14}/> Apply break
+          </button>
+          <button
+            onClick={() => setShowOnBehalf(true)}
+            className="iu-btn-primary"
+            data-testid="apply-on-behalf"
+          >
+            <Plus size={14}/> Apply on behalf
+          </button>
+          <button
+            onClick={load}
+            className="iu-btn-secondary"
+            disabled={loading}
+            data-testid="approvals-refresh"
+          >
+            {loading ? <Loader2 className="animate-spin" size={14}/> : <RefreshCw size={14}/>} Refresh
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-wrap gap-2 mb-4" data-testid="approvals-filter-chips">
@@ -341,6 +383,28 @@ export default function ApprovalsUnified() {
           </table>
         </div>
       </div>
+
+      {showOnBehalf && (
+        <ApplyForm
+          asAdmin
+          onClose={() => setShowOnBehalf(false)}
+          onCreated={() => {
+            setShowOnBehalf(false);
+            // Fresh leaves cache so newly-filed on-behalf rows appear
+            // in the pending list without a manual refresh.
+            queryClient.invalidateQueries({ queryKey: ["/leaves"] });
+            queryClient.invalidateQueries({ queryKey: ["/admin/approvals-summary"] });
+          }}
+        />
+      )}
+      {showBreak && (
+        <BreakForm
+          members={breakDeps.members}
+          institutions={breakDeps.institutions}
+          onClose={() => setShowBreak(false)}
+          onSaved={() => { setShowBreak(false); toast.success("Break applied"); }}
+        />
+      )}
     </div>
   );
 }
