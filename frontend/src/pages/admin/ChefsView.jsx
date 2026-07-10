@@ -167,7 +167,9 @@ export default function ChefsView() {
           { key: "dinner",    label: "Dinner",    hint: `on campus @ ${data?.cutoffs?.dinner || "18:00"}` },
         ].map((m) => {
           const active = meal === m.key;
-          const total = data?.[m.key]?.total ?? 0;
+          const b = data?.[m.key];
+          const total = b?.total ?? 0;
+          const locked = b?.locked !== false; // treat undefined as locked (past dates)
           return (
             <button
               key={m.key}
@@ -177,13 +179,14 @@ export default function ChefsView() {
                 active
                   ? "bg-orange-600 text-white border-orange-700 shadow"
                   : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-              }`}
+              } ${!locked ? "opacity-70" : ""}`}
               data-testid={`chefs-meal-tab-${m.key}`}
+              title={locked ? "" : `Count locks at ${data?.cutoffs?.[m.key]}`}
             >
               <span className="capitalize">{m.label}</span>
               <span className={`min-w-[26px] h-6 px-1.5 rounded-full text-[11px] flex items-center justify-center font-bold tabular-nums ${
-                active ? "bg-white/20 text-white" : "bg-orange-100 text-orange-700"
-              }`}>{total}</span>
+                active ? "bg-white/20 text-white" : (locked ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-400")
+              }`}>{locked ? total : "—"}</span>
               <span className={`text-[10px] ${active ? "opacity-90" : "text-slate-400"}`}>{m.hint}</span>
             </button>
           );
@@ -260,10 +263,22 @@ export default function ChefsView() {
               </label>
             </div>
 
-            {filteredTotal === 0 ? (
+            {bucket.locked === false ? (
+              <div className="text-sm text-slate-500 italic py-10 text-center border-2 border-dashed border-slate-200 rounded-xl" data-testid="chefs-locked-notice">
+                <div className="text-slate-700 font-semibold mb-1 not-italic">
+                  {meal[0].toUpperCase() + meal.slice(1)} count locks at {data?.cutoffs?.[meal] || "—"}
+                </div>
+                <div className="text-xs">
+                  Members can still leave before the anchor time, so a provisional total would be misleading.
+                  <br />Check back after {data?.cutoffs?.[meal] || "the anchor time"} for the true head-count.
+                </div>
+              </div>
+            ) : filteredTotal === 0 ? (
               <div className="text-sm text-slate-400 italic py-8 text-center" data-testid="chefs-empty">
                 {total === 0
-                  ? `No one on campus at ${data?.cutoffs?.[meal] || "—"} on ${data?.today}.`
+                  ? (meal === "breakfast"
+                      ? `No one checked in on or before ${data?.cutoffs?.breakfast || "—"} on ${data?.today}.`
+                      : `No one on campus at ${data?.cutoffs?.[meal] || "—"} on ${data?.today}.`)
                   : "No matches for your search."}
               </div>
             ) : (

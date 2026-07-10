@@ -25,7 +25,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from services.time_utils import local_date_str, now_utc, office_tz
+from services.time_utils import local_date_str, local_now, now_utc, office_tz
 
 
 DEFAULT_MEAL_CUTOFF = "07:00"
@@ -273,6 +273,18 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             today_iso = local_date_str(office)
             today_d = date.fromisoformat(today_iso)
         tz = office_tz(office)
+        # For today's date, compute "is this meal window locked in yet"
+        # — i.e. has the clock crossed the anchor time? Before the
+        # anchor passes, showing a provisional count is misleading
+        # (members can still leave before the anchor), so we hide it.
+        # Past dates are always locked.
+        _local_today = local_date_str(office)
+        _is_today = today_iso == _local_today
+        _now_local = local_now(office) if _is_today else None
+        def _locked(h: int, m: int) -> bool:
+            if not _is_today:
+                return True
+            return (_now_local.hour, _now_local.minute) >= (h, m)
 
         # Build the three cut-off moments in office-local time then
         # convert to UTC ISO strings (attendance rows store UTC ISO).
@@ -367,6 +379,19 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         breakfast = _bucket(_breakfast_eligible)
         lunch     = _bucket(lambda s: _still_on_campus_at(s, lu_utc))
         dinner    = _bucket(lambda s: _still_on_campus_at(s, di_utc))
+        # Stamp lock state + zero-out unlocked buckets so the kitchen
+        # never sees a premature estimate. Past dates always locked.
+        for bucket_dict, (h, m) in (
+            (breakfast, (bf_h, bf_m)),
+            (lunch,     (lu_h, lu_m)),
+            (dinner,    (di_h, di_m)),
+        ):
+            locked = _locked(h, m)
+            bucket_dict["locked"] = locked
+            if not locked:
+                bucket_dict["counts"] = {c["key"]: 0 for c in cats}
+                bucket_dict["total"] = 0
+                bucket_dict["members"] = []
 
         return {
             "today": today_iso,
