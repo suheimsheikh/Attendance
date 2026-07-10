@@ -6,6 +6,7 @@ import { categoryLabel, formatDate } from "../../utils";
 import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 import AttendanceLedgerModal from "./AttendanceLedgerModal";
 import OTLedgerModal from "./OTLedgerModal";
+import { GridCell, CELL_STYLE, correctionForCode, fmtOt } from "./calendar-grid/gridHelpers";
 
 /**
  * Calendar Grid tab — one row per member, one column per day of the
@@ -19,67 +20,6 @@ const CATEGORY_FILTERS = [
   { key: "elite",   label: "Elite" },
   { key: "rest",    label: "Staff & Coaches" },
 ];
-
-// Cell colour + label registry. Each entry maps a status code to
-// tailwind bg + text classes and the display label (2-letter code).
-const CELL_STYLE = {
-  P:  { bg: "bg-emerald-500",    text: "text-white",       label: "P",  title: "Present" },
-  HD: { bg: "bg-amber-100",      text: "text-amber-700",   label: "HD", title: "Half day" },
-  LT: { bg: "bg-emerald-500/70", text: "text-amber-100",   label: "LT", title: "Late" },
-  LV: { bg: "bg-amber-200",      text: "text-amber-800",   label: "LV", title: "Leave" },
-  TR: { bg: "bg-orange-200",     text: "text-orange-800",  label: "TR", title: "Tour" },
-  PS: { bg: "bg-slate-200",      text: "text-slate-700",   label: "PS", title: "Posting" },
-  CO: { bg: "bg-sky-200",        text: "text-sky-800",     label: "CO", title: "Comp-off" },
-  WO: { bg: "bg-slate-100",      text: "text-slate-500",   label: "WO", title: "Weekly off" },
-  HO: { bg: "bg-violet-100",     text: "text-violet-700",  label: "HO", title: "Holiday" },
-  AB: { bg: "bg-red-500",        text: "text-white",       label: "AB", title: "Absent" },
-};
-
-function GridCell({ code, dow, onClick }) {
-  if (!code) {
-    // Future date — render an empty slot but keep it clickable-looking
-    // in the same width so the grid stays aligned.
-    return <td className="border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-7">·</td>;
-  }
-  const s = CELL_STYLE[code] || CELL_STYLE.AB;
-  const clickable = !!onClick;
-  return (
-    <td
-      className={`border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-7 leading-none ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
-      title={`${s.title}${dow ? " · " + dow : ""}${clickable ? " · click to file correction" : ""}`}
-      onClick={onClick}
-    >
-      {s.label}
-    </td>
-  );
-}
-
-// Given a cell code, pick the best default correction kind + entityType
-// so the modal opens straight to the right form section. Cells that
-// don't map to a useful correction (WO / HO) return null so we don't
-// wire an onClick handler.
-function correctionForCode(code) {
-  switch (code) {
-    case "AB":               return { entityType: "attendance", initialKind: "missed_checkin" };
-    case "LT":
-    case "P":
-    case "HD":               return { entityType: "attendance", initialKind: "time_adjust" };
-    case "LV":
-    case "TR":
-    case "CO":
-    case "PS":               return { entityType: "leave", initialKind: "leave_cancel" };
-    default:                 return null;   // WO, HO — nothing sensible to correct
-  }
-}
-
-// Format OT minutes → compact "1h 30m" / "45m" / "" (empty when zero).
-function fmtOt(mins) {
-  const m = Number(mins || 0);
-  if (m <= 0) return "";
-  const h = Math.floor(m / 60);
-  const mm = m % 60;
-  return h > 0 ? (mm ? `${h}h ${mm}m` : `${h}h`) : `${mm}m`;
-}
 
 export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPrevMonth, onNextMonth, onJumpToday, MonthNav, athleteLikeKeys }) {
   const [loading, setLoading] = useState(false);
