@@ -23,7 +23,15 @@ function fmtMin(m) {
 }
 function timeOnly(iso) {
   if (!iso) return "—";
-  return iso.slice(11, 16);
+  // Convert to local time (browser TZ = office TZ for the Yacht Club).
+  // Was doing `iso.slice(11, 16)` which stripped raw UTC — a 05:37 IST
+  // check-in showed up as 00:07, making shifts look "weird" (bug
+  // reported 15 Feb 2026: Shiva's OT ledger showed midnight check-ins).
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  } catch {
+    return iso.slice(11, 16);
+  }
 }
 // dd/mm/yy — matches the format used across the rest of the reports
 // (see reports.py `_ddmmyy`). Falls back to the raw string if the

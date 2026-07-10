@@ -151,9 +151,16 @@ export default function CorrectionRequestModal({
   const pickerRows = useMemo(() => {
     if (!needsRow) return [];
     if (kind === "time_adjust") {
+      // Convert UTC ISO timestamps → local HH:MM (office TZ). Raw
+      // slice(11,16) leaked UTC into the dropdown labels.
+      const _t = (iso) => {
+        if (!iso) return "";
+        try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }); }
+        catch { return iso.slice(11, 16); }
+      };
       return (candidates.attendance || []).map((r) => ({
         id: r.id, date: r.date,
-        label: `${r.date} · ${(r.check_in_at || "").slice(11, 16) || "no check-in"}${r.check_out_at ? " → " + r.check_out_at.slice(11, 16) : ""}`,
+        label: `${r.date} · ${_t(r.check_in_at) || "no check-in"}${r.check_out_at ? " → " + _t(r.check_out_at) : ""}`,
       }));
     }
     return (candidates.leaves || []).map((r) => ({

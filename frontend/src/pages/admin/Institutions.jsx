@@ -320,16 +320,26 @@ function RecentVisitsStrip({ visits, loading, escortId }) {
     <div className="mt-1.5 pl-11 flex items-center gap-1 flex-wrap" data-testid={`escort-visits-${escortId}`}>
       <History size={10} className="text-slate-400 shrink-0"/>
       <span className="text-[10px] uppercase tracking-wider text-slate-400 mr-1">recent</span>
-      {visits.map((v, i) => (
-        <span
-          key={`${v.date}-${i}`}
-          title={`In ${v.check_in_at?.slice(11, 16) || "—"}${v.check_out_at ? ` · Out ${v.check_out_at.slice(11, 16)}` : " · still in"}`}
-          className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${v.check_out_at ? "bg-slate-100 text-slate-600" : "bg-emerald-100 text-emerald-800"}`}
-          data-testid={`escort-visit-chip-${escortId}-${i}`}
-        >
-          {formatVisitDate(v.date)}
-        </span>
-      ))}
+      {visits.map((v, i) => {
+        // Convert UTC ISO → local (office TZ) HH:MM. Raw `.slice(11,16)`
+        // used to leak UTC into the tooltip.
+        const inTime = v.check_in_at
+          ? new Date(v.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+          : "—";
+        const outTime = v.check_out_at
+          ? new Date(v.check_out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+          : null;
+        return (
+          <span
+            key={`${v.date}-${i}`}
+            title={`In ${inTime}${outTime ? ` · Out ${outTime}` : " · still in"}`}
+            className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${v.check_out_at ? "bg-slate-100 text-slate-600" : "bg-emerald-100 text-emerald-800"}`}
+            data-testid={`escort-visit-chip-${escortId}-${i}`}
+          >
+            {formatVisitDate(v.date)}
+          </span>
+        );
+      })}
     </div>
   );
 }
