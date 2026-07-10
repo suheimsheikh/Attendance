@@ -21,7 +21,7 @@ const Devices = lazy(() => import("./pages/admin/Devices"));
 const OfficeSettings = lazy(() => import("./pages/admin/Office"));
 const Reports = lazy(() => import("./pages/admin/Reports"));
 const Overtime = lazy(() => import("./pages/admin/Overtime"));
-const Approvals = lazy(() => import("./pages/admin/Approvals"));
+const Approvals = lazy(() => import("./pages/admin/ApprovalsUnified"));
 const LeaveBalances = lazy(() => import("./pages/admin/LeaveBalances"));
 const Institutions = lazy(() => import("./pages/admin/Institutions"));
 const Fleets = lazy(() => import("./pages/admin/Fleets"));

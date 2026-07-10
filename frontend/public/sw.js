@@ -8,7 +8,7 @@
  * a registered SW) and to eliminate the white-flash on cold launch by
  * serving the cached index.html instantly.
  */
-const CACHE = "ishowedup-shell-v1";
+const CACHE = "ishowedup-shell-v2";
 const SHELL = ["/", "/index.html", "/manifest.json", "/favicon.png",
                "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 

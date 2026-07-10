@@ -4,6 +4,55 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
 ---
+## 10 Feb 2026 — Approvals collapsed into a single unified table
+
+**User request:** "Can we combine all approvals into one table" — with
+one row per pending item, filter chips (All / Leaves / OT / Check-ins
+/ Corrections), single-row Approve/Reject, date-sorted latest first,
+details folded into free-text.
+
+### Replaced
+- The old 4-tab wrapper (`pages/admin/Approvals.jsx`) is retired.
+  `App.js` now lazy-loads `pages/admin/ApprovalsUnified.jsx` in its
+  place.
+
+### Shipped — `ApprovalsUnified.jsx` (~330 lines)
+- **Fetches 4 endpoints in parallel** (`/leaves`, `/admin/overtime`,
+  `/admin/checkin-approvals`, `/admin/corrections`), each with a small
+  normalise-to-shape function that returns:
+  `{ kind, id, member_name, submitted_at, when, details, apply }`.
+- **Unified table** — 6 columns: Member · Kind badge · Submitted
+  timestamp · When (target date) · Details (type-specific free text) ·
+  Action (approve ✓ / reject ✗). Latest-first sort by `submitted_at`.
+- **Filter chips** with live counts: All / Leaves / OT / Check-ins /
+  Corrections. Kind badge tinted per type.
+- **Approve/Reject** buttons fire the type-specific endpoint via the
+  `apply(decision)` closure baked into each row — table stays type-
+  agnostic. Optimistic removal on success.
+- **Empty state**: "Nothing pending in this filter. 🎉"
+- All dates render via `formatDate()` (dd/mm/yy).
+
+### Bug found & fixed during shipping
+`/admin/checkin-approvals` returns `{items, count, status}` (not the
+`{rows}` shape used by `/admin/overtime`), which caused my initial
+merge to call `.entries()` on a plain object and silently blow up
+the whole load(). Added a shared `asArray()` helper that handles all
+three shapes (`[]`, `{items}`, `{rows}`) — table now renders all 49
+pending items across the 4 types on the live DB.
+
+### Files touched
+- `frontend/src/pages/admin/ApprovalsUnified.jsx` — new file.
+- `frontend/src/App.js` — swapped `Approvals` lazy import target.
+- `frontend/public/sw.js` — bumped shell cache to `v2` so old
+  service-worker cache doesn't serve stale chunks.
+
+**Verified end-to-end via Playwright**: 49 rows rendered, filter
+chips show live counts (5/25/0/19), Details column packs member-name
++ correction reason + filer-name correctly, action buttons wired to
+the correct endpoint per row.
+
+
+---
 ## 9 Feb 2026 — Dashboard: Corrections-this-month scroll box + Undo
 
 **User request:** "Do potential improvement but not just for last 5.
