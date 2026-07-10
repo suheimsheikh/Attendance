@@ -284,7 +284,7 @@ export default function SelfCheckIn() {
                 variant="amber"
                 testId="ot-reason"
               />
-              <p className="text-[11px] text-amber-700 mt-1.5">Admin will review and approve overtime tomorrow morning. Only staff accrue overtime.</p>
+              <p className="text-[11px] text-amber-700 mt-1.5">Overtime is auto-tracked as extra hours served. Only staff accrue overtime.</p>
             </div>
           )}
           <button

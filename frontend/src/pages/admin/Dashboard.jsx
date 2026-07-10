@@ -210,6 +210,9 @@ export default function Dashboard() {
   const attentionTotal = useMemo(() => {
     if (!data?.attention) return 0;
     const a = data.attention;
+    // OT approval workflow removed 15 Feb 2026 — pending_overtime is
+    // always 0 now, but keep the summand for backward compat with
+    // older server responses that might still include it.
     return (a.pending_leaves || 0)
       + (a.pending_overtime || 0)
       + (a.pending_devices || 0)
@@ -556,13 +559,8 @@ export default function Dashboard() {
                 testid="attention-leaves"
                 tone="amber"
               />
-              <AttentionRow
-                label="Pending OT approvals"
-                value={attention.pending_overtime}
-                to="/admin/approvals?tab=overtime"
-                testid="attention-ot"
-                tone="amber"
-              />
+              {/* Pending OT approvals row removed 15 Feb 2026 — OT is
+                  now purely calculated, no approval queue. */}
               <AttentionRow
                 label="Device access requests"
                 value={attention.pending_devices}

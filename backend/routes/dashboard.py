@@ -114,11 +114,10 @@ def make_router(db, require_admin) -> APIRouter:
             if a["id"] not in present_today_ids and a["id"] not in excused_ids
         )
 
-        # Pending approvals across three queues.
+        # Pending approvals across two queues (OT dropped from workflow
+        # 15 Feb 2026 — OT is now purely calculated, no approval).
         pending_leaves = await db.leaves.count_documents({"status": "pending"})
-        pending_overtime = await db.attendance.count_documents(
-            {"overtime_status": "pending"}
-        )
+        pending_overtime = 0
         pending_devices = await db.devices.count_documents({"status": "pending"})
 
         # ================== ATTENTION (data-quality signals) ==============
@@ -265,8 +264,7 @@ def make_router(db, require_admin) -> APIRouter:
 
         month_atts = await db.attendance.find(
             {"date": {"$gte": month_start, "$lte": today_iso}},
-            {"_id": 0, "user_id": 1, "hours": 1, "overtime_total_min": 1,
-             "overtime_status": 1},
+            {"_id": 0, "user_id": 1, "hours": 1, "overtime_total_min": 1},
         ).to_list(30000)
         staff_hours = 0.0
         ot_minutes = 0
@@ -276,8 +274,9 @@ def make_router(db, require_admin) -> APIRouter:
                 continue
             if u.get("category") in ("staff", "coach", "executive"):
                 staff_hours += float(r.get("hours") or 0)
-            if r.get("overtime_status") == "approved":
-                ot_minutes += int(r.get("overtime_total_min") or 0)
+            # 15 Feb 2026: OT approval workflow removed — every minute
+            # recorded on the attendance row counts as time served.
+            ot_minutes += int(r.get("overtime_total_min") or 0)
 
         # Leave days consumed this month (type=leave, approved, overlap
         # with the month window).

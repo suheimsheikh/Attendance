@@ -5,6 +5,72 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 15 Feb 2026 (part 5) — OT approval workflow removed
+
+**User request:** "There is no longer any such thing as pending and
+approved OT. Just OT as calculated by the system for extra hours
+served. Remove all pending and approves OT carefully without disturbing
+other logic."
+
+OT continues to be **calculated** as before (early-arrival +
+late-departure minutes on each attendance row). The pending/approved
+decision workflow is gone.
+
+### Backend
+- `server.py`: check-in / check-out no longer sets
+  `overtime_status = "pending"` on new attendance rows. Reason field
+  still captured as an audit note.
+- `server.py`: `/admin/overtime`, `/admin/overtime/needs-review`,
+  `/admin/overtime/approve-all`, `/admin/overtime/{id}/decide` deleted
+  as workflow. First two kept as **empty stubs** returning zeros so
+  older cached clients don't 404; the two write endpoints are gone
+  outright. (Deprecation test locks in the contract.)
+- Payroll report: `overtime_hours_approved` / `overtime_hours_pending`
+  now both alias `overtime_hours_served` (all OT is "served").
+  `dates_overtime_approved` = all OT dates; `dates_overtime_applied`
+  is empty. Keys retained for frontend backward-compat.
+- `routes/dashboard.py`: `attention.pending_overtime` always returns 0;
+  This-month OT sum now includes every calculated minute (was previously
+  gated by `overtime_status == "approved"`).
+- `routes/checkin_approvals.py`: approvals-summary `overtime` count → 0.
+- `routes/reports.py`: OT ledger CSV/PDF export drops the Status column;
+  column widths rebalanced.
+- `config.py`: `AUTO_APPROVAL_OVERTIME` constant removed (nothing reads
+  it anymore).
+
+### Frontend
+- `ApprovalsUnified.jsx`: OT tab + `normOvertime` normalizer removed.
+- `Dashboard.jsx`: "Pending OT approvals" AttentionRow removed.
+- `OTLedgerModal.jsx`: Status column + STATUS_TINT + admin_note surface
+  all removed. tfoot colSpan rebalanced.
+- `SelfCheckIn.jsx`: "Admin will review and approve overtime tomorrow
+  morning" copy replaced with "Overtime is auto-tracked as extra hours
+  served."
+- `MemberTimelineModal.jsx`: OT line drops the `(status)` suffix.
+- `App.js`: `/admin/overtime` and `/admin/overtime-page` routes redirect
+  to `/admin/reports?tab=grid` (The Grid, where OT hours now live as a
+  calculated column). Lazy `import("./pages/admin/Overtime")` removed;
+  the Overtime.jsx module is now orphaned and safe to delete later.
+
+### Tests — `tests/test_ot_approval_removed.py` (new, 5 tests)
+- `/admin/overtime` returns empty rows list.
+- `/admin/overtime/needs-review` returns zeros.
+- Dashboard `attention.pending_overtime` == 0.
+- `approvals-summary` `overtime` == 0.
+- OT ledger still exposes calculated `overtime_total_min` per row
+  (the deprecation didn't touch the calculation — just the workflow).
+
+Preserved: OT reason capture (audit note), OT minute calculation,
+OT column on The Grid, OT ledger drill-down, Top-5-OT widget on
+Dashboard, PDF/CSV export.
+
+Screenshot-verified: Approvals filter chips = All/Leaves/Check-ins/
+Corrections (no OT). Dashboard Attention rail has no OT row. OT
+ledger has 8 columns (dropped Status).
+
+
+
+---
 ## 15 Feb 2026 (part 4) — All ledgers restricted to the current month
 
 **User request:** "All ledgers should be restricted to the current month."

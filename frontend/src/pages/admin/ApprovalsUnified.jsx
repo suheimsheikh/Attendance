@@ -13,7 +13,7 @@
  * approve/reject endpoint so the table stays type-agnostic.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCw, Check, X, Plane, ClipboardCheck, LogIn, PencilRuler } from "lucide-react";
+import { Loader2, RefreshCw, Check, X, Plane, LogIn, PencilRuler } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { formatDate, formatTime } from "../../utils";
@@ -21,15 +21,15 @@ import { showApiError } from "../../api";
 
 const KIND_META = {
   leave:      { label: "Leave/Tour",  Icon: Plane,          tone: "bg-amber-100 text-amber-700" },
-  overtime:   { label: "Overtime",    Icon: ClipboardCheck, tone: "bg-orange-100 text-orange-700" },
   checkin:    { label: "Check-in",    Icon: LogIn,          tone: "bg-sky-100 text-sky-700" },
   correction: { label: "Correction",  Icon: PencilRuler,    tone: "bg-violet-100 text-violet-700" },
 };
 
+// OT approval tab removed 15 Feb 2026 — overtime is now a purely
+// calculated field (see /reports/ot-ledger + The Grid OT column).
 const FILTERS = [
   { key: "all",        label: "All" },
   { key: "leave",      label: "Leaves" },
-  { key: "overtime",   label: "OT" },
   { key: "checkin",    label: "Check-ins" },
   { key: "correction", label: "Corrections" },
 ];
@@ -68,25 +68,8 @@ function normLeave(row) {
   };
 }
 
-function normOvertime(row) {
-  return {
-    kind: "overtime",
-    id: row.session_id || row.id,
-    member_name: row.user_name || row.member_name || "—",
-    submitted_at: row.submitted_at || row.check_in_at || row.date,
-    when: formatDate(row.date),
-    details: [
-      row.overtime_total_min ? `${Math.floor(row.overtime_total_min/60)}h ${row.overtime_total_min%60}m OT` : null,
-      row.overtime_reason,
-    ].filter(Boolean).join(" · "),
-    apply: async (decision) => {
-      await api.post(`/admin/overtime/${row.session_id || row.id}/decide`, {
-        status: decision === "approve" ? "approved" : "rejected",
-        admin_note: "",
-      });
-    },
-  };
-}
+// OT approval removed 15 Feb 2026 — helper deleted along with the tab.
+
 
 function normCheckin(row) {
   return {
@@ -140,9 +123,8 @@ export default function ApprovalsUnified() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [leaves, overtime, checkins, corrections] = await Promise.all([
+      const [leaves, checkins, corrections] = await Promise.all([
         api.get("/leaves"),
-        api.get("/admin/overtime", { status: "pending" }),
         api.get("/admin/checkin-approvals", { status: "pending" }),
         api.get("/admin/corrections", { status: "pending" }),
       ]);
@@ -160,10 +142,9 @@ export default function ApprovalsUnified() {
         return out;
       };
       const leavesArr = safeMap(asArray(leaves).filter((l) => l.status === "pending"), normLeave, "leave");
-      const otArr = safeMap(asArray(overtime), normOvertime, "overtime");
       const ckArr = safeMap(asArray(checkins), normCheckin, "checkin");
       const corArr = safeMap(asArray(corrections), normCorrection, "correction");
-      const merged = [...leavesArr, ...otArr, ...ckArr, ...corArr];
+      const merged = [...leavesArr, ...ckArr, ...corArr];
       // Latest first.
       merged.sort((a, b) => (b.submitted_at || "").localeCompare(a.submitted_at || ""));
       setRows(merged);
@@ -180,7 +161,7 @@ export default function ApprovalsUnified() {
   }, [rows, filter]);
 
   const counts = useMemo(() => {
-    const c = { all: rows.length, leave: 0, overtime: 0, checkin: 0, correction: 0 };
+    const c = { all: rows.length, leave: 0, checkin: 0, correction: 0 };
     for (const r of rows) c[r.kind] = (c[r.kind] || 0) + 1;
     return c;
   }, [rows]);

@@ -60,7 +60,7 @@ function renderDetail(d) {
     if (d.auto_checkout) parts.push("auto-checkout");
     if (d.out_of_geofence) parts.push("off-geo");
     if (d.overtime_total_min) {
-      parts.push(`OT ${d.overtime_total_min}m (${d.overtime_status || "n/a"})`);
+      parts.push(`OT ${d.overtime_total_min}m`);
     }
     return parts.join(" · ");
   }

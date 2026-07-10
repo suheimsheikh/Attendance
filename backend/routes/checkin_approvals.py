@@ -179,7 +179,7 @@ def make_router(db, require_admin, write_audit) -> APIRouter:
         powers the sidebar badge on 'Approvals' and the Dashboard.
         """
         leaves    = await db.leaves.count_documents({"status": "pending"})
-        overtime  = await db.attendance.count_documents({"overtime_status": "pending"})
+        overtime  = 0  # OT approval workflow removed 15 Feb 2026
         devices   = await db.devices.count_documents({"status": "pending"})
         checkins  = await db.attendance.count_documents({"approval_status": "pending"})
         corrections = await db.corrections.count_documents({"status": "pending"})

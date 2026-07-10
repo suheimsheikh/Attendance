@@ -1314,7 +1314,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         headers = [
             "Date", "Check-in", "Check-out",
             "Early Arrival", "Late Departures", "Total",
-            "Early reason", "Late reason", "Status",
+            "Early reason", "Late reason",
         ]
         table = []
         for r in rows:
@@ -1328,7 +1328,6 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 _fmt_min(r.get("overtime_total_min") or 0),
                 e_reason or "—",
                 l_reason or "—",
-                (r.get("overtime_status") or "—").title(),
             ])
         # Append the Totals row so the printed PDF matches the modal
         # footer exactly. Empty cells for date/times/reasons keep the
@@ -1339,7 +1338,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         table.append([
             "Totals", "", "",
             _fmt_min(tot_early), _fmt_min(tot_late), _fmt_min(tot_total),
-            "", "", "",
+            "", "",
         ])
 
         if fmt == "csv":
@@ -1359,7 +1358,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         }
         # Column widths (mm) tuned for A4 landscape (~277 mm usable).
         # Sum here = ~271 mm; reason columns eat what's left of the space.
-        col_widths_mm = [22, 18, 20, 24, 26, 22, 55, 55, 22]
+        col_widths_mm = [22, 18, 20, 24, 26, 22, 65, 65]
         pdf = _pdf_from_table(
             f"Overtime Ledger — {member_name}",
             headers, table,

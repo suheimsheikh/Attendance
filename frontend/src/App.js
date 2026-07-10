@@ -20,7 +20,8 @@ const AdminLeaves = lazy(() => import("./pages/admin/Leaves"));
 const Devices = lazy(() => import("./pages/admin/Devices"));
 const OfficeSettings = lazy(() => import("./pages/admin/Office"));
 const Reports = lazy(() => import("./pages/admin/Reports"));
-const Overtime = lazy(() => import("./pages/admin/Overtime"));
+// Overtime page removed 15 Feb 2026 — OT approval workflow deprecated;
+// OT hours are now surfaced via The Grid and the OT ledger.
 const Approvals = lazy(() => import("./pages/admin/ApprovalsUnified"));
 const LeaveBalances = lazy(() => import("./pages/admin/LeaveBalances"));
 const Institutions = lazy(() => import("./pages/admin/Institutions"));
@@ -133,12 +134,14 @@ function App() {
             <Route path="admin/roles" element={<RequireAdmin><Roles /></RequireAdmin>} />
             <Route path="admin/members" element={<RequireAdmin><Members /></RequireAdmin>} />
             <Route path="admin/approvals" element={<RequireAdmin><Approvals /></RequireAdmin>} />
-            {/* Legacy direct links — keep deep-links working but funnel into Approvals. */}
+            {/* Legacy direct links — keep deep-links working but funnel into Approvals.
+                Overtime routes redirect to The Grid where OT hours now live as a
+                calculated column (approval workflow removed 15 Feb 2026). */}
             <Route path="admin/leaves" element={<Navigate to="/admin/approvals?tab=leaves" replace />} />
-            <Route path="admin/overtime" element={<Navigate to="/admin/approvals?tab=overtime" replace />} />
+            <Route path="admin/overtime" element={<Navigate to="/admin/reports?tab=grid" replace />} />
+            <Route path="admin/overtime-page" element={<Navigate to="/admin/reports?tab=grid" replace />} />
             {/* Internal pages still mounted at their old paths for fallback / tests. */}
             <Route path="admin/leaves-page" element={<RequireAdmin><AdminLeaves /></RequireAdmin>} />
-            <Route path="admin/overtime-page" element={<RequireAdmin><Overtime /></RequireAdmin>} />
             <Route path="admin/devices" element={<RequireAdmin><Devices /></RequireAdmin>} />
             <Route path="admin/office" element={<RequireAdmin><OfficeSettings /></RequireAdmin>} />
             <Route path="admin/sms-log" element={<RequireAdmin><SmsLog /></RequireAdmin>} />

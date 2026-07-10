@@ -15,16 +15,18 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 # Approval workflow flags (introduced 08 Jul 2026 at admin's request).
 #
-# When True, the system automatically routes anomalous check-ins and
-# earned-overtime into the /admin/approvals queue. Admin wanted these
-# OFF while cleaning up a large accumulated pre-launch backlog and
-# handling these cases manually. Flip either back to True to restore
-# the automatic queuing behavior — the underlying `late` /
-# `out_of_geofence` / `overtime_total_min` fields are still calculated
-# and stored so no historical data is lost by turning these off.
+# When True, anomalous check-ins are automatically routed into the
+# /admin/approvals queue. Admin wanted this OFF while cleaning up a
+# large accumulated pre-launch backlog and handling these cases
+# manually. Flip back to True to restore automatic queuing — the
+# underlying `late` / `out_of_geofence` fields are still calculated
+# and stored regardless.
+#
+# NOTE: The OT-approval flag (AUTO_APPROVAL_OVERTIME) was removed
+# 15 Feb 2026 — OT is now purely a calculated value with no admin
+# approval workflow.
 # ---------------------------------------------------------------------------
 AUTO_APPROVAL_LATE_CHECKINS: bool = False
-AUTO_APPROVAL_OVERTIME: bool = True
 
 
 # ---------------------------------------------------------------------------

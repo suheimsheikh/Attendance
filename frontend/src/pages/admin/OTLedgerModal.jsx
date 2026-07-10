@@ -1,19 +1,19 @@
 /**
- * OTLedgerModal — date-wise overtime ledger for a single member across
- * the currently-selected report year. Opens on double-click of any
- * Comp-off cell (Earned / Applied / Approved) on the Attendance report.
+ * OTLedgerModal — date-wise overtime ledger for a single member,
+ * scoped by default to the current month (see `_ledger_window` on the
+ * server). Opens on double-click of any OT cell on The Grid or the
+ * classic Attendance report.
  *
  * Read-only. Server does all the aggregation via /api/reports/ot-ledger.
+ *
+ * OT approval workflow removed 15 Feb 2026 — OT is now purely a
+ * calculated value (early-arrival + late-departure minutes summed off
+ * `attendance.overtime_total_min`). The Status column and admin_note
+ * were dropped from the ledger UI at the same time.
  */
 import React, { useEffect, useState } from "react";
 import { X, Loader2, Download } from "lucide-react";
 import { api, showApiError, downloadBlob } from "../../api";
-
-const STATUS_TINT = {
-  pending:  "bg-amber-100 text-amber-800 border-amber-200",
-  approved: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  rejected: "bg-rose-100 text-rose-800 border-rose-200",
-};
 
 function fmtMin(m) {
   if (!m) return "—";
@@ -120,7 +120,6 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
                   <th className="py-1.5 pr-3 text-right">Total</th>
                   <th className="py-1.5 pr-3">Early reason</th>
                   <th className="py-1.5 pr-3">Late reason</th>
-                  <th className="py-1.5">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -150,14 +149,6 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
                           data-testid={`ot-ledger-late-reason-${r.date}`}>
                         {lateReason || <span className="not-italic text-slate-300">—</span>}
                       </td>
-                      <td className="py-1.5">
-                        <span className={`inline-flex px-2 h-5 rounded-full text-[10px] font-bold border ${STATUS_TINT[r.overtime_status] || "bg-slate-50 text-slate-600 border-slate-200"}`}>
-                          {r.overtime_status || "—"}
-                        </span>
-                        {r.overtime_admin_note && (
-                          <div className="text-[10px] text-slate-500 italic mt-0.5" title={r.overtime_admin_note}>{r.overtime_admin_note}</div>
-                        )}
-                      </td>
                     </tr>
                   );
                 })}
@@ -177,7 +168,7 @@ export default function OTLedgerModal({ open, onClose, memberId, memberName, yea
                   <td className="py-2 pr-3 text-right">
                     {fmtMin(rows.reduce((s, r) => s + (r.overtime_total_min || 0), 0))}
                   </td>
-                  <td colSpan={3} />
+                  <td colSpan={2} />
                 </tr>
               </tfoot>
             </table>

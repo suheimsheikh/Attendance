@@ -58,7 +58,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 # of truth without triggering a circular import back into server.py.
 from config import (  # noqa: E402
     AUTO_APPROVAL_LATE_CHECKINS,
-    AUTO_APPROVAL_OVERTIME,
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -2115,11 +2114,12 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             ot_updates = {
                 "overtime_late_min": late_min,
                 "overtime_total_min": existing_early + late_min,
-                # Gated by AUTO_APPROVAL_OVERTIME (top of file). When OFF,
-                # overtime minutes are still recorded on the row but the
-                # entry is not routed to the OT approval queue — admin
-                # handles OT manually via the Overtime page.
-                "overtime_status": "pending" if AUTO_APPROVAL_OVERTIME else None,
+                # Auto-calculated OT — no approval workflow (15 Feb 2026
+                # user request: "no longer any such thing as pending
+                # and approved OT. Just OT as calculated by the system
+                # for extra hours served"). Reason is still stored as
+                # an audit note when the member supplied one.
+                "overtime_status": None,
                 "overtime_reason": (overtime_reason or existing_reason or "").strip() or None,
                 # Late-checkout OT gets its own reason field so the ledger
                 # can surface early-in vs late-out reasons separately
@@ -2200,10 +2200,10 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         doc.update({
             "overtime_early_min": early_min,
             "overtime_total_min": early_min,
-            # Gated by AUTO_APPROVAL_OVERTIME (top of file). When OFF, OT
-            # minutes are still recorded on the row but the row is not
-            # routed to the OT approval queue.
-            "overtime_status": "pending" if AUTO_APPROVAL_OVERTIME else None,
+            # Auto-calculated OT — no approval workflow (15 Feb 2026,
+            # see check-out branch for context). Reason still stored
+            # as an audit note.
+            "overtime_status": None,
             "overtime_reason": _early_reason,
             # Early-in OT gets its own reason field so the OT ledger can
             # render early vs late reasons side-by-side (8 Jul 2026 user
@@ -2328,21 +2328,18 @@ class OvertimeDecisionIn(BaseModel):
 
 @api_router.get("/admin/overtime/needs-review")
 async def overtime_needs_review(admin: dict = Depends(require_admin)):
-    """Counts pending OT entries from the previous office-local date — used
-    to drive the "you have OT to review" banner that pops on admin login."""
+    """DEPRECATED (15 Feb 2026) — OT no longer needs approval. Kept as
+    a stub returning zeros so any older cached client that still polls
+    this endpoint doesn't 404. Safe to remove once all clients are
+    known to be updated."""
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
     yesterday = (date.fromisoformat(today) - timedelta(days=1)).isoformat()
-    cnt = await db.attendance.count_documents({
-        "overtime_status": "pending",
-        "date": yesterday,
-    })
-    total_pending = await db.attendance.count_documents({"overtime_status": "pending"})
     comp_off_pending = await db.leaves.count_documents({
         "type": "comp_off", "status": "pending",
     })
-    return {"yesterday": yesterday, "yesterday_count": cnt,
-            "total_pending": total_pending,
+    return {"yesterday": yesterday, "yesterday_count": 0,
+            "total_pending": 0,
             "comp_off_pending": comp_off_pending}
 
 
@@ -2350,106 +2347,15 @@ async def overtime_needs_review(admin: dict = Depends(require_admin)):
 async def overtime_list(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-    status_filter: Optional[str] = Query("pending", alias="status"),
+    status_filter: Optional[str] = Query(None, alias="status"),  # noqa: ARG001 (kept for URL compat)
     admin: dict = Depends(require_admin),
 ):
-    office = await db.config.find_one({"id": "office"})
-    if not date_from and not date_to:
-        today = local_date_str(office)
-        yesterday = (date.fromisoformat(today) - timedelta(days=1)).isoformat()
-        date_from = date_to = yesterday
-    q: dict = {"overtime_total_min": {"$gt": 0}}
-    if status_filter and status_filter != "all":
-        q["overtime_status"] = status_filter
-    if date_from or date_to:
-        date_q: dict = {}
-        if date_from:
-            date_q["$gte"] = date_from
-        if date_to:
-            date_q["$lte"] = date_to
-        q["date"] = date_q
-    rows = await db.attendance.find(q, {"_id": 0}).sort("date", -1).to_list(2000)
-    user_ids = list({r["user_id"] for r in rows})
-    users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0}).to_list(2000)
-    umap = {u["id"]: u for u in users}
-    out = []
-    for r in rows:
-        u = umap.get(r["user_id"], {})
-        out.append({
-            "session_id": r["id"],
-            "user_id": r["user_id"],
-            "member_name": u.get("full_name", "Unknown"),
-            "category": u.get("category"),
-            "rank": u.get("rank"),
-            "photo": u.get("photo_thumb") or u.get("photo"),
-            "date": r.get("date"),
-            "check_in_at": r.get("check_in_at"),
-            "check_out_at": r.get("check_out_at"),
-            "work_start": u.get("work_start"),
-            "work_end": u.get("work_end"),
-            "early_min": int(r.get("overtime_early_min") or 0),
-            "late_min": int(r.get("overtime_late_min") or 0),
-            "total_min": int(r.get("overtime_total_min") or 0),
-            "reason": r.get("overtime_reason"),
-            "status": r.get("overtime_status") or "pending",
-            "admin_note": r.get("overtime_admin_note"),
-            "decided_by": r.get("overtime_decided_by"),
-            "decided_at": r.get("overtime_decided_at"),
-        })
-    return {"date_from": date_from, "date_to": date_to, "rows": out}
-
-
-@api_router.post("/admin/overtime/approve-all")
-async def overtime_approve_all(admin: dict = Depends(require_admin)):
-    """Bulk-approve every currently-pending overtime entry in one shot.
-    Added 08 Jul 2026 alongside the auto-approval flags — lets the admin
-    clear the pre-launch backlog without clicking through each session.
-    Writes ONE audit-log row summarising the batch (not N rows) with the
-    full list of ids preserved in `after.ids` for later trace-through.
-    """
-    pending = await db.attendance.find(
-        {"overtime_status": "pending"},
-        {"_id": 0, "id": 1, "user_id": 1, "date": 1, "overtime_total_min": 1},
-    ).to_list(10000)
-    if not pending:
-        return {"ok": True, "updated": 0}
-    ids = [r["id"] for r in pending]
-    now = now_utc().isoformat()
-    res = await db.attendance.update_many(
-        {"id": {"$in": ids}},
-        {"$set": {
-            "overtime_status": "approved",
-            "overtime_admin_note": "Bulk approved by admin",
-            "overtime_decided_by": admin["full_name"],
-            "overtime_decided_at": now,
-        }},
-    )
-    total_min = sum(int(r.get("overtime_total_min") or 0) for r in pending)
-    await write_audit(
-        db, actor=admin, action="overtime_bulk_approve",
-        entity_type="attendance", entity_id="bulk",
-        entity_name=f"{len(ids)} sessions · {total_min} min",
-        before={"count_pending": len(ids), "total_minutes": total_min},
-        after={"overtime_status": "approved", "ids": ids},
-        reason="Bulk approve all pending overtime",
-    )
-    return {"ok": True, "updated": int(res.modified_count), "total_minutes": total_min}
-
-
-@api_router.post("/admin/overtime/{session_id}/decide")
-async def overtime_decide(session_id: str, body: OvertimeDecisionIn, admin: dict = Depends(require_admin)):
-    sess = await db.attendance.find_one({"id": session_id}, {"_id": 0})
-    if not sess:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if int(sess.get("overtime_total_min") or 0) <= 0:
-        raise HTTPException(status_code=400, detail="No overtime on this session")
-    await db.attendance.update_one({"id": session_id}, {"$set": {
-        "overtime_status": body.status,
-        "overtime_admin_note": (body.admin_note or "").strip() or None,
-        "overtime_decided_by": admin["full_name"],
-        "overtime_decided_at": now_utc().isoformat(),
-    }})
-    return {"ok": True, "status": body.status}
+    """DEPRECATED (15 Feb 2026) — OT no longer has an approval queue.
+    Returns an empty rows list so any older client that still polls
+    /api/admin/overtime doesn't 404. New clients should read OT
+    minutes directly off the attendance rows (see the OT ledger /
+    The Grid's OT column)."""
+    return {"date_from": date_from, "date_to": date_to, "rows": []}
 
 
 
@@ -3530,12 +3436,14 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         # Combined "time-off" column for backward-compat with older clients.
         days_on_leave = days_leave + days_tour + days_break
         overstays = _overstays(sessions)
-        approved_ot_min = sum(int(s.get("overtime_total_min") or 0)
-                              for s in sessions
-                              if s.get("overtime_status") == "approved")
-        pending_ot_min = sum(int(s.get("overtime_total_min") or 0)
-                             for s in sessions
-                             if s.get("overtime_status") == "pending")
+        # As of 15 Feb 2026 OT has no approval workflow — every minute
+        # recorded on the row is counted as "served" (both approved and
+        # pending buckets are collapsed into the same value). Keys kept
+        # for backward-compat with older frontend clients that still
+        # read `overtime_hours_approved` / `overtime_hours_pending`.
+        total_ot_min = sum(int(s.get("overtime_total_min") or 0) for s in sessions)
+        approved_ot_min = total_ot_min
+        pending_ot_min = 0
         # Compensatory off bookkeeping (within this report's date range)
         co_earned = _comp_off_earned(u, sessions)
         co_used = len(comp_off_used_dates)
@@ -3678,15 +3586,13 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
                 s["date"] for s in sessions
                 if int(s.get("overtime_total_min") or 0) > 0
             }),
-            "dates_overtime_applied": sorted({
-                s["date"] for s in sessions
-                if s.get("overtime_status") == "pending"
-                and int(s.get("overtime_total_min") or 0) > 0
-            }),
+            # 15 Feb 2026: OT no longer has an approval workflow, so
+            # applied/approved buckets are now aliases of served. Kept
+            # as keys for frontend backward-compat.
+            "dates_overtime_applied": [],
             "dates_overtime_approved": sorted({
                 s["date"] for s in sessions
-                if s.get("overtime_status") == "approved"
-                and int(s.get("overtime_total_min") or 0) > 0
+                if int(s.get("overtime_total_min") or 0) > 0
             }),
             "dates_comp_off_earned": sorted({
                 s["date"] for s in sessions
