@@ -443,7 +443,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             def _ddmmyyyy(iso: str) -> str:
                 try:
                     y, m, d = iso.split("-")
-                    return f"{d}/{m}/{y}"
+                    return f"{d}/{m}/{y[-2:]}"
                 except Exception:
                     return iso
             period_disp = f"{_ddmmyyyy(start)}  to  {_ddmmyyyy(end)}"
@@ -982,11 +982,17 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
 
         office = await db.config.find_one({"id": "office"})
         academy = (office or {}).get("office_name") or "iShowedUp"
+        def _fmt(iso: str) -> str:
+            try:
+                y, m, d = iso.split("-")
+                return f"{d}/{m}/{y[-2:]}"
+            except Exception:
+                return iso
         meta = {
             "Academy": academy,
             "Report": "Calendar Grid",
             "Month": month,
-            "Range": f"{data['start']} → {data['end']}",
+            "Range": f"{_fmt(data['start'])} → {_fmt(data['end'])}",
             "Members": str(len(rows)),
             "Filters": ", ".join(filter(None, [
                 f"Category: {category}" if category else None,
@@ -1233,7 +1239,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         def _ddmmyyyy(iso: str) -> str:
             try:
                 y, m, d = iso.split("-")
-                return f"{d}/{m}/{y}"
+                return f"{d}/{m}/{y[-2:]}"
             except Exception:
                 return iso
 
@@ -1579,7 +1585,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
     def _ddmmyyyy(iso: str) -> str:
         try:
             y, m, d = iso.split("-")
-            return f"{d}/{m}/{y}"
+            return f"{d}/{m}/{y[-2:]}"
         except Exception:
             return iso
 

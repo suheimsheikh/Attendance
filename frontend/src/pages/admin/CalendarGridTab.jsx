@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, FileDown, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob } from "../../api";
-import { categoryLabel } from "../../utils";
+import { categoryLabel, formatDate } from "../../utils";
 import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 
 /**
@@ -171,7 +171,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
         />
         {data && (
           <div className="text-[11px] text-slate-500 hidden md:block">
-            {data.start.split("-").reverse().join("/")} → {data.end.split("-").reverse().join("/")}
+            {formatDate(data.start)} → {formatDate(data.end)}
             &nbsp;·&nbsp; {displayedRows.length} of {rows.length} member{rows.length === 1 ? "" : "s"}
           </div>
         )}

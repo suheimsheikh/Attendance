@@ -21,6 +21,7 @@ import React, { useEffect, useState } from "react";
 import { X, Loader2, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
+import { formatDate } from "../utils";
 
 const BUCKET_STYLES = {
   present:         { bg: "bg-emerald-100", text: "text-emerald-800", ring: "ring-emerald-200" },
@@ -201,7 +202,7 @@ export default function MemberTimelineModal({ memberId, start, end, onClose }) {
                     data-testid={`timeline-row-${d.date}`}
                   >
                     <td className="py-1.5 px-3 font-mono tabular-nums text-slate-800">
-                      {d.date.split("-").reverse().join("/")}
+                      {formatDate(d.date)}
                     </td>
                     <td className="py-1.5 px-3 text-slate-500">{d.weekday}</td>
                     <td className="py-1.5 px-3">

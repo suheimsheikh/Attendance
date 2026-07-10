@@ -30,10 +30,12 @@ export function formatTime(iso) {
 }
 
 /**
- * Format a date as `dd/mm/yyyy` (Indian standard, 4-digit year). Used in
- * headers, tables, list rows, and anywhere a full unambiguous date is
- * shown to a human. Accepts both `YYYY-MM-DD` strings and full ISO
- * timestamps.
+ * Format a date as `dd/mm/yy` (Indian standard, 2-digit year). Used in
+ * headers, tables, list rows, and anywhere a numeric date is shown to
+ * a human. Accepts both `YYYY-MM-DD` strings and full ISO timestamps.
+ *
+ * 9 Feb 2026: standardised on 2-digit year across the whole app per
+ * user request ("change the date formats across the board to ddmmyy").
  */
 export function formatDate(d) {
   if (!d) return "";
@@ -41,25 +43,18 @@ export function formatDate(d) {
     const date = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + "T00:00:00") : new Date(d);
     const dd = String(date.getDate()).padStart(2, "0");
     const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const yyyy = String(date.getFullYear());
-    return `${dd}/${mm}/${yyyy}`;
+    const yy = String(date.getFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
   } catch { return d; }
 }
 
 /**
- * Compact `dd/mm` — strips the year when it matches the current calendar
- * year (the common case), otherwise falls back to `dd/mm/yy`. Used in
- * leave / report ranges that almost always sit inside the current year.
+ * Compact `dd/mm/yy` — same as `formatDate` since we standardised on
+ * 2-digit year (9 Feb 2026). Kept as a distinct export so any code
+ * expecting the "shortest possible" flavour stays wired up.
  */
 export function shortDate(d) {
-  if (!d) return "";
-  try {
-    const date = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + "T00:00:00") : new Date(d);
-    const dd = String(date.getDate()).padStart(2, "0");
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const sameYear = date.getFullYear() === new Date().getFullYear();
-    return sameYear ? `${dd}/${mm}` : `${dd}/${mm}/${String(date.getFullYear()).slice(-2)}`;
-  } catch { return d; }
+  return formatDate(d);
 }
 
 export function initials(name) {

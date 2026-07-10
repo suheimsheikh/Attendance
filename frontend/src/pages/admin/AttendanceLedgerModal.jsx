@@ -42,7 +42,7 @@ function fmtDDMMYYYY(iso) {
   const parts = String(iso).split("-");
   if (parts.length !== 3) return iso;
   const [y, m, d] = parts;
-  return `${d}/${m}/${y}`;
+  return `${d}/${m}/${y.slice(-2)}`;
 }
 
 export default function AttendanceLedgerModal({

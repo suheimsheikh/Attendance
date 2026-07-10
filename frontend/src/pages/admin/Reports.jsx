@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 import { api, downloadBlob } from "../../api";
 import { useAuth } from "../../auth";
-import { todayIso, shortDate, categoryLabel } from "../../utils";
+import { todayIso, shortDate, categoryLabel, formatDate } from "../../utils";
 import MemberTimelineModal from "../../components/MemberTimelineModal";
 import OTLedgerModal from "./OTLedgerModal";
 import AttendanceLedgerModal from "./AttendanceLedgerModal";
@@ -316,7 +316,7 @@ export default function Reports() {
             />
             {attendance && (
               <div className="text-[11px] text-slate-500 hidden md:block">
-                {attendance.start.split("-").reverse().join("/")} → {attendance.end.split("-").reverse().join("/")}
+                {formatDate(attendance.start)} → {formatDate(attendance.end)}
                 &nbsp;·&nbsp; {attendance.rows.length} member{attendance.rows.length === 1 ? "" : "s"}
               </div>
             )}
