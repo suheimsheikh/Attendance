@@ -24,22 +24,76 @@ export const CELL_STYLE = {
 };
 
 /** One cell in a member's row for a given date. `code` may be null
- * (future date) — renders an empty aligned slot. */
-export function GridCell({ code, dow, onClick }) {
+ * (future date) — renders an empty aligned slot. `meta` is an optional
+ * per-cell payload from the backend (`row.cell_meta[iso]`) that we
+ * unpack into a rich multi-line tooltip — Break name & applied-by for
+ * BK cells, check-in / late-minutes for LT/P/HD, leave reason + range
+ * for LV/TR/CO/PS. Kept as a native `title` (no JS popover library) so
+ * the whole 31-day grid stays fast when hovering across 100 rows. */
+export function GridCell({ code, dow, onClick, meta, iso }) {
   if (!code) {
     return <td className="border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-7">·</td>;
   }
   const s = CELL_STYLE[code] || CELL_STYLE.AB;
   const clickable = !!onClick;
+  const title = buildCellTooltip({ code, dow, meta, iso, clickable });
   return (
     <td
       className={`border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-7 leading-none ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
-      title={`${s.title}${dow ? " · " + dow : ""}${clickable ? " · click to file correction" : ""}`}
+      title={title}
       onClick={onClick}
     >
       {s.label}
     </td>
   );
+}
+
+/** Format an ISO timestamp as local "HH:MM" (browser local, which
+ * matches admin's IST expectation in prod). Falls back to '?' on
+ * unparseable input so a broken row still renders. */
+function fmtHM(iso) {
+  if (!iso) return "";
+  try {
+    const dt = new Date(iso);
+    return dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  } catch { return "?"; }
+}
+
+function fmtDateShort(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" });
+  } catch { return iso; }
+}
+
+/** Build the native tooltip string for a Grid cell. Multi-line so the
+ * OS renders it in a stack — no external popover library needed.
+ * Explicitly ordered so break cells lead with the break's name, leaves
+ * lead with the reason, and P/LT lead with the check-in time. */
+export function buildCellTooltip({ code, dow, meta, iso, clickable }) {
+  const s = CELL_STYLE[code] || {};
+  const lines = [];
+  const header = [s.title || code, dow, iso ? fmtDateShort(iso) : null]
+    .filter(Boolean).join(" · ");
+  lines.push(header);
+  const m = meta || {};
+  if (code === "BK") {
+    if (m.break_name)    lines.push(`Break: ${m.break_name}`);
+    if (m.range)         lines.push(`Window: ${m.range}`);
+    if (m.applied_by)    lines.push(`Applied by ${m.applied_by}${m.applied_at ? " on " + fmtDateShort(m.applied_at) : ""}`);
+  } else if (["LV", "TR", "CO", "PS"].includes(code)) {
+    if (m.half_day)      lines.push(`Half day (${m.half_day})`);
+    if (m.range)         lines.push(`Window: ${m.range}`);
+    if (m.reason)        lines.push(`Reason: ${m.reason}`);
+    if (m.approved_by)   lines.push(`Approved by ${m.approved_by}`);
+  } else if (["P", "LT", "HD"].includes(code)) {
+    if (m.check_in_at)   lines.push(`In: ${fmtHM(m.check_in_at)}`);
+    if (m.check_out_at)  lines.push(`Out: ${fmtHM(m.check_out_at)}`);
+    if (m.late_minutes)  lines.push(`Late by ${m.late_minutes}m`);
+    if (m.ot_minutes)    lines.push(`OT: ${Math.floor(m.ot_minutes / 60)}h ${m.ot_minutes % 60}m`);
+  }
+  if (clickable) lines.push("Click to file correction");
+  return lines.join("\n");
 }
 
 /** Map a cell code to the best default correction (kind + entityType)

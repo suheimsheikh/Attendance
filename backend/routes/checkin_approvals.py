@@ -177,12 +177,33 @@ def make_router(db, require_admin, write_audit) -> APIRouter:
     async def approvals_summary(admin: dict = Depends(require_admin)):
         """Aggregated pending counts across every approval queue —
         powers the sidebar badge on 'Approvals' and the Dashboard.
+
+        Counts are intentionally *reconciled* against the underlying user
+        records so a legacy pending row for a since-deleted member does not
+        keep the sidebar badge glowing forever (the row would never surface
+        on the Approvals page → phantom '82 pending' bug, 20 Feb 2026).
         """
-        leaves    = await db.leaves.count_documents({"status": "pending"})
+        # Live user IDs — anything referencing a stale user_id is treated as
+        # orphaned and excluded from the badge count.
+        live_ids = {u["id"] async for u in db.users.find({}, {"_id": 0, "id": 1})}
+
+        pending_leaves = await db.leaves.find(
+            {"status": "pending"}, {"_id": 0, "user_id": 1},
+        ).to_list(5000)
+        leaves = sum(1 for l in pending_leaves if l.get("user_id") in live_ids)
+
+        pending_checkins = await db.attendance.find(
+            {"approval_status": "pending"}, {"_id": 0, "user_id": 1},
+        ).to_list(5000)
+        checkins = sum(1 for r in pending_checkins if r.get("user_id") in live_ids)
+
+        pending_corrections = await db.corrections.find(
+            {"status": "pending"}, {"_id": 0, "requester_id": 1},
+        ).to_list(5000)
+        corrections = sum(1 for c in pending_corrections if c.get("requester_id") in live_ids)
+
         overtime  = 0  # OT approval workflow removed 15 Feb 2026
         devices   = await db.devices.count_documents({"status": "pending"})
-        checkins  = await db.attendance.count_documents({"approval_status": "pending"})
-        corrections = await db.corrections.count_documents({"status": "pending"})
         return {
             "leaves": leaves,
             "overtime": overtime,

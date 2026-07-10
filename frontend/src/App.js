@@ -43,6 +43,7 @@ const Categories = lazy(() => import("./pages/admin/Categories"));
 const CategoryHealth = lazy(() => import("./pages/admin/CategoryHealth"));
 const Roles = lazy(() => import("./pages/admin/Roles"));
 const MyCorrections = lazy(() => import("./pages/MyCorrections"));
+const ChurnRisk = lazy(() => import("./pages/admin/ChurnRisk"));
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -162,6 +163,7 @@ function App() {
             <Route path="admin/escort-photos" element={<RequireAdmin><EscortPhotoCleanup /></RequireAdmin>} />
             <Route path="admin/audit-log" element={<RequireAdmin><AuditLog /></RequireAdmin>} />
             <Route path="admin/data-quality" element={<RequireAdmin><DataQuality /></RequireAdmin>} />
+            <Route path="admin/churn-risk" element={<RequireAdmin><ChurnRisk /></RequireAdmin>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

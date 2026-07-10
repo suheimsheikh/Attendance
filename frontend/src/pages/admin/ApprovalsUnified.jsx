@@ -123,14 +123,23 @@ export default function ApprovalsUnified() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [leaves, checkins, corrections] = await Promise.all([
+      // allSettled — a single failing queue must NOT blank out the whole
+      // Approvals page. A legacy /leaves 500 was previously making the
+      // sidebar badge (which counts records directly) diverge from the
+      // (empty) table for admins — see prod bug 20 Feb 2026.
+      const [leavesRes, checkinsRes, correctionsRes] = await Promise.allSettled([
         api.get("/leaves"),
         api.get("/admin/checkin-approvals", { status: "pending" }),
         api.get("/admin/corrections", { status: "pending" }),
       ]);
-      // Normalise each response into a bare array — endpoints vary
-      // between `[...]`, `{rows: [...]}` and `{items: [...]}`.
       const asArray = (r) => Array.isArray(r) ? r : (r?.items || r?.rows || []);
+      const settled = (res, label) => {
+        if (res.status === "fulfilled") return asArray(res.value);
+        // eslint-disable-next-line no-console
+        console.warn(`[approvals] ${label} endpoint failed`, res.reason);
+        toast.error(`Couldn't load ${label} — showing the rest`);
+        return [];
+      };
       const safeMap = (arr, fn, label) => {
         const out = [];
         for (const [i, row] of arr.entries()) {
@@ -141,15 +150,13 @@ export default function ApprovalsUnified() {
         }
         return out;
       };
-      const leavesArr = safeMap(asArray(leaves).filter((l) => l.status === "pending"), normLeave, "leave");
-      const ckArr = safeMap(asArray(checkins), normCheckin, "checkin");
-      const corArr = safeMap(asArray(corrections), normCorrection, "correction");
+      const leavesArr = safeMap(settled(leavesRes, "leaves").filter((l) => l.status === "pending"), normLeave, "leave");
+      const ckArr = safeMap(settled(checkinsRes, "check-ins"), normCheckin, "checkin");
+      const corArr = safeMap(settled(correctionsRes, "corrections"), normCorrection, "correction");
       const merged = [...leavesArr, ...ckArr, ...corArr];
       // Latest first.
       merged.sort((a, b) => (b.submitted_at || "").localeCompare(a.submitted_at || ""));
       setRows(merged);
-    } catch (err) {
-      toast.error(err?.message || "Failed to load approvals");
     } finally { setLoading(false); }
   }, []);
 

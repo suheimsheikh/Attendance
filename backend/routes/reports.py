@@ -885,12 +885,14 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             {"user_id": {"$in": user_ids},
              "date": {"$gte": start_iso, "$lte": end_iso}},
             {"_id": 0, "user_id": 1, "date": 1, "check_in_at": 1,
+             "check_out_at": 1, "late_minutes": 1,
              "is_late": 1, "is_half_day": 1, "overtime_total_min": 1},
         ).to_list(20000)
         leave_docs = await db.leaves.find(
             {"user_id": {"$in": user_ids}, "status": "approved",
              "start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
-            {"_id": 0, "user_id": 1, "type": 1,
+            {"_id": 0, "user_id": 1, "type": 1, "reason": 1,
+             "half_day": 1, "decided_by": 1, "decided_at": 1,
              "start_date": 1, "end_date": 1},
         ).to_list(20000)
         holidays_docs = await db.holidays.find(
@@ -915,26 +917,39 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         leaves_by_user: dict = {}
         for L in leave_docs:
             leaves_by_user.setdefault(L["user_id"], []).append(L)
-        # Break lookup per user: set of iso dates on which this member
-        # is on a break. Reuses breaks.break_applies_to() so audience
-        # filtering (category / individual list) stays authoritative.
+        # Break lookup per user: iso date → the break doc that applies.
+        # Reuses breaks.break_applies_to() so audience filtering
+        # (category / individual list) stays authoritative. Storing the
+        # full break gives us tooltip metadata (name, applied-by) on the
+        # BK cell — Feb 2026 tooltip pass.
         breaks_by_user: dict = {}
         for u in users:
-            days_on_break: set = set()
+            per_date: dict = {}
             for b in breaks_docs:
                 if not _breaks_module.break_applies_to(b, u):
                     continue
                 bs, be = b.get("start_date"), b.get("end_date")
                 if not (bs and be):
                     continue
-                # Iterate the intersection of the break window and month.
                 cur = max(bs, start_iso)
                 stop = min(be, end_iso)
                 while cur <= stop:
-                    days_on_break.add(cur)
+                    per_date[cur] = b
                     cur = (date.fromisoformat(cur) + timedelta(days=1)).isoformat()
-            if days_on_break:
-                breaks_by_user[u["id"]] = days_on_break
+            if per_date:
+                breaks_by_user[u["id"]] = per_date
+
+        # Admin name lookup — for BK cell tooltips ("applied by …"). We
+        # already fetched breaks_docs; collect their unique created_by
+        # ids and any leave decided_by names (leaves already store the
+        # human-readable name).
+        admin_ids = list({b.get("created_by") for b in breaks_docs if b.get("created_by")})
+        admin_name_by_id: dict = {}
+        if admin_ids:
+            admin_docs = await db.users.find(
+                {"id": {"$in": admin_ids}}, {"_id": 0, "id": 1, "full_name": 1},
+            ).to_list(len(admin_ids))
+            admin_name_by_id = {a["id"]: a.get("full_name") for a in admin_docs}
 
         # Map leave type → cell code.
         LEAVE_CODE = {
@@ -960,7 +975,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             # Break for this member (admin-applied via /admin/breaks).
             # Painted with a dedicated BK code so admins can tell it
             # apart from a global HO (15 Feb 2026).
-            if iso in breaks_by_user.get(uid, set()):
+            if iso in breaks_by_user.get(uid, {}):
                 return "BK"
             if WEEKDAY_KEY[dow_idx] == weekly_off:
                 return "WO"
@@ -983,6 +998,55 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             work_start = u.get("work_start") or default_work_start
             cells = [_classify(uid, iso, dow_by_iso[iso], weekly_off, work_start)
                      for iso in days]
+            # Per-cell metadata — used by the frontend tooltip layer.
+            # Only populate entries where there IS extra context worth
+            # surfacing (break name, leave reason, late minutes, half-day
+            # window, checked-in time) — keeps the payload lean.
+            cell_meta: dict = {}
+            for idx, iso in enumerate(days):
+                code = cells[idx]
+                if not code or code in ("WO", "HO", "AB"):
+                    continue
+                m: dict = {}
+                if code == "BK":
+                    b = breaks_by_user.get(uid, {}).get(iso)
+                    if b:
+                        m["break_name"] = b.get("name")
+                        applier = admin_name_by_id.get(b.get("created_by"))
+                        if applier:
+                            m["applied_by"] = applier
+                        if b.get("created_at"):
+                            m["applied_at"] = b["created_at"]
+                        rng = f"{b.get('start_date')}"
+                        if b.get("end_date") and b["end_date"] != b.get("start_date"):
+                            rng += f" → {b['end_date']}"
+                        m["range"] = rng
+                elif code in ("LV", "TR", "CO", "PS"):
+                    for L in leaves_by_user.get(uid, []):
+                        if L.get("start_date") <= iso <= L.get("end_date"):
+                            if L.get("reason"):
+                                m["reason"] = L["reason"]
+                            if L.get("half_day"):
+                                m["half_day"] = L["half_day"]
+                            if L.get("decided_by"):
+                                m["approved_by"] = L["decided_by"]
+                            m["range"] = (
+                                L["start_date"] if L.get("start_date") == L.get("end_date")
+                                else f"{L.get('start_date')} → {L.get('end_date')}"
+                            )
+                            break
+                elif code in ("P", "HD", "LT"):
+                    att = att_by_user.get(uid, {}).get(iso) or {}
+                    if att.get("check_in_at"):
+                        m["check_in_at"] = att["check_in_at"]
+                    if att.get("check_out_at"):
+                        m["check_out_at"] = att["check_out_at"]
+                    if code == "LT" and att.get("late_minutes"):
+                        m["late_minutes"] = int(att.get("late_minutes") or 0)
+                    if att.get("overtime_total_min"):
+                        m["ot_minutes"] = int(att.get("overtime_total_min") or 0)
+                if m:
+                    cell_meta[iso] = m
             # Per-row totals — surfaces at the end of each row in the UI.
             # Half-day + Late still count as attendance (present-like);
             # Comp-off is bucketed with Leave (both are time-off types).
@@ -1015,6 +1079,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 "work_start": u.get("work_start") or default_work_start,
                 "work_end": u.get("work_end") or ((office or {}).get("default_work_end") or "17:00"),
                 "cells": cells,
+                "cell_meta": cell_meta,
                 "totals": totals,
             })
         rows.sort(key=lambda r: (r["member_name"] or "").lower())
@@ -1101,6 +1166,233 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             headers={"Content-Disposition":
                      f"attachment; filename={filename_stem}.pdf"},
         )
+
+    @router.get("/reports/churn-risk")
+    async def churn_risk(
+        window_days: int = 30,
+        threshold: float = 0.40,
+        category: Optional[str] = None,
+        institution: Optional[str] = None,
+        min_scheduled: int = 5,
+        admin: dict = Depends(require_admin),
+    ):
+        """No-show / churn early-warning report.
+
+        Scans the last ``window_days`` days ending today (office-tz) and
+        surfaces members whose *miss rate* on **scheduled** days (i.e.
+        excluding weekly-offs, holidays, approved leaves, and breaks)
+        crosses ``threshold`` — 0.40 = missed >= 40% of expected days.
+
+        Also computes the current *consecutive-absent streak* ending on
+        the last scheduled day, so admins can catch someone who's been
+        AWOL for a stretch even if the rolling % is still under the
+        alert bar. Sorted worst-first (miss_pct desc, then streak desc).
+
+        Athletes are the primary target — parent contact fields
+        (``father_mobile`` / ``mother_mobile`` / ``guardian_mobile``)
+        are surfaced on the payload so a downstream "Notify parents"
+        button can dispatch SMS without a second round-trip.
+
+        ``min_scheduled`` guards against noise — a new member with just
+        1 scheduled day in the window shouldn't ring alarm bells at
+        100%. Default 5 skips anyone with <5 workable days.
+        """
+        try:
+            window = max(1, min(int(window_days), 180))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="window_days must be an integer 1..180")
+        try:
+            th = float(threshold)
+            if not 0.0 <= th <= 1.0:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="threshold must be a float 0.0..1.0")
+
+        office = await db.config.find_one({"id": "office"})
+        today_iso = local_date_str(office)
+        end_d = date.fromisoformat(today_iso)
+        start_d = end_d - timedelta(days=window - 1)
+        start_iso, end_iso = start_d.isoformat(), end_d.isoformat()
+        default_wo = ((office or {}).get("default_weekly_off") or "sunday").lower()
+        from holidays import WEEKDAY_KEY
+
+        # Roster (same filter semantics as calendar-grid).
+        users = await db.users.find(
+            {"status": {"$ne": "left"}},
+            {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1,
+             "fleet": 1, "institution": 1, "weekly_off": 1,
+             "mobile": 1, "email": 1,
+             "father_name": 1, "father_mobile": 1,
+             "mother_name": 1, "mother_mobile": 1,
+             "guardian_name": 1, "guardian_mobile": 1},
+        ).to_list(3000)
+        athlete_like = await _athlete_like_keys(db)
+        if category == "athlete":
+            users = [u for u in users if u.get("category") in athlete_like]
+        elif category == "elite":
+            users = [u for u in users if u.get("category") == "elite"]
+        elif category == "rest":
+            users = [u for u in users if u.get("category") not in athlete_like]
+        if institution:
+            users = [u for u in users if (u.get("institution") or "") == institution]
+
+        user_ids = [u["id"] for u in users]
+        days = [(start_d + timedelta(days=i)).isoformat() for i in range(window)]
+        if not user_ids:
+            return {"start": start_iso, "end": end_iso, "window_days": window,
+                    "threshold": th, "rows": []}
+
+        # Bulk fetches — attendance rows, approved leaves, holidays, breaks.
+        att_docs = await db.attendance.find(
+            {"user_id": {"$in": user_ids},
+             "date": {"$gte": start_iso, "$lte": end_iso}},
+            {"_id": 0, "user_id": 1, "date": 1, "check_in_at": 1},
+        ).to_list(20000)
+        leave_docs = await db.leaves.find(
+            {"user_id": {"$in": user_ids}, "status": "approved",
+             "start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
+            {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1},
+        ).to_list(20000)
+        holidays_docs = await db.holidays.find(
+            {"date": {"$gte": start_iso, "$lte": end_iso}},
+            {"_id": 0, "date": 1},
+        ).to_list(200)
+        holiday_dates = {h["date"] for h in holidays_docs}
+        breaks_docs = await db.breaks.find(
+            {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
+            {"_id": 0},
+        ).to_list(500)
+
+        att_by_user: dict = {}
+        for a in att_docs:
+            att_by_user.setdefault(a["user_id"], set()).add(a["date"])
+        leaves_by_user: dict = {}
+        for L in leave_docs:
+            leaves_by_user.setdefault(L["user_id"], []).append(L)
+        # Per-user break dates.
+        breaks_by_user: dict = {}
+        for u in users:
+            on_break: set = set()
+            for b in breaks_docs:
+                if not _breaks_module.break_applies_to(b, u):
+                    continue
+                bs, be = b.get("start_date"), b.get("end_date")
+                if not (bs and be):
+                    continue
+                cur = max(bs, start_iso)
+                stop = min(be, end_iso)
+                while cur <= stop:
+                    on_break.add(cur)
+                    cur = (date.fromisoformat(cur) + timedelta(days=1)).isoformat()
+            if on_break:
+                breaks_by_user[u["id"]] = on_break
+
+        dow_by_iso = {iso: date.fromisoformat(iso).weekday() for iso in days}
+
+        rows: List[dict] = []
+        for u in users:
+            uid = u["id"]
+            weekly_off = (u.get("weekly_off") or default_wo).lower()
+            on_leave: set = set()
+            for L in leaves_by_user.get(uid, []):
+                bs, be = L.get("start_date"), L.get("end_date")
+                if not (bs and be):
+                    continue
+                cur = max(bs, start_iso)
+                stop = min(be, end_iso)
+                while cur <= stop:
+                    on_leave.add(cur)
+                    cur = (date.fromisoformat(cur) + timedelta(days=1)).isoformat()
+            on_break = breaks_by_user.get(uid, set())
+            att_set = att_by_user.get(uid, set())
+
+            scheduled = 0
+            present = 0
+            absent_days: List[str] = []
+            for iso in days:
+                # Excluded from the "scheduled" tally: WO, holiday, break, approved leave.
+                if WEEKDAY_KEY[dow_by_iso[iso]] == weekly_off:
+                    continue
+                if iso in holiday_dates or iso in on_break or iso in on_leave:
+                    continue
+                scheduled += 1
+                if iso in att_set:
+                    present += 1
+                else:
+                    absent_days.append(iso)
+
+            if scheduled < min_scheduled:
+                continue
+            missed = scheduled - present
+            miss_pct = missed / scheduled if scheduled else 0.0
+            # Trailing consecutive absent streak on scheduled days only.
+            streak = 0
+            for iso in reversed(days):
+                if WEEKDAY_KEY[dow_by_iso[iso]] == weekly_off:
+                    continue
+                if iso in holiday_dates or iso in on_break or iso in on_leave:
+                    continue
+                if iso in att_set:
+                    break
+                streak += 1
+            # Alert only when either the rolling % breaches threshold OR
+            # the trailing streak is >= 3 scheduled misses in a row (a
+            # 3-day silent stretch tends to be the earliest actionable
+            # signal per user brief).
+            if miss_pct < th and streak < 3:
+                continue
+
+            # Best-guess parent/guardian channel for downstream SMS. Order:
+            # father → mother → guardian → member's own mobile.
+            contact = None
+            for label, name_k, phone_k in (
+                ("Father",   "father_name",    "father_mobile"),
+                ("Mother",   "mother_name",    "mother_mobile"),
+                ("Guardian", "guardian_name",  "guardian_mobile"),
+            ):
+                if u.get(phone_k):
+                    contact = {
+                        "relation": label,
+                        "name": u.get(name_k),
+                        "mobile": u.get(phone_k),
+                    }
+                    break
+            if not contact and u.get("mobile"):
+                contact = {"relation": "Self", "name": u.get("full_name"), "mobile": u.get("mobile")}
+
+            # Risk band — powers the pill colour on the UI.
+            if miss_pct >= 0.75 or streak >= 7:
+                band = "critical"
+            elif miss_pct >= 0.50 or streak >= 5:
+                band = "high"
+            else:
+                band = "watch"
+
+            rows.append({
+                "member_id": uid,
+                "member_name": u.get("full_name"),
+                "rank": u.get("rank"),
+                "category": u.get("category"),
+                "institution": u.get("institution"),
+                "fleet": u.get("fleet"),
+                "scheduled": scheduled,
+                "present": present,
+                "missed": missed,
+                "miss_pct": round(miss_pct, 3),
+                "attendance_pct": round(1 - miss_pct, 3),
+                "streak": streak,
+                "last_seen": max(att_set) if att_set else None,
+                "absent_days": absent_days[-10:],  # cap payload
+                "contact": contact,
+                "risk_band": band,
+            })
+
+        rows.sort(key=lambda r: (-r["miss_pct"], -r["streak"], (r["member_name"] or "").lower()))
+        return {
+            "start": start_iso, "end": end_iso, "window_days": window,
+            "threshold": th, "count": len(rows), "rows": rows,
+        }
+
 
     @router.get("/reports/attendance-ledger")
     async def attendance_ledger(

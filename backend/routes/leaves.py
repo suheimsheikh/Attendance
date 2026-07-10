@@ -90,12 +90,18 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
     async def enrich_leaves(leaves: List[dict]) -> List[dict]:
         """Attach member name/category/rank for each leave row. Used by the
         admin views and the exported reports — extracted here so callers
-        outside this module can re-use it via the returned helper below."""
-        user_ids = list({leave["user_id"] for leave in leaves})
+        outside this module can re-use it via the returned helper below.
+
+        Defensive against legacy rows that lack `user_id` (would have thrown
+        KeyError before → the whole `/leaves` endpoint 500'd, which is how
+        we ended up with a phantom '82 pending' sidebar badge in prod while
+        the Approvals page rendered empty — see 20 Feb 2026 bug report).
+        """
+        user_ids = list({leave.get("user_id") for leave in leaves if leave.get("user_id")})
         users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0}).to_list(2000)
         umap = {u["id"]: u for u in users}
         for leave in leaves:
-            u = umap.get(leave["user_id"], {})
+            u = umap.get(leave.get("user_id"), {}) if leave.get("user_id") else {}
             leave["member_name"] = u.get("full_name", "Unknown")
             leave["member_category"] = u.get("category")
             leave["member_rank"] = u.get("rank")

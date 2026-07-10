@@ -5,7 +5,7 @@ import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, Building2, IdCard, Sailboat,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight
+  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, TrendingDown
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -58,6 +58,7 @@ const NAV_ADMIN = [
   // reporting surface (all-in-one 31-day view).
   { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, spotlight: true },
   { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page" },
+  { to: "/admin/churn-risk", label: "Churn Risk", icon: TrendingDown },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
 ];

@@ -273,6 +273,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                     {r.cells.map((code, idx) => {
                       const cfg = correctionForCode(code);
                       const iso = days[idx];
+                      const meta = r.cell_meta ? r.cell_meta[iso] : undefined;
                       // Only wire onClick for past-or-today cells that
                       // map to a useful correction. Future dates
                       // (empty code) already skip in GridCell; WO/HO
@@ -295,6 +296,8 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                           key={iso}
                           code={code}
                           dow={dayHeaders[idx]?.dow}
+                          iso={iso}
+                          meta={meta}
                           onClick={onClick}
                         />
                       );
