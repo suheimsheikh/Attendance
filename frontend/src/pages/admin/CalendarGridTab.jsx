@@ -252,8 +252,9 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
           <table className="text-xs border-collapse" data-testid="calendar-grid-table">
             <thead className="sticky top-0 z-30 bg-slate-50">
               <tr>
-                <th className="py-1.5 px-2 text-left sticky left-0 z-40 bg-slate-50 min-w-[180px] border-b border-slate-200 font-semibold text-slate-700">Member</th>
-                <th className="py-1.5 px-2 text-left sticky left-[180px] z-40 bg-slate-50 min-w-[100px] hidden md:table-cell border-b border-slate-200 font-semibold text-slate-700">Category</th>
+                <th className="py-1.5 px-2 text-center sticky left-0 z-40 bg-slate-50 w-10 border-b border-slate-200 font-semibold text-slate-500 text-[10px] uppercase tracking-wider">#</th>
+                <th className="py-1.5 px-2 text-left sticky left-10 z-40 bg-slate-50 min-w-[180px] border-b border-slate-200 font-semibold text-slate-700">Member</th>
+                <th className="py-1.5 px-2 text-left sticky left-[220px] z-40 bg-slate-50 min-w-[100px] hidden md:table-cell border-b border-slate-200 font-semibold text-slate-700">Category</th>
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso}
@@ -271,8 +272,9 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 <th className="sticky right-0 z-40 bg-orange-100 text-orange-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Tour days">TR</th>
               </tr>
               <tr>
-                <th className="py-0.5 px-2 sticky left-0 z-40 bg-slate-50 text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">Name / Rank</th>
-                <th className="py-0.5 px-2 sticky left-[180px] z-40 bg-slate-50 hidden md:table-cell border-b border-slate-200"></th>
+                <th className="py-0.5 sticky left-0 z-40 bg-slate-50 border-b border-slate-200"></th>
+                <th className="py-0.5 px-2 sticky left-10 z-40 bg-slate-50 text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">Name / Rank</th>
+                <th className="py-0.5 px-2 sticky left-[220px] z-40 bg-slate-50 hidden md:table-cell border-b border-slate-200"></th>
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso + "-dow"}
@@ -290,20 +292,21 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={2 + days.length + 4} className="py-8 text-center text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={3 + days.length + 4} className="py-8 text-center text-slate-400">Loading…</td></tr>
               )}
               {!loading && displayedRows.length === 0 && (
-                <tr><td colSpan={2 + days.length + 4} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
+                <tr><td colSpan={3 + days.length + 4} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
               )}
               {!loading && displayedRows.map((r, i) => {
                 const rowBg = i % 2 === 1 ? "bg-slate-100/40" : "bg-white";
                 return (
                   <tr key={r.member_id} className={`${rowBg} hover:bg-sky-50 group transition-colors`} data-testid={`calendar-row-${r.member_id}`}>
-                    <td className={`py-1 px-2 font-semibold text-slate-800 sticky left-0 z-20 ${rowBg} group-hover:bg-sky-50 border-b border-slate-100`}>
+                    <td className={`py-1 px-2 text-center text-[11px] text-slate-500 tabular-nums sticky left-0 z-20 ${rowBg} group-hover:bg-sky-50 border-b border-slate-100`} data-testid={`calendar-serial-${r.member_id}`}>{i + 1}</td>
+                    <td className={`py-1 px-2 font-semibold text-slate-800 sticky left-10 z-20 ${rowBg} group-hover:bg-sky-50 border-b border-slate-100`}>
                       {r.member_name}
                       {r.rank && <div className="text-[10px] text-slate-400 leading-tight">{r.rank}</div>}
                     </td>
-                    <td className={`py-1 px-2 text-slate-600 hidden md:table-cell border-b border-slate-100 sticky left-[180px] z-20 ${rowBg} group-hover:bg-sky-50`}>{categoryLabel(r.category)}</td>
+                    <td className={`py-1 px-2 text-slate-600 hidden md:table-cell border-b border-slate-100 sticky left-[220px] z-20 ${rowBg} group-hover:bg-sky-50`}>{categoryLabel(r.category)}</td>
                     {r.cells.map((code, idx) => {
                       const cfg = correctionForCode(code);
                       const iso = days[idx];
