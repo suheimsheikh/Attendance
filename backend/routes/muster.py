@@ -1,22 +1,30 @@
 """
-Muster roll endpoints — bulk check-in / check-out for athletes performed
-by a coach, admin, or institution-scoped active escort. Athletes typically
-don't have phones; a coach physically musters them and ticks who's present
-(or who's departing).
+Muster roll endpoints — bulk check-in / check-out performed by a coach,
+admin, or institution-scoped active escort.
+
+Historically this was athletes-only (they don't have phones, so a coach
+physically musters them). From 15 Feb 2026 admins can also muster staff,
+coaches, and executives via this same surface — non-athletes checked in
+here go through the identical hours/late/geofence pipeline as everyone
+else, so payroll tracking stays in one place.
 
 Split out of `server.py` during the 06/2026 modularisation pass.
 
 Covers:
-  • GET  /api/muster/athletes        — list eligible athletes for the
+  • GET  /api/muster/athletes        — list eligible members for the
                                        given mode (checkin | checkout).
-  • POST /api/muster/checkin-bulk    — record presence for many athletes
+                                       ?scope= (admin-only) narrows to
+                                       athletes | staff | coach |
+                                       executive | non_athletes | all.
+  • POST /api/muster/checkin-bulk    — record presence for many members
                                        in one shot.
   • POST /api/muster/checkout-bulk   — close many open sessions in one
                                        shot.
 
 Institutional scoping: active escort tokens (`is_escort=True`) are
 silently restricted to their assigned institution; non-matching ids
-are skipped, never 403-ing the whole batch.
+are skipped, never 403-ing the whole batch. Coaches and escorts are
+always limited to athlete-like categories regardless of `scope`.
 """
 from __future__ import annotations
 
@@ -103,12 +111,48 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         if esc.get("valid_until") and today_iso > esc["valid_until"]:
             raise HTTPException(status_code=403, detail="Your escort access expired on " + esc["valid_until"])
 
+    async def _scoped_user_query(user: dict, scope: str) -> dict:
+        """Build the users-collection filter for the muster list. Admins can
+        bulk-muster ANY category (staff, coaches, executives, athletes) — this
+        was enabled 15 Feb 2026 to let admins run muster for non-athlete
+        payroll tracking. Coaches and escorts remain restricted to athletes
+        (their job is to physically muster kids, not sign staff in).
+
+        `scope` (admin only) narrows the roster:
+          • "athletes"     → athlete_like categories (default for coaches/escorts, safe default for admins too)
+          • "staff"        → category == "staff"
+          • "coach"        → category == "coach"
+          • "executive"    → category == "executive"
+          • "non_athletes" → category NOT in athlete_like
+          • "all"          → no category filter (everyone)
+        """
+        athlete_keys = await _athlete_like_keys()
+        is_admin = user.get("role") == "admin"
+        if not is_admin or scope == "athletes":
+            return {"category": {"$in": athlete_keys}}
+        if scope == "non_athletes":
+            return {"category": {"$nin": athlete_keys}}
+        if scope in ("staff", "coach", "executive"):
+            return {"category": scope}
+        # scope == "all" or unknown → no category filter
+        return {}
+
     @router.get("/muster/athletes")
-    async def muster_athletes(mode: str = "checkin", user: dict = Depends(get_current_user)):
-        """List athletes eligible for the given muster mode:
-           checkin  → athletes not currently on-campus AND not on leave/tour AND not
+    async def muster_athletes(
+        mode: str = "checkin",
+        scope: str = "athletes",
+        user: dict = Depends(get_current_user),
+    ):
+        """List members eligible for the given muster mode.
+
+        For coaches / escorts the roster is always athletes-only. For admins,
+        `scope` widens the roster to include staff / coaches / executives so
+        the muster surface can double as bulk check-in for non-athletes
+        (payroll tracking for staff etc.). See `_scoped_user_query`.
+
+           checkin  → members not currently on-campus AND not on leave/tour AND not
                       already closed-out today
-           checkout → athletes currently checked in (open session)
+           checkout → members currently checked in (open session)
         """
         _require_muster(user)
         await _enforce_escort_window(user)
@@ -119,9 +163,8 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         today = local_date_str(office)
 
         # Escorts can only muster athletes from their own institution. Coaches
-        # and admins see the full roster.
-        athlete_keys = await _athlete_like_keys()
-        athlete_query: dict = {"category": {"$in": athlete_keys}}
+        # see the full athlete roster. Admins can widen scope via ?scope=.
+        athlete_query: dict = await _scoped_user_query(user, scope)
         if user.get("is_escort"):
             inst = (user.get("institution") or "").strip()
             if not inst:
@@ -176,6 +219,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 "photo": s.get("photo_thumb") or s.get("photo"),
                 "institution": s.get("institution"),
                 "gender": s.get("gender"),
+                "category": s.get("category"),
                 "father_mobile": s.get("father_mobile"),
                 "mother_mobile": s.get("mother_mobile"),
                 "guardian_mobile": s.get("guardian_mobile"),
@@ -215,16 +259,27 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
 
         done, skipped = [], []
         athlete_keys = await _athlete_like_keys()
+        is_admin = user.get("role") == "admin"
         # Escorts may only muster within their assigned institution. We
         # silently skip athletes outside that institution rather than 403
         # the whole batch — keeps the muster UX forgiving if a stale id
         # slips into the request.
         escort_inst = (user.get("institution") or "").strip() if user.get("is_escort") else None
         for sid in body.athlete_ids:
-            athlete = await db.users.find_one({"id": sid, "category": {"$in": athlete_keys}}, {"_id": 0})
-            if not athlete:
-                skipped.append({"id": sid, "reason": "not an athlete"})
-                continue
+            # Admins can bulk-muster any member (staff, coaches, execs, athletes).
+            # Coaches / escorts remain restricted to athlete-like categories.
+            if is_admin:
+                athlete = await db.users.find_one({"id": sid}, {"_id": 0})
+                if not athlete:
+                    skipped.append({"id": sid, "reason": "unknown member"})
+                    continue
+            else:
+                athlete = await db.users.find_one(
+                    {"id": sid, "category": {"$in": athlete_keys}}, {"_id": 0}
+                )
+                if not athlete:
+                    skipped.append({"id": sid, "reason": "not an athlete"})
+                    continue
             if escort_inst and (athlete.get("institution") or "").strip() != escort_inst:
                 skipped.append({"id": sid, "name": athlete["full_name"],
                                 "reason": "outside your institution"})
@@ -310,12 +365,22 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
 
         done, skipped = [], []
         athlete_keys = await _athlete_like_keys()
+        is_admin = user.get("role") == "admin"
         escort_inst = (user.get("institution") or "").strip() if user.get("is_escort") else None
         for sid in body.athlete_ids:
-            athlete = await db.users.find_one({"id": sid, "category": {"$in": athlete_keys}}, {"_id": 0})
-            if not athlete:
-                skipped.append({"id": sid, "reason": "not an athlete"})
-                continue
+            # Admins may check out any member; coaches/escorts limited to athletes.
+            if is_admin:
+                athlete = await db.users.find_one({"id": sid}, {"_id": 0})
+                if not athlete:
+                    skipped.append({"id": sid, "reason": "unknown member"})
+                    continue
+            else:
+                athlete = await db.users.find_one(
+                    {"id": sid, "category": {"$in": athlete_keys}}, {"_id": 0}
+                )
+                if not athlete:
+                    skipped.append({"id": sid, "reason": "not an athlete"})
+                    continue
             if escort_inst and (athlete.get("institution") or "").strip() != escort_inst:
                 skipped.append({"id": sid, "name": athlete["full_name"],
                                 "reason": "outside your institution"})

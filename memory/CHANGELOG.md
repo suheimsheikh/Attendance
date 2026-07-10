@@ -3,6 +3,50 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 problem statement + user personas; long-form change history lives here.
 
+
+---
+## 15 Feb 2026 — Muster roll accepts Staff & non-athletes (admins only)
+
+**User request:** "Muster checkin should allow admins to check in and
+out Staff and all non athletes." Payroll tracking for coaches, staff,
+and executives should live on the same muster surface that admins
+already use for athletes.
+
+### Backend — `routes/muster.py`
+- New `?scope=` query param on `GET /api/muster/athletes`:
+  `athletes` (default) | `staff` | `coach` | `executive` |
+  `non_athletes` | `all`.
+- `_scoped_user_query(user, scope)` centralises the category filter.
+  Coaches / escorts are ignored on `scope` and always get athletes-only
+  (their job is athlete muster, not staff sign-in).
+- `POST /muster/checkin-bulk` and `/muster/checkout-bulk` now allow
+  admins to touch ANY member id; coaches/escorts remain athlete-scoped
+  with the existing "not an athlete" skip reason.
+- Response rows now include `category` so the frontend can render a
+  category chip alongside the institution chip.
+
+### Frontend — `pages/Muster.jsx`
+- Admin-only scope chip row: **All · Athletes · Staff · Coaches ·
+  Executives · Non-athletes**. Default = "All" per user preference
+  ("show everyone by default, narrow down with chips").
+- Category chip on each row (colour-coded per category) for admins so
+  it's obvious which rows are non-athletes.
+- Header + summary + toasts now say "member(s)" for admins instead of
+  hardcoding "athlete(s)". Coach/escort view is unchanged.
+- Search placeholder widened to "name, rank, category" for admins.
+- Scope changes reset the institution filter back to All.
+
+### Tests — `tests/test_muster_scope.py` (new, 6 tests)
+- Scope=athletes default returns only athlete-like rows.
+- Scope=staff returns only staff.
+- Scope=non_athletes excludes athletes/elite.
+- Scope=all returns mixed categories, each row exposes `category`.
+- Admin bulk check-in of a staff member records the attendance.
+- Admin round-trip check-in → check-out on a staff member.
+
+All 6 new tests + all 4 existing muster GPS tests pass.
+
+
 ---
 ## 10 Feb 2026 — Approvals collapsed into a single unified table
 

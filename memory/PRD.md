@@ -28,9 +28,10 @@
 
 ## What's Implemented (Jan 2026)
 > Session-level shipments (Jun 2026 – Feb 2026) live in `CHANGELOG.md`
-> — most recent: **Elite squad now visible in Muster + Fleet bulk-assign**
-> (4 Feb 2026); **Code review: brute-force protection + backup restore
-> fixes** (session before); **Chef's View + Elite category** shipped
+> — most recent: **Muster roll accepts Staff & non-athletes (admins
+> only)** (15 Feb 2026); **Approvals collapsed into a single unified
+> table** (10 Feb 2026); **Elite squad now visible in Muster + Fleet
+> bulk-assign** (4 Feb 2026); **Chef's View + Elite category** shipped
 > 8 Jul 2026; **Single-glance Admin Dashboard (`/admin/dashboard`)**
 > shipped 7 Jul 2026.
 > alongside this file to keep PRD.md focused on the durable spec.

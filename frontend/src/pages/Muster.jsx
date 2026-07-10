@@ -15,9 +15,33 @@ const MODES = [
   { key: "checkout", label: "Check out", Icon: LogOutIcon,   verb: "Check out", color: "#6B7280" },
 ];
 
+// Admin-only scope chips — widens the muster roster beyond athletes.
+// Default is "all" per user preference (04 Feb 2026): show everyone,
+// let admin filter down. Coaches/escorts don't see these chips and are
+// always restricted to athletes server-side.
+const SCOPES = [
+  { key: "all",          label: "All" },
+  { key: "athletes",     label: "Athletes" },
+  { key: "staff",        label: "Staff" },
+  { key: "coach",        label: "Coaches" },
+  { key: "executive",    label: "Executives" },
+  { key: "non_athletes", label: "Non-athletes" },
+];
+
+const CATEGORY_CHIP_STYLE = {
+  athlete:   "bg-sky-100 text-sky-700",
+  elite:     "bg-rose-100 text-rose-700",
+  staff:     "bg-emerald-100 text-emerald-700",
+  coach:     "bg-amber-100 text-amber-700",
+  executive: "bg-violet-100 text-violet-700",
+};
+
 export default function Muster() {
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [mode, setMode] = useState("checkin");
+  // Admins get scope filter (default "all"); coaches/escorts always get athletes.
+  const [scope, setScope] = useState(isAdmin ? "all" : "athletes");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -41,7 +65,7 @@ export default function Muster() {
     setLoading(true);
     try {
       const [res, o, si] = await Promise.all([
-        api.get("/muster/athletes", { mode }),
+        api.get("/muster/athletes", { mode, scope }),
         api.get("/office").catch(() => null),
         api.get("/sites").catch(() => []),
       ]);
@@ -54,11 +78,11 @@ export default function Muster() {
     } finally {
       setLoading(false);
     }
-  }, [mode]);
+  }, [mode, scope]);
 
   useEffect(() => { load(); }, [load]);
-  // Reset institution filter when mode changes so the user always starts broad.
-  useEffect(() => { setInstitutionFilter("all"); }, [mode]);
+  // Reset institution filter when mode / scope changes so the user always starts broad.
+  useEffect(() => { setInstitutionFilter("all"); }, [mode, scope]);
 
   const runBulk = useCallback(async (ids) => {
     setSaving(true);
@@ -109,10 +133,11 @@ export default function Muster() {
       const doneCount = res.checked_in_count ?? res.checked_out_count ?? 0;
       const skipCount = res.skipped_count ?? 0;
       const skipNote = skipCount > 0 ? ` · ${skipCount} skipped` : "";
+      const noun = doneCount === 1 ? "member" : "members";
       toast.success(
         mode === "checkin"
-          ? `${doneCount} athlete${doneCount === 1 ? "" : "s"} marked present${skipNote}`
-          : `${doneCount} athlete${doneCount === 1 ? "" : "s"} marked departed${skipNote}`
+          ? `${doneCount} ${noun} marked present${skipNote}`
+          : `${doneCount} ${noun} marked departed${skipNote}`
       );
       // Clear the ticked set so the next round starts fresh (the just-saved
       // members no longer appear in the picker anyway, but state was lingering).
@@ -248,7 +273,7 @@ export default function Muster() {
 
   const submit = async () => {
     if (picked.size === 0) {
-      toast.error("Tick at least one athlete first");
+      toast.error(`Tick at least one ${isAdmin ? "member" : "athlete"} first`);
       return;
     }
     // Snapshot who needs a photo BEFORE we clear the picked set on
@@ -275,7 +300,9 @@ export default function Muster() {
       <header className="mb-6">
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Muster Roll</h1>
         <p className="text-slate-500 text-sm mt-1">
-          Tick the athletes who are physically present. Their attendance is logged with your name as the verifier. Your GPS location is captured on submit and stamped on each check-in.
+          {isAdmin
+            ? "Tick the members who are physically present. Attendance is logged with your name as the verifier. Your GPS is captured on submit and stamped on each check-in."
+            : "Tick the athletes who are physically present. Their attendance is logged with your name as the verifier. Your GPS location is captured on submit and stamped on each check-in."}
         </p>
       </header>
 
@@ -294,6 +321,30 @@ export default function Muster() {
           </button>
         ))}
       </div>
+
+      {/* Scope filter chips — admin only. Lets admins muster staff /
+          coaches / executives alongside athletes for payroll tracking.
+          Coaches and escorts are server-restricted to athletes. */}
+      {isAdmin && (
+        <div
+          className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-1 px-1"
+          data-testid="muster-scope-filter"
+        >
+          {SCOPES.map((s) => {
+            const active = scope === s.key;
+            return (
+              <button
+                key={s.key}
+                data-testid={`muster-scope-${s.key}`}
+                onClick={() => setScope(s.key)}
+                className={`iu-chip whitespace-nowrap shrink-0 ${active ? "iu-chip-active" : ""}`}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Institution filter chips */}
       {institutions.length > 1 && (
@@ -338,7 +389,7 @@ export default function Muster() {
             data-testid="muster-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter athletes by name or rank…"
+            placeholder={isAdmin ? "Filter by name, rank, category…" : "Filter athletes by name or rank…"}
             className="flex-1 outline-none bg-transparent text-sm"
           />
         </div>
@@ -359,7 +410,7 @@ export default function Muster() {
       {/* Summary line */}
       <div className="flex items-baseline justify-between mb-2 px-1">
         <p className="text-sm text-slate-600" data-testid="muster-summary">
-          <span className="font-bold text-slate-900">{tickable.length}</span> athlete{tickable.length === 1 ? "" : "s"} {mode === "checkin" ? "to check in" : "still on campus"}
+          <span className="font-bold text-slate-900">{tickable.length}</span> {isAdmin ? (tickable.length === 1 ? "member" : "members") : (tickable.length === 1 ? "athlete" : "athletes")} {mode === "checkin" ? "to check in" : "still on campus"}
           {mode === "checkin" && (filtered.length - tickable.length) > 0 && (
             <> · <span className="text-slate-500">{filtered.length - tickable.length} already in</span></>
           )}
@@ -437,11 +488,13 @@ export default function Muster() {
         <div className="iu-card p-10 text-center" data-testid="muster-empty">
           <Users className="mx-auto text-slate-300 mb-2" size={36} />
           <p className="font-semibold text-slate-700">
-            {mode === "checkin" ? "Everyone's already accounted for" : "Nobody is currently on campus"}
+            {mode === "checkin"
+              ? (isAdmin ? "Everyone in this scope is already accounted for" : "Everyone's already accounted for")
+              : (isAdmin ? "Nobody in this scope is currently on campus" : "Nobody is currently on campus")}
           </p>
           <p className="text-sm text-slate-500 mt-1">
             {mode === "checkin"
-              ? "All athletes are either already checked in, on leave, or have completed their day."
+              ? (isAdmin ? "All members here are already checked in, on leave, or off-scope. Try widening the scope filter." : "All athletes are either already checked in, on leave, or have completed their day.")
               : "There's nobody to check out right now."}
           </p>
         </div>
@@ -483,6 +536,15 @@ export default function Muster() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <div className="font-semibold text-slate-900 truncate flex-1">{s.full_name}</div>
+                    {isAdmin && s.category && s.category !== "athlete" && (
+                      <span
+                        title={`Category: ${s.category}`}
+                        data-testid={`muster-category-chip-${s.id}`}
+                        className={`inline-flex items-center px-1.5 h-5 rounded text-[10px] font-bold shrink-0 capitalize ${CATEGORY_CHIP_STYLE[s.category] || "bg-slate-100 text-slate-700"}`}
+                      >
+                        {s.category}
+                      </span>
+                    )}
                     {isLocked && (
                       <span
                         title={inAt ? `Checked in at ${inAt}` : "Already checked in"}
@@ -528,7 +590,7 @@ export default function Muster() {
         <div className="max-w-3xl mx-auto flex items-center gap-3">
           <div className="flex-1 text-sm">
             {picked.size === 0
-              ? <span className="text-slate-400">Tick athletes above to {meta.verb.toLowerCase()}</span>
+              ? <span className="text-slate-400">Tick {isAdmin ? "members" : "athletes"} above to {meta.verb.toLowerCase()}</span>
               : <span className="font-semibold text-slate-900">{picked.size} ticked</span>}
             {user?.full_name && (
               <span className="text-xs text-slate-400 block">Verified by {user.full_name}</span>
