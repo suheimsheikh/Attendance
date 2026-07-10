@@ -12,13 +12,14 @@ import React from "react";
 export const CELL_STYLE = {
   P:  { bg: "bg-emerald-500",    text: "text-white",       label: "P",  title: "Present" },
   HD: { bg: "bg-amber-100",      text: "text-amber-700",   label: "HD", title: "Half day" },
-  LT: { bg: "bg-emerald-500/70", text: "text-amber-100",   label: "LT", title: "Late" },
+  LT: { bg: "bg-orange-500",     text: "text-white",       label: "LT", title: "Late" },
   LV: { bg: "bg-amber-200",      text: "text-amber-800",   label: "LV", title: "Leave" },
   TR: { bg: "bg-orange-200",     text: "text-orange-800",  label: "TR", title: "Tour" },
   PS: { bg: "bg-slate-200",      text: "text-slate-700",   label: "PS", title: "Posting" },
   CO: { bg: "bg-sky-200",        text: "text-sky-800",     label: "CO", title: "Comp-off" },
   WO: { bg: "bg-slate-100",      text: "text-slate-500",   label: "WO", title: "Weekly off" },
   HO: { bg: "bg-violet-100",     text: "text-violet-700",  label: "HO", title: "Holiday" },
+  BK: { bg: "bg-fuchsia-200",    text: "text-fuchsia-800", label: "BK", title: "Break (member-scoped)" },
   AB: { bg: "bg-red-500",        text: "text-white",       label: "AB", title: "Absent" },
 };
 

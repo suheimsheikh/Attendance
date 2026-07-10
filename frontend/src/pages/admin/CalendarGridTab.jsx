@@ -222,14 +222,15 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                     {h.day}
                   </th>
                 ))}
-                {/* Sticky-right totals headers. Layout: | P | AB | LV | TR | OT |
-                    OT is a compact-but-wider column (holds "1h 30m") so
-                    the offset stack now: OT=0, TR=52, LV=94, AB=136, P=178. */}
-                <th className="sticky right-[178px] z-40 bg-emerald-100 text-emerald-800 h-6 min-w-[42px] text-center border-b border-l-2 border-slate-300 text-[10px] font-bold" title="Present days (incl. HD + Late)">P</th>
-                <th className="sticky right-[136px] z-40 bg-red-100 text-red-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Absent days">AB</th>
-                <th className="sticky right-[94px] z-40 bg-amber-100 text-amber-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Leave + Comp-off days">LV</th>
-                <th className="sticky right-[52px] z-40 bg-orange-100 text-orange-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Tour days">TR</th>
-                <th className="sticky right-0 z-40 bg-violet-100 text-violet-800 h-6 min-w-[52px] text-center border-b border-slate-200 text-[10px] font-bold" title="Overtime hours accumulated (early arrival + late departure)">OT h</th>
+                {/* Sticky-right totals headers. Layout (rightmost-first):
+                    LT (Late count) → OT (mins) → TR → LV → AB → P.
+                    Offsets: LT=0, OT=42, TR=94, LV=136, AB=178, P=220. */}
+                <th className="sticky right-[220px] z-40 bg-emerald-100 text-emerald-800 h-6 min-w-[42px] text-center border-b border-l-2 border-slate-300 text-[10px] font-bold" title="Present days (incl. HD + Late)">P</th>
+                <th className="sticky right-[178px] z-40 bg-red-100 text-red-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Absent days">AB</th>
+                <th className="sticky right-[136px] z-40 bg-amber-100 text-amber-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Leave + Comp-off days">LV</th>
+                <th className="sticky right-[94px] z-40 bg-orange-200 text-orange-800 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Tour days">TR</th>
+                <th className="sticky right-[42px] z-40 bg-violet-100 text-violet-800 h-6 min-w-[52px] text-center border-b border-slate-200 text-[10px] font-bold" title="Overtime hours accumulated (early arrival + late departure)">OT h</th>
+                <th className="sticky right-0 z-40 bg-orange-500/90 text-white h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Late days this month (subset of Present)">LT</th>
               </tr>
               <tr>
                 <th className="py-0.5 sticky left-0 z-40 bg-slate-50 border-b border-slate-200"></th>
@@ -244,19 +245,20 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                   </th>
                 ))}
                 {/* Sticky-right total sub-labels */}
-                <th className="sticky right-[178px] z-40 bg-emerald-50 h-4 text-[8px] uppercase font-semibold text-emerald-700 border-b border-l-2 border-slate-300 text-center">Total</th>
-                <th className="sticky right-[136px] z-40 bg-red-50 h-4 text-[8px] uppercase font-semibold text-red-600 border-b border-slate-200 text-center">Total</th>
-                <th className="sticky right-[94px] z-40 bg-amber-50 h-4 text-[8px] uppercase font-semibold text-amber-700 border-b border-slate-200 text-center">Total</th>
-                <th className="sticky right-[52px] z-40 bg-orange-50 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-slate-200 text-center">Total</th>
-                <th className="sticky right-0 z-40 bg-violet-50 h-4 text-[8px] uppercase font-semibold text-violet-700 border-b border-slate-200 text-center">Sum</th>
+                <th className="sticky right-[220px] z-40 bg-emerald-50 h-4 text-[8px] uppercase font-semibold text-emerald-700 border-b border-l-2 border-slate-300 text-center">Total</th>
+                <th className="sticky right-[178px] z-40 bg-red-50 h-4 text-[8px] uppercase font-semibold text-red-600 border-b border-slate-200 text-center">Total</th>
+                <th className="sticky right-[136px] z-40 bg-amber-50 h-4 text-[8px] uppercase font-semibold text-amber-700 border-b border-slate-200 text-center">Total</th>
+                <th className="sticky right-[94px] z-40 bg-orange-100 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-slate-200 text-center">Total</th>
+                <th className="sticky right-[42px] z-40 bg-violet-50 h-4 text-[8px] uppercase font-semibold text-violet-700 border-b border-slate-200 text-center">Sum</th>
+                <th className="sticky right-0 z-40 bg-orange-100 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-slate-200 text-center">Days</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={3 + days.length + 5} className="py-8 text-center text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={3 + days.length + 6} className="py-8 text-center text-slate-400">Loading…</td></tr>
               )}
               {!loading && displayedRows.length === 0 && (
-                <tr><td colSpan={3 + days.length + 5} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
+                <tr><td colSpan={3 + days.length + 6} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
               )}
               {!loading && displayedRows.map((r, i) => {
                 const rowBg = i % 2 === 1 ? "bg-slate-100/40" : "bg-white";
@@ -316,35 +318,41 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                       return (
                         <>
                           <td
-                            className={`sticky right-[178px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-emerald-700 font-bold tabular-nums text-[11px] border-b border-l-2 border-slate-300 cursor-pointer select-none`}
+                            className={`sticky right-[220px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-emerald-700 font-bold tabular-nums text-[11px] border-b border-l-2 border-slate-300 cursor-pointer select-none`}
                             data-testid={`cal-total-p-${r.member_id}`}
                             title={`Present · ${attnTitle}`}
                             onDoubleClick={openAttn}
                           >{r.totals?.present || ""}</td>
                           <td
-                            className={`sticky right-[136px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-red-600 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            className={`sticky right-[178px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-red-600 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
                             data-testid={`cal-total-ab-${r.member_id}`}
                             title={`Absent · ${attnTitle}`}
                             onDoubleClick={openAttn}
                           >{r.totals?.absent || ""}</td>
                           <td
-                            className={`sticky right-[94px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-amber-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            className={`sticky right-[136px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-amber-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
                             data-testid={`cal-total-lv-${r.member_id}`}
                             title={`Leave · ${attnTitle}`}
                             onDoubleClick={openAttn}
                           >{r.totals?.leave || ""}</td>
                           <td
-                            className={`sticky right-[52px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            className={`sticky right-[94px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
                             data-testid={`cal-total-tr-${r.member_id}`}
                             title={`Tour · ${attnTitle}`}
                             onDoubleClick={openAttn}
                           >{r.totals?.tour || ""}</td>
                           <td
-                            className={`sticky right-0 z-20 ${rowBg} group-hover:bg-sky-50 text-center text-violet-800 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            className={`sticky right-[42px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-violet-800 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
                             data-testid={`cal-total-ot-${r.member_id}`}
                             title={`OT hours · ${otTitle}`}
                             onDoubleClick={openOt}
                           >{fmtOt(r.totals?.ot_minutes)}</td>
+                          <td
+                            className={`sticky right-0 z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            data-testid={`cal-total-lt-${r.member_id}`}
+                            title={`Late days · ${attnTitle}`}
+                            onDoubleClick={openAttn}
+                          >{r.totals?.late || ""}</td>
                         </>
                       );
                     })()}

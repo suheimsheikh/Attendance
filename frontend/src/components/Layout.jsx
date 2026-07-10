@@ -48,15 +48,18 @@ const NAV_CHEF = [
 
 // ADMIN section — day-to-day operational surfaces. Kept intentionally
 // short so the sidebar stays scannable; masters + system live below.
+// SMS Log moved to SYSTEM section on 15 Feb 2026 per admin — it's a
+// diagnostics / audit surface, not a day-to-day tool.
 const NAV_ADMIN = [
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true },
   { to: "/admin/members", label: "Manage Members", icon: Users },
-  { to: "/admin/reports", label: "The Grid", icon: FileBarChart2 },
+  // Highlighted bright yellow — this is the single most-visited
+  // reporting surface (all-in-one 31-day view).
+  { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, spotlight: true },
   { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page" },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
-  { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare },
 ];
 
 // MASTERS section — reference data admins tune occasionally.
@@ -75,6 +78,7 @@ const NAV_SYSTEM = [
   { to: "/admin/office", label: "Office Settings", icon: Settings },
   { to: "/admin/data-quality", label: "Data Quality", icon: ShieldAlert },
   { to: "/admin/category-health", label: "Category Health", icon: ShieldAlert },
+  { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare },
   { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera },
   { to: "/admin/audit-log", label: "Audit Log", icon: ScanLine },
   { to: "/admin/backup", label: "Backup & Restore", icon: Database },
@@ -368,7 +372,7 @@ function SectionHeader({ label, open, onToggle, tone = "cyan" }) {
   );
 }
 
-function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason, highlight, badge }) {
+function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason, highlight, spotlight, badge }) {
   if (disabled) {
     return (
       <div
@@ -389,18 +393,23 @@ function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason
       onClick={onClick}
       data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
       className={({ isActive }) =>
-        // The Approvals row gets a persistent amber tint + brighter border
-        // so it stays visually loud (there's always work to review). When
-        // active it gets an even stronger amber background so admins
-        // don't lose their place.
+        // Three variants, mutually exclusive:
+        //  • `spotlight` — bright yellow (The Grid, 15 Feb 2026): the most-visited
+        //    reporting surface; we want admins to spot it instantly.
+        //  • `highlight` — amber (Approvals): persistent nag for pending work.
+        //  • neutral    — the default slate treatment.
         `flex items-center gap-3 px-3 h-9 rounded-lg text-[13px] font-medium transition mb-px ${
-          highlight
+          spotlight
             ? isActive
-              ? "bg-amber-500/25 text-amber-100 ring-1 ring-amber-400/60"
-              : "bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 ring-1 ring-amber-400/25"
-            : isActive
-              ? "bg-white/10 text-white"
-              : "text-slate-300 hover:bg-white/5 hover:text-white"
+              ? "bg-yellow-400 text-yellow-950 ring-2 ring-yellow-300 font-extrabold"
+              : "bg-yellow-400 text-yellow-950 hover:bg-yellow-300 ring-1 ring-yellow-300/70 font-extrabold"
+            : highlight
+              ? isActive
+                ? "bg-amber-500/25 text-amber-100 ring-1 ring-amber-400/60"
+                : "bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 ring-1 ring-amber-400/25"
+              : isActive
+                ? "bg-white/10 text-white"
+                : "text-slate-300 hover:bg-white/5 hover:text-white"
         }`
       }
     >
@@ -408,10 +417,8 @@ function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason
       <span className="flex-1">{label}</span>
       {typeof badge === "number" && badge > 0 && (
         <span
-          // Show the actual pending count — no 99+ cap. Admins want the
-          // real backlog size at a glance so they can prioritise; the pill
-          // grows horizontally to fit 3–4 digit numbers (px-1.5 + auto width).
           className={`min-w-[22px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center tabular-nums ${
+            spotlight ? "bg-yellow-900 text-yellow-100" :
             highlight ? "bg-amber-400 text-amber-950" : "bg-rose-500 text-white"
           }`}
           data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-badge`}
