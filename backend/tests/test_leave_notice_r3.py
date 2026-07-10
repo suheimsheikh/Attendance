@@ -114,8 +114,6 @@ class TestNoticeRuleBlocksSelfApply:
                       json={"type": "leave", "start_date": start,
                             "end_date": end, "reason": "Exactly 3 days"})
         assert r.status_code == 200, r.text
-        # Cleanup
-        admin_creds_required = False  # noqa
 
 
 class TestNoticeRuleExemptions:

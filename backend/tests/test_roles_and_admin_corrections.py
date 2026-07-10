@@ -184,7 +184,6 @@ def test_admin_files_correction_on_behalf_of_member(admin_client, base_url, athl
     # The missed_checkin applier fails with 409 if an attendance row
     # already exists for that date, so retry across older dates until
     # we hit a clean slot.
-    target_date = None
     cid = None
     body = None
     for delta in range(2, 25):
@@ -198,7 +197,6 @@ def test_admin_files_correction_on_behalf_of_member(admin_client, base_url, athl
             "on_behalf_of": athlete["id"],
         }, timeout=15)
         if r.status_code == 200:
-            target_date = d
             body = r.json()
             cid = body["id"]
             break
