@@ -8,23 +8,12 @@ import { formatDate, getLocation, resolveNearestSite } from "../utils";
 import { useGeoPermission } from "../hooks/useGeoPermission";
 import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import MusterRow from "./muster/MusterRow";
+import { MusterScopeChips, MusterInstitutionChips } from "./muster/MusterFilters";
+import MusterBreakdownBar from "./muster/MusterBreakdownBar";
 
 const MODES = [
   { key: "checkin",  label: "Check in",  Icon: LogIn,        verb: "Check in",  color: "#10B981" },
   { key: "checkout", label: "Check out", Icon: LogOutIcon,   verb: "Check out", color: "#6B7280" },
-];
-
-// Admin-only scope chips — widens the muster roster beyond athletes.
-// Default is "all" per user preference (04 Feb 2026): show everyone,
-// let admin filter down. Coaches/escorts don't see these chips and are
-// always restricted to athletes server-side.
-const SCOPES = [
-  { key: "all",          label: "All" },
-  { key: "athletes",     label: "Athletes" },
-  { key: "staff",        label: "Staff" },
-  { key: "coach",        label: "Coaches" },
-  { key: "executive",    label: "Executives" },
-  { key: "non_athletes", label: "Non-athletes" },
 ];
 
 const CATEGORY_CHIP_STYLE = {
@@ -349,61 +338,15 @@ export default function Muster() {
       {/* Scope filter chips — admin only. Lets admins muster staff /
           coaches / executives alongside athletes for payroll tracking.
           Coaches and escorts are server-restricted to athletes. */}
-      {isAdmin && (
-        <div
-          className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-1 px-1"
-          data-testid="muster-scope-filter"
-        >
-          {SCOPES.map((s) => {
-            const active = scope === s.key;
-            return (
-              <button
-                key={s.key}
-                data-testid={`muster-scope-${s.key}`}
-                onClick={() => setScope(s.key)}
-                className={`iu-chip whitespace-nowrap shrink-0 ${active ? "iu-chip-active" : ""}`}
-              >
-                {s.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {isAdmin && <MusterScopeChips scope={scope} onChange={setScope} />}
 
-      {/* Institution filter chips */}
-      {institutions.length > 1 && (
-        <div
-          className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-1 px-1"
-          data-testid="muster-institution-filter"
-        >
-          <button
-            data-testid="muster-institution-all"
-            onClick={() => setInstitutionFilter("all")}
-            className={`iu-chip whitespace-nowrap shrink-0 ${institutionFilter === "all" ? "iu-chip-active" : ""}`}
-          >
-            All
-            <span className={`min-w-[22px] h-5 px-1.5 rounded-full text-[10px] flex items-center justify-center ${institutionFilter === "all" ? "bg-white/20 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>
-              {(data?.athletes || []).length}
-            </span>
-          </button>
-          {institutions.map((inst) => {
-            const active = institutionFilter === inst.name;
-            return (
-              <button
-                key={inst.name}
-                data-testid={`muster-institution-${inst.name.replace(/\s+/g, "-").toLowerCase()}`}
-                onClick={() => setInstitutionFilter(inst.name)}
-                className={`iu-chip whitespace-nowrap shrink-0 ${active ? "iu-chip-active" : ""}`}
-              >
-                {inst.name}
-                <span className={`min-w-[22px] h-5 px-1.5 rounded-full text-[10px] flex items-center justify-center ${active ? "bg-white/20 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>
-                  {inst.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {/* Institution filter chips (only when ≥ 2 institutions present) */}
+      <MusterInstitutionChips
+        institutions={institutions}
+        institutionFilter={institutionFilter}
+        onChange={setInstitutionFilter}
+        totalCount={(data?.athletes || []).length}
+      />
 
       {/* Search + bulk-tick */}
       <div className="iu-card p-3 mb-4 flex flex-wrap items-center gap-2">
@@ -451,59 +394,11 @@ export default function Muster() {
           currently filtered set. Hidden when the filter resolves to
           zero athletes (the muster-empty card takes over). */}
       {filtered.length > 0 && (
-        <div
-          className="sticky top-0 z-10 -mx-1 px-1 py-2 mb-2 bg-white/95 backdrop-blur border-y border-slate-200 flex items-center gap-1.5 flex-wrap"
-          data-testid="muster-breakdown"
-        >
-          <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500 mr-1">
-            Breakdown
-          </span>
-          {breakdown.boys > 0 && (
-            <span
-              className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[11px] font-bold bg-sky-100 text-sky-700"
-              data-testid="muster-breakdown-boys"
-              title={`${breakdown.boys} boys`}
-            >
-              B {breakdown.boys}
-            </span>
-          )}
-          {breakdown.girls > 0 && (
-            <span
-              className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[11px] font-bold bg-pink-100 text-pink-700"
-              data-testid="muster-breakdown-girls"
-              title={`${breakdown.girls} girls`}
-            >
-              G {breakdown.girls}
-            </span>
-          )}
-          {breakdown.other > 0 && (
-            <span
-              className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[11px] font-bold bg-slate-100 text-slate-700"
-              data-testid="muster-breakdown-other"
-              title={`${breakdown.other} unspecified gender`}
-            >
-              ◇ {breakdown.other}
-            </span>
-          )}
-          {mode === "checkin" && breakdown.lockedIn > 0 && (
-            <span
-              className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-700"
-              data-testid="muster-breakdown-locked"
-              title={`${breakdown.lockedIn} already checked in`}
-            >
-              ✓ {breakdown.lockedIn} in
-            </span>
-          )}
-          {picked.size > 0 && (
-            <span
-              className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[11px] font-bold bg-emerald-600 text-white ml-auto"
-              data-testid="muster-breakdown-picked"
-              title={`${picked.size} ticked`}
-            >
-              ☑ {picked.size}
-            </span>
-          )}
-        </div>
+        <MusterBreakdownBar
+          breakdown={breakdown}
+          mode={mode}
+          pickedCount={picked.size}
+        />
       )}
 
       {loading ? (
