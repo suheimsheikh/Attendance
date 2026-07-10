@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { api, downloadBlob } from "../../api";
 import { categoryLabel, formatDate } from "../../utils";
 import CorrectionRequestModal from "../../components/CorrectionRequestModal";
+import AttendanceLedgerModal from "./AttendanceLedgerModal";
+import OTLedgerModal from "./OTLedgerModal";
 
 /**
  * Calendar Grid tab — one row per member, one column per day of the
@@ -70,6 +72,15 @@ function correctionForCode(code) {
   }
 }
 
+// Format OT minutes → compact "1h 30m" / "45m" / "" (empty when zero).
+function fmtOt(mins) {
+  const m = Number(mins || 0);
+  if (m <= 0) return "";
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return h > 0 ? (mm ? `${h}h ${mm}m` : `${h}h`) : `${mm}m`;
+}
+
 export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPrevMonth, onNextMonth, onJumpToday, MonthNav, athleteLikeKeys }) {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
@@ -80,6 +91,12 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
   // (AB/LT/P/HD/LV/TR/CO/PS) opens the shared CorrectionRequestModal
   // pre-filled with the member and date the admin clicked.
   const [correction, setCorrection] = useState(null); // { member, date, entityType, initialKind } | null
+  // Ledger modal state — double-clicking any totals cell opens the
+  // matching drill-down modal for that member (mirrors the Attendance
+  // report double-click UX). AttendanceLedger for P/AB/LV/TR, OT
+  // ledger for the OT-hours cell.
+  const [attnLedger, setAttnLedger] = useState(null); // { member_id, member_name } | null
+  const [otLedger, setOtLedger] = useState(null);     // { member_id, member_name } | null
 
   const isAthleteLike = useCallback(
     (r) => athleteLikeKeys.has(r?.category),
@@ -265,11 +282,14 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                     {h.day}
                   </th>
                 ))}
-                {/* Sticky-right totals headers */}
-                <th className="sticky right-[84px] z-40 bg-emerald-100 text-emerald-800 h-6 min-w-[42px] text-center border-b border-l-2 border-slate-300 text-[10px] font-bold" title="Present days (incl. HD + Late)">P</th>
-                <th className="sticky right-[56px] z-40 bg-red-100 text-red-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Absent days">AB</th>
-                <th className="sticky right-[28px] z-40 bg-amber-100 text-amber-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Leave + Comp-off days">LV</th>
-                <th className="sticky right-0 z-40 bg-orange-100 text-orange-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Tour days">TR</th>
+                {/* Sticky-right totals headers. Layout: | P | AB | LV | TR | OT |
+                    OT is a compact-but-wider column (holds "1h 30m") so
+                    the offset stack now: OT=0, TR=52, LV=94, AB=136, P=178. */}
+                <th className="sticky right-[178px] z-40 bg-emerald-100 text-emerald-800 h-6 min-w-[42px] text-center border-b border-l-2 border-slate-300 text-[10px] font-bold" title="Present days (incl. HD + Late)">P</th>
+                <th className="sticky right-[136px] z-40 bg-red-100 text-red-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Absent days">AB</th>
+                <th className="sticky right-[94px] z-40 bg-amber-100 text-amber-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Leave + Comp-off days">LV</th>
+                <th className="sticky right-[52px] z-40 bg-orange-100 text-orange-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Tour days">TR</th>
+                <th className="sticky right-0 z-40 bg-violet-100 text-violet-800 h-6 min-w-[52px] text-center border-b border-slate-200 text-[10px] font-bold" title="Overtime hours accumulated (early arrival + late departure)">OT h</th>
               </tr>
               <tr>
                 <th className="py-0.5 sticky left-0 z-40 bg-slate-50 border-b border-slate-200"></th>
@@ -284,18 +304,19 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                   </th>
                 ))}
                 {/* Sticky-right total sub-labels */}
-                <th className="sticky right-[84px] z-40 bg-emerald-50 h-4 text-[8px] uppercase font-semibold text-emerald-700 border-b border-l-2 border-slate-300 text-center">Total</th>
-                <th className="sticky right-[56px] z-40 bg-red-50 h-4 text-[8px] uppercase font-semibold text-red-600 border-b border-slate-200 text-center">Total</th>
-                <th className="sticky right-[28px] z-40 bg-amber-50 h-4 text-[8px] uppercase font-semibold text-amber-700 border-b border-slate-200 text-center">Total</th>
-                <th className="sticky right-0 z-40 bg-orange-50 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-slate-200 text-center">Total</th>
+                <th className="sticky right-[178px] z-40 bg-emerald-50 h-4 text-[8px] uppercase font-semibold text-emerald-700 border-b border-l-2 border-slate-300 text-center">Total</th>
+                <th className="sticky right-[136px] z-40 bg-red-50 h-4 text-[8px] uppercase font-semibold text-red-600 border-b border-slate-200 text-center">Total</th>
+                <th className="sticky right-[94px] z-40 bg-amber-50 h-4 text-[8px] uppercase font-semibold text-amber-700 border-b border-slate-200 text-center">Total</th>
+                <th className="sticky right-[52px] z-40 bg-orange-50 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-slate-200 text-center">Total</th>
+                <th className="sticky right-0 z-40 bg-violet-50 h-4 text-[8px] uppercase font-semibold text-violet-700 border-b border-slate-200 text-center">Sum</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={3 + days.length + 4} className="py-8 text-center text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={3 + days.length + 5} className="py-8 text-center text-slate-400">Loading…</td></tr>
               )}
               {!loading && displayedRows.length === 0 && (
-                <tr><td colSpan={3 + days.length + 4} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
+                <tr><td colSpan={3 + days.length + 5} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
               )}
               {!loading && displayedRows.map((r, i) => {
                 const rowBg = i % 2 === 1 ? "bg-slate-100/40" : "bg-white";
@@ -336,11 +357,57 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                         />
                       );
                     })}
-                    {/* Row totals — pinned to the right */}
-                    <td className={`sticky right-[84px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-emerald-700 font-bold tabular-nums text-[11px] border-b border-l-2 border-slate-300`} data-testid={`cal-total-p-${r.member_id}`}>{r.totals?.present || ""}</td>
-                    <td className={`sticky right-[56px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-red-600 font-bold tabular-nums text-[11px] border-b border-slate-100`} data-testid={`cal-total-ab-${r.member_id}`}>{r.totals?.absent || ""}</td>
-                    <td className={`sticky right-[28px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-amber-700 font-bold tabular-nums text-[11px] border-b border-slate-100`} data-testid={`cal-total-lv-${r.member_id}`}>{r.totals?.leave || ""}</td>
-                    <td className={`sticky right-0 z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100`} data-testid={`cal-total-tr-${r.member_id}`}>{r.totals?.tour || ""}</td>
+                    {/* Row totals — pinned to the right. Double-click any
+                        of the day-count cells to open the Attendance
+                        ledger for this member across the current month;
+                        the OT cell opens the OT ledger. Mirrors the
+                        Attendance report drill-down UX (04 Feb 2026). */}
+                    {(() => {
+                      const openAttn = () => setAttnLedger({
+                        member_id: r.member_id,
+                        member_name: r.member_name,
+                      });
+                      const openOt = () => setOtLedger({
+                        member_id: r.member_id,
+                        member_name: r.member_name,
+                      });
+                      const attnTitle = "Double-click for daily ledger";
+                      const otTitle = "Double-click for OT ledger";
+                      return (
+                        <>
+                          <td
+                            className={`sticky right-[178px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-emerald-700 font-bold tabular-nums text-[11px] border-b border-l-2 border-slate-300 cursor-pointer select-none`}
+                            data-testid={`cal-total-p-${r.member_id}`}
+                            title={`Present · ${attnTitle}`}
+                            onDoubleClick={openAttn}
+                          >{r.totals?.present || ""}</td>
+                          <td
+                            className={`sticky right-[136px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-red-600 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            data-testid={`cal-total-ab-${r.member_id}`}
+                            title={`Absent · ${attnTitle}`}
+                            onDoubleClick={openAttn}
+                          >{r.totals?.absent || ""}</td>
+                          <td
+                            className={`sticky right-[94px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-amber-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            data-testid={`cal-total-lv-${r.member_id}`}
+                            title={`Leave · ${attnTitle}`}
+                            onDoubleClick={openAttn}
+                          >{r.totals?.leave || ""}</td>
+                          <td
+                            className={`sticky right-[52px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            data-testid={`cal-total-tr-${r.member_id}`}
+                            title={`Tour · ${attnTitle}`}
+                            onDoubleClick={openAttn}
+                          >{r.totals?.tour || ""}</td>
+                          <td
+                            className={`sticky right-0 z-20 ${rowBg} group-hover:bg-sky-50 text-center text-violet-800 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            data-testid={`cal-total-ot-${r.member_id}`}
+                            title={`OT hours · ${otTitle}`}
+                            onDoubleClick={openOt}
+                          >{fmtOt(r.totals?.ot_minutes)}</td>
+                        </>
+                      );
+                    })()}
                   </tr>
                 );
               })}
@@ -348,6 +415,27 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
           </table>
         </div>
       </div>
+
+      {attnLedger && (
+        <AttendanceLedgerModal
+          open
+          onClose={() => setAttnLedger(null)}
+          memberId={attnLedger.member_id}
+          memberName={attnLedger.member_name}
+          start={data?.start}
+          end={data?.end}
+        />
+      )}
+
+      {otLedger && (
+        <OTLedgerModal
+          open
+          onClose={() => setOtLedger(null)}
+          memberId={otLedger.member_id}
+          memberName={otLedger.member_name}
+          year={monthIso?.slice(0, 4)}
+        />
+      )}
 
       {correction && (
         <CorrectionRequestModal

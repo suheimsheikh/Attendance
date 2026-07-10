@@ -5,6 +5,52 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 15 Feb 2026 (part 2) — OT hours on The Grid + inline Check-out on Muster
+
+**User requests:**
+1. "Add OT hours accumulated to grid where the totals are being shown
+   at extreme right. Also a double click on the totals should show the
+   ledgers as we have done in reports for the same."
+2. "Some of the non athlete muster candidates are greyed out and not
+   selectable."
+
+### Backend — `routes/reports.py`
+- `GET /reports/calendar-grid` now includes `totals.ot_minutes` per
+  row (sum of `attendance.overtime_total_min` across the month).
+- CSV / PDF export gets a new **OT (h)** column, formatted "1h 30m" /
+  "45m" / "" (blank when 0). Column widths bumped from 4 totals to 5.
+
+### Frontend — `pages/admin/CalendarGridTab.jsx`
+- New violet **OT h** sticky-right column (leftmost of the totals
+  strip; rendered "1h 30m" / "45m" / blank).
+- All totals cells (P / AB / LV / TR / OT) now double-clickable:
+  P/AB/LV/TR opens the shared `AttendanceLedgerModal` for the month
+  window; OT opens `OTLedgerModal` for the year. Mirrors the drill-down
+  UX from the classic Attendance report so the muscle memory carries.
+- Sticky column offsets rebalanced: OT=0, TR=52, LV=94, AB=136, P=178.
+- `colSpan` on loading / empty rows adjusted from 4→5 totals.
+
+### Frontend — `pages/Muster.jsx`
+- **Fix**: greyed "already checked in" rows now expose an inline
+  **Check out** button (admin-only) so an admin can close a member's
+  stale open session directly from the check-in view without switching
+  to check-out mode. Fires `/muster/checkout-bulk` with a single id.
+- Row visual tweak: replaced `opacity-60` on locked rows with a plain
+  muted background so the child button remains fully readable
+  (opacity was cascading and darkening the child).
+- Loading spinner while the single-id checkout is in flight; success
+  toast + roster refresh on completion.
+
+### Tests — `tests/test_calendar_grid_ot.py` (new, 3 tests)
+- `totals.ot_minutes` present on every calendar-grid row.
+- CSV export header contains "OT (h)".
+- Cross-check: month-total OT ≤ year-total OT from the OT ledger.
+
+All 3 new tests + all 6 muster-scope tests + all 4 muster-gps tests pass.
+
+
+
+---
 ## 15 Feb 2026 — Muster roll accepts Staff & non-athletes (admins only)
 
 **User request:** "Muster checkin should allow admins to check in and

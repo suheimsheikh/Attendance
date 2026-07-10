@@ -150,6 +150,31 @@ export default function Muster() {
     }
   }, [mode, office, sites, load]);
 
+  // Inline "Check out" action for a single already-checked-in member on
+  // the check-in list. Lets admins close a stale open session without
+  // switching to check-out mode (15 Feb 2026 user request: "greyed rows
+  // are not selectable"). Fires the same /muster/checkout-bulk endpoint
+  // as the bulk button but scoped to one id.
+  const [singleCheckoutId, setSingleCheckoutId] = useState(null);
+  const inlineCheckout = useCallback(async (member) => {
+    if (!member?.id) return;
+    setSingleCheckoutId(member.id);
+    try {
+      const res = await api.post("/muster/checkout-bulk", { athlete_ids: [member.id] });
+      const okCount = res.checked_out_count ?? 0;
+      if (okCount > 0) {
+        toast.success(`${member.full_name} checked out`);
+        load();
+      } else {
+        toast.error(`Could not check out ${member.full_name}`);
+      }
+    } catch (err) {
+      showApiError(err, "Check out failed");
+    } finally {
+      setSingleCheckoutId(null);
+    }
+  }, [load]);
+
   // Step through the photo queue as an OPTIONAL post-checkin cleanup
   // — check-in has already fired by the time we get here (7 Jul 2026
   // user-requested "non-blocking"). Empty queue just closes the
@@ -512,7 +537,7 @@ export default function Muster() {
                 onClick={() => toggle(s.id)}
                 className={`flex items-center gap-3 px-4 py-3 transition ${
                   isLocked
-                    ? "bg-slate-50 opacity-60 cursor-not-allowed"
+                    ? "bg-slate-100 text-slate-500 cursor-not-allowed"
                     : isPicked
                       ? "bg-emerald-50 cursor-pointer"
                       : "hover:bg-slate-50 cursor-pointer"
@@ -577,6 +602,25 @@ export default function Muster() {
                     data-testid={`muster-photo-${s.id}`}
                   >
                     <Camera size={11} /> Add photo
+                  </button>
+                )}
+                {/* Inline check-out on already-in rows — lets admins
+                    close a stale open session directly from the
+                    check-in view without switching modes. Admin-only:
+                    coaches/escorts still see the "In · HH:MM" chip
+                    as read-only. */}
+                {isLocked && isAdmin && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); inlineCheckout(s); }}
+                    disabled={singleCheckoutId === s.id}
+                    className="ml-2 inline-flex items-center gap-1 px-2 h-7 rounded-full bg-slate-800 text-white text-[11px] font-bold hover:bg-slate-900 shrink-0 cursor-pointer disabled:opacity-60"
+                    data-testid={`muster-inline-checkout-${s.id}`}
+                    title="Check this member out now"
+                  >
+                    {singleCheckoutId === s.id
+                      ? <Loader2 size={11} className="animate-spin" />
+                      : <LogOutIcon size={11} />} Check out
                   </button>
                 )}
               </li>
