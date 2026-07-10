@@ -207,19 +207,32 @@ export default function Muster() {
     }
   };
 
-  // Distinct institutions present in the current roster (sorted, "(none)" last).
+  // Distinct institutions present in the current roster. The
+  // "(no institution)" bucket is only shown when at least one member
+  // in view HAS an institution set — otherwise it's meaningless
+  // (e.g. staff/coaches don't carry an institution, so a filter row
+  // with just "(no institution) 24" is noise, not signal). Reported
+  // 15 Feb 2026 by admin.
   const institutions = useMemo(() => {
-    const set = new Map();  // name -> count
+    const named = new Map();       // name → count (excl. "(no institution)")
+    let unaffiliated = 0;
     (data?.athletes || []).forEach((s) => {
-      const k = s.institution || "(no institution)";
-      set.set(k, (set.get(k) || 0) + 1);
+      const inst = (s.institution || "").trim();
+      if (inst) {
+        named.set(inst, (named.get(inst) || 0) + 1);
+      } else {
+        unaffiliated += 1;
+      }
     });
-    const arr = Array.from(set.entries()).map(([name, count]) => ({ name, count }));
-    arr.sort((a, b) => {
-      if (a.name === "(no institution)") return 1;
-      if (b.name === "(no institution)") return -1;
-      return a.name.localeCompare(b.name);
-    });
+    const arr = Array.from(named.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    // Only surface "(no institution)" when there's at least one named
+    // institution to contrast it with — otherwise the chip row would
+    // just be a single meaningless bucket.
+    if (arr.length > 0 && unaffiliated > 0) {
+      arr.push({ name: "(no institution)", count: unaffiliated });
+    }
     return arr;
   }, [data]);
 
@@ -340,13 +353,20 @@ export default function Muster() {
           Coaches and escorts are server-restricted to athletes. */}
       {isAdmin && <MusterScopeChips scope={scope} onChange={setScope} />}
 
-      {/* Institution filter chips (only when ≥ 2 institutions present) */}
-      <MusterInstitutionChips
-        institutions={institutions}
-        institutionFilter={institutionFilter}
-        onChange={setInstitutionFilter}
-        totalCount={(data?.athletes || []).length}
-      />
+      {/* Institution filter chips — only meaningful for athletes
+          (external school/college affiliation). Staff / coaches /
+          executives don't carry an institution semantically, so we
+          hide the row entirely on those scopes (15 Feb 2026 user
+          feedback: "In muster it says no institution. Is that not
+          for Staff and Coaches"). */}
+      {(scope === "athletes" || scope === "all") && (
+        <MusterInstitutionChips
+          institutions={institutions}
+          institutionFilter={institutionFilter}
+          onChange={setInstitutionFilter}
+          totalCount={(data?.athletes || []).length}
+        />
+      )}
 
       {/* Search + bulk-tick */}
       <div className="iu-card p-3 mb-4 flex flex-wrap items-center gap-2">
