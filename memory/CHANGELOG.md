@@ -6,6 +6,50 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 20 Feb 2026 (part 2) — Perf pass 1: gzip + indexes + asyncio.gather + React Query
+
+**User request:** "Any suggestions to make the data fetch a lot faster. There is a significant lag at this time."
+
+Shipped the first 3 items from the perf plan. Deferred items are logged in the backlog below.
+
+### 1. MongoDB indexes (server.py)
+Added indexes on collections the reports were full-scanning:
+- `corrections`: `(status, created_at)` compound + `requester_id`
+- `breaks`: `(start_date, end_date)` compound
+- `holidays`: `date`
+
+### 2. `asyncio.gather` on the two heaviest report endpoints (routes/reports.py)
+- `calendar_grid()` — attendance/leaves/holidays/breaks queries now fire concurrently instead of one-after-another. Saves ~3 round-trips of latency.
+- `churn_risk()` — same treatment. Warm response ~125 ms; cold ~260 ms.
+
+(Gzip middleware was already present with `minimum_size=500` — verified.)
+
+### 3. React Query adoption on hot pages
+`@tanstack/react-query` was installed + wired since June 2026 but nobody was using it — every page did raw `useEffect + api.get()`. Migrated:
+- `pages/admin/CalendarGridTab.jsx` — historical months cached 5 min (immutable), current month 60 s.
+- `pages/admin/Dashboard.jsx` — 30 s stale, 60 s background refetch. Replaces the hand-rolled `setInterval` + `inflightRef` guard.
+- `pages/admin/ApprovalsUnified.jsx` — `useQueries` per queue so one failure doesn't blank the page; decide() now uses `queryClient.setQueryData` for optimistic drops + `invalidateQueries` for rollback on error.
+- `pages/admin/ChurnRisk.jsx` — 30 s stale so category chip toggling shows cached results instantly.
+- `components/Layout.jsx` — sidebar approvals badge + my-corrections badge migrated off manual polling.
+
+New helper: `frontend/src/hooks/useApiQuery.js` — thin `useQuery` adapter around `api.get(path, params)`. Kept intentionally minimal; the queryKey is `[path, params]`.
+
+**Net effect:** tab-switch and back-navigation feel instant (data served from cache while a silent background refetch keeps it fresh). Sidebar badges no longer double-fetch when the Dashboard also queries `/admin/dashboard`.
+
+### Fixed while there
+- `Dashboard.jsx` was referencing `fmtShortDate` without importing it — pre-existing lint error surfaced during the migration. Now imported from `widgets.jsx`.
+
+### Perf backlog (deferred, in priority order)
+1. **Server-side pagination on `/reports/calendar-grid`** (P2) — 134 members × 31 days × ~200 bytes/cell = ~830 KB per request. Return 30 rows per page + a "load next" button. Meaningful only once the roster grows past ~200.
+2. **Kill in-Python break-audience loop via `$expr`** (P3) — `breaks_by_user` iterates users × breaks in Python. For today's scale (134 users × ~5 breaks) it's <1 ms; only worth doing if the report ever slows.
+3. **Aggregation-pipeline rewrite for Payroll / Attendance reports** (P2) — swap 5 separate queries + Python join for a single `$lookup` pipeline. 3–5× faster on the monthly ledger.
+4. **ETag / `If-Modified-Since` on stable endpoints** (P3) — `/config/office`, `/institutions`, `/roles`, `/holidays`. Payloads are small; the win is 304s (~50 bytes) vs full re-serialisation.
+5. **Materialised `attendance_daily_summary` collection** (P2) — nightly rollup used by the Dashboard's monthly widgets so they stop rescanning raw attendance.
+6. **Prefetch on nav hover** (P3) — `queryClient.prefetchQuery` when the user hovers "The Grid" / "Dashboard" so the click feels instant.
+
+
+
+---
 ## 20 Feb 2026 — Phantom approvals badge + Grid tooltips + Churn-risk report
 
 **User requests:**

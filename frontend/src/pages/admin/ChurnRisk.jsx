@@ -18,7 +18,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, RefreshCw, AlertTriangle, TrendingDown, PhoneCall, Users, FileDown } from "lucide-react";
 import { toast } from "sonner";
-import { api, showApiError } from "../../api";
+import { showApiError } from "../../api";
+import { useApiQuery } from "../../hooks/useApiQuery";
 import { categoryLabel, formatDate } from "../../utils";
 
 const BAND_META = {
@@ -79,26 +80,31 @@ function downloadCsv(rows, filename) {
 }
 
 export default function ChurnRisk() {
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState(null);
   const [windowDays, setWindowDays] = useState(30);
   const [threshold, setThreshold] = useState(0.40);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [bandFilter, setBandFilter] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = { window_days: windowDays, threshold };
-      if (categoryFilter) params.category = categoryFilter;
-      const r = await api.get("/reports/churn-risk", params);
-      setData(r);
-    } catch (err) {
-      showApiError(err, "Couldn't load churn risk");
-    } finally { setLoading(false); }
+  // React Query wraps the fetch — cached per {window, threshold, category}
+  // tuple, so flipping category chips instantly restores prior data while
+  // the new payload is quietly refetched in the background.
+  const params = useMemo(() => {
+    const p = { window_days: windowDays, threshold };
+    if (categoryFilter) p.category = categoryFilter;
+    return p;
   }, [windowDays, threshold, categoryFilter]);
 
-  useEffect(() => { load(); }, [load]);
+  const query = useApiQuery("/reports/churn-risk", params, {
+    staleTime: 30_000,  // 30s freshness — churn is a coarse metric
+  });
+  const { data, isFetching, refetch, error } = query;
+  const loading = isFetching;
+
+  useEffect(() => {
+    if (error) showApiError(error, "Couldn't load churn risk");
+  }, [error]);
+
+  const load = useCallback(() => { refetch(); }, [refetch]);
 
   const rows = useMemo(() => data?.rows || [], [data]);
   const displayedRows = useMemo(() => {

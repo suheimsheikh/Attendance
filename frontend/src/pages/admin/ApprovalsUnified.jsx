@@ -13,11 +13,11 @@
  * approve/reject endpoint so the table stays type-agnostic.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw, Check, X, Plane, LogIn, PencilRuler } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "../../api";
+import { api, showApiError } from "../../api";
 import { formatDate, formatTime } from "../../utils";
-import { showApiError } from "../../api";
 
 const KIND_META = {
   leave:      { label: "Leave/Tour",  Icon: Plane,          tone: "bg-amber-100 text-amber-700" },
@@ -115,52 +115,73 @@ function normCorrection(row) {
 // --- Component --------------------------------------------------------------
 
 export default function ApprovalsUnified() {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("all");
   const [busyId, setBusyId] = useState(null);
+  const queryClient = useQueryClient();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      // allSettled — a single failing queue must NOT blank out the whole
-      // Approvals page. A legacy /leaves 500 was previously making the
-      // sidebar badge (which counts records directly) diverge from the
-      // (empty) table for admins — see prod bug 20 Feb 2026.
-      const [leavesRes, checkinsRes, correctionsRes] = await Promise.allSettled([
-        api.get("/leaves"),
-        api.get("/admin/checkin-approvals", { status: "pending" }),
-        api.get("/admin/corrections", { status: "pending" }),
-      ]);
-      const asArray = (r) => Array.isArray(r) ? r : (r?.items || r?.rows || []);
-      const settled = (res, label) => {
-        if (res.status === "fulfilled") return asArray(res.value);
-        // eslint-disable-next-line no-console
-        console.warn(`[approvals] ${label} endpoint failed`, res.reason);
-        toast.error(`Couldn't load ${label} — showing the rest`);
-        return [];
-      };
-      const safeMap = (arr, fn, label) => {
-        const out = [];
-        for (const [i, row] of arr.entries()) {
-          try { out.push(fn(row)); } catch (e) {
-            // eslint-disable-next-line no-console
-            console.warn(`[approvals] ${label}[${i}] threw`, e, row);
-          }
+  // Three independent queues rendered in one table. `useQueries` lets us
+  // cache each response individually — a decision on a leave invalidates
+  // only its queue, not the whole page. Failures are per-queue: a 500
+  // on /leaves must not blank out check-ins & corrections (was the root
+  // of the "sidebar 82 pending, list empty" phantom-badge prod bug —
+  // 20 Feb 2026).
+  const queries = useQueries({
+    queries: [
+      { queryKey: ["/leaves", null], queryFn: () => api.get("/leaves") },
+      { queryKey: ["/admin/checkin-approvals", { status: "pending" }],
+        queryFn: () => api.get("/admin/checkin-approvals", { status: "pending" }) },
+      { queryKey: ["/admin/corrections", { status: "pending" }],
+        queryFn: () => api.get("/admin/corrections", { status: "pending" }) },
+    ],
+  });
+  const [leavesQ, checkinsQ, correctionsQ] = queries;
+  const loading = queries.some((q) => q.isFetching);
+
+  // Surface any queue-level failures via toast, keyed by label so a stale
+  // toast doesn't linger after a subsequent successful refetch.
+  useEffect(() => {
+    const failures = [
+      { q: leavesQ, label: "leaves" },
+      { q: checkinsQ, label: "check-ins" },
+      { q: correctionsQ, label: "corrections" },
+    ].filter((x) => x.q.error);
+    for (const { q, label } of failures) {
+      console.warn(`[approvals] ${label} endpoint failed`, q.error);
+      toast.error(`Couldn't load ${label} — showing the rest`);
+    }
+    // Deps: only re-fire when error identity changes on any queue.
+  }, [leavesQ.error, checkinsQ.error, correctionsQ.error, leavesQ, checkinsQ, correctionsQ]);
+
+  const rows = useMemo(() => {
+    const asArray = (r) => Array.isArray(r) ? r : (r?.items || r?.rows || []);
+    const safeMap = (arr, fn, label) => {
+      const out = [];
+      for (const [i, row] of arr.entries()) {
+        try { out.push(fn(row)); } catch (e) {
+          console.warn(`[approvals] ${label}[${i}] threw`, e, row);
         }
-        return out;
-      };
-      const leavesArr = safeMap(settled(leavesRes, "leaves").filter((l) => l.status === "pending"), normLeave, "leave");
-      const ckArr = safeMap(settled(checkinsRes, "check-ins"), normCheckin, "checkin");
-      const corArr = safeMap(settled(correctionsRes, "corrections"), normCorrection, "correction");
-      const merged = [...leavesArr, ...ckArr, ...corArr];
-      // Latest first.
-      merged.sort((a, b) => (b.submitted_at || "").localeCompare(a.submitted_at || ""));
-      setRows(merged);
-    } finally { setLoading(false); }
-  }, []);
+      }
+      return out;
+    };
+    const leavesData = leavesQ.data ? asArray(leavesQ.data).filter((l) => l.status === "pending") : [];
+    const checkinsData = checkinsQ.data ? asArray(checkinsQ.data) : [];
+    const correctionsData = correctionsQ.data ? asArray(correctionsQ.data) : [];
+    const merged = [
+      ...safeMap(leavesData, normLeave, "leave"),
+      ...safeMap(checkinsData, normCheckin, "checkin"),
+      ...safeMap(correctionsData, normCorrection, "correction"),
+    ];
+    merged.sort((a, b) => (b.submitted_at || "").localeCompare(a.submitted_at || ""));
+    return merged;
+  }, [leavesQ.data, checkinsQ.data, correctionsQ.data]);
 
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(() => {
+    // Blow away all three queue caches so a click on "Refresh" or a
+    // successful decide() gets fresh data across the board.
+    queryClient.invalidateQueries({ queryKey: ["/leaves"] });
+    queryClient.invalidateQueries({ queryKey: ["/admin/checkin-approvals"] });
+    queryClient.invalidateQueries({ queryKey: ["/admin/corrections"] });
+  }, [queryClient]);
 
   const filteredRows = useMemo(() => {
     if (filter === "all") return rows;
@@ -178,11 +199,39 @@ export default function ApprovalsUnified() {
     try {
       await row.apply(decision);
       toast.success(`${decision === "approve" ? "Approved" : "Rejected"}: ${row.member_name}`);
-      // Optimistic: pull the row out immediately so admins don't
-      // wait on a refetch to see it disappear.
-      setRows((prev) => prev.filter((r) => !(r.kind === row.kind && r.id === row.id)));
+      // Optimistic: yank the row out of its per-queue cache so admins
+      // don't wait on the refetch to see it disappear. Then trigger a
+      // background refetch for authoritative state + summary sync.
+      const dropRow = (arr) => {
+        if (!Array.isArray(arr)) return arr;
+        return arr.filter((x) => (x.id ?? x._id) !== row.id);
+      };
+      if (row.kind === "leave") {
+        queryClient.setQueryData(["/leaves", null], dropRow);
+      } else if (row.kind === "checkin") {
+        queryClient.setQueryData(
+          ["/admin/checkin-approvals", { status: "pending" }],
+          (prev) => {
+            if (!prev) return prev;
+            if (Array.isArray(prev)) return dropRow(prev);
+            const items = dropRow(prev.items || prev.rows || []);
+            return { ...prev, items, count: items.length };
+          },
+        );
+      } else if (row.kind === "correction") {
+        queryClient.setQueryData(
+          ["/admin/corrections", { status: "pending" }],
+          dropRow,
+        );
+      }
+      // Refresh the sidebar badge count without spamming other tabs.
+      queryClient.invalidateQueries({ queryKey: ["/admin/approvals-summary"] });
     } catch (err) {
       showApiError(err, `Could not ${decision}`);
+      // Roll back any optimistic drop by refetching the queue.
+      if (row.kind === "leave") queryClient.invalidateQueries({ queryKey: ["/leaves"] });
+      else if (row.kind === "checkin") queryClient.invalidateQueries({ queryKey: ["/admin/checkin-approvals"] });
+      else if (row.kind === "correction") queryClient.invalidateQueries({ queryKey: ["/admin/corrections"] });
     } finally { setBusyId(null); }
   };
 

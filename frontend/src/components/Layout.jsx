@@ -13,6 +13,7 @@ import InstallPrompt from "./InstallPrompt";
 import OfflineBanner from "./OfflineBanner";
 import { api } from "../api";
 import { useUiPrefs } from "../hooks/useUiPrefs";
+import { useApiQuery } from "../hooks/useApiQuery";
 
 const NAV_MEMBER = [
   { to: "/", label: "My Check In/Out", icon: ScanLine, end: true },
@@ -97,25 +98,20 @@ export default function Layout() {
   // no member/coach/admin permissions otherwise.
   const isEscort = !!user?.is_escort;
 
-  // Pending-approvals badge — one polling loop, badge attached to the
-  // Approvals nav item. Kept quiet on failures so a temporarily-slow
-  // backend doesn't clog the sidebar with error toasts.
-  const [approvalsSummary, setApprovalsSummary] = React.useState(null);
-  React.useEffect(() => {
-    if (!isAdmin || isEscort) return undefined;
-    let cancelled = false;
-    const refresh = async () => {
-      try {
-        const s = await api.get("/admin/approvals-summary");
-        if (!cancelled) setApprovalsSummary(s);
-      } catch (err) {
-        console.debug("approvals-summary fetch:", err?.message);
-      }
-    };
-    refresh();
-    const t = setInterval(refresh, 60_000);
-    return () => { cancelled = true; clearInterval(t); };
-  }, [isAdmin, isEscort]);
+  // Pending-approvals badge — cached via React Query, refreshed every
+  // 60 s while the tab is visible. If the fetch fails, the previous
+  // count stays put (quiet-fail) so a transient backend hiccup doesn't
+  // clog the sidebar with error toasts.
+  const approvalsSummaryQuery = useApiQuery(
+    "/admin/approvals-summary", null,
+    {
+      enabled: !!isAdmin && !isEscort,
+      staleTime: 30_000,
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: false,
+    },
+  );
+  const approvalsSummary = approvalsSummaryQuery.data || null;
 
   // Collapsible sidebar sections (04 Feb 2026). Backed by useUiPrefs
   // so an admin's collapse choice syncs across devices — laptop and
@@ -133,26 +129,20 @@ export default function Layout() {
   }, [collapsed, patchUiPrefs]);
   const isOpen = (key) => !collapsed.has(key);
 
-  // Member-side pending-corrections badge. Polled every 60 s alongside
-  // the admin summary above. Skipped for escort tokens (they have no
-  // corrections page anyway). 8 Jul 2026 user request "bring all
-  // correction requests by a member under member in the main menu".
-  const [myPendingCorrections, setMyPendingCorrections] = React.useState(0);
-  React.useEffect(() => {
-    if (isEscort) return undefined;
-    let cancelled = false;
-    const refresh = async () => {
-      try {
-        const rows = await api.get("/me/corrections?status=pending");
-        if (!cancelled) setMyPendingCorrections(Array.isArray(rows) ? rows.length : 0);
-      } catch (err) {
-        console.debug("my corrections fetch:", err?.message);
-      }
-    };
-    refresh();
-    const t = setInterval(refresh, 60_000);
-    return () => { cancelled = true; clearInterval(t); };
-  }, [isEscort]);
+  // Member-side pending-corrections badge — same 60 s cadence as the
+  // admin summary via React Query.
+  const myCorrectionsQuery = useApiQuery(
+    "/me/corrections", { status: "pending" },
+    {
+      enabled: !isEscort,
+      staleTime: 30_000,
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: false,
+    },
+  );
+  const myPendingCorrections = Array.isArray(myCorrectionsQuery.data)
+    ? myCorrectionsQuery.data.length
+    : 0;
 
   const memberNav = isEscort
     ? [

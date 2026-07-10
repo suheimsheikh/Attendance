@@ -465,6 +465,13 @@ async def _seed_database() -> None:
     await db.escorts.create_index([("status", 1), ("institution", 1)])
     await db.escort_attendance.create_index([("escort_id", 1), ("date", -1)])
     await db.escort_attendance.create_index("date")
+    # Perf pass 20 Feb 2026 — the calendar-grid + approvals + reports
+    # endpoints were doing full-collection scans on these. All ~O(1)
+    # writes so keeping them indexed is a no-brainer.
+    await db.corrections.create_index([("status", 1), ("created_at", -1)])
+    await db.corrections.create_index("requester_id")
+    await db.breaks.create_index([("start_date", 1), ("end_date", 1)])
+    await db.holidays.create_index("date")
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({

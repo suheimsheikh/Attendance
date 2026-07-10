@@ -880,36 +880,39 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             return {"month": month, "start": start_iso, "end": end_iso,
                     "today": today_iso, "days": days, "rows": []}
 
-        # --- Bulk fetches. ---
-        att_docs = await db.attendance.find(
-            {"user_id": {"$in": user_ids},
-             "date": {"$gte": start_iso, "$lte": end_iso}},
-            {"_id": 0, "user_id": 1, "date": 1, "check_in_at": 1,
-             "check_out_at": 1, "late_minutes": 1,
-             "is_late": 1, "is_half_day": 1, "overtime_total_min": 1},
-        ).to_list(20000)
-        leave_docs = await db.leaves.find(
-            {"user_id": {"$in": user_ids}, "status": "approved",
-             "start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
-            {"_id": 0, "user_id": 1, "type": 1, "reason": 1,
-             "half_day": 1, "decided_by": 1, "decided_at": 1,
-             "start_date": 1, "end_date": 1},
-        ).to_list(20000)
-        holidays_docs = await db.holidays.find(
-            {"date": {"$gte": start_iso, "$lte": end_iso}},
-            {"_id": 0, "date": 1},
-        ).to_list(200)
+        # --- Bulk fetches (parallelised via asyncio.gather —
+        # 20 Feb 2026 perf pass. All four queries are independent, so
+        # firing them concurrently saves ~3 round-trip latencies on the
+        # month-view Grid). ---
+        import asyncio  # noqa: PLC0415 — local import, avoids module-level cost
+        att_docs, leave_docs, holidays_docs, breaks_docs = await asyncio.gather(
+            db.attendance.find(
+                {"user_id": {"$in": user_ids},
+                 "date": {"$gte": start_iso, "$lte": end_iso}},
+                {"_id": 0, "user_id": 1, "date": 1, "check_in_at": 1,
+                 "check_out_at": 1, "late_minutes": 1,
+                 "is_late": 1, "is_half_day": 1, "overtime_total_min": 1},
+            ).to_list(20000),
+            db.leaves.find(
+                {"user_id": {"$in": user_ids}, "status": "approved",
+                 "start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
+                {"_id": 0, "user_id": 1, "type": 1, "reason": 1,
+                 "half_day": 1, "decided_by": 1, "decided_at": 1,
+                 "start_date": 1, "end_date": 1},
+            ).to_list(20000),
+            db.holidays.find(
+                {"date": {"$gte": start_iso, "$lte": end_iso}},
+                {"_id": 0, "date": 1},
+            ).to_list(200),
+            # Break windows that overlap the month. Audience filter
+            # (`break_applies_to(user)`) is applied below — a break
+            # scoped to "athletes" won't paint a staff row.
+            db.breaks.find(
+                {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
+                {"_id": 0},
+            ).to_list(500),
+        )
         holiday_dates = {h["date"] for h in holidays_docs}
-
-        # Break windows that overlap the month. Each break has an
-        # audience filter (`break_applies_to(user)` handles it) — a
-        # break scoped to "athletes" won't paint a staff row (15 Feb
-        # 2026 user request: "when we apply a break for Akhila it
-        # should reflect in the grid").
-        breaks_docs = await db.breaks.find(
-            {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
-            {"_id": 0},
-        ).to_list(500)
 
         att_by_user: dict = {}
         for a in att_docs:
@@ -1242,26 +1245,29 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             return {"start": start_iso, "end": end_iso, "window_days": window,
                     "threshold": th, "rows": []}
 
-        # Bulk fetches — attendance rows, approved leaves, holidays, breaks.
-        att_docs = await db.attendance.find(
-            {"user_id": {"$in": user_ids},
-             "date": {"$gte": start_iso, "$lte": end_iso}},
-            {"_id": 0, "user_id": 1, "date": 1, "check_in_at": 1},
-        ).to_list(20000)
-        leave_docs = await db.leaves.find(
-            {"user_id": {"$in": user_ids}, "status": "approved",
-             "start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
-            {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1},
-        ).to_list(20000)
-        holidays_docs = await db.holidays.find(
-            {"date": {"$gte": start_iso, "$lte": end_iso}},
-            {"_id": 0, "date": 1},
-        ).to_list(200)
+        # Bulk fetches, parallelised via asyncio.gather (independent).
+        import asyncio  # noqa: PLC0415
+        att_docs, leave_docs, holidays_docs, breaks_docs = await asyncio.gather(
+            db.attendance.find(
+                {"user_id": {"$in": user_ids},
+                 "date": {"$gte": start_iso, "$lte": end_iso}},
+                {"_id": 0, "user_id": 1, "date": 1, "check_in_at": 1},
+            ).to_list(20000),
+            db.leaves.find(
+                {"user_id": {"$in": user_ids}, "status": "approved",
+                 "start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
+                {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1},
+            ).to_list(20000),
+            db.holidays.find(
+                {"date": {"$gte": start_iso, "$lte": end_iso}},
+                {"_id": 0, "date": 1},
+            ).to_list(200),
+            db.breaks.find(
+                {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
+                {"_id": 0},
+            ).to_list(500),
+        )
         holiday_dates = {h["date"] for h in holidays_docs}
-        breaks_docs = await db.breaks.find(
-            {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
-            {"_id": 0},
-        ).to_list(500)
 
         att_by_user: dict = {}
         for a in att_docs:

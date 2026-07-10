@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, FileDown, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { api, downloadBlob } from "../../api";
+import { downloadBlob, showApiError } from "../../api";
+import { useApiQuery } from "../../hooks/useApiQuery";
 import { categoryLabel, formatDate } from "../../utils";
 import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 import AttendanceLedgerModal from "./AttendanceLedgerModal";
@@ -22,8 +23,6 @@ const CATEGORY_FILTERS = [
 ];
 
 export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPrevMonth, onNextMonth, onJumpToday, MonthNav, athleteLikeKeys }) {
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [fleetFilter, setFleetFilter] = useState("");
   const [institutionFilter, setInstitutionFilter] = useState("");
@@ -43,19 +42,26 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
     [athleteLikeKeys]
   );
 
-  const loadReport = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await api.get("/reports/calendar-grid", { month: monthIso });
-      setData(r);
-    } catch (err) {
-      toast.error(err?.message || "Failed to load calendar grid");
-    } finally {
-      setLoading(false);
-    }
-  }, [monthIso]);
+  // React Query — historical months are effectively immutable, so we
+  // cache aggressively (5 min stale, 30 min gc). Current month keeps
+  // the default 60 s stale time (from index.js) so admins see today's
+  // check-ins reflected within a page-flip. Perf-pass 20 Feb 2026.
+  const isHistorical = !isCurrent;
+  const query = useApiQuery(
+    "/reports/calendar-grid",
+    { month: monthIso },
+    isHistorical
+      ? { staleTime: 5 * 60_000, gcTime: 30 * 60_000 }
+      : {},
+  );
+  const { data, isFetching, refetch, error } = query;
+  const loading = isFetching;
 
-  useEffect(() => { loadReport(); }, [loadReport]);
+  useEffect(() => {
+    if (error) showApiError(error, "Failed to load calendar grid");
+  }, [error]);
+
+  const loadReport = useCallback(() => { refetch(); }, [refetch]);
 
   const rows = useMemo(() => data?.rows || [], [data]);
   const days = useMemo(() => data?.days || [], [data]);

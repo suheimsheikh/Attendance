@@ -21,13 +21,13 @@ import {
   AlertTriangle, Clock, ArrowRight, TrendingUp, ClipboardCheck,
   IdCard, ShieldAlert, Calendar as CalendarIcon, MapPin,
 } from "lucide-react";
-import { toast } from "sonner";
-import { api } from "../../api";
+import { showApiError } from "../../api";
+import { useApiQuery } from "../../hooks/useApiQuery";
 import Avatar from "../../components/Avatar";
 import MonthCorrectionsCard from "./dashboard/MonthCorrectionsCard";
 import {
   CATEGORY_COLOR, StatTile, CategoryChips, Sparkline,
-  fmtRange, SectionCard, AttentionRow, ShortcutBtn,
+  fmtShortDate, fmtRange, SectionCard, AttentionRow, ShortcutBtn,
 } from "./dashboard/widgets";
 
 // ----- Widgets moved to ./dashboard/widgets.jsx --------------------
@@ -35,36 +35,28 @@ import {
 // fmtRange, SectionCard, AttentionRow, ShortcutBtn all live there now.
 
 export default function Dashboard() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [reloading, setReloading] = useState(false);
-  const inflightRef = React.useRef(false);
+  // React Query — the dashboard payload is expensive to compute
+  // server-side (aggregations across attendance + leaves + members).
+  // 30 s stale time balances freshness vs re-fetch spam, and the
+  // built-in 60 s refetchInterval takes over what the manual
+  // setInterval used to do. Perf pass 20 Feb 2026.
+  const query = useApiQuery("/admin/dashboard", null, {
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,  // don't burn quota on hidden tabs
+  });
+  const { data, isFetching, isLoading, refetch, error } = query;
+  // `loading` = initial spinner-blocking load. `reloading` = background
+  // refetch (used to show a tiny spinner in the header instead of the
+  // full skeleton).
+  const loading = isLoading;
+  const reloading = isFetching && !isLoading;
 
-  const load = useCallback(async (soft = false) => {
-    if (inflightRef.current) return;      // guard against concurrent refreshes
-    inflightRef.current = true;
-    if (soft) setReloading(true); else setLoading(true);
-    try {
-      const r = await api.get("/admin/dashboard");
-      setData(r);
-    } catch (err) {
-      toast.error(err?.message || "Failed to load dashboard");
-    } finally {
-      setLoading(false);
-      setReloading(false);
-      inflightRef.current = false;
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  // Auto-refresh every 60 s on visible tabs, mirroring Presence Board.
   useEffect(() => {
-    const iv = setInterval(() => {
-      if (document.visibilityState === "visible") load(true);
-    }, 60_000);
-    return () => clearInterval(iv);
-  }, [load]);
+    if (error) showApiError(error, "Failed to load dashboard");
+  }, [error]);
+
+  const load = useCallback(() => { refetch(); }, [refetch]);
 
   const attentionTotal = useMemo(() => {
     if (!data?.attention) return 0;
