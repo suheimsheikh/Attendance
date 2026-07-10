@@ -472,6 +472,15 @@ async def _seed_database() -> None:
     await db.corrections.create_index("requester_id")
     await db.breaks.create_index([("start_date", 1), ("end_date", 1)])
     await db.holidays.create_index("date")
+    # Covering-compound so /reports/calendar-grid + /reports/attendance can
+    # answer from the index without fetching docs. Added 20 Feb 2026 perf
+    # pass 2. Motor's `create_index` is idempotent so this is safe to
+    # deploy on top of the existing (user_id, date) index — Mongo just
+    # picks the more specific one for range queries.
+    await db.attendance.create_index([
+        ("user_id", 1), ("date", -1),
+        ("check_in_at", 1), ("is_late", 1),
+    ])
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({
@@ -3844,6 +3853,35 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(RequestIDMiddleware)
+
+# --- Cache-Control on stable read-only endpoints -----------------------
+# Small, rarely-changing reference data can safely sit in the browser
+# cache for a couple of minutes. `private` = user-scoped (never cache on
+# a shared CDN), `max-age=120` = 2-minute freshness. Only applies to GETs
+# on the whitelisted prefixes AND only when the response is a 200 —
+# anything else (401, 500, 304 with stale body) is left untouched.
+# Purely additive — the frontend already works fine without it.
+_CACHEABLE_GET_PREFIXES = (
+    "/api/office",
+    "/api/institutions",
+    "/api/fleets",
+    "/api/masters/categories",
+    "/api/roles",
+    "/api/holidays",
+    "/api/changelog",
+    "/api/version",
+)
+
+@app.middleware("http")
+async def _add_stable_cache_headers(request, call_next):  # noqa: ANN001
+    response = await call_next(request)
+    if request.method == "GET" and response.status_code == 200:
+        path = request.url.path
+        if any(path == p or path.startswith(p + "/") for p in _CACHEABLE_GET_PREFIXES):
+            # Don't clobber if a route already set its own policy.
+            if "cache-control" not in {k.lower() for k in response.headers.keys()}:
+                response.headers["Cache-Control"] = "private, max-age=120"
+    return response
 
 # GZip compression — cuts JSON payload sizes ~70% for typical text-heavy
 # responses like /api/members and /api/presence (which include lots of

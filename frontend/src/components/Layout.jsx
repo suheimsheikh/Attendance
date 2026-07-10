@@ -14,6 +14,20 @@ import OfflineBanner from "./OfflineBanner";
 import { api } from "../api";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { useQueryClient } from "@tanstack/react-query";
+
+/** Map: route path → [reactQueryKey to prefetch, api-path, params].
+ * When the admin hovers a sidebar link we start the fetch during the
+ * ~300 ms hover-to-click window so the destination page opens
+ * instantly. Only routes whose data is expensive-to-compute are
+ * listed — cheap pages don't benefit and would just add background
+ * network churn. Added 20 Feb 2026 (perf combo item B). */
+const PREFETCH_MAP = {
+  "/admin/dashboard":   ["/admin/dashboard", null],
+  "/admin/approvals":   ["/leaves", null],
+  "/admin/churn-risk":  ["/reports/churn-risk", { window_days: 30, threshold: 0.4 }],
+  "/admin/members":     ["/members", null],
+};
 
 const NAV_MEMBER = [
   { to: "/", label: "My Check In/Out", icon: ScanLine, end: true },
@@ -97,6 +111,28 @@ export default function Layout() {
   // Muster Roll (institution-scoped server-side), and Sign out. They have
   // no member/coach/admin permissions otherwise.
   const isEscort = !!user?.is_escort;
+
+  // Hover-prefetch helper. Fires a background React Query fetch when
+  // the admin hovers a sidebar link (with a 200 ms debounce to avoid
+  // spamming Mongo when they mouse across the entire nav). No-op if
+  // the target page isn't in PREFETCH_MAP or if the query is already
+  // cached and fresh.
+  const queryClient = useQueryClient();
+  const prefetchFor = React.useCallback((to) => {
+    const spec = PREFETCH_MAP[to];
+    if (!spec) return undefined;
+    const [path, params] = spec;
+    return () => {
+      queryClient.prefetchQuery({
+        queryKey: [path, params],
+        queryFn: () => api.get(path, params),
+        staleTime: 30_000,
+      }).catch(() => {
+        // Prefetch failures are silent by design — the real request
+        // when the user actually navigates will surface the error.
+      });
+    };
+  }, [queryClient]);
 
   // Pending-approvals badge — cached via React Query, refreshed every
   // 60 s while the tab is visible. If the fetch fails, the previous
@@ -245,6 +281,7 @@ export default function Layout() {
                   {...item}
                   badge={badge}
                   onClick={() => setOpen(false)}
+                  onHoverPrefetch={prefetchFor(item.to)}
                 />
               );
             })}
@@ -363,7 +400,7 @@ function SectionHeader({ label, open, onToggle, tone = "cyan" }) {
   );
 }
 
-function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason, highlight, spotlight, badge }) {
+function NavItem({ to, label, icon: Icon, end, onClick, onHoverPrefetch, disabled, disabledReason, highlight, spotlight, badge }) {
   if (disabled) {
     return (
       <div
@@ -382,6 +419,8 @@ function NavItem({ to, label, icon: Icon, end, onClick, disabled, disabledReason
       to={to}
       end={end}
       onClick={onClick}
+      onMouseEnter={onHoverPrefetch}
+      onFocus={onHoverPrefetch}
       data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
       className={({ isActive }) =>
         // Three variants, mutually exclusive:

@@ -330,8 +330,14 @@ export default function ApprovalsUnified() {
               </tr>
             </thead>
             <tbody>
-              {loading && (
-                <tr><td colSpan={6} className="py-8 text-center text-slate-400">Loading…</td></tr>
+              {loading && filteredRows.length === 0 && (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={`appr-skel-${i}`} className="border-b border-slate-100" data-testid="approvals-skeleton-row">
+                    <td className="py-2 px-3" colSpan={6}>
+                      <div className="h-4 rounded bg-slate-200/70 animate-pulse w-full" />
+                    </td>
+                  </tr>
+                ))
               )}
               {!loading && filteredRows.length === 0 && (
                 <tr>
@@ -340,7 +346,7 @@ export default function ApprovalsUnified() {
                   </td>
                 </tr>
               )}
-              {!loading && filteredRows.map((r) => {
+              {filteredRows.map((r) => {
                 const meta = KIND_META[r.kind] || {};
                 const Icon = meta.Icon;
                 return (

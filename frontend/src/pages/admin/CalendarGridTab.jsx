@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { Loader2, FileDown, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { downloadBlob, showApiError } from "../../api";
@@ -45,14 +46,18 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
   // React Query — historical months are effectively immutable, so we
   // cache aggressively (5 min stale, 30 min gc). Current month keeps
   // the default 60 s stale time (from index.js) so admins see today's
-  // check-ins reflected within a page-flip. Perf-pass 20 Feb 2026.
+  // check-ins reflected within a page-flip. `placeholderData:
+  // keepPreviousData` (K in the 20 Feb 2026 perf combo) keeps the
+  // previous month's rows on screen while the new month loads — Grid
+  // month-scroll now feels like a native app instead of blanking.
   const isHistorical = !isCurrent;
   const query = useApiQuery(
     "/reports/calendar-grid",
     { month: monthIso },
-    isHistorical
-      ? { staleTime: 5 * 60_000, gcTime: 30 * 60_000 }
-      : {},
+    {
+      placeholderData: keepPreviousData,
+      ...(isHistorical ? { staleTime: 5 * 60_000, gcTime: 30 * 60_000 } : {}),
+    },
   );
   const { data, isFetching, refetch, error } = query;
   const loading = isFetching;
@@ -260,13 +265,25 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
               </tr>
             </thead>
             <tbody>
-              {loading && (
-                <tr><td colSpan={3 + days.length + 6} className="py-8 text-center text-slate-400">Loading…</td></tr>
+              {loading && displayedRows.length === 0 && (
+                // Skeleton rows — appears in <100 ms while the real
+                // payload loads. Feels much snappier than a single
+                // "Loading…" placeholder. 8 dummy rows is enough to
+                // cover an above-the-fold slot without shifting layout
+                // when the real rows arrive. (Perf combo item D,
+                // 20 Feb 2026.)
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={`skeleton-${i}`} className={i % 2 === 1 ? "bg-slate-100/40" : "bg-white"} data-testid="calendar-skeleton-row">
+                    <td className="py-1 px-2" colSpan={3 + days.length + 6}>
+                      <div className="h-4 rounded bg-slate-200/70 animate-pulse w-full" />
+                    </td>
+                  </tr>
+                ))
               )}
               {!loading && displayedRows.length === 0 && (
                 <tr><td colSpan={3 + days.length + 6} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
               )}
-              {!loading && displayedRows.map((r, i) => {
+              {displayedRows.map((r, i) => {
                 const rowBg = i % 2 === 1 ? "bg-slate-100/40" : "bg-white";
                 return (
                   <tr key={r.member_id} className={`${rowBg} hover:bg-sky-50 group transition-colors`} data-testid={`calendar-row-${r.member_id}`}>

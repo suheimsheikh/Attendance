@@ -806,10 +806,16 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         category: Optional[str] = None,
         fleet: Optional[str] = None,
         institution: Optional[str] = None,
+        with_meta: bool = True,
         admin: dict = Depends(require_admin),
     ):
         """Month-view calendar grid — one row per member, one cell per
         calendar day of the requested month.
+
+        ``with_meta=False`` skips the per-cell tooltip metadata. The
+        default is True to preserve the current UI contract; the CSV/PDF
+        export path and any callers that don't need hover context can
+        opt out to save ~30% payload size.
 
         Cell codes (2-letter, uppercased):
           • ``P``  present (rendered filled-green in UI)
@@ -1005,51 +1011,54 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             # Only populate entries where there IS extra context worth
             # surfacing (break name, leave reason, late minutes, half-day
             # window, checked-in time) — keeps the payload lean.
+            # `with_meta=False` short-circuits — the CSV/PDF export path
+            # doesn't need any tooltip context.
             cell_meta: dict = {}
-            for idx, iso in enumerate(days):
-                code = cells[idx]
-                if not code or code in ("WO", "HO", "AB"):
-                    continue
-                m: dict = {}
-                if code == "BK":
-                    b = breaks_by_user.get(uid, {}).get(iso)
-                    if b:
-                        m["break_name"] = b.get("name")
-                        applier = admin_name_by_id.get(b.get("created_by"))
-                        if applier:
-                            m["applied_by"] = applier
-                        if b.get("created_at"):
-                            m["applied_at"] = b["created_at"]
-                        rng = f"{b.get('start_date')}"
-                        if b.get("end_date") and b["end_date"] != b.get("start_date"):
-                            rng += f" → {b['end_date']}"
-                        m["range"] = rng
-                elif code in ("LV", "TR", "CO", "PS"):
-                    for L in leaves_by_user.get(uid, []):
-                        if L.get("start_date") <= iso <= L.get("end_date"):
-                            if L.get("reason"):
-                                m["reason"] = L["reason"]
-                            if L.get("half_day"):
-                                m["half_day"] = L["half_day"]
-                            if L.get("decided_by"):
-                                m["approved_by"] = L["decided_by"]
-                            m["range"] = (
-                                L["start_date"] if L.get("start_date") == L.get("end_date")
-                                else f"{L.get('start_date')} → {L.get('end_date')}"
-                            )
-                            break
-                elif code in ("P", "HD", "LT"):
-                    att = att_by_user.get(uid, {}).get(iso) or {}
-                    if att.get("check_in_at"):
-                        m["check_in_at"] = att["check_in_at"]
-                    if att.get("check_out_at"):
-                        m["check_out_at"] = att["check_out_at"]
-                    if code == "LT" and att.get("late_minutes"):
-                        m["late_minutes"] = int(att.get("late_minutes") or 0)
-                    if att.get("overtime_total_min"):
-                        m["ot_minutes"] = int(att.get("overtime_total_min") or 0)
-                if m:
-                    cell_meta[iso] = m
+            if with_meta:
+                for idx, iso in enumerate(days):
+                    code = cells[idx]
+                    if not code or code in ("WO", "HO", "AB"):
+                        continue
+                    m: dict = {}
+                    if code == "BK":
+                        b = breaks_by_user.get(uid, {}).get(iso)
+                        if b:
+                            m["break_name"] = b.get("name")
+                            applier = admin_name_by_id.get(b.get("created_by"))
+                            if applier:
+                                m["applied_by"] = applier
+                            if b.get("created_at"):
+                                m["applied_at"] = b["created_at"]
+                            rng = f"{b.get('start_date')}"
+                            if b.get("end_date") and b["end_date"] != b.get("start_date"):
+                                rng += f" → {b['end_date']}"
+                            m["range"] = rng
+                    elif code in ("LV", "TR", "CO", "PS"):
+                        for L in leaves_by_user.get(uid, []):
+                            if L.get("start_date") <= iso <= L.get("end_date"):
+                                if L.get("reason"):
+                                    m["reason"] = L["reason"]
+                                if L.get("half_day"):
+                                    m["half_day"] = L["half_day"]
+                                if L.get("decided_by"):
+                                    m["approved_by"] = L["decided_by"]
+                                m["range"] = (
+                                    L["start_date"] if L.get("start_date") == L.get("end_date")
+                                    else f"{L.get('start_date')} → {L.get('end_date')}"
+                                )
+                                break
+                    elif code in ("P", "HD", "LT"):
+                        att = att_by_user.get(uid, {}).get(iso) or {}
+                        if att.get("check_in_at"):
+                            m["check_in_at"] = att["check_in_at"]
+                        if att.get("check_out_at"):
+                            m["check_out_at"] = att["check_out_at"]
+                        if code == "LT" and att.get("late_minutes"):
+                            m["late_minutes"] = int(att.get("late_minutes") or 0)
+                        if att.get("overtime_total_min"):
+                            m["ot_minutes"] = int(att.get("overtime_total_min") or 0)
+                    if m:
+                        cell_meta[iso] = m
             # Per-row totals — surfaces at the end of each row in the UI.
             # Half-day + Late still count as attendance (present-like);
             # Comp-off is bucketed with Leave (both are time-off types).
@@ -1098,7 +1107,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         admin: dict = Depends(require_admin),
     ):
         """CSV / PDF export of the calendar-grid report."""
-        data = await calendar_grid(month, category, fleet, institution, admin)
+        data = await calendar_grid(month, category, fleet, institution, with_meta=False, admin=admin)
         rows = data["rows"]
         days = data["days"]
         day_headers = [d[8:10] for d in days]  # "01", "02", ..., "31"

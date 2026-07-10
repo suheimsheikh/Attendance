@@ -239,8 +239,14 @@ export default function ChurnRisk() {
               </tr>
             </thead>
             <tbody>
-              {loading && (
-                <tr><td colSpan={8} className="py-8 text-center text-slate-400">Loading…</td></tr>
+              {loading && displayedRows.length === 0 && (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={`churn-skel-${i}`} className="border-b border-slate-100" data-testid="churn-skeleton-row">
+                    <td className="py-2 px-3" colSpan={8}>
+                      <div className="h-4 rounded bg-slate-200/70 animate-pulse w-full" />
+                    </td>
+                  </tr>
+                ))
               )}
               {!loading && displayedRows.length === 0 && (
                 <tr>
@@ -249,7 +255,7 @@ export default function ChurnRisk() {
                   </td>
                 </tr>
               )}
-              {!loading && displayedRows.map((r) => {
+              {displayedRows.map((r) => {
                 const band = BAND_META[r.risk_band] || BAND_META.watch;
                 const attnPct = Math.round((r.attendance_pct || 0) * 100);
                 const missPct = Math.round((r.miss_pct || 0) * 100);
