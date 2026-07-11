@@ -14,6 +14,11 @@ export const CELL_STYLE = {
   HD: { bg: "bg-amber-100",      text: "text-amber-700",   label: "HD", title: "Half day" },
   LT: { bg: "bg-orange-500",     text: "text-white",       label: "LT", title: "Late" },
   LV: { bg: "bg-amber-200",      text: "text-amber-800",   label: "LV", title: "Leave" },
+  // LOP overlay (20 Feb 2026) — days at the tail end of an approved
+  // leave whose requested-days exceeded the deduction ladder's
+  // comp-off + paid-leave balance. Rendered in dark rose so admins
+  // can spot LOP without diving into payroll.
+  LP: { bg: "bg-rose-600",       text: "text-white",       label: "LP", title: "Leave (LOP)" },
   TR: { bg: "bg-orange-200",     text: "text-orange-800",  label: "TR", title: "Tour" },
   PS: { bg: "bg-slate-200",      text: "text-slate-700",   label: "PS", title: "Posting" },
   CO: { bg: "bg-sky-200",        text: "text-sky-800",     label: "CO", title: "Comp-off" },
@@ -81,10 +86,11 @@ export function buildCellTooltip({ code, dow, meta, iso, clickable }) {
     if (m.break_name)    lines.push(`Break: ${m.break_name}`);
     if (m.range)         lines.push(`Window: ${m.range}`);
     if (m.applied_by)    lines.push(`Applied by ${m.applied_by}${m.applied_at ? " on " + fmtDateShort(m.applied_at) : ""}`);
-  } else if (["LV", "TR", "CO", "PS"].includes(code)) {
+  } else if (["LV", "LP", "TR", "CO", "PS"].includes(code)) {
     if (m.half_day)      lines.push(`Half day (${m.half_day})`);
     if (m.range)         lines.push(`Window: ${m.range}`);
     if (m.reason)        lines.push(`Reason: ${m.reason}`);
+    if (m.balance_split) lines.push(m.balance_split);
     if (m.approved_by)   lines.push(`Approved by ${m.approved_by}`);
   } else if (["P", "LT", "HD"].includes(code)) {
     if (m.check_in_at)   lines.push(`In: ${fmtHM(m.check_in_at)}`);
@@ -106,6 +112,7 @@ export function correctionForCode(code) {
     case "P":
     case "HD":               return { entityType: "attendance", initialKind: "time_adjust" };
     case "LV":
+    case "LP":
     case "TR":
     case "CO":
     case "PS":               return { entityType: "leave", initialKind: "leave_cancel" };

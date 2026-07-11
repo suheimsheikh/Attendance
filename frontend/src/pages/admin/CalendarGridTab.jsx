@@ -358,9 +358,23 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                           <td
                             className={`sticky right-[136px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-amber-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
                             data-testid={`cal-total-lv-${r.member_id}`}
-                            title={`Leave · ${attnTitle}`}
+                            title={r.totals?.lop ? `Leave (${r.totals.lop} LOP) · ${attnTitle}` : `Leave · ${attnTitle}`}
                             onDoubleClick={openAttn}
-                          >{r.totals?.leave || ""}</td>
+                          >
+                            {r.totals?.leave || ""}
+                            {/* LOP badge — appears inline when any LOP
+                                days were stamped on this row's leaves
+                                so admins spot pay impact at a glance. */}
+                            {r.totals?.lop ? (
+                              <span
+                                className="ml-1 inline-flex items-center px-1 rounded-full bg-rose-600 text-white text-[9px] font-bold"
+                                title={`${r.totals.lop} day${r.totals.lop === 1 ? "" : "s"} without pay`}
+                                data-testid={`cal-total-lop-${r.member_id}`}
+                              >
+                                {r.totals.lop} LOP
+                              </span>
+                            ) : null}
+                          </td>
                           <td
                             className={`sticky right-[94px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
                             data-testid={`cal-total-tr-${r.member_id}`}

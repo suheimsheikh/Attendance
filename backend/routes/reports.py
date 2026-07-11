@@ -904,7 +904,8 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                  "start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
                 {"_id": 0, "user_id": 1, "type": 1, "reason": 1,
                  "half_day": 1, "decided_by": 1, "decided_at": 1,
-                 "start_date": 1, "end_date": 1},
+                 "start_date": 1, "end_date": 1,
+                 "lop_days": 1, "paid_leave_used": 1, "comp_off_used": 1},
             ).to_list(20000),
             db.holidays.find(
                 {"date": {"$gte": start_iso, "$lte": end_iso}},
@@ -980,7 +981,26 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             # No attendance — check approved leaves.
             for L in leaves_by_user.get(uid, []):
                 if L.get("start_date") <= iso <= L.get("end_date"):
-                    return LEAVE_CODE.get((L.get("type") or "").lower(), "LV")
+                    code = LEAVE_CODE.get((L.get("type") or "").lower(), "LV")
+                    # LOP overlay (20 Feb 2026): if an APPROVED `leave`
+                    # (only `leave` runs the deduction ladder) has a
+                    # non-zero `lop_days` stamp, mark the tail portion
+                    # of the window as "LP" — convention is that
+                    # balance drains from the front (comp-off + paid),
+                    # so any un-covered days fall at the END. This
+                    # lets admins see LOP without diving into payroll.
+                    if code == "LV":
+                        lop_d = float(L.get("lop_days") or 0)
+                        if lop_d > 0:
+                            end_d = date.fromisoformat(L["end_date"])
+                            days_from_end = (end_d - date.fromisoformat(iso)).days
+                            # `days_from_end` is 0 on the last day, 1
+                            # on the second-last, etc. If the current
+                            # day sits in the last `lop_d` positions,
+                            # it's the LOP tail.
+                            if days_from_end < lop_d:
+                                return "LP"
+                    return code
             # Break for this member (admin-applied via /admin/breaks).
             # Painted with a dedicated BK code so admins can tell it
             # apart from a global HO (15 Feb 2026).
@@ -1033,7 +1053,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                             if b.get("end_date") and b["end_date"] != b.get("start_date"):
                                 rng += f" → {b['end_date']}"
                             m["range"] = rng
-                    elif code in ("LV", "TR", "CO", "PS"):
+                    elif code in ("LV", "LP", "TR", "CO", "PS"):
                         for L in leaves_by_user.get(uid, []):
                             if L.get("start_date") <= iso <= L.get("end_date"):
                                 if L.get("reason"):
@@ -1042,6 +1062,19 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                                     m["half_day"] = L["half_day"]
                                 if L.get("decided_by"):
                                     m["approved_by"] = L["decided_by"]
+                                # Balance-split hint on tooltips — only
+                                # meaningful for `type=leave` (comp-off
+                                # / tour / posting don't run the ladder).
+                                paid_used = L.get("paid_leave_used")
+                                lop_days = L.get("lop_days")
+                                co_used = L.get("comp_off_used")
+                                if any(v is not None for v in (paid_used, lop_days, co_used)):
+                                    parts = []
+                                    if co_used:  parts.append(f"Comp-off: {int(co_used)}d")
+                                    if paid_used: parts.append(f"Paid: {paid_used}d")
+                                    if lop_days:  parts.append(f"LOP: {lop_days}d")
+                                    if parts:
+                                        m["balance_split"] = " · ".join(parts)
                                 m["range"] = (
                                     L["start_date"] if L.get("start_date") == L.get("end_date")
                                     else f"{L.get('start_date')} → {L.get('end_date')}"
@@ -1073,12 +1106,23 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             totals = {
                 "present":     sum(1 for c in cells if c in ("P", "HD", "LT")),
                 "absent":      sum(1 for c in cells if c == "AB"),
-                "leave":       sum(1 for c in cells if c in ("LV", "CO")),
+                # LP days count toward the "leave" total (backward
+                # compat with pre-20-Feb behaviour where every approved
+                # leave day rolled up into LV). The dedicated `lop`
+                # sub-total below breaks it out for admins who want to
+                # see the split.
+                "leave":       sum(1 for c in cells if c in ("LV", "CO", "LP")),
                 "tour":        sum(1 for c in cells if c == "TR"),
                 # Late-count is a subset of Present — surfaced as its
                 # own column at the right of the totals strip so admins
                 # can spot habitual late-comers at a glance (15 Feb 2026).
                 "late":        sum(1 for c in cells if c == "LT"),
+                # LOP-day count (20 Feb 2026) — tail portion of any
+                # approved leave whose requested days exceeded the
+                # comp-off + paid-leave balance. Surfaces alongside
+                # payroll's `lop_days` totals so admins get the same
+                # number from either angle.
+                "lop":         sum(1 for c in cells if c == "LP"),
                 "ot_minutes":  ot_minutes,
             }
             rows.append({

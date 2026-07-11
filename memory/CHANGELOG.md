@@ -6,6 +6,43 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 20 Feb 2026 (part 4) — LOP overlay on The Grid
+
+**User question:** "Are we checking for available leave and marking as LOP/AB if the leave exceeds the available leave irrespective of approval?"
+
+**Root-cause investigation surfaced:**
+- ✅ Balance check at apply-time already runs (`split_leave_days` — comp-off → paid leave → LOP)
+- ✅ Unapproved leaves already show as `AB` on the Grid (only `status: "approved"` is fetched)
+- ⚠️ Approved leaves that spilled to LOP were **stamped correctly** but **not visually distinguished** — the Grid painted every day as `LV` even when payroll would treat 2 of 5 as unpaid
+- ✅ Apply-form warning (`LeaveBalanceNotice`) already existed and shows the waterfall before submit
+
+### Fix — LOP overlay
+Backend (`routes/reports.py::calendar_grid`):
+- Leaves projection now also fetches `lop_days`, `paid_leave_used`, `comp_off_used`.
+- `_classify()` computes the **LOP tail**: any approved `type=leave` whose `lop_days > 0` marks the LAST N days as `LP` (convention: balance drains from front, LOP falls at the end).
+- New `LP` cell code sits alongside `LV`/`TR`/`CO`/`PS`.
+- Row totals gained a `lop` sub-count; LP days still roll up into `leave` total for backward compat.
+- Cell meta gained `balance_split` string (e.g. *"Comp-off: 1d · Paid: 3d · LOP: 2d"*) — surfaces on hover tooltips for LV / LP / TR / CO / PS cells.
+
+Frontend:
+- `gridHelpers.jsx::CELL_STYLE` gained `LP` (rose-600 bg, white text) — auto-flows into the legend.
+- `buildCellTooltip()` now includes the `balance_split` line for approved-leave cells.
+- `correctionForCode()` treats `LP` same as `LV` (admin can file a correction).
+- `CalendarGridTab.jsx` — the row-total `LV` cell now renders an inline `N LOP` rose-pill when any of the row's approved leaves spilled to LOP. Tooltip becomes *"Leave (2 LOP) · <attendance summary>"*.
+
+Apply-form LOP warning: **already existed** at `LeaveBalanceNotice.jsx:188` — no changes needed. It shows the red waterfall preview *before* submit whenever requested days exceed comp-off + paid balance.
+
+### Tests
+- New `tests/test_lop_overlay.py` — 3 tests:
+  - `test_lop_tail_cells_render_as_LP` — seeds a 5-day leave with 3d paid balance, asserts cells 1-3 = `LV`, cells 4-5 = `LP`
+  - `test_totals_include_lop_subcount` — `totals.lop == 2` while `totals.leave >= 5`
+  - `test_cell_meta_carries_balance_split` — tooltip payload contains the "Paid: 3d · LOP: 2d" line
+
+**27/27 backend tests passing.** Frontend lint clean.
+
+
+
+---
 ## 20 Feb 2026 (part 3) — Perf pass 2: safe production-ready optimisations
 
 **User request:** "Do all you think are safe and will not cause any regressions as we are live."
