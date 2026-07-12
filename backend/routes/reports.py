@@ -897,7 +897,13 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                  "date": {"$gte": start_iso, "$lte": end_iso}},
                 {"_id": 0, "user_id": 1, "date": 1, "check_in_at": 1,
                  "check_out_at": 1, "late_minutes": 1,
-                 "is_late": 1, "is_half_day": 1, "overtime_total_min": 1},
+                 # Field is stamped as `late` on attendance docs (see
+                 # server.py:2070) — NOT `is_late`. Reading the wrong
+                 # name meant every real late check-in silently degraded
+                 # into a plain `P` cell on the Grid while the
+                 # Attendance report (which correctly reads `late`)
+                 # showed them. Prod bug 20 Feb 2026.
+                 "late": 1, "overtime_total_min": 1},
             ).to_list(20000),
             db.leaves.find(
                 {"user_id": {"$in": user_ids}, "status": "approved",
@@ -964,7 +970,14 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         # Map leave type → cell code.
         LEAVE_CODE = {
             "leave": "LV", "tour": "TR", "posting": "PS",
-            "comp_off": "CO", "late_coming": "LT",
+            "comp_off": "CO",
+            # NOTE: `late_coming` intentionally NOT mapped to "LT" any
+            # more (20 Feb 2026 fix). A late-coming *leave* means the
+            # member got permission to arrive late — the actual LT cell
+            # should be driven by the attendance row's `late: true`
+            # stamp. If the member never checked in, the day is AB,
+            # not LT. This aligns Grid LT count with Payroll's
+            # `late_days` (Attendance report is the source of truth).
         }
 
         def _classify(uid: str, iso: str, dow_idx: int, weekly_off: str,
@@ -973,9 +986,11 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 return ""  # future
             att = att_by_user.get(uid, {}).get(iso)
             if att and att.get("check_in_at"):
-                if att.get("is_half_day"):
-                    return "HD"
-                if att.get("is_late"):
+                # `late` is the canonical field on attendance docs
+                # (server.py:2070). `is_half_day` was a phantom check
+                # that never fired because the field was never stamped;
+                # dropped so we don't confuse readers.
+                if att.get("late"):
                     return "LT"
                 return "P"
             # No attendance — check approved leaves.
@@ -1495,7 +1510,10 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         atts = {a["date"]: a for a in await db.attendance.find(
             {"user_id": member_id, "date": {"$gte": start, "$lte": end}},
             {"_id": 0, "date": 1, "check_in_at": 1, "check_out_at": 1,
-             "is_late": 1, "is_half_day": 1, "overtime_total_min": 1,
+             # Canonical field is `late`, not `is_late`. Same bug as
+             # calendar_grid — attendance-ledger's "Late" status was
+             # unreachable before this fix.
+             "late": 1, "overtime_total_min": 1,
              "work_start_at_session": 1, "work_end_at_session": 1},
         ).to_list(400)}
         leaves = await db.leaves.find(
@@ -1537,9 +1555,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             if att and att.get("check_in_at"):
                 check_in = _hhmm(att.get("check_in_at"))
                 check_out = _hhmm(att.get("check_out_at"))
-                if att.get("is_half_day"):
-                    status = "Half day"
-                elif att.get("is_late"):
+                if att.get("late"):
                     status = "Late"
                 else:
                     status = "Present"

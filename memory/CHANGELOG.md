@@ -6,6 +6,36 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 20 Feb 2026 (part 5) — Grid LT ↔ Payroll `late_days` drift (P0 fix)
+
+**User report:** "The late in attendance under grid is diff from the late totals being shown in grid." (Preview + Prod)
+
+### Root cause
+Two silent bugs stacking on top of each other:
+
+1. **Wrong field name in the Grid projection.** Attendance docs are stamped with `late: bool` at `server.py:2070`. The Grid endpoint (`routes/reports.py::calendar_grid`) projected and read **`is_late`** — a field that never existed on any doc → always `None` → real late check-ins fell through to plain `P` cells. Same story for the phantom `is_half_day` field.
+2. **`late_coming` leaves painted LT cells** even when the member didn't check in — inflating Grid LT above Payroll's `late_days` count.
+
+Verified in prod DB: 135 members, July 2026 — Grid LT total was **311**, Payroll `late_days` total was **310**, per-member mismatches everywhere. The Attendance report was showing the correct number; the Grid was showing something *else entirely* (Late-Coming *leave applications* instead of real late check-ins).
+
+### Fix
+`routes/reports.py`:
+- `calendar_grid()` — projection now includes `late` (drops the phantom `is_late` / `is_half_day`). `_classify()` reads `att.get("late")`. The dead `is_half_day → HD` branch removed (never fired — no such field on any doc).
+- `attendance_ledger()` — same projection + read fix. This was silently misreporting per-member Late status too.
+- `LEAVE_CODE` no longer maps `late_coming` → `"LT"`. A late-coming *leave* means the member got permission to arrive late; the actual LT cell should come from the attendance row's `late: true` stamp. If they never checked in, the day is AB, not LT.
+
+### Post-fix verification
+- Grid LT total for July 2026: **310** (was 311)
+- Payroll `late_days` total: **310**
+- Per-member mismatches: **0 / 135**
+
+### Tests
+- New `tests/test_grid_late_matches_payroll.py` — asserts aggregate + per-member LT parity between the two endpoints. Snapshots the invariant so this can never regress silently.
+- All existing tests still passing (7 new + existing suites unaffected).
+
+
+
+---
 ## 20 Feb 2026 (part 4) — LOP overlay on The Grid
 
 **User question:** "Are we checking for available leave and marking as LOP/AB if the leave exceeds the available leave irrespective of approval?"
