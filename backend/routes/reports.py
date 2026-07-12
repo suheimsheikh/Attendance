@@ -22,7 +22,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 
-from services.time_utils import local_date_str, local_now
+from services.time_utils import local_date_str, local_hm, local_now
 from services.permissions import is_super_admin
 import breaks as _breaks_module
 
@@ -1532,8 +1532,13 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             {"_id": 0, "date": 1, "label": 1},
         ).to_list(200)}
 
+        # `_hhmm` used to naively slice `iso[11:16]` — which returns
+        # the UTC HH:MM stored in the DB, NOT the IST time the admin
+        # expects. Prod bug 20 Feb 2026: attendance-ledger check-in
+        # timings looked "strange" because they were UTC. Route through
+        # `local_hm(office, iso)` (Asia/Kolkata via office_tz) instead.
         def _hhmm(iso):
-            return iso[11:16] if iso and len(iso) >= 16 else ""
+            return local_hm(office, iso)
 
         def _leave_on(iso):
             for lv in leaves:
@@ -1693,6 +1698,8 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             {"_id": 0, "full_name": 1, "category": 1, "rank": 1},
         )
         member_name = (u or {}).get("full_name") or "Member"
+        # For IST-correct HH:MM rendering below.
+        office = await db.config.find_one({"id": "office"})
 
         def _ddmmyyyy(iso: str) -> str:
             try:
@@ -1704,7 +1711,10 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         def _hhmm(iso: str) -> str:
             if not iso:
                 return "—"
-            return iso[11:16] if len(iso) >= 16 else iso
+            # IST conversion via office_tz — was slicing UTC bytes 11:16
+            # before, which showed check-in times 5:30 hours behind IST
+            # on any historical export path (attendance-ledger CSV/PDF).
+            return local_hm(office, iso) or "—"
 
         def _fmt_min(m: int) -> str:
             if not m:
