@@ -568,7 +568,7 @@ def make_router(db, require_admin) -> APIRouter:
         COMMENT_PREFIXES = ("#", "//", "*", '"""', "'''", "/*")
         # Pragma suppression: any line containing `cat-health-ok` in a
         # comment is treated as a deliberate false-positive marker. Same
-        # convention as `# noqa` for lint. Use sparingly and always with
+        # convention as ruff lint suppression markers. Use sparingly and always with
         # a rationale explaining WHY the raw `category == "athlete"` is
         # semantically correct at that spot (usually: it's comparing a
         # query-param value, not a member DB field).
