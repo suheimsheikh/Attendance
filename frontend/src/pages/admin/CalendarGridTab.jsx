@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { Loader2, FileDown, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { downloadBlob, showApiError } from "../../api";
+import { api, downloadBlob, showApiError } from "../../api";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { categoryLabel, formatDate } from "../../utils";
 import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 import AttendanceLedgerModal from "./AttendanceLedgerModal";
 import OTLedgerModal from "./OTLedgerModal";
+import MemberForm from "./MemberForm";
 import { GridCell, CELL_STYLE, correctionForCode, fmtOt } from "./calendar-grid/gridHelpers";
 
 /**
@@ -37,6 +38,25 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
   // ledger for the OT-hours cell.
   const [attnLedger, setAttnLedger] = useState(null); // { member_id, member_name } | null
   const [otLedger, setOtLedger] = useState(null);     // { member_id, member_name } | null
+  // Double-click on the name cell opens the full member-edit modal
+  // (same one Manage Members uses) — quick edit-in-place without
+  // switching tabs. 20 Feb 2026 user request.
+  const [editingMemberId, setEditingMemberId] = useState(null);
+  const [editingMember, setEditingMember] = useState(null);
+  useEffect(() => {
+    if (!editingMemberId) { setEditingMember(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const m = await api.get(`/members/${editingMemberId}`);
+        if (!cancelled) setEditingMember(m);
+      } catch (err) {
+        showApiError(err, "Couldn't load member for edit");
+        if (!cancelled) setEditingMemberId(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [editingMemberId]);
 
   const isAthleteLike = useCallback(
     (r) => athleteLikeKeys.has(r?.category),
@@ -288,7 +308,12 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 return (
                   <tr key={r.member_id} className={`${rowBg} hover:bg-sky-50 group transition-colors`} data-testid={`calendar-row-${r.member_id}`}>
                     <td className={`py-1 px-2 text-center text-[11px] text-slate-500 tabular-nums sticky left-0 z-20 ${rowBg} group-hover:bg-sky-50 border-b border-slate-100`} data-testid={`calendar-serial-${r.member_id}`}>{i + 1}</td>
-                    <td className={`py-1 px-2 font-semibold text-slate-800 sticky left-10 z-20 ${rowBg} group-hover:bg-sky-50 border-b border-slate-100`}>
+                    <td
+                      className={`py-1 px-2 font-semibold text-slate-800 sticky left-10 z-20 ${rowBg} group-hover:bg-sky-50 border-b border-slate-100 cursor-pointer select-none`}
+                      onDoubleClick={() => setEditingMemberId(r.member_id)}
+                      title="Double-click to edit member"
+                      data-testid={`calendar-name-${r.member_id}`}
+                    >
                       {r.member_name}
                       {r.rank && <div className="text-[10px] text-slate-400 leading-tight">{r.rank}</div>}
                     </td>
@@ -344,51 +369,54 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                       return (
                         <>
                           <td
-                            className={`sticky right-[220px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-emerald-700 font-bold tabular-nums text-[11px] border-b border-l-2 border-slate-300 cursor-pointer select-none`}
+                            className={`sticky right-[220px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-emerald-700 font-bold tabular-nums text-[11px] border-b border-l-2 border-slate-300 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
                             data-testid={`cal-total-p-${r.member_id}`}
                             title={`Present · ${attnTitle}`}
                             onDoubleClick={openAttn}
                           >{r.totals?.present || ""}</td>
                           <td
-                            className={`sticky right-[178px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-red-600 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            className={`sticky right-[178px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-red-600 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
                             data-testid={`cal-total-ab-${r.member_id}`}
                             title={`Absent · ${attnTitle}`}
                             onDoubleClick={openAttn}
                           >{r.totals?.absent || ""}</td>
                           <td
-                            className={`sticky right-[136px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-amber-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            className={`sticky right-[136px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-amber-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px] relative`}
                             data-testid={`cal-total-lv-${r.member_id}`}
                             title={r.totals?.lop ? `Leave (${r.totals.lop} LOP) · ${attnTitle}` : `Leave · ${attnTitle}`}
                             onDoubleClick={openAttn}
                           >
                             {r.totals?.leave || ""}
-                            {/* LOP badge — appears inline when any LOP
-                                days were stamped on this row's leaves
-                                so admins spot pay impact at a glance. */}
+                            {/* LOP badge — absolutely positioned so it
+                                doesn't inflate the LV column width and
+                                spill over its sticky-right neighbours.
+                                Sits as a small pill on the top-right
+                                corner, visible without disturbing
+                                totals alignment. (Bug fix 20 Feb 2026.) */}
                             {r.totals?.lop ? (
                               <span
-                                className="ml-1 inline-flex items-center px-1 rounded-full bg-rose-600 text-white text-[9px] font-bold"
+                                className="absolute top-0 right-0 translate-x-1/3 -translate-y-1/2 inline-flex items-center px-1 rounded-full bg-rose-600 text-white text-[8px] font-bold leading-tight shadow-sm pointer-events-none"
                                 title={`${r.totals.lop} day${r.totals.lop === 1 ? "" : "s"} without pay`}
                                 data-testid={`cal-total-lop-${r.member_id}`}
                               >
-                                {r.totals.lop} LOP
+                                {r.totals.lop}L
                               </span>
                             ) : null}
                           </td>
                           <td
-                            className={`sticky right-[94px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            className={`sticky right-[94px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
                             data-testid={`cal-total-tr-${r.member_id}`}
                             title={`Tour · ${attnTitle}`}
                             onDoubleClick={openAttn}
                           >{r.totals?.tour || ""}</td>
                           <td
-                            className={`sticky right-[42px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-violet-800 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            className={`sticky right-[42px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-violet-800 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[52px] min-w-[52px] max-w-[52px]`}
                             data-testid={`cal-total-ot-${r.member_id}`}
                             title={`OT hours · ${otTitle}`}
                             onDoubleClick={openOt}
                           >{fmtOt(r.totals?.ot_minutes)}</td>
                           <td
-                            className={`sticky right-0 z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none`}
+                            className={`sticky right-0 z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
                             data-testid={`cal-total-lt-${r.member_id}`}
                             title={`Late days · ${attnTitle}`}
                             onDoubleClick={openAttn}
@@ -444,6 +472,20 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
           entityLabel={`${correction.member.full_name} · ${correction.date}`}
           defaultCheckInTime={correction.member.work_start}
           defaultCheckOutTime={correction.member.work_end}
+        />
+      )}
+
+      {editingMember && (
+        <MemberForm
+          initial={editingMember}
+          onClose={() => setEditingMemberId(null)}
+          onSaved={() => {
+            setEditingMemberId(null);
+            toast.success("Member updated");
+            // Refetch the Grid so any name/rank/category tweaks
+            // reflect in the row immediately.
+            loadReport();
+          }}
         />
       )}
     </>

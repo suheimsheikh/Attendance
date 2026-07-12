@@ -7,6 +7,7 @@ from pymongo.errors import DuplicateKeyError
 from fastapi.security import OAuth2PasswordBearer
 import os
 import io
+import asyncio
 import uuid
 import logging
 import jwt
@@ -3127,6 +3128,154 @@ async def my_stats(user: dict = Depends(get_current_user)):
         "pending_leaves": pending_leaves,
         "recent": recent,
     }
+
+
+# ----------------------------------------------------------------------------
+# Rich profile dashboard — /me/profile-details
+# ----------------------------------------------------------------------------
+@api_router.get("/me/profile-details")
+async def my_profile_details(user: dict = Depends(get_current_user)):
+    """One-shot "everything you need to know about yourself" payload for
+    the member's Profile page. Bundles balance summary, YTD/MTD stats,
+    late-arrival and early-out lists, OT accrual, and recent activity.
+
+    Kept as a single roundtrip so the profile renders in one paint —
+    the individual sources (`/me/stats`, `/me/leave-summary`,
+    `/me/comp-off-balance`) are still available for callers that only
+    want a slice. All numeric fields are safe for direct display; the
+    lists are pre-sorted (latest first).
+    """
+    from holidays import compute_balance_summary, compute_comp_off_balance
+
+    office = await db.config.find_one({"id": "office"})
+    today = local_now(office).date()
+    today_iso = today.isoformat()
+    month_start = today.replace(day=1).isoformat()
+    week_start = (today - timedelta(days=today.weekday())).isoformat()
+    year_start = f"{today.year}-01-01"
+
+    # Fire independent fetches concurrently — big wall-clock win.
+    balance_task = compute_balance_summary(db, user)
+    comp_off_task = compute_comp_off_balance(db, user)
+    sessions_task = db.attendance.find(
+        {"user_id": user["id"], "date": {"$gte": year_start, "$lte": today_iso}},
+        {"_id": 0, "id": 1, "date": 1, "check_in_at": 1, "check_out_at": 1,
+         "hours": 1, "late": 1, "late_minutes": 1,
+         "overtime_total_min": 1, "ot_early": 1,
+         "work_start_at_session": 1, "work_end_at_session": 1},
+    ).sort("date", -1).to_list(500)
+    open_task = open_session_for(user["id"])
+    pending_leaves_task = db.leaves.count_documents(
+        {"user_id": user["id"], "status": "pending"},
+    )
+    balance, comp_off, sessions, open_sess, pending_leaves = await asyncio.gather(
+        balance_task, comp_off_task, sessions_task, open_task, pending_leaves_task,
+    )
+
+    # Attendance aggregates.
+    week_sessions = [s for s in sessions if s["date"] >= week_start]
+    month_sessions = [s for s in sessions if s["date"] >= month_start]
+
+    late_this_month = [s for s in month_sessions if s.get("late")]
+    late_ytd_count = sum(1 for s in sessions if s.get("late"))
+
+    # Early-out detection — checked out significantly (>15m) before
+    # work_end_at_session. Session must have a check_out_at recorded.
+    def _hhmm_to_min(hhmm: str):
+        if not hhmm or ":" not in hhmm:
+            return None
+        try:
+            h, m = hhmm.split(":")[:2]
+            return int(h) * 60 + int(m)
+        except (ValueError, TypeError):
+            return None
+
+    def _timestamp_local_min(ts):
+        # `ts` is a datetime string in UTC ISO. Convert to local minutes.
+        if not ts:
+            return None
+        try:
+            from services.time_utils import to_local
+            dt = to_local(ts, office)
+            return dt.hour * 60 + dt.minute
+        except Exception:
+            return None
+
+    early_outs_month = []
+    for s in month_sessions:
+        if not s.get("check_out_at"):
+            continue
+        work_end = s.get("work_end_at_session")
+        end_min = _hhmm_to_min(work_end) if work_end else None
+        out_min = _timestamp_local_min(s.get("check_out_at"))
+        if end_min is None or out_min is None:
+            continue
+        early_by = end_min - out_min
+        if early_by >= 15:  # 15-min grace
+            early_outs_month.append({
+                "id": s.get("id"), "date": s["date"],
+                "check_out_at": s.get("check_out_at"),
+                "expected_end": work_end,
+                "early_by_minutes": early_by,
+                "hours": s.get("hours"),
+            })
+
+    ot_minutes_month = sum((s.get("overtime_total_min") or 0) for s in month_sessions)
+    ot_minutes_ytd = sum((s.get("overtime_total_min") or 0) for s in sessions)
+
+    week_hours = round(sum((s.get("hours") or 0) for s in week_sessions), 2)
+    month_hours = round(sum((s.get("hours") or 0) for s in month_sessions), 2)
+    ytd_hours = round(sum((s.get("hours") or 0) for s in sessions), 2)
+
+    days_this_week = len({s["date"] for s in week_sessions})
+    days_this_month = len({s["date"] for s in month_sessions})
+    days_ytd = len({s["date"] for s in sessions})
+
+    # Slim the payload — cap the recent + late + early lists.
+    recent = sessions[:15]
+    late_this_month_list = [{
+        "id": s.get("id"), "date": s["date"],
+        "check_in_at": s.get("check_in_at"),
+        "late_minutes": int(s.get("late_minutes") or 0),
+        "hours": s.get("hours"),
+    } for s in late_this_month[:30]]
+
+    return {
+        # Section 1 — headline stats
+        "today": today_iso,
+        "checked_in": open_sess is not None,
+        "open_session": open_sess,
+        # Section 2 — attendance aggregates
+        "attendance": {
+            "week_hours": week_hours,
+            "month_hours": month_hours,
+            "ytd_hours": ytd_hours,
+            "days_this_week": days_this_week,
+            "days_this_month": days_this_month,
+            "days_ytd": days_ytd,
+            "late_days_this_week": len({s["date"] for s in week_sessions if s.get("late")}),
+            "late_days_this_month": len(late_this_month),
+            "late_days_ytd": late_ytd_count,
+            "early_outs_this_month": len(early_outs_month),
+        },
+        # Section 3 — OT (minutes; convert to h/m client-side)
+        "overtime": {
+            "month_minutes": int(ot_minutes_month),
+            "ytd_minutes": int(ot_minutes_ytd),
+        },
+        # Section 4 — leave & comp-off balances (from holidays.py)
+        "balance": balance,
+        "comp_off": comp_off,
+        # Section 5 — pending items
+        "pending": {
+            "leaves": pending_leaves,
+        },
+        # Section 6 — drill-down lists (already trimmed)
+        "recent_attendance": recent,
+        "late_this_month": late_this_month_list,
+        "early_outs_this_month": early_outs_month[:30],
+    }
+
 
 
 # ----------------------------------------------------------------------------

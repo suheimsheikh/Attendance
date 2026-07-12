@@ -1,20 +1,52 @@
+/**
+ * Profile — a rich, data-dense "everything about me" dashboard for the
+ * member. Data comes from /api/me/profile-details (see server.py).
+ *
+ * Sections in order (all collapsible where they have a drill-down):
+ *   1. Hero (avatar + name + role)
+ *   2. Top KPI strip — Present Days · Late · OT · Comp-off · Paid Leave
+ *   3. Leave & Comp-off balance cards with used/available bars
+ *   4. YTD attendance summary (present · absent · leave · LOP · tour)
+ *   5. Late arrivals this month — expandable list, dates + minutes late
+ *   6. Early outs this month — expandable list
+ *   7. Recent attendance timeline
+ *   8. My reasons (reason-bank cleanup panel)
+ *
+ * 20 Feb 2026 — user request for a data-rich profile.
+ */
 import React, { useEffect, useState } from "react";
-import { Clock, Calendar, AlertCircle, Loader2, Camera } from "lucide-react";
+import {
+  Clock, Calendar, AlertCircle, Loader2, Camera, TrendingUp,
+  Coffee, LogOut, ChevronDown, ChevronRight, Award, PhoneCall,
+  Zap, CalendarClock, Layers,
+} from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
 import { useAuth } from "../auth";
 import Avatar from "../components/Avatar";
 import { formatTime, formatDate, categoryLabel } from "../utils";
 
+/** Turn "78 minutes" into "1h 18m" / "0m". */
+function fmtMin(m) {
+  if (!m) return "0m";
+  const n = Math.abs(m);
+  const h = Math.floor(n / 60);
+  const mm = n % 60;
+  const sign = m < 0 ? "-" : "";
+  if (!h) return `${sign}${mm}m`;
+  return mm ? `${sign}${h}h ${mm}m` : `${sign}${h}h`;
+}
+
 export default function Profile() {
   const { user, refreshMe } = useAuth();
-  const [stats, setStats] = useState(null);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     (async () => {
-      try { setStats(await api.get("/me/stats")); }
+      try { setData(await api.get("/me/profile-details")); }
+      catch (err) { showApiError(err, "Couldn't load profile"); }
       finally { setLoading(false); }
     })();
   }, []);
@@ -42,90 +74,381 @@ export default function Profile() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
-      <div className="iu-card overflow-hidden mb-6">
-        <div
-          className="h-32 md:h-44 bg-cover bg-center relative"
-          style={{
-            backgroundImage:
-              "linear-gradient(180deg, rgba(15,23,42,0.2), rgba(15,23,42,0.55)), url('https://images.unsplash.com/photo-1689846136233-de0717f3675c?crop=entropy&cs=srgb&fm=jpg&w=1600&q=85')",
-          }}
-        />
-        <div className="px-5 md:px-8 pb-6 -mt-12 flex flex-col md:flex-row items-center md:items-end gap-4">
-          <div className="relative" data-testid="profile-avatar">
-            <Avatar name={user?.full_name} photo={user?.photo} size={96} />
-            <label className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-slate-900 text-white flex items-center justify-center cursor-pointer shadow hover:bg-slate-800" title="Change photo">
-              {uploading ? <Loader2 className="animate-spin" size={14}/> : <Camera size={14} />}
-              <input
-                data-testid="photo-input"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoSelected}
-                disabled={uploading}
-              />
-            </label>
-          </div>
-          <div className="flex-1 text-center md:text-left">
-            <h1 className="text-2xl font-extrabold tracking-tight" data-testid="profile-name">{user?.full_name}</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              {user?.rank ? `${user.rank} · ` : ""}{categoryLabel(user?.category)} · {user?.role === "admin" ? "Admin" : "Member"}
-            </p>
-            <p className="text-xs text-slate-400 mt-1">{user?.email}</p>
-          </div>
-        </div>
-      </div>
+    <div className="p-4 md:p-8 max-w-5xl mx-auto" data-testid="profile-page">
+      <ProfileHero user={user} uploading={uploading} onSelect={handlePhotoSelected} />
 
       {loading ? (
         <div className="text-center py-10"><Loader2 className="mx-auto animate-spin text-slate-400" /></div>
-      ) : (
+      ) : data ? (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <StatBox label="Hours this week" value={`${stats?.week_hours ?? 0}h`} Icon={Clock} />
-            <StatBox label="Hours this month" value={`${stats?.month_hours ?? 0}h`} Icon={Clock} />
-            <StatBox label="Days on campus" value={stats?.days_this_week ?? 0} Icon={Calendar} />
-            <StatBox label="Late days" value={stats?.late_days_this_week ?? 0} Icon={AlertCircle} accent={(stats?.late_days_this_week ?? 0) > 0 ? "#F59E0B" : undefined} />
-          </div>
-
-          <section className="iu-card">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="font-extrabold tracking-tight">Recent attendance</h2>
-              <span className="text-xs text-slate-400">Last 10 sessions</span>
-            </div>
-            {(stats?.recent || []).length === 0 ? (
-              <div className="p-8 text-center text-slate-500 text-sm">No attendance logged yet.</div>
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {stats.recent.map((s) => (
-                  <li key={s.id} className="px-5 py-3 flex items-center gap-3" data-testid={`recent-${s.id}`}>
-                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700"><Clock size={16}/></div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-sm">{formatDate(s.date)}</div>
-                      <div className="text-xs text-slate-500">
-                        {formatTime(s.check_in_at)} – {s.check_out_at ? formatTime(s.check_out_at) : "Open"}
-                        {s.late ? <span className="ml-2 text-amber-700 font-semibold">· Late {s.late_minutes}m</span> : null}
-                      </div>
-                    </div>
-                    <div className="text-sm font-bold text-slate-900">{s.hours ?? "—"}{typeof s.hours === "number" ? "h" : ""}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-          <MyReasonsSection />
+          <KPIStrip d={data}/>
+          <BalanceCards d={data}/>
+          <YearOverviewCard d={data}/>
+          <LateArrivalsCard rows={data.late_this_month}/>
+          <EarlyOutsCard rows={data.early_outs_this_month}/>
+          <RecentAttendanceCard rows={data.recent_attendance}/>
+          <MyReasonsSection/>
         </>
-      )}
+      ) : null}
     </div>
   );
 }
 
-/**
- * MyReasonsSection — small self-contained panel on the Profile page
- * showing the member's personal reason bank (built up from OT prompts
- * and comp-off applications). Members can prune stale entries with a
- * one-click "×". Kept intentionally low-key — most members will never
- * look at this; it's here for cleanup.
- */
+// ------------ Hero (header) ---------------------------------------------
+
+function ProfileHero({ user, uploading, onSelect }) {
+  return (
+    <div className="iu-card overflow-hidden mb-6">
+      <div
+        className="h-32 md:h-44 bg-cover bg-center relative"
+        style={{
+          backgroundImage:
+            "linear-gradient(180deg, rgba(15,23,42,0.2), rgba(15,23,42,0.55)), url('https://images.unsplash.com/photo-1689846136233-de0717f3675c?crop=entropy&cs=srgb&fm=jpg&w=1600&q=85')",
+        }}
+      />
+      <div className="px-5 md:px-8 pb-6 -mt-12 flex flex-col md:flex-row items-center md:items-end gap-4">
+        <div className="relative" data-testid="profile-avatar">
+          <Avatar name={user?.full_name} photo={user?.photo} size={96} />
+          <label className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-slate-900 text-white flex items-center justify-center cursor-pointer shadow hover:bg-slate-800" title="Change photo">
+            {uploading ? <Loader2 className="animate-spin" size={14}/> : <Camera size={14} />}
+            <input
+              data-testid="photo-input"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={onSelect}
+              disabled={uploading}
+            />
+          </label>
+        </div>
+        <div className="flex-1 text-center md:text-left">
+          <h1 className="text-2xl font-extrabold tracking-tight" data-testid="profile-name">{user?.full_name}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {user?.rank ? `${user.rank} · ` : ""}{categoryLabel(user?.category)} · {user?.role === "admin" ? "Admin" : "Member"}
+          </p>
+          <p className="text-xs text-slate-400 mt-1 flex items-center justify-center md:justify-start gap-3">
+            <span>{user?.email}</span>
+            {user?.mobile && <span className="inline-flex items-center gap-1"><PhoneCall size={11}/>{user.mobile}</span>}
+            {user?.institution && <span>· {user.institution}</span>}
+            {user?.fleet && <span>· Fleet: {user.fleet}</span>}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ------------ Section 2 — KPI strip -------------------------------------
+
+function KPIStrip({ d }) {
+  const balance = d.balance || {};
+  const comp = d.comp_off || {};
+  const attn = d.attendance || {};
+  const ot = d.overtime || {};
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6" data-testid="profile-kpi">
+      <KPI
+        label="Days Present (MTD)"
+        value={attn.days_this_month ?? 0}
+        sub={`${attn.month_hours ?? 0}h logged`}
+        Icon={Calendar}
+        accent="emerald"
+        testid="kpi-days-mtd"
+      />
+      <KPI
+        label="Late Arrivals (MTD)"
+        value={attn.late_days_this_month ?? 0}
+        sub={`${attn.late_days_ytd ?? 0} YTD`}
+        Icon={AlertCircle}
+        accent="amber"
+        testid="kpi-late-mtd"
+      />
+      <KPI
+        label="OT (MTD)"
+        value={fmtMin(ot.month_minutes)}
+        sub={`${fmtMin(ot.ytd_minutes)} YTD`}
+        Icon={Zap}
+        accent="violet"
+        testid="kpi-ot-mtd"
+      />
+      <KPI
+        label="Comp-off Available"
+        value={comp.available ?? 0}
+        sub={`${comp.accrued ?? 0} earned · ${comp.used ?? 0} used`}
+        Icon={Coffee}
+        accent="teal"
+        testid="kpi-comp-off"
+      />
+      <KPI
+        label="Paid Leave Available"
+        value={balance?.paid_leave?.available ?? 0}
+        sub={`${balance?.paid_leave?.opening ?? 0} opening · ${balance?.paid_leave?.used ?? 0} used`}
+        Icon={Award}
+        accent="sky"
+        testid="kpi-paid-leave"
+      />
+    </div>
+  );
+}
+
+const ACCENT_BG = {
+  emerald: "bg-emerald-50 text-emerald-800 border-emerald-100",
+  amber:   "bg-amber-50 text-amber-800 border-amber-100",
+  violet:  "bg-violet-50 text-violet-800 border-violet-100",
+  teal:    "bg-teal-50 text-teal-800 border-teal-100",
+  sky:     "bg-sky-50 text-sky-800 border-sky-100",
+  rose:    "bg-rose-50 text-rose-800 border-rose-100",
+  slate:   "bg-slate-50 text-slate-800 border-slate-100",
+};
+
+function KPI({ label, value, sub, Icon, accent = "slate", testid }) {
+  const cls = ACCENT_BG[accent] || ACCENT_BG.slate;
+  return (
+    <div className={`iu-card p-4 border ${cls}`} data-testid={testid}>
+      <div className="flex items-center gap-2 mb-2">
+        <Icon size={14} className="opacity-70"/>
+        <div className="text-[10px] font-bold uppercase tracking-wider opacity-70">{label}</div>
+      </div>
+      <div className="text-2xl font-extrabold tabular-nums">{value}</div>
+      {sub && <div className="text-[11px] mt-1 opacity-70">{sub}</div>}
+    </div>
+  );
+}
+
+// ------------ Section 3 — Balance cards with progress bars ---------------
+
+function BalanceCards({ d }) {
+  const balance = d.balance || {};
+  const comp = d.comp_off || {};
+  const paid = balance.paid_leave || {};
+  const paidOpening = Number(paid.opening) || 0;
+  const paidUsed = Number(paid.used) || 0;
+  const paidAvail = Math.max(0, paidOpening - paidUsed);
+  const paidPct = paidOpening > 0 ? Math.min(100, (paidUsed / paidOpening) * 100) : 0;
+
+  const compAccrued = Number(comp.accrued) || 0;
+  const compUsed = Number(comp.used) || 0;
+  const compAvail = Math.max(0, compAccrued - compUsed);
+  const compPct = compAccrued > 0 ? Math.min(100, (compUsed / compAccrued) * 100) : 0;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" data-testid="profile-balances">
+      <BalanceCard
+        title="Paid Leave"
+        Icon={Award}
+        accent="sky"
+        opening={paidOpening}
+        used={paidUsed}
+        available={paidAvail}
+        pct={paidPct}
+        pending={balance.pending_leave_days || 0}
+        futureApproved={balance.future_approved_leave_days || 0}
+        testid="balance-paid-leave"
+      />
+      <BalanceCard
+        title="Comp-off"
+        Icon={Coffee}
+        accent="teal"
+        opening={compAccrued}
+        used={compUsed}
+        available={compAvail}
+        pct={compPct}
+        breakdown={comp.breakdown || {}}
+        testid="balance-comp-off"
+      />
+    </div>
+  );
+}
+
+function BalanceCard({ title, Icon, accent, opening, used, available, pct, pending, futureApproved, breakdown, testid }) {
+  return (
+    <div className={`iu-card p-5 border ${ACCENT_BG[accent] || ACCENT_BG.slate}`} data-testid={testid}>
+      <div className="flex items-center gap-2 mb-3">
+        <Icon size={18} className="opacity-80"/>
+        <div className="font-extrabold tracking-tight">{title}</div>
+        <div className="ml-auto text-[11px] opacity-70">{opening} total</div>
+      </div>
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <MiniStat label="Used" value={used}/>
+        <MiniStat label="Available" value={available} bold/>
+        <MiniStat label="Total" value={opening}/>
+      </div>
+      <div className="h-2 bg-white/50 rounded-full overflow-hidden mb-3">
+        <div className={`h-full ${accent === "sky" ? "bg-sky-500" : "bg-teal-500"} transition-all`} style={{ width: `${pct}%` }}/>
+      </div>
+      <div className="text-[11px] opacity-70 flex flex-wrap gap-x-3">
+        {pending !== undefined && <span>Pending: <b>{pending}d</b></span>}
+        {futureApproved !== undefined && <span>Future approved: <b>{futureApproved}d</b></span>}
+        {breakdown?.weekly_off !== undefined && <span>Weekly-off worked: <b>{breakdown.weekly_off}d</b></span>}
+        {breakdown?.holiday !== undefined && <span>Holiday worked: <b>{breakdown.holiday}d</b></span>}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, bold }) {
+  return (
+    <div>
+      <div className={`tabular-nums ${bold ? "text-xl font-extrabold" : "text-lg font-bold"}`}>{value}</div>
+      <div className="text-[10px] uppercase tracking-wider opacity-60 font-semibold">{label}</div>
+    </div>
+  );
+}
+
+// ------------ Section 4 — Year overview (attendance ledger) --------------
+
+function YearOverviewCard({ d }) {
+  const b = d.balance || {};
+  const attn = d.attendance || {};
+  const cells = [
+    { label: "Present YTD",   value: attn.days_ytd ?? 0,             tone: "emerald" },
+    { label: "Absent YTD",    value: b.absent_ytd_days ?? 0,          tone: "rose" },
+    { label: "Tour YTD",      value: b.tour_ytd_days ?? 0,            tone: "orange" },
+    { label: "LOP YTD",       value: b.lop_ytd_days ?? 0,             tone: "rose" },
+    { label: "Hours YTD",     value: `${attn.ytd_hours ?? 0}h`,        tone: "slate" },
+    { label: "Late YTD",      value: attn.late_days_ytd ?? 0,          tone: "amber" },
+  ];
+  return (
+    <div className="iu-card p-5 mb-6" data-testid="profile-ytd">
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp size={16} className="text-slate-500"/>
+        <h2 className="font-extrabold tracking-tight">Year-to-Date Overview</h2>
+      </div>
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+        {cells.map((c) => (
+          <div key={c.label} className={`p-3 rounded-lg border ${ACCENT_BG[c.tone] || ACCENT_BG.slate}`}>
+            <div className="text-xl font-extrabold tabular-nums">{c.value}</div>
+            <div className="text-[9px] uppercase tracking-wider mt-1 opacity-70 font-semibold">{c.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ------------ Section 5 — Late arrivals list -----------------------------
+
+function CollapsibleList({ title, Icon, count, empty, testid, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="iu-card mb-4 overflow-hidden" data-testid={testid}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full px-5 py-4 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left"
+        aria-expanded={open}
+      >
+        <Icon size={16} className="text-slate-500"/>
+        <h3 className="font-extrabold tracking-tight flex-1">{title}</h3>
+        <span className="inline-flex items-center justify-center min-w-[28px] h-6 px-2 rounded-full bg-slate-100 text-slate-700 text-xs font-bold tabular-nums">
+          {count}
+        </span>
+        {open ? <ChevronDown size={16} className="text-slate-400"/> : <ChevronRight size={16} className="text-slate-400"/>}
+      </button>
+      {open && (
+        count === 0
+          ? <div className="px-5 py-6 text-center text-slate-400 text-sm italic">{empty}</div>
+          : <div className="border-t border-slate-100">{children}</div>
+      )}
+    </section>
+  );
+}
+
+function LateArrivalsCard({ rows }) {
+  return (
+    <CollapsibleList
+      title="Late Arrivals — This Month"
+      Icon={CalendarClock}
+      count={rows?.length || 0}
+      empty="On time every day this month 🎉"
+      testid="profile-late-arrivals"
+    >
+      <ul className="divide-y divide-slate-100">
+        {(rows || []).map((r) => (
+          <li key={r.id || r.date} className="px-5 py-3 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700"><AlertCircle size={16}/></div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm">{formatDate(r.date)}</div>
+              <div className="text-xs text-slate-500">
+                Checked in at {formatTime(r.check_in_at)}
+                {r.hours != null && <> · {r.hours}h worked</>}
+              </div>
+            </div>
+            <div className="text-sm font-bold text-amber-700 tabular-nums">+{r.late_minutes}m</div>
+          </li>
+        ))}
+      </ul>
+    </CollapsibleList>
+  );
+}
+
+// ------------ Section 6 — Early outs list --------------------------------
+
+function EarlyOutsCard({ rows }) {
+  return (
+    <CollapsibleList
+      title="Early Outs — This Month"
+      Icon={LogOut}
+      count={rows?.length || 0}
+      empty="No early departures this month."
+      testid="profile-early-outs"
+    >
+      <ul className="divide-y divide-slate-100">
+        {(rows || []).map((r) => (
+          <li key={r.id || r.date} className="px-5 py-3 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-rose-100 flex items-center justify-center text-rose-700"><LogOut size={16}/></div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm">{formatDate(r.date)}</div>
+              <div className="text-xs text-slate-500">
+                Out at {formatTime(r.check_out_at)} (expected {r.expected_end})
+                {r.hours != null && <> · {r.hours}h worked</>}
+              </div>
+            </div>
+            <div className="text-sm font-bold text-rose-700 tabular-nums">−{r.early_by_minutes}m</div>
+          </li>
+        ))}
+      </ul>
+    </CollapsibleList>
+  );
+}
+
+// ------------ Section 7 — Recent attendance timeline ---------------------
+
+function RecentAttendanceCard({ rows }) {
+  return (
+    <section className="iu-card mb-4" data-testid="profile-recent">
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+        <Layers size={16} className="text-slate-500"/>
+        <h2 className="font-extrabold tracking-tight">Recent Attendance</h2>
+        <span className="ml-auto text-xs text-slate-400">Last {rows?.length || 0} sessions</span>
+      </div>
+      {(rows || []).length === 0 ? (
+        <div className="p-8 text-center text-slate-500 text-sm">No attendance logged yet.</div>
+      ) : (
+        <ul className="divide-y divide-slate-100">
+          {rows.map((s) => (
+            <li key={s.id} className="px-5 py-3 flex items-center gap-3" data-testid={`recent-${s.id}`}>
+              <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700"><Clock size={16}/></div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm">{formatDate(s.date)}</div>
+                <div className="text-xs text-slate-500 flex flex-wrap gap-x-2">
+                  <span>{formatTime(s.check_in_at)} – {s.check_out_at ? formatTime(s.check_out_at) : "Open"}</span>
+                  {s.late ? <span className="text-amber-700 font-semibold">· Late {s.late_minutes}m</span> : null}
+                  {s.overtime_total_min ? <span className="text-violet-700 font-semibold">· OT {fmtMin(s.overtime_total_min)}</span> : null}
+                </div>
+              </div>
+              <div className="text-sm font-bold text-slate-900 tabular-nums">
+                {s.hours ?? "—"}{typeof s.hours === "number" ? "h" : ""}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+// ------------ Section 8 — Reason bank cleanup ---------------------------
+
 function MyReasonsSection() {
   const [reasons, setReasons] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -185,17 +508,5 @@ function MyReasonsSection() {
         </ul>
       )}
     </section>
-  );
-}
-
-function StatBox({ label, value, Icon, accent }) {
-  return (
-    <div className="iu-card p-4">
-      <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-slate-100 text-slate-700 mb-3">
-        <Icon size={16} style={accent ? { color: accent } : undefined} />
-      </div>
-      <div className="text-2xl font-extrabold text-slate-900">{value}</div>
-      <div className="text-xs text-slate-500 font-semibold uppercase tracking-wide mt-0.5">{label}</div>
-    </div>
   );
 }

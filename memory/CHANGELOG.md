@@ -6,6 +6,54 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 20 Feb 2026 (part 6) — Data-rich Profile + Grid polish
+
+**User asks:**
+1. Make My Profile "a lot more detailed" — leave balance used/available, OT, comp-offs, late arrivals & early outs, "make it data and info rich with drill downs".
+2. Grid LV totals cell has a "strange 3-sided border".
+3. Double-click on the name in the Grid should open the same edit modal as Manage Members.
+
+### 1️⃣ Rich Profile dashboard
+Backend: new `GET /api/me/profile-details` at `server.py:3130`. Single roundtrip that bundles:
+- **Attendance aggregates** (week / month / YTD hours + days, late-days counts, early-out count)
+- **OT** in minutes (this month + YTD)
+- **Leave balance summary** via `compute_balance_summary()` — opening, used, available, pending, future-approved, LOP YTD, absent YTD, tour YTD
+- **Comp-off balance** via `compute_comp_off_balance()` — accrued, used, available, with weekly-off/holiday/regular-day breakdown
+- **Late arrivals** trimmed list (last 30 this month) with check-in time + late minutes
+- **Early outs** — sessions where checked out ≥15 min before `work_end_at_session` (list of dates + minutes early)
+- **Recent attendance** (last 15 sessions)
+- Open-session flag + pending-leaves count
+
+All 5 independent DB reads run through `asyncio.gather()` for a single wall-clock RTT.
+
+Frontend: full rewrite of `pages/Profile.jsx` (140 → 400 lines).
+- Hero with photo upload + contact strip (email, mobile, institution, fleet)
+- **5-KPI strip** (Days Present MTD · Late MTD · OT MTD · Comp-off Available · Paid Leave Available) — each with a YTD sub-line
+- **Balance cards** for Paid Leave + Comp-off with used/available/total mini-stats, progress bar, and pending/future-approved footnote
+- **Year-to-date overview** — 6 tone-coded tiles (Present / Absent / Tour / LOP / Hours / Late)
+- **Collapsible drill-downs** for Late Arrivals and Early Outs (empty-state graceful — "On time every day 🎉")
+- **Recent Attendance timeline** — dates, in/out times, late/OT badges
+- **My Reasons** cleanup panel (preserved)
+
+### 2️⃣ Grid LV total 3-sided border fix
+Root cause: header cells used `min-w-[42px]` but body totals cells had no width constraint. When a row had `totals.leave >= 10` and a LOP badge, the LV body cell grew wider than 42px and overflowed left into the sticky AB cell — visually presenting as a broken 3-sided border.
+
+Fix (`pages/admin/CalendarGridTab.jsx`):
+- Explicit `w-[42px] min-w-[42px] max-w-[42px]` on all sticky-right totals body cells (`w-[52px]` on OT).
+- LOP badge changed from an inline pill (took extra width) to an absolute-positioned top-right superscript that doesn't affect flow width.
+
+### 3️⃣ Grid → Manage Members edit modal on double-click
+`CalendarGridTab.jsx`:
+- Import `MemberForm` from `./MemberForm` (the same modal Manage Members uses).
+- Name/Rank cell gains `onDoubleClick={() => setEditingMemberId(r.member_id)}` + `cursor-pointer` and a title tooltip.
+- On double-click, fetch `/members/{id}` and pass into `<MemberForm initial={editingMember} onSaved={loadReport}>`. After save, the Grid refetches so name/rank/category tweaks reflect immediately.
+
+### Tests
+All existing suites still passing (19/19 in the affected set): `test_lop_overlay`, `test_grid_late_matches_payroll`, `test_churn_and_approvals_summary`, `test_calendar_grid_ot`, `test_ot_approval_removed`.
+
+
+
+---
 ## 20 Feb 2026 (part 5) — Grid LT ↔ Payroll `late_days` drift (P0 fix)
 
 **User report:** "The late in attendance under grid is diff from the late totals being shown in grid." (Preview + Prod)
