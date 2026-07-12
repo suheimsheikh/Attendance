@@ -28,7 +28,7 @@ function timeOnly(iso) {
   // check-in showed up as 00:07, making shifts look "weird" (bug
   // reported 15 Feb 2026: Shiva's OT ledger showed midnight check-ins).
   try {
-    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
   } catch {
     return iso.slice(11, 16);
   }

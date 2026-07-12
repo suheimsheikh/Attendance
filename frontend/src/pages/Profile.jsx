@@ -74,7 +74,7 @@ export default function Profile() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto" data-testid="profile-page">
+    <div className="p-3 md:p-6 max-w-5xl mx-auto space-y-4" data-testid="profile-page">
       <ProfileHero user={user} uploading={uploading} onSelect={handlePhotoSelected} />
 
       {loading ? (
@@ -98,41 +98,32 @@ export default function Profile() {
 
 function ProfileHero({ user, uploading, onSelect }) {
   return (
-    <div className="iu-card overflow-hidden mb-6">
-      <div
-        className="h-32 md:h-44 bg-cover bg-center relative"
-        style={{
-          backgroundImage:
-            "linear-gradient(180deg, rgba(15,23,42,0.2), rgba(15,23,42,0.55)), url('https://images.unsplash.com/photo-1689846136233-de0717f3675c?crop=entropy&cs=srgb&fm=jpg&w=1600&q=85')",
-        }}
-      />
-      <div className="px-5 md:px-8 pb-6 -mt-12 flex flex-col md:flex-row items-center md:items-end gap-4">
-        <div className="relative" data-testid="profile-avatar">
-          <Avatar name={user?.full_name} photo={user?.photo} size={96} />
-          <label className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-slate-900 text-white flex items-center justify-center cursor-pointer shadow hover:bg-slate-800" title="Change photo">
-            {uploading ? <Loader2 className="animate-spin" size={14}/> : <Camera size={14} />}
-            <input
-              data-testid="photo-input"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={onSelect}
-              disabled={uploading}
-            />
-          </label>
-        </div>
-        <div className="flex-1 text-center md:text-left">
-          <h1 className="text-2xl font-extrabold tracking-tight" data-testid="profile-name">{user?.full_name}</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {user?.rank ? `${user.rank} · ` : ""}{categoryLabel(user?.category)} · {user?.role === "admin" ? "Admin" : "Member"}
-          </p>
-          <p className="text-xs text-slate-400 mt-1 flex items-center justify-center md:justify-start gap-3">
-            <span>{user?.email}</span>
-            {user?.mobile && <span className="inline-flex items-center gap-1"><PhoneCall size={11}/>{user.mobile}</span>}
-            {user?.institution && <span>· {user.institution}</span>}
-            {user?.fleet && <span>· Fleet: {user.fleet}</span>}
-          </p>
-        </div>
+    <div className="iu-card p-4 md:p-5 mb-4 flex items-center gap-4" data-testid="profile-hero">
+      <div className="relative shrink-0" data-testid="profile-avatar">
+        <Avatar name={user?.full_name} photo={user?.photo} size={64} />
+        <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center cursor-pointer shadow hover:bg-slate-800" title="Change photo">
+          {uploading ? <Loader2 className="animate-spin" size={11}/> : <Camera size={11} />}
+          <input
+            data-testid="photo-input"
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={onSelect}
+            disabled={uploading}
+          />
+        </label>
+      </div>
+      <div className="flex-1 min-w-0">
+        <h1 className="text-lg md:text-xl font-extrabold tracking-tight truncate" data-testid="profile-name">{user?.full_name}</h1>
+        <p className="text-xs text-slate-500 truncate">
+          {user?.rank ? `${user.rank} · ` : ""}{categoryLabel(user?.category)} · {user?.role === "admin" ? "Admin" : "Member"}
+        </p>
+        <p className="text-[11px] text-slate-400 mt-0.5 flex flex-wrap gap-x-2">
+          <span className="truncate">{user?.email}</span>
+          {user?.mobile && <span className="inline-flex items-center gap-1"><PhoneCall size={10}/>{user.mobile}</span>}
+          {user?.institution && <span>· {user.institution}</span>}
+          {user?.fleet && <span>· Fleet: {user.fleet}</span>}
+        </p>
       </div>
     </div>
   );
@@ -204,13 +195,13 @@ const ACCENT_BG = {
 function KPI({ label, value, sub, Icon, accent = "slate", testid }) {
   const cls = ACCENT_BG[accent] || ACCENT_BG.slate;
   return (
-    <div className={`iu-card p-4 border ${cls}`} data-testid={testid}>
-      <div className="flex items-center gap-2 mb-2">
-        <Icon size={14} className="opacity-70"/>
-        <div className="text-[10px] font-bold uppercase tracking-wider opacity-70">{label}</div>
+    <div className={`iu-card p-3 border ${cls}`} data-testid={testid}>
+      <div className="flex items-center gap-1.5 mb-1">
+        <Icon size={12} className="opacity-70"/>
+        <div className="text-[9px] font-bold uppercase tracking-wider opacity-70">{label}</div>
       </div>
-      <div className="text-2xl font-extrabold tabular-nums">{value}</div>
-      {sub && <div className="text-[11px] mt-1 opacity-70">{sub}</div>}
+      <div className="text-xl font-extrabold tabular-nums leading-tight">{value}</div>
+      {sub && <div className="text-[10px] mt-0.5 opacity-70">{sub}</div>}
     </div>
   );
 }
@@ -232,7 +223,7 @@ function BalanceCards({ d }) {
   const compPct = compAccrued > 0 ? Math.min(100, (compUsed / compAccrued) * 100) : 0;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" data-testid="profile-balances">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-testid="profile-balances">
       <BalanceCard
         title="Paid Leave"
         Icon={Award}
@@ -262,21 +253,21 @@ function BalanceCards({ d }) {
 
 function BalanceCard({ title, Icon, accent, opening, used, available, pct, pending, futureApproved, breakdown, testid }) {
   return (
-    <div className={`iu-card p-5 border ${ACCENT_BG[accent] || ACCENT_BG.slate}`} data-testid={testid}>
-      <div className="flex items-center gap-2 mb-3">
-        <Icon size={18} className="opacity-80"/>
-        <div className="font-extrabold tracking-tight">{title}</div>
-        <div className="ml-auto text-[11px] opacity-70">{opening} total</div>
+    <div className={`iu-card p-4 border ${ACCENT_BG[accent] || ACCENT_BG.slate}`} data-testid={testid}>
+      <div className="flex items-center gap-2 mb-2">
+        <Icon size={14} className="opacity-80"/>
+        <div className="font-extrabold tracking-tight text-sm">{title}</div>
+        <div className="ml-auto text-[10px] opacity-70">{opening} total</div>
       </div>
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      <div className="grid grid-cols-3 gap-2 mb-2">
         <MiniStat label="Used" value={used}/>
         <MiniStat label="Available" value={available} bold/>
         <MiniStat label="Total" value={opening}/>
       </div>
-      <div className="h-2 bg-white/50 rounded-full overflow-hidden mb-3">
+      <div className="h-1.5 bg-white/50 rounded-full overflow-hidden mb-2">
         <div className={`h-full ${accent === "sky" ? "bg-sky-500" : "bg-teal-500"} transition-all`} style={{ width: `${pct}%` }}/>
       </div>
-      <div className="text-[11px] opacity-70 flex flex-wrap gap-x-3">
+      <div className="text-[10px] opacity-70 flex flex-wrap gap-x-3">
         {pending !== undefined && <span>Pending: <b>{pending}d</b></span>}
         {futureApproved !== undefined && <span>Future approved: <b>{futureApproved}d</b></span>}
         {breakdown?.weekly_off !== undefined && <span>Weekly-off worked: <b>{breakdown.weekly_off}d</b></span>}
@@ -309,16 +300,16 @@ function YearOverviewCard({ d }) {
     { label: "Late YTD",      value: attn.late_days_ytd ?? 0,          tone: "amber" },
   ];
   return (
-    <div className="iu-card p-5 mb-6" data-testid="profile-ytd">
-      <div className="flex items-center gap-2 mb-4">
-        <TrendingUp size={16} className="text-slate-500"/>
-        <h2 className="font-extrabold tracking-tight">Year-to-Date Overview</h2>
+    <div className="iu-card p-4" data-testid="profile-ytd">
+      <div className="flex items-center gap-2 mb-3">
+        <TrendingUp size={14} className="text-slate-500"/>
+        <h2 className="font-extrabold tracking-tight text-sm">Year-to-Date Overview</h2>
       </div>
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
         {cells.map((c) => (
-          <div key={c.label} className={`p-3 rounded-lg border ${ACCENT_BG[c.tone] || ACCENT_BG.slate}`}>
-            <div className="text-xl font-extrabold tabular-nums">{c.value}</div>
-            <div className="text-[9px] uppercase tracking-wider mt-1 opacity-70 font-semibold">{c.label}</div>
+          <div key={c.label} className={`p-2 rounded-lg border ${ACCENT_BG[c.tone] || ACCENT_BG.slate}`}>
+            <div className="text-lg font-extrabold tabular-nums leading-tight">{c.value}</div>
+            <div className="text-[9px] uppercase tracking-wider mt-0.5 opacity-70 font-semibold">{c.label}</div>
           </div>
         ))}
       </div>
@@ -331,14 +322,14 @@ function YearOverviewCard({ d }) {
 function CollapsibleList({ title, Icon, count, empty, testid, children }) {
   const [open, setOpen] = useState(false);
   return (
-    <section className="iu-card mb-4 overflow-hidden" data-testid={testid}>
+    <section className="iu-card overflow-hidden" data-testid={testid}>
       <button
         onClick={() => setOpen(!open)}
-        className="w-full px-5 py-4 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left"
+        className="w-full px-4 py-2.5 flex items-center gap-2 hover:bg-slate-50 transition-colors text-left"
         aria-expanded={open}
       >
-        <Icon size={16} className="text-slate-500"/>
-        <h3 className="font-extrabold tracking-tight flex-1">{title}</h3>
+        <Icon size={14} className="text-slate-500"/>
+        <h3 className="font-extrabold tracking-tight flex-1 text-sm">{title}</h3>
         <span className="inline-flex items-center justify-center min-w-[28px] h-6 px-2 rounded-full bg-slate-100 text-slate-700 text-xs font-bold tabular-nums">
           {count}
         </span>
@@ -415,11 +406,11 @@ function EarlyOutsCard({ rows }) {
 
 function RecentAttendanceCard({ rows }) {
   return (
-    <section className="iu-card mb-4" data-testid="profile-recent">
-      <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-        <Layers size={16} className="text-slate-500"/>
-        <h2 className="font-extrabold tracking-tight">Recent Attendance</h2>
-        <span className="ml-auto text-xs text-slate-400">Last {rows?.length || 0} sessions</span>
+    <section className="iu-card" data-testid="profile-recent">
+      <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2">
+        <Layers size={14} className="text-slate-500"/>
+        <h2 className="font-extrabold tracking-tight text-sm">Recent Attendance</h2>
+        <span className="ml-auto text-[11px] text-slate-400">Last {rows?.length || 0} sessions</span>
       </div>
       {(rows || []).length === 0 ? (
         <div className="p-8 text-center text-slate-500 text-sm">No attendance logged yet.</div>

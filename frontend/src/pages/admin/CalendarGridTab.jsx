@@ -439,7 +439,11 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
           memberId={attnLedger.member_id}
           memberName={attnLedger.member_name}
           start={data?.start}
-          end={data?.end}
+          /* Clip the ledger end date to today for the CURRENT month so
+             future dates (empty rows) don't pad the modal — user
+             request 20 Feb 2026. Historical months keep the full
+             month-end so past data displays completely. */
+          end={isCurrent ? (data?.today || new Date().toISOString().slice(0, 10)) : data?.end}
         />
       )}
 

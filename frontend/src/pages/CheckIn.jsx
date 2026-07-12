@@ -162,9 +162,9 @@ export default function CheckIn() {
           </div>
           <div className="text-sm font-semibold text-slate-900 truncate">
             {onTempOut
-              ? `${currentExcursion.reason}${currentExcursion.expected_return ? ` · back by ${new Date(currentExcursion.expected_return).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}`
+              ? `${currentExcursion.reason}${currentExcursion.expected_return ? ` · back by ${new Date(currentExcursion.expected_return).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}` : ""}`
               : status?.checked_in
-                ? `Since ${new Date(status.session.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                ? `Since ${new Date(status.session.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}`
                 : "Tap an option below to check in"}
           </div>
         </div>
@@ -178,8 +178,8 @@ export default function CheckIn() {
           </div>
           <h3 className="font-extrabold text-lg">Returning to campus?</h3>
           <p className="text-sm text-slate-500 mt-1">
-            Out since {new Date(currentExcursion.out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            {currentExcursion.expected_return && " · expected back by " + new Date(currentExcursion.expected_return).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            Out since {new Date(currentExcursion.out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}
+            {currentExcursion.expected_return && " · expected back by " + new Date(currentExcursion.expected_return).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}
           </p>
           <button
             data-testid="temp-return-button"

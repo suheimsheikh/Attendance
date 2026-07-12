@@ -6,6 +6,38 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 20 Feb 2026 (part 7) — IST audit + Profile compression + Ledger clip
+
+**User asks:**
+1. Ensure IST across the app.
+2. Attendance ledger opened from The Grid must not show data beyond today.
+3. Compress the Profile page — kill the huge hero photo, tighten spacing.
+
+### 1️⃣ IST audit
+Backend (`routes/reports.py::_pdf_from_table` + `routes/admin_tools.py`):
+- Report PDF footer's "Generated" timestamp switched from naive `datetime.now()` → `local_now(None)` (falls back to `DEFAULT_TZ = "Asia/Kolkata"` from `services/time_utils.py`). Footer now reads e.g. *"Generated 20 Feb 2026 14:37 IST · iShowedUp"*.
+- Backup tarball filename uses the same IST clock so nightly backups don't collide across timezones.
+
+Frontend (`utils.js` + 8 other files):
+- `formatTime()` and `formatDate()` in `utils.js` now pass `timeZone: "Asia/Kolkata"` to `toLocaleTimeString` / `toLocaleDateString`. Full-ISO timestamps like `2026-07-02T23:45:00Z` will now render as `03/07/26` in IST, not `02/07/26` in UTC.
+- Batch-updated 10 inline `toLocaleTimeString(...)` call sites across `CheckIn.jsx`, `SelfCheckIn.jsx`, `EscortCheckIn.jsx`, `MusterRow.jsx`, `Overtime.jsx`, `OTLedgerModal.jsx`, `ChefsView.jsx`, `Institutions.jsx`, and `calendar-grid/gridHelpers.jsx`.
+
+### 2️⃣ Ledger clipped to today
+`CalendarGridTab.jsx` — the `AttendanceLedgerModal` is now invoked with `end={isCurrent ? data?.today : data?.end}`. Historical months still render the full window; the current month stops at today (no more empty future rows filling the modal).
+
+### 3️⃣ Profile compression
+`pages/Profile.jsx`:
+- Removed the 44-mm gradient hero photo entirely.
+- Hero collapsed into a single-row card: 64px avatar + name + role + inline contacts.
+- Vertical rhythm tightened — cards `space-y-4` between sections, KPI/YTD tiles use `text-xl` (was `text-2xl`), balance card `p-4` (was `p-5`), collapsible sections use `py-2.5` header (was `py-4`).
+- Whole dashboard now fits above the fold on a 1400×900 laptop.
+
+### Tests
+14/14 existing regression tests still passing.
+
+
+
+---
 ## 20 Feb 2026 (part 6) — Data-rich Profile + Grid polish
 
 **User asks:**

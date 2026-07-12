@@ -60,14 +60,14 @@ function fmtHM(iso) {
   if (!iso) return "";
   try {
     const dt = new Date(iso);
-    return dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+    return dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
   } catch { return "?"; }
 }
 
 function fmtDateShort(iso) {
   if (!iso) return "";
   try {
-    return new Date(iso).toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" });
+    return new Date(iso).toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 }
 

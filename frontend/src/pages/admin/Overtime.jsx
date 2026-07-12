@@ -24,7 +24,7 @@ function fmtDay(iso) {
 }
 function fmtTime(iso) {
   if (!iso) return "—";
-  try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+  try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }); }
   catch { return iso; }
 }
 

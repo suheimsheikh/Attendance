@@ -37,7 +37,7 @@ export default function MusterRow({
   categoryChipStyle,
 }) {
   const inAt = s.check_in_at
-    ? new Date(s.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    ? new Date(s.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })
     : null;
 
   return (

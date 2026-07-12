@@ -181,7 +181,11 @@ def _pdf_from_table(
     )
     elems.append(Spacer(1, 5 * mm))
     elems.append(Paragraph(
-        f"Generated {datetime.now().strftime('%d %b %Y %H:%M')} · iShowedUp",
+        # Always render the "Generated" timestamp in IST (office
+        # default). `local_now(None)` uses DEFAULT_TZ = Asia/Kolkata —
+        # keeps report footers consistent no matter what timezone the
+        # server clock is on. 20 Feb 2026 timezone audit.
+        f"Generated {local_now(None).strftime('%d %b %Y %H:%M')} IST · iShowedUp",
         footer,
     ))
     doc.build(elems)

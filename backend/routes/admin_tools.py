@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from services.time_utils import (
-    DEFAULT_TZ, local_date_str, local_hm, now_utc, office_tz,
+    DEFAULT_TZ, local_date_str, local_hm, local_now, now_utc, office_tz,
 )
 
 logger = logging.getLogger(__name__)
@@ -100,7 +100,9 @@ def make_router(db, require_admin) -> APIRouter:
         tf.addfile(info, io.BytesIO(mpayload))
         tf.close()
 
-        fname = f"ych-full-{datetime.now().strftime('%Y%m%d-%H%M')}.tar.gz"
+        # Backup filename timestamped in IST so daily backups don't
+        # collide across timezones. 20 Feb 2026 timezone audit.
+        fname = f"ych-full-{local_now(None).strftime('%Y%m%d-%H%M')}.tar.gz"
         # Stamp last_backup_at so /api/admin/preflight can confirm a recent backup
         # exists without the admin having to remember when they ran it.
         await db.config.update_one(

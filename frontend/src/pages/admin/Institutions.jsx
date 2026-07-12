@@ -324,10 +324,10 @@ function RecentVisitsStrip({ visits, loading, escortId }) {
         // Convert UTC ISO → local (office TZ) HH:MM. Raw `.slice(11,16)`
         // used to leak UTC into the tooltip.
         const inTime = v.check_in_at
-          ? new Date(v.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+          ? new Date(v.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" })
           : "—";
         const outTime = v.check_out_at
-          ? new Date(v.check_out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+          ? new Date(v.check_out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" })
           : null;
         return (
           <span

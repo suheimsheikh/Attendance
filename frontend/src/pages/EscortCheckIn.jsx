@@ -336,7 +336,7 @@ function OnCampusActions({ escort, att, athletes, openExcursion, localInSelfie, 
         <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 font-bold text-emerald-800">
-              <CheckCircle2 size={16} /> On campus since {new Date(att.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              <CheckCircle2 size={16} /> On campus since {new Date(att.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}
             </div>
             {openExcursion && (
               <div className="text-xs text-sky-800 mt-1">
@@ -402,7 +402,7 @@ function CheckedOutRecap({ att, localInSelfie, localOutSelfie }) {
             <CheckCircle2 size={14} className="text-emerald-600"/> Done for today
           </div>
           <div className="text-xs text-slate-600 mt-0.5">
-            In {new Date(att.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} → Out {new Date(att.check_out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            In {new Date(att.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })} → Out {new Date(att.check_out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}
           </div>
           {(att.excursions || []).length > 0 && (
             <div className="text-xs text-slate-500 mt-0.5">

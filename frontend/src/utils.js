@@ -22,10 +22,17 @@ export function getDeviceInfo() {
   return { device_name, model, platform: "web" };
 }
 
+// Force IST across every time/date render so the UI stays consistent
+// regardless of the browser's local timezone (matches the backend which
+// uses office_tz = Asia/Kolkata). 20 Feb 2026 timezone audit.
+const OFFICE_TZ = "Asia/Kolkata";
+
 export function formatTime(iso) {
   if (!iso) return "";
   try {
-    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleTimeString([], {
+      hour: "2-digit", minute: "2-digit", timeZone: OFFICE_TZ,
+    });
   } catch { return ""; }
 }
 
@@ -36,15 +43,24 @@ export function formatTime(iso) {
  *
  * 9 Feb 2026: standardised on 2-digit year across the whole app per
  * user request ("change the date formats across the board to ddmmyy").
+ * 20 Feb 2026: full ISO timestamps (with a time component) now render
+ * in IST so a check-in at 23:45 IST doesn't slip to "the next day" on
+ * a UTC-tz browser.
  */
 export function formatDate(d) {
   if (!d) return "";
   try {
-    const date = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + "T00:00:00") : new Date(d);
-    const dd = String(date.getDate()).padStart(2, "0");
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const yy = String(date.getFullYear()).slice(-2);
-    return `${dd}/${mm}/${yy}`;
+    // Pure date strings (`YYYY-MM-DD`) are timezone-agnostic — parse
+    // as local midnight to avoid the UTC → previous-day flip.
+    if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      const [y, m, day] = d.split("-").map(Number);
+      return `${String(day).padStart(2, "0")}/${String(m).padStart(2, "0")}/${String(y).slice(-2)}`;
+    }
+    // Full ISO timestamps: render in IST via `en-GB` (dd/mm/yy).
+    const parts = new Date(d).toLocaleDateString("en-GB", {
+      day: "2-digit", month: "2-digit", year: "2-digit", timeZone: OFFICE_TZ,
+    });
+    return parts;  // en-GB with 2-digit year already outputs dd/mm/yy
   } catch { return d; }
 }
 
