@@ -5,6 +5,29 @@ problem statement + user personas; long-form change history lives here.
 
 
 
+
+---
+## 12 Feb 2026 (part 1) — Grid: day-01 column no longer clipped by sticky Category
+
+### Bug
+When the admin switched the calendar-grid category filter to **Staff & Coaches** (or Elite / Athletes), the very first attendance column (day 01) rendered with its left edge tucked *under* the sticky Category column, so the "01" header read as "1" and the cell body showed only its right half.
+
+### Root cause
+The three sticky-left columns on the grid — `#`, Member, Category — used **hard-coded** `left-*` offsets that assume the `#` column is exactly 40 px wide. In reality the `#` column's width tracks the widest serial in the filtered row-set (~40 px for 3-digit serials, ~30 px for 2-digit serials). When the filter narrowed the row-set to under 100 rows the serial column shrank to ~30 px, so Member and Category (each sticky) sat 7-10 px to the *right* of their natural in-flow position. The un-sticky day-01 column still rendered at natural position, ending up **underneath** the higher-z-index Category sticky — chopping its left edge.
+
+### Fix
+Locked the three sticky-left column widths so the `left-*` offsets always describe reality:
+- `#` header + body: `w-10 min-w-[40px] max-w-[40px]`
+- Member header + body + sub-header: `w-[180px] min-w-[180px] max-w-[180px]`
+- Category header + body + sub-header: `w-[100px] min-w-[100px] max-w-[100px]`
+
+Measured `Category.right` and `day01.left` are now both **865 px** across every filter combo (was a 3–10 px overlap before) — day-01 renders fully in All / Athletes / Elite / Staff & Coaches.
+
+### Also
+Fixed a build-blocking ESLint issue introduced with the recent `.eslintrc.json`: `extends: ["react-app"]` collided with react-scripts' baseline (`react-hooks` plugin duplicated). Dropped the `extends` — the custom rule overrides still layer on top of CRA's baked-in `react-app` config as intended.
+
+Files: `frontend/src/pages/admin/CalendarGridTab.jsx`, `frontend/.eslintrc.json`
+
 ---
 ## 20 Feb 2026 (part 8) — ESLint config + Complexity Phase 1
 
