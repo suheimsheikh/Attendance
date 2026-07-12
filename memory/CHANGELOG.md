@@ -6,6 +6,33 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 20 Feb 2026 (part 8) — ESLint config + Complexity Phase 1
+
+### ESLint config (`.eslintrc.json`)
+Added a formal `.eslintrc.json` at the frontend root so external code-review tools use our conventions:
+- `react-hooks/exhaustive-deps`: `warn` (was implicitly the CRA default); added `useApiQuery` to `additionalHooks` so React Query dep-check works properly
+- `no-nested-ternary`: off (many rendering sites use them cleanly)
+- `no-console`: warn but allow `warn` / `error` / `debug` (diagnostic paths we deliberately keep)
+
+Should silence the recurring "214 hook-dep warnings" false positives in the code-review CI.
+
+### Complexity refactor — Phase 1: CorrectionRequestModal split
+**File:** `components/CorrectionRequestModal.jsx` — was 436 lines, cyclomatic complexity 76.
+
+Extracted:
+1. **`CorrectionRequestModal.helpers.js`** (43 lines) — `KIND_LABELS`, `KINDS_BY_ENTITY`, `windowMaxDate()`, `windowMinDate()`. Pure constants + helpers, no React, no state.
+2. **`OnBehalfMemberPicker.jsx`** (92 lines) — the entire "File on behalf of" sky-tinted card. Purely presentational — all state (`onBehalfId`, `memberQuery`, `members`, `memberOptions`, `onBehalfMember`) lives in the parent; picker only receives props + emits `onQueryChange`, `onPick`, `onClear` callbacks.
+
+**Result:** main modal file down to **352 lines** (~20% smaller); every data-testid (`correction-admin-onbehalf`, `correction-onbehalf-search`, `correction-onbehalf-clear`, `correction-onbehalf-pick-*`) preserved so existing tests and admin muscle-memory unchanged. Behaviour is byte-identical.
+
+Phase 2 (Reports.jsx tab-body split) and Phase 3 (Presence.jsx filter/table extract) queued as follow-up PRs — user's explicit call to do these strictly one-at-a-time.
+
+### Tests
+14/14 backend regression tests still passing.
+
+
+
+---
 ## 20 Feb 2026 (part 7) — IST audit + Profile compression + Ledger clip
 
 **User asks:**

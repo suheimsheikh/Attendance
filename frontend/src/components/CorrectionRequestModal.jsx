@@ -13,42 +13,14 @@
  *  • Submits to POST /api/corrections and toasts on success.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { X, Loader2, UserCog } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
 import { useAuth } from "../auth";
-
-// Human-readable labels for the kind dropdown.
-const KIND_LABELS = {
-  missed_checkin:    "I forgot to punch in",
-  time_adjust:       "My check-in time is wrong",
-  leave_date_change: "The dates on my leave are wrong",
-  leave_cancel:      "Cancel this leave — shouldn't have run",
-  leave_type_change: "Change the leave type",
-};
-
-// Kinds grouped by entity_type — drives the dropdown when the caller
-// hasn't hard-locked a specific kind (e.g. from a generic corrections
-// button).
-const KINDS_BY_ENTITY = {
-  attendance: ["missed_checkin", "time_adjust"],
-  leave:      ["leave_date_change", "leave_cancel", "leave_type_change"],
-};
-
-function windowMaxDate() {
-  // Corrections are capped at today (future dates are never valid).
-  return new Date().toISOString().slice(0, 10);
-}
-function windowMinDate() {
-  // 31-day retro window (was 7 — expanded 9 Feb 2026 per user request
-  // so admins can fix late-reported check-in times / missed punches
-  // for an entire month). Non-admin self-filed requests are still
-  // capped at 7 days by the backend `_enforce_window` guard; admins
-  // bypass that check server-side.
-  const d = new Date();
-  d.setDate(d.getDate() - 31);
-  return d.toISOString().slice(0, 10);
-}
+import OnBehalfMemberPicker from "./OnBehalfMemberPicker";
+import {
+  KIND_LABELS, KINDS_BY_ENTITY, windowMaxDate, windowMinDate,
+} from "./CorrectionRequestModal.helpers";
 
 export default function CorrectionRequestModal({
   open,
@@ -245,71 +217,15 @@ export default function CorrectionRequestModal({
         </header>
         <div className="p-4 space-y-3">
           {isAdmin && (
-            <div className="rounded-xl border border-sky-200 bg-sky-50 p-3" data-testid="correction-admin-onbehalf">
-              <div className="flex items-center gap-2 mb-2">
-                <UserCog size={16} className="text-sky-700" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-sky-900">
-                  File on behalf of
-                </span>
-              </div>
-              {onBehalfOfMember ? (
-                <div className="text-sm text-sky-900">
-                  <b>{onBehalfOfMember.full_name}</b>
-                  <span className="text-sky-700 text-xs ml-2">
-                    Applied instantly &mdash; no second approval needed.
-                  </span>
-                </div>
-              ) : (
-                <>
-                  {onBehalfMember ? (
-                    <div className="flex items-center gap-2 text-sm text-sky-900">
-                      <span className="font-semibold">{onBehalfMember.full_name}</span>
-                      <button
-                        type="button"
-                        onClick={() => { setOnBehalfId(""); setMemberQuery(""); }}
-                        className="text-xs underline text-sky-700 hover:text-sky-900"
-                        data-testid="correction-onbehalf-clear"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <input
-                        value={memberQuery}
-                        onChange={(e) => setMemberQuery(e.target.value)}
-                        placeholder="Search member name (or leave empty to file for yourself)"
-                        className="iu-input text-sm"
-                        data-testid="correction-onbehalf-search"
-                      />
-                      {memberQuery.trim() && memberOptions.length > 0 && (
-                        <ul className="mt-1 max-h-40 overflow-y-auto bg-white border border-sky-200 rounded-lg divide-y">
-                          {memberOptions.map((m) => (
-                            <li key={m.id}>
-                              <button
-                                type="button"
-                                onClick={() => { setOnBehalfId(m.id); setMemberQuery(""); }}
-                                className="w-full text-left px-3 py-1.5 text-sm hover:bg-sky-50"
-                                data-testid={`correction-onbehalf-pick-${m.id}`}
-                              >
-                                {m.full_name}
-                                <span className="text-slate-400 text-xs ml-2">
-                                  {m.category}{m.role !== "member" ? ` · ${m.role}` : ""}
-                                </span>
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </>
-                  )}
-                  <p className="text-[11px] text-sky-700 mt-1.5">
-                    Leaving this empty files the request as your own. Filing on behalf of a member
-                    still requires a <b>different admin</b> to approve.
-                  </p>
-                </>
-              )}
-            </div>
+            <OnBehalfMemberPicker
+              onBehalfOfMember={onBehalfOfMember}
+              onBehalfMember={onBehalfMember}
+              memberQuery={memberQuery}
+              memberOptions={memberOptions}
+              onQueryChange={setMemberQuery}
+              onPick={(m) => { setOnBehalfId(m.id); setMemberQuery(""); }}
+              onClear={() => { setOnBehalfId(""); setMemberQuery(""); }}
+            />
           )}
           {entityLabel && (
             <p className="text-xs text-slate-600 -mt-1">
