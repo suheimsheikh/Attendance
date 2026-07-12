@@ -7,6 +7,16 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 12 Feb 2026 (part 2) — Grid: removed Category column
+
+User feedback after the day-01 clipping fix: "better to remove the category column". Dropped the Category `<th>`/`<td>` from all three rows of the grid table (main header, dow sub-header, body) and adjusted the skeleton + empty-state colSpans from `3 + days.length + 6` → `2 + days.length + 6`. Removed the now-unused `categoryLabel` import.
+
+The category grouping is still discoverable via the four filter chips (All / Athletes / Elite / Staff & Coaches) sitting directly above the table — no functionality lost, and the freed ~100 px surfaces more day columns per screen.
+
+Files: `frontend/src/pages/admin/CalendarGridTab.jsx`
+
+
+---
 ## 12 Feb 2026 (part 1) — Grid: day-01 column no longer clipped by sticky Category
 
 ### Bug
