@@ -7,6 +7,33 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 14 Feb 2026 — Silent auto-reload on new-deploy detection
+
+### Problem
+Previous `VersionPoller` shipped a toast + button ("Refresh"), and worse: it read `res.version` while the primary `/api/version` handler in `server.py` returned `git_sha`/`started_at` (no `version` field). Users had to see the toast to reload — and in practice the toast **never fired** because `res.version` was always undefined. The fallback handler in `routes/office.py` does return `{version: <git_sha>}` correctly and appears to win FastAPI's route resolution, but the reliance on it was accidental.
+
+### Fix — silent auto-reload with safe-moment guards
+Rewrote `VersionPoller.jsx` to reload the page automatically at the first SAFE trigger after a version drift is detected. Zero toast, zero button.
+
+Triggers (fires on first that occurs):
+1. **`visibilitychange` → visible** — user just switched back to the tab
+2. **Route change** — via `useLocation()`, fires on any React Router nav
+3. **3-minute idle** — no `mousemove` / `keydown` / `touchstart` / `click` / `wheel`
+4. **30-minute hard fallback** — force reload even if a form is focused, so nobody sits on a stale bundle indefinitely
+
+**Active-edit guard**: before reloading (except on the hard fallback), sniffs `document.activeElement`. If an `<input>`, `<textarea>`, `<select>`, or `contentEditable` element is focused, skips this trigger and waits for the next. Protects unsaved form state (leave applications, corrections, etc.) from being wiped mid-typing.
+
+**Reload sequence**: unregister service workers → clear `caches` storage → `location.reload()`. Belt-and-braces for stubborn CDNs.
+
+Polling frequency dropped from 30 min → **5 min** — since there's no user-facing toast, we can be more responsive without being annoying.
+
+Files: `frontend/src/components/VersionPoller.jsx`
+
+### Portability
+Feature is fully self-contained: one component + one backend `/api/version` endpoint (already present via `routes/office.py`). Drop-in for other Emergent apps.
+
+
+---
 ## 13 Feb 2026 (part 3) — Grid: search, 2-row In/Out view, richer tooltip
 
 ### Search
