@@ -7,6 +7,26 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 13 Feb 2026 (part 3) — Grid: search, 2-row In/Out view, richer tooltip
+
+### Search
+Added a `Search name / rank…` input to the filter chip strip. Case-insensitive substring match against `member_name` + `rank`, wired into `displayedRows`. Header counter reflects the filtered subset (e.g. "2 of 135 members").
+
+### 1-row / 2-row toggle
+New button in the filter row toggles between `single` (current, one row per member with 2-letter codes) and `double` (**In/Out**, two rows per member: top row shows check-in HH:MM, bottom row shows check-out HH:MM). Preference persists to `localStorage["gridRowsMode"]`.
+- Attendance-day cells (P/HD/LT) split into an In-time cell and an Out-time cell
+- Non-attendance codes (LV/TR/AB/WO/HO/BK/CO/PS/LP) render as a **rowSpan=2 cell** so the visual stays honest — no "AB in / AB out" absurdity
+- Sticky-left `#` + Member and sticky-right totals all rowSpan=2 in double mode
+- Small `▲ IN  ▼ OUT` legend appears under each member's name in double mode so admins never have to guess which row is which
+- New `GridTimeCell` helper renders the HH:MM in the same status colour as the underlying code
+
+### Richer tooltip
+`buildCellTooltip` for P/LT/HD cells now also includes **`Worked: Xh Ym`** (from stored `hours`, falling back to raw timestamp delta). Full tooltip: header · dow · date · In · Out · Worked · Late by · OT.
+
+Files: `frontend/src/pages/admin/CalendarGridTab.jsx`, `frontend/src/pages/admin/calendar-grid/gridHelpers.jsx`
+
+
+---
 ## 13 Feb 2026 (part 2) — Grid EO (Early Outs) column
 
 Added a rose-tinted **EO** column to the calendar-grid totals strip, sitting between **OT h** and **LT**. Layout right-to-left: `LT → EO → OT h → TR → LV → AB → P`. Double-click any EO cell opens the Attendance Ledger for that member (same UX as LT).

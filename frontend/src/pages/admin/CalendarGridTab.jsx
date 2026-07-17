@@ -9,7 +9,8 @@ import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 import AttendanceLedgerModal from "./AttendanceLedgerModal";
 import OTLedgerModal from "./OTLedgerModal";
 import MemberForm from "./MemberForm";
-import { GridCell, CELL_STYLE, correctionForCode, fmtOt } from "./calendar-grid/gridHelpers";
+import { GridCell, GridTimeCell, CELL_STYLE, correctionForCode, fmtOt } from "./calendar-grid/gridHelpers";
+import { Search, Rows2, Rows } from "lucide-react";
 
 /**
  * Calendar Grid tab — one row per member, one column per day of the
@@ -28,6 +29,26 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [fleetFilter, setFleetFilter] = useState("");
   const [institutionFilter, setInstitutionFilter] = useState("");
+  // Name / rank search (13 Feb 2026) — case-insensitive substring
+  // match against member_name + rank so admins can jump to a specific
+  // person in a big filtered list without paging.
+  const [nameSearch, setNameSearch] = useState("");
+  // 1-row vs 2-row layout (13 Feb 2026). Two-row mode shows a
+  // dedicated check-IN row and check-OUT row per member for days the
+  // member was on-campus (P / HD / LT). Non-attendance codes
+  // (LV / TR / WO …) span both rows so the visual stays honest.
+  // Persisted per-admin via localStorage so the preference sticks.
+  const [rowsMode, setRowsMode] = useState(() => {
+    try { return localStorage.getItem("gridRowsMode") || "single"; }
+    catch { return "single"; }
+  });
+  const toggleRowsMode = () => {
+    setRowsMode((prev) => {
+      const next = prev === "single" ? "double" : "single";
+      try { localStorage.setItem("gridRowsMode", next); } catch { /* private mode */ }
+      return next;
+    });
+  };
   // Correction modal state — clicking any cell with a useful code
   // (AB/LT/P/HD/LV/TR/CO/PS) opens the shared CorrectionRequestModal
   // pre-filled with the member and date the admin clicked.
@@ -114,8 +135,15 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
         institutionFilter === "__none__" ? !r.institution : (r.institution || "") === institutionFilter
       );
     }
+    const q = (nameSearch || "").trim().toLowerCase();
+    if (q) {
+      list = list.filter((r) =>
+        (r.member_name || "").toLowerCase().includes(q) ||
+        (r.rank || "").toLowerCase().includes(q)
+      );
+    }
     return [...list].sort((a, b) => (a.member_name || "").localeCompare(b.member_name || ""));
-  }, [rows, categoryFilter, fleetFilter, institutionFilter, isAthleteLike]);
+  }, [rows, categoryFilter, fleetFilter, institutionFilter, nameSearch, isAthleteLike]);
 
   const fleetOptions = useMemo(() => {
     const s = new Set();
@@ -222,6 +250,35 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
               ))}
             </select>
           )}
+          {/* Name / rank search — fed straight into displayedRows above. */}
+          <div className="relative">
+            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="search"
+              data-testid="calendar-name-search"
+              value={nameSearch}
+              onChange={(e) => setNameSearch(e.target.value)}
+              placeholder="Search name / rank…"
+              className="iu-input !w-52 !py-1 !h-8 text-xs !pl-7"
+              autoComplete="off"
+            />
+          </div>
+          {/* 1-row / 2-row toggle. Icon reflects the state you'd flip
+              INTO on click so the affordance is unambiguous. */}
+          <button
+            type="button"
+            data-testid="calendar-rows-mode-toggle"
+            onClick={toggleRowsMode}
+            title={rowsMode === "single" ? "Switch to 2-row view (In/Out times)" : "Switch to 1-row view"}
+            className={`inline-flex items-center gap-1 px-2 h-8 rounded-md text-xs font-semibold border transition ${
+              rowsMode === "double"
+                ? "border-sky-500 bg-sky-500 text-white"
+                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+            }`}
+          >
+            {rowsMode === "single" ? <Rows2 size={12}/> : <Rows size={12}/>}
+            {rowsMode === "single" ? "In / Out" : "Compact"}
+          </button>
         </div>
       </div>
 
@@ -305,131 +362,186 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
               )}
               {displayedRows.map((r, i) => {
                 const rowBg = i % 2 === 1 ? "bg-slate-100/40" : "bg-white";
-                return (
-                  <tr key={r.member_id} className={`${rowBg} hover:bg-sky-50 group transition-colors`} data-testid={`calendar-row-${r.member_id}`}>
-                    <td className={`py-1 px-2 text-center text-[11px] text-slate-500 tabular-nums sticky left-0 z-20 w-10 min-w-[40px] max-w-[40px] ${rowBg} group-hover:bg-sky-50 border-b border-slate-100`} data-testid={`calendar-serial-${r.member_id}`}>{i + 1}</td>
+                const isDouble = rowsMode === "double";
+                const openAttn = () => setAttnLedger({
+                  member_id: r.member_id,
+                  member_name: r.member_name,
+                });
+                const openOt = () => setOtLedger({
+                  member_id: r.member_id,
+                  member_name: r.member_name,
+                });
+                const attnTitle = "Double-click for daily ledger";
+                const otTitle = "Double-click for OT ledger";
+                // Build once — reused across the top and bottom rows in
+                // double mode. Each entry carries everything the two
+                // GridCell / GridTimeCell renders need.
+                const dayCells = r.cells.map((code, idx) => {
+                  const iso = days[idx];
+                  const meta = r.cell_meta ? r.cell_meta[iso] : undefined;
+                  const cfg = correctionForCode(code);
+                  const onClick = cfg
+                    ? () => setCorrection({
+                        member: {
+                          id: r.member_id,
+                          full_name: r.member_name,
+                          work_start: r.work_start,
+                          work_end: r.work_end,
+                        },
+                        date: iso,
+                        entityType: cfg.entityType,
+                        initialKind: cfg.initialKind,
+                      })
+                    : undefined;
+                  return { code, iso, meta, onClick, dow: dayHeaders[idx]?.dow };
+                });
+                const isAttnCode = (c) => c === "P" || c === "HD" || c === "LT";
+
+                const totalsRowSpan = isDouble ? 2 : 1;
+                const totalsCells = (
+                  <>
                     <td
-                      className={`py-1 px-2 font-semibold text-slate-800 sticky left-10 z-20 w-[180px] min-w-[180px] max-w-[180px] ${rowBg} group-hover:bg-sky-50 border-b border-slate-100 cursor-pointer select-none`}
-                      onDoubleClick={() => setEditingMemberId(r.member_id)}
-                      title="Double-click to edit member"
-                      data-testid={`calendar-name-${r.member_id}`}
+                      rowSpan={totalsRowSpan}
+                      className={`sticky right-[262px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-emerald-700 font-bold tabular-nums text-[11px] border-b border-l-2 border-slate-300 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
+                      data-testid={`cal-total-p-${r.member_id}`}
+                      title={`Present · ${attnTitle}`}
+                      onDoubleClick={openAttn}
+                    >{r.totals?.present || ""}</td>
+                    <td
+                      rowSpan={totalsRowSpan}
+                      className={`sticky right-[220px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-red-600 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
+                      data-testid={`cal-total-ab-${r.member_id}`}
+                      title={`Absent · ${attnTitle}`}
+                      onDoubleClick={openAttn}
+                    >{r.totals?.absent || ""}</td>
+                    <td
+                      rowSpan={totalsRowSpan}
+                      className={`sticky right-[178px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-amber-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px] relative`}
+                      data-testid={`cal-total-lv-${r.member_id}`}
+                      title={r.totals?.lop ? `Leave (${r.totals.lop} LOP) · ${attnTitle}` : `Leave · ${attnTitle}`}
+                      onDoubleClick={openAttn}
                     >
-                      {r.member_name}
-                      {r.rank && <div className="text-[10px] text-slate-400 leading-tight">{r.rank}</div>}
+                      {r.totals?.leave || ""}
+                      {r.totals?.lop ? (
+                        <span
+                          className="absolute top-0 right-0 translate-x-1/3 -translate-y-1/2 inline-flex items-center px-1 rounded-full bg-rose-600 text-white text-[8px] font-bold leading-tight shadow-sm pointer-events-none"
+                          title={`${r.totals.lop} day${r.totals.lop === 1 ? "" : "s"} without pay`}
+                          data-testid={`cal-total-lop-${r.member_id}`}
+                        >
+                          {r.totals.lop}L
+                        </span>
+                      ) : null}
                     </td>
-                    {r.cells.map((code, idx) => {
-                      const cfg = correctionForCode(code);
-                      const iso = days[idx];
-                      const meta = r.cell_meta ? r.cell_meta[iso] : undefined;
-                      // Only wire onClick for past-or-today cells that
-                      // map to a useful correction. Future dates
-                      // (empty code) already skip in GridCell; WO/HO
-                      // return null cfg.
-                      const onClick = cfg
-                        ? () => setCorrection({
-                            member: {
-                              id: r.member_id,
-                              full_name: r.member_name,
-                              work_start: r.work_start,
-                              work_end: r.work_end,
-                            },
-                            date: iso,
-                            entityType: cfg.entityType,
-                            initialKind: cfg.initialKind,
-                          })
-                        : undefined;
-                      return (
-                        <GridCell
-                          key={iso}
-                          code={code}
-                          dow={dayHeaders[idx]?.dow}
-                          iso={iso}
-                          meta={meta}
-                          onClick={onClick}
-                        />
-                      );
-                    })}
-                    {/* Row totals — pinned to the right. Double-click any
-                        of the day-count cells to open the Attendance
-                        ledger for this member across the current month;
-                        the OT cell opens the OT ledger. Mirrors the
-                        Attendance report drill-down UX (04 Feb 2026). */}
-                    {(() => {
-                      const openAttn = () => setAttnLedger({
-                        member_id: r.member_id,
-                        member_name: r.member_name,
-                      });
-                      const openOt = () => setOtLedger({
-                        member_id: r.member_id,
-                        member_name: r.member_name,
-                      });
-                      const attnTitle = "Double-click for daily ledger";
-                      const otTitle = "Double-click for OT ledger";
-                      return (
-                        <>
-                          <td
-                            className={`sticky right-[262px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-emerald-700 font-bold tabular-nums text-[11px] border-b border-l-2 border-slate-300 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
-                            data-testid={`cal-total-p-${r.member_id}`}
-                            title={`Present · ${attnTitle}`}
-                            onDoubleClick={openAttn}
-                          >{r.totals?.present || ""}</td>
-                          <td
-                            className={`sticky right-[220px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-red-600 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
-                            data-testid={`cal-total-ab-${r.member_id}`}
-                            title={`Absent · ${attnTitle}`}
-                            onDoubleClick={openAttn}
-                          >{r.totals?.absent || ""}</td>
-                          <td
-                            className={`sticky right-[178px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-amber-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px] relative`}
-                            data-testid={`cal-total-lv-${r.member_id}`}
-                            title={r.totals?.lop ? `Leave (${r.totals.lop} LOP) · ${attnTitle}` : `Leave · ${attnTitle}`}
-                            onDoubleClick={openAttn}
-                          >
-                            {r.totals?.leave || ""}
-                            {/* LOP badge — absolutely positioned so it
-                                doesn't inflate the LV column width and
-                                spill over its sticky-right neighbours.
-                                Sits as a small pill on the top-right
-                                corner, visible without disturbing
-                                totals alignment. (Bug fix 20 Feb 2026.) */}
-                            {r.totals?.lop ? (
-                              <span
-                                className="absolute top-0 right-0 translate-x-1/3 -translate-y-1/2 inline-flex items-center px-1 rounded-full bg-rose-600 text-white text-[8px] font-bold leading-tight shadow-sm pointer-events-none"
-                                title={`${r.totals.lop} day${r.totals.lop === 1 ? "" : "s"} without pay`}
-                                data-testid={`cal-total-lop-${r.member_id}`}
-                              >
-                                {r.totals.lop}L
-                              </span>
-                            ) : null}
-                          </td>
-                          <td
-                            className={`sticky right-[136px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
-                            data-testid={`cal-total-tr-${r.member_id}`}
-                            title={`Tour · ${attnTitle}`}
-                            onDoubleClick={openAttn}
-                          >{r.totals?.tour || ""}</td>
-                          <td
-                            className={`sticky right-[84px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-violet-800 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[52px] min-w-[52px] max-w-[52px]`}
-                            data-testid={`cal-total-ot-${r.member_id}`}
-                            title={`OT hours · ${otTitle}`}
-                            onDoubleClick={openOt}
-                          >{fmtOt(r.totals?.ot_minutes)}</td>
-                          <td
-                            className={`sticky right-[42px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-rose-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
-                            data-testid={`cal-total-eo-${r.member_id}`}
-                            title={`Early-out days · ${attnTitle}`}
-                            onDoubleClick={openAttn}
-                          >{r.totals?.early_out || ""}</td>
-                          <td
-                            className={`sticky right-0 z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
-                            data-testid={`cal-total-lt-${r.member_id}`}
-                            title={`Late days · ${attnTitle}`}
-                            onDoubleClick={openAttn}
-                          >{r.totals?.late || ""}</td>
-                        </>
-                      );
-                    })()}
-                  </tr>
+                    <td
+                      rowSpan={totalsRowSpan}
+                      className={`sticky right-[136px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
+                      data-testid={`cal-total-tr-${r.member_id}`}
+                      title={`Tour · ${attnTitle}`}
+                      onDoubleClick={openAttn}
+                    >{r.totals?.tour || ""}</td>
+                    <td
+                      rowSpan={totalsRowSpan}
+                      className={`sticky right-[84px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-violet-800 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[52px] min-w-[52px] max-w-[52px]`}
+                      data-testid={`cal-total-ot-${r.member_id}`}
+                      title={`OT hours · ${otTitle}`}
+                      onDoubleClick={openOt}
+                    >{fmtOt(r.totals?.ot_minutes)}</td>
+                    <td
+                      rowSpan={totalsRowSpan}
+                      className={`sticky right-[42px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-rose-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
+                      data-testid={`cal-total-eo-${r.member_id}`}
+                      title={`Early-out days · ${attnTitle}`}
+                      onDoubleClick={openAttn}
+                    >{r.totals?.early_out || ""}</td>
+                    <td
+                      rowSpan={totalsRowSpan}
+                      className={`sticky right-0 z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
+                      data-testid={`cal-total-lt-${r.member_id}`}
+                      title={`Late days · ${attnTitle}`}
+                      onDoubleClick={openAttn}
+                    >{r.totals?.late || ""}</td>
+                  </>
+                );
+
+                return (
+                  <React.Fragment key={r.member_id}>
+                    <tr className={`${rowBg} hover:bg-sky-50 group transition-colors`} data-testid={`calendar-row-${r.member_id}`}>
+                      <td
+                        rowSpan={isDouble ? 2 : 1}
+                        className={`py-1 px-2 text-center text-[11px] text-slate-500 tabular-nums sticky left-0 z-20 w-10 min-w-[40px] max-w-[40px] ${rowBg} group-hover:bg-sky-50 border-b border-slate-100`}
+                        data-testid={`calendar-serial-${r.member_id}`}
+                      >{i + 1}</td>
+                      <td
+                        rowSpan={isDouble ? 2 : 1}
+                        className={`py-1 px-2 font-semibold text-slate-800 sticky left-10 z-20 w-[180px] min-w-[180px] max-w-[180px] ${rowBg} group-hover:bg-sky-50 border-b border-slate-100 cursor-pointer select-none`}
+                        onDoubleClick={() => setEditingMemberId(r.member_id)}
+                        title="Double-click to edit member"
+                        data-testid={`calendar-name-${r.member_id}`}
+                      >
+                        {r.member_name}
+                        {r.rank && <div className="text-[10px] text-slate-400 leading-tight">{r.rank}</div>}
+                        {isDouble && <div className="text-[9px] text-emerald-600 font-bold mt-0.5 tracking-wider">▲ IN &nbsp;&nbsp; ▼ OUT</div>}
+                      </td>
+                      {dayCells.map((c) => {
+                        if (isDouble && isAttnCode(c.code)) {
+                          // Two-row mode, attendance day → top cell = check-in time.
+                          return (
+                            <GridTimeCell
+                              key={c.iso}
+                              code={c.code}
+                              time={c.meta?.check_in_at}
+                              dow={c.dow}
+                              iso={c.iso}
+                              meta={c.meta}
+                              onClick={c.onClick}
+                              half="in"
+                              half_kind="in"
+                            />
+                          );
+                        }
+                        // Single-row mode, or non-attendance day in double mode.
+                        // In the latter case, span both rows so the code stays
+                        // visually anchored across the in/out pair.
+                        return (
+                          <GridCell
+                            key={c.iso}
+                            code={c.code}
+                            dow={c.dow}
+                            iso={c.iso}
+                            meta={c.meta}
+                            onClick={c.onClick}
+                            rowSpan={isDouble ? 2 : undefined}
+                          />
+                        );
+                      })}
+                      {totalsCells}
+                    </tr>
+                    {isDouble && (
+                      <tr className={`${rowBg} hover:bg-sky-50 group transition-colors`} data-testid={`calendar-row-${r.member_id}-out`}>
+                        {dayCells.map((c) => {
+                          if (isAttnCode(c.code)) {
+                            return (
+                              <GridTimeCell
+                                key={c.iso + "-out"}
+                                code={c.code}
+                                time={c.meta?.check_out_at}
+                                dow={c.dow}
+                                iso={c.iso}
+                                meta={c.meta}
+                                onClick={c.onClick}
+                                half="out"
+                                half_kind="out"
+                              />
+                            );
+                          }
+                          // Non-attendance cell was rowSpan=2 in the top
+                          // row — emit nothing here to preserve column
+                          // alignment.
+                          return null;
+                        })}
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </tbody>

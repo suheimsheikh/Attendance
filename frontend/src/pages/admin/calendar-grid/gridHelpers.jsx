@@ -35,15 +35,16 @@ export const CELL_STYLE = {
  * BK cells, check-in / late-minutes for LT/P/HD, leave reason + range
  * for LV/TR/CO/PS. Kept as a native `title` (no JS popover library) so
  * the whole 31-day grid stays fast when hovering across 100 rows. */
-export function GridCell({ code, dow, onClick, meta, iso }) {
+export function GridCell({ code, dow, onClick, meta, iso, rowSpan }) {
   if (!code) {
-    return <td className="border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-7">·</td>;
+    return <td rowSpan={rowSpan} className="border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-7">·</td>;
   }
   const s = CELL_STYLE[code] || CELL_STYLE.AB;
   const clickable = !!onClick;
   const title = buildCellTooltip({ code, dow, meta, iso, clickable });
   return (
     <td
+      rowSpan={rowSpan}
       className={`border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-7 leading-none ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
       title={title}
       onClick={onClick}
@@ -56,12 +57,53 @@ export function GridCell({ code, dow, onClick, meta, iso }) {
 /** Format an ISO timestamp as local "HH:MM" (browser local, which
  * matches admin's IST expectation in prod). Falls back to '?' on
  * unparseable input so a broken row still renders. */
-function fmtHM(iso) {
+export function fmtHM(iso) {
   if (!iso) return "";
   try {
     const dt = new Date(iso);
     return dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
   } catch { return "?"; }
+}
+
+/** Worked hours between check-in and check-out. Prefers the stored
+ * `hours` field (server computed, respects excursions). Falls back to
+ * raw timestamp delta. Returns a compact "Xh Ym" string. */
+function deriveWorked(cin, cout, storedHours) {
+  if (typeof storedHours === "number" && storedHours > 0) {
+    const h = Math.floor(storedHours);
+    const m = Math.round((storedHours - h) * 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  try {
+    const delta = (new Date(cout).getTime() - new Date(cin).getTime()) / 60000;
+    if (delta <= 0) return "";
+    const h = Math.floor(delta / 60);
+    const m = Math.round(delta % 60);
+    return h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+  } catch { return ""; }
+}
+
+/** One "time cell" in the two-row-per-member Grid view. Shares the
+ * same status colour as its GridCell counterpart so the row remains
+ * scannable at a glance, but the label is the HH:MM check-in or
+ * check-out time instead of the 2-letter code. Falls back to a dash
+ * when the timestamp is missing (open session / no out yet). */
+export function GridTimeCell({ code, time, dow, onClick, meta, iso, half, half_kind }) {
+  const s = CELL_STYLE[code] || CELL_STYLE.AB;
+  const clickable = !!onClick;
+  const title = buildCellTooltip({ code, dow, meta, iso, clickable });
+  const label = time ? fmtHM(time) : "—";
+  return (
+    <td
+      className={`border border-white text-center text-[9px] font-semibold tabular-nums ${s.bg} ${s.text} h-6 w-9 leading-none px-0.5 ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
+      title={title}
+      onClick={onClick}
+      data-testid={`grid-time-${half_kind || "cell"}-${iso}`}
+      data-half={half}
+    >
+      {label}
+    </td>
+  );
 }
 
 function fmtDateShort(iso) {
@@ -95,6 +137,14 @@ export function buildCellTooltip({ code, dow, meta, iso, clickable }) {
   } else if (["P", "LT", "HD"].includes(code)) {
     if (m.check_in_at)   lines.push(`In: ${fmtHM(m.check_in_at)}`);
     if (m.check_out_at)  lines.push(`Out: ${fmtHM(m.check_out_at)}`);
+    // Worked hours — only show when we have both endpoints. Uses the
+    // stored `hours` when present (server-side calc), else derives from
+    // the timestamps. Handy when scanning the Grid without opening
+    // the ledger — user request 13 Feb 2026.
+    if (m.check_in_at && m.check_out_at) {
+      const worked = deriveWorked(m.check_in_at, m.check_out_at, m.hours);
+      if (worked) lines.push(`Worked: ${worked}`);
+    }
     if (m.late_minutes)  lines.push(`Late by ${m.late_minutes}m`);
     if (m.ot_minutes)    lines.push(`OT: ${Math.floor(m.ot_minutes / 60)}h ${m.ot_minutes % 60}m`);
   }
