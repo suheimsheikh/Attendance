@@ -7,6 +7,24 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 13 Feb 2026 (part 2) — Grid EO (Early Outs) column
+
+Added a rose-tinted **EO** column to the calendar-grid totals strip, sitting between **OT h** and **LT**. Layout right-to-left: `LT → EO → OT h → TR → LV → AB → P`. Double-click any EO cell opens the Attendance Ledger for that member (same UX as LT).
+
+### Data
+Backend `/reports/calendar-grid` now returns `totals.early_out` per row — a day-count where the member checked out ≥15 min before their `work_end`. Uses the freshly-stamped `early_out_minutes` field when present; falls back to computing on-the-fly from `check_out_at` (via `local_hm`) + `user.work_end` so **historical rows count too** (verified: 61 of 135 members show EO>0 on July 2026 data, computed without any backfill).
+
+### Sticky offsets shifted
+All right-sticky columns needed to move +42 px to fit the new EO column:
+`P: 220→262 · AB: 178→220 · LV: 136→178 · TR: 94→136 · OT h: 42→84 · EO: 42 (new) · LT: 0 (unchanged)`
+colSpans on skeleton + empty rows updated `6 → 7`.
+
+CSV/PDF export gained an "EarlyOut" column.
+
+Files: `backend/routes/reports.py`, `frontend/src/pages/admin/CalendarGridTab.jsx`
+
+
+---
 ## 13 Feb 2026 (part 1) — Early-out reason capture on checkout
 
 ### Feature

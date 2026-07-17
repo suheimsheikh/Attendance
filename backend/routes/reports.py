@@ -907,7 +907,12 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                  # into a plain `P` cell on the Grid while the
                  # Attendance report (which correctly reads `late`)
                  # showed them. Prod bug 20 Feb 2026.
-                 "late": 1, "overtime_total_min": 1},
+                 "late": 1, "overtime_total_min": 1,
+                 # Early-out flag stamped at checkout (13 Feb 2026);
+                 # historical rows are computed on-the-fly from
+                 # check_out_at + user.work_end so the Grid tally is
+                 # correct for pre-feature data too.
+                 "early_out_minutes": 1},
             ).to_list(20000),
             db.leaves.find(
                 {"user_id": {"$in": user_ids}, "status": "approved",
@@ -1122,6 +1127,42 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 int((att_by_user.get(uid, {}).get(iso) or {}).get("overtime_total_min") or 0)
                 for iso in days
             )
+            # Early-out count (13 Feb 2026 user request) — days where
+            # the member checked out ≥15 min before their scheduled
+            # work_end. Uses the freshly-stamped `early_out_minutes`
+            # when present; otherwise computes on-the-fly from
+            # check_out_at (local HH:MM) + the member's work_end so
+            # historical rows also register. Grace threshold matches
+            # the Profile early-out list (server.py:_early_by >= 15)
+            # and the SelfCheckIn early-out prompt threshold.
+            user_work_end = u.get("work_end") or ((office or {}).get("default_work_end") or "17:00")
+            _we_parts = (user_work_end or "").split(":")[:2]
+            try:
+                user_work_end_min = int(_we_parts[0]) * 60 + int(_we_parts[1])
+            except (ValueError, IndexError):
+                user_work_end_min = None
+
+            def _is_early_out(att: dict) -> bool:
+                if not att or not att.get("check_out_at"):
+                    return False
+                stored = att.get("early_out_minutes")
+                if stored is not None:
+                    return int(stored) >= 15
+                if user_work_end_min is None:
+                    return False
+                hm = local_hm(office, att.get("check_out_at"))
+                if not hm or ":" not in hm:
+                    return False
+                try:
+                    h, m = hm.split(":")[:2]
+                    out_min = int(h) * 60 + int(m)
+                except (ValueError, IndexError):
+                    return False
+                return (user_work_end_min - out_min) >= 15
+
+            early_out_days = sum(
+                1 for iso in days if _is_early_out(att_by_user.get(uid, {}).get(iso))
+            )
             totals = {
                 "present":     sum(1 for c in cells if c in ("P", "HD", "LT")),
                 "absent":      sum(1 for c in cells if c == "AB"),
@@ -1143,6 +1184,10 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 # number from either angle.
                 "lop":         sum(1 for c in cells if c == "LP"),
                 "ot_minutes":  ot_minutes,
+                # Days with an ≥15-min early departure (subset of
+                # Present; unrelated to Leaves). Sits next to LT in
+                # the totals strip.
+                "early_out":   early_out_days,
             }
             rows.append({
                 "member_id": uid,
@@ -1175,7 +1220,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         days = data["days"]
         day_headers = [d[8:10] for d in days]  # "01", "02", ..., "31"
         headers = ["#", "Name", "Rank", "Category", *day_headers,
-                   "Present", "Absent", "Leave", "Tour", "OT (h)", "Late"]
+                   "Present", "Absent", "Leave", "Tour", "OT (h)", "Late", "EarlyOut"]
 
         def _fmt_ot(minutes: int) -> str:
             m = int(minutes or 0)
@@ -1192,7 +1237,8 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
              str(r["totals"]["present"]), str(r["totals"]["absent"]),
              str(r["totals"]["leave"]), str(r["totals"]["tour"]),
              _fmt_ot(r["totals"].get("ot_minutes")),
-             str(r["totals"].get("late") or "")]
+             str(r["totals"].get("late") or ""),
+             str(r["totals"].get("early_out") or "")]
             for i, r in enumerate(rows)
         ]
         filename_stem = f"calendar_grid_{month}"
