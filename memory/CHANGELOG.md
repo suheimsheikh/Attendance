@@ -8,6 +8,53 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 17 Feb 2026 — Admin search & view any member's profile
+
+User request: "*Also admins should be able to see any members profile
+with a search.*"
+
+Chosen shape (user picks 1b + 2a): extend the existing `/profile` page
+rather than creating a new route. Read-only view of any target member,
+mirrors the member's own dashboard exactly (no photo upload, no reason
+bank when viewing others).
+
+### Backend
+- **New endpoint**: `GET /api/admin/members/{member_id}/profile-details`
+  (admin-only). Mirrors `/me/profile-details` payload shape and adds a
+  top-level `user` object with the target's display fields
+  (`full_name`, `photo_url`, `role`, `category`, `mobile`, `email`,
+  `rank`, `institution`, `fleet`, `joining_date`, `leaving_date`) so the
+  Hero renders in a single roundtrip.
+- Extracted the ~130 lines of profile-details computation into a
+  private `_profile_details_for(user)` helper so both endpoints share
+  it. `/me/profile-details` is now a 2-line pass-through.
+- Verified: 200 for valid admin, 404 for missing member, 401 for unauth.
+
+### Frontend
+- **`Profile.jsx`** reads `?member=<uuid>` from the URL. When admin and
+  the param is set → fetch the admin endpoint and drive the Hero from
+  `data.user`; else classic self-view via `useAuth()`.
+- **New `AdminMemberSearch` component** shown at the top of the Profile
+  page (admin-only). Lazy-loads the member roster on first focus,
+  filters client-side across name / category / rank / email, renders
+  an avatar-decorated dropdown, and writes `?member=<uuid>` on pick.
+  "Back to my profile" button clears the param.
+- **Read-only guarantees**: camera-overlay + `<input type="file">` are
+  omitted when `viewingOther`, and `MyReasonsSection` is hidden. All
+  data-driven sections (KPIs, balances, YTD, Late/EO lists, recent
+  attendance) render for both self and other.
+- Search input inherits the app-wide search-box tint (lightish blue,
+  black text) via its `iu-input` class + prior CSS rule.
+
+### Verified end-to-end
+Own profile → search "ABHIRAM" → dropdown filters correctly → pick →
+URL `?member=<uuid>`, profile swaps (17 P / 165h / 12/12 leave / 253h
+YTD / 31 late), no photo camera → "Back to my profile" → own view
+restored.
+
+
+
+---
 ## 17 Feb 2026 — Reports.jsx split (Phase 2 refactor)
 
 Broke the 842-line god-component into a `/admin/reports/` subfolder so

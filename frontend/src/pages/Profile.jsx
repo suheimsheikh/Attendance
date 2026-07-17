@@ -14,11 +14,12 @@
  *
  * 20 Feb 2026 — user request for a data-rich profile.
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Clock, Calendar, AlertCircle, Loader2, Camera, TrendingUp,
   Coffee, LogOut, ChevronDown, ChevronRight, Award, PhoneCall,
-  Zap, CalendarClock, Layers,
+  Zap, CalendarClock, Layers, Search, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
@@ -38,18 +39,40 @@ function fmtMin(m) {
 }
 
 export default function Profile() {
-  const { user, refreshMe } = useAuth();
+  const { user: authUser, refreshMe } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Admin-only: viewing another member's profile via ?member=<uuid>.
+  // Members ignore this param entirely (RequireMember gate keeps them
+  // on their own /me/profile-details anyway).
+  const isAdmin = authUser?.role === "admin";
+  const targetId = isAdmin ? searchParams.get("member") : null;
+  const viewingOther = !!targetId && targetId !== authUser?.id;
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setData(null);
     (async () => {
-      try { setData(await api.get("/me/profile-details")); }
-      catch (err) { showApiError(err, "Couldn't load profile"); }
-      finally { setLoading(false); }
+      try {
+        // Admin viewing someone else → admin endpoint (returns .user).
+        // Self view → the classic /me endpoint (Hero pulls from useAuth).
+        const path = viewingOther
+          ? `/admin/members/${targetId}/profile-details`
+          : "/me/profile-details";
+        const payload = await api.get(path);
+        if (!cancelled) setData(payload);
+      } catch (err) {
+        if (!cancelled) showApiError(err, "Couldn't load profile");
+      } finally { if (!cancelled) setLoading(false); }
     })();
-  }, []);
+    return () => { cancelled = true; };
+  }, [viewingOther, targetId]);
+
+  const displayUser = viewingOther ? (data?.user || null) : authUser;
 
   const handlePhotoSelected = async (e) => {
     const file = e.target.files?.[0];
@@ -75,7 +98,24 @@ export default function Profile() {
 
   return (
     <div className="p-3 md:p-6 max-w-5xl mx-auto space-y-4" data-testid="profile-page">
-      <ProfileHero user={user} uploading={uploading} onSelect={handlePhotoSelected} />
+      {isAdmin && (
+        <AdminMemberSearch
+          selfId={authUser?.id}
+          targetId={targetId}
+          onPick={(id) => {
+            const next = new URLSearchParams(searchParams);
+            if (!id || id === authUser?.id) next.delete("member");
+            else next.set("member", id);
+            setSearchParams(next, { replace: true });
+          }}
+        />
+      )}
+      <ProfileHero
+        user={displayUser}
+        uploading={uploading}
+        onSelect={handlePhotoSelected}
+        readOnly={viewingOther}
+      />
 
       {loading ? (
         <div className="text-center py-10"><Loader2 className="mx-auto animate-spin text-slate-400" /></div>
@@ -87,31 +127,150 @@ export default function Profile() {
           <LateArrivalsCard rows={data.late_this_month}/>
           <EarlyOutsCard rows={data.early_outs_this_month}/>
           <RecentAttendanceCard rows={data.recent_attendance}/>
-          <MyReasonsSection/>
+          {/* Reason bank is a personal cleanup tool — only surfaced on
+              self-view (18 Feb 2026). Admins viewing another member get
+              a read-only profile per user pref (2a). */}
+          {!viewingOther && <MyReasonsSection/>}
         </>
       ) : null}
     </div>
   );
 }
 
+// ------------ Admin member search (18 Feb 2026 user request) -------------
+
+/**
+ * Shown at the top of Profile only for admin users. Lets an admin
+ * search any member by name / category / rank and swap the profile
+ * view to that person via a ?member=<uuid> URL param. Picking their
+ * own row (or clearing) restores the self-view.
+ */
+function AdminMemberSearch({ selfId, targetId, onPick }) {
+  const [members, setMembers] = useState(null); // null = not yet fetched
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    // Lazy-load the full member roster the first time the admin
+    // clicks in. Keeps first-paint of Profile fast for the common
+    // "view my own profile" case.
+    if (open && members === null) {
+      api.get("/members")
+        .then((rows) => setMembers(Array.isArray(rows) ? rows : []))
+        .catch(() => setMembers([]));
+    }
+  }, [open, members]);
+
+  const currentTarget = useMemo(() => {
+    if (!targetId || !members) return null;
+    return members.find((m) => m.id === targetId) || null;
+  }, [targetId, members]);
+
+  const results = useMemo(() => {
+    if (!members) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return members.slice(0, 30);
+    return members
+      .filter((m) =>
+        (m.full_name || "").toLowerCase().includes(q)
+        || (m.category || "").toLowerCase().includes(q)
+        || (m.rank || "").toLowerCase().includes(q)
+        || (m.email || "").toLowerCase().includes(q)
+      )
+      .slice(0, 30);
+  }, [members, query]);
+
+  return (
+    <div className="iu-card p-3 md:p-4" data-testid="admin-profile-search-card">
+      <label className="iu-label flex items-center gap-1.5 mb-2">
+        <Search size={12}/> View any member&rsquo;s profile
+      </label>
+      {targetId && targetId !== selfId ? (
+        <div className="flex items-center gap-2">
+          <span className="iu-chip iu-chip-active" data-testid="admin-profile-search-current">
+            {currentTarget?.full_name || "Loading…"}
+          </span>
+          <button
+            type="button"
+            onClick={() => { onPick(null); setQuery(""); }}
+            className="iu-btn-secondary !h-8 !px-2"
+            data-testid="admin-profile-search-clear"
+            title="Return to my own profile"
+          >
+            <X size={12}/> Back to my profile
+          </button>
+        </div>
+      ) : (
+        <div className="relative">
+          <input
+            data-testid="admin-profile-member-search"
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 180)}
+            placeholder="Search a member by name, category, rank, or email…"
+            className="iu-input w-full"
+          />
+          {open && results.length > 0 && (
+            <ul
+              className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-blue-200 rounded-lg shadow-lg divide-y"
+              data-testid="admin-profile-search-results"
+            >
+              {results.map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { onPick(m.id); setQuery(""); setOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2"
+                    data-testid={`admin-profile-search-pick-${m.id}`}
+                  >
+                    <Avatar name={m.full_name} photo={m.photo} size={24} />
+                    <span className="flex-1 truncate">
+                      <b>{m.full_name}</b>
+                      <span className="text-slate-400 text-xs ml-2">
+                        {categoryLabel(m.category)}
+                        {m.rank ? ` · ${m.rank}` : ""}
+                        {m.institution ? ` · ${m.institution}` : ""}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {open && members && results.length === 0 && (
+            <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow px-3 py-2 text-sm text-slate-500">
+              No matches.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ------------ Hero (header) ---------------------------------------------
 
-function ProfileHero({ user, uploading, onSelect }) {
+function ProfileHero({ user, uploading, onSelect, readOnly }) {
   return (
     <div className="iu-card p-4 md:p-5 mb-4 flex items-center gap-4" data-testid="profile-hero">
       <div className="relative shrink-0" data-testid="profile-avatar">
-        <Avatar name={user?.full_name} photo={user?.photo} size={64} />
-        <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center cursor-pointer shadow hover:bg-slate-800" title="Change photo">
-          {uploading ? <Loader2 className="animate-spin" size={11}/> : <Camera size={11} />}
-          <input
-            data-testid="photo-input"
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={onSelect}
-            disabled={uploading}
-          />
-        </label>
+        <Avatar name={user?.full_name} photo={user?.photo || user?.photo_url} size={64} />
+        {!readOnly && (
+          <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center cursor-pointer shadow hover:bg-slate-800" title="Change photo">
+            {uploading ? <Loader2 className="animate-spin" size={11}/> : <Camera size={11} />}
+            <input
+              data-testid="photo-input"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={onSelect}
+              disabled={uploading}
+            />
+          </label>
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <h1 className="text-lg md:text-xl font-extrabold tracking-tight truncate" data-testid="profile-name">{user?.full_name}</h1>

@@ -3221,6 +3221,15 @@ async def my_profile_details(user: dict = Depends(get_current_user)):
     want a slice. All numeric fields are safe for direct display; the
     lists are pre-sorted (latest first).
     """
+    return await _profile_details_for(user)
+
+
+async def _profile_details_for(user: dict) -> dict:
+    """Compute the full profile-details payload for `user`. Shared by
+    `/me/profile-details` (self-view) and
+    `/admin/members/{id}/profile-details` (admin search-and-view). See
+    the endpoint docstring above for the payload shape.
+    """
     from holidays import compute_balance_summary, compute_comp_off_balance
 
     office = await db.config.find_one({"id": "office"})
@@ -3356,6 +3365,41 @@ async def my_profile_details(user: dict = Depends(get_current_user)):
         "late_this_month": late_this_month_list,
         "early_outs_this_month": early_outs_month[:30],
     }
+
+
+# Admin search-and-view — same rich profile payload for any target member.
+# 18 Feb 2026 user request "admins should be able to see any members
+# profile with a search". Front-end wires this on the Profile page via
+# ?member=<uuid>.
+@api_router.get("/admin/members/{member_id}/profile-details")
+async def admin_member_profile_details(
+    member_id: str,
+    admin: dict = Depends(require_admin),
+):
+    target = await db.users.find_one({"id": member_id}, {"_id": 0, "password_hash": 0})
+    if not target:
+        raise HTTPException(404, "Member not found")
+    payload = await _profile_details_for(target)
+    # Return the target's basic profile so the Hero card renders
+    # correctly without the client needing a second roundtrip. Only the
+    # display-safe fields are surfaced — password hashes / tokens are
+    # already stripped by the projection above.
+    payload["user"] = {
+        "id": target.get("id"),
+        "full_name": target.get("full_name"),
+        "role": target.get("role"),
+        "category": target.get("category"),
+        "mobile": target.get("mobile"),
+        "email": target.get("email"),
+        "photo_url": target.get("photo_url"),
+        "rank": target.get("rank"),
+        "institution": target.get("institution"),
+        "fleet": target.get("fleet"),
+        "joining_date": target.get("joining_date"),
+        "leaving_date": target.get("leaving_date"),
+    }
+    return payload
+
 
 
 
