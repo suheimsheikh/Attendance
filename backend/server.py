@@ -2093,6 +2093,31 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
             "late": late, "late_minutes": late_minutes}
 
 
+def _compute_early_out_at_checkout(ts: datetime, target: dict, office: dict) -> int:
+    """Return the number of minutes a checkout is happening BEFORE the
+    member's scheduled `work_end`, only when that gap is ≥ 15 min
+    (matching the /me/profile-details grace-window). Returns 0 when the
+    member has no `work_end` set, when the checkout is on-time or later,
+    or on any parsing failure — the callers depend on 0 to mean "no
+    early-out stamp needed". Extracted 14 Feb 2026 (item E of the
+    medium-risk refactor pass) so this arithmetic can be unit-tested in
+    isolation of the DB write path.
+    """
+    work_end_hm = target.get("work_end")
+    if not work_end_hm or ":" not in (work_end_hm or ""):
+        return 0
+    try:
+        from services.time_utils import office_tz
+        _out_local = ts.astimezone(office_tz(office))
+        _out_min = _out_local.hour * 60 + _out_local.minute
+        _we_parts = work_end_hm.split(":")[:2]
+        _we_min = int(_we_parts[0]) * 60 + int(_we_parts[1])
+        _early_by = _we_min - _out_min
+        return _early_by if _early_by >= 15 else 0
+    except (ValueError, TypeError, AttributeError):
+        return 0
+
+
 async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
                       reason: Optional[str], by: Optional[str],
                       overtime_reason: Optional[str] = None,
@@ -2165,25 +2190,11 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             await _ensure_reason_in_bank(target["id"], overtime_reason)
         # Early-out detection at checkout — mirror the /me/profile-details
         # detection so the number matches the Profile "Early Outs" list
-        # (15-min grace before work_end). We store the reason + minute-count
-        # on the session so admins and the member both see WHY they left
-        # early, and so the personal reason-bank surfaces prior notes as
-        # suggestions on the next check-out. Detection uses the office-
-        # local minute-of-day for both `ts` and the member's work_end.
-        early_out_minutes = 0
-        work_end_hm = target.get("work_end")
-        if work_end_hm and ":" in (work_end_hm or ""):
-            try:
-                from services.time_utils import office_tz
-                _out_local = ts.astimezone(office_tz(office))
-                _out_min = _out_local.hour * 60 + _out_local.minute
-                _we_parts = work_end_hm.split(":")[:2]
-                _we_min = int(_we_parts[0]) * 60 + int(_we_parts[1])
-                _early_by = _we_min - _out_min
-                if _early_by >= 15:
-                    early_out_minutes = _early_by
-            except (ValueError, TypeError, AttributeError):
-                pass
+        # (15-min grace before work_end). See _compute_early_out_at_checkout
+        # for the arithmetic. When the member has no `work_end` set or
+        # they're leaving on-time or later, this returns 0 and the row
+        # gets a clean `early_out_minutes: 0` + `early_out_reason: None`.
+        early_out_minutes = _compute_early_out_at_checkout(ts, target, office)
         _early_out_reason = (early_out_reason or "").strip() or None
         if early_out_minutes > 0 and _early_out_reason:
             await _ensure_reason_in_bank(target["id"], _early_out_reason)
@@ -2421,6 +2432,85 @@ async def active_leave_for(user_id: str, on: str) -> Optional[dict]:
     }, {"_id": 0})
 
 
+_WEEKDAY_KEY = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+
+async def _make_absence_streak_computer(db, today: str):
+    """Bulk-fetch attendance + approved leaves + breaks for the 30 days
+    before `today`, then return a closure `(user) -> int` that counts a
+    given member's consecutive-absent streak.
+
+    Extracted from `presence()` on 14 Feb 2026 (item D of the medium-risk
+    refactor pass). One factory call fires three bulk Mongo queries; the
+    returned closure is then O(1) per member. Pulling this out cuts the
+    top-level `presence` function from ~665 → ~600 LOC and makes the
+    30-day-lookback logic testable in isolation.
+
+    A "covered" day is one where the member had attendance, an approved
+    leave/tour, or a break that applies to them. The streak stops at the
+    first covered day walking backwards. Weekly-off days don't COUNT as
+    absent but don't BREAK the streak either — the walker skips them.
+    """
+    today_d = date.fromisoformat(today)
+    lookback_start = (today_d - timedelta(days=30)).isoformat()
+
+    recent_atts = await db.attendance.find(
+        {"date": {"$gte": lookback_start, "$lt": today}},
+        {"_id": 0, "user_id": 1, "date": 1},
+    ).to_list(50000)
+    att_dates_by_user: dict = {}
+    for a in recent_atts:
+        att_dates_by_user.setdefault(a["user_id"], set()).add(a["date"])
+
+    recent_leaves = await db.leaves.find(
+        {"status": "approved",
+         "start_date": {"$lte": today},
+         "end_date":   {"$gte": lookback_start}},
+        {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1},
+    ).to_list(5000)
+    leave_dates_by_user: dict = {}
+    for L in recent_leaves:
+        try:
+            ls = max(date.fromisoformat(L["start_date"]), today_d - timedelta(days=30))
+            le = min(date.fromisoformat(L["end_date"]), today_d)
+        except Exception:
+            continue
+        cur = ls
+        while cur <= le:
+            leave_dates_by_user.setdefault(L["user_id"], set()).add(cur.isoformat())
+            cur += timedelta(days=1)
+
+    recent_breaks = await db.breaks.find(
+        {"start_date": {"$lte": today},
+         "end_date":   {"$gte": lookback_start}},
+        {"_id": 0},
+    ).to_list(500)
+
+    def _consecutive_absent_days(u: dict) -> int:
+        atts_set = att_dates_by_user.get(u["id"], set())
+        leaves_set = leave_dates_by_user.get(u["id"], set())
+        weekly_off = (u.get("weekly_off") or "").lower()
+        n = 0
+        d = today_d - timedelta(days=1)
+        for _ in range(30):
+            ds = d.isoformat()
+            if ds in atts_set or ds in leaves_set:
+                break
+            covered_by_break = any(
+                b.get("start_date") <= ds <= b.get("end_date")
+                and _breaks_module.break_applies_to(b, u)
+                for b in recent_breaks
+            )
+            if covered_by_break:
+                break
+            if _WEEKDAY_KEY[d.weekday()] != weekly_off:
+                n += 1
+            d -= timedelta(days=1)
+        return n
+
+    return _consecutive_absent_days
+
+
 @api_router.get("/presence")
 async def presence(on: Optional[str] = None, user: dict = Depends(get_current_user)):
     """Live presence (live=today, view-only=historical).
@@ -2531,72 +2621,12 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
     notify_grace = int(office.get("parent_notify_grace_minutes") or 30)
 
     # --- 30-day lookback for "consecutive days absent" counter ----------------
-    # We pre-fetch attendance + approved leave dates for the past 30 days
-    # in two bulk queries, then walk backwards per absent member to find their
-    # last covered day. Days falling on the member's weekly_off don't count.
-    today_d = date.fromisoformat(today)
-    lookback_start = (today_d - timedelta(days=30)).isoformat()
-    recent_atts = await db.attendance.find(
-        {"date": {"$gte": lookback_start, "$lt": today}},
-        {"_id": 0, "user_id": 1, "date": 1},
-    ).to_list(50000)
-    att_dates_by_user: dict = {}
-    for a in recent_atts:
-        att_dates_by_user.setdefault(a["user_id"], set()).add(a["date"])
-
-    recent_leaves = await db.leaves.find(
-        {"status": "approved",
-         "start_date": {"$lte": today},
-         "end_date":   {"$gte": lookback_start}},
-        {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1},
-    ).to_list(5000)
-    leave_dates_by_user: dict = {}
-    for L in recent_leaves:
-        try:
-            ls = max(date.fromisoformat(L["start_date"]), today_d - timedelta(days=30))
-            le = min(date.fromisoformat(L["end_date"]), today_d)
-        except Exception:
-            continue
-        cur = ls
-        while cur <= le:
-            leave_dates_by_user.setdefault(L["user_id"], set()).add(cur.isoformat())
-            cur += timedelta(days=1)
-
-    recent_breaks = await db.breaks.find(
-        {"start_date": {"$lte": today},
-         "end_date":   {"$gte": lookback_start}},
-        {"_id": 0},
-    ).to_list(500)
-
-    WEEKDAY_KEY = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-
-    def _consecutive_absent_days(u: dict) -> int:
-        """Count consecutive days (max 30) before today where the member had
-        no attendance, no approved leave/tour, no covering break, and the day
-        is not their weekly_off. Stops at the first 'covered' day."""
-        atts_set = att_dates_by_user.get(u["id"], set())
-        leaves_set = leave_dates_by_user.get(u["id"], set())
-        weekly_off = (u.get("weekly_off") or "").lower()
-        n = 0
-        d = today_d - timedelta(days=1)
-        for _ in range(30):
-            ds = d.isoformat()
-            if ds in atts_set or ds in leaves_set:
-                break
-            # Is this day covered by a break that applies to this member?
-            covered_by_break = any(
-                b.get("start_date") <= ds <= b.get("end_date")
-                and _breaks_module.break_applies_to(b, u)
-                for b in recent_breaks
-            )
-            if covered_by_break:
-                break
-            # Weekly off doesn't COUNT as absent but doesn't BREAK the streak —
-            # skip it (move further back).
-            if WEEKDAY_KEY[d.weekday()] != weekly_off:
-                n += 1
-            d -= timedelta(days=1)
-        return n
+    # Bulk-fetches attendance/leaves/breaks for the past 30 days in three
+    # queries, then returns a closure that walks backwards per absent
+    # member to count their streak. Extracted 14 Feb 2026 (item D of the
+    # medium-risk refactor pass) — this ~65 line block is one of the
+    # biggest cognitive-load segments of the 665-LOC `presence` function.
+    _consecutive_absent_days = await _make_absence_streak_computer(db, today)
 
     # ================== 2. RESOLVE ====================================
     # Single pass over the roster. Each iteration consumes the bulk-fetched

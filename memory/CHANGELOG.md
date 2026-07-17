@@ -7,6 +7,25 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 14 Feb 2026 — Medium-risk refactor pass (surgical extract-method)
+
+Rather than move `_geo_toggle` and `presence` to new route files (which requires threading many shared deps through `make_router` factories), took the **safer surgical route**: extract the most cognitively expensive chunks INSIDE `server.py` as named helpers.
+
+### Extractions
+1. **`_compute_early_out_at_checkout(ts, target, office) → int`** — pulled out of `_geo_toggle` (was 23 inline LOC of timezone/parse arithmetic mixed into the checkout write path). Now a pure function, no DB deps.
+2. **`_make_absence_streak_computer(db, today) → closure`** — factory pulled out of `presence()` (was ~67 LOC of bulk-fetch + closure inline in the giant function). Fires 3 bulk Mongo queries once, returns an O(1) `_consecutive_absent_days(user)` closure.
+
+### Test coverage
+- `test_early_out_helper.py` — 11 pure-unit tests covering the grace-window boundary (14 / 15 / 16 min early), on-time / late checkouts, missing work_end, and 5 malformed-value parametrisations. DB-free.
+- Existing tests still pass: 52/52 across `test_ishowedup_api.py`, `test_presence_break_precedence.py`, `test_presence_by_location.py`, `test_posting_r2.py`, `test_review_iter11.py`, `test_early_out_reason.py`, `test_early_out_helper.py`.
+
+### Why not a full route-file move?
+Both functions depend on ~6–8 shared module helpers (`_ensure_reason_in_bank`, `_resolve_site_for`, `_active_camp_for`, `compute_overtime_in/out`, `_breaks_module.break_applies_to`, DB collections). Moving them to `routes/attendance.py` / `routes/presence.py` would require threading all these through a `make_router` factory or refactoring them to a shared services module — both are 2–3 hour surgeries with higher regression risk than the LOC gain justifies. The extract-method pattern here gets the maintainability win (isolated, testable helpers + smaller top-level functions) without cross-module state risk. Full file-move can happen incrementally in future passes.
+
+Files: `backend/server.py`, `backend/tests/test_early_out_helper.py`
+
+
+---
 ## 14 Feb 2026 — Low-risk maintainability refactor pass
 
 Split several large files into focused sub-components. **Zero behaviour change** — testing agent verified via Playwright across the 4 affected pages (0 regressions across 30 backend pytest cases + frontend smoke).
