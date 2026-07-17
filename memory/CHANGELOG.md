@@ -7,6 +7,31 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 14 Feb 2026 — Golden pure-unit safety net for `holidays.py` (test-first refactor prep)
+
+Added **59 focused pure-arithmetic pytest cases** in `tests/test_holidays_pure.py` covering every branch of every pure helper in the payroll-critical `holidays.py`. DB-free, runs in **70 ms**. Locks in the exact numeric contract before any future refactor touches this file (item O in the high-risk lane).
+
+### Coverage
+| Function | Cases | Covers |
+|---|---:|---|
+| `_days_inclusive` | 5 | single-day, range, cross-month, backwards, invalid |
+| `_bucket_leave_rows` | 8 | empty, stamped, legacy fallback, future-approved, half-day, pending, approved tour, pending tour |
+| `_break_covers_user` | 8 | all / institution / fleet / category / selected + default-when-missing + unknown-scope |
+| `split_leave_days` (**the ladder**) | 10 + 7 parametrised | full ladder combos, half-day never uses comp-off, negatives clamped, invalid inputs, regression sentinels |
+| `_expand_date_ranges` | 6 | single, both-end clipping, multi-row union, bad input |
+| `_accrual_from_attendance` | 5 | empty, matching Sunday, weekday mismatch, posting overlap, bad date string |
+| `_accrual_from_tours` | 5 | empty, matching, future-skipped, att-dedup, tour-tour dedup |
+| `_sum_comp_off_used` | 6 | new-stamp, zero-stamp, legacy `type=comp_off` fallback, stamp-wins, mixed shapes, None handling |
+
+### Why this matters
+`split_leave_days` alone determines every LOP day in payroll. A wrong sign or off-by-half here = wage disputes. The 7 parametrised regression sentinels lock in a broad matrix of (requested, comp_off_avail, paid_avail) → expected-split combinations so no future refactor can silently shift the ladder.
+
+**When you're ready to tackle item O (holidays.py refactor)**, this suite is the safety net — run it before/after every commit. Any RED here = revert.
+
+Files: `backend/tests/test_holidays_pure.py`
+
+
+---
 ## 14 Feb 2026 — Medium-risk refactor pass (surgical extract-method)
 
 Rather than move `_geo_toggle` and `presence` to new route files (which requires threading many shared deps through `make_router` factories), took the **safer surgical route**: extract the most cognitively expensive chunks INSIDE `server.py` as named helpers.
