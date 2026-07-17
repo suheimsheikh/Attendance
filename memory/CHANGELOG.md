@@ -7,6 +7,25 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 14 Feb 2026 — Feature: `joining_date` on Members + Grid "NJ" cells
+
+### What shipped
+- **Data model**: `joining_date: Optional[str]` (ISO YYYY-MM-DD) added to `MemberCreate` / `MemberUpdate` / `UserPublic` (models.py) so it flows through the full CRUD surface.
+- **Admin form**: `MemberForm.jsx` gained a date picker between DOB and OT-eligibility with helper text "*Days before this date render as — on the Grid instead of counting as absent.*"
+- **Grid backend** (`reports.py::_classify`): a new pre-check at the top returns `"NJ"` when the day is strictly before the member's `joining_date`. `NJ` sits alongside `WO`/`HO`/`AB` in the code family — it's excluded from tooltip metadata generation and doesn't contribute to any totals bucket (Present / Absent / Leave / Tour / EO / LT / OT / LOP all skip it).
+- **Grid frontend** (`gridHelpers.jsx`): new `CELL_STYLE.NJ` entry — grey with a diagonal-striped background (`repeating-linear-gradient(45deg, ...)`) and an em-dash label. Tooltip: "Before joining date". Also appears in the code legend at the top of the Grid.
+- **End-to-end verified**: set `joining_date=2026-07-15` on a test member → Grid rendered days 01–14 as `NJ` (14 dashed cells with the "Before joining date" tooltip), day 15+ as normal `P`. Totals correctly showed P=3 with no AB penalty for the pre-joining stretch. Reset the fixture.
+
+### Why "NJ" and not empty / grey / AB
+- **Empty** would blend into future days — admin can't tell "the member existed but was on leave" from "they didn't exist yet".
+- **Grey without a pattern** looks identical to WO — visually confusing for members whose weekly-off happens to fall in the pre-joining window.
+- **AB** would over-flag every new hire's first month as absent → payroll would try to LOP them for days before they joined.
+- **NJ + diagonal stripes + em-dash** reads as "no data here, and correctly so".
+
+Files: `backend/server.py` (MemberCreate/Update + create-doc), `backend/models.py` (UserPublic), `backend/routes/reports.py` (classify), `frontend/src/pages/admin/MemberForm.jsx` (form field), `frontend/src/pages/admin/calendar-grid/gridHelpers.jsx` (CELL_STYLE.NJ)
+
+
+---
 ## 14 Feb 2026 — Golden pure-unit safety net for `holidays.py` (test-first refactor prep)
 
 Added **59 focused pure-arithmetic pytest cases** in `tests/test_holidays_pure.py` covering every branch of every pure helper in the payroll-critical `holidays.py`. DB-free, runs in **70 ms**. Locks in the exact numeric contract before any future refactor touches this file (item O in the high-risk lane).

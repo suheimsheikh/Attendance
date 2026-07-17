@@ -38,6 +38,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     guardian_mobile: initial?.guardian_mobile || "",
     guardian_name: initial?.guardian_name || "",
     date_of_birth: initial?.date_of_birth || "",
+    joining_date: initial?.joining_date || "",
     // Undefined on legacy members → treat as eligible (matches the
     // backend's opt-out semantics). Admin can uncheck to disable.
     ot_eligible: initial?.ot_eligible !== false,
@@ -296,6 +297,17 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               className="iu-input"
             />
             <p className="text-[11px] text-slate-500 mt-1">Powers a &ldquo;Happy birthday&rdquo; greeting on the Check-In screen.</p>
+          </div>
+          <div>
+            <label className="iu-label">Joining date <span className="text-slate-400 font-normal">(optional)</span></label>
+            <input
+              data-testid="mf-joining-date"
+              type="date"
+              value={form.joining_date}
+              onChange={(e) => set("joining_date", e.target.value)}
+              className="iu-input"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">Days before this date render as &ldquo;—&rdquo; on the Grid instead of counting as absent.</p>
           </div>
           <div>
             <label className="iu-label">Overtime eligibility</label>

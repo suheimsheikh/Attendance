@@ -41,6 +41,11 @@ class UserPublic(BaseModel):
     # ISO YYYY-MM-DD. Optional — drives the "Happy birthday" flourish
     # on the Check-In greeting (added 7 Jul 2026).
     date_of_birth: Optional[str] = None
+    # ISO YYYY-MM-DD of the day the member joined the academy. Drives
+    # the Grid "NJ" (Not Joined) cell — days before this date render
+    # as an em-dash on grey stripe instead of counting as absent
+    # (added 14 Feb 2026, user request).
+    joining_date: Optional[str] = None
     # OT eligibility (7 Jul 2026). Explicit False disables OT accrual;
     # None/True → category-based defaults apply.
     ot_eligible: Optional[bool] = None

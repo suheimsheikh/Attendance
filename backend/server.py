@@ -236,6 +236,12 @@ class MemberCreate(BaseModel):
     # ISO YYYY-MM-DD. Optional — powers the "Happy birthday" flourish
     # on the Check-In greeting (added 7 Jul 2026).
     date_of_birth: Optional[str] = None
+    # ISO YYYY-MM-DD of the day the member joined the academy /
+    # started their contract. Grid renders pre-joining days as "NJ"
+    # (Not Joined) so they don't count as absent. Optional — legacy
+    # rows without a joining_date behave as before (no NJ cells).
+    # Added 14 Feb 2026 (user request).
+    joining_date: Optional[str] = None
     # OT-eligible flag (7 Jul 2026). Explicit `False` disables OT
     # accrual for this member regardless of category. `None` / `True`
     # → the pre-existing category-based rule applies (staff/coach/
@@ -265,6 +271,7 @@ class MemberUpdate(BaseModel):
     guardian_mobile: Optional[str] = None
     guardian_name: Optional[str] = None
     date_of_birth: Optional[str] = None
+    joining_date: Optional[str] = None
     ot_eligible: Optional[bool] = None
 
 
@@ -887,6 +894,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "guardian_mobile": body.guardian_mobile,
         "guardian_name": body.guardian_name,
         "date_of_birth": body.date_of_birth,
+        "joining_date": body.joining_date,
         "ot_eligible": body.ot_eligible,
         "photo": None,
         "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
