@@ -1,0 +1,45 @@
+{
+  "summary": "Iter 26 — Frontend regression test of the Reports.jsx refactor (842→122-line orchestrator + 7 files under /app/frontend/src/pages/admin/reports/). Verified all three tabs render, all 5 ledger modals open on double-click, month-nav preserves state across tabs, category/fleet/OT filters and Escorts swap work, hover drilldown tooltip renders. Search-box tint is intact. 1 URL-sync asymmetry bug found (see below); everything else passes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Reports.jsx (orchestrator)",
+        "issue": "URL-sync asymmetry: setTab('attendance') calls `next.delete('tab')`, but `initial` defaults to 'calendar' when the tab param is missing. Effect: clicking the Attendance chip leaves the URL as /admin/reports (no ?tab=), and a page refresh lands the user back on the Calendar tab — Attendance is not reload-sticky. Review-request explicitly says 'switching tabs updates the ?tab= query param', which fails for the Attendance case. Suggested fix: either always call `next.set('tab', t)` for all three tabs (simplest), or flip the default in `initial` to 'attendance' so the delete-on-attendance is consistent with the fallback.",
+        "selector": "[data-testid=tab-attendance]",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "LeaveLedgerModal (not part of this refactor, but triggered from AttendanceTab.jsx)",
+        "issue": "React warning: 'Encountered two children with the same key, `leave-rejected`' — fires 4× on modal open. Pre-existing (LeaveLedgerModal.jsx is not a file touched by this refactor) but worth flagging. Non-crashing but risks duplicate/omitted rows.",
+        "selector": "console.error on double-click [data-testid^=leave-open-]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix URL sync in /app/frontend/src/pages/admin/Reports.jsx `setTab`: make it symmetric with `initial` (either always set ?tab=<t> or change initial default to 'attendance'). Currently clicking Attendance and refreshing silently reverts to Calendar.",
+    "(Optional / out-of-scope) Fix duplicate React key `leave-rejected` in LeaveLedgerModal.jsx — key should include the row index or unique leave id."
+  ],
+  "critical_code_review_comments": [
+    "AttendanceTab.jsx is now ~600 lines and still comfortably readable — good split. All 4 ledger modals + timeline modal + hover portal live locally and only pass member_id/name outwards, no prop drilling.",
+    "Reports.jsx cleanly owns just: year/monthIdx, tab state, athleteLikeKeys fetch, showHours super-admin flag. Correct choice to keep month-nav state at the orchestrator so Attendance and Calendar tabs stay synced (verified: June 2026 label preserved when switching Attendance→Calendar).",
+    "DrillDownBubble.jsx is rendered via ReactDOM.createPortal(document.body) from AttendanceTab — correct; keeps positioning immune to the scrollable table container's overflow-hidden. Verified `data-testid=drilldown-tooltip` renders with 17 dates on hover of days-present cell.",
+    "The `institution-filter` dropdown legitimately does NOT render on the current dataset because no member row has `r.institution` set (institutionOptions is empty). Not a refactor bug — just data-driven. Escort report table separately shows an Institution column populated from the escort collection.",
+    "constants.js / utils.js extraction is a pure move — CATEGORY_FILTERS, SORT_OPTIONS, VALID_TABS, pad2, isoDate, monthWindow are all imported cleanly by the tabs. No duplicate declarations. Good.",
+    "MonthNav.jsx is used directly by AttendanceTab (`import MonthNav`) AND passed as a prop to CalendarGridTab. The prop pattern is a little inconsistent — CalendarGridTab could just import MonthNav itself the way AttendanceTab does; passing it as a prop offers no injection benefit here. Non-blocking.",
+    "compOffMap fetch (`/leave-balances`) fires once on tab mount and is silent-fail on error — good; the COff column falls back to blank. No console errors observed on that fetch.",
+    "Zebra striping + sticky top-0/top-7 header rows verified visually — sub-header stays anchored during vertical scroll."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "~95% — 13/14 acceptance criteria passed; URL-sync for Attendance tab is the only failure"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (click 'Admin sign in with email' toggle first on /login).",
+  "seed_data_creation": "None — read-only smoke test.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reports.jsx refactor smoke pass on 17 Jul 2026 (Iter 26). Preview URL: https://attendance-portal-56.preview.emergentagent.com. Verified testids (all present): tab-calendar/attendance/daily, attendance-controls, attendance-run, category-filters, cat-filter-{all,athlete,elite,rest,escorts}, ot-only-toggle, fleet-filter (only when Athletes active), export-attendance-{csv,pdf}, month-nav, month-prev/next/label/today, attn-row-<id>, attn-name-<id>, days-{present,leave,tour,off,absent}-<id>, late-days-<id>, half-days-<id>, days-total-<id>, leave-{open,coff,total,avld,close}-<id>, ot-served-<id>, comp-off-earned-<id>, escort-report-table, escort-row-<id>, drilldown-tooltip, rep-day, rep-day-run, export-daily-{csv,pdf}. Modal drill-downs verified: dblclick attn-name opens MemberTimelineModal (fixed-inset overlay); dblclick days-present opens Attendance Ledger; dblclick leave-open opens 'Leave ledger — <NAME>' modal; dblclick leave-coff and comp-off-earned both open CompOffLedgerModal; dblclick ot-served opens OTLedgerModal. Hover on days-present shows drilldown-tooltip with dow-formatted dates. Direct nav /admin/reports?tab=daily works; ?tab=payroll folds into Attendance. Only issue: clicking Attendance chip drops the tab param → refresh lands on Calendar (not Attendance).",
+  "rca_of_the_issue": "URL-sync asymmetry — Reports.jsx L44-50: `initial = ... : 'calendar'` (Calendar is the fallback when tab param is missing), but `setTab` L46-51: `if (t === 'attendance') next.delete('tab'); else next.set('tab', t);` (Attendance is the tab that clears the param). These two defaults contradict each other. Reproduction: (1) Load /admin/reports (defaults to Calendar, no ?tab). (2) Click [data-testid=tab-attendance] — URL stays /admin/reports. (3) Reload the page — you're back on Calendar, not Attendance. Fix: change `if (t === 'attendance') next.delete('tab')` to `if (t === 'calendar') next.delete('tab')` (or drop the delete branch entirely and always `next.set('tab', t)`), matching the `initial` default."
+}
