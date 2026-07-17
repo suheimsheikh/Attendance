@@ -6,6 +6,42 @@ problem statement + user personas; long-form change history lives here.
 
 
 
+
+---
+## 17 Feb 2026 — Search-box tint: lightish blue + black text (global)
+
+User request: "*Show all search boxes across the app with font black on
+blue. Not too light blue but lightish.*"
+
+### Fix
+Updated the single global CSS block in `index.css` that targets any
+`input[data-testid$="-search"]` or `input[data-testid^="search-"]`:
+
+- **Background**: was `#EFF6FF` (sky-50, too pale) → now `#DBEAFE`
+  (tailwind **blue-100** — lightish, not too light).
+- **Typed text color**: was default → now **`#000000` (pure black)**.
+- **Placeholder**: was `#38BDF8` (sky-400, competing with the tint) →
+  now `#1e293b` (slate-800) @ 75% opacity — reads near-black without
+  looking harsh on the blue.
+- **Border**: sky-200 → blue-300 (`#93C5FD`) so the edge is visible
+  against the tinted fill.
+- Wrapper `<div>`s that hold a search input + icon are tinted with the
+  same blue so the icon area matches the input, no visual seam.
+
+### Coverage (all 11 search inputs auto-styled by the global rule)
+`member-search`, `presence-search`, `calendar-name-search`, `escort-search`,
+`athlete-checklist-search`, `smslog-search`, `assign-search`, `lb-search`,
+`bf-member-search`, `cf-member-search`, `ob-search`,
+`correction-onbehalf-search`.
+
+Zero per-component code changes — every search box in the app inherits
+the new tint via the existing `data-testid` naming convention.
+
+### Verified via screenshot
+- Members search (empty + typed "Ali") — lightish blue fill, black text.
+- Presence Board search — same treatment, icon area matches.
+
+
 ---
 ## 14 Feb 2026 — Fix NJ label + add `leaving_date` + LF cell code
 
