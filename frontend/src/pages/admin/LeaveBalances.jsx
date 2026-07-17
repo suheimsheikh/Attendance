@@ -5,6 +5,7 @@ import { api } from "../../api";
 import { categoryLabel } from "../../utils";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
+import { round1 } from "../leaves/utils";
 
 export default function LeaveBalances() {
   const [data, setData] = useState(null);
@@ -334,9 +335,3 @@ export default function LeaveBalances() {
   );
 }
 
-function round1(v) {
-  if (v == null) return 0;
-  const n = Number(v);
-  if (Number.isNaN(n)) return 0;
-  return Math.round(n * 10) / 10;
-}

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api } from "../../api";
 import { shortDate } from "../../utils";
 import { ApplyForm } from "../MyLeaves";
+import { round1 } from "../leaves/utils";
 import { BreakForm } from "./Calendar";
 import OverlapNotice from "../../components/OverlapNotice";
 import EventConflictNotice from "../../components/EventConflictNotice";
@@ -518,9 +519,3 @@ function BalanceSummaryCard({ data, memberName, requestedDays, leaveType }) {
   );
 }
 
-function round1(v) {
-  if (v == null) return 0;
-  const n = Number(v);
-  if (Number.isNaN(n)) return 0;
-  return Math.round(n * 10) / 10;
-}

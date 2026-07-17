@@ -9,21 +9,15 @@ import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 import AttendanceLedgerModal from "./AttendanceLedgerModal";
 import OTLedgerModal from "./OTLedgerModal";
 import MemberForm from "./MemberForm";
-import { GridCell, GridTimeCell, CELL_STYLE, correctionForCode, fmtOt } from "./calendar-grid/gridHelpers";
-import { Search, Rows2, Rows } from "lucide-react";
+import { GridCell, GridTimeCell, CELL_STYLE, correctionForCode } from "./calendar-grid/gridHelpers";
+import GridFilterBar from "./calendar-grid/GridFilterBar";
+import GridRowTotals from "./calendar-grid/GridRowTotals";
 
 /**
  * Calendar Grid tab — one row per member, one column per day of the
  * month. Each cell shows a 2-letter code (LV, AB, TR, HD, LT, WO, HO,
  * CO, PS) or a green pill for a present day. Future days render blank.
  */
-
-const CATEGORY_FILTERS = [
-  { key: "all",     label: "All" },
-  { key: "athlete", label: "Athletes" },
-  { key: "elite",   label: "Elite" },
-  { key: "rest",    label: "Staff & Coaches" },
-];
 
 export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPrevMonth, onNextMonth, onJumpToday, MonthNav, athleteLikeKeys }) {
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -199,88 +193,22 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
         <button data-testid="export-calendar-pdf" onClick={() => exportGrid("pdf")} className="iu-btn-secondary"><FileText size={14}/> PDF</button>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-        <div className="flex flex-wrap gap-2" data-testid="calendar-category-filters">
-          {CATEGORY_FILTERS.map((f) => {
-            const active = categoryFilter === f.key;
-            const count = f.key === "all"
-              ? rows.length
-              : f.key === "athlete"
-                ? rows.filter(isAthleteLike).length
-                : f.key === "elite"
-                  ? rows.filter((r) => r.category === "elite").length
-                  : rows.filter((r) => !isAthleteLike(r)).length;
-            return (
-              <button
-                key={f.key}
-                data-testid={`calendar-cat-filter-${f.key}`}
-                onClick={() => { setCategoryFilter(f.key); if (f.key !== "athlete") setFleetFilter(""); }}
-                className={`iu-chip ${active ? "iu-chip-active" : ""}`}
-              >
-                {f.label}
-                <span className={`min-w-[22px] h-5 px-1.5 rounded-full text-[10px] flex items-center justify-center ${active ? "bg-white/20 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>{count}</span>
-              </button>
-            );
-          })}
-          {categoryFilter === "athlete" && fleetOptions.length > 0 && (
-            <select
-              data-testid="calendar-fleet-filter"
-              value={fleetFilter}
-              onChange={(e) => setFleetFilter(e.target.value)}
-              className="iu-input !w-40 !py-1 !h-8 text-xs"
-            >
-              <option value="">All fleets</option>
-              {fleetOptions.map((f) => (
-                <option key={f} value={f}>{f === "__none__" ? "(No fleet)" : f}</option>
-              ))}
-            </select>
-          )}
-          {institutionOptions.length > 0 && (
-            <select
-              data-testid="calendar-institution-filter"
-              value={institutionFilter}
-              onChange={(e) => setInstitutionFilter(e.target.value)}
-              className="iu-input !w-44 !py-1 !h-8 text-xs"
-              title="Filter by institution"
-            >
-              <option value="">All institutions</option>
-              <option value="__none__">(No institution)</option>
-              {institutionOptions.map((i) => (
-                <option key={i} value={i}>{i}</option>
-              ))}
-            </select>
-          )}
-          {/* Name / rank search — fed straight into displayedRows above. */}
-          <div className="relative">
-            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            <input
-              type="search"
-              data-testid="calendar-name-search"
-              value={nameSearch}
-              onChange={(e) => setNameSearch(e.target.value)}
-              placeholder="Search name / rank…"
-              className="iu-input !w-52 !py-1 !h-8 text-xs !pl-7"
-              autoComplete="off"
-            />
-          </div>
-          {/* 1-row / 2-row toggle. Icon reflects the state you'd flip
-              INTO on click so the affordance is unambiguous. */}
-          <button
-            type="button"
-            data-testid="calendar-rows-mode-toggle"
-            onClick={toggleRowsMode}
-            title={rowsMode === "single" ? "Switch to 2-row view (In/Out times)" : "Switch to 1-row view"}
-            className={`inline-flex items-center gap-1 px-2 h-8 rounded-md text-xs font-semibold border transition ${
-              rowsMode === "double"
-                ? "border-sky-500 bg-sky-500 text-white"
-                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-            }`}
-          >
-            {rowsMode === "single" ? <Rows2 size={12}/> : <Rows size={12}/>}
-            {rowsMode === "single" ? "In / Out" : "Compact"}
-          </button>
-        </div>
-      </div>
+      <GridFilterBar
+        rows={rows}
+        isAthleteLike={isAthleteLike}
+        categoryFilter={categoryFilter}
+        onCategoryFilter={setCategoryFilter}
+        fleetFilter={fleetFilter}
+        onFleetFilter={setFleetFilter}
+        fleetOptions={fleetOptions}
+        institutionFilter={institutionFilter}
+        onInstitutionFilter={setInstitutionFilter}
+        institutionOptions={institutionOptions}
+        nameSearch={nameSearch}
+        onNameSearch={setNameSearch}
+        rowsMode={rowsMode}
+        onToggleRowsMode={toggleRowsMode}
+      />
 
       {/* Legend */}
       <div className="flex flex-wrap gap-2 mb-3 text-[11px]" data-testid="calendar-legend">
@@ -371,8 +299,6 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                   member_id: r.member_id,
                   member_name: r.member_name,
                 });
-                const attnTitle = "Double-click for daily ledger";
-                const otTitle = "Double-click for OT ledger";
                 // Build once — reused across the top and bottom rows in
                 // double mode. Each entry carries everything the two
                 // GridCell / GridTimeCell renders need.
@@ -399,68 +325,14 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
 
                 const totalsRowSpan = isDouble ? 2 : 1;
                 const totalsCells = (
-                  <>
-                    <td
-                      rowSpan={totalsRowSpan}
-                      className={`sticky right-[262px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-emerald-700 font-bold tabular-nums text-[11px] border-b border-l-2 border-slate-300 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
-                      data-testid={`cal-total-p-${r.member_id}`}
-                      title={`Present · ${attnTitle}`}
-                      onDoubleClick={openAttn}
-                    >{r.totals?.present || ""}</td>
-                    <td
-                      rowSpan={totalsRowSpan}
-                      className={`sticky right-[220px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-red-600 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
-                      data-testid={`cal-total-ab-${r.member_id}`}
-                      title={`Absent · ${attnTitle}`}
-                      onDoubleClick={openAttn}
-                    >{r.totals?.absent || ""}</td>
-                    <td
-                      rowSpan={totalsRowSpan}
-                      className={`sticky right-[178px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-amber-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px] relative`}
-                      data-testid={`cal-total-lv-${r.member_id}`}
-                      title={r.totals?.lop ? `Leave (${r.totals.lop} LOP) · ${attnTitle}` : `Leave · ${attnTitle}`}
-                      onDoubleClick={openAttn}
-                    >
-                      {r.totals?.leave || ""}
-                      {r.totals?.lop ? (
-                        <span
-                          className="absolute top-0 right-0 translate-x-1/3 -translate-y-1/2 inline-flex items-center px-1 rounded-full bg-rose-600 text-white text-[8px] font-bold leading-tight shadow-sm pointer-events-none"
-                          title={`${r.totals.lop} day${r.totals.lop === 1 ? "" : "s"} without pay`}
-                          data-testid={`cal-total-lop-${r.member_id}`}
-                        >
-                          {r.totals.lop}L
-                        </span>
-                      ) : null}
-                    </td>
-                    <td
-                      rowSpan={totalsRowSpan}
-                      className={`sticky right-[136px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
-                      data-testid={`cal-total-tr-${r.member_id}`}
-                      title={`Tour · ${attnTitle}`}
-                      onDoubleClick={openAttn}
-                    >{r.totals?.tour || ""}</td>
-                    <td
-                      rowSpan={totalsRowSpan}
-                      className={`sticky right-[84px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-violet-800 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[52px] min-w-[52px] max-w-[52px]`}
-                      data-testid={`cal-total-ot-${r.member_id}`}
-                      title={`OT hours · ${otTitle}`}
-                      onDoubleClick={openOt}
-                    >{fmtOt(r.totals?.ot_minutes)}</td>
-                    <td
-                      rowSpan={totalsRowSpan}
-                      className={`sticky right-[42px] z-20 ${rowBg} group-hover:bg-sky-50 text-center text-rose-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
-                      data-testid={`cal-total-eo-${r.member_id}`}
-                      title={`Early-out days · ${attnTitle}`}
-                      onDoubleClick={openAttn}
-                    >{r.totals?.early_out || ""}</td>
-                    <td
-                      rowSpan={totalsRowSpan}
-                      className={`sticky right-0 z-20 ${rowBg} group-hover:bg-sky-50 text-center text-orange-700 font-bold tabular-nums text-[11px] border-b border-slate-100 cursor-pointer select-none w-[42px] min-w-[42px] max-w-[42px]`}
-                      data-testid={`cal-total-lt-${r.member_id}`}
-                      title={`Late days · ${attnTitle}`}
-                      onDoubleClick={openAttn}
-                    >{r.totals?.late || ""}</td>
-                  </>
+                  <GridRowTotals
+                    totals={r.totals}
+                    memberId={r.member_id}
+                    rowBg={rowBg}
+                    rowSpan={totalsRowSpan}
+                    onOpenAttn={openAttn}
+                    onOpenOt={openOt}
+                  />
                 );
 
                 return (

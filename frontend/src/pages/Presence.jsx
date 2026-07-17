@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search, Camera } from "lucide-react";
+import { Search } from "lucide-react";
 import { api, showApiError } from "../api";
 import GuestCheckInModal from "../components/GuestCheckInModal";
 import MemberForm from "./admin/MemberForm";
@@ -19,6 +19,7 @@ import { SkeletonBoard } from "../components/presence/SkeletonBoard";
 import { PresenceHeader } from "../components/presence/PresenceHeader";
 import { FleetFilterRow } from "../components/presence/FleetFilterRow";
 import { LocationFilterRow } from "../components/presence/LocationFilterRow";
+import MissingPhotoStrip from "../components/presence/MissingPhotoStrip";
 
 export default function Presence() {
   const { user: currentUser } = useAuth();
@@ -364,31 +365,11 @@ export default function Presence() {
         }}
       />
 
-      {!isHistorical && missingPhotoOnCampus.length > 0 && (
-        <button
-          type="button"
-          onClick={() => advancePhotoQueue(missingPhotoOnCampus)}
-          data-testid="presence-missing-photos-strip"
-          className="w-full mb-3 iu-card px-4 py-2.5 flex items-center gap-3 text-left hover:bg-amber-50 transition group"
-        >
-          <span className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center ring-1 ring-amber-200">
-            <Camera size={16} />
-          </span>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold text-slate-800">
-              {missingPhotoOnCampus.length} athlete{missingPhotoOnCampus.length === 1 ? "" : "s"} on campus without a photo
-            </div>
-            <div className="text-xs text-slate-500 truncate">
-              Tap to capture photos while they&apos;re here — skip any time.
-              {" "}
-              {missingPhotoOnCampus.slice(0, 3).map((m) => m.full_name).join(", ")}
-              {missingPhotoOnCampus.length > 3 && ` +${missingPhotoOnCampus.length - 3} more`}
-            </div>
-          </div>
-          <span className="text-[10px] uppercase tracking-wider font-bold text-amber-700 group-hover:underline">
-            Capture
-          </span>
-        </button>
+      {!isHistorical && (
+        <MissingPhotoStrip
+          members={missingPhotoOnCampus}
+          onStart={advancePhotoQueue}
+        />
       )}
 
       <div className="iu-card mb-4 px-3 py-2 flex items-center gap-3" data-testid="presence-search-wrap">

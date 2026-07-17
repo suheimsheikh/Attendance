@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { Loader2, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, AlertTriangle, Camera } from "lucide-react";
+import { Loader2, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, Camera } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { getLocation, speakLateMessage, resolveNearestSite } from "../utils";
 import { useGeoPermission } from "../hooks/useGeoPermission";
 import SelfieCapture from "../components/SelfieCapture";
 import DailyContent from "../components/DailyContent";
-import ReasonPicker from "../components/ReasonPicker";
+import ReasonPrompt from "../components/ReasonPrompt";
 import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import OutOfGeofenceModal from "../components/OutOfGeofenceModal";
 import CorrectionRequestModal from "../components/CorrectionRequestModal";
@@ -298,38 +298,28 @@ export default function SelfCheckIn() {
         <div className="iu-card p-8 text-center" data-testid="self-checkin-card">
           <Greeting user={user} checkedIn={!!status?.checked_in} />
           {otInfo && (
-            <div className="mb-5 text-left rounded-xl border border-amber-200 bg-amber-50 p-3" data-testid="ot-reason-block">
-              <div className="flex items-start gap-2 mb-2">
-                <AlertTriangle size={14} className="text-amber-700 mt-0.5 shrink-0" />
-                <div className="text-xs text-amber-800 font-semibold">{otInfo.label}</div>
-              </div>
-              <label className="iu-label text-amber-900">Reason for overtime (optional)</label>
-              <ReasonPicker
-                value={overtimeReason}
-                onChange={setOvertimeReason}
-                placeholder={otInfo.kind === "early" ? "e.g. Pre-event setup, training session…" : "e.g. End-of-day reconciliation, regatta cleanup…"}
-                variant="amber"
-                testId="ot-reason"
-              />
-              <p className="text-[11px] text-amber-700 mt-1.5">Overtime is auto-tracked as extra hours served. Only staff accrue overtime.</p>
-            </div>
+            <ReasonPrompt
+              variant="amber"
+              headline={otInfo.label}
+              labelText="Reason for overtime (optional)"
+              placeholder={otInfo.kind === "early" ? "e.g. Pre-event setup, training session…" : "e.g. End-of-day reconciliation, regatta cleanup…"}
+              footnote="Overtime is auto-tracked as extra hours served. Only staff accrue overtime."
+              value={overtimeReason}
+              onChange={setOvertimeReason}
+              testId="ot-reason"
+            />
           )}
           {earlyOutInfo && (
-            <div className="mb-5 text-left rounded-xl border border-rose-200 bg-rose-50 p-3" data-testid="early-out-reason-block">
-              <div className="flex items-start gap-2 mb-2">
-                <AlertTriangle size={14} className="text-rose-700 mt-0.5 shrink-0" />
-                <div className="text-xs text-rose-800 font-semibold">{earlyOutInfo.label}</div>
-              </div>
-              <label className="iu-label text-rose-900">Reason for leaving early (optional)</label>
-              <ReasonPicker
-                value={earlyOutReason}
-                onChange={setEarlyOutReason}
-                placeholder="e.g. Medical appointment, family emergency, permitted early leave…"
-                variant="rose"
-                testId="early-out-reason"
-              />
-              <p className="text-[11px] text-rose-700 mt-1.5">Leaves an audit note on this session — admins see it on your Profile and in the day&rsquo;s ledger.</p>
-            </div>
+            <ReasonPrompt
+              variant="rose"
+              headline={earlyOutInfo.label}
+              labelText="Reason for leaving early (optional)"
+              placeholder="e.g. Medical appointment, family emergency, permitted early leave…"
+              footnote="Leaves an audit note on this session — admins see it on your Profile and in the day’s ledger."
+              value={earlyOutReason}
+              onChange={setEarlyOutReason}
+              testId="early-out-reason"
+            />
           )}
           <button
             data-testid="self-checkin-button"
