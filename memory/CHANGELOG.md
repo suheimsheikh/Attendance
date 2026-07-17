@@ -7,6 +7,35 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 14 Feb 2026 — Low-risk maintainability refactor pass
+
+Split several large files into focused sub-components. **Zero behaviour change** — testing agent verified via Playwright across the 4 affected pages (0 regressions across 30 backend pytest cases + frontend smoke).
+
+### File-size wins
+| File | Before | After | Δ |
+|---|---:|---:|---:|
+| `admin/CalendarGridTab.jsx` | 614 | 486 | −128 |
+| `pages/MyLeaves.jsx` | 892 | 649 | −243 |
+| `pages/SelfCheckIn.jsx` | 637 | 627 | −10 |
+| `pages/Presence.jsx` | 491 | 472 | −19 |
+| `admin/LeaveBalances.jsx` | 343 | 337 | −6 (round1 dedupe) |
+| `admin/Leaves.jsx` | 527 | 521 | −6 (round1 dedupe) |
+| **Total** | | | **−412 LOC** |
+
+### New files (7)
+- `pages/admin/calendar-grid/GridFilterBar.jsx` — category chips + fleet + institution + name-search + rows-mode toggle
+- `pages/admin/calendar-grid/GridRowTotals.jsx` — right-sticky 7-cell totals strip with double-click drill-downs
+- `components/ReasonPrompt.jsx` — reusable amber/rose reason-picker card (OT + early-out)
+- `components/presence/MissingPhotoStrip.jsx` — amber "N athletes on campus without a photo" strip
+- `pages/leaves/utils.js` — shared `round1`, `TYPE_LABELS`, `STATUS_COLORS`, `TONE`
+- `pages/leaves/StatsDashboard.jsx` — 8-tile YTD leave dashboard + `StatCard`
+- `pages/leaves/MyLeaveRow.jsx` — historical row card with ladder split badges
+
+### Phase 4 skipped intentionally
+On close inspection, `OnBehalfMemberPicker` (93 LOC, single-select) and `MemberMultiPicker` (113 LOC, multi-select) solve different problems and are each used exactly once. Merging would be premature abstraction. Left as-is.
+
+
+---
 ## 14 Feb 2026 — Silent auto-reload on new-deploy detection
 
 ### Problem
