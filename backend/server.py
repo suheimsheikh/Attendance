@@ -3965,6 +3965,13 @@ app.include_router(_roles_router(db, require_admin, get_current_user))
 from routes.prefs import make_router as _prefs_router  # noqa: E402
 app.include_router(_prefs_router(db, get_current_user))
 
+# Help chat — Claude-powered assistant for the bottom-right widget.
+# Injects the user's own attendance snapshot into every turn so
+# questions like "how many late days do I have this year?" can be
+# answered without tool-calling.
+from routes.help_chat import make_router as _help_chat_router  # noqa: E402
+app.include_router(_help_chat_router(db, get_current_user, _profile_details_for))
+
 # Leave / Tour routes — split out 06/2026 during the server.py refactor.
 from routes.leaves import make_router as _leaves_router  # noqa: E402
 from holidays import (

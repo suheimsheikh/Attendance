@@ -8,6 +8,59 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 18 Feb 2026 — Claude Help Chat widget (bottom-right FAB)
+
+User request: "*Can we have a help routine by Claude at the bottom
+right corner of the app.*"
+
+### Backend
+- **New route file** `/app/backend/routes/help_chat.py`.
+- `POST /api/help/chat` — SSE streaming endpoint. Body:
+  `{message, session_id?, page?}`. Returns:
+  - `event: session · data: {session_id}` (once, on first turn)
+  - `data: {delta: "..."}` (many, one per token)
+  - `event: done · data: {}` (once, terminal)
+- `POST /api/help/reset` — drops the LlmChat instance for that session
+  so the next turn starts fresh.
+- **Session store**: in-memory dict keyed by `session_id`, 1-hour idle
+  TTL, per-user rate-limit (15 messages / 60 s window).
+- **Model**: `claude-sonnet-4-5-20250929` via emergentintegrations
+  (`EMERGENT_LLM_KEY` universal key — no user-supplied key needed).
+- **Personalised system prompt** — rebuilt every turn:
+  - Base prompt describes the app (Grid legend, muster, corrections,
+    escorts, comp-off) so Claude doesn't hallucinate features.
+  - Role-specific block: members get warm/self-focused, admins get
+    ops-focused with permission to reference admin-only pages.
+  - Per-user snapshot: pulls `_profile_details_for(user)` and injects
+    MTD/YTD present days, hours, late-days, OT, leave balance,
+    comp-off, pending leaves — so questions like "how many late days
+    do I have this year?" get the correct number without tool-calling.
+
+### Frontend
+- **New `HelpChat.jsx`** — floating FAB in the bottom-right (`fixed
+  bottom-5 right-5`), opens a 420×600 chat drawer.
+- **Streaming reader** — parses SSE frames from the fetch reader,
+  appends deltas to the current assistant bubble as they arrive.
+- **Session persistence** — the server-issued `session_id` is stashed
+  in `localStorage.help_chat_session_v1` so page-refresh keeps the
+  conversation. "New chat" button on the header wipes both sides.
+- Mounted once in `Layout.jsx` so it's visible on every authenticated
+  page but hidden on `/login`.
+- Auth token pulled via `getToken()` from `api.js` (localStorage key
+  is `ishowedup_token`, not `token` — fixed in v2 of the widget).
+
+### Verified end-to-end
+- FAB visible on The Grid.
+- Ask "What does WO mean on the Grid?" → Claude answers with correct
+  legend + contrast to HO / LV, streamed word-by-word.
+- Follow-up: "How many late days do I have this year?" → Claude
+  answers **"17 YTD, 16 this month"** — the exact numbers from the
+  snapshot payload. Confirms multi-turn history + personalised data
+  injection both work.
+
+
+
+---
 ## 17 Feb 2026 — Admin search & view any member's profile
 
 User request: "*Also admins should be able to see any members profile

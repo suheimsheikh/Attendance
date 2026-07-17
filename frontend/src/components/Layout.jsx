@@ -11,6 +11,7 @@ import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
 import InstallPrompt from "./InstallPrompt";
 import OfflineBanner from "./OfflineBanner";
+import HelpChat from "./HelpChat";
 import { api } from "../api";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { useApiQuery } from "../hooks/useApiQuery";
@@ -374,6 +375,7 @@ export default function Layout() {
       <StaleSessionPrompt />
       <InstallPrompt />
       <OfflineBanner />
+      <HelpChat />
     </div>
   );
 }
