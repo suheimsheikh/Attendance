@@ -46,6 +46,10 @@ class UserPublic(BaseModel):
     # as an em-dash on grey stripe instead of counting as absent
     # (added 14 Feb 2026, user request).
     joining_date: Optional[str] = None
+    # ISO YYYY-MM-DD of the day the member exited the academy. Drives
+    # the Grid "LF" (Left) cell — days after this date don't count
+    # as absent. Optional.
+    leaving_date: Optional[str] = None
     # OT eligibility (7 Jul 2026). Explicit False disables OT accrual;
     # None/True → category-based defaults apply.
     ot_eligible: Optional[bool] = None

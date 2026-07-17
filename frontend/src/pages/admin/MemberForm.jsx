@@ -39,6 +39,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     guardian_name: initial?.guardian_name || "",
     date_of_birth: initial?.date_of_birth || "",
     joining_date: initial?.joining_date || "",
+    leaving_date: initial?.leaving_date || "",
     // Undefined on legacy members → treat as eligible (matches the
     // backend's opt-out semantics). Admin can uncheck to disable.
     ot_eligible: initial?.ot_eligible !== false,
@@ -307,7 +308,18 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               onChange={(e) => set("joining_date", e.target.value)}
               className="iu-input"
             />
-            <p className="text-[11px] text-slate-500 mt-1">Days before this date render as &ldquo;—&rdquo; on the Grid instead of counting as absent.</p>
+            <p className="text-[11px] text-slate-500 mt-1">Days before this date render as &ldquo;NJ&rdquo; on the Grid instead of counting as absent.</p>
+          </div>
+          <div>
+            <label className="iu-label">Leaving date <span className="text-slate-400 font-normal">(optional)</span></label>
+            <input
+              data-testid="mf-leaving-date"
+              type="date"
+              value={form.leaving_date}
+              onChange={(e) => set("leaving_date", e.target.value)}
+              className="iu-input"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">Days after this date render as &ldquo;LF&rdquo; on the Grid — for members who have exited the academy.</p>
           </div>
           <div>
             <label className="iu-label">Overtime eligibility</label>

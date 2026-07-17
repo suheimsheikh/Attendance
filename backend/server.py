@@ -242,6 +242,10 @@ class MemberCreate(BaseModel):
     # rows without a joining_date behave as before (no NJ cells).
     # Added 14 Feb 2026 (user request).
     joining_date: Optional[str] = None
+    # ISO YYYY-MM-DD of the day the member exited the academy. Grid
+    # renders post-leaving days as "LF" (Left) so they don't count as
+    # absent for a member who has moved on. Optional. Added 14 Feb 2026.
+    leaving_date: Optional[str] = None
     # OT-eligible flag (7 Jul 2026). Explicit `False` disables OT
     # accrual for this member regardless of category. `None` / `True`
     # → the pre-existing category-based rule applies (staff/coach/
@@ -272,6 +276,7 @@ class MemberUpdate(BaseModel):
     guardian_name: Optional[str] = None
     date_of_birth: Optional[str] = None
     joining_date: Optional[str] = None
+    leaving_date: Optional[str] = None
     ot_eligible: Optional[bool] = None
 
 
@@ -895,6 +900,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "guardian_name": body.guardian_name,
         "date_of_birth": body.date_of_birth,
         "joining_date": body.joining_date,
+        "leaving_date": body.leaving_date,
         "ot_eligible": body.ot_eligible,
         "photo": None,
         "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),

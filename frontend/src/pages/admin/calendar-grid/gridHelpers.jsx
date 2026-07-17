@@ -27,11 +27,13 @@ export const CELL_STYLE = {
   BK: { bg: "bg-fuchsia-200",    text: "text-fuchsia-800", label: "BK", title: "Break (member-scoped)" },
   AB: { bg: "bg-red-500",        text: "text-white",       label: "AB", title: "Absent" },
   // NJ = "Not Joined" — day predates the member's `joining_date`.
-  // Rendered as a diagonal-striped grey with an em-dash so it reads
-  // as "no data here, and correctly so" — the alternative was to show
-  // AB (red) which would over-flag every new hire's first month.
-  // Added 14 Feb 2026 (user request).
-  NJ: { bg: "bg-slate-100 bg-[repeating-linear-gradient(45deg,rgba(148,163,184,0.15)_0_4px,transparent_4px_8px)]", text: "text-slate-400", label: "—", title: "Before joining date" },
+  // Same visual weight as WO (bg-slate-200, text-slate-500, 2-letter
+  // label "NJ") so it reads as an off-day family sibling.
+  NJ: { bg: "bg-slate-200",      text: "text-slate-500",   label: "NJ", title: "Before joining date" },
+  // LF = "Left" — day is after the member's `leaving_date` (exited
+  // the academy). Same visual family as NJ, different label so
+  // admins can tell apart "hadn't joined yet" from "has left".
+  LF: { bg: "bg-slate-200",      text: "text-slate-500",   label: "LF", title: "After leaving date" },
 };
 
 /** One cell in a member's row for a given date. `code` may be null

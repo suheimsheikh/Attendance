@@ -862,10 +862,11 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1,
              "fleet": 1, "institution": 1, "weekly_off": 1,
              "work_start": 1, "work_end": 1,
-             # Joining date drives the "NJ" (Not Joined) cell code so
-             # the Grid doesn't show days before the member joined as
-             # absent. Added 14 Feb 2026 (user request).
-             "joining_date": 1},
+             # Joining/leaving dates drive the "NJ" (Not Joined) and
+             # "LF" (Left) cell codes so the Grid doesn't show
+             # pre-joining or post-leaving days as absent. Added
+             # 14 Feb 2026 (user request).
+             "joining_date": 1, "leaving_date": 1},
         ).to_list(2000)
         athlete_like = await _athlete_like_keys(db)
         if category == "athlete":
@@ -994,15 +995,18 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         }
 
         def _classify(uid: str, iso: str, dow_idx: int, weekly_off: str,
-                      work_start: str, joining_date: Optional[str] = None) -> str:
-            # Pre-joining days render as NJ ("Not Joined") — never as
-            # AB. This keeps the Grid honest for members who joined
-            # mid-year: their timeline shows an empty grey pre-join
-            # window rather than a 31-day column of red AB cells. Also
-            # excluded from Present / Absent / Leave / LOP totals below
-            # (only P/HD/LT/AB/LV/CO/LP/TR ever contribute to totals).
+                      work_start: str, joining_date: Optional[str] = None,
+                      leaving_date: Optional[str] = None) -> str:
+            # Pre-joining / post-leaving days render as NJ / LF so the
+            # Grid stays honest for members who joined mid-year or have
+            # left. Both codes are excluded from every totals bucket
+            # (Present / Absent / Leave / Tour / EO / LT / OT / LOP).
+            # Order matters: joining check fires first so a same-day
+            # (leaving < joining, corrupt data) still shows NJ.
             if joining_date and iso < joining_date:
                 return "NJ"
+            if leaving_date and iso > leaving_date:
+                return "LF"
             if iso > today_iso:
                 return ""  # future
             att = att_by_user.get(uid, {}).get(iso)
@@ -1062,7 +1066,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             weekly_off = (u.get("weekly_off") or default_wo).lower()
             work_start = u.get("work_start") or default_work_start
             cells = [_classify(uid, iso, dow_by_iso[iso], weekly_off, work_start,
-                               u.get("joining_date"))
+                               u.get("joining_date"), u.get("leaving_date"))
                      for iso in days]
             # Per-cell metadata — used by the frontend tooltip layer.
             # Only populate entries where there IS extra context worth
@@ -1074,7 +1078,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             if with_meta:
                 for idx, iso in enumerate(days):
                     code = cells[idx]
-                    if not code or code in ("WO", "HO", "AB", "NJ"):
+                    if not code or code in ("WO", "HO", "AB", "NJ", "LF"):
                         continue
                     m: dict = {}
                     if code == "BK":

@@ -7,6 +7,34 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 14 Feb 2026 — Fix NJ label + add `leaving_date` + LF cell code
+
+### Fix — NJ label visibility
+User feedback: "*NJ is not showing in grid. Show NJ with same font as WO.*"
+- Root cause: I had made `CELL_STYLE.NJ` render an em-dash (`—`) on a diagonal-striped background. The stripe was subtle at cell scale and the em-dash blended with the WO cells, making the pre-joining stretch look like weekly-offs. Also had a bug in the users-projection: **`leaving_date` was missing from the calendar-grid users projection**, so even a correctly-stored value came back as `None` in the loop.
+- Fix: NJ now uses the WO visual family — solid `bg-slate-200` + `text-slate-500` + 2-letter label **"NJ"**. Reads exactly like WO in font/size/weight, distinguishable only by the "NJ" text + tooltip. Added `leaving_date` to the users projection.
+
+### Feature — `leaving_date` + `LF` code
+- **Data model**: `leaving_date: Optional[str]` added to `MemberCreate` / `MemberUpdate` / `UserPublic`.
+- **Admin form**: MemberForm gets a second date picker below Joining date with helper text "*Days after this date render as "LF" on the Grid — for members who have exited the academy.*"
+- **Grid backend**: `_classify()` gains a second branch — `if leaving_date and iso > leaving_date: return "LF"` — checked AFTER the joining check but BEFORE the "future" check, so LF renders even for future days (an admin can mark someone as leaving next week and the Grid will show LF for post-leaving days regardless of when today falls).
+- **Grid frontend**: `CELL_STYLE.LF` mirrors NJ visually (bg-slate-200 + text-slate-500), label = `"LF"`, tooltip = "After leaving date". Auto-shows in the code legend.
+- **Excluded from totals** (P/AB/LV/TR/EO/LT/OT/LOP all skip): `WO`, `HO`, `AB`, `NJ`, `LF`, empty.
+
+### End-to-end verified
+Set `joining_date=2026-07-10, leaving_date=2026-07-25` on AINUL HAQUE:
+- Days 01–09 → `NJ` (9 cells)
+- Days 10–17 → normal (P, WO)
+- Days 18–25 (future within active window) → empty
+- Days 26–31 → `LF` (6 cells)
+- Totals: P=7, absent=0, all other buckets 0 — correctly excludes both stretches
+- DOM count: `NJ=9 · LF=6` ✓
+- Legend shows both codes.
+
+Files: `backend/server.py` (MemberCreate/Update + create-doc), `backend/models.py` (UserPublic), `backend/routes/reports.py` (classify, projection, totals filter), `frontend/src/pages/admin/MemberForm.jsx` (form field), `frontend/src/pages/admin/calendar-grid/gridHelpers.jsx` (CELL_STYLE NJ+LF)
+
+
+---
 ## 14 Feb 2026 — Feature: `joining_date` on Members + Grid "NJ" cells
 
 ### What shipped
