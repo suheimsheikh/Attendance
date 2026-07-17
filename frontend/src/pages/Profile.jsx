@@ -393,6 +393,11 @@ function EarlyOutsCard({ rows }) {
                 Out at {formatTime(r.check_out_at)} (expected {r.expected_end})
                 {r.hours != null && <> · {r.hours}h worked</>}
               </div>
+              {r.reason ? (
+                <div className="text-[11px] text-rose-700 mt-0.5 italic truncate" title={r.reason} data-testid={`early-out-reason-${r.id}`}>
+                  &ldquo;{r.reason}&rdquo;
+                </div>
+              ) : null}
             </div>
             <div className="text-sm font-bold text-rose-700 tabular-nums">−{r.early_by_minutes}m</div>
           </li>

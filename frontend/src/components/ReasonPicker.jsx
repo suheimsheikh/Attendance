@@ -12,7 +12,7 @@ import { api } from "../api";
  *    reason. Empty string means "no reason yet".
  *  - `placeholder` — hint text on the free-text input.
  *  - `disabled` — pass-through to the underlying inputs.
- *  - `variant` — "amber" (OT prompts) or "slate" (comp-off apply).
+ *  - `variant` — "amber" (OT prompts), "rose" (early-out prompt), or "slate" (comp-off apply).
  *    Only tweaks background tint so the picker slots into whichever
  *    surrounding card it's placed inside.
  *  - `testId` — data-testid namespace so multiple pickers on-page
@@ -49,11 +49,15 @@ export default function ReasonPicker({
   const chipBase =
     variant === "amber"
       ? "border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
-      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100";
+      : variant === "rose"
+        ? "border-rose-300 bg-white text-rose-900 hover:bg-rose-100"
+        : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100";
   const chipActive =
     variant === "amber"
       ? "border-amber-500 bg-amber-500 text-white"
-      : "border-slate-700 bg-slate-800 text-white";
+      : variant === "rose"
+        ? "border-rose-500 bg-rose-500 text-white"
+        : "border-slate-700 bg-slate-800 text-white";
 
   return (
     <div data-testid={testId}>

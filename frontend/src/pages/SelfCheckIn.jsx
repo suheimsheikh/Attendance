@@ -22,6 +22,11 @@ function hmParse(s) {
   return h * 60 + m;
 }
 const OT_THRESHOLD = 30;
+// Grace window (minutes) before `work_end` — mirrors the backend's
+// early-out detection in /me/profile-details (server.py L3214). If a
+// member is more than this many minutes early on check-out, we surface
+// an optional-reason prompt so the note lands on the attendance row.
+const EARLY_OUT_THRESHOLD = 15;
 
 export default function SelfCheckIn() {
   const { user, refreshMe } = useAuth();
@@ -33,6 +38,7 @@ export default function SelfCheckIn() {
   const [locating, setLocating] = useState("");
   const [lastDistance, setLastDistance] = useState(null);
   const [overtimeReason, setOvertimeReason] = useState("");
+  const [earlyOutReason, setEarlyOutReason] = useState("");
   const [showSelfie, setShowSelfie] = useState(false);
   const [photoStatus, setPhotoStatus] = useState(null);
   const [sites, setSites] = useState([]);
@@ -88,6 +94,25 @@ export default function SelfCheckIn() {
     return null;
   }, [user, status]);
 
+  // Early-out detection — mirrors the backend's 15-minute grace window
+  // in /me/profile-details. Fires only when the member is CHECKED IN
+  // (i.e. about to check out) and the current local minute is more than
+  // 15 min before their `work_end`. Applies to everyone with a
+  // schedule, not just staff (unlike OT which is staff-only) — coaches
+  // and executives should also be able to note "leaving early for a
+  // medical appt" so admins can review the ledger with full context.
+  const earlyOutInfo = useMemo(() => {
+    if (!status?.checked_in) return null;
+    const weMin = hmParse(user?.work_end);
+    if (weMin == null) return null;
+    const now = hmNow();
+    const diff = weMin - now;
+    if (diff >= EARLY_OUT_THRESHOLD) {
+      return { minutes: diff, label: `You're leaving ${diff} min before your end time (${user.work_end})` };
+    }
+    return null;
+  }, [user, status]);
+
   // Core check-in/out logic — extracted so it can be invoked directly after
   // the first-time selfie is captured (without re-tripping the photo guard).
   // Also invoked with an explicit `geoReason` after the off-geofence modal
@@ -129,6 +154,7 @@ export default function SelfCheckIn() {
         ? { latitude: lat, longitude: lng }
         : { latitude: 0, longitude: 0 };
       if (otInfo && overtimeReason.trim()) body.overtime_reason = overtimeReason.trim();
+      if (earlyOutInfo && earlyOutReason.trim()) body.early_out_reason = earlyOutReason.trim();
       if (geoReason) body.reason = geoReason;
       const res = await api.post("/attendance/geo-toggle", body);
       const dist = res.distance_m;
@@ -147,6 +173,7 @@ export default function SelfCheckIn() {
         speakLateMessage(res.late_minutes, res.member);
       }
       setOvertimeReason("");
+      setEarlyOutReason("");
       setOffGeoPending(null);
       refresh();
     } catch (err) {
@@ -285,6 +312,23 @@ export default function SelfCheckIn() {
                 testId="ot-reason"
               />
               <p className="text-[11px] text-amber-700 mt-1.5">Overtime is auto-tracked as extra hours served. Only staff accrue overtime.</p>
+            </div>
+          )}
+          {earlyOutInfo && (
+            <div className="mb-5 text-left rounded-xl border border-rose-200 bg-rose-50 p-3" data-testid="early-out-reason-block">
+              <div className="flex items-start gap-2 mb-2">
+                <AlertTriangle size={14} className="text-rose-700 mt-0.5 shrink-0" />
+                <div className="text-xs text-rose-800 font-semibold">{earlyOutInfo.label}</div>
+              </div>
+              <label className="iu-label text-rose-900">Reason for leaving early (optional)</label>
+              <ReasonPicker
+                value={earlyOutReason}
+                onChange={setEarlyOutReason}
+                placeholder="e.g. Medical appointment, family emergency, permitted early leave…"
+                variant="rose"
+                testId="early-out-reason"
+              />
+              <p className="text-[11px] text-rose-700 mt-1.5">Leaves an audit note on this session — admins see it on your Profile and in the day&rsquo;s ledger.</p>
             </div>
           )}
           <button

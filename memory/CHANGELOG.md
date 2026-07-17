@@ -7,6 +7,30 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 13 Feb 2026 (part 1) — Early-out reason capture on checkout
+
+### Feature
+When a member checks out **more than 15 min before** their scheduled `work_end`, the check-in/out screen now shows a rose-tinted "Reason for leaving early (optional)" prompt above the "Leaving Campus" button — mirroring the existing OT-reason UX. The reason is:
+- Persisted on the attendance row as `early_out_reason` + `early_out_minutes`
+- Surfaced back on Profile → **Early Outs — This Month** (each row now shows the italic quote of the reason under the timestamp)
+- Fed into the member's personal `_reason_bank`, so past reasons pop up as chips on subsequent check-outs
+
+Non-blocking (the check-out button stays active whether or not the field is filled), applies to every category (staff, coaches, executives, admins with a schedule) — unlike OT which stays staff-only.
+
+### Bug also fixed along the way
+While wiring this up, discovered that the existing Profile "Early Outs" list at `server.py` L3225–3234 was silently returning **empty for every user** because its `to_local` import didn't exist in `services.time_utils` and the try/except swallowed the `ImportError`. Replaced with the correct `office_tz` helper + `datetime.astimezone` — the list now actually populates.
+
+### API contract
+- `POST /api/attendance/geo-toggle` now accepts `early_out_reason: str?` (optional).
+- Only stamps `early_out_reason` when `early_out_minutes ≥ 15` — a reason on an on-time check-out is dropped (verified by pytest).
+
+### Tests
+- `backend/tests/test_early_out_reason.py` — two focused tests: (a) reason persists when leaving >15 min early, (b) reason dropped when on-time. Both pass. Full regression: `test_review_iter22.py` (3 tests) still green.
+
+Files: `backend/server.py`, `backend/tests/test_early_out_reason.py`, `frontend/src/pages/SelfCheckIn.jsx`, `frontend/src/pages/Profile.jsx`, `frontend/src/components/ReasonPicker.jsx` (added `variant="rose"` support).
+
+
+---
 ## 12 Feb 2026 (part 2) — Grid: removed Category column
 
 User feedback after the day-01 clipping fix: "better to remove the category column". Dropped the Category `<th>`/`<td>` from all three rows of the grid table (main header, dow sub-header, body) and adjusted the skeleton + empty-state colSpans from `3 + days.length + 6` → `2 + days.length + 6`. Removed the now-unused `categoryLabel` import.

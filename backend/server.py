@@ -387,6 +387,7 @@ class GeoToggleIn(BaseModel):
     longitude: float
     reason: Optional[str] = None
     overtime_reason: Optional[str] = None
+    early_out_reason: Optional[str] = None
 
 
 class MarkMemberIn(BaseModel):
@@ -2094,7 +2095,8 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
 
 async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
                       reason: Optional[str], by: Optional[str],
-                      overtime_reason: Optional[str] = None) -> dict:
+                      overtime_reason: Optional[str] = None,
+                      early_out_reason: Optional[str] = None) -> dict:
     """GPS-based check in/out (no QR). Distance from the office is recorded but
     NOT enforced — a check-in always succeeds. If the caller could not obtain
     a GPS fix they pass (0, 0) and we mark the row as `geo_unavailable`."""
@@ -2161,6 +2163,30 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         # bank so it re-appears as a suggestion on their next OT prompt.
         if overtime_reason and overtime_reason.strip():
             await _ensure_reason_in_bank(target["id"], overtime_reason)
+        # Early-out detection at checkout — mirror the /me/profile-details
+        # detection so the number matches the Profile "Early Outs" list
+        # (15-min grace before work_end). We store the reason + minute-count
+        # on the session so admins and the member both see WHY they left
+        # early, and so the personal reason-bank surfaces prior notes as
+        # suggestions on the next check-out. Detection uses the office-
+        # local minute-of-day for both `ts` and the member's work_end.
+        early_out_minutes = 0
+        work_end_hm = target.get("work_end")
+        if work_end_hm and ":" in (work_end_hm or ""):
+            try:
+                from services.time_utils import office_tz
+                _out_local = ts.astimezone(office_tz(office))
+                _out_min = _out_local.hour * 60 + _out_local.minute
+                _we_parts = work_end_hm.split(":")[:2]
+                _we_min = int(_we_parts[0]) * 60 + int(_we_parts[1])
+                _early_by = _we_min - _out_min
+                if _early_by >= 15:
+                    early_out_minutes = _early_by
+            except (ValueError, TypeError, AttributeError):
+                pass
+        _early_out_reason = (early_out_reason or "").strip() or None
+        if early_out_minutes > 0 and _early_out_reason:
+            await _ensure_reason_in_bank(target["id"], _early_out_reason)
         update_fields = {
             "check_out_at": ts.isoformat(),
             "hours": hours,
@@ -2173,6 +2199,11 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             "exit_reason": (reason or None),
             "exit_method": "geo",
             "checked_out_by": by,
+            # Early-out stamp — 0 when leaving on-time or later. Reason is
+            # kept even if the reason was supplied but early_out_minutes==0
+            # so admins can see the member intended to note something.
+            "early_out_minutes": early_out_minutes,
+            "early_out_reason": _early_out_reason if early_out_minutes > 0 else None,
         }
         update_fields.update(ot_updates)
         await db.attendance.update_one({"id": sess["id"]}, {"$set": update_fields})
@@ -2246,7 +2277,8 @@ async def geo_toggle(body: GeoToggleIn, user: dict = Depends(get_current_user)):
     if not office:
         raise HTTPException(status_code=500, detail="Office not configured")
     return await _geo_toggle(user, office, body.latitude, body.longitude,
-                             body.reason, None, body.overtime_reason)
+                             body.reason, None, body.overtime_reason,
+                             body.early_out_reason)
 
 
 @api_router.post("/attendance/mark-member")
@@ -3191,14 +3223,15 @@ async def my_profile_details(user: dict = Depends(get_current_user)):
             return None
 
     def _timestamp_local_min(ts):
-        # `ts` is a datetime string in UTC ISO. Convert to local minutes.
+        # `ts` is a datetime string in UTC ISO. Convert to office-local
+        # minute-of-day so it can be compared to the HH:MM `work_end`.
         if not ts:
             return None
         try:
-            from services.time_utils import to_local
-            dt = to_local(ts, office)
+            from services.time_utils import office_tz
+            dt = datetime.fromisoformat(ts).astimezone(office_tz(office))
             return dt.hour * 60 + dt.minute
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             return None
 
     early_outs_month = []
@@ -3218,6 +3251,10 @@ async def my_profile_details(user: dict = Depends(get_current_user)):
                 "expected_end": work_end,
                 "early_by_minutes": early_by,
                 "hours": s.get("hours"),
+                # Reason captured at checkout time (13 Feb 2026). May be
+                # blank for historical rows that predate the feature —
+                # the Profile card falls back to an em-dash in that case.
+                "reason": s.get("early_out_reason"),
             })
 
     ot_minutes_month = sum((s.get("overtime_total_min") or 0) for s in month_sessions)
