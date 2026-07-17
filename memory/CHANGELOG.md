@@ -8,6 +8,49 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 17 Feb 2026 — Reports.jsx split (Phase 2 refactor)
+
+Broke the 842-line god-component into a `/admin/reports/` subfolder so
+new report tabs and modals can land without stepping on each other.
+
+### New file layout
+- **`admin/Reports.jsx` (122 lines)** — thin orchestrator. Owns only:
+  shared month-nav state (year + monthIdx + `win`), URL-driven `tab`
+  state, the `athleteLikeKeys` fetch, and the `showHours` super-admin
+  flag. Renders exactly one of the three tab components.
+- **`admin/reports/AttendanceTab.jsx` (601 lines)** — the big monthly
+  table. Owns its own filters, all 4 ledger modals (Attendance / Leave /
+  Comp-off / OT), the hover-portal drilldown tooltip, and the timeline
+  modal. Zero prop drilling — only receives month props + `showHours`
+  + `athleteLikeKeys`.
+- **`admin/reports/DailyTab.jsx` (46 lines)** — Daily leave/tour list.
+  Owns its own `day` picker + fetch state.
+- **`admin/reports/MonthNav.jsx`** — prev/today/next arrows (used by
+  both Attendance tab directly and passed as a prop to CalendarGridTab).
+- **`admin/reports/DrillDownBubble.jsx`** — portal-rendered hover
+  tooltip that lists exact dates behind a count cell.
+- **`admin/reports/SectionList.jsx`** — the "On leave" / "On tour" card.
+- **`admin/reports/constants.js`** — `CATEGORY_FILTERS`, `SORT_OPTIONS`,
+  `VALID_TABS`.
+- **`admin/reports/utils.js`** — `pad2`, `isoDate`, `monthWindow`.
+
+### Behaviour preserved
+Zero API or logic changes — every `data-testid`, filter, ledger modal,
+export button, tooltip, and URL alias (`?tab=payroll`/`hours` → Attendance)
+is preserved verbatim. Testing-agent smoke pass on 13/14 flows.
+
+### Bug fixed as part of the refactor validation
+Pre-existing URL-sync asymmetry (introduced long before this refactor):
+`initial` defaulted to `"calendar"` when `?tab=` was missing, but
+`setTab` cleared `?tab=` when Attendance was clicked. Effect: click
+Attendance → reload → user silently lands on Calendar. Fixed by making
+`setTab` symmetric with `initial` — Calendar clears the param (the
+default), every other tab writes `?tab=<t>`. Verified: `/admin/reports`
+→ Attendance chip → reload → still on Attendance ✓.
+
+
+
+---
 ## 17 Feb 2026 — Search-box tint: lightish blue + black text (global)
 
 User request: "*Show all search boxes across the app with font black on

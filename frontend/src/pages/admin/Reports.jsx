@@ -46,7 +46,11 @@ export default function Reports() {
   const setTab = (t) => {
     setTabState(t);
     const next = new URLSearchParams(searchParams);
-    if (t === "attendance") next.delete("tab"); else next.set("tab", t);
+    // Calendar is the fallback in `initial` when no ?tab is set, so
+    // clicking Calendar strips the param (idempotent) while every
+    // other tab writes ?tab=<t> — this way a page refresh always
+    // returns the user to the tab they last clicked.
+    if (t === "calendar") next.delete("tab"); else next.set("tab", t);
     setSearchParams(next, { replace: true });
   };
   useEffect(() => {
