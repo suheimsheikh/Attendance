@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 
 from models import UserPublic
-from services.permissions import is_super_admin
+from services.permissions import is_super_admin, _SUPER_ADMIN_PHONES
 from services.time_utils import now_utc, local_date_str
 from services.phone import normalize_phone, phone_key
 
@@ -289,6 +289,50 @@ def make_router(
                         "category": None,
                     },
                 }
+
+        # Super-admin break-glass (24 Feb 2026): a phone on the
+        # SUPER_ADMIN_PHONES env whitelist is guaranteed a way in, even
+        # on a fresh production DB where the phone was never stamped
+        # against a user record. Three shapes we handle:
+        #   1. No user at all with this phone → create a fresh admin.
+        #   2. Existing user with this phone, non-admin role → elevate.
+        #   3. Existing admin (typical case) → no-op, downstream
+        #      auto-approve branch handles it.
+        # Deliberately narrow: only phones on the env whitelist can
+        # trigger this, so a member changing their phone to an admin's
+        # digits can never self-promote.
+        if _SUPER_ADMIN_PHONES and phone_key(digits) in {phone_key(p) for p in _SUPER_ADMIN_PHONES}:
+            if not matched:
+                # Fresh super-admin — synthesise a user row so the rest
+                # of the flow has something to link the device to.
+                new_admin_id = str(uuid.uuid4())
+                await db.users.insert_one({
+                    "id": new_admin_id,
+                    "email": f"super-admin-{digits}@attendance.app",
+                    "full_name": (body.full_name or "").strip() or "Super Admin",
+                    "role": "admin",
+                    "category": "staff",
+                    "rank": "Super Admin",
+                    "mobile": digits,
+                    "mobile_last10": phone_key(digits) or None,
+                    "photo": None,
+                    "hashed_password": hash_password(uuid.uuid4().hex),
+                    "created_at": now,
+                })
+                matched = await db.users.find_one({"id": new_admin_id}, {"_id": 0, "hashed_password": 0})
+                logger.info("Break-glass: created super-admin user for phone %s", digits)
+            elif matched.get("role") != "admin":
+                # Existing user (member/chef/etc.) whose phone happens
+                # to be on the super-admin whitelist — elevate them.
+                await db.users.update_one(
+                    {"id": matched["id"]},
+                    {"$set": {"role": "admin", "mobile": digits,
+                              "mobile_last10": phone_key(digits) or None}},
+                )
+                matched = await db.users.find_one({"id": matched["id"]}, {"_id": 0, "hashed_password": 0})
+                logger.info("Break-glass: elevated %s to admin (super phone %s)",
+                            matched.get("email"), digits)
+
         device = await db.devices.find_one({"device_id": body.device_id}, {"_id": 0})
         meta = {
             "phone": digits,

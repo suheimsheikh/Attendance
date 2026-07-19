@@ -1,0 +1,48 @@
+{
+  "verdict": "not_fixed",
+  "user_reported_bug": "I am not able to direct login with 9849002111 as super admin. I am not getting access with 9849002111 and the access request is not visible to admins. On prod just says waiting for approval.",
+  "summary": "No relevant testing skill found. Focused verification shows the normal-state API and UI direct login with 9849002111 now works, and startup backfill restores admin mobile after restart. However, the runtime break-glass layer fails under the requested drift scenario because /api/auth/phone matches an active escort with the same last-10 phone before running super-admin break-glass, returning an escort token and leaving admin@attendance.app downgraded/missing mobile until restored by the test cleanup.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/auth/phone",
+        "issue": "Runtime break-glass does not take precedence over escort matching. After unsetting admin@attendance.app mobile/mobile_last10 and downgrading role to member without restart, phone login for 9849002111 returned HTTP 200 approved for escort 'agape test' (role null, is_escort true) instead of admin, and the original admin row remained role=member with no mobile in the assertion snapshot. This can still deny super-admin access when DB drift exists and an escort shares the whitelisted phone.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification/test_super_admin_phone_login.py",
+    "/app/test_reports/super_admin_phone_api_results.json",
+    "/app/test_reports/bug_verification_27.json",
+    "/app/test_reports/iteration_27.json"
+  ],
+  "action_items": [
+    "Move/adjust the super-admin break-glass logic so whitelisted SUPER_ADMIN_PHONES are resolved before escort matching, or explicitly ignore escort matches for whitelisted super-admin phones.",
+    "Retest drift-corrupted admin row with active escorts sharing +919849002111 to ensure the response user.role is admin and admin@attendance.app is restored to role=admin/mobile=9849002111 without backend restart."
+  ],
+  "critical_code_review_comments": [
+    "In /app/backend/routes/auth.py, lines 268-291 return an escort token before the new super-admin break-glass block at lines 293-335. Because _match_escort_by_phone uses mobile_last10, active escorts with +919849002111 preempt the whitelisted super-admin rescue path whenever the admin user is not matched by mobile."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification/test_super_admin_phone_login.py",
+    "/app/test_reports/super_admin_phone_api_results.json",
+    "/app/test_reports/bug_verification_27.json",
+    "/app/test_reports/iteration_27.json"
+  ],
+  "success_rate": {
+    "backend": "83%",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "No permanent seed data created. Test temporarily unset/restored admin@attendance.app mobile/mobile_last10 and role, created QA device rows, then deleted those QA device rows and restored admin to role=admin/mobile=9849002111.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend API checks: 5/6 passed. Direct 9849002111 API login returned approved admin token; admin email login returned admin token; startup backfill after restart restored mobile/mobile_last10; regular member and unknown phone regressions passed. Failing case: no-restart drift corruption of admin row returned escort identity because two active escorts in DB have mobile_last10=9849002111. UI normal-state login at preview /login passed: entered 9849002111, navigated to /, no pending panel, sidebar showed Admin and Campus Administrator.",
+  "rca_of_the_issue": "The break-glass block was inserted after the escort-match early return. If admin@attendance.app cannot be matched by phone (the exact production drift class), _match_escort_by_phone can match +919849002111 and return immediately, so the SUPER_ADMIN_PHONES guarantee is bypassed. Backend logs also show startup backfill works on restart, but Layer 2 does not rescue at request time in this DB shape."
+}

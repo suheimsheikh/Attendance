@@ -509,6 +509,27 @@ async def _seed_database() -> None:
             "created_at": now_utc().isoformat(),
         })
         logger.info("Seeded admin user")
+
+    # Super-admin phone backfill (24 Feb 2026): if the seeded admin has no
+    # `mobile` set, stamp the first phone from SUPER_ADMIN_PHONES on it so
+    # the passwordless phone-login path works out of the box on any fresh
+    # deployment. Without this, a production DB that was seeded before the
+    # phone-login feature existed leaves the admin unreachable via phone —
+    # they can still log in with email + password, but that's admin-only
+    # and clumsy for the "just tap Continue" experience.
+    from services.permissions import _SUPER_ADMIN_PHONES as _SEED_SUPER_PHONES
+    if _SEED_SUPER_PHONES:
+        primary_super = next(iter(_SEED_SUPER_PHONES))
+        # Only patch the primary admin — deliberately narrow so we don't
+        # accidentally overwrite anybody else's mobile.
+        admin_row = await db.users.find_one({"email": ADMIN_EMAIL}, {"_id": 0, "id": 1, "mobile": 1})
+        if admin_row and not (admin_row.get("mobile") or "").strip():
+            key = phone_key(primary_super)
+            await db.users.update_one(
+                {"id": admin_row["id"]},
+                {"$set": {"mobile": primary_super, "mobile_last10": key}},
+            )
+            logger.info("Backfilled super-admin phone %s onto %s", primary_super, ADMIN_EMAIL)
     office = await db.config.find_one({"id": "office"})
     if not office:
         await db.config.insert_one({

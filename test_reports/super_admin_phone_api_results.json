@@ -1,0 +1,84 @@
+{
+  "all_ok": false,
+  "results": [
+    {
+      "name": "direct super-admin phone login approved",
+      "ok": true,
+      "detail": {
+        "http": 200,
+        "status": "approved",
+        "role": "admin",
+        "token_present": true
+      }
+    },
+    {
+      "name": "admin email login still works",
+      "ok": true,
+      "detail": {
+        "http": 200,
+        "role": "admin",
+        "token_present": true
+      }
+    },
+    {
+      "name": "startup backfill restores admin mobile",
+      "ok": true,
+      "detail": {
+        "role": "admin",
+        "mobile": "9849002111",
+        "mobile_last10": "9849002111"
+      }
+    },
+    {
+      "name": "runtime break-glass restores original admin row after role/mobile drift",
+      "ok": false,
+      "detail": {
+        "http": 200,
+        "response_status": "approved",
+        "response_user": {
+          "id": "ffc4fe5f-2b8b-4652-acc3-d4dd1b66143f",
+          "full_name": "agape test",
+          "phone": "+919849002111",
+          "institution": "Agape Home",
+          "is_escort": true,
+          "escort_id": "ffc4fe5f-2b8b-4652-acc3-d4dd1b66143f",
+          "role": null,
+          "category": null
+        },
+        "admin_row": {
+          "email": "admin@attendance.app",
+          "full_name": "Campus Administrator",
+          "role": "member"
+        }
+      }
+    },
+    {
+      "name": "non-super-admin member phone is not elevated",
+      "ok": true,
+      "detail": {
+        "http": 200,
+        "response_status": "approved",
+        "response_user_role": "member",
+        "member_row": {
+          "id": "95834ee6-090f-4696-82ff-142f11af3413",
+          "role": "member",
+          "mobile": "6305989752"
+        }
+      }
+    },
+    {
+      "name": "unknown non-super phone stays pending and does not create admin",
+      "ok": true,
+      "detail": {
+        "http": 200,
+        "response": {
+          "status": "pending",
+          "device_id": "qa-unknown-89538c80483a45f1b56a5e903e3c285c",
+          "matched_member": null,
+          "needs_profile": true
+        },
+        "unknown_admins": []
+      }
+    }
+  ]
+}
