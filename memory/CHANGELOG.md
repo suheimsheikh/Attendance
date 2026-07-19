@@ -8,6 +8,76 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 24 Feb 2026 — P0: Super-admin phone-login lockout on prod
+
+User report: "*I am not able to direct login with 9849002111 as super
+admin. On prod just says waiting for approval. The email id and pwd
+you provided does not work in prod either.*"
+
+### Root cause
+On the very first prod deploy, `_seed_database()` created the admin
+row with `email=admin@attendance.app` but never stamped a `mobile`
+field. On today's prod DB two additional facts held:
+- 2 rows in the `escorts` collection have `mobile_last10=9849002111`.
+- The admin's password was manually changed away from `Admin@12345`,
+  killing the email-login fallback.
+
+Effect: phone-login for `9849002111` couldn't find a user via
+`_match_user_by_phone`, then fell through to `_match_escort_by_phone`
+which happily matched an escort with the same last-10 digits and
+returned an escort token — so the super-admin was routed to the
+escort flow instead of the admin dashboard, AND with no working email
+fallback the whole account was locked out.
+
+### Fix — two layers of defence
+**Layer 1 — Startup backfill (`server.py::_seed_database`)**
+- On every boot, if `admin@attendance.app` exists with no `mobile`,
+  stamp the first phone from `SUPER_ADMIN_PHONES` onto it
+  (`mobile` + `mobile_last10`). Logs `Backfilled super-admin phone`.
+- Solves prod on the *next deploy* — no manual DB edit needed.
+
+**Layer 2 — Runtime break-glass (`routes/auth.py::/api/auth/phone`)**
+- Inserted immediately after `matched = _match_user_by_phone(digits)`
+  and **BEFORE** the escort-match block (critical ordering — an earlier
+  version of this patch placed the block AFTER the escort match, and
+  iteration-27 bug-testing caught that an escort sharing the whitelisted
+  phone preempted the rescue).
+- If the incoming phone is in `SUPER_ADMIN_PHONES`, guarantees a valid
+  admin identity via three shapes:
+  1. **No user matched** → prefer restoring the seeded
+     `admin@attendance.app` row (backfill role/mobile) rather than
+     creating a duplicate. Only if that row doesn't exist do we
+     synthesise a fresh `super-admin-<phone>@attendance.app` user.
+  2. **Matched user, non-admin role** → elevate in place
+     (`role="admin"`, mobile stamped).
+  3. **Matched admin** → no-op; downstream auto-approve branch handles it.
+- Deliberately narrow: only phones on the env whitelist can trigger
+  this, so no self-promotion attack surface.
+
+### Verified (iteration-28 bug-testing agent)
+- Drift-corrupted admin + 2 escorts sharing `9849002111` → phone
+  login now returns `status=approved, role=admin, token, is_escort=None`.
+- `admin@attendance.app` row is restored (`role=admin`,
+  `mobile=9849002111`) — zero ghost rows.
+- Startup backfill runs on restart and restores the mobile field.
+- Regressions all green: regular member phone login stays as member,
+  unknown phone still returns `pending+needs_profile`, non-whitelisted
+  escort phone still routes to escort flow, admin email login on
+  preview unaffected.
+- Frontend E2E on `/login` — entering `9849002111` → Continue →
+  navigation to `/` with Admin sidebar and Campus Administrator header.
+
+### On the "email/pwd doesn't work in prod" symptom
+The prod admin password was manually changed at some point (not by
+this session). Nothing in the codebase reset it, and I deliberately
+did NOT force a password reset in the fix — that would trample an
+intentional change. The phone break-glass is now the primary
+recovery path. Once logged in via phone, the user can change the
+password from Profile settings.
+
+
+
+---
 ## 18 Feb 2026 — Claude Help Chat widget (bottom-right FAB)
 
 User request: "*Can we have a help routine by Claude at the bottom
