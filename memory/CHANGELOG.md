@@ -8,6 +8,57 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 24 Feb 2026 — Grid cell click → auto-cancel leave + paint LP
+
+User request: "*When we request a correction for leave on the grid by
+clicking on a cell then it should seek out the entire leave
+application and allow for its cancellation and then display LP. Same
+for Tour.*"
+
+### Before
+Clicking an LV/TR cell opened `CorrectionRequestModal` in "picker
+mode" — admin had to scroll a candidate dropdown to find the target
+leave row. After cancellation the affected days flipped to **AB**
+(absent), not LP.
+
+### Fix (backend + frontend, 5 surgical edits)
+
+**Backend — `routes/reports.py::calendar-grid`**
+- Line ~922: leaves query now pulls `status="approved"` **OR**
+  `status="cancelled" AND converted_to_lop=true`.
+- Line ~1024: code-selector returns `"LP"` for cancelled+lop leaves
+  across the entire date range (not just the trailing LOP tail).
+- Line ~1097: `cell_meta[iso]` for LV/LP/TR/CO/PS cells now includes
+  `leave_id` — the frontend uses this to pre-bind the correction.
+
+**Backend — `routes/corrections.py`**
+- `_apply_leave_cancel` now defaults `payload.convert_to_lop=True` and
+  stamps `converted_to_lop: true` + `lop_days: <total_days>` on the
+  cancelled leave. Callers can opt out via
+  `payload.convert_to_lop=false`.
+- `_undo_leave_cancel` clears the `converted_to_lop`/`lop_days` flags
+  on undo so the Grid stops painting LP once the cancellation is
+  reversed.
+
+**Frontend — `pages/admin/CalendarGridTab.jsx`**
+- Cell `onClick` reads `meta.leave_id` from `cell_meta[iso]` and passes
+  it as `entityId` in `setCorrection`.
+- `<CorrectionRequestModal>` now receives `entityId={correction.entityId}`
+  — the modal's existing early-return (line 89) skips the picker
+  fetch when an entityId is pre-bound.
+
+### Verified (bug-testing agent iteration 29 — 100% pass)
+- LV/TR cells carry `leave_id` metadata.
+- Clicking LV/TR opens the modal with **no candidate picker**.
+- Submitting the cancellation succeeds → all days of the range paint
+  as **LP** on the Grid, including tours.
+- Undo restores original LV/TR codes.
+- `convert_to_lop=false` opt-out path preserved (cancels without LP).
+- Non-leave cells (P/HD/LT/AB/WO/HO) do **not** carry `leave_id`.
+
+
+
+---
 ## 24 Feb 2026 — P0: Super-admin phone-login lockout on prod
 
 User report: "*I am not able to direct login with 9849002111 as super
