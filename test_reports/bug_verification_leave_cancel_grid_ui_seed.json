@@ -1,0 +1,15 @@
+{
+  "base_url": "https://attendance-portal-56.preview.emergentagent.com",
+  "month": "2026-07",
+  "member_id": "f8aae03c-093c-437d-ad5e-34a46d1debbf",
+  "member_name": "QA Leave Grid Ui 1784516112659",
+  "leave_id": "a54e2b3d-d835-4273-99d5-53cf855939a7",
+  "dates": [
+    "2026-07-01",
+    "2026-07-02",
+    "2026-07-03"
+  ],
+  "target_date": "2026-07-01",
+  "admin_email": "admin@attendance.app",
+  "admin_password": "Admin@12345"
+}

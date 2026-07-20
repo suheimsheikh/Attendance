@@ -1,0 +1,85 @@
+{
+  "base_url": "https://attendance-portal-56.preview.emergentagent.com",
+  "month": "2026-07",
+  "checks": [
+    {
+      "name": "approved leave LV cells include leave_id",
+      "member_id": "09f20069-4a5f-4a89-8234-3759eeed62a0",
+      "leave_id": "e2d82583-c199-44e8-a898-95111d1a6f39",
+      "dates": [
+        "2026-07-01",
+        "2026-07-02",
+        "2026-07-03"
+      ],
+      "codes": [
+        "LV",
+        "LV",
+        "LV"
+      ]
+    },
+    {
+      "name": "default leave_cancel paints LP across whole leave",
+      "correction_id": "ec201ddb-265d-4e1c-b068-6fc6e0be22ad",
+      "codes": [
+        "LP",
+        "LP",
+        "LP"
+      ],
+      "leave_status": {
+        "status": "cancelled",
+        "converted_to_lop": true,
+        "lop_days": 3.0
+      }
+    },
+    {
+      "name": "undo restores approved LV and clears LOP flags",
+      "codes": [
+        "LV",
+        "LV",
+        "LV"
+      ]
+    },
+    {
+      "name": "tour TR cancels to LP across range and undo restores TR",
+      "tour_id": "871823ca-0c08-47e2-81e3-200460749811",
+      "dates": [
+        "2026-07-01",
+        "2026-07-02",
+        "2026-07-03"
+      ],
+      "codes_after_undo": [
+        "TR",
+        "TR",
+        "TR"
+      ]
+    },
+    {
+      "name": "convert_to_lop false cancels without LP or leave_id",
+      "codes": [
+        "AB",
+        "AB",
+        "AB"
+      ],
+      "leave_status": {
+        "status": "cancelled",
+        "converted_to_lop": null,
+        "lop_days": 0.0
+      }
+    }
+  ],
+  "ui_seed": {
+    "base_url": "https://attendance-portal-56.preview.emergentagent.com",
+    "month": "2026-07",
+    "member_id": "f8aae03c-093c-437d-ad5e-34a46d1debbf",
+    "member_name": "QA Leave Grid Ui 1784516112659",
+    "leave_id": "a54e2b3d-d835-4273-99d5-53cf855939a7",
+    "dates": [
+      "2026-07-01",
+      "2026-07-02",
+      "2026-07-03"
+    ],
+    "target_date": "2026-07-01",
+    "admin_email": "admin@attendance.app",
+    "admin_password": "Admin@12345"
+  }
+}

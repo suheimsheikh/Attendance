@@ -317,6 +317,13 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                         date: iso,
                         entityType: cfg.entityType,
                         initialKind: cfg.initialKind,
+                        // 24 Feb 2026: when the click lands on a leave-family
+                        // cell (LV / LP / TR / CO / PS), the backend already
+                        // stashed the target leave id in cell_meta — pass it
+                        // straight through as `entityId` so the modal skips
+                        // the candidate-picker step and goes direct to "cancel
+                        // this leave application".
+                        entityId: meta?.leave_id,
                       })
                     : undefined;
                   return { code, iso, meta, onClick, dow: dayHeaders[idx]?.dow };
@@ -459,6 +466,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
             loadReport();
           }}
           entityType={correction.entityType}
+          entityId={correction.entityId}
           initialKind={correction.initialKind}
           targetDate={correction.date}
           onBehalfOfMember={correction.member}

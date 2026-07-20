@@ -920,11 +920,21 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                  "early_out_minutes": 1},
             ).to_list(20000),
             db.leaves.find(
-                {"user_id": {"$in": user_ids}, "status": "approved",
+                # Also pull leaves that were cancelled + converted to LOP
+                # (24 Feb 2026 user request: Grid-initiated cancellations
+                # paint LP on the affected days instead of falling back
+                # to AB). The code-selector below treats these rows as
+                # LP for their entire range.
+                {"user_id": {"$in": user_ids},
+                 "$or": [
+                     {"status": "approved"},
+                     {"status": "cancelled", "converted_to_lop": True},
+                 ],
                  "start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
-                {"_id": 0, "user_id": 1, "type": 1, "reason": 1,
+                {"_id": 0, "id": 1, "user_id": 1, "type": 1, "reason": 1,
                  "half_day": 1, "decided_by": 1, "decided_at": 1,
-                 "start_date": 1, "end_date": 1,
+                 "start_date": 1, "end_date": 1, "status": 1,
+                 "converted_to_lop": 1, "cancelled_by": 1, "cancelled_at": 1,
                  "lop_days": 1, "paid_leave_used": 1, "comp_off_used": 1},
             ).to_list(20000),
             db.holidays.find(
@@ -1021,6 +1031,14 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             # No attendance — check approved leaves.
             for L in leaves_by_user.get(uid, []):
                 if L.get("start_date") <= iso <= L.get("end_date"):
+                    # Grid-initiated cancellations flip the whole date
+                    # range to LP so admins can see the day counts as
+                    # loss-of-pay without diving into the leave record
+                    # (24 Feb 2026). Applies for the ENTIRE range —
+                    # unlike the partial LOP tail below which only
+                    # paints the trailing `lop_days` positions.
+                    if L.get("status") == "cancelled" and L.get("converted_to_lop"):
+                        return "LP"
                     code = LEAVE_CODE.get((L.get("type") or "").lower(), "LV")
                     # LOP overlay (20 Feb 2026): if an APPROVED `leave`
                     # (only `leave` runs the deduction ladder) has a
@@ -1097,6 +1115,23 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                     elif code in ("LV", "LP", "TR", "CO", "PS"):
                         for L in leaves_by_user.get(uid, []):
                             if L.get("start_date") <= iso <= L.get("end_date"):
+                                # Grid-initiated cancellations paint LP
+                                # across the entire range but the SOURCE
+                                # leave is the cancelled one — skip it
+                                # here so the Grid click on an LP cell
+                                # still targets the cancelled leave for
+                                # any future undo flow.
+                                if L.get("status") == "cancelled" and not L.get("converted_to_lop"):
+                                    continue
+                                # 24 Feb 2026: expose the leave id so the
+                                # Grid can pre-bind it into the correction
+                                # modal (`entityId`), skipping the picker
+                                # step and going straight to "cancel this
+                                # leave". Same field is used by TR / CO /
+                                # PS cells since all four are `leaves`
+                                # rows differing only by `type`.
+                                if L.get("id"):
+                                    m["leave_id"] = L["id"]
                                 if L.get("reason"):
                                     m["reason"] = L["reason"]
                                 if L.get("half_day"):

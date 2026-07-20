@@ -159,18 +159,45 @@ async def _apply_leave_date_change(db, c: dict, admin: dict) -> dict:
 async def _apply_leave_cancel(db, c: dict, admin: dict) -> dict:
     if not c.get("entity_id"):
         raise HTTPException(status_code=400, detail="entity_id (leave id) is required")
-    res = await db.leaves.update_one(
-        {"id": c["entity_id"]},
-        {"$set": {
-            "status": "cancelled",
-            "cancelled_by": admin.get("full_name"),
-            "cancelled_via": c["id"],
-            "cancelled_at": now_utc().isoformat(),
-        }},
-    )
+    # 24 Feb 2026 (user request): Grid-initiated cancellations should
+    # flip the affected days to LP (Loss of Pay) on the calendar
+    # instead of leaving them blank/AB. We do this by stamping
+    # `converted_to_lop=True` + `lop_days=<total range>` alongside the
+    # cancellation. The Grid picks these rows up alongside approved
+    # leaves and paints LP for the whole date range. Non-Grid cancels
+    # (which the UI currently doesn't expose but the endpoint still
+    # accepts) can opt out via payload.convert_to_lop=false.
+    leave = await db.leaves.find_one({"id": c["entity_id"]}, {"_id": 0})
+    if not leave:
+        raise HTTPException(status_code=404, detail="Target leave no longer exists")
+    payload = c.get("payload") or {}
+    # Default ON — the correction UI (Grid + MyLeaves) never sets this
+    # explicitly today, so unless the API caller opts out we treat every
+    # cancellation as LP-converting.
+    convert_to_lop = payload.get("convert_to_lop", True)
+    update = {
+        "status": "cancelled",
+        "cancelled_by": admin.get("full_name"),
+        "cancelled_via": c["id"],
+        "cancelled_at": now_utc().isoformat(),
+    }
+    if convert_to_lop:
+        try:
+            sd = date.fromisoformat(leave["start_date"])
+            ed = date.fromisoformat(leave["end_date"])
+            total_days = max(1, (ed - sd).days + 1)
+        except Exception:
+            total_days = 1
+        update["converted_to_lop"] = True
+        update["lop_days"] = float(total_days)
+    res = await db.leaves.update_one({"id": c["entity_id"]}, {"$set": update})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Target leave no longer exists")
-    return {"leave_id": c["entity_id"], "cancelled": True}
+    return {
+        "leave_id": c["entity_id"],
+        "cancelled": True,
+        "converted_to_lop": convert_to_lop,
+    }
 
 
 async def _apply_leave_type_change(db, c: dict, admin: dict) -> dict:
@@ -259,11 +286,14 @@ async def _undo_leave_date_change(db, c: dict) -> dict:
 
 
 async def _undo_leave_cancel(db, c: dict) -> dict:
-    """Flip a cancelled leave back to approved."""
+    """Flip a cancelled leave back to approved. Also clears the
+    `converted_to_lop` overlay set by `_apply_leave_cancel` so the
+    Grid stops painting LP once the cancellation is undone."""
     res = await db.leaves.update_one(
         {"id": c["entity_id"], "cancelled_via": c["id"]},
         {"$set": {"status": "approved"},
-         "$unset": {"cancelled_by": "", "cancelled_via": "", "cancelled_at": ""}},
+         "$unset": {"cancelled_by": "", "cancelled_via": "", "cancelled_at": "",
+                    "converted_to_lop": "", "lop_days": ""}},
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Leave already restored or no longer exists")
