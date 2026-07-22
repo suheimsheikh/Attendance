@@ -8,6 +8,83 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 26 Feb 2026 — Data Quality report: 15 new checks + 6 one-click auto-fixes
+
+User request: "*Could we add a missing data and data quality check
+report with a fix option.*" Discovery: the page already existed at
+`/admin/data-quality` (sidebar entry present) with ~20 checks and
+navigate-only Fix buttons. This session **extends** the existing suite
+rather than duplicating.
+
+### New checks (15) added to `GET /api/admin/data-quality`
+**Profile gaps** (6): `member.missing_joining_date`, `.missing_category`,
+`.missing_rank`, `.missing_weekly_off`, `.missing_institution`,
+`.missing_fleet`.
+
+**Leaves** (3): `leave.missing_reason`, `leave.overlapping`,
+`leave.lop_exceeds_span`.
+
+**Attendance** (3): `session.zero_duration`, `session.too_long_16h`,
+`session.duplicate_open`.
+
+**Devices** (3): `device.approved_for_ex_member`,
+`device.too_many_active`, `device.stale_pending`.
+
+**Escorts** (3): `escort.no_institution`, `escort.duplicate_phone`,
+`escort.malformed_phone`.
+
+**Config** (3): `config.no_office_geofence`, `config.empty_categories`,
+`config.stale_holidays`.
+
+### One-click auto-fix (6) — new `POST` endpoints
+All admin-guarded, idempotent, safe bulk mutations:
+- `POST /api/admin/data-quality/fix/session.zero_duration` — deletes
+  zero-length attendance rows.
+- `POST /api/admin/data-quality/fix/session.too_long_16h` — caps
+  sessions > 16 h at check-in + 16 h. Normalises naive/`Z`/`+00:00`
+  timestamps before subtracting (iteration-32 fix).
+- `POST /api/admin/data-quality/fix/session.duplicate_open` — keeps
+  earliest open session per user, deletes the rest.
+- `POST /api/admin/data-quality/fix/session.open_over_36h` — closes
+  dangling sessions at check-in + 8 h.
+- `POST /api/admin/data-quality/fix/leave.lop_exceeds_span` — caps
+  `lop_days` at the leave's actual date span.
+- `POST /api/admin/data-quality/fix/device.approved_for_ex_member` —
+  revokes all approved devices whose user has `leaving_date` in the past.
+
+Auto-fix findings carry `auto_fix: true` in the report JSON so the
+frontend can render the green **Fix all** button.
+
+### Frontend — `DataQuality.jsx` `FixButton` extended
+- When `finding.auto_fix === true` → green **Fix all** button
+  (data-testid `dq-autofix-<code>`) with a confirm prompt, POST, toast,
+  and auto-refresh via the existing `load()` callback.
+- Otherwise → the pre-existing navigate-Link (data-testid `dq-fix-<code>`)
+  jumps to the appropriate edit page (Members / Approvals / Devices /
+  Escorts / Office / Masters / Holidays).
+
+### Bugs caught + fixed during verification (iterations 32 → 33)
+1. `session.too_long_16h` was silently skipping rows with mixed
+   timezone-aware and naive timestamps because both parse paths landed
+   in the broad `except: continue`. Fix: `_naive_dt()` helper strips
+   tzinfo before subtracting, applied to both the detector and the
+   auto-fix handler.
+2. `config.empty_categories` was reading `db.categories_master` but the
+   app actually uses `db.categories` — false positive in the report.
+   Fix: read the correct collection.
+
+### Verified (bug-testing agent iterations 32 & 33)
+- All 6 auto-fix endpoints work + are idempotent (2nd POST returns
+  `fixed: 0`).
+- Every new detector fires when its condition is met.
+- `session.too_long_16h` catches ALL shapes: naive, Z-suffixed,
+  `+00:00`, non-UTC offset.
+- Frontend Fix-all button + confirm + toast + refresh flow verified.
+- Auth guard on all 6 fix endpoints: 401 without token, 403 for member.
+
+
+
+---
 ## 24 Feb 2026 — Exit-a-member playbook: 4 gaps closed
 
 User request: "*How do I exit a person who has resigned without
