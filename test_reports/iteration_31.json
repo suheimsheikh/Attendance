@@ -1,0 +1,41 @@
+{
+  "verdict": "fixed",
+  "user_reported_bug": "How do I exit a person who has resigned without disturbing attendance and balance leaves. A resignation or let go basically",
+  "summary": "No relevant testing skill found. Targeted Presence Board retest passed: /api/presence now emits leaving_date after PATCH /api/members/{id}, and the Presence UI hides the exited member by default, shows a non-zero Show ex-members toggle, and re-includes the member with LF chip after toggling. Quick regression checks for Members, Muster Roll, and Reports Attendance filters/LF chips also passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/verify_ex_member_presence_api.py",
+    "/app/tests/verify_presence_curl_jq.sh",
+    "/app/tests/seed_ex_member_for_ui.py",
+    "/app/tests/cleanup_ex_member_test_flags.py",
+    "/app/test_reports/bug_verification_31.json",
+    "/app/test_reports/iteration_31.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/backend/server.py /api/presence users projection now includes leaving_date: 1, matching the response assembly and enabling frontend ex-member filtering/chips. No remaining code-review blocker found for the targeted Presence fix."
+  ],
+  "updated_files": [
+    "/app/tests/verify_presence_curl_jq.sh",
+    "/app/test_reports/ex_member_ui_seed_state.json",
+    "/app/test_reports/bug_verification_31.json",
+    "/app/test_reports/iteration_31.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "Temporarily set existing member DHARANI LAVETI (f5495671-3773-43d9-8b16-1f9fe924c393) leaving_date to 2020-01-01 for API/UI verification, then restored original leaving_date=null. Cleanup confirmed 0 QA devices, 0 QA attendance rows, 0 QA leave rows, and 0 flagged open sessions remain.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Focused iteration-31 retest only. Evidence: verify_ex_member_presence_api.py passed; verify_presence_curl_jq.sh showed /api/presence row leaving_date=2020-01-01; browser automation confirmed Presence default hides row and Show ex-members reveals LF chip; Members/Muster/Reports Attendance sanity checks passed. No APIs were MOCKED.",
+  "rca_of_the_issue": "Prior failure was caused by /api/presence reading u.get('leaving_date') after a db.users projection that omitted leaving_date, causing null in the API and preventing UI ex-member classification. The projection now includes leaving_date, and end-to-end API/UI evidence verifies the fix."
+}
