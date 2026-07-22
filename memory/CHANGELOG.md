@@ -8,6 +8,69 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 24 Feb 2026 — Exit-a-member playbook: 4 gaps closed
+
+User request: "*How do I exit a person who has resigned without
+disturbing attendance and balance leaves. A resignation or let go
+basically.*" Answered with a mechanism walkthrough + shipped 4
+safety-net additions.
+
+### The exit flow (unchanged mechanism, now with guardrails)
+Admin → **Manage Members → edit → Leaving date → Save**. Historical
+attendance and leave balances stay intact — the record is preserved,
+not deleted.
+
+### Gaps closed
+
+**1. Backend hard cutoff on check-in surfaces** (`services/permissions.py`)
+- New `is_ex_member(user, today?)` helper — True when `leaving_date`
+  is set and strictly in the past.
+- `perform_toggle` (server.py 2073), `_geo_toggle` (server.py 2199),
+  and `muster_checkin_bulk` (routes/muster.py 289) now raise 403 or
+  push ex-members into `skipped` before any DB write.
+- Attendance / leave rows never mutated → history preserved.
+
+**2. Auto-revoke devices on off-boarding** (server.py update_member,
+lines 1135-1160)
+- When `leaving_date` transitions INTO the past on a PATCH, all
+  non-revoked devices for that user get `status="revoked"` with
+  reason "Member exited on <date>".
+- Idempotent — subsequent saves of an already-ex member don't re-fire.
+- Setting a FUTURE leaving_date does NOT revoke.
+
+**3. "Active only" default filter with per-surface toggle**
+- New helper `utils/exMember.js` + new components
+  `ExMemberToggle.jsx` + `ExMemberChip.jsx`.
+- Wired into **Members list**, **Presence Board**, **Muster Roll**,
+  and **Reports Attendance table** — default hides ex-members with a
+  small "Show ex-members" chip (data-testid=`ex-member-toggle`) that
+  persists preference per-surface in localStorage.
+- The Calendar Grid is intentionally unaffected — it still renders
+  ex-members with LF cells for post-leaving_date dates so admins can
+  see historical months.
+- Backend projections extended to emit `leaving_date` on `/presence`,
+  `/muster/athletes`, and `/reports/payroll` rows so the frontend
+  filter/chip logic works uniformly.
+
+**4. "LF" chip next to ex-member names**
+- Small grey pill rendered by `ExMemberChip` next to the member's
+  name in every list surface. Tooltip shows `Left on <date>`.
+
+### Verified (bug-testing agent — iterations 30 & 31)
+- Attendance cutoff: 403 on geo-toggle, scan-card, muster-checkin;
+  attendance table unchanged.
+- Auto-revoke: transitions past → all non-revoked devices flip to
+  revoked; future leaving_date does not fire; idempotent on repeated
+  saves.
+- All 4 UI surfaces: toggle appears when ex-count > 0, default hides
+  ex-members, LF chip renders when shown.
+- **Historical preservation invariant**: db.attendance and db.leaves
+  counts unchanged before/after marking a member as ex.
+- 100% pass on backend & frontend regressions.
+
+
+
+---
 ## 24 Feb 2026 — Grid cell click → auto-cancel leave + paint LP
 
 User request: "*When we request a correction for leave on the grid by
