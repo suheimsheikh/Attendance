@@ -1,0 +1,62 @@
+{
+  "ok": true,
+  "issues": [],
+  "evidence": {
+    "admin_login": {
+      "ok": true,
+      "user": "admin@attendance.app"
+    },
+    "categories_detector": {
+      "original_count": 5,
+      "non_empty_count": 5,
+      "non_empty_has_config_empty_categories": false,
+      "empty_count": 0,
+      "empty_has_config_empty_categories": true
+    },
+    "session.too_long_16h": {
+      "existing_gt16_before": 0,
+      "seeded_gt16_before": 6,
+      "all_gt16_before": 6,
+      "report_findings_before": 6,
+      "reported_synthetic_ids": [
+        "dq33_long_0_b23b10b28c",
+        "dq33_long_1_b23b10b28c",
+        "dq33_long_2_b23b10b28c",
+        "dq33_long_3_b23b10b28c",
+        "dq33_long_4_b23b10b28c",
+        "dq33_long_5_b23b10b28c"
+      ],
+      "first_fixed": 6,
+      "all_gt16_after": 0,
+      "seeded_hours_after": {
+        "dq33_long_0_b23b10b28c": 16.0,
+        "dq33_long_1_b23b10b28c": 16.0,
+        "dq33_long_2_b23b10b28c": 16.0,
+        "dq33_long_3_b23b10b28c": 16.0,
+        "dq33_long_4_b23b10b28c": 16.0,
+        "dq33_long_5_b23b10b28c": 16.0
+      },
+      "second_fixed": 0
+    },
+    "other_fix_idempotency": {
+      "session.zero_duration": {
+        "first_fixed": 1,
+        "second_fixed": 0
+      },
+      "session.open_over_36h": {
+        "first_fixed": 1,
+        "second_fixed": 0
+      },
+      "leave.lop_exceeds_span": {
+        "first_fixed": 1,
+        "second_fixed": 0
+      },
+      "device.approved_for_ex_member": {
+        "first_fixed": 1,
+        "second_fixed": 0
+      }
+    }
+  },
+  "api_base": "http://localhost:8001/api",
+  "db_name": "test_database"
+}

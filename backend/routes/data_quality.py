@@ -542,12 +542,22 @@ def make_router(db, require_admin) -> APIRouter:
             {"_id": 0, "id": 1, "user_name": 1, "check_in_at": 1, "check_out_at": 1}
         )
         long_added = 0
+
+        def _naive_dt(s: str) -> datetime:
+            # Attendance timestamps mix naive + tz-aware shapes; normalise
+            # both sides to naive-UTC before subtracting (see iteration-32
+            # fix note in the auto-fix handler below).
+            dt = datetime.fromisoformat((s or "").replace("Z", "+00:00"))
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return dt
+
         async for r in long_cursor:
             if long_added >= 200:
                 break
             try:
-                dt_in = datetime.fromisoformat(r["check_in_at"])
-                dt_out = datetime.fromisoformat(r["check_out_at"])
+                dt_in = _naive_dt(r["check_in_at"])
+                dt_out = _naive_dt(r["check_out_at"])
                 if (dt_out - dt_in).total_seconds() > 16 * 3600:
                     hours = round((dt_out - dt_in).total_seconds() / 3600, 1)
                     findings.append({
@@ -700,7 +710,7 @@ def make_router(db, require_admin) -> APIRouter:
             })
 
         # --- Config: categories master empty ---
-        cat_n = await db.categories_master.count_documents({})
+        cat_n = await db.categories.count_documents({})
         if cat_n == 0:
             findings.append({
                 "category": "Configuration",
@@ -764,8 +774,19 @@ def make_router(db, require_admin) -> APIRouter:
         cursor = db.attendance.find({"check_out_at": {"$ne": None}})
         async for r in cursor:
             try:
-                dt_in = datetime.fromisoformat(r["check_in_at"])
-                dt_out = datetime.fromisoformat(r["check_out_at"])
+                # Attendance timestamps come in a mix of shapes across
+                # historical rows (naive vs. `+00:00` vs. Z-suffixed).
+                # Normalise both sides to naive UTC before subtracting
+                # so we don't drop rows to a TypeError inside the
+                # broad `except` below (bug caught by iteration 32
+                # of the bug-testing agent).
+                def _naive(s: str) -> datetime:
+                    dt = datetime.fromisoformat(s.replace("Z", "+00:00") if s else s)
+                    if dt.tzinfo is not None:
+                        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+                    return dt
+                dt_in = _naive(r["check_in_at"])
+                dt_out = _naive(r["check_out_at"])
                 if (dt_out - dt_in).total_seconds() > 16 * 3600:
                     capped = (dt_in + timedelta(hours=16)).isoformat()
                     await db.attendance.update_one(
