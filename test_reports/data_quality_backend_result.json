@@ -1,0 +1,85 @@
+{
+  "ok": false,
+  "issues": [
+    "config.empty_categories fires even though db.categories has seeded category rows; detector reads db.categories_master",
+    "too_long left >16h sessions after fix: ['30ebd13c-8516-47d3-8deb-729563d892ac', 'fde79119-6577-43a8-b9b4-92373d49076c', 'd6f600d6-b7df-4db0-a21c-e85443b48724']"
+  ],
+  "evidence": {
+    "admin_login": {
+      "ok": true,
+      "user": "admin@attendance.app"
+    },
+    "auth_guard": {
+      "no_auth": {
+        "session.zero_duration": 401,
+        "session.too_long_16h": 401,
+        "session.duplicate_open": 401,
+        "session.open_over_36h": 401,
+        "leave.lop_exceeds_span": 401,
+        "device.approved_for_ex_member": 401
+      },
+      "member_auth": {
+        "session.zero_duration": 403,
+        "session.too_long_16h": 403,
+        "session.duplicate_open": 403,
+        "session.open_over_36h": 403,
+        "leave.lop_exceeds_span": 403,
+        "device.approved_for_ex_member": 403
+      }
+    },
+    "get_report": {
+      "total_findings": 279,
+      "seeded_codes_present": [
+        "config.empty_categories",
+        "config.no_office_geofence",
+        "config.stale_holidays",
+        "device.too_many_active",
+        "escort.duplicate_phone",
+        "leave.overlapping",
+        "member.missing_institution",
+        "member.missing_joining_date",
+        "member.missing_weekly_off"
+      ],
+      "config_codes_present": [
+        "config.empty_categories",
+        "config.no_office_geofence",
+        "config.stale_holidays"
+      ],
+      "office_has_latitude_longitude_radius": false,
+      "office_has_lat_lng": false,
+      "categories_count": 5,
+      "categories_master_count": 0
+    },
+    "fix_session.too_long_16h": {
+      "initial_existing": 3,
+      "first_fixed": 1,
+      "second_fixed": 0
+    },
+    "fix_session.zero_duration": {
+      "initial_existing": 0,
+      "first_fixed": 1,
+      "second_fixed": 0
+    },
+    "fix_session.duplicate_open": {
+      "initial_existing_groups": 0,
+      "first_fixed": 1,
+      "second_fixed": 0
+    },
+    "fix_session.open_over_36h": {
+      "initial_existing": 0,
+      "first_fixed": 1,
+      "second_fixed": 0
+    },
+    "fix_leave.lop_exceeds_span": {
+      "initial_existing": 0,
+      "first_fixed": 1,
+      "second_fixed": 0
+    },
+    "fix_device.approved_for_ex_member": {
+      "initial_existing": 0,
+      "first_fixed": 1,
+      "second_fixed": 0
+    }
+  },
+  "api_base": "http://localhost:8001/api"
+}

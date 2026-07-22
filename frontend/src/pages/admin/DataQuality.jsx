@@ -33,12 +33,43 @@ function SeverityBadge({ severity }) {
   );
 }
 
-/** Render a context-sensitive "Fix" button for a finding, if the
- * backend attached a `fix` action (route + params). Falls back to
- * an em-dash when no automated jump target exists (e.g. review-only
- * findings like session-open-too-long which need human judgement). */
-function FixButton({ finding }) {
+/** Render a context-sensitive "Fix" button for a finding. Two modes:
+ *   - Auto-fix (`finding.auto_fix === true`): POST to
+ *     `/admin/data-quality/fix/<code>` — safe bulk mutation with a
+ *     confirm prompt. Toast reports the count, then the report
+ *     refreshes.
+ *   - Navigate (default): a plain <Link> to the appropriate edit page
+ *     with the offender pre-highlighted.
+ * Falls back to an em-dash when no automated jump target exists. */
+function FixButton({ finding, onFixed }) {
   const fix = finding.fix;
+  const [busy, setBusy] = React.useState(false);
+  if (finding.auto_fix) {
+    const trigger = async () => {
+      if (busy) return;
+      if (!window.confirm(`Auto-fix all "${finding.code}" issues in bulk? This runs immediately.`)) return;
+      setBusy(true);
+      try {
+        const r = await api.post(`/admin/data-quality/fix/${finding.code}`);
+        toast.success(`Fixed ${r?.fixed ?? 0} record${(r?.fixed ?? 0) === 1 ? "" : "s"}.`);
+        onFixed?.();
+      } catch (err) {
+        toast.error(err?.message || "Auto-fix failed");
+      } finally { setBusy(false); }
+    };
+    return (
+      <button
+        type="button"
+        onClick={trigger}
+        disabled={busy}
+        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 transition disabled:opacity-50"
+        data-testid={`dq-autofix-${finding.code}`}
+      >
+        {busy ? <Loader2 size={11} className="animate-spin"/> : <Wrench size={11}/>}
+        Fix all
+      </button>
+    );
+  }
   if (!fix) return <span className="text-slate-300">—</span>;
   const qs = new URLSearchParams(fix.params || {}).toString();
   const to = qs ? `${fix.to}?${qs}` : fix.to;
@@ -210,7 +241,7 @@ export default function DataQuality() {
                     <td className="py-2 px-3"><SeverityBadge severity={f.severity} /></td>
                     <td className="py-2 px-3 text-slate-800">{f.message}</td>
                     <td className="py-2 px-3"><EntityRefs f={f} /></td>
-                    <td className="py-2 px-3"><FixButton finding={f} /></td>
+                    <td className="py-2 px-3"><FixButton finding={f} onFixed={load} /></td>
                     <td className="py-2 px-3 font-mono text-[10px] text-slate-400">{f.code}</td>
                   </tr>
                 ))}

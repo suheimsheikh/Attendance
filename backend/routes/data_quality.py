@@ -84,6 +84,40 @@ def _fix_for(code: str, entity_ids: list) -> Optional[dict]:
         return {"label": "Open member", "to": "/admin/members",
                 "params": {"highlight": first, "edit": first}}
 
+    # New individual-field checks (26 Feb 2026) — jump into MemberForm.
+    if code in ("member.missing_joining_date", "member.missing_category",
+                "member.missing_rank", "member.missing_weekly_off",
+                "member.missing_institution", "member.missing_fleet"):
+        return {"label": "Fix on member", "to": "/admin/members",
+                "params": {"edit": first, "highlight": first}}
+
+    # Leave-record findings that need human judgement.
+    if code == "leave.missing_reason":
+        return {"label": "Add reason", "to": "/admin/approvals",
+                "params": {"highlight": first}}
+    if code == "leave.overlapping":
+        return {"label": "Review leaves", "to": "/admin/approvals",
+                "params": {"highlight": first}}
+
+    # Device findings that need human judgement.
+    if code in ("device.too_many_active", "device.stale_pending"):
+        return {"label": "Review devices", "to": "/admin/devices",
+                "params": {"highlight": first}}
+
+    # Escort findings — jump into the Escorts admin page.
+    if code in ("escort.no_institution", "escort.duplicate_phone",
+                "escort.malformed_phone"):
+        return {"label": "Edit escort", "to": "/admin/escorts",
+                "params": {"highlight": first}}
+
+    # Config findings — jump to the appropriate settings page.
+    if code == "config.no_office_geofence":
+        return {"label": "Set geofence", "to": "/admin/office", "params": {}}
+    if code == "config.empty_categories":
+        return {"label": "Set categories", "to": "/admin/masters", "params": {}}
+    if code == "config.stale_holidays":
+        return {"label": "Add holidays", "to": "/admin/holidays", "params": {}}
+
     return None
 
 
@@ -387,6 +421,309 @@ def make_router(db, require_admin) -> APIRouter:
                 except ValueError:
                     pass
 
+        # ── New checks (26 Feb 2026 user request) ─────────────────
+        # Adds 15 detectors and 6 one-click safe auto-fixes on top of
+        # the original suite. Each finding may carry `auto_fix: true`
+        # so the frontend renders a Fix-Now button (POST) instead of
+        # the default navigate-to-edit link.
+        today_iso = date.today().isoformat()
+
+        # --- Members: missing individual fields (surfaced separately
+        #     from the `member.missing_fields` roll-up so filters can
+        #     target one at a time). ---
+        for field, code, sev, msg in [
+            ("joining_date", "member.missing_joining_date", "low",
+             "no joining date on record"),
+            ("category", "member.missing_category", "low",
+             "no category set"),
+            ("rank", "member.missing_rank", "info",
+             "no rank / role title"),
+            ("weekly_off", "member.missing_weekly_off", "low",
+             "no weekly-off set (defaults to Monday)"),
+            ("institution", "member.missing_institution", "low",
+             "no institution set"),
+            ("fleet", "member.missing_fleet", "info",
+             "no fleet assigned"),
+        ]:
+            missing = [u for u in users if u.get("role") != "admin"
+                       and not (u.get(field) or "").strip()]
+            for u in missing[:50]:
+                findings.append({
+                    "category": "Missing fields",
+                    "code": code, "severity": sev,
+                    "message": f"{u.get('full_name')} — {msg}",
+                    "entity_type": "member",
+                    "entity_ids": [u["id"]],
+                    "entity_names": [u.get("full_name")],
+                })
+
+        # --- Approved leaves without a reason ---
+        approved_leaves = await db.leaves.find(
+            {"status": "approved", "$or": [{"reason": None}, {"reason": ""}]},
+            {"_id": 0, "id": 1, "user_name": 1, "start_date": 1, "end_date": 1}
+        ).limit(200).to_list(200)
+        for L in approved_leaves:
+            findings.append({
+                "category": "Leaves",
+                "code": "leave.missing_reason", "severity": "info",
+                "message": f"Approved leave {L.get('start_date')}→{L.get('end_date')} has no reason",
+                "entity_type": "leave",
+                "entity_ids": [L["id"]],
+                "entity_names": [L.get("user_name") or "(unknown)"],
+            })
+
+        # --- Overlapping approved leaves for the same member ---
+        overlap_leaves = await db.leaves.find(
+            {"status": "approved"},
+            {"_id": 0, "id": 1, "user_id": 1, "user_name": 1, "start_date": 1, "end_date": 1}
+        ).sort([("user_id", 1), ("start_date", 1)]).to_list(20000)
+        by_user_lv: dict[str, list[dict]] = defaultdict(list)
+        for L in overlap_leaves:
+            by_user_lv[L.get("user_id") or ""].append(L)
+        for uid, arr in by_user_lv.items():
+            arr.sort(key=lambda x: x.get("start_date") or "")
+            for i in range(len(arr) - 1):
+                a, b = arr[i], arr[i + 1]
+                if (a.get("end_date") or "") >= (b.get("start_date") or ""):
+                    findings.append({
+                        "category": "Leaves",
+                        "code": "leave.overlapping", "severity": "high",
+                        "message": (f"Overlap: {a['start_date']}→{a['end_date']} "
+                                    f"clashes with {b['start_date']}→{b['end_date']}"),
+                        "entity_type": "leave",
+                        "entity_ids": [b["id"], a["id"]],
+                        "entity_names": [b.get("user_name") or "(unknown)"],
+                    })
+
+        # --- LOP days > actual leave span (arithmetic corruption) ---
+        lop_leaves = await db.leaves.find(
+            {"lop_days": {"$gt": 0}},
+            {"_id": 0, "id": 1, "user_name": 1, "start_date": 1, "end_date": 1, "lop_days": 1}
+        ).to_list(20000)
+        for L in lop_leaves:
+            try:
+                sd = date.fromisoformat(L["start_date"])
+                ed = date.fromisoformat(L["end_date"])
+                span = (ed - sd).days + 1
+                if (L.get("lop_days") or 0) > span:
+                    findings.append({
+                        "category": "Leaves",
+                        "code": "leave.lop_exceeds_span", "severity": "high",
+                        "message": (f"lop_days={L['lop_days']} > span={span} "
+                                    f"({L['start_date']}→{L['end_date']})"),
+                        "entity_type": "leave",
+                        "entity_ids": [L["id"]],
+                        "entity_names": [L.get("user_name") or "(unknown)"],
+                        "auto_fix": True,
+                    })
+            except Exception:
+                continue
+
+        # --- Attendance: zero-duration sessions ---
+        zero_dur = await db.attendance.find(
+            {"$expr": {"$eq": ["$check_in_at", "$check_out_at"]},
+             "check_out_at": {"$ne": None}},
+            {"_id": 0, "id": 1, "user_name": 1, "check_in_at": 1}
+        ).limit(200).to_list(200)
+        for r in zero_dur:
+            findings.append({
+                "category": "Attendance",
+                "code": "session.zero_duration", "severity": "medium",
+                "message": f"Zero-duration session at {r['check_in_at'][:16].replace('T', ' ')}",
+                "entity_type": "attendance",
+                "entity_ids": [r["id"]],
+                "entity_names": [r.get("user_name") or "(unknown)"],
+                "auto_fix": True,
+            })
+
+        # --- Attendance: sessions longer than 16 hours ---
+        long_cursor = db.attendance.find(
+            {"check_out_at": {"$ne": None}},
+            {"_id": 0, "id": 1, "user_name": 1, "check_in_at": 1, "check_out_at": 1}
+        )
+        long_added = 0
+        async for r in long_cursor:
+            if long_added >= 200:
+                break
+            try:
+                dt_in = datetime.fromisoformat(r["check_in_at"])
+                dt_out = datetime.fromisoformat(r["check_out_at"])
+                if (dt_out - dt_in).total_seconds() > 16 * 3600:
+                    hours = round((dt_out - dt_in).total_seconds() / 3600, 1)
+                    findings.append({
+                        "category": "Attendance",
+                        "code": "session.too_long_16h", "severity": "medium",
+                        "message": f"Session lasted {hours}h ({r['check_in_at'][:10]}) — likely missed checkout",
+                        "entity_type": "attendance",
+                        "entity_ids": [r["id"]],
+                        "entity_names": [r.get("user_name") or "(unknown)"],
+                        "auto_fix": True,
+                    })
+                    long_added += 1
+            except Exception:
+                continue
+
+        # --- Attendance: duplicate open sessions (same member, two+ opens) ---
+        dupe_open = await db.attendance.aggregate([
+            {"$match": {"check_out_at": None}},
+            {"$group": {"_id": "$user_id",
+                        "sessions": {"$push": {"id": "$id",
+                                               "check_in_at": "$check_in_at",
+                                               "user_name": "$user_name"}},
+                        "n": {"$sum": 1}}},
+            {"$match": {"n": {"$gt": 1}}},
+        ]).to_list(1000)
+        for g in dupe_open:
+            sessions = sorted(g["sessions"], key=lambda s: s.get("check_in_at") or "")
+            for s in sessions[1:]:
+                findings.append({
+                    "category": "Attendance",
+                    "code": "session.duplicate_open", "severity": "high",
+                    "message": f"Duplicate open session at {s['check_in_at'][:16].replace('T', ' ')}",
+                    "entity_type": "attendance",
+                    "entity_ids": [s["id"]],
+                    "entity_names": [s.get("user_name") or "(unknown)"],
+                    "auto_fix": True,
+                })
+
+        # --- Devices: approved for ex-members ---
+        ex_users = [u for u in users
+                    if (u.get("leaving_date") or "").strip() and (u.get("leaving_date") or "").strip() < today_iso]
+        ex_ids = [u["id"] for u in ex_users]
+        if ex_ids:
+            ex_devs = await db.devices.find(
+                {"user_id": {"$in": ex_ids}, "status": "approved"},
+                {"_id": 0, "id": 1, "user_id": 1, "device_id": 1}
+            ).limit(200).to_list(200)
+            ex_map = {u["id"]: u for u in ex_users}
+            for d in ex_devs:
+                u = ex_map.get(d["user_id"], {})
+                findings.append({
+                    "category": "Devices",
+                    "code": "device.approved_for_ex_member", "severity": "medium",
+                    "message": f"Approved device for {u.get('full_name')} (exited {u.get('leaving_date')})",
+                    "entity_type": "device",
+                    "entity_ids": [d["id"]],
+                    "entity_names": [u.get("full_name") or "(unknown)"],
+                    "auto_fix": True,
+                })
+
+        # --- Devices: users with more than 3 approved devices ---
+        heavy = await db.devices.aggregate([
+            {"$match": {"status": "approved", "user_id": {"$ne": None}}},
+            {"$group": {"_id": "$user_id", "n": {"$sum": 1}}},
+            {"$match": {"n": {"$gt": 3}}},
+        ]).to_list(1000)
+        heavy_ids = [h["_id"] for h in heavy]
+        heavy_users = await db.users.find({"id": {"$in": heavy_ids}}, {"_id": 0, "id": 1, "full_name": 1}).to_list(1000) if heavy_ids else []
+        by_id_h = {u["id"]: u["full_name"] for u in heavy_users}
+        for h in heavy:
+            findings.append({
+                "category": "Devices",
+                "code": "device.too_many_active", "severity": "info",
+                "message": f"{by_id_h.get(h['_id']) or 'Member'} has {h['n']} approved devices — probably leftover browsers",
+                "entity_type": "member",
+                "entity_ids": [h["_id"]],
+                "entity_names": [by_id_h.get(h["_id"]) or "(unknown)"],
+            })
+
+        # --- Devices: pending requests > 7 days old ---
+        stale_cut = (now - timedelta(days=7)).isoformat()
+        stale_devs = await db.devices.find(
+            {"status": "pending", "requested_at": {"$lt": stale_cut}},
+            {"_id": 0, "id": 1, "device_id": 1, "requested_at": 1}
+        ).limit(200).to_list(200)
+        for d in stale_devs:
+            findings.append({
+                "category": "Devices",
+                "code": "device.stale_pending", "severity": "medium",
+                "message": f"Pending request from {d['requested_at'][:10]} — over 7 days old",
+                "entity_type": "device",
+                "entity_ids": [d["id"]],
+                "entity_names": [f"device {d.get('device_id', '')[:8]}"],
+            })
+
+        # --- Escorts: without institution ---
+        escorts = await db.escorts.find({}, {"_id": 0, "id": 1, "name": 1, "mobile": 1,
+                                              "institution": 1, "mobile_last10": 1}).to_list(5000)
+        for e in escorts:
+            if not (e.get("institution") or "").strip():
+                findings.append({
+                    "category": "Escorts",
+                    "code": "escort.no_institution", "severity": "info",
+                    "message": f"{e.get('name') or 'Escort'} has no institution set",
+                    "entity_type": "escort",
+                    "entity_ids": [e["id"]],
+                    "entity_names": [e.get("name") or "(unnamed)"],
+                })
+
+        # --- Escorts: duplicate phone numbers ---
+        esc_by_phone: dict[str, list[dict]] = defaultdict(list)
+        for e in escorts:
+            k = (e.get("mobile_last10") or "").strip()
+            if k:
+                esc_by_phone[k].append(e)
+        for k, group in esc_by_phone.items():
+            if len(group) > 1:
+                findings.append({
+                    "category": "Escorts",
+                    "code": "escort.duplicate_phone", "severity": "medium",
+                    "message": f"Phone {k} shared by {len(group)} escort rows",
+                    "entity_type": "escort",
+                    "entity_ids": [e["id"] for e in group],
+                    "entity_names": [e.get("name") or "(unnamed)" for e in group],
+                })
+
+        # --- Escorts: malformed phone (not clean 10 digits) ---
+        for e in escorts:
+            m10 = (e.get("mobile_last10") or "").strip()
+            if not re.fullmatch(r"\d{10}", m10):
+                findings.append({
+                    "category": "Escorts",
+                    "code": "escort.malformed_phone", "severity": "medium",
+                    "message": f"{e.get('name') or 'Escort'} phone '{e.get('mobile') or ''}' is not 10 digits",
+                    "entity_type": "escort",
+                    "entity_ids": [e["id"]],
+                    "entity_names": [e.get("name") or "(unnamed)"],
+                })
+
+        # --- Config: office geofence not set ---
+        office = await db.config.find_one({"id": "office"})
+        if not (office and office.get("lat") and office.get("lng")):
+            findings.append({
+                "category": "Configuration",
+                "code": "config.no_office_geofence", "severity": "medium",
+                "message": "Office geofence lat/lng not set — GPS distance can't be computed",
+                "entity_type": "config",
+                "entity_ids": ["office"],
+                "entity_names": ["Office geofence"],
+            })
+
+        # --- Config: categories master empty ---
+        cat_n = await db.categories_master.count_documents({})
+        if cat_n == 0:
+            findings.append({
+                "category": "Configuration",
+                "code": "config.empty_categories", "severity": "high",
+                "message": "Categories master empty — dropdowns will crash",
+                "entity_type": "config",
+                "entity_ids": ["categories"],
+                "entity_names": ["Categories master"],
+            })
+
+        # --- Config: no upcoming holidays in next 6 months ---
+        horizon = (date.today() + timedelta(days=180)).isoformat()
+        upcoming_hols = await db.holidays.count_documents({"date": {"$gte": today_iso, "$lte": horizon}})
+        if upcoming_hols == 0:
+            findings.append({
+                "category": "Configuration",
+                "code": "config.stale_holidays", "severity": "medium",
+                "message": "No holidays scheduled in the next 6 months — payroll math will treat all as working days",
+                "entity_type": "config",
+                "entity_ids": ["holidays"],
+                "entity_names": ["Holiday calendar"],
+            })
+
         # Sort by severity, then category.
         findings.sort(key=lambda f: (_severity_key(f), f.get("category", ""), f.get("code", "")))
 
@@ -407,5 +744,118 @@ def make_router(db, require_admin) -> APIRouter:
             "by_severity": dict(summary),
             "findings": findings,
         }
+
+    # ── Auto-fix endpoints (26 Feb 2026) ──────────────────────────
+    # Each POST performs ONE safe bulk mutation and returns the count
+    # of rows fixed. Admin-guarded, no additional confirmations — the
+    # frontend already prompts before calling.
+
+    @router.post("/admin/data-quality/fix/session.zero_duration")
+    async def fix_zero(admin: dict = Depends(require_admin)):
+        r = await db.attendance.delete_many(
+            {"$expr": {"$eq": ["$check_in_at", "$check_out_at"]},
+             "check_out_at": {"$ne": None}}
+        )
+        return {"fixed": r.deleted_count}
+
+    @router.post("/admin/data-quality/fix/session.too_long_16h")
+    async def fix_long(admin: dict = Depends(require_admin)):
+        fixed = 0
+        cursor = db.attendance.find({"check_out_at": {"$ne": None}})
+        async for r in cursor:
+            try:
+                dt_in = datetime.fromisoformat(r["check_in_at"])
+                dt_out = datetime.fromisoformat(r["check_out_at"])
+                if (dt_out - dt_in).total_seconds() > 16 * 3600:
+                    capped = (dt_in + timedelta(hours=16)).isoformat()
+                    await db.attendance.update_one(
+                        {"id": r["id"]},
+                        {"$set": {"check_out_at": capped, "auto_capped": True,
+                                  "auto_capped_by": "data_quality",
+                                  "auto_capped_at": datetime.now(timezone.utc).isoformat()}},
+                    )
+                    fixed += 1
+            except Exception:
+                continue
+        return {"fixed": fixed}
+
+    @router.post("/admin/data-quality/fix/session.duplicate_open")
+    async def fix_dupe_open(admin: dict = Depends(require_admin)):
+        groups = await db.attendance.aggregate([
+            {"$match": {"check_out_at": None}},
+            {"$group": {"_id": "$user_id",
+                        "sessions": {"$push": {"id": "$id",
+                                               "check_in_at": "$check_in_at"}},
+                        "n": {"$sum": 1}}},
+            {"$match": {"n": {"$gt": 1}}},
+        ]).to_list(2000)
+        fixed = 0
+        for g in groups:
+            sessions = sorted(g["sessions"], key=lambda s: s.get("check_in_at") or "")
+            for s in sessions[1:]:
+                r = await db.attendance.delete_one({"id": s["id"]})
+                fixed += r.deleted_count
+        return {"fixed": fixed}
+
+    @router.post("/admin/data-quality/fix/session.open_over_36h")
+    async def fix_dangling(admin: dict = Depends(require_admin)):
+        """Close sessions that have been open > 36h at check-in + 8h."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=36)).isoformat()
+        fixed = 0
+        cursor = db.attendance.find({"check_out_at": None,
+                                     "check_in_at": {"$lt": cutoff}})
+        async for r in cursor:
+            try:
+                dt_in = datetime.fromisoformat(r["check_in_at"])
+                close_at = (dt_in + timedelta(hours=8)).isoformat()
+                await db.attendance.update_one(
+                    {"id": r["id"]},
+                    {"$set": {"check_out_at": close_at, "auto_closed": True,
+                              "auto_closed_by": "data_quality",
+                              "auto_closed_at": datetime.now(timezone.utc).isoformat()}},
+                )
+                fixed += 1
+            except Exception:
+                continue
+        return {"fixed": fixed}
+
+    @router.post("/admin/data-quality/fix/leave.lop_exceeds_span")
+    async def fix_lop_cap(admin: dict = Depends(require_admin)):
+        leaves = await db.leaves.find(
+            {"lop_days": {"$gt": 0}},
+            {"_id": 0, "id": 1, "start_date": 1, "end_date": 1, "lop_days": 1}
+        ).to_list(20000)
+        fixed = 0
+        for L in leaves:
+            try:
+                sd = date.fromisoformat(L["start_date"])
+                ed = date.fromisoformat(L["end_date"])
+                span = (ed - sd).days + 1
+                if (L.get("lop_days") or 0) > span:
+                    await db.leaves.update_one(
+                        {"id": L["id"]}, {"$set": {"lop_days": float(span)}})
+                    fixed += 1
+            except Exception:
+                continue
+        return {"fixed": fixed}
+
+    @router.post("/admin/data-quality/fix/device.approved_for_ex_member")
+    async def fix_ex_devices(admin: dict = Depends(require_admin)):
+        today_iso = date.today().isoformat()
+        ex_users = await db.users.find(
+            {"leaving_date": {"$nin": [None, ""], "$lt": today_iso}},
+            {"_id": 0, "id": 1}
+        ).to_list(2000)
+        uids = [u["id"] for u in ex_users]
+        if not uids:
+            return {"fixed": 0}
+        r = await db.devices.update_many(
+            {"user_id": {"$in": uids}, "status": "approved"},
+            {"$set": {"status": "revoked",
+                      "revoked_reason": "Ex-member cleanup via Data Quality",
+                      "revoked_at": datetime.now(timezone.utc).isoformat(),
+                      "revoked_by": admin.get("id")}},
+        )
+        return {"fixed": r.modified_count}
 
     return router
