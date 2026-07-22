@@ -5,6 +5,7 @@ import ParentContact from "../../../components/ParentContact";
 import StatusBadge from "../../../components/StatusBadge";
 import InlineCell from "../../../components/InlineCell";
 import ParentInlineInput from "./ParentInlineInput";
+import ExMemberChip from "../../../components/ExMemberChip";
 import { BUCKET_BY_KEY, GENDER_LABEL, bucketOf, isInteractive, lastSeenLabel, leaveBalanceLabel } from "./helpers";
 
 /**
@@ -128,6 +129,7 @@ export default React.memo(function MemberRow({
                 onSave={(v) => onPatchField(m.id, "full_name", v)}
                 className="text-sm font-semibold"
               />
+              <ExMemberChip member={m} />
               <ParentContact father={m.father_mobile} mother={m.mother_mobile} guardian={m.guardian_mobile} />
             </div>
             <div className="text-xs text-slate-500 truncate">{m.email}</div>

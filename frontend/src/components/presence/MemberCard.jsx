@@ -4,6 +4,7 @@ import Avatar from "../Avatar";
 import PhotoZoom from "../PhotoZoom";
 import ParentContact from "../ParentContact";
 import NotifyParentsButton from "../NotifyParentsButton";
+import ExMemberChip from "../ExMemberChip";
 import { categoryLabel } from "../../utils";
 import { GeoLine } from "./GeoLine";
 import { SessionTimeline } from "./SessionTimeline";
@@ -98,6 +99,7 @@ export function MemberCard({ m, accent, columnKey, adminContacts, coachMobile, o
             </span>
           )}
           <div className={`text-[13px] font-semibold leading-tight truncate flex-1 ${m.late ? "text-red-700" : "text-slate-900"}`}>{m.full_name}</div>
+          <ExMemberChip member={m} />
           <ParentContact father={m.father_mobile} mother={m.mother_mobile} guardian={m.guardian_mobile} />
           {hasTimeline && onToggleExpand && (
             <button

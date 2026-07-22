@@ -20,6 +20,8 @@ import { PresenceHeader } from "../components/presence/PresenceHeader";
 import { FleetFilterRow } from "../components/presence/FleetFilterRow";
 import { LocationFilterRow } from "../components/presence/LocationFilterRow";
 import MissingPhotoStrip from "../components/presence/MissingPhotoStrip";
+import ExMemberToggle, { useExMemberToggle } from "../components/ExMemberToggle";
+import { isExMember } from "../utils/exMember";
 
 export default function Presence() {
   const { user: currentUser } = useAuth();
@@ -32,8 +34,7 @@ export default function Presence() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [lateOnly, setLateOnly] = useState(false);
-  const [fleetFilter, setFleetFilter] = useState("");  // "" = all fleets
+  const [lateOnly, setLateOnly] = useState(false);  const [fleetFilter, setFleetFilter] = useState("");  // "" = all fleets
   // Location filter — set via the pill row OR deep-linked from the Admin
   // Dashboard by-location chips (?location=Rowing%20Academy). Only applies
   // to today's live view; historical days won't have on-campus rows anyway.
@@ -42,6 +43,11 @@ export default function Presence() {
     searchParams.get("location") || ""
   );
   const [query, setQuery] = useState("");
+  // Ex-member visibility toggle — default OFF so the board stays crisp.
+  // Ex-members whose status is anything other than "off_campus" for
+  // days after their leaving_date shouldn't appear here anyway, but
+  // the roster still lists them until we filter (24 Feb 2026).
+  const [showEx, setShowEx] = useExMemberToggle("presence");
   const [guests, setGuests] = useState({ active: [], completed: [], active_count: 0 });
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
@@ -205,6 +211,7 @@ export default function Presence() {
     const buckets = Object.fromEntries(COLUMNS.map((c) => [c.key, []]));
     const q = query.trim().toLowerCase();
     const members = (data?.members || []).filter((m) => {
+      if (!showEx && isExMember(m)) return false;
       if (lateOnly && !m.late) return false;
       if (fleetFilter && (m.fleet || "") !== fleetFilter) return false;
       // Location filter only makes sense for statuses that carry a
@@ -237,7 +244,9 @@ export default function Presence() {
       });
     }
     return buckets;
-  }, [data, lateOnly, fleetFilter, locationFilter, query, isHistorical]);
+  }, [data, showEx, lateOnly, fleetFilter, locationFilter, query, isHistorical]);
+
+  const exCount = useMemo(() => (data?.members || []).filter((m) => isExMember(m)).length, [data]);
 
   // Distinct fleet labels present across loaded members — used to render the
   // filter pill row. Athletes without a fleet set are not surfaced here.
@@ -351,6 +360,15 @@ export default function Presence() {
         fleetFilter={fleetFilter}
         onFleetChange={setFleetFilter}
       />
+
+      {exCount > 0 && (
+        <div className="flex items-center gap-2 px-2 md:px-3 -mt-1 mb-2">
+          <ExMemberToggle showEx={showEx} onChange={setShowEx} exCount={exCount} />
+          <span className="text-[11px] text-slate-400">
+            {showEx ? "Including" : "Hiding"} {exCount} ex-member{exCount === 1 ? "" : "s"}.
+          </span>
+        </div>
+      )}
 
       <LocationFilterRow
         locations={data?.by_location || []}

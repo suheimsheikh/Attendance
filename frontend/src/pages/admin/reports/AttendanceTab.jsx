@@ -12,6 +12,9 @@ import LeaveLedgerModal from "../LeaveLedgerModal";
 import DrillDownBubble from "./DrillDownBubble";
 import MonthNav from "./MonthNav";
 import { CATEGORY_FILTERS, SORT_OPTIONS } from "./constants";
+import ExMemberToggle, { useExMemberToggle } from "../../../components/ExMemberToggle";
+import ExMemberChip from "../../../components/ExMemberChip";
+import { isExMember } from "../../../utils/exMember";
 
 /**
  * The Attendance tab of Reports — big monthly table with per-member
@@ -46,6 +49,7 @@ export default function AttendanceTab({
   // user-requested). Surfaces rows with any non-zero OT signal
   // (served / applied / approved) this month.
   const [otOnly, setOtOnly] = useState(false);
+  const [showEx, setShowEx] = useExMemberToggle("reports_attendance");
   const [sortBy, setSortBy] = useState("alpha");
   // YTD comp-off available per member — fetched once from /leave-balances
   // and merged into the on-screen Leave columns (Open · COff · Total ·
@@ -150,6 +154,7 @@ export default function AttendanceTab({
   }, [rows]);
   const displayedRows = useMemo(() => {
     let list = rows;
+    if (!showEx) list = list.filter((r) => !isExMember({ leaving_date: r.leaving_date }));
     if (categoryFilter === "athlete") {
       list = list.filter((r) => isAthleteLike(r));
     } else if (categoryFilter === "elite") {
@@ -188,7 +193,9 @@ export default function AttendanceTab({
       sorted.sort((a, b) => (a.member_name || "").localeCompare(b.member_name || ""));
     }
     return sorted;
-  }, [rows, categoryFilter, fleetFilter, institutionFilter, otOnly, sortBy, isAthleteLike]);
+  }, [rows, showEx, categoryFilter, fleetFilter, institutionFilter, otOnly, sortBy, isAthleteLike]);
+
+  const exCount = useMemo(() => rows.filter((r) => isExMember({ leaving_date: r.leaving_date })).length, [rows]);
 
   const fleetOptions = useMemo(() => {
     const s = new Set();
@@ -296,6 +303,9 @@ export default function AttendanceTab({
           >
             OT &gt; 0
           </button>
+          {exCount > 0 && (
+            <ExMemberToggle showEx={showEx} onChange={setShowEx} exCount={exCount} />
+          )}
         </div>
         <div className="flex items-center gap-2" data-testid="sort-options">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Sort</span>
@@ -445,6 +455,7 @@ export default function AttendanceTab({
                       data-testid={`attn-name-${r.member_id}`}
                     >
                       {r.member_name}
+                      <ExMemberChip member={{ id: r.member_id, leaving_date: r.leaving_date }} className="ml-1.5 align-middle" />
                       <div className="text-[10px] text-slate-400 leading-tight">
                         {r.rank || ""}
                         {r.attendance_pct !== undefined && (

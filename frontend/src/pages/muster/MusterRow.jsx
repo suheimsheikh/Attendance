@@ -24,6 +24,7 @@ import React from "react";
 import { CheckSquare, Camera, Loader2, LogOut as LogOutIcon } from "lucide-react";
 import Avatar from "../../components/Avatar";
 import ParentContact from "../../components/ParentContact";
+import ExMemberChip from "../../components/ExMemberChip";
 
 export default function MusterRow({
   member: s,
@@ -69,6 +70,7 @@ export default function MusterRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <div className="font-semibold text-slate-900 truncate flex-1">{s.full_name}</div>
+          <ExMemberChip member={s} />
           {isAdmin && s.category && s.category !== "athlete" && (
             <span
               title={`Category: ${s.category}`}

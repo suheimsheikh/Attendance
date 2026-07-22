@@ -30,3 +30,26 @@ def is_super_admin(user: dict) -> bool:
         return False
     mob = str(user.get("mobile") or user.get("phone") or "").strip()
     return bool(mob) and mob in _SUPER_ADMIN_PHONES
+
+
+
+def is_ex_member(user: dict, today_iso: str | None = None) -> bool:
+    """True when the user has been off-boarded (`leaving_date` set and
+    already in the past). Used as a hard cutoff on check-in / muster /
+    scan-card endpoints so ex-members can't accidentally clock in after
+    their exit — the record still exists (to preserve history and leave
+    balances) but new attendance is blocked.
+
+    24 Feb 2026 — user request: "How do I exit a person who has
+    resigned without disturbing attendance and balance leaves." The
+    intent is display + write-guard: history stays, future check-ins
+    stop.
+    """
+    from datetime import date as _date
+    if not user:
+        return False
+    lv = (user.get("leaving_date") or "").strip()
+    if not lv:
+        return False
+    today = today_iso or _date.today().isoformat()
+    return lv < today

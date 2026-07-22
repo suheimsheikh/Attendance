@@ -37,6 +37,7 @@ from pydantic import BaseModel
 
 from services.time_utils import now_utc, local_date_str
 from services.attendance_calc import compute_late, excursion_seconds
+from services.permissions import is_ex_member
 from config import AUTO_APPROVAL_LATE_CHECKINS
 
 
@@ -220,6 +221,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 "institution": s.get("institution"),
                 "gender": s.get("gender"),
                 "category": s.get("category"),
+                "leaving_date": s.get("leaving_date"),
                 "father_mobile": s.get("father_mobile"),
                 "mother_mobile": s.get("mother_mobile"),
                 "guardian_mobile": s.get("guardian_mobile"),
@@ -283,6 +285,14 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             if escort_inst and (athlete.get("institution") or "").strip() != escort_inst:
                 skipped.append({"id": sid, "name": athlete["full_name"],
                                 "reason": "outside your institution"})
+                continue
+            # Ex-member cutoff: silently skip anyone with a past
+            # leaving_date so muster batches don't blow up mid-run
+            # (24 Feb 2026 user request). Surfaced in `skipped` so the
+            # coach can see who was excluded.
+            if is_ex_member(athlete):
+                skipped.append({"id": sid, "name": athlete["full_name"],
+                                "reason": f"exited on {athlete.get('leaving_date')}"})
                 continue
             if await db.attendance.find_one({"user_id": sid, "check_out_at": None}):
                 skipped.append({"id": sid, "name": athlete["full_name"], "reason": "already checked in"})

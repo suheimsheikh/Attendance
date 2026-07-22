@@ -10,6 +10,8 @@ import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import MusterRow from "./muster/MusterRow";
 import { MusterScopeChips, MusterInstitutionChips } from "./muster/MusterFilters";
 import MusterBreakdownBar from "./muster/MusterBreakdownBar";
+import ExMemberToggle, { useExMemberToggle } from "../components/ExMemberToggle";
+import { isExMember } from "../utils/exMember";
 
 const MODES = [
   { key: "checkin",  label: "Check in",  Icon: LogIn,        verb: "Check in",  color: "#10B981" },
@@ -42,6 +44,7 @@ export default function Muster() {
 
   const meta = MODES.find((m) => m.key === mode);
   const [institutionFilter, setInstitutionFilter] = useState("all");
+  const [showEx, setShowEx] = useExMemberToggle("muster");
   // Coach's GPS + geofence context — captured on the FIRST submit tap
   // and reused for the whole batch so all attendance rows are stamped
   // with the same physical location the coach was at.
@@ -240,6 +243,7 @@ export default function Muster() {
     const list = data?.athletes || [];
     const q = search.trim().toLowerCase();
     return list.filter((s) => {
+      if (!showEx && isExMember(s)) return false;
       if (institutionFilter !== "all") {
         const sInst = s.institution || "(no institution)";
         if (sInst !== institutionFilter) return false;
@@ -251,7 +255,9 @@ export default function Muster() {
         (s.institution || "").toLowerCase().includes(q)
       );
     });
-  }, [data, search, institutionFilter]);
+  }, [data, showEx, search, institutionFilter]);
+
+  const exCount = useMemo(() => (data?.athletes || []).filter((s) => isExMember(s)).length, [data]);
 
   const toggle = (id) => {
     // Already-checked-in athletes (mode=checkin) are read-only. Server
@@ -380,6 +386,9 @@ export default function Muster() {
             className="flex-1 outline-none bg-transparent text-sm"
           />
         </div>
+        {exCount > 0 && (
+          <ExMemberToggle showEx={showEx} onChange={setShowEx} exCount={exCount} />
+        )}
         <button
           data-testid="muster-toggle-all"
           onClick={toggleAllVisible}

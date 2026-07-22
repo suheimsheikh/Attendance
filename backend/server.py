@@ -175,7 +175,7 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
 # routes/*.py can import it directly without a `from server import ...`
 # circular import. Re-exported here for backwards-compatibility with any
 # tests that reach for `server.is_super_admin` / `server._SUPER_ADMIN_PHONES`.
-from services.permissions import is_super_admin, _SUPER_ADMIN_PHONES  # noqa: E402, F401
+from services.permissions import is_super_admin, _SUPER_ADMIN_PHONES, is_ex_member  # noqa: E402, F401
 
 
 async def require_coach_or_admin(user: dict = Depends(get_current_user)) -> dict:
@@ -1132,6 +1132,29 @@ async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depend
     u = await db.users.find_one({"id": member_id}, {"_id": 0})
     if not u:
         raise HTTPException(status_code=404, detail="Member not found")
+    # Auto-revoke devices when leaving_date crosses into the past.
+    # 24 Feb 2026 user request: an admin sets `leaving_date` to
+    # off-board someone → their existing sessions on personal devices
+    # should die immediately so they can no longer log in or check
+    # themselves in. We only fire this when the leaving_date TRANSITION
+    # actually moves into the past (not on every save, not on future
+    # dates yet to arrive).
+    if "leaving_date" in update:
+        old_lv = (before_doc.get("leaving_date") or "").strip()
+        new_lv = (u.get("leaving_date") or "").strip()
+        today = local_date_str(await db.config.find_one({"id": "office"}))
+        was_ex = bool(old_lv) and old_lv < today
+        is_ex_now = bool(new_lv) and new_lv < today
+        if is_ex_now and not was_ex:
+            rev = await db.devices.update_many(
+                {"user_id": member_id, "status": {"$ne": "revoked"}},
+                {"$set": {"status": "revoked",
+                          "revoked_reason": f"Member exited on {new_lv}",
+                          "revoked_at": now_utc().isoformat(),
+                          "revoked_by": admin.get("id")}},
+            )
+            logger.info("Auto-revoked %d device(s) for exited member %s",
+                        rev.modified_count, u.get("full_name"))
     # Audit trail — one row per admin-driven member edit. Sensitive
     # fields (photo bytes, hashed password) are redacted from the
     # diff to keep the log lean and to avoid re-persisting secrets.
@@ -2047,6 +2070,15 @@ async def _resolve_site_for(office: dict, lat: float, lng: float):
 
 async def perform_toggle(target, office, lat, lng, photo, reason, method, scanned_by):
     """Check a member in (if no open session) or out (if open). Stores location + reason."""
+    # Ex-member cutoff: once a member's leaving_date is in the past,
+    # new attendance is blocked so ex-employees can't accidentally
+    # clock in from a lingering session (24 Feb 2026). History stays
+    # intact so payroll for their tenure still reconciles.
+    if is_ex_member(target):
+        raise HTTPException(
+            status_code=403,
+            detail=f"{target.get('full_name') or 'This member'} has exited — check-in blocked from {target.get('leaving_date')}.",
+        )
     site_id, site_name, dist, out = await _resolve_site_for(office, lat, lng)
     sess = await open_session_for(target["id"])
     ts = now_utc()
@@ -2160,6 +2192,13 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
     """GPS-based check in/out (no QR). Distance from the office is recorded but
     NOT enforced — a check-in always succeeds. If the caller could not obtain
     a GPS fix they pass (0, 0) and we mark the row as `geo_unavailable`."""
+    # Ex-member cutoff — mirror of the guard in `perform_toggle`; both
+    # surfaces share the same policy (24 Feb 2026 user request).
+    if is_ex_member(target):
+        raise HTTPException(
+            status_code=403,
+            detail=f"{target.get('full_name') or 'This member'} has exited — check-in blocked from {target.get('leaving_date')}.",
+        )
     geo_unavailable = (lat == 0 and lng == 0)
     if geo_unavailable:
         dist = None
@@ -2945,6 +2984,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             "rank": u.get("rank"),
             "institution": u.get("institution"),
             "fleet": u.get("fleet"),
+            "leaving_date": u.get("leaving_date"),
             "status": status_v,
             "detail": detail,
             # Training-location tag (where they were tapped into today).
@@ -3548,7 +3588,7 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
 async def compute_hours_report(start: str, end: str) -> List[dict]:
     """Aggregate hours and days present per member between dates inclusive."""
     users = await db.users.find(
-        {}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "weekly_off": 1, "fleet": 1}
+        {}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "weekly_off": 1, "fleet": 1, "leaving_date": 1}
     ).sort("full_name", 1).to_list(2000)
     sd = date.fromisoformat(start)
     ed = date.fromisoformat(end)
@@ -3839,6 +3879,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "rank": u.get("rank"),
             "weekly_off": u.get("weekly_off") or "monday",
             "fleet": u.get("fleet"),
+            "leaving_date": u.get("leaving_date"),
             "total_hours": total_hours,
             "days_present": days_present,
             "late_days": late_days,

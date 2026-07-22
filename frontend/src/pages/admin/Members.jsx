@@ -10,6 +10,8 @@ import MemberBucketFilters from "./members/MemberBucketFilters";
 import MemberRow from "./members/MemberRow";
 import SortableTh, { COL_HELP } from "./members/SortableTh";
 import { bucketOf } from "./members/helpers";
+import ExMemberToggle, { useExMemberToggle } from "../../components/ExMemberToggle";
+import { filterEx, isExMember } from "../../utils/exMember";
 
 /**
  * Members admin page — table view with inline editing, bulk-edit toolbar,
@@ -38,6 +40,10 @@ export default function Members() {
   const [onlyAdmins, setOnlyAdmins] = useState(false);
   const [instFilter, setInstFilter] = useState("");
   const [institutions, setInstitutions] = useState([]);
+  // Ex-member visibility toggle — default OFF (hide members who have
+  // exited). Toggle persists per-page via localStorage so an admin can
+  // pin their preference. 24 Feb 2026.
+  const [showEx, setShowEx] = useExMemberToggle("members");
   // Fleet master — used to render the inline Fleet dropdown. Falls back to
   // free-text + any distinct fleets actually assigned (defensive: handles
   // historic athletes whose fleet label was deleted from the master).
@@ -139,7 +145,7 @@ export default function Members() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = members;
+    let list = filterEx(members, showEx);
     if (bucket !== "all") list = list.filter((m) => bucketOf(m) === bucket);
     if (onlyAdmins) list = list.filter((m) => m.role === "admin");
     if (instFilter) list = list.filter((m) => m.institution === instFilter);
@@ -151,7 +157,9 @@ export default function Members() {
       (m.mobile || "").includes(q) ||
       (m.institution || "").toLowerCase().includes(q)
     );
-  }, [members, search, bucket, onlyAdmins, instFilter]);
+  }, [members, showEx, search, bucket, onlyAdmins, instFilter]);
+
+  const exCount = useMemo(() => members.filter((m) => isExMember(m)).length, [members]);
 
   // ── Column sort ───────────────────────────────────────────────────────────
   // Click a sortable header to cycle: unsorted → asc → desc → unsorted.
@@ -394,6 +402,17 @@ export default function Members() {
         instFilter={instFilter}
         onInstFilterChange={setInstFilter}
       />
+
+      <div className="flex items-center gap-2 mb-2">
+        <ExMemberToggle showEx={showEx} onChange={setShowEx} exCount={exCount} />
+        <span className="text-[11px] text-slate-400">
+          {exCount === 0
+            ? "No ex-members on file."
+            : showEx
+              ? `Showing all members including ${exCount} who have left.`
+              : `${exCount} ex-member${exCount === 1 ? "" : "s"} hidden — click to include.`}
+        </span>
+      </div>
 
       {loading ? (
         <div className="text-center py-10"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
