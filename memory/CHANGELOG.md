@@ -3755,3 +3755,10 @@ not reproducible in current codebase (no nested spans found).
   staff and coaches (who don't have a fleet or institution). Now
   gated on `category == "athlete"` — matches the athlete-specific
   block inside `member.missing_fields`.
+
+## 2026-02-23 — Data Quality: rank check excludes athletes
+
+**Fixed (P1)**
+- `member.missing_rank` was firing for athletes (who don't have a
+  staff/coach rank or role title). Now gated to non-athlete users
+  only. Same pattern as the athlete-only institution/fleet gating.

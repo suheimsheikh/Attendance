@@ -431,25 +431,32 @@ def make_router(db, require_admin) -> APIRouter:
         # --- Members: missing individual fields (surfaced separately
         #     from the `member.missing_fields` roll-up so filters can
         #     target one at a time). Athletes-only fields (institution,
-        #     fleet) are gated on `category == "athlete"` — staff and
-        #     coaches don't have a fleet or institution. ---
-        for field, code, sev, msg, athlete_only in [
+        #     fleet) are gated on `category == "athlete"`. Rank is the
+        #     opposite — a staff/coach job title, so we skip it for
+        #     athletes. ---
+        for field, code, sev, msg, only in [
             ("joining_date", "member.missing_joining_date", "low",
-             "no joining date on record", False),
+             "no joining date on record", None),
             ("category", "member.missing_category", "low",
-             "no category set", False),
+             "no category set", None),
             ("rank", "member.missing_rank", "info",
-             "no rank / role title", False),
+             "no rank / role title", "non_athlete"),
             ("weekly_off", "member.missing_weekly_off", "low",
-             "no weekly-off set (defaults to Monday)", False),
+             "no weekly-off set (defaults to Monday)", None),
             ("institution", "member.missing_institution", "low",
-             "no institution set", True),
+             "no institution set", "athlete"),
             ("fleet", "member.missing_fleet", "info",
-             "no fleet assigned", True),
+             "no fleet assigned", "athlete"),
         ]:
-            missing = [u for u in users if u.get("role") != "admin"
-                       and (not athlete_only or u.get("category") == "athlete")
-                       and not (u.get(field) or "").strip()]
+            def _keep(u, only=only):
+                if u.get("role") == "admin":
+                    return False
+                if only == "athlete" and u.get("category") != "athlete":
+                    return False
+                if only == "non_athlete" and u.get("category") == "athlete":
+                    return False
+                return not (u.get(field) or "").strip()
+            missing = [u for u in users if _keep(u)]
             for u in missing[:50]:
                 findings.append({
                     "category": "Missing fields",
