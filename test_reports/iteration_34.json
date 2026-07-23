@@ -1,0 +1,42 @@
+{
+  "verdict": "fixed",
+  "user_reported_bug": "Code review findings \u2014 Python: Undefined Variables (9 instances) causing runtime crashes and incomplete error handling. Specifically 'today_d' NameError at server.py:2906 and 2914 (originally reported), inside the /api/presence endpoint's per-member leave-remaining calculation.",
+  "summary": "No relevant testing skill found. Verified the /api/presence today_d fix end-to-end: live on-leave member HASSAN MOHD returns days_remaining=24 (expected 24), historical /api/presence?on=2026-01-02 returns Campus Administrator days_remaining=1 (expected 1), and the Presence Board UI renders both pills without null/undefined.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/bug_verification_34_presence_days_remaining_api.py",
+    "/app/test_reports/presence_days_remaining_api_result.json",
+    "/app/test_reports/presence_days_remaining_seed_meta.json",
+    "/app/test_reports/bug_verification_34.json",
+    "/app/test_reports/iteration_34.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Code inspection confirms only backend/server.py changed: today_d = date.fromisoformat(target_date) is now defined before the per-member days_remaining calculations.",
+    "Backend logs for presence requests showed 200 OK and no NameError/today_d traceback during verification."
+  ],
+  "updated_files": [
+    "/app/test_reports/bug_verification_34_presence_days_remaining_api.py",
+    "/app/test_reports/presence_days_remaining_api_result.json",
+    "/app/test_reports/presence_days_remaining_seed_meta.json",
+    "/app/test_reports/bug_verification_34.json",
+    "/app/test_reports/iteration_34.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "None. Existing preview DB leave rows were sufficient; no synthetic user or leave was inserted.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Focused verification only. API tested locally against http://localhost:8001 with real MongoDB test_database and admin token. UI tested on https://attendance-portal-56.preview.emergentagent.com/presence using admin@attendance.app. No MOCKED APIs used.",
+  "rca_of_the_issue": "Previously, days_remaining calculation referenced today_d inside /api/presence without defining it in the function scope, so the try/except swallowed NameError and returned null. The fix anchors today_d to target_date, so live and historical presence views compute remaining leave days relative to the requested date. Regression coverage included required presence member keys for all 141 live members."
+}

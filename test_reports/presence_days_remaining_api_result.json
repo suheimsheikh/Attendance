@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "base_url": "http://localhost:8001",
+  "db_name": "test_database",
+  "created_seed": [],
+  "live": {
+    "member_id": "d67b1d1b-ca1f-45f3-b44a-c795b7546416",
+    "full_name": "HASSAN MOHD",
+    "status": "on_leave",
+    "leave_end_date": "2026-08-15",
+    "days_remaining": 24,
+    "expected": 24
+  },
+  "historical": {
+    "on": "2026-01-02",
+    "member_id": "5c20a4cb-35af-4cb8-b061-321eedf5c188",
+    "full_name": "Campus Administrator",
+    "status": "on_leave",
+    "leave_start_date": "2026-01-01",
+    "leave_end_date": "2026-01-02",
+    "days_remaining": 1,
+    "expected": 1
+  },
+  "regression_shape": {
+    "required_member_keys_present_for_all_live_members": true,
+    "live_member_count": 141
+  }
+}

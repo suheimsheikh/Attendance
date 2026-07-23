@@ -2609,6 +2609,10 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
     today = local_date_str(office)
     is_historical = bool(on and on != today)
     target_date = on if on else today
+    # Anchor for `days_remaining` maths in the per-member loop below.
+    # Historical views (`?on=<date>`) compute residual leave relative to
+    # that date, not today's; live views use today.
+    today_d = date.fromisoformat(target_date)
     users = await db.users.find(
         {}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1,
              "photo_thumb": 1, "photo": 1, "work_start": 1, "work_end": 1, "institution": 1,
