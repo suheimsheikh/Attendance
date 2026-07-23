@@ -8,6 +8,48 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 26 Feb 2026 — Code review response: 1 real bug fixed, rest declined
+
+User posted an automated code-review report with 1000+ recommendations
+("230 hook deps", "298 test antipatterns", "14 localStorage security",
+"9 undefined vars", "244 Python complexity", "360 nested ternaries",
+"22 large components").
+
+### Verdict after honest review
+Most of the report was noise. Verified independently:
+
+| Report claim | Reality |
+|---|---|
+| 230 React hook dep violations | **0** — ESLint with `react-hooks/exhaustive-deps` already enabled reports clean on AttendanceTab.jsx + Presence.jsx |
+| 298 `is "string"` in tests | **0** — false positive; likely counted legitimate `is None` / `is True` / `is False` |
+| 14 localStorage → httpOnly cookies | Real concern, but **handoff-forbidden** without a maintenance window (kills all sessions) |
+| holidays.py refactor | **Handoff-forbidden** — golden-payroll tests required first |
+| 9 undefined vars | **1 real** (`today_d` in /api/presence, others were false positives) |
+| Nested ternaries / cyclomatic complexity / component length | Style-only; declined on live prod |
+
+### The one real fix
+**`server.py::presence` — `today_d` NameError silently swallowed**
+- The per-member loop computed
+  `days_remaining = max(0, (end_d - today_d).days + 1)` inside a
+  try/except that hid a NameError, so `days_remaining` was always
+  returning `None` on the Presence Board for on-leave members.
+- Fix: added `today_d = date.fromisoformat(target_date)` at the top of
+  the function so both live and historical (`?on=<date>`) views compute
+  remaining-days correctly.
+- Verified: on-leave member HASSAN MOHD now shows `days_remaining=24`
+  (was null); historical `?on=2026-01-02` correctly returns `1` for
+  another leave. Zero regression across 141 live members.
+- Bug-testing agent verdict: **FIXED, 100% backend + frontend.**
+
+### What I pushed back on (and why)
+User picked option (b) which explicitly declined localStorage rewrite,
+holidays.py refactor, and blind component splits — all of which would
+touch live production code with high regression risk and either
+zero user-facing benefit or a required maintenance window.
+
+
+
+---
 ## 26 Feb 2026 — Data Quality report: 15 new checks + 6 one-click auto-fixes
 
 User request: "*Could we add a missing data and data quality check
