@@ -430,22 +430,25 @@ def make_router(db, require_admin) -> APIRouter:
 
         # --- Members: missing individual fields (surfaced separately
         #     from the `member.missing_fields` roll-up so filters can
-        #     target one at a time). ---
-        for field, code, sev, msg in [
+        #     target one at a time). Athletes-only fields (institution,
+        #     fleet) are gated on `category == "athlete"` — staff and
+        #     coaches don't have a fleet or institution. ---
+        for field, code, sev, msg, athlete_only in [
             ("joining_date", "member.missing_joining_date", "low",
-             "no joining date on record"),
+             "no joining date on record", False),
             ("category", "member.missing_category", "low",
-             "no category set"),
+             "no category set", False),
             ("rank", "member.missing_rank", "info",
-             "no rank / role title"),
+             "no rank / role title", False),
             ("weekly_off", "member.missing_weekly_off", "low",
-             "no weekly-off set (defaults to Monday)"),
+             "no weekly-off set (defaults to Monday)", False),
             ("institution", "member.missing_institution", "low",
-             "no institution set"),
+             "no institution set", True),
             ("fleet", "member.missing_fleet", "info",
-             "no fleet assigned"),
+             "no fleet assigned", True),
         ]:
             missing = [u for u in users if u.get("role") != "admin"
+                       and (not athlete_only or u.get("category") == "athlete")
                        and not (u.get(field) or "").strip()]
             for u in missing[:50]:
                 findings.append({

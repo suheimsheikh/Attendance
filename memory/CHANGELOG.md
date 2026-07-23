@@ -3746,3 +3746,12 @@ not reproducible in current codebase (no nested spans found).
   fixtures.
 - `GET /api/reports/leave-ledger` now surfaces the leave doc `id` on
   every row.
+
+## 2026-02-23 — Data Quality: institution/fleet athlete-scoped
+
+**Fixed (P1)**
+- `member.missing_institution` and `member.missing_fleet` DQ checks
+  were firing for every non-admin user, generating false positives for
+  staff and coaches (who don't have a fleet or institution). Now
+  gated on `category == "athlete"` — matches the athlete-specific
+  block inside `member.missing_fields`.
