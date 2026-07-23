@@ -3735,3 +3735,14 @@ security, bugs, performance, quality. 466-test suite used as regression gate.
 **Known/deferred (unchanged)**: JWT in localStorage (P2 post-launch),
 server.py size + large component splits (P3), `<option>` hydration warning
 not reproducible in current codebase (no nested spans found).
+
+## 2026-02-23 — LeaveLedgerModal stable keys
+
+**Fixed (P1)**
+- `LeaveLedgerModal` row `key` and `data-testid` now use the leave
+  document's stable server-side `id` (root-cause fix for the
+  duplicate-key warning reported in the code review). Falls back to
+  the previous composite `start_date-kind-index` for offline test
+  fixtures.
+- `GET /api/reports/leave-ledger` now surfaces the leave doc `id` on
+  every row.

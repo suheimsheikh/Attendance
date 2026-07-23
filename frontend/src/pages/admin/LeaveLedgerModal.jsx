@@ -101,9 +101,14 @@ export default function LeaveLedgerModal({ open, onClose, memberId, memberName, 
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
-                  <tr key={`${r.start_date}-${r.kind}-${i}`} className="border-t border-slate-100 hover:bg-slate-50/60"
-                      data-testid={`leave-ledger-row-${r.start_date}-${r.kind}`}>
+                {rows.map((r, i) => {
+                  // Stable, unique per-application key: prefer the leave
+                  // doc's server-side `id`; fall back to composite +
+                  // index for older responses / offline test fixtures.
+                  const rowKey = r.id || `${r.start_date}-${r.kind}-${i}`;
+                  return (
+                  <tr key={rowKey} className="border-t border-slate-100 hover:bg-slate-50/60"
+                      data-testid={`leave-ledger-row-${rowKey}`}>
                     <td className="py-1.5 font-mono">{r.start_date}</td>
                     <td className="py-1.5 font-semibold text-slate-700">{r.dow}</td>
                     <td className="py-1.5 font-mono text-slate-600">{r.end_date}</td>
@@ -120,7 +125,8 @@ export default function LeaveLedgerModal({ open, onClose, memberId, memberName, 
                       {r.admin_note || <span className="not-italic text-slate-300">—</span>}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

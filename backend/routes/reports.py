@@ -2098,7 +2098,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         leaves = await db.leaves.find(
             {"user_id": member_id, "type": "leave",
              "start_date": {"$lte": yr_end}, "end_date": {"$gte": yr_start}},
-            {"_id": 0, "status": 1, "start_date": 1, "end_date": 1,
+            {"_id": 0, "id": 1, "status": 1, "start_date": 1, "end_date": 1,
              "reason": 1, "paid_leave_used": 1, "lop_days": 1,
              "comp_off_used": 1, "admin_note": 1,
              "decided_by": 1, "decided_at": 1, "applied_at": 1},
@@ -2117,6 +2117,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 continue
             qty = (e - s).days + 1
             rows.append({
+                "id": L.get("id"),
                 "start_date": s.isoformat(),
                 "end_date": e.isoformat(),
                 "dow": DOW_LABEL[s.weekday()],
