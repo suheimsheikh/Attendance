@@ -18,14 +18,20 @@ lunch/dinner variations.
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from pymongo.errors import DuplicateKeyError
 
 from services.time_utils import local_date_str, local_now, now_utc, office_tz
+from services.scope import scoped_user_query as _scoped_user_query_shared
+from config import MAX_USERS
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_MEAL_CUTOFF = "07:00"
@@ -454,26 +460,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     # `meal_records`. Different from Chef's View above, which INFERS
     # meal eligibility from attendance windows.
     # ==================================================================
-    async def _athlete_like_keys() -> list:
-        keys = set()
-        async for c in db.categories.find({"is_athlete_like": True}, {"_id": 0, "key": 1}):
-            k = c.get("key")
-            if k:
-                keys.add(k)
-        return list(keys) if keys else ["athlete", "elite"]
-
     async def _scoped_meal_query(scope: str) -> dict:
-        """Same shape as `muster._scoped_user_query` but simpler:
-        meal muster is admin/chef/coach only (no escort branch)."""
-        athlete_keys = await _athlete_like_keys()
-        if scope == "athletes":
-            return {"category": {"$in": athlete_keys}}
-        if scope == "non_athletes":
-            return {"category": {"$nin": athlete_keys}}
-        if scope in ("staff", "coach", "executive"):
-            return {"category": scope}
-        # scope == "all" (or unknown) → no filter
-        return {}
+        """Meal muster is admin/chef/coach only — no escort branch —
+        so admins can always widen. Delegates to the shared helper in
+        services.scope."""
+        return await _scoped_user_query_shared(db, scope, admin_can_widen=True)
 
     def _valid_meal(meal: str) -> str:
         m = (meal or "").strip().lower()
@@ -491,15 +482,21 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     async def _ensure_meal_index():
         """Idempotent — create the compound unique index once per boot.
         Cheap enough to attempt on every roster fetch (Motor caches the
-        index metadata and short-circuits when it already exists)."""
+        index metadata and short-circuits when it already exists).
+        Failures are logged but not raised: a pre-existing index is a
+        no-op, and a genuine build failure (e.g. duplicate rows in the
+        collection) still surfaces at the next insert via
+        DuplicateKeyError so nothing is silently written twice."""
         try:
             await db.meal_records.create_index(
                 [("user_id", 1), ("date", 1), ("meal", 1)],
                 unique=True, name="uniq_user_date_meal",
             )
-        except Exception:
-            # Race between two boots creating the same index is safe to ignore.
-            pass
+        except Exception as exc:  # noqa: BLE001 — log-and-continue is intentional
+            # Common cases: index already exists with same spec (no-op),
+            # or the collection has legacy duplicates blocking a unique
+            # build. Log so an operator can investigate the latter.
+            logger.warning("meal_records unique index build failed: %s", exc)
 
     @router.get("/meals/config")
     async def meal_config(user: dict = Depends(get_current_user)):
@@ -537,12 +534,12 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
              "category": 1, "institution": 1, "photo_thumb": 1,
              "photo": 1, "gender": 1, "leaving_date": 1,
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1},
-        ).to_list(3000)
+        ).to_list(MAX_USERS)
 
         marks = await db.meal_records.find(
             {"date": d, "meal": m},
             {"_id": 0, "user_id": 1},
-        ).to_list(3000)
+        ).to_list(MAX_USERS)
         marked_ids = {r["user_id"] for r in marks}
 
         out = []
@@ -607,10 +604,12 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             try:
                 await db.meal_records.insert_one(doc)
                 marked += 1
-            except Exception:
-                # Duplicate key (already marked) → skip silently. Any other
-                # exception is also treated as skip so a single bad row
-                # can't fail the batch.
+            except DuplicateKeyError:
+                # Already marked for this (member, date, meal) — the
+                # unique index guards it, and the intent is idempotent
+                # so we just count it as a skip. Any OTHER exception
+                # is a real error and now propagates instead of being
+                # silently masked as "skipped".
                 skipped += 1
         return {"marked_count": marked, "skipped_count": skipped,
                 "meal": m, "date": d}
@@ -641,8 +640,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
         Duplicates are silently skipped via the compound unique index
         (`copied_count` reflects only NEW inserts). Members whose
-        `leaving_date` is on/before the target date are excluded so
-        ex-members don't sneak into a fresh day's roster."""
+        `leaving_date` is BEFORE the target date are excluded so
+        ex-members don't sneak into a fresh day's roster; a member on
+        their final active day (`leaving_date == target`) is still
+        carried forward — matches the canonical `is_ex_member` rule."""
         # `date` is shadowed by the query-param name, so grab the class
         # via the datetime import path before we lose it.
         from datetime import date as _date_cls
@@ -662,7 +663,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             {"meal": m, "date": source},
             {"_id": 0, "user_id": 1, "user_name": 1,
              "category": 1, "institution": 1},
-        ).to_list(5000)
+        ).to_list(MAX_USERS)
         if not prev_rows:
             return {"copied_count": 0, "skipped_count": 0,
                     "meal": m, "date": target, "from_date": source,
@@ -670,11 +671,14 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
         # Cross-check leaving_date so ex-members from the source day
         # don't get carried forward into a day when they no longer eat.
+        # A member whose leaving_date == target is on their FINAL
+        # active day and still eats — mirrors `is_ex_member` which
+        # treats `leaving_date < today` as ex (strict).
         user_ids = [r["user_id"] for r in prev_rows]
         actives = await db.users.find(
             {"id": {"$in": user_ids},
              "$or": [{"leaving_date": None}, {"leaving_date": ""},
-                     {"leaving_date": {"$gt": target}}]},
+                     {"leaving_date": {"$gte": target}}]},
             {"_id": 0, "id": 1},
         ).to_list(len(user_ids))
         active_ids = {u["id"] for u in actives}
@@ -704,8 +708,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             try:
                 await db.meal_records.insert_one(doc)
                 copied += 1
-            except Exception:
-                # Duplicate (already marked for today) → count as skipped.
+            except DuplicateKeyError:
+                # Already marked for today (via mark-bulk or a prior
+                # copy-previous run) — dedupe silently. Non-duplicate
+                # errors propagate.
                 skipped += 1
         return {"copied_count": copied, "skipped_count": skipped,
                 "meal": m, "date": target, "from_date": source,
@@ -777,7 +783,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             q,
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "institution": 1,
              "photo_thumb": 1, "leaving_date": 1},
-        ).sort("full_name", 1).to_list(3000)
+        ).sort("full_name", 1).to_list(MAX_USERS)
         member_ids = {u["id"] for u in members}
 
         # All meal records for this month.

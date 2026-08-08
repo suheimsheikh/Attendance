@@ -38,6 +38,7 @@ from pydantic import BaseModel
 from services.time_utils import now_utc, local_date_str
 from services.attendance_calc import compute_late, excursion_seconds
 from services.permissions import is_ex_member
+from services.scope import athlete_like_keys as _athlete_like_keys_shared, scoped_user_query as _scoped_user_query_shared
 from config import AUTO_APPROVAL_LATE_CHECKINS
 
 
@@ -78,20 +79,9 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
     router = APIRouter(prefix="/api")
 
     async def _athlete_like_keys() -> list:
-        """Category keys flagged `is_athlete_like=True` in the categories
-        master. Both 'athlete' and 'elite' qualify — historically muster
-        only queried 'athlete' which silently hid Elite squad members
-        (bug reported 04 Feb 2026: Badrinath & Ravikumar not showing).
-        Falls back to {athlete, elite} if the master collection is empty
-        (fresh install / test env)."""
-        keys = set()
-        async for c in db.categories.find({"is_athlete_like": True}, {"_id": 0, "key": 1}):
-            k = c.get("key")
-            if k:
-                keys.add(k)
-        if not keys:
-            keys = {"athlete", "elite"}
-        return list(keys)
+        """Delegates to services.scope — kept as a thin wrapper so the
+        rest of the file (and tests) don't need updating."""
+        return await _athlete_like_keys_shared(db)
 
     async def _enforce_escort_window(user: dict) -> None:
         """If the caller is an escort-token, refuse the request when the
@@ -113,30 +103,11 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             raise HTTPException(status_code=403, detail="Your escort access expired on " + esc["valid_until"])
 
     async def _scoped_user_query(user: dict, scope: str) -> dict:
-        """Build the users-collection filter for the muster list. Admins can
-        bulk-muster ANY category (staff, coaches, executives, athletes) — this
-        was enabled 15 Feb 2026 to let admins run muster for non-athlete
-        payroll tracking. Coaches and escorts remain restricted to athletes
-        (their job is to physically muster kids, not sign staff in).
-
-        `scope` (admin only) narrows the roster:
-          • "athletes"     → athlete_like categories (default for coaches/escorts, safe default for admins too)
-          • "staff"        → category == "staff"
-          • "coach"        → category == "coach"
-          • "executive"    → category == "executive"
-          • "non_athletes" → category NOT in athlete_like
-          • "all"          → no category filter (everyone)
-        """
-        athlete_keys = await _athlete_like_keys()
+        """Delegate to services.scope — muster passes
+        `admin_can_widen=True` for admins, `False` for coaches/escorts
+        (server-restricted to athletes regardless of client filter)."""
         is_admin = user.get("role") == "admin"
-        if not is_admin or scope == "athletes":
-            return {"category": {"$in": athlete_keys}}
-        if scope == "non_athletes":
-            return {"category": {"$nin": athlete_keys}}
-        if scope in ("staff", "coach", "executive"):
-            return {"category": scope}
-        # scope == "all" or unknown → no category filter
-        return {}
+        return await _scoped_user_query_shared(db, scope, admin_can_widen=is_admin)
 
     @router.get("/muster/athletes")
     async def muster_athletes(

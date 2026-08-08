@@ -53,6 +53,7 @@ const NAV_MEMBER = [
 const NAV_COACH = [
   { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
   { to: "/meals", label: "Meals", icon: Utensils },
+  { to: "/admin/meals-report", label: "Meals Report", icon: FileBarChart2 },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat },
   { to: "/presence", label: "Presence", icon: LayoutDashboard },
 ];

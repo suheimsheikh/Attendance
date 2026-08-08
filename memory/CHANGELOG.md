@@ -3810,3 +3810,29 @@ not reproducible in current codebase (no nested spans found).
   as the parameter, causing `.fromisoformat` to fail on the string).
   Aliased via local `from datetime import date as _date_cls` inside
   the endpoint body.
+
+## 2026-02-23 — Code-review fixes (Meal Muster)
+
+**Fixed (MEDIUM)**
+- `POST /api/meals/mark-bulk` and `/meals/copy-previous` now catch
+  only `pymongo.errors.DuplicateKeyError` for the "already marked"
+  skip path. Non-duplicate DB errors previously bubbled up as
+  `skipped_count` (silent data loss); they now propagate as a real
+  5xx.
+- `/meals/copy-previous` ex-member gate changed from `leaving_date >
+  target` to `>= target` — matches the canonical `is_ex_member` rule
+  (`leaving_date < today` ⇒ ex). Fixes off-by-one on a member's
+  final active day.
+
+**Refactored (LOW)**
+- Extracted `_scoped_user_query` / `_athlete_like_keys` into a shared
+  helper: `backend/services/scope.py`. Both `routes/muster.py` and
+  `routes/meals.py` now delegate — one source of truth if a scope
+  is renamed or added.
+- Bumped `to_list(3000)` in meals endpoints to `MAX_USERS` (5000) to
+  match the app-wide soft-pagination cap.
+- `_ensure_meal_index` now logs (`logger.warning`) instead of
+  silently swallowing errors, so an index-build failure (e.g. legacy
+  duplicates) is visible to operators.
+- Sidebar: "Meals Report" added to `NAV_COACH` (coaches already had
+  server-side access; sidebar link filled the UX gap).
