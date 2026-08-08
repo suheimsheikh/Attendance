@@ -19,8 +19,8 @@ lunch/dinner variations.
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
-from typing import Optional
+from datetime import date, datetime, timedelta
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -33,6 +33,38 @@ DEFAULT_LUNCH_CUTOFF = "10:00"
 DEFAULT_DINNER_CUTOFF = "18:00"
 SEEDED_CATEGORY_KEYS = {"athlete", "elite", "coach", "staff", "executive"}
 VALID_COLORS = {"sky", "rose", "emerald", "amber", "violet", "slate"}
+
+# ---------------------------------------------------------------------------
+# Meal muster (23 Feb 2026)
+# ---------------------------------------------------------------------------
+# The Chef's View above INFERS meal counts from attendance-timing overlaps.
+# The endpoints below are the opposite: an EXPLICIT paper-trail of who
+# actually ate, ticked off by admins/chefs/coaches from a Muster-style
+# roster. Stored one row per (member, date, meal) in `meal_records` with a
+# compound unique index so a double-tap can't create duplicates.
+MEAL_KEYS: tuple[str, ...] = ("breakfast", "lunch", "snacks", "dinner")
+MEAL_LABELS: dict[str, str] = {
+    "breakfast": "Breakfast",
+    "lunch":     "Lunch",
+    "snacks":    "Snacks / Tea",
+    "dinner":    "Dinner",
+}
+MEAL_SHORT: dict[str, str] = {
+    "breakfast": "BF",
+    "lunch":     "L",
+    "snacks":    "S",
+    "dinner":    "D",
+}
+
+
+class MealMarkIn(BaseModel):
+    """Body for /api/meals/mark-bulk and /api/meals/unmark-bulk.
+    Defined at module scope (not inside make_router) so `from __future__
+    import annotations` + FastAPI's `get_type_hints()` can resolve the
+    forward reference at route-decoration time."""
+    meal: str
+    date: str            # ISO YYYY-MM-DD, office-local
+    user_ids: List[str]
 
 
 class CategoryIn(BaseModel):
@@ -413,6 +445,313 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "counts": breakfast["counts"],
             "total":  breakfast["total"],
             "members": breakfast["members"],
+        }
+
+    # ==================================================================
+    # Meal muster — explicit paper-trail (23 Feb 2026)
+    # ------------------------------------------------------------------
+    # A chef/admin/coach ticks a member and it's persisted in
+    # `meal_records`. Different from Chef's View above, which INFERS
+    # meal eligibility from attendance windows.
+    # ==================================================================
+    async def _athlete_like_keys() -> list:
+        keys = set()
+        async for c in db.categories.find({"is_athlete_like": True}, {"_id": 0, "key": 1}):
+            k = c.get("key")
+            if k:
+                keys.add(k)
+        return list(keys) if keys else ["athlete", "elite"]
+
+    async def _scoped_meal_query(scope: str) -> dict:
+        """Same shape as `muster._scoped_user_query` but simpler:
+        meal muster is admin/chef/coach only (no escort branch)."""
+        athlete_keys = await _athlete_like_keys()
+        if scope == "athletes":
+            return {"category": {"$in": athlete_keys}}
+        if scope == "non_athletes":
+            return {"category": {"$nin": athlete_keys}}
+        if scope in ("staff", "coach", "executive"):
+            return {"category": scope}
+        # scope == "all" (or unknown) → no filter
+        return {}
+
+    def _valid_meal(meal: str) -> str:
+        m = (meal or "").strip().lower()
+        if m not in MEAL_KEYS:
+            raise HTTPException(status_code=400,
+                                detail=f"meal must be one of {list(MEAL_KEYS)}")
+        return m
+
+    def _valid_date(d: str) -> str:
+        try:
+            return date.fromisoformat(d).isoformat()
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+
+    async def _ensure_meal_index():
+        """Idempotent — create the compound unique index once per boot.
+        Cheap enough to attempt on every roster fetch (Motor caches the
+        index metadata and short-circuits when it already exists)."""
+        try:
+            await db.meal_records.create_index(
+                [("user_id", 1), ("date", 1), ("meal", 1)],
+                unique=True, name="uniq_user_date_meal",
+            )
+        except Exception:
+            # Race between two boots creating the same index is safe to ignore.
+            pass
+
+    @router.get("/meals/config")
+    async def meal_config(user: dict = Depends(get_current_user)):
+        """Static list of meal keys/labels used by the frontend to render
+        the meal switcher. Exposed as an endpoint (rather than hard-coded
+        on the client) so a future admin-configurable meal list plugs in
+        without a frontend release."""
+        return {
+            "meals": [
+                {"key": k, "label": MEAL_LABELS[k], "short": MEAL_SHORT[k]}
+                for k in MEAL_KEYS
+            ],
+        }
+
+    @router.get("/meals/roster")
+    async def meal_roster(
+        meal: str,
+        date: str,  # noqa: A002 — matches API contract; local name shadowed via `_valid_date`
+        scope: str = "all",
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Return every member in the selected scope with an
+        `already_marked` flag so the frontend can pre-tick rows already
+        recorded for this (meal, date) tuple."""
+        m = _valid_meal(meal)
+        d = _valid_date(date)
+        await _ensure_meal_index()
+
+        q = await _scoped_meal_query(scope)
+        # Exclude admin-only accounts — they don't eat mess meals.
+        q["role"] = {"$ne": "admin"}
+        users = await db.users.find(
+            q,
+            {"_id": 0, "id": 1, "full_name": 1, "rank": 1,
+             "category": 1, "institution": 1, "photo_thumb": 1,
+             "photo": 1, "gender": 1, "leaving_date": 1,
+             "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1},
+        ).to_list(3000)
+
+        marks = await db.meal_records.find(
+            {"date": d, "meal": m},
+            {"_id": 0, "user_id": 1},
+        ).to_list(3000)
+        marked_ids = {r["user_id"] for r in marks}
+
+        out = []
+        for u in users:
+            uid = u["id"]
+            out.append({
+                "id": uid,
+                "full_name": u.get("full_name"),
+                "rank": u.get("rank"),
+                "category": u.get("category"),
+                "institution": u.get("institution"),
+                "gender": u.get("gender"),
+                "photo": u.get("photo_thumb") or u.get("photo"),
+                "leaving_date": u.get("leaving_date"),
+                "father_mobile": u.get("father_mobile"),
+                "mother_mobile": u.get("mother_mobile"),
+                "guardian_mobile": u.get("guardian_mobile"),
+                "already_marked": uid in marked_ids,
+            })
+        out.sort(key=lambda x: (x["full_name"] or "").lower())
+        return {"meal": m, "date": d, "scope": scope,
+                "members": out, "count": len(out),
+                "marked_count": len(marked_ids)}
+
+    @router.post("/meals/mark-bulk")
+    async def meal_mark_bulk(body: MealMarkIn, user: dict = Depends(require_chef_or_admin)):
+        m = _valid_meal(body.meal)
+        d = _valid_date(body.date)
+        if not body.user_ids:
+            return {"marked_count": 0, "skipped_count": 0}
+        await _ensure_meal_index()
+
+        # Hydrate names/categories so the meal_records doc is
+        # self-describing (report views don't have to re-join to `users`).
+        subjects = await db.users.find(
+            {"id": {"$in": body.user_ids}},
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "institution": 1},
+        ).to_list(len(body.user_ids))
+        by_id = {u["id"]: u for u in subjects}
+
+        marked, skipped = 0, 0
+        now_iso = now_utc().isoformat()
+        marker_id = user.get("id")
+        marker_name = user.get("full_name") or user.get("email") or "Chef"
+        for uid in body.user_ids:
+            u = by_id.get(uid)
+            if not u:
+                skipped += 1
+                continue
+            doc = {
+                "id": str(uuid.uuid4()),
+                "user_id": uid,
+                "user_name": u.get("full_name"),
+                "category": u.get("category"),
+                "institution": u.get("institution"),
+                "date": d,
+                "meal": m,
+                "marked_at": now_iso,
+                "marked_by": marker_id,
+                "marked_by_name": marker_name,
+            }
+            try:
+                await db.meal_records.insert_one(doc)
+                marked += 1
+            except Exception:
+                # Duplicate key (already marked) → skip silently. Any other
+                # exception is also treated as skip so a single bad row
+                # can't fail the batch.
+                skipped += 1
+        return {"marked_count": marked, "skipped_count": skipped,
+                "meal": m, "date": d}
+
+    @router.post("/meals/unmark-bulk")
+    async def meal_unmark_bulk(body: MealMarkIn, user: dict = Depends(require_chef_or_admin)):
+        m = _valid_meal(body.meal)
+        d = _valid_date(body.date)
+        if not body.user_ids:
+            return {"unmarked_count": 0}
+        res = await db.meal_records.delete_many(
+            {"date": d, "meal": m, "user_id": {"$in": body.user_ids}},
+        )
+        return {"unmarked_count": int(res.deleted_count or 0),
+                "meal": m, "date": d}
+
+    @router.get("/meals/daily-counts")
+    async def meal_daily_counts(
+        date: str,  # noqa: A002
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Kitchen-facing headcount for the day. Groups by meal and by
+        category so the chef can plan portions per meal + per group."""
+        d = _valid_date(date)
+        rows = await db.meal_records.find(
+            {"date": d},
+            {"_id": 0, "meal": 1, "category": 1, "user_id": 1},
+        ).to_list(5000)
+        # meal → { category → count, total }
+        per_meal: dict[str, dict] = {
+            k: {"total": 0, "by_category": {}, "user_ids": []} for k in MEAL_KEYS
+        }
+        for r in rows:
+            m = (r.get("meal") or "").lower()
+            if m not in per_meal:
+                continue
+            per_meal[m]["total"] += 1
+            cat = r.get("category") or "other"
+            per_meal[m]["by_category"][cat] = per_meal[m]["by_category"].get(cat, 0) + 1
+            per_meal[m]["user_ids"].append(r.get("user_id"))
+        return {
+            "date": d,
+            "meals": [
+                {"key": k, "label": MEAL_LABELS[k], "short": MEAL_SHORT[k],
+                 "total": per_meal[k]["total"],
+                 "by_category": per_meal[k]["by_category"]}
+                for k in MEAL_KEYS
+            ],
+        }
+
+    @router.get("/meals/monthly-grid")
+    async def meal_monthly_grid(
+        month: str,          # YYYY-MM
+        scope: str = "all",
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Admin-facing matrix. Rows = members in scope, cols = days of
+        the month, cell = bit-flags of which meals they took (BF/L/S/D).
+        Also returns per-member and per-day totals so the frontend can
+        surface a "top eaters" summary without a second call."""
+        try:
+            y, mo = month.split("-")
+            y, mo = int(y), int(mo)
+            month_start = date(y, mo, 1)
+            # Compute last day of month via first-of-next-month minus one day.
+            if mo == 12:
+                month_end = date(y, 12, 31)
+            else:
+                month_end = date(y, mo + 1, 1) - timedelta(days=1)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+
+        start_iso = month_start.isoformat()
+        end_iso = month_end.isoformat()
+
+        # Members in the requested scope.
+        q = await _scoped_meal_query(scope)
+        q["role"] = {"$ne": "admin"}
+        members = await db.users.find(
+            q,
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "institution": 1,
+             "photo_thumb": 1, "leaving_date": 1},
+        ).sort("full_name", 1).to_list(3000)
+        member_ids = {u["id"] for u in members}
+
+        # All meal records for this month.
+        recs = await db.meal_records.find(
+            {"date": {"$gte": start_iso, "$lte": end_iso},
+             "user_id": {"$in": list(member_ids)}},
+            {"_id": 0, "user_id": 1, "date": 1, "meal": 1},
+        ).to_list(50000)
+
+        # Build the grid.
+        # Encode which meals each (member, day) had as a set of meal keys.
+        by_member_day: dict[str, dict[str, set]] = {}
+        per_day_totals: dict[str, dict[str, int]] = {}
+        per_member_totals: dict[str, dict[str, int]] = {}
+        for r in recs:
+            uid = r["user_id"]
+            d_iso = r["date"]
+            m = (r.get("meal") or "").lower()
+            if m not in MEAL_KEYS:
+                continue
+            by_member_day.setdefault(uid, {}).setdefault(d_iso, set()).add(m)
+            per_day_totals.setdefault(d_iso, {k: 0 for k in MEAL_KEYS})[m] += 1
+            per_member_totals.setdefault(uid, {k: 0 for k in MEAL_KEYS})[m] += 1
+
+        days = []
+        cur = month_start
+        while cur <= month_end:
+            days.append(cur.isoformat())
+            cur = cur + timedelta(days=1)
+
+        rows = []
+        for u in members:
+            uid = u["id"]
+            uday = by_member_day.get(uid, {})
+            row = {
+                "id": uid,
+                "full_name": u.get("full_name"),
+                "category": u.get("category"),
+                "institution": u.get("institution"),
+                "photo": u.get("photo_thumb"),
+                "leaving_date": u.get("leaving_date"),
+                "days": {d: sorted(list(uday.get(d, set()))) for d in days if d in uday},
+                "totals": per_member_totals.get(uid, {k: 0 for k in MEAL_KEYS}),
+            }
+            # Include only members with at least one meal in the month to
+            # keep the grid focused (admins can widen scope; blank rows
+            # don't add signal). Frontend still gets days array.
+            if row["totals"] and sum(row["totals"].values()) > 0:
+                rows.append(row)
+
+        return {
+            "month": month,
+            "days": days,
+            "scope": scope,
+            "meals": [{"key": k, "label": MEAL_LABELS[k], "short": MEAL_SHORT[k]}
+                      for k in MEAL_KEYS],
+            "rows": rows,
+            "per_day_totals": per_day_totals,
         }
 
     return router

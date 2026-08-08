@@ -1,0 +1,36 @@
+{
+  "summary": "Tested the new Meal Muster feature (backend + frontend) per the review request. Wrote /app/backend/tests/test_meal_muster.py with 18 pytest cases covering config, roster (incl. scope=athletes/staff/non_athletes/all), mark-bulk (with idempotency verification via unique index), unmark-bulk, daily-counts (shape + by_category sums), monthly-grid (rows + totals + days array), auth-required (401/403), and bad-input (400) paths. All 18 tests PASS. Ran a Playwright E2E flow as admin: /meals loads, all 4 meal switcher buttons render, date picker works, 7 scope chips render for admin, 134 members shown, tapping a row shows 'Mark 1', clicking submit fires /meals/mark-bulk and the green '✓ Already marked' badge appears (meals-marked-badge-{id}); re-ticking the marked row flips the submit verb to 'Un-mark 1' and submitting removes the badge. Sidebar shows 'Meals' (Coaches section) and 'Meals Report' (Admin section) for the admin. /admin/meals-report shows Daily + Monthly tabs; all 4 meals-report-daily-{key}-total cards render; switching to Monthly grid tab works. Test meal_records created during E2E were cleaned up by un-mark within the same run; pytest cases clean up via /meals/unmark-bulk in finally.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/meals", "issues": ["React hydration warning: <li> cannot be a descendant of <li>. In Meals.jsx line 320 the row wrapper is <li data-testid='meals-row-wrap-...'> and MusterRow itself renders another <li data-testid='muster-row-...'>. Not user-visible but pollutes the console and breaks HTML semantics. Fix: change the outer wrapper in Meals.jsx to a <div> (the <ul>/<li> pairing is already provided by MusterRow's own list markup)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_meal_muster.py",
+    "/app/test_reports/pytest/meal_muster_results.xml"
+  ],
+  "action_items": [
+    "Optional: replace the outer <li> in /app/frontend/src/pages/Meals.jsx (around line 320) with a <div> to silence the hydration warning caused by <li> nesting; move data-testid='meals-row-wrap-{id}' onto the wrapping <div>."
+  ],
+  "critical_code_review_comments": [
+    "meals.py /meals/mark-bulk swallows ALL exceptions per insert and counts them as skipped_count. This masks non-duplicate errors (e.g. transient DB issues) as if the row were 'already marked'. Consider narrowing the except to DuplicateKeyError (pymongo.errors) and re-raising other exceptions.",
+    "meals.py routes/meals.py — _ensure_meal_index() is invoked from every /meals/roster call. Even though Motor caches the metadata, prefer registering the index once at app startup for clarity.",
+    "Meals.jsx nests <li> inside <li> (see design_issues above) — HTML semantics + React hydration warning.",
+    "meal_muster endpoints do not return the ISO time-of-mark on roster; UI code hints at surfacing 'marked at' as a future enhancement — consider adding marked_at + marked_by_name to the roster payload so the chef can see WHO ticked the row."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_meal_muster.py"
+  ],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100% (all listed flows verified)"},
+  "test_credentials": "Admin: admin@attendance.app / Admin@12345 (via /app/memory/test_credentials.md)",
+  "seed_data_creation": "None; tests use TEST_DATE=2025-01-15 (past) and clean up via /meals/unmark-bulk in finally blocks. E2E cleanup verified by un-mark step.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Meal Muster feature is fully working end-to-end. Test file /app/backend/tests/test_meal_muster.py is a regression harness for the new /api/meals/* endpoints. If the main agent tweaks the mark-bulk exception handling, re-run this file. The only cosmetic issue is the <li>-in-<li> hydration warning on /meals."
+}
