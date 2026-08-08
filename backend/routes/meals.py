@@ -627,6 +627,90 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         return {"unmarked_count": int(res.deleted_count or 0),
                 "meal": m, "date": d}
 
+    @router.post("/meals/copy-previous")
+    async def meal_copy_previous(
+        meal: str,
+        date: str,  # target date — usually today
+        from_date: Optional[str] = None,   # override source date (defaults to date - 1)
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Seed today's marks for `meal` from a previous day. If
+        `from_date` is not provided we use `date - 1` (skipping weekends
+        would surprise chefs — mess service is 7 days a week, so a
+        strict calendar-day lookback is the right default).
+
+        Duplicates are silently skipped via the compound unique index
+        (`copied_count` reflects only NEW inserts). Members whose
+        `leaving_date` is on/before the target date are excluded so
+        ex-members don't sneak into a fresh day's roster."""
+        # `date` is shadowed by the query-param name, so grab the class
+        # via the datetime import path before we lose it.
+        from datetime import date as _date_cls
+        m = _valid_meal(meal)
+        target = _valid_date(date)
+        if from_date is not None:
+            source = _valid_date(from_date)
+        else:
+            source = (_date_cls.fromisoformat(target) - timedelta(days=1)).isoformat()
+        if source >= target:
+            raise HTTPException(status_code=400,
+                                detail="from_date must be before date")
+        await _ensure_meal_index()
+
+        # Read yesterday's rows.
+        prev_rows = await db.meal_records.find(
+            {"meal": m, "date": source},
+            {"_id": 0, "user_id": 1, "user_name": 1,
+             "category": 1, "institution": 1},
+        ).to_list(5000)
+        if not prev_rows:
+            return {"copied_count": 0, "skipped_count": 0,
+                    "meal": m, "date": target, "from_date": source,
+                    "source_count": 0}
+
+        # Cross-check leaving_date so ex-members from the source day
+        # don't get carried forward into a day when they no longer eat.
+        user_ids = [r["user_id"] for r in prev_rows]
+        actives = await db.users.find(
+            {"id": {"$in": user_ids},
+             "$or": [{"leaving_date": None}, {"leaving_date": ""},
+                     {"leaving_date": {"$gt": target}}]},
+            {"_id": 0, "id": 1},
+        ).to_list(len(user_ids))
+        active_ids = {u["id"] for u in actives}
+
+        copied, skipped = 0, 0
+        now_iso = now_utc().isoformat()
+        marker_id = user.get("id")
+        marker_name = user.get("full_name") or user.get("email") or "Chef"
+        for r in prev_rows:
+            uid = r["user_id"]
+            if uid not in active_ids:
+                skipped += 1
+                continue
+            doc = {
+                "id": str(uuid.uuid4()),
+                "user_id": uid,
+                "user_name": r.get("user_name"),
+                "category": r.get("category"),
+                "institution": r.get("institution"),
+                "date": target,
+                "meal": m,
+                "marked_at": now_iso,
+                "marked_by": marker_id,
+                "marked_by_name": marker_name,
+                "copied_from": source,
+            }
+            try:
+                await db.meal_records.insert_one(doc)
+                copied += 1
+            except Exception:
+                # Duplicate (already marked for today) → count as skipped.
+                skipped += 1
+        return {"copied_count": copied, "skipped_count": skipped,
+                "meal": m, "date": target, "from_date": source,
+                "source_count": len(prev_rows)}
+
     @router.get("/meals/daily-counts")
     async def meal_daily_counts(
         date: str,  # noqa: A002

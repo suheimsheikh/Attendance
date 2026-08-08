@@ -12,7 +12,7 @@
  * require_chef_or_admin).
  */
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { Loader2, Search, RefreshCw, CheckSquare, Square, Utensils, Users } from "lucide-react";
+import { Loader2, Search, RefreshCw, CheckSquare, Square, Utensils, Users, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
 import { useAuth } from "../auth";
@@ -186,6 +186,34 @@ export default function Meals() {
     }
   };
 
+  // Copy the same meal's marks from the previous day. Handy for morning
+  // stand-ups when the mess roster barely changes day-to-day. Duplicates
+  // (already marked for today) are silently skipped server-side.
+  const [copying, setCopying] = useState(false);
+  const copyFromYesterday = async () => {
+    setCopying(true);
+    try {
+      const res = await api.post(
+        `/meals/copy-previous?meal=${encodeURIComponent(meal)}&date=${encodeURIComponent(dateStr)}`,
+      );
+      const copied = res.copied_count || 0;
+      const src = res.from_date;
+      if (res.source_count === 0) {
+        toast.error(`No ${activeMealDef.label} marks found for ${src}`);
+      } else if (copied === 0) {
+        toast.success(`${activeMealDef.label} is already up to date (nothing new to copy)`);
+      } else {
+        const noun = copied === 1 ? "member" : "members";
+        toast.success(`Copied ${copied} ${noun} from ${src}`);
+      }
+      load();
+    } catch (err) {
+      showApiError(err, "Copy failed");
+    } finally {
+      setCopying(false);
+    }
+  };
+
   const color = MEAL_COLOR[meal] || "#2563EB";
   const allVisiblePicked = filtered.length > 0 && filtered.every((s) => picked.has(s.id));
 
@@ -272,6 +300,16 @@ export default function Meals() {
         >
           {allVisiblePicked ? <CheckSquare size={14}/> : <Square size={14}/>}
           {allVisiblePicked ? "Untick visible" : "Tick all visible"}
+        </button>
+        <button
+          data-testid="meals-copy-yesterday"
+          onClick={copyFromYesterday}
+          disabled={copying || saving}
+          className="iu-btn-secondary !h-9 !px-3 text-xs"
+          title={`Copy ${activeMealDef.label} marks from yesterday to ${dateStr}`}
+        >
+          {copying ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
+          <span className="hidden sm:inline">Copy yesterday</span>
         </button>
         <button onClick={load} className="iu-btn-secondary !h-9 !px-3" data-testid="meals-refresh">
           <RefreshCw size={14} />

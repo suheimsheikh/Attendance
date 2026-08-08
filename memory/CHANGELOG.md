@@ -3789,3 +3789,24 @@ not reproducible in current codebase (no nested spans found).
   `rowTint`) so the Meals page can reuse it without nested `<li>`s.
 - Backend regression suite: `/app/backend/tests/test_meal_muster.py`
   (18 tests, all green).
+
+## 2026-02-23 — Meal Muster: Copy Yesterday
+
+**New (P1)**
+- `POST /api/meals/copy-previous?meal=&date=&from_date=` copies the
+  same meal's marks forward from the previous day (or an explicit
+  `from_date`). Dedupes via the compound unique index, so re-running
+  is a no-op. Ex-members past their `leaving_date` on the target day
+  are excluded so a resignation doesn't get re-marked. Response
+  includes `copied_count`, `skipped_count`, `source_count`.
+- New "Copy yesterday" button on `/meals` toolbar (data-testid
+  `meals-copy-yesterday`), between "Tick all visible" and refresh.
+  Friendly toasts: "Copied N members from {date}", "…already up to
+  date", or "No {meal} marks found for {date}".
+
+**Fixed**
+- Query-param name `date` shadowed the imported `datetime.date` class
+  inside `meal_copy_previous` (Python name resolution treated `date`
+  as the parameter, causing `.fromisoformat` to fail on the string).
+  Aliased via local `from datetime import date as _date_cls` inside
+  the endpoint body.
