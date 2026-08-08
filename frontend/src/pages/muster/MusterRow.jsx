@@ -19,6 +19,13 @@
  *   onAddPhoto(member)    — open the SelfieCapture flow for this member
  *   onInlineCheckout(m)   — close this member's open session directly
  *   categoryChipStyle     — { [category]: "bg-... text-..." } map
+ *   markedChip            — optional { label, tone } — renders a small
+ *                           status chip (used by /meals to show
+ *                           "✓ Marked for {meal}"); does NOT block
+ *                           tickability.
+ *   rowTint               — optional CSS class applied to the <li>
+ *                           background when not locked/picked (used by
+ *                           /meals for the pre-ticked green tint).
  */
 import React from "react";
 import { CheckSquare, Camera, Loader2, LogOut as LogOutIcon } from "lucide-react";
@@ -36,6 +43,8 @@ export default function MusterRow({
   onAddPhoto,
   onInlineCheckout,
   categoryChipStyle,
+  markedChip,
+  rowTint,
 }) {
   const inAt = s.check_in_at
     ? new Date(s.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })
@@ -49,7 +58,7 @@ export default function MusterRow({
           ? "bg-slate-100 text-slate-500 cursor-not-allowed"
           : isPicked
             ? "bg-emerald-50 cursor-pointer"
-            : "hover:bg-slate-50 cursor-pointer"
+            : `${rowTint || ""} hover:bg-slate-50 cursor-pointer`
       }`}
       data-testid={`muster-row-${s.id}`}
       aria-disabled={isLocked || undefined}
@@ -87,6 +96,15 @@ export default function MusterRow({
               className="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[10px] font-bold bg-slate-200 text-slate-600 shrink-0"
             >
               ✓ {inAt ? `In · ${inAt}` : "Already in"}
+            </span>
+          )}
+          {markedChip && (
+            <span
+              data-testid={`muster-marked-chip-${s.id}`}
+              className={`inline-flex items-center px-1.5 h-5 rounded text-[10px] font-bold shrink-0 ${markedChip.tone || "bg-emerald-100 text-emerald-700"}`}
+              title={markedChip.label}
+            >
+              ✓ {markedChip.label}
             </span>
           )}
           {s.institution && (

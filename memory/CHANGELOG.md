@@ -3762,3 +3762,30 @@ not reproducible in current codebase (no nested spans found).
 - `member.missing_rank` was firing for athletes (who don't have a
   staff/coach rank or role title). Now gated to non-athlete users
   only. Same pattern as the athlete-only institution/fleet gating.
+
+## 2026-02-23 — Meal Muster feature
+
+**New (P1)**
+- Meal Muster surface: chef/admin/coach can tick members for each of
+  Breakfast / Lunch / Snacks / Dinner from a Muster-style roster
+  (`/meals`). Idempotent toggle — re-ticking a marked row switches
+  the submit verb to "Un-mark".
+- Meals Report (`/admin/meals-report`) with two tabs: chef-facing
+  daily counts (per-meal totals + category breakdown) and
+  admin-facing monthly grid (matrix of members × days × meals with
+  per-member + per-day totals).
+- Sidebar entries: "Meals" (Coaches section, visible to admins too),
+  "Meals Report" (Chef + Admin sections).
+- New Mongo collection `meal_records` with compound unique index on
+  `(user_id, date, meal)` — insert-time dedupe.
+- New endpoints (all `require_chef_or_admin`):
+  `GET /api/meals/config`,
+  `GET /api/meals/roster?meal=&date=&scope=`,
+  `POST /api/meals/mark-bulk`,
+  `POST /api/meals/unmark-bulk`,
+  `GET /api/meals/daily-counts?date=`,
+  `GET /api/meals/monthly-grid?month=&scope=`.
+- `MusterRow` extended with two optional props (`markedChip`,
+  `rowTint`) so the Meals page can reuse it without nested `<li>`s.
+- Backend regression suite: `/app/backend/tests/test_meal_muster.py`
+  (18 tests, all green).

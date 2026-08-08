@@ -305,43 +305,23 @@ export default function Meals() {
         <ul className="iu-card divide-y divide-slate-100 overflow-hidden" data-testid="meals-list">
           {filtered.map((s) => {
             const isPicked = picked.has(s.id);
-            // Reuse MusterRow but stuff `already_marked` metadata into a
-            // spare field so the row can render a distinctive tint. We
-            // do NOT pass `isLocked=true` — locked rows are non-tickable
-            // in MusterRow, and we WANT already-marked rows to be tickable
-            // (to allow un-marking).
-            const rowMember = {
-              ...s,
-              // Repurpose check_in_at so MusterRow shows a "marked at" pill
-              // if we ever surface the timestamp — currently null on
-              // roster response; a future enhancement.
-            };
             return (
-              <li
+              <MusterRow
                 key={s.id}
-                data-testid={`meals-row-wrap-${s.id}`}
-                className={s.already_marked ? "bg-emerald-50/40" : ""}
-              >
-                <MusterRow
-                  member={rowMember}
-                  isPicked={isPicked}
-                  isLocked={false}
-                  isAdmin={isAdmin}
-                  singleCheckoutBusy={false}
-                  onToggle={toggle}
-                  onAddPhoto={() => {}}
-                  onInlineCheckout={() => {}}
-                  categoryChipStyle={CATEGORY_CHIP_STYLE}
-                />
-                {s.already_marked && (
-                  <div
-                    className="px-4 pb-2 -mt-1 text-[11px] font-semibold text-emerald-700"
-                    data-testid={`meals-marked-badge-${s.id}`}
-                  >
-                    ✓ Already marked for {activeMealDef.label}
-                  </div>
-                )}
-              </li>
+                member={s}
+                isPicked={isPicked}
+                isLocked={false}
+                isAdmin={isAdmin}
+                singleCheckoutBusy={false}
+                onToggle={toggle}
+                onAddPhoto={() => {}}
+                onInlineCheckout={() => {}}
+                categoryChipStyle={CATEGORY_CHIP_STYLE}
+                markedChip={s.already_marked
+                  ? { label: `Marked · ${activeMealDef.label}` }
+                  : undefined}
+                rowTint={s.already_marked ? "bg-emerald-50/40" : ""}
+              />
             );
           })}
         </ul>
