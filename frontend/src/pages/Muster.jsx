@@ -57,8 +57,8 @@ export default function Muster() {
     try {
       const [res, o, si] = await Promise.all([
         api.get("/muster/athletes", { mode, scope }),
-        api.get("/office").catch(() => null),
-        api.get("/sites").catch(() => []),
+        api.getCached("/office").catch(() => null),
+        api.getCached("/sites").catch(() => []),
       ]);
       setData(res);
       setPicked(new Set());

@@ -3836,3 +3836,41 @@ not reproducible in current codebase (no nested spans found).
   duplicates) is visible to operators.
 - Sidebar: "Meals Report" added to `NAV_COACH` (coaches already had
   server-side access; sidebar link filled the UX gap).
+
+## 2026-02-24 — Perf pass across the board
+
+**Backend wire-size wins**
+- `/api/muster/athletes` payload: **434 KB → 50 KB (~8.5 KB gzip)** — 8.7×
+  smaller. Switched from embedded 25 KB base64 thumbnails to the same
+  cacheable `/api/members/{id}/photo?v=hash` URL pattern that Presence
+  already uses. Photos now stream individually and browsers cache them
+  permanently until an admin uploads a new one.
+- `/api/meals/roster` payload: **412 KB → 45 KB (~8.5 KB gzip)** — 9.2×
+  smaller. Same photo-URL swap.
+- Dropped unused `photo` field from `/api/presence` and escort-presence
+  projections — Mongo I/O reduced from ~7 MB to ~450 KB per query.
+- Latency also down 15-30% across these endpoints.
+- Hoisted `member_photo_url` from `server.py` into `services/photo.py`
+  so route modules can share the same URL scheme without duplication.
+
+**Missing indexes (perf pass)**
+- `audit_log`: added `at DESC`, `actor_id`, `entity_id`,
+  `(entity_type, at DESC)`. Was doing a full-collection scan on ~700
+  rows and growing.
+- `sms_log`: added `at DESC`, `to`.
+- `meal_records`: added `(date, meal)` on top of the compound unique
+  key so the daily-counts + monthly-grid range scans are index-covered.
+
+**Frontend cache wins**
+- React Query `staleTime` bumped from 60s → 5min; `gcTime` set to
+  15min. Tab-switch back to a recently-visited page now renders
+  instantly from cache without a refetch.
+- Added `api.getCached` — tiny module-level TTL cache (10min) for
+  near-static endpoints (`/office`, `/sites`, `/meals/config`,
+  `/masters/categories`). Muster and Meals now hit these once per
+  session instead of once per page load. Cleared on logout via
+  `clearStaticCache()`.
+
+**Verified:** 28/28 muster+meals pytest tests green. Smoke-tested
+Meals / Muster / Presence in the browser — photos render, cache warms
+on repeat visits.

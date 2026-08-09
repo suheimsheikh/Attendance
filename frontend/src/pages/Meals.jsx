@@ -65,7 +65,7 @@ export default function Meals() {
 
   // Fetch the (static, for now) meal list once.
   useEffect(() => {
-    api.get("/meals/config")
+    api.getCached("/meals/config")
       .then((r) => setMeals(r?.meals || []))
       .catch(() => setMeals([
         { key: "breakfast", label: "Breakfast", short: "BF" },

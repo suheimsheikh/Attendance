@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
-import { api, setToken, clearToken, getToken } from "./api";
+import { api, setToken, clearToken, getToken, clearStaticCache } from "./api";
 
 const AuthCtx = createContext(null);
 
@@ -75,6 +75,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     clearToken();
+    clearStaticCache();
     setUser(null);
     // Intentionally KEEP iu_last_user_v1 — the device is still theirs, so the
     // login page shows "Welcome back, NAME" on the next visit. Use the

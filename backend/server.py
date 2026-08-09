@@ -495,6 +495,24 @@ async def _seed_database() -> None:
         ("user_id", 1), ("date", -1),
         ("check_in_at", 1), ("is_late", 1),
     ])
+    # Perf pass 24 Feb 2026 — audit_log + sms_log had NO indexes; every
+    # admin view/filter was doing a full-collection scan (~700 rows and
+    # growing). Sort key is `at` DESC (most-recent-first paging), and
+    # the filter fields are actor_id / entity_id / entity_type / action.
+    await db.audit_log.create_index([("at", -1)])
+    await db.audit_log.create_index("actor_id", sparse=True)
+    await db.audit_log.create_index("entity_id", sparse=True)
+    await db.audit_log.create_index([("entity_type", 1), ("at", -1)])
+    await db.sms_log.create_index([("at", -1)])
+    await db.sms_log.create_index("to", sparse=True)
+    # Meal muster index — added here in addition to the runtime
+    # _ensure_meal_index() call so a fresh install has the guarantee
+    # from boot without waiting for the first /meals/roster hit.
+    await db.meal_records.create_index(
+        [("user_id", 1), ("date", 1), ("meal", 1)],
+        unique=True, name="uniq_user_date_meal",
+    )
+    await db.meal_records.create_index([("date", 1), ("meal", 1)])
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({
@@ -992,22 +1010,11 @@ async def list_members(user: dict = Depends(get_current_user)):
 
 
 def member_photo_url(u: dict) -> Optional[str]:
-    """Build the tiny relative URL used by the list endpoints as a
-    stand-in for the base64 photo. `v` is a short hash so browsers can
-    cache the response for a year yet still refresh instantly when the
-    admin uploads a new photo (hash changes → cache miss on new URL)."""
-    thumb = u.get("photo_thumb") or u.get("photo")
-    if not thumb:
-        return None
-    import hashlib
-    # Cache-busting version tag — used ONLY as a URL fingerprint so the
-    # browser knows when a new photo has been uploaded. Not
-    # security-sensitive; SHA-256 truncated to 10 hex chars is plenty
-    # for collision-avoidance across a ~1000-member academy. (Was MD5
-    # pre-9-Jul-2026; swapped to silence static-analysis warnings that
-    # flagged MD5 as weak crypto even in non-security paths.)
-    version = hashlib.sha256(thumb.encode("utf-8", errors="ignore")).hexdigest()[:10]
-    return f"/api/members/{u['id']}/photo?v={version}"
+    """Compat shim — the canonical implementation lives in
+    services.photo.member_photo_url. Kept here so existing server.py
+    call sites don't need touching."""
+    from services.photo import member_photo_url as _mpu
+    return _mpu(u)
 
 
 @api_router.get("/members/{member_id}/photo")
@@ -2615,7 +2622,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
     today_d = date.fromisoformat(target_date)
     users = await db.users.find(
         {}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1,
-             "photo_thumb": 1, "photo": 1, "work_start": 1, "work_end": 1, "institution": 1,
+             "photo_thumb": 1, "work_start": 1, "work_end": 1, "institution": 1,
              "fleet": 1,  # NOTE: needed by break_applies_to() for scope=fleet breaks
              "leaving_date": 1,  # 24 Feb 2026 — feeds the ex-member filter/chip on the Presence Board
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1}
@@ -3082,7 +3089,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
             e["id"]: e for e in await db.escorts.find(
                 {"id": {"$in": escort_ids}},
                 {"_id": 0, "id": 1, "name": 1, "institution": 1,
-                 "photo_thumb": 1, "photo": 1, "valid_until": 1},
+                 "photo_thumb": 1, "valid_until": 1},
             ).to_list(500)
         }
         for r in rows:

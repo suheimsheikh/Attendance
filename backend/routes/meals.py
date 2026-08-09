@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
 from services.time_utils import local_date_str, local_now, now_utc, office_tz
+from services.photo import member_photo_url
 from services.scope import scoped_user_query as _scoped_user_query_shared
 from config import MAX_USERS
 
@@ -530,9 +531,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         q["role"] = {"$ne": "admin"}
         users = await db.users.find(
             q,
+            # Explicit fields — dropped full `photo` (25KB) in favor
+            # of `photo_thumb` (3KB). Perf pass 24 Feb 2026.
             {"_id": 0, "id": 1, "full_name": 1, "rank": 1,
              "category": 1, "institution": 1, "photo_thumb": 1,
-             "photo": 1, "gender": 1, "leaving_date": 1,
+             "gender": 1, "leaving_date": 1,
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1},
         ).to_list(MAX_USERS)
 
@@ -552,7 +555,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "category": u.get("category"),
                 "institution": u.get("institution"),
                 "gender": u.get("gender"),
-                "photo": u.get("photo_thumb") or u.get("photo"),
+                "photo": member_photo_url(u),
                 "leaving_date": u.get("leaving_date"),
                 "father_mobile": u.get("father_mobile"),
                 "mother_mobile": u.get("mother_mobile"),
@@ -823,7 +826,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "full_name": u.get("full_name"),
                 "category": u.get("category"),
                 "institution": u.get("institution"),
-                "photo": u.get("photo_thumb"),
+                "photo": member_photo_url(u),
                 "leaving_date": u.get("leaving_date"),
                 "days": {d: sorted(list(uday.get(d, set()))) for d in days if d in uday},
                 "totals": per_member_totals.get(uid, {k: 0 for k in MEAL_KEYS}),

@@ -7,8 +7,19 @@ import App from "@/App";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60_000,
+      // Perf pass 24 Feb 2026 — bumped from 60s to 5min. Most surfaces
+      // (Grid, Dashboard, Reports) don't need sub-minute freshness;
+      // 5-min caches let tab-switches feel instant. Hot-refresh
+      // surfaces (Presence, Approvals) override this locally.
+      staleTime: 5 * 60_000,
+      // Keep prefetched / previous responses in memory for 15 min
+      // after their last observer unmounts — makes back-navigation
+      // to a recently-visited page render immediately from cache.
+      gcTime: 15 * 60_000,
       refetchOnWindowFocus: false,
+      // Retry once on transient network errors (default 3 makes a
+      // failing page feel sluggish; one retry is a good balance).
+      retry: 1,
     },
   },
 });

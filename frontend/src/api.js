@@ -49,6 +49,38 @@ export const api = {
   del: (path) => unwrap(client.delete(path)),
 };
 
+// -------------------------------------------------------------------------
+// Static-config cache (perf pass 24 Feb 2026)
+// -------------------------------------------------------------------------
+// A handful of endpoints return near-static data — office settings,
+// training sites, category master, meal list — but they're fetched on
+// every mount of Muster / Meals / Presence / Reports. Cache them at
+// the module level with a soft TTL so we hit the server at most once
+// every 10 minutes per browser tab.
+//
+// This is orthogonal to React Query — pages that call `api.get()`
+// directly (not via useApiQuery) still get the win. Cache is cleared
+// on `clearToken()` / logout so a new user doesn't inherit stale
+// office config from the previous session.
+const _staticCache = new Map();
+const STATIC_TTL_MS = 10 * 60_000;
+
+/** Cached GET for near-static endpoints. Same signature as `api.get`. */
+api.getCached = async (path, params) => {
+  const key = path + (params ? "?" + JSON.stringify(params) : "");
+  const now = Date.now();
+  const hit = _staticCache.get(key);
+  if (hit && now - hit.at < STATIC_TTL_MS) {
+    return hit.value;
+  }
+  const value = await unwrap(client.get(path, { params }));
+  _staticCache.set(key, { value, at: now });
+  return value;
+};
+
+/** Clear the static-config cache — call on logout / user switch. */
+export const clearStaticCache = () => _staticCache.clear();
+
 // Download blob (CSV / PDF / XLSX) keeping auth header
 export async function downloadBlob(path, filename, params) {
   const res = await client.get(path, { params, responseType: "blob" });

@@ -38,6 +38,7 @@ from pydantic import BaseModel
 from services.time_utils import now_utc, local_date_str
 from services.attendance_calc import compute_late, excursion_seconds
 from services.permissions import is_ex_member
+from services.photo import member_photo_url
 from services.scope import athlete_like_keys as _athlete_like_keys_shared, scoped_user_query as _scoped_user_query_shared
 from config import AUTO_APPROVAL_LATE_CHECKINS
 
@@ -143,7 +144,16 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 raise HTTPException(status_code=400, detail="Escort has no institution assigned")
             athlete_query["institution"] = inst
 
-        athletes = await db.users.find(athlete_query, {"_id": 0}).to_list(2000)
+        athletes = await db.users.find(
+            athlete_query,
+            # Explicit projection — was `{"_id": 0}` (pulls full 25KB
+            # `photo` blob per member). Fetching only `photo_thumb`
+            # cuts the response body ~8× (perf pass 24 Feb 2026).
+            {"_id": 0, "id": 1, "full_name": 1, "rank": 1,
+             "category": 1, "institution": 1, "photo_thumb": 1,
+             "gender": 1, "leaving_date": 1,
+             "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1},
+        ).to_list(2000)
 
         # Pull today's open sessions WITH their check_in_at timestamps so the
         # UI can show "already checked in at HH:MM" for the greyed-out rows
@@ -188,7 +198,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 "id": sid,
                 "full_name": s["full_name"],
                 "rank": s.get("rank"),
-                "photo": s.get("photo_thumb") or s.get("photo"),
+                "photo": member_photo_url(s),
                 "institution": s.get("institution"),
                 "gender": s.get("gender"),
                 "category": s.get("category"),
