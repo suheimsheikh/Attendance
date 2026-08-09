@@ -3897,3 +3897,24 @@ on repeat visits.
 
 **Files:** new `pages/admin/LeaveContextPanel.jsx`; expand toggle +
 `React.Fragment` sub-row wiring in `ApprovalsUnified.jsx`.
+
+## 2026-02-24 — Approvals: two-step confirmation for leaves
+
+**New (P1)**
+- Approve click on a leave/tour row now opens a "Confirm approval"
+  modal instead of firing immediately. Modal shows:
+    • applicant recap (name, date range, days, reason)
+    • the same LeaveContextPanel used inline — overlapping leaves,
+      regattas in window, camps in window, colour-coded severity
+    • Cancel / Confirm approval buttons
+- Second Approve click (inside modal) commits the decision.
+- Rejections stay ONE-CLICK — the safety net is only on the "yes"
+  path where a stray click could grant an absence during a
+  scheduled regatta or camp.
+- Check-in and correction approvals are unchanged (context guidance
+  doesn't apply — they're same-day decisions).
+
+**Files:** new `pages/admin/LeaveApprovalConfirmModal.jsx`;
+`ApprovalsUnified.decide()` gains an early-return guard that opens
+the modal on first Approve for `kind === "leave"`, and a second
+call with `_confirmed: true` bypasses the guard.

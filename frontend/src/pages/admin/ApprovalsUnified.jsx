@@ -21,6 +21,7 @@ import { formatDate, formatTime } from "../../utils";
 import { ApplyForm } from "../MyLeaves";
 import { BreakForm } from "./Calendar";
 import LeaveContextPanel from "./LeaveContextPanel";
+import LeaveApprovalConfirmModal from "./LeaveApprovalConfirmModal";
 
 const KIND_META = {
   leave:      { label: "Leave/Tour",  Icon: Plane,          tone: "bg-amber-100 text-amber-700" },
@@ -150,6 +151,13 @@ export default function ApprovalsUnified() {
       return next;
     });
   }, []);
+  // Two-step approval guard for LEAVES only (24 Feb 2026 user request).
+  // First Approve click parks the row here; the modal shows the full
+  // context and requires a second confirm to fire the decision.
+  // Rejections stay one-click — the safety net is only on the "yes"
+  // path where a stray click could grant an absence during a
+  // scheduled regatta / camp.
+  const [pendingConfirm, setPendingConfirm] = useState(null);
 
   const openBreakModal = useCallback(async () => {
     setShowBreak(true);
@@ -242,6 +250,14 @@ export default function ApprovalsUnified() {
   }, [rows]);
 
   const decide = async (row, decision) => {
+    // Two-step guard: first Approve click on a LEAVE row opens the
+    // confirmation modal instead of firing. The second click (inside
+    // the modal) re-enters `decide` with `confirmed: true` and
+    // proceeds. Rejects bypass the guard entirely.
+    if (decision === "approve" && row.kind === "leave" && row.context && !row._confirmed) {
+      setPendingConfirm(row);
+      return;
+    }
     setBusyId(`${row.kind}-${row.id}-${decision}`);
     try {
       await row.apply(decision);
@@ -457,6 +473,22 @@ export default function ApprovalsUnified() {
           institutions={breakDeps.institutions}
           onClose={() => setShowBreak(false)}
           onSaved={() => { setShowBreak(false); toast.success("Break applied"); }}
+        />
+      )}
+      {pendingConfirm && (
+        <LeaveApprovalConfirmModal
+          row={pendingConfirm}
+          busy={busyId === `${pendingConfirm.kind}-${pendingConfirm.id}-approve`}
+          onCancel={() => setPendingConfirm(null)}
+          onConfirm={async () => {
+            const row = pendingConfirm;
+            setPendingConfirm(null);
+            // Re-enter decide() with a flag that bypasses the guard.
+            // Wrapping in a plain object with `_confirmed` is cheaper
+            // than lifting the guard-bypass logic to a separate
+            // function and keeps `row.apply` intact.
+            await decide({ ...row, _confirmed: true }, "approve");
+          }}
         />
       )}
     </div>
