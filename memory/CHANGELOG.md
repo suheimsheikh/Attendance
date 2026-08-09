@@ -3874,3 +3874,26 @@ not reproducible in current codebase (no nested spans found).
 **Verified:** 28/28 muster+meals pytest tests green. Smoke-tested
 Meals / Muster / Presence in the browser — photos render, cache warms
 on repeat visits.
+
+## 2026-02-24 — Approvals: decision-support context for leaves
+
+**New (P1)**
+- Each pending leave/tour row on the Approvals page now has an
+  expand chevron. Expanding reveals a contextual sub-row with three
+  sections:
+    • Other absences overlapping the same window (leaves/tours/
+      postings — includes both pending and approved), with member
+      name, institution, category, type chip and date range
+    • Regattas active in the window (name, level, location, dates)
+    • Camps active in the window (name, institution, days-of-week,
+      dates)
+- Colour cue on the panel:
+    • rose  — international regatta or camp overlaps (strong warning)
+    • amber — 3+ other members already absent in the window
+    • emerald — clear window, nothing pressing
+- Uses existing backend endpoints (`/api/leaves/overlap` +
+  `/api/leaves/event-conflicts`) — no schema changes. React Query
+  caches each expansion for the session.
+
+**Files:** new `pages/admin/LeaveContextPanel.jsx`; expand toggle +
+`React.Fragment` sub-row wiring in `ApprovalsUnified.jsx`.

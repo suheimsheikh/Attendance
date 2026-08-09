@@ -14,12 +14,13 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCw, Check, X, Plane, LogIn, PencilRuler, Plus, Coffee } from "lucide-react";
+import { Loader2, RefreshCw, Check, X, Plane, LogIn, PencilRuler, Plus, Coffee, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
 import { formatDate, formatTime } from "../../utils";
 import { ApplyForm } from "../MyLeaves";
 import { BreakForm } from "./Calendar";
+import LeaveContextPanel from "./LeaveContextPanel";
 
 const KIND_META = {
   leave:      { label: "Leave/Tour",  Icon: Plane,          tone: "bg-amber-100 text-amber-700" },
@@ -64,6 +65,14 @@ function normLeave(row) {
       days ? `${days}d` : null,
       row.reason,
     ].filter(Boolean).join(" · "),
+    // Raw dates + user_id so the expandable LeaveContextPanel can fetch
+    // overlapping leaves / regattas / camps for the same window.
+    context: {
+      id: row.id,
+      user_id: row.user_id,
+      start_date: row.start_date,
+      end_date: row.end_date || row.start_date,
+    },
     apply: async (decision) => {
       await api.patch(`/leaves/${row.id}`, { status: decision === "approve" ? "approved" : "rejected" });
     },
@@ -129,6 +138,18 @@ export default function ApprovalsUnified() {
   const [showOnBehalf, setShowOnBehalf] = useState(false);
   const [showBreak, setShowBreak] = useState(false);
   const [breakDeps, setBreakDeps] = useState({ members: [], institutions: [] });
+  // Expanded leave rows show a contextual sub-row with overlapping
+  // leaves + regattas + camps. Keyed by leave id — one at a time is
+  // fine, but the Set gives cheap multi-open without lifting the
+  // panel state.
+  const [expandedLeaves, setExpandedLeaves] = useState(new Set());
+  const toggleExpand = useCallback((id) => {
+    setExpandedLeaves((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
 
   const openBreakModal = useCallback(async () => {
     setShowBreak(true);
@@ -349,9 +370,28 @@ export default function ApprovalsUnified() {
               {filteredRows.map((r) => {
                 const meta = KIND_META[r.kind] || {};
                 const Icon = meta.Icon;
+                const isLeave = r.kind === "leave" && r.context;
+                const isExpanded = isLeave && expandedLeaves.has(r.id);
                 return (
-                  <tr key={`${r.kind}-${r.id}`} className="border-b border-slate-100 hover:bg-slate-50 transition-colors" data-testid={`approvals-row-${r.kind}-${r.id}`}>
-                    <td className="py-2 px-3 font-semibold text-slate-800">{r.member_name}</td>
+                  <React.Fragment key={`${r.kind}-${r.id}`}>
+                  <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors" data-testid={`approvals-row-${r.kind}-${r.id}`}>
+                    <td className="py-2 px-3 font-semibold text-slate-800">
+                      <div className="flex items-center gap-1">
+                        {isLeave ? (
+                          <button
+                            onClick={() => toggleExpand(r.id)}
+                            className="p-0.5 rounded hover:bg-slate-200 text-slate-500 shrink-0"
+                            title={isExpanded ? "Hide context" : "Show overlapping leaves, regattas & camps"}
+                            data-testid={`approvals-expand-${r.id}`}
+                          >
+                            {isExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
+                          </button>
+                        ) : (
+                          <span className="w-[18px] shrink-0" />
+                        )}
+                        <span className="truncate">{r.member_name}</span>
+                      </div>
+                    </td>
                     <td className="py-2 px-3">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${meta.tone || "bg-slate-100 text-slate-600"}`}>
                         {Icon && <Icon size={11}/>} {meta.label || r.kind}
@@ -383,6 +423,14 @@ export default function ApprovalsUnified() {
                       </div>
                     </td>
                   </tr>
+                  {isExpanded && (
+                    <tr data-testid={`approvals-context-row-${r.id}`}>
+                      <td colSpan={6} className="p-0">
+                        <LeaveContextPanel leave={r.context} />
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
