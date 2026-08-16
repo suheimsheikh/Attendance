@@ -4014,3 +4014,29 @@ call with `_confirmed: true` bypasses the guard.
 - Verified by testing_agent — 11 new focused pytest cases in
   `tests/test_meal_roster_ex_member_and_eligibility.py` + all 18
   pre-existing meal_muster tests still green = 29/29.
+
+## 2026-02-24 — Code review (Fable 5) fixes
+
+**Fixed (MEDIUM)**
+- `POST /api/meals/mark-bulk` now enforces the same eligibility
+  invariants the roster (read path) enforces:
+    • role ≠ admin
+    • `is_ex_member(u, today_iso=meal_date)` cutoff
+    • category ∈ meal_eligible set (from categories master)
+  Failures fall into `skipped_count`. Closes the race where an admin
+  flipped `category.meal_eligible=false` (or a member's leaving_date
+  passed) between the chef opening the roster and tapping Save.
+
+**Fixed (LOW)**
+- `_ensure_meal_index()` and its 3 per-request call sites removed.
+  The compound unique index is built at startup in `server.py`; the
+  per-request rebuild was a wasted round-trip on every roster/mark/
+  copy hit.
+- Test file `test_meal_roster_ex_member_and_eligibility.py` finally
+  blocks now restore the OBSERVED pre-test `meal_eligible` value
+  (captured via new `_get_category` helper) instead of hard-coding
+  True — was environment-fragile.
+
+**Verified:** testing_agent iteration_37 — 8 new mark-bulk tests +
+11 roster tests + 18 muster regression + 8 legacy meals = **45/45
+green**. Mongo unique index confirmed via index_information().

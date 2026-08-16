@@ -481,24 +481,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         except (ValueError, TypeError):
             raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
 
-    async def _ensure_meal_index():
-        """Idempotent — create the compound unique index once per boot.
-        Cheap enough to attempt on every roster fetch (Motor caches the
-        index metadata and short-circuits when it already exists).
-        Failures are logged but not raised: a pre-existing index is a
-        no-op, and a genuine build failure (e.g. duplicate rows in the
-        collection) still surfaces at the next insert via
-        DuplicateKeyError so nothing is silently written twice."""
-        try:
-            await db.meal_records.create_index(
-                [("user_id", 1), ("date", 1), ("meal", 1)],
-                unique=True, name="uniq_user_date_meal",
-            )
-        except Exception as exc:  # noqa: BLE001 — log-and-continue is intentional
-            # Common cases: index already exists with same spec (no-op),
-            # or the collection has legacy duplicates blocking a unique
-            # build. Log so an operator can investigate the latter.
-            logger.warning("meal_records unique index build failed: %s", exc)
+    # Note: the compound unique index `uniq_user_date_meal` is created
+    # at app startup in `server.py::_lifespan`. Per-request builds were
+    # dropped in the perf review (24 Feb 2026) — startup is the right
+    # place for a one-shot idempotent operation.
 
     @router.get("/meals/config")
     async def meal_config(user: dict = Depends(get_current_user)):
@@ -535,7 +521,6 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         """
         m = _valid_meal(meal)
         d = _valid_date(date)
-        await _ensure_meal_index()
 
         # Resolve meal-eligible category keys from the master. Cheap
         # (< 10 rows) — do it inline rather than plumbing a helper.
@@ -622,13 +607,26 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         d = _valid_date(body.date)
         if not body.user_ids:
             return {"marked_count": 0, "skipped_count": 0}
-        await _ensure_meal_index()
 
-        # Hydrate names/categories so the meal_records doc is
-        # self-describing (report views don't have to re-join to `users`).
+        # Resolve meal-eligible category keys so the write path enforces
+        # the same invariant the roster (read path) already does.
+        # Closes the race between the chef opening the roster and an
+        # admin flipping category.meal_eligible before Save is tapped
+        # (code review 24 Feb 2026).
+        eligible_cats = {
+            c["key"] async for c in db.categories.find(
+                {"active": True, "meal_eligible": True},
+                {"_id": 0, "key": 1},
+            )
+        }
+
+        # Hydrate names/categories/leaving_date so the meal_records doc
+        # is self-describing (report views don't have to re-join to
+        # `users`) AND so we can enforce the eligibility gate below.
         subjects = await db.users.find(
             {"id": {"$in": body.user_ids}},
-            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "institution": 1},
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1,
+             "institution": 1, "leaving_date": 1, "role": 1},
         ).to_list(len(body.user_ids))
         by_id = {u["id"]: u for u in subjects}
 
@@ -639,6 +637,21 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         for uid in body.user_ids:
             u = by_id.get(uid)
             if not u:
+                skipped += 1
+                continue
+            # Eligibility gates (mirror the roster's read-path filters):
+            #   • not an admin-only account (they don't eat mess)
+            #   • not an ex-member as of the meal date
+            #   • category is in the meal_eligible set
+            # Failures are counted as skipped so a batch with ONE
+            # ineligible member still marks the rest.
+            if u.get("role") == "admin":
+                skipped += 1
+                continue
+            if is_ex_member(u, today_iso=d):
+                skipped += 1
+                continue
+            if u.get("category") not in eligible_cats:
                 skipped += 1
                 continue
             doc = {
@@ -708,7 +721,6 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         if source >= target:
             raise HTTPException(status_code=400,
                                 detail="from_date must be before date")
-        await _ensure_meal_index()
 
         # Read yesterday's rows.
         prev_rows = await db.meal_records.find(

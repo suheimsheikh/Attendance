@@ -54,13 +54,23 @@ def _delete_member(base_url, tok, user_id):
         pass
 
 
-def _get_category_id(base_url, tok, key):
+def _get_category(base_url, tok, key):
+    """Return the full category doc for `key` (or None). Used to
+    capture the pre-test state before flipping meal_eligible so the
+    finally block can restore the OBSERVED value, not a hard-coded
+    True (which would mis-restore if the env's default is different).
+    """
     r = requests.get(f"{base_url}/api/masters/categories", headers=_hdr(tok), timeout=30)
     assert r.status_code == 200, r.text
     for c in r.json():
         if c.get("key") == key:
-            return c.get("id")
+            return c
     return None
+
+
+def _get_category_id(base_url, tok, key):
+    c = _get_category(base_url, tok, key)
+    return c.get("id") if c else None
 
 
 def _patch_category(base_url, tok, cat_id, patch):
@@ -136,10 +146,12 @@ def test_roster_ex_member_gate_uses_meal_date_not_today(base_url, admin_token):
 # ---------- category meal_eligible filter ---------- #
 
 def test_roster_excludes_meal_ineligible_category_and_reincludes_on_flip_back(base_url, admin_token):
-    cat_id = _get_category_id(base_url, admin_token, "staff")
-    assert cat_id, "staff category must exist in seed"
+    orig = _get_category(base_url, admin_token, "staff")
+    assert orig, "staff category must exist in seed"
+    cat_id = orig["id"]
+    orig_eligible = bool(orig.get("meal_eligible", True))
     m = _create_member(base_url, admin_token, category="staff")
-    original = _patch_category(base_url, admin_token, cat_id, {"meal_eligible": False})
+    _patch_category(base_url, admin_token, cat_id, {"meal_eligible": False})
     try:
         _, ids = _roster_ids(base_url, admin_token, _iso(0), scope="all")
         assert m["id"] not in ids, "member whose category is meal_eligible=false MUST NOT appear"
@@ -148,16 +160,18 @@ def test_roster_excludes_meal_ineligible_category_and_reincludes_on_flip_back(ba
         _, ids2 = _roster_ids(base_url, admin_token, _iso(0), scope="all")
         assert m["id"] in ids2, "after flipping meal_eligible back to true, member reappears"
     finally:
-        _patch_category(base_url, admin_token, cat_id, {"meal_eligible": True})
+        # Restore the OBSERVED pre-test value, not a hard-coded True.
+        _patch_category(base_url, admin_token, cat_id, {"meal_eligible": orig_eligible})
         _delete_member(base_url, admin_token, m["id"])
-        _ = original  # noqa
 
 
 # ---------- scope interaction ---------- #
 
 def test_scope_staff_empty_when_staff_meal_eligible_false(base_url, admin_token):
-    cat_id = _get_category_id(base_url, admin_token, "staff")
-    assert cat_id
+    orig = _get_category(base_url, admin_token, "staff")
+    assert orig
+    cat_id = orig["id"]
+    orig_eligible = bool(orig.get("meal_eligible", True))
     m = _create_member(base_url, admin_token, category="staff")
     try:
         _patch_category(base_url, admin_token, cat_id, {"meal_eligible": False})
@@ -168,38 +182,42 @@ def test_scope_staff_empty_when_staff_meal_eligible_false(base_url, admin_token)
             assert mm.get("category") != "staff", \
                 f"scope=staff with staff meal_eligible=false still returned staff row: {mm}"
     finally:
-        _patch_category(base_url, admin_token, cat_id, {"meal_eligible": True})
+        _patch_category(base_url, admin_token, cat_id, {"meal_eligible": orig_eligible})
         _delete_member(base_url, admin_token, m["id"])
 
 
 def test_scope_staff_has_members_when_eligible(base_url, admin_token):
-    cat_id = _get_category_id(base_url, admin_token, "staff")
-    assert cat_id
+    orig = _get_category(base_url, admin_token, "staff")
+    assert orig
+    cat_id = orig["id"]
+    orig_eligible = bool(orig.get("meal_eligible", True))
     _patch_category(base_url, admin_token, cat_id, {"meal_eligible": True})
     m = _create_member(base_url, admin_token, category="staff")
     try:
         _, ids = _roster_ids(base_url, admin_token, _iso(0), scope="staff")
         assert m["id"] in ids
     finally:
+        _patch_category(base_url, admin_token, cat_id, {"meal_eligible": orig_eligible})
         _delete_member(base_url, admin_token, m["id"])
 
 
 def test_scope_athletes_respects_meal_eligible(base_url, admin_token):
-    cat_id = _get_category_id(base_url, admin_token, "athlete")
-    if not cat_id:
+    orig = _get_category(base_url, admin_token, "athlete")
+    if not orig:
         pytest.skip("athlete category not present")
-    # ensure eligible
+    cat_id = orig["id"]
+    orig_eligible = bool(orig.get("meal_eligible", True))
+    # ensure eligible for the "on" assertion
     _patch_category(base_url, admin_token, cat_id, {"meal_eligible": True})
     body_on, ids_on = _roster_ids(base_url, admin_token, _iso(0), scope="athletes")
     try:
         _patch_category(base_url, admin_token, cat_id, {"meal_eligible": False})
         body_off, ids_off = _roster_ids(base_url, admin_token, _iso(0), scope="athletes")
-        # If athlete is the only athlete_like category, ids_off must be empty.
-        # Regardless, no athlete_like member from athlete category should be present.
+        # No athlete-category member should be present when off.
         for m in body_off["members"]:
             assert m.get("category") != "athlete"
     finally:
-        _patch_category(base_url, admin_token, cat_id, {"meal_eligible": True})
+        _patch_category(base_url, admin_token, cat_id, {"meal_eligible": orig_eligible})
 
 
 def test_scope_non_athletes_applies_meal_eligible(base_url, admin_token):

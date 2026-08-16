@@ -1,0 +1,24 @@
+{
+  "summary": "Backend-only regression for the Meal Muster follow-up fixes (mark-bulk eligibility guard + test restore fix + _ensure_meal_index removal). Created new focused test file test_meal_mark_bulk_eligibility.py with 8 tests covering: meal-ineligible-category skip, ex-member skip (leaving_date < meal_date), final active day allow (leaving_date == meal_date), 3-way mixed batch, admin-role skip regression, duplicate-key idempotency, empty user_ids regression, and meal_records unique-index presence via direct pymongo. All 8 new tests + 11 existing roster tests + 18 test_meal_muster tests + 8 test_meals.py tests = 45 tests PASSED. The MEDIUM race window is closed, the test-restore LOW is verified (finally blocks now restore observed value), and the perf LOW (index no longer built per-request) is verified via mongo_db.meal_records.index_information() showing uniq_user_date_meal is unique on (user_id,date,meal).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_meal_mark_bulk_eligibility.py",
+    "/app/test_reports/pytest/iter37_full.xml",
+    "/app/test_reports/pytest/iter37_meal_markbulk.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: mark-bulk hydrates users via {'id': {'$in': body.user_ids}} without also filtering role/leaving_date/category in the DB query. For batches of thousands, pushing predicates into Mongo (like the roster endpoint does) would avoid pulling ineligible docs across the wire. Not a correctness issue.",
+    "Minor: /api/members Pydantic accepts only 5 seeded category Literals. That's the correct behavior for member creation, but it means the mixed-batch test had to reuse the executive seed category (toggled off) instead of a bespoke throwaway. Documented in the test comment."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_meal_mark_bulk_eligibility.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "n/a"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "All test members and category flips are created and cleaned up in finally blocks (delete member, unmark records, restore category.meal_eligible to observed pre-test value).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Meal Muster mark-bulk now enforces eligibility on write. If further changes touch /api/meals/mark-bulk, /api/meals/roster, or services/permissions.is_ex_member, re-run: pytest tests/test_meal_mark_bulk_eligibility.py tests/test_meal_roster_ex_member_and_eligibility.py tests/test_meal_muster.py tests/test_meals.py"
+}
