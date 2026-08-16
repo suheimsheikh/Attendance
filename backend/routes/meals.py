@@ -29,6 +29,7 @@ from pymongo.errors import DuplicateKeyError
 
 from services.time_utils import local_date_str, local_now, now_utc, office_tz
 from services.photo import member_photo_url
+from services.permissions import is_ex_member
 from services.scope import scoped_user_query as _scoped_user_query_shared
 from config import MAX_USERS
 
@@ -521,14 +522,56 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     ):
         """Return every member in the selected scope with an
         `already_marked` flag so the frontend can pre-tick rows already
-        recorded for this (meal, date) tuple."""
+        recorded for this (meal, date) tuple.
+
+        Eligibility rules (aligned with Chef's View 24 Feb 2026):
+          • Category must be `active=true AND meal_eligible=true` in
+            the categories master. Executive/day-scholar categories
+            can be flipped off there without touching this code.
+          • Member must not be an ex-member as of the meal date —
+            same `leaving_date < target` rule as Copy Yesterday and
+            the other write-guarded endpoints. History stays intact;
+            they just don't appear on the roster after their exit.
+        """
         m = _valid_meal(meal)
         d = _valid_date(date)
         await _ensure_meal_index()
 
+        # Resolve meal-eligible category keys from the master. Cheap
+        # (< 10 rows) — do it inline rather than plumbing a helper.
+        eligible_cats = {
+            c["key"] async for c in db.categories.find(
+                {"active": True, "meal_eligible": True},
+                {"_id": 0, "key": 1},
+            )
+        }
+
         q = await _scoped_meal_query(scope)
         # Exclude admin-only accounts — they don't eat mess meals.
         q["role"] = {"$ne": "admin"}
+        # Push the category filter into the DB query so we don't drag
+        # ineligible members over the wire only to drop them in Python.
+        if eligible_cats:
+            existing = q.get("category")
+            if isinstance(existing, dict) and "$in" in existing:
+                # Intersect with the scope filter's category set.
+                q["category"] = {"$in": [k for k in existing["$in"] if k in eligible_cats]}
+            elif isinstance(existing, dict) and "$nin" in existing:
+                # `non_athletes` scope — keep it AS-IS and stack the
+                # eligibility set on top via $and.
+                q["$and"] = [
+                    {"category": existing},
+                    {"category": {"$in": list(eligible_cats)}},
+                ]
+                q.pop("category")
+            elif isinstance(existing, str):
+                # scope=staff / coach / executive → must be BOTH the
+                # chosen category AND meal-eligible. If admin flipped
+                # the category off, the roster is empty — correct.
+                if existing not in eligible_cats:
+                    q["category"] = {"$in": []}  # empty → no rows
+            else:
+                q["category"] = {"$in": list(eligible_cats)}
         users = await db.users.find(
             q,
             # Explicit fields — dropped full `photo` (25KB) in favor
@@ -547,6 +590,12 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
         out = []
         for u in users:
+            # Ex-member cutoff — checked against the meal date `d`,
+            # not today (a chef marking yesterday's meal shouldn't be
+            # blocked by today's leaving_date). Aligned with the
+            # Copy-Yesterday rule: leaving_date < target ⇒ ex.
+            if is_ex_member(u, today_iso=d):
+                continue
             uid = u["id"]
             out.append({
                 "id": uid,

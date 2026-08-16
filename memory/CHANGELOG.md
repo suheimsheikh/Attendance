@@ -3994,3 +3994,23 @@ call with `_confirmed: true` bypasses the guard.
   inherit the prior user's cached `/office` / `/sites` /
   `/meals/config` / `/masters/categories`. Cached endpoints are
   org-global today, but the safety net is cheap.
+
+## 2026-02-24 — Meal Muster / Chef's View alignment
+
+**Fixed (P1)**
+- `GET /api/meals/roster` was showing (a) ex-members whose
+  `leaving_date` had already passed and (b) members of categories the
+  admin had explicitly marked `meal_eligible=false` or `active=false`
+  — inconsistent with Chef's View, which honored both. Chefs could
+  accidentally tick people the org had already excluded.
+- Fix in `routes/meals.py::meal_roster`:
+  - Build `eligible_cats` from `categories.find({active:true,
+    meal_eligible:true})` and intersect into the scope filter's
+    category selector (handles `$in`, `$nin` via `$and`, plain string,
+    and no-filter cases).
+  - `continue` on `is_ex_member(u, today_iso=meal_date)` — cutoff is
+    checked against the meal date, not today, so a chef marking
+    yesterday's dinner isn't blocked by today's leaving_date.
+- Verified by testing_agent — 11 new focused pytest cases in
+  `tests/test_meal_roster_ex_member_and_eligibility.py` + all 18
+  pre-existing meal_muster tests still green = 29/29.

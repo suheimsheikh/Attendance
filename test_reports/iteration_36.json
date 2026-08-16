@@ -1,0 +1,34 @@
+{
+  "summary": "Verified the Meal Muster roster gap-fix (align with Chef's View): (1) ex-member cutoff against meal date, (2) category meal_eligible/active filter. Wrote /app/backend/tests/test_meal_roster_ex_member_and_eligibility.py with 11 focused pytest cases. All 11 pass. Re-ran the pre-existing 18-test regression suite (/app/backend/tests/test_meal_muster.py) — all 18 still pass. Direct API call to /api/meals/roster from an authenticated browser session returned 200 with the required shape (meal/date/scope/members/count/marked_count) and count=134 members on today's roster. No regression in Chef's View endpoint (used as parity check in the new suite).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_meal_roster_ex_member_and_eligibility.py",
+    "/app/backend/tests/test_meal_muster.py",
+    "/app/test_reports/pytest/meal_roster_gapfix.xml",
+    "/app/test_reports/pytest/meal_muster_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/meals.py meal_roster: when q['category'] is a plain string (scope=staff/coach/executive) and that category is NOT in eligible_cats, the code sets q['category'] = {'$in': []} which is correct but could be more explicit — e.g. return early with empty list to save the users.find + is_ex_member loop. Micro-optimisation only.",
+    "routes/meals.py: eligible_cats is recomputed on every roster call. Since categories master is <10 rows this is fine, but consider a 30s TTL cache if roster is polled frequently by many chefs.",
+    "The eligible_cats filter uses {active:true, meal_eligible:true}. If either field is legitimately MISSING on a legacy category doc (i.e. schema drift), those categories will be EXCLUDED from roster. Confirm the seed migration set both keys explicitly on all existing categories — if not, add a defensive migration or treat missing as truthy."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_meal_roster_ex_member_and_eligibility.py"
+  ],
+  "success_rate": {"backend": "100% (11/11 new + 18/18 regression = 29/29)", "frontend": "not fully re-tested (iteration_35 already covered UI); direct API call from authenticated browser returned 200 with correct shape"},
+  "test_credentials": "Admin: admin@attendance.app / Admin@12345 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Each ex-member/eligibility test creates 1 test member (email @example.com, prefix testmealros-<uuid>) and deletes it in finally. Category meal_eligible flips are restored to true in finally.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The new file /app/backend/tests/test_meal_roster_ex_member_and_eligibility.py is a targeted regression harness for the roster gap-fix. It covers ex-member cutoff at meal_date (yesterday=out / today=in / tomorrow=in / meal_date-vs-today distinction), category meal_eligible filter + flip-back, scope=staff/athletes/non_athletes interaction with meal_eligible, response shape, and Chef's View parity. Any future changes to meal_roster should keep this file green. Cleanup is done via finally blocks — no orphan test data.",
+  "rca of the issue": "Original bug: /api/meals/roster did not filter by categories.meal_eligible=true and did not apply the ex-member (leaving_date < meal_date) cutoff, so Meal Muster showed ex-members and members of meal-ineligible categories that Chef's View correctly excluded. Fix (in routes/meals.py meal_roster ~line 542): (a) build eligible_cats from db.categories.find({active:true, meal_eligible:true}); (b) intersect that set into the scope filter's category selector — handling $in, $nin (via $and), plain string, and no-filter cases; (c) inside the response-building loop, `continue` when is_ex_member(u, today_iso=meal_date). Verified via 11 new pytest cases + all 18 regression tests still green."
+}
