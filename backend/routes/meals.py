@@ -754,6 +754,39 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             ],
         }
 
+    @router.get("/meals/daily-details")
+    async def meal_daily_details(
+        date: str,       # noqa: A002 — API contract; local name via _valid_date
+        meal: str,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Detailed roster of who took `meal` on `date` — one row per
+        member with name, category, institution, marked_at time, and
+        who marked them. Drives the click-through details view + PDF
+        print on the Meals Report (user request 24 Feb 2026)."""
+        d = _valid_date(date)
+        m = _valid_meal(meal)
+        rows = await db.meal_records.find(
+            {"date": d, "meal": m},
+            {"_id": 0, "user_id": 1, "user_name": 1, "category": 1,
+             "institution": 1, "marked_at": 1, "marked_by_name": 1,
+             "copied_from": 1},
+        ).to_list(MAX_USERS)
+        # Sort by category then name so the printed sheet groups
+        # naturally (all athletes together, then staff, etc.).
+        rows.sort(key=lambda r: (
+            (r.get("category") or "zz").lower(),
+            (r.get("institution") or "").lower(),
+            (r.get("user_name") or "").lower(),
+        ))
+        return {
+            "date": d, "meal": m,
+            "meal_label": MEAL_LABELS[m],
+            "meal_short": MEAL_SHORT[m],
+            "count": len(rows),
+            "members": rows,
+        }
+
     @router.get("/meals/monthly-grid")
     async def meal_monthly_grid(
         month: str,          # YYYY-MM

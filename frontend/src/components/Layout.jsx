@@ -445,7 +445,11 @@ function NavItem({ to, label, icon: Icon, end, onClick, onHoverPrefetch, disable
                 ? "bg-amber-500/25 text-amber-100 ring-1 ring-amber-400/60"
                 : "bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 ring-1 ring-amber-400/25"
               : isActive
-                ? "bg-white/10 text-white"
+                // Light-blue "you-are-here" pill on the dark sidebar
+                // (user request 24 Feb 2026). Sky ring + tinted fill
+                // makes the current page unmistakable without
+                // fighting the spotlight/highlight variants above.
+                ? "bg-sky-400/25 text-sky-100 ring-1 ring-sky-400/60 font-semibold"
                 : "text-slate-300 hover:bg-white/5 hover:text-white"
         }`
       }

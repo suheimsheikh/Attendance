@@ -159,3 +159,26 @@ input[data-testid^="search-"]::placeholder {
 @layer base {
   body { @apply bg-background text-foreground; }
 }
+
+/* -------------------------------------------------------------------------
+ * Print — Meals Report daily details
+ * -------------------------------------------------------------------------
+ * The details modal renders both an on-screen list (.iu-card body) and a
+ * hidden printable region (.print:block class from Tailwind). When the
+ * user hits "Print / PDF" we tag the <body> so this stylesheet can hide
+ * everything else on the page during window.print(). Tag removed on
+ * afterprint (see DailyDetailsModal.handlePrint).
+ */
+@media print {
+  body.meals-print-active > *:not([data-testid="meals-details-backdrop"]) {
+    display: none !important;
+  }
+  body.meals-print-active [data-testid="meals-details-modal"] {
+    display: none !important;
+  }
+  body.meals-print-active [data-testid="meals-details-print-region"] {
+    display: block !important;
+    position: static !important;
+  }
+  @page { margin: 1.5cm; }
+}

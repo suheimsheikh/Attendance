@@ -3918,3 +3918,27 @@ on repeat visits.
 `ApprovalsUnified.decide()` gains an early-return guard that opens
 the modal on first Approve for `kind === "leave"`, and a second
 call with `_confirmed: true` bypasses the guard.
+
+## 2026-02-24 — Sidebar active state + Meals daily details
+
+**Sidebar UX**
+- Active nav item now renders with a distinct light-blue pill
+  (`bg-sky-400/25 text-sky-100 ring-1 ring-sky-400/60`) on the dark
+  sidebar. Was previously a subtle white overlay — hard to spot at a
+  glance. Applies to all neutral nav items; the `spotlight` (The
+  Grid) and `highlight` (Approvals) variants keep their own colours.
+
+**Meals Report — daily details + print**
+- Daily-counts cards are now buttons. Tapping Breakfast / Lunch /
+  Snacks / Dinner opens a modal listing every member marked for
+  that meal, grouped by category (with per-group counts) and sorted
+  alphabetically inside each group.
+- New endpoint `GET /api/meals/daily-details?date=&meal=` returns
+  the detailed roster (name, category, institution, marked_at,
+  marked_by_name, copied_from).
+- Modal has a "Print / PDF" action — kicks off `window.print()` on
+  a hidden printable region that renders the same data as a
+  headed sheet (title, date, per-category tables). Screen-only
+  chrome is suppressed via `@media print` in `index.css`.
+- Cards with zero marks are disabled ("No marks yet") to prevent
+  opening an empty modal.

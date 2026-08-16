@@ -10,7 +10,7 @@
  * Access: admin / chef / coach (require_chef_or_admin on the server).
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, Utensils, CalendarDays, BarChart3 } from "lucide-react";
+import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 
@@ -40,10 +40,179 @@ function currentMonth() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}`;
 }
 
+function DailyDetailsModal({ dateStr, meal, mealLabel, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get(`/meals/daily-details?date=${dateStr}&meal=${meal}`)
+      .then(setData)
+      .catch((err) => showApiError(err, "Couldn't load details"))
+      .finally(() => setLoading(false));
+  }, [dateStr, meal]);
+
+  // Printing: give body a marker class so the print CSS knows to
+  // isolate the printable region, kick off the browser dialog, then
+  // clean up on afterprint. Handles the ESC-abort path too via the
+  // one-shot listener.
+  const handlePrint = () => {
+    document.body.classList.add("meals-print-active");
+    const cleanup = () => {
+      document.body.classList.remove("meals-print-active");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+  };
+
+  // Group members by category for the printable sheet — matches the
+  // backend's sort order but surfaces group headings + running totals
+  // so the kitchen can tick physical copies without recounting.
+  const grouped = useMemo(() => {
+    const g = new Map();
+    (data?.members || []).forEach((m) => {
+      const cat = m.category || "other";
+      if (!g.has(cat)) g.set(cat, []);
+      g.get(cat).push(m);
+    });
+    return Array.from(g.entries());
+  }, [data]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 print:hidden"
+      onClick={onClose}
+      data-testid="meals-details-backdrop"
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        data-testid="meals-details-modal"
+      >
+        <header className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-extrabold text-slate-900" data-testid="meals-details-title">
+              {mealLabel} — {formatDate(dateStr)}
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {loading ? "Loading…" : `${data?.count || 0} members marked`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrint}
+              disabled={loading || !data?.count}
+              className="iu-btn-secondary !h-9 !px-3 text-sm"
+              data-testid="meals-details-print"
+              title="Print or save as PDF"
+            >
+              <Printer size={14}/> Print / PDF
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded hover:bg-slate-100 text-slate-500"
+              aria-label="Close"
+              data-testid="meals-details-close"
+            >
+              <X size={18}/>
+            </button>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto" data-testid="meals-details-body">
+          {loading ? (
+            <div className="text-center py-12"><Loader2 className="animate-spin mx-auto text-slate-400"/></div>
+          ) : !data?.count ? (
+            <div className="text-center py-12 text-slate-500" data-testid="meals-details-empty">
+              No one marked for this meal.
+            </div>
+          ) : (
+            grouped.map(([cat, members]) => (
+              <section key={cat} className="border-b border-slate-100 last:border-0" data-testid={`meals-details-group-${cat}`}>
+                <div className="sticky top-0 bg-slate-50 px-5 py-2 border-b border-slate-100">
+                  <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
+                    <span className="capitalize">{cat}</span>
+                    <span className="text-slate-400">·</span>
+                    <span className="text-slate-500">{members.length}</span>
+                  </div>
+                </div>
+                <ul className="divide-y divide-slate-100">
+                  {members.map((mem, idx) => (
+                    <li key={mem.user_id || idx} className="px-5 py-2 flex items-center gap-3 text-sm" data-testid={`meals-details-row-${mem.user_id}`}>
+                      <span className="w-8 text-right text-slate-400 tabular-nums text-xs shrink-0">{idx + 1}.</span>
+                      <span className="font-semibold text-slate-900 flex-1 truncate">{mem.user_name || "—"}</span>
+                      {mem.institution && (
+                        <span className="text-xs text-slate-500 hidden sm:inline">{mem.institution}</span>
+                      )}
+                      {mem.copied_from && (
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 h-4 rounded inline-flex items-center" title={`Copied from ${mem.copied_from}`}>
+                          COPIED
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Print-only region — hidden on screen, shown on print. Placed
+          OUTSIDE the modal card so it flows naturally on paper without
+          fixed-position overlays. */}
+      <div className="hidden print:block fixed inset-0 bg-white p-8 z-0" data-testid="meals-details-print-region">
+        <div className="border-b-2 border-slate-800 pb-3 mb-4">
+          <h1 className="text-2xl font-extrabold text-slate-900">
+            {mealLabel} — {formatDate(dateStr)}
+          </h1>
+          <p className="text-sm text-slate-600 mt-1">
+            {data?.count || 0} members marked ·
+            Printed {new Date().toLocaleString()}
+          </p>
+        </div>
+        {grouped.map(([cat, members]) => (
+          <section key={cat} className="mb-4 break-inside-avoid">
+            <h2 className="text-sm font-extrabold uppercase tracking-wider bg-slate-100 px-2 py-1 mb-2">
+              {cat} <span className="text-slate-500">({members.length})</span>
+            </h2>
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-slate-300 text-xs text-slate-600 uppercase">
+                  <th className="text-left p-1 w-10">#</th>
+                  <th className="text-left p-1">Name</th>
+                  <th className="text-left p-1 w-40">Institution</th>
+                  <th className="text-left p-1 w-16"> </th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((mem, idx) => (
+                  <tr key={mem.user_id || idx} className="border-b border-slate-200">
+                    <td className="p-1 text-slate-500 tabular-nums">{idx + 1}</td>
+                    <td className="p-1 font-semibold">{mem.user_name || "—"}</td>
+                    <td className="p-1 text-slate-700">{mem.institution || ""}</td>
+                    <td className="p-1 text-slate-500 text-xs">
+                      {mem.copied_from ? `copied ${mem.copied_from}` : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DailyTab() {
   const [dateStr, setDateStr] = useState(todayISO());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [detailsMeal, setDetailsMeal] = useState(null);   // e.g. "breakfast"
 
   useEffect(() => {
     setLoading(true);
@@ -83,39 +252,66 @@ function DailyTab() {
         <div className="text-center py-10"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="meals-report-daily">
-          {(data?.meals || []).map((m) => (
-            <div key={m.key} className="iu-card p-4" data-testid={`meals-report-daily-${m.key}`}>
-              <div className="flex items-center gap-3 mb-2">
-                <div
-                  className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold shrink-0"
-                  style={{ background: MEAL_COLOR[m.key] }}
-                >
-                  {MEAL_SHORT[m.key]}
+          {(data?.meals || []).map((m) => {
+            const disabled = !m.total;
+            return (
+              <button
+                type="button"
+                key={m.key}
+                onClick={() => !disabled && setDetailsMeal(m.key)}
+                disabled={disabled}
+                className={`iu-card p-4 text-left transition ${
+                  disabled
+                    ? "opacity-70 cursor-not-allowed"
+                    : "hover:shadow-md hover:border-slate-300 cursor-pointer"
+                }`}
+                data-testid={`meals-report-daily-${m.key}`}
+                title={disabled ? "No one marked yet" : `Show ${m.label} details`}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <div
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold shrink-0"
+                    style={{ background: MEAL_COLOR[m.key] }}
+                  >
+                    {MEAL_SHORT[m.key]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-slate-900">{m.label}</div>
+                    <div className="text-xs text-slate-500">
+                      {disabled ? "No marks yet" : "Tap for details · printable"}
+                    </div>
+                  </div>
+                  <div className="text-3xl font-extrabold tabular-nums" data-testid={`meals-report-daily-${m.key}-total`}>
+                    {m.total || 0}
+                  </div>
+                  {!disabled && <ChevronRight size={16} className="text-slate-400 shrink-0" />}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-slate-900">{m.label}</div>
-                  <div className="text-xs text-slate-500">Portions to plan</div>
-                </div>
-                <div className="text-3xl font-extrabold tabular-nums" data-testid={`meals-report-daily-${m.key}-total`}>
-                  {m.total || 0}
-                </div>
-              </div>
-              {Object.keys(m.by_category || {}).length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-                  {Object.entries(m.by_category).map(([cat, n]) => (
-                    <span
-                      key={cat}
-                      className="inline-flex items-center gap-1 px-2 h-6 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold capitalize"
-                    >
-                      {cat}
-                      <span className="font-bold">{n}</span>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+                {Object.keys(m.by_category || {}).length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+                    {Object.entries(m.by_category).map(([cat, n]) => (
+                      <span
+                        key={cat}
+                        className="inline-flex items-center gap-1 px-2 h-6 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold capitalize"
+                      >
+                        {cat}
+                        <span className="font-bold">{n}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
+      )}
+
+      {detailsMeal && (
+        <DailyDetailsModal
+          dateStr={dateStr}
+          meal={detailsMeal}
+          mealLabel={MEAL_LABELS[detailsMeal]}
+          onClose={() => setDetailsMeal(null)}
+        />
       )}
     </div>
   );
