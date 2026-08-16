@@ -81,7 +81,7 @@ function DailyDetailsModal({ dateStr, meal, mealLabel, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 print:hidden"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
       onClick={onClose}
       data-testid="meals-details-backdrop"
     >

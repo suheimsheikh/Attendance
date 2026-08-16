@@ -49,6 +49,16 @@ export function AuthProvider({ children }) {
       const me = await api.get("/auth/me");
       setUser(me);
       rememberLastUser(me);
+      // Warm the static-config cache in the background so the first
+      // Muster / Meals navigation doesn't wait for /office /sites
+      // /meals/config /masters/categories. Fire-and-forget — failures
+      // just mean the page fetches them itself on demand.
+      Promise.allSettled([
+        api.getCached("/office"),
+        api.getCached("/sites"),
+        api.getCached("/meals/config"),
+        api.getCached("/masters/categories"),
+      ]);
     } catch {
       clearToken();
       setUser(null);
@@ -64,6 +74,13 @@ export function AuthProvider({ children }) {
     setToken(res.access_token);
     setUser(res.user);
     rememberLastUser(res.user);
+    // Warm static-config cache in background — same as loadMe.
+    Promise.allSettled([
+      api.getCached("/office"),
+      api.getCached("/sites"),
+      api.getCached("/meals/config"),
+      api.getCached("/masters/categories"),
+    ]);
     return res.user;
   }, []);
 
@@ -71,6 +88,12 @@ export function AuthProvider({ children }) {
     setToken(token);
     setUser(user);
     rememberLastUser(user);
+    Promise.allSettled([
+      api.getCached("/office"),
+      api.getCached("/sites"),
+      api.getCached("/meals/config"),
+      api.getCached("/masters/categories"),
+    ]);
   }, []);
 
   const logout = useCallback(() => {

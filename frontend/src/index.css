@@ -163,22 +163,41 @@ input[data-testid^="search-"]::placeholder {
 /* -------------------------------------------------------------------------
  * Print — Meals Report daily details
  * -------------------------------------------------------------------------
- * The details modal renders both an on-screen list (.iu-card body) and a
- * hidden printable region (.print:block class from Tailwind). When the
- * user hits "Print / PDF" we tag the <body> so this stylesheet can hide
- * everything else on the page during window.print(). Tag removed on
- * afterprint (see DailyDetailsModal.handlePrint).
+ * The modal is not portaled to <body>, so display:none on `body > *`
+ * would hide the whole app (#root is the direct body child). Instead
+ * we use visibility-based isolation — hide EVERYTHING first, then
+ * un-hide only the print region and its descendants, and take it out
+ * of flow with position:fixed so it prints on a clean page. Works
+ * regardless of the modal's DOM nesting depth.
  */
 @media print {
-  body.meals-print-active > *:not([data-testid="meals-details-backdrop"]) {
-    display: none !important;
+  body.meals-print-active *,
+  body.meals-print-active *::before,
+  body.meals-print-active *::after {
+    visibility: hidden !important;
   }
-  body.meals-print-active [data-testid="meals-details-modal"] {
-    display: none !important;
+  /* The backdrop had `print:hidden` (display:none) which would drop
+     the entire subtree from print — override so the print region can
+     be shown. Its own paint stays hidden via the visibility rule
+     above; only the print-region children opt back in. */
+  body.meals-print-active [data-testid="meals-details-backdrop"] {
+    display: block !important;
+    background: transparent !important;
+    position: static !important;
+    padding: 0 !important;
+  }
+  body.meals-print-active [data-testid="meals-details-print-region"],
+  body.meals-print-active [data-testid="meals-details-print-region"] * {
+    visibility: visible !important;
   }
   body.meals-print-active [data-testid="meals-details-print-region"] {
     display: block !important;
-    position: static !important;
+    position: fixed !important;
+    inset: 0 !important;
+    padding: 1.5cm !important;
+    background: white !important;
+    z-index: 9999 !important;
+    overflow: visible !important;
   }
-  @page { margin: 1.5cm; }
+  @page { margin: 1cm; }
 }

@@ -3942,3 +3942,32 @@ call with `_confirmed: true` bypasses the guard.
   chrome is suppressed via `@media print` in `index.css`.
 - Cards with zero marks are disabled ("No marks yet") to prevent
   opening an empty modal.
+
+## 2026-02-24 — Perf pass 2 + Print fix
+
+**Fixed (HIGH from code review)**
+- Meals Report "Print / PDF" was producing a **blank page**. The
+  print stylesheet used `body.meals-print-active > *:not(backdrop)`
+  which hid `#root` (the direct body child), collapsing every
+  ancestor of the print region. Additionally, the Tailwind
+  `print:hidden` on the backdrop forced `display:none` above the
+  print region.
+- Fix: rewrote `@media print` in `index.css` to use visibility-based
+  isolation (`visibility: hidden !important` on everything, then
+  `visible` only on the print region + its descendants) and take the
+  print region out of flow with `position: fixed`. Removed the
+  Tailwind `print:hidden` from the modal backdrop; backdrop's own
+  paint is suppressed via the visibility rule.
+- Verified with Playwright + `page.emulate_media(media="print")` +
+  `body.meals-print-active` toggle: print region renders at full
+  viewport, modal card hidden, headed sheet with member table
+  visible in the print preview snapshot.
+
+**Boot-time static cache warm**
+- After `/auth/me` (page reload path) or successful `login` /
+  `loginWithToken`, kick off a background `Promise.allSettled` of
+  `/office`, `/sites`, `/meals/config`, `/masters/categories` via
+  `api.getCached`. First navigation to Muster / Meals no longer
+  waits on these ~100-150ms round-trips — they're already resolved
+  in the module-level cache. Fire-and-forget; failure just falls
+  back to lazy fetch on the page.
