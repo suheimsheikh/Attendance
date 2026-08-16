@@ -3971,3 +3971,26 @@ call with `_confirmed: true` bypasses the guard.
   waits on these ~100-150ms round-trips — they're already resolved
   in the module-level cache. Fire-and-forget; failure just falls
   back to lazy fetch on the page.
+
+## 2026-02-24 — Print pagination fix + review LOW fixes
+
+**Fixed (HIGH from code review)**
+- Multi-page meal rosters were clipped to page 1 (up to 100+ members
+  silently dropped from the printed sheet) because the print region
+  used `position: fixed`, which anchors to a single page box. Also,
+  `visibility: hidden` on the rest of the app retained layout →
+  trailing blank pages.
+- Fix: `createPortal` renders the print region as a direct
+  `<body>` child, and the print CSS now uses `display: none` on all
+  other body children (removes from flow, no blank pages). The
+  print region stays `position: static` so tall rosters paginate
+  across pages naturally.
+- Verified with `page.pdf()` in Playwright: 100 members → **5-page
+  PDF** with headers on page 1 and members continuing correctly.
+
+**Fixed (LOW from code review)**
+- `login` and `loginWithToken` now call `clearStaticCache()` before
+  the warmup fetches, so a second user in the same tab can't
+  inherit the prior user's cached `/office` / `/sites` /
+  `/meals/config` / `/masters/categories`. Cached endpoints are
+  org-global today, but the safety net is cheap.

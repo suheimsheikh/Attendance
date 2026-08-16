@@ -10,6 +10,7 @@
  * Access: admin / chef / coach (require_chef_or_admin on the server).
  */
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
@@ -161,49 +162,55 @@ function DailyDetailsModal({ dateStr, meal, mealLabel, onClose }) {
         </div>
       </div>
 
-      {/* Print-only region — hidden on screen, shown on print. Placed
-          OUTSIDE the modal card so it flows naturally on paper without
-          fixed-position overlays. */}
-      <div className="hidden print:block fixed inset-0 bg-white p-8 z-0" data-testid="meals-details-print-region">
-        <div className="border-b-2 border-slate-800 pb-3 mb-4">
-          <h1 className="text-2xl font-extrabold text-slate-900">
-            {mealLabel} — {formatDate(dateStr)}
-          </h1>
-          <p className="text-sm text-slate-600 mt-1">
-            {data?.count || 0} members marked ·
-            Printed {new Date().toLocaleString()}
-          </p>
-        </div>
-        {grouped.map(([cat, members]) => (
-          <section key={cat} className="mb-4 break-inside-avoid">
-            <h2 className="text-sm font-extrabold uppercase tracking-wider bg-slate-100 px-2 py-1 mb-2">
-              {cat} <span className="text-slate-500">({members.length})</span>
-            </h2>
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-slate-300 text-xs text-slate-600 uppercase">
-                  <th className="text-left p-1 w-10">#</th>
-                  <th className="text-left p-1">Name</th>
-                  <th className="text-left p-1 w-40">Institution</th>
-                  <th className="text-left p-1 w-16"> </th>
-                </tr>
-              </thead>
-              <tbody>
-                {members.map((mem, idx) => (
-                  <tr key={mem.user_id || idx} className="border-b border-slate-200">
-                    <td className="p-1 text-slate-500 tabular-nums">{idx + 1}</td>
-                    <td className="p-1 font-semibold">{mem.user_name || "—"}</td>
-                    <td className="p-1 text-slate-700">{mem.institution || ""}</td>
-                    <td className="p-1 text-slate-500 text-xs">
-                      {mem.copied_from ? `copied ${mem.copied_from}` : ""}
-                    </td>
+      {/* Print region is PORTALED to document.body so it's a direct
+          body child. Two wins: (1) `body > *:not(print-region)` in the
+          print CSS cleanly hides everything else without collapsing
+          ancestors, (2) the print region uses normal flow (not
+          position:fixed), so long rosters paginate across pages
+          naturally instead of clipping to page 1. */}
+      {typeof document !== "undefined" && createPortal(
+        <div className="hidden print:block bg-white" data-testid="meals-details-print-region">
+          <div className="border-b-2 border-slate-800 pb-3 mb-4">
+            <h1 className="text-2xl font-extrabold text-slate-900">
+              {mealLabel} — {formatDate(dateStr)}
+            </h1>
+            <p className="text-sm text-slate-600 mt-1">
+              {data?.count || 0} members marked ·
+              Printed {new Date().toLocaleString()}
+            </p>
+          </div>
+          {grouped.map(([cat, members]) => (
+            <section key={cat} className="mb-4 break-inside-avoid">
+              <h2 className="text-sm font-extrabold uppercase tracking-wider bg-slate-100 px-2 py-1 mb-2">
+                {cat} <span className="text-slate-500">({members.length})</span>
+              </h2>
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-300 text-xs text-slate-600 uppercase">
+                    <th className="text-left p-1 w-10">#</th>
+                    <th className="text-left p-1">Name</th>
+                    <th className="text-left p-1 w-40">Institution</th>
+                    <th className="text-left p-1 w-16"> </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        ))}
-      </div>
+                </thead>
+                <tbody>
+                  {members.map((mem, idx) => (
+                    <tr key={mem.user_id || idx} className="border-b border-slate-200">
+                      <td className="p-1 text-slate-500 tabular-nums">{idx + 1}</td>
+                      <td className="p-1 font-semibold">{mem.user_name || "—"}</td>
+                      <td className="p-1 text-slate-700">{mem.institution || ""}</td>
+                      <td className="p-1 text-slate-500 text-xs">
+                        {mem.copied_from ? `copied ${mem.copied_from}` : ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ))}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

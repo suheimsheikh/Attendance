@@ -74,6 +74,10 @@ export function AuthProvider({ children }) {
     setToken(res.access_token);
     setUser(res.user);
     rememberLastUser(res.user);
+    // Fresh login → clear any prior user's cache before warming, so
+    // a second user in the same tab doesn't inherit stale config
+    // (safety net; today the cached endpoints are org-global).
+    clearStaticCache();
     // Warm static-config cache in background — same as loadMe.
     Promise.allSettled([
       api.getCached("/office"),
@@ -88,6 +92,7 @@ export function AuthProvider({ children }) {
     setToken(token);
     setUser(user);
     rememberLastUser(user);
+    clearStaticCache();
     Promise.allSettled([
       api.getCached("/office"),
       api.getCached("/sites"),

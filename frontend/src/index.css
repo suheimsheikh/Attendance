@@ -163,41 +163,20 @@ input[data-testid^="search-"]::placeholder {
 /* -------------------------------------------------------------------------
  * Print — Meals Report daily details
  * -------------------------------------------------------------------------
- * The modal is not portaled to <body>, so display:none on `body > *`
- * would hide the whole app (#root is the direct body child). Instead
- * we use visibility-based isolation — hide EVERYTHING first, then
- * un-hide only the print region and its descendants, and take it out
- * of flow with position:fixed so it prints on a clean page. Works
- * regardless of the modal's DOM nesting depth.
+ * The print region is portaled to document.body (see MealsReport.jsx),
+ * so it's a direct child of <body> alongside #root, script tags, etc.
+ * That lets us cleanly hide every OTHER direct body child with
+ * `display: none` — which removes them from flow entirely (no blank
+ * trailing pages) and lets the print region use normal flow layout
+ * (`position: static`) so tall rosters paginate across pages naturally
+ * instead of being clipped by a `position: fixed` box.
  */
 @media print {
-  body.meals-print-active *,
-  body.meals-print-active *::before,
-  body.meals-print-active *::after {
-    visibility: hidden !important;
-  }
-  /* The backdrop had `print:hidden` (display:none) which would drop
-     the entire subtree from print — override so the print region can
-     be shown. Its own paint stays hidden via the visibility rule
-     above; only the print-region children opt back in. */
-  body.meals-print-active [data-testid="meals-details-backdrop"] {
-    display: block !important;
-    background: transparent !important;
-    position: static !important;
-    padding: 0 !important;
-  }
-  body.meals-print-active [data-testid="meals-details-print-region"],
-  body.meals-print-active [data-testid="meals-details-print-region"] * {
-    visibility: visible !important;
+  body.meals-print-active > *:not([data-testid="meals-details-print-region"]) {
+    display: none !important;
   }
   body.meals-print-active [data-testid="meals-details-print-region"] {
     display: block !important;
-    position: fixed !important;
-    inset: 0 !important;
-    padding: 1.5cm !important;
-    background: white !important;
-    z-index: 9999 !important;
-    overflow: visible !important;
   }
   @page { margin: 1cm; }
 }
