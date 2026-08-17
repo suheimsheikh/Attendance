@@ -53,7 +53,7 @@ const NAV_MEMBER = [
 const NAV_COACH = [
   { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
   { to: "/meals", label: "Meals", icon: Utensils },
-  { to: "/admin/meals-report", label: "Meals Report", icon: FileBarChart2 },
+  { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2 },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat },
   { to: "/presence", label: "Presence", icon: LayoutDashboard },
 ];
@@ -61,7 +61,7 @@ const NAV_COACH = [
 const NAV_CHEF = [
   { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
   { to: "/meals", label: "Meals", icon: Utensils },
-  { to: "/admin/meals-report", label: "Meals Report", icon: FileBarChart2 },
+  { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2 },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat },
   { to: "/presence", label: "Presence", icon: LayoutDashboard },
 ];
@@ -78,7 +78,7 @@ const NAV_ADMIN = [
   // reporting surface (all-in-one 31-day view).
   { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, spotlight: true },
   { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page" },
-  { to: "/admin/meals-report", label: "Meals Report", icon: Utensils },
+  { to: "/admin/meals-report", label: "Pantry Stock", icon: Utensils },
   { to: "/admin/churn-risk", label: "Churn Risk", icon: TrendingDown },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },

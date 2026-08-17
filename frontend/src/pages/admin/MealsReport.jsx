@@ -11,11 +11,13 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart } from "lucide-react";
+import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Boxes } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import MealExpensesTab from "./MealExpensesTab";
 import MealPurchasesTab from "./MealPurchasesTab";
+import MealIssuesTab from "./MealIssuesTab";
+import MealStockTab from "./MealStockTab";
 
 const MEAL_ORDER = ["breakfast", "lunch", "snacks", "dinner"];
 const MEAL_LABELS = {
@@ -460,11 +462,13 @@ export default function MealsReport() {
     { key: "monthly",   label: "Monthly grid",  Icon: CalendarDays },
     { key: "expenses",  label: "Expense report", Icon: IndianRupee },
     { key: "purchases", label: "Purchases",     Icon: ShoppingCart },
+    { key: "issues",    label: "Daily issues",  Icon: ClipboardList },
+    { key: "stock",     label: "Stock on hand", Icon: Boxes },
   ];
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto" data-testid="meals-report-page">
       <header className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Meals Report</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Pantry Stock</h1>
         <p className="text-slate-500 text-sm mt-1">
           Portion planning, month-long audit, purchase entry and the expense report.
         </p>
@@ -489,6 +493,8 @@ export default function MealsReport() {
       {tab === "monthly" && <MonthlyGridTab />}
       {tab === "expenses" && <MealExpensesTab />}
       {tab === "purchases" && <MealPurchasesTab />}
+      {tab === "issues" && <MealIssuesTab />}
+      {tab === "stock" && <MealStockTab />}
     </div>
   );
 }

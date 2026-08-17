@@ -77,6 +77,12 @@ DEFAULT_PURCHASE_CATEGORIES = [
     {"key": "paneer",         "label": "Paneer"},
 ]
 
+# Fixed list of stocking units offered when creating an item. Fixed list
+# (rather than free-text) keeps stock math consistent across the app —
+# users choose the unit once when defining the item, then every purchase
+# and issue for that item inherits it.
+VALID_UNITS = ("kg", "g", "L", "mL", "pcs", "dozen", "packet")
+
 
 def _slug_key(label: str) -> str:
     import re
@@ -129,7 +135,36 @@ class PurchaseCategoriesIn(BaseModel):
 
 
 class PurchaseUpsertIn(BaseModel):
-    amounts: dict
+    # Legacy path — kept for the bulk-CSV importer and older clients that
+    # still POST a `{category_key: amount}` map. New clients POST `lines`.
+    amounts: Optional[dict] = None
+    lines: Optional[List[dict]] = None
+
+
+class ItemIn(BaseModel):
+    """Body for creating a new stock item under a purchase category."""
+    category_key: str = Field(..., min_length=1, max_length=60)
+    name: str = Field(..., min_length=1, max_length=80)
+    unit: str
+    opening_stock: float = 0.0
+    opening_stock_as_of: Optional[str] = None   # ISO date; defaults to today
+    sort_order: int = 100
+
+
+class ItemPatch(BaseModel):
+    category_key: Optional[str] = None
+    name: Optional[str] = None
+    unit: Optional[str] = None
+    opening_stock: Optional[float] = None
+    opening_stock_as_of: Optional[str] = None
+    sort_order: Optional[int] = None
+    active: Optional[bool] = None
+
+
+class IssuesUpsertIn(BaseModel):
+    """Body for PUT /api/meals/issues/{date}. `lines` is a list of
+    `{item_id, qty}` entries — unit is inherited from the item master."""
+    lines: List[dict]
 
 
 class MealMarkIn(BaseModel):
@@ -1065,12 +1100,365 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         ).sort("date", 1).to_list(400)
         return {"start": s, "end": e, "purchases": rows}
 
+    # ------------------------------------------------------------------
+    # Items master (Feb 2026) — sub-categories under each purchase
+    # category. Admin manages CRUD; anyone chef/admin can read so the
+    # purchase entry dropdown works.
+    # ------------------------------------------------------------------
+    def _valid_unit(u: str) -> str:
+        if u not in VALID_UNITS:
+            raise HTTPException(status_code=400,
+                                detail=f"unit must be one of {list(VALID_UNITS)}")
+        return u
+
+    def _norm_name(n: str) -> str:
+        import re
+        return re.sub(r"\s+", " ", (n or "").strip().lower())
+
+    @router.get("/meals/items")
+    async def list_items(
+        category_key: Optional[str] = Query(None),
+        include_inactive: bool = Query(False),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        q: dict = {}
+        if not include_inactive:
+            q["active"] = True
+        if category_key:
+            q["category_key"] = category_key
+        rows = await db.meal_items.find(q, {"_id": 0}) \
+            .sort([("category_key", 1), ("sort_order", 1), ("name", 1)]) \
+            .to_list(500)
+        return {"items": rows, "units": list(VALID_UNITS)}
+
+    @router.post("/meals/items")
+    async def create_item(body: ItemIn, admin: dict = Depends(require_admin)):
+        _valid_unit(body.unit)
+        cats = await _purchase_categories()
+        if body.category_key not in {c["key"] for c in cats}:
+            raise HTTPException(status_code=400,
+                                detail=f"Unknown category '{body.category_key}'")
+        name = body.name.strip()
+        name_norm = _norm_name(name)
+        # Uniqueness within (category_key, name) among ACTIVE items only —
+        # a soft-deleted item with the same name can be reactivated later
+        # without a collision.
+        clash = await db.meal_items.find_one(
+            {"category_key": body.category_key,
+             "name_norm": name_norm, "active": True},
+        )
+        if clash:
+            raise HTTPException(status_code=409,
+                                detail=f"Item '{name}' already exists under this category")
+        opening = float(body.opening_stock or 0)
+        if opening < 0:
+            raise HTTPException(status_code=400, detail="Opening stock cannot be negative")
+        as_of = _valid_date(body.opening_stock_as_of) if body.opening_stock_as_of \
+            else date.today().isoformat()
+        doc = {
+            "id": str(uuid.uuid4()),
+            "category_key": body.category_key,
+            "name": name,
+            "name_norm": name_norm,
+            "unit": body.unit,
+            "opening_stock": round(opening, 4),
+            "opening_stock_as_of": as_of,
+            "sort_order": int(body.sort_order),
+            "active": True,
+            "created_at": now_utc().isoformat(),
+            "created_by": admin.get("id"),
+            "created_by_name": admin.get("full_name") or admin.get("email"),
+        }
+        await db.meal_items.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
+
+    @router.patch("/meals/items/{item_id}")
+    async def update_item(
+        item_id: str, body: ItemPatch, admin: dict = Depends(require_admin),
+    ):
+        row = await db.meal_items.find_one({"id": item_id}, {"_id": 0})
+        if not row:
+            raise HTTPException(status_code=404, detail="Item not found")
+        update: dict = {}
+        if body.category_key is not None:
+            cats = await _purchase_categories()
+            if body.category_key not in {c["key"] for c in cats}:
+                raise HTTPException(status_code=400, detail="Unknown category")
+            update["category_key"] = body.category_key
+        if body.name is not None:
+            new_name = body.name.strip()
+            new_norm = _norm_name(new_name)
+            if new_norm != row.get("name_norm"):
+                clash = await db.meal_items.find_one({
+                    "category_key": update.get("category_key", row["category_key"]),
+                    "name_norm": new_norm, "active": True,
+                    "id": {"$ne": item_id},
+                })
+                if clash:
+                    raise HTTPException(status_code=409, detail="Another item has that name")
+            update["name"] = new_name
+            update["name_norm"] = new_norm
+        if body.unit is not None:
+            _valid_unit(body.unit)
+            update["unit"] = body.unit
+        if body.opening_stock is not None:
+            if body.opening_stock < 0:
+                raise HTTPException(status_code=400, detail="Opening stock cannot be negative")
+            update["opening_stock"] = round(float(body.opening_stock), 4)
+        if body.opening_stock_as_of is not None:
+            update["opening_stock_as_of"] = _valid_date(body.opening_stock_as_of)
+        if body.sort_order is not None:
+            update["sort_order"] = int(body.sort_order)
+        if body.active is not None:
+            update["active"] = bool(body.active)
+        if update:
+            update["updated_at"] = now_utc().isoformat()
+            update["updated_by"] = admin.get("id")
+            update["updated_by_name"] = admin.get("full_name") or admin.get("email")
+            await db.meal_items.update_one({"id": item_id}, {"$set": update})
+            row.update(update)
+        return row
+
+    @router.delete("/meals/items/{item_id}")
+    async def delete_item(item_id: str, admin: dict = Depends(require_admin)):
+        row = await db.meal_items.find_one({"id": item_id}, {"_id": 0})
+        if not row:
+            raise HTTPException(status_code=404, detail="Item not found")
+        # Soft-delete if any purchase or issue references the item so
+        # historic data keeps rendering the item name. Otherwise hard delete.
+        has_hist = await db.meal_purchases.find_one({"lines.item_id": item_id}) \
+                   or await db.meal_issues.find_one({"lines.item_id": item_id})
+        if has_hist:
+            await db.meal_items.update_one(
+                {"id": item_id},
+                {"$set": {"active": False,
+                          "updated_at": now_utc().isoformat(),
+                          "updated_by": admin.get("id"),
+                          "updated_by_name": admin.get("full_name") or admin.get("email")}},
+            )
+            return {"ok": True, "soft_deleted": True}
+        await db.meal_items.delete_one({"id": item_id})
+        return {"ok": True, "soft_deleted": False}
+
+    # ------------------------------------------------------------------
+    # Daily issues (consumption)
+    # ------------------------------------------------------------------
+    @router.get("/meals/issues")
+    async def list_issues(
+        start: str, end: str, user: dict = Depends(require_chef_or_admin),
+    ):
+        s, e = _valid_date(start), _valid_date(end)
+        if s > e:
+            raise HTTPException(status_code=400, detail="start must be before end")
+        rows = await db.meal_issues.find(
+            {"date": {"$gte": s, "$lte": e}}, {"_id": 0},
+        ).sort("date", 1).to_list(400)
+        return {"start": s, "end": e, "issues": rows}
+
+    @router.put("/meals/issues/{date_str}")
+    async def upsert_issues(
+        date_str: str, body: IssuesUpsertIn,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        d = _valid_date(date_str)
+        item_ids = [str(l.get("item_id") or "") for l in body.lines if l.get("item_id")]
+        items = await db.meal_items.find(
+            {"id": {"$in": item_ids}}, {"_id": 0},
+        ).to_list(len(item_ids) or 1)
+        by_id = {i["id"]: i for i in items}
+
+        clean: list[dict] = []
+        for raw in body.lines:
+            iid = str(raw.get("item_id") or "").strip()
+            item = by_id.get(iid)
+            if not item:
+                raise HTTPException(status_code=400,
+                                    detail=f"Unknown item_id: {iid or '(blank)'}")
+            qty = _parse_amount(raw.get("qty"))
+            if qty is None or qty <= 0:
+                continue  # blank/zero silently dropped
+            clean.append({
+                "id": str(raw.get("id") or uuid.uuid4()),
+                "item_id": iid,
+                "item_name": item.get("name"),
+                "category_key": item.get("category_key"),
+                "qty": round(qty, 4),
+                "unit": item.get("unit"),
+            })
+
+        stamp = {
+            "updated_at": now_utc().isoformat(),
+            "updated_by": user.get("id"),
+            "updated_by_name": user.get("full_name") or user.get("email"),
+        }
+        await db.meal_issues.update_one(
+            {"date": d},
+            {"$set": {"date": d, "lines": clean, **stamp},
+             "$setOnInsert": {"id": str(uuid.uuid4())}},
+            upsert=True,
+        )
+        return {"date": d, "lines": clean}
+
+    # ------------------------------------------------------------------
+    # Stock on hand — opening + Σ purchases − Σ issues, per item.
+    # ------------------------------------------------------------------
+    @router.get("/meals/stock")
+    async def stock_on_hand(
+        as_of: Optional[str] = Query(None),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        as_of_iso = _valid_date(as_of) if as_of else date.today().isoformat()
+        items = await db.meal_items.find(
+            {"active": True}, {"_id": 0},
+        ).sort([("category_key", 1), ("sort_order", 1), ("name", 1)]).to_list(500)
+        cats = await _purchase_categories()
+        cat_label = {c["key"]: c["label"] for c in cats}
+
+        # Purchases and issues from earliest opening_as_of onward. One
+        # fetch each covers the whole date range — volume is tiny (< 400
+        # docs even at 1 doc/day for a year).
+        purch_docs = await db.meal_purchases.find(
+            {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
+        ).to_list(2000)
+        iss_docs = await db.meal_issues.find(
+            {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
+        ).to_list(2000)
+
+        # Aggregate qty per item, respecting each item's opening_as_of.
+        purch_by_item: dict[str, float] = {}
+        for doc in purch_docs:
+            for line in doc.get("lines") or []:
+                iid = line.get("item_id")
+                if iid:
+                    purch_by_item[iid] = purch_by_item.get(iid, 0.0) + float(line.get("qty") or 0)
+        iss_by_item: dict[str, float] = {}
+        for doc in iss_docs:
+            for line in doc.get("lines") or []:
+                iid = line.get("item_id")
+                if iid:
+                    iss_by_item[iid] = iss_by_item.get(iid, 0.0) + float(line.get("qty") or 0)
+
+        # Per-item purchase / issue sums ONLY count movements from the
+        # opening_as_of date onward — earlier movements are assumed to
+        # already be baked into `opening_stock`. Re-aggregate with a
+        # date filter using the docs we already have to avoid a second
+        # DB round-trip.
+        purch_from: dict[str, float] = {}
+        iss_from: dict[str, float] = {}
+        item_opening_as_of = {i["id"]: i.get("opening_stock_as_of") or "1970-01-01"
+                              for i in items}
+        for doc in purch_docs:
+            d = doc.get("date")
+            for line in doc.get("lines") or []:
+                iid = line.get("item_id")
+                if iid and d and d >= item_opening_as_of.get(iid, "1970-01-01"):
+                    purch_from[iid] = purch_from.get(iid, 0.0) + float(line.get("qty") or 0)
+        for doc in iss_docs:
+            d = doc.get("date")
+            for line in doc.get("lines") or []:
+                iid = line.get("item_id")
+                if iid and d and d >= item_opening_as_of.get(iid, "1970-01-01"):
+                    iss_from[iid] = iss_from.get(iid, 0.0) + float(line.get("qty") or 0)
+
+        rows = []
+        for it in items:
+            iid = it["id"]
+            opening = float(it.get("opening_stock") or 0)
+            p = round(purch_from.get(iid, 0.0), 4)
+            iq = round(iss_from.get(iid, 0.0), 4)
+            on_hand = round(opening + p - iq, 4)
+            rows.append({
+                "item_id": iid,
+                "name": it.get("name"),
+                "category_key": it.get("category_key"),
+                "category_label": cat_label.get(it.get("category_key"), it.get("category_key")),
+                "unit": it.get("unit"),
+                "opening_stock": round(opening, 4),
+                "opening_stock_as_of": it.get("opening_stock_as_of"),
+                "purchased": p,
+                "issued": iq,
+                "on_hand": on_hand,
+            })
+        return {"as_of": as_of_iso, "rows": rows,
+                "categories": cats, "units": list(VALID_UNITS)}
+
+
     @router.put("/meals/purchases/{date_str}")
     async def upsert_purchase(
         date_str: str, body: PurchaseUpsertIn,
         user: dict = Depends(require_chef_or_admin),
     ):
+        """Upsert one day's purchases.
+
+        Two payload shapes:
+          • **lines** — new items-based model. Each line:
+              `{item_id, qty, rate}` (unit + name + category derived from
+              item master). `amount = qty * rate` server-side. Existing
+              lines for the date are REPLACED wholesale so the client can
+              be a plain re-save.
+          • **amounts** — legacy category-total map (bulk CSV path).
+            Preserved for backward compat; overwrites the summary field
+            only, does not touch `lines`.
+
+        Either way, `amounts` (the derived category totals) is kept in
+        sync so the expense report keeps working with zero changes.
+        """
         d = _valid_date(date_str)
+        stamp = {
+            "updated_at": now_utc().isoformat(),
+            "updated_by": user.get("id"),
+            "updated_by_name": user.get("full_name") or user.get("email"),
+        }
+
+        if body.lines is not None:
+            # Resolve item master once for validation + hydration.
+            item_ids = [str(l.get("item_id") or "") for l in body.lines if l.get("item_id")]
+            items = await db.meal_items.find(
+                {"id": {"$in": item_ids}}, {"_id": 0},
+            ).to_list(len(item_ids) or 1)
+            by_id = {i["id"]: i for i in items}
+
+            clean_lines: list[dict] = []
+            amounts: dict[str, float] = {}
+            for raw in body.lines:
+                iid = str(raw.get("item_id") or "").strip()
+                item = by_id.get(iid)
+                if not item:
+                    raise HTTPException(status_code=400,
+                                        detail=f"Unknown item_id: {iid or '(blank)'}")
+                qty = _parse_amount(raw.get("qty"))
+                rate = _parse_amount(raw.get("rate"))
+                if qty is None or qty <= 0:
+                    continue  # blank/zero lines silently dropped
+                if rate is None or rate < 0:
+                    raise HTTPException(status_code=400,
+                                        detail=f"Rate for '{item['name']}' must be ≥ 0")
+                amount = round(qty * rate, 2)
+                clean_lines.append({
+                    "id": str(raw.get("id") or uuid.uuid4()),
+                    "item_id": iid,
+                    "item_name": item.get("name"),
+                    "category_key": item.get("category_key"),
+                    "qty": round(qty, 4),
+                    "unit": item.get("unit"),
+                    "rate": round(rate, 2),
+                    "amount": amount,
+                })
+                cat = item.get("category_key") or "other"
+                amounts[cat] = round(amounts.get(cat, 0.0) + amount, 2)
+
+            await db.meal_purchases.update_one(
+                {"date": d},
+                {"$set": {"date": d, "lines": clean_lines,
+                          "amounts": amounts, **stamp},
+                 "$setOnInsert": {"id": str(uuid.uuid4())}},
+                upsert=True,
+            )
+            return {"date": d, "lines": clean_lines, "amounts": amounts,
+                    "total": round(sum(amounts.values()), 2)}
+
+        # ── Legacy amounts-map path ────────────────────────────────────
         amounts: dict[str, float] = {}
         for k, v in (body.amounts or {}).items():
             amt = _parse_amount(v)
@@ -1082,10 +1470,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 amounts[str(k)] = round(amt, 2)
         await db.meal_purchases.update_one(
             {"date": d},
-            {"$set": {"date": d, "amounts": amounts,
-                      "updated_at": now_utc().isoformat(),
-                      "updated_by": user.get("id"),
-                      "updated_by_name": user.get("full_name") or user.get("email")},
+            {"$set": {"date": d, "amounts": amounts, **stamp},
              "$setOnInsert": {"id": str(uuid.uuid4())}},
             upsert=True,
         )
