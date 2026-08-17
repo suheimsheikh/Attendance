@@ -14,7 +14,23 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
-### 17 Jun 2026 (this session)
+### 17 Aug 2026 (Pantry Stock session)
+- **Renamed "Meals Report" → "Pantry Stock"** everywhere (sidebar Layout.jsx, App.js, page header).
+  Deduped: admins now see it only under ADMIN section (filtered out of Coaches nav).
+- **Items master**: db.meal_items {id, category_key, name, unit, opening_stock,
+  opening_stock_as_of, active, sort_order}; GET/POST/PUT /api/meals/items.
+- **Line-item Purchases**: meal_purchases now carry lines:[{item_id, qty, unit, rate, amount}]
+  (amount computed server-side); legacy amounts map kept in sync for expense report.
+- **Daily Issues tab** (kitchen consumption): db.meal_issues, PUT/GET /api/meals/issues/{date}.
+- **Wastage & Losses tab**: db.meal_wastage with per-line {reason, notes};
+  PUT/GET /api/meals/wastage/{date}. Frontend MealWastageTab.jsx.
+- **Stock on hand**: GET /api/meals/stock — Opening + Purchases − Issues − Wastage;
+  entries before item's opening_stock_as_of excluded. Frontend MealStockTab.jsx.
+- **Server-side future-date guard** on PUT purchases/issues/wastage (400 on date > today).
+- Tested: iteration_39.json — 9/9 backend pytest (tests/test_pantry_stock_iter39.py),
+  all 7 frontend tabs verified, stock math confirmed, zero console errors.
+
+### 17 Jun 2026
 - **Calendar Grid left-member fix**: /api/reports/calendar-grid now drops members whose
   `leaving_date` < month start; they still appear in their leaving month with LF cells. (Tested)
 - **Meals Expense Report + Purchases module** (extends /admin/meals-report page, 4 tabs now):
@@ -52,6 +68,8 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 ## Backlog
 ### P1
 - Phase 2 Profile Data Additions — NEEDS USER CLARIFICATION on which fields
+- Phase 3 Consumption cross-check (qty issued vs meal counts × per-item norms; flag over/under)
+- Meals/Pantry CSV export alongside Print/PDF
 - Group-Photo Muster check-in (single wide shot → face match → bulk check-in)
 - Payslip PDF generator & Payroll worksheet CSV (staff)
 ### P2

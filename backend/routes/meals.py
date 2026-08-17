@@ -167,6 +167,17 @@ class IssuesUpsertIn(BaseModel):
     lines: List[dict]
 
 
+# Wastage & losses — separate event log so consumption vs loss is easy
+# to split in reports. Each line: {item_id, qty, reason, notes?}. Reason
+# picked from a fixed list so category totals stay clean; free-text
+# `notes` gives the chef space to explain (e.g. "left in sun, spoiled").
+VALID_WASTAGE_REASONS = ("wasted", "spoilt", "rotten", "lost", "damaged", "other")
+
+
+class WastageUpsertIn(BaseModel):
+    lines: List[dict]
+
+
 class MealMarkIn(BaseModel):
     """Body for /api/meals/mark-bulk and /api/meals/unmark-bulk.
     Defined at module scope (not inside make_router) so `from __future__
@@ -582,6 +593,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             return date.fromisoformat(d).isoformat()
         except (ValueError, TypeError):
             raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+
+    def _not_future(d: str) -> str:
+        if d > date.today().isoformat():
+            raise HTTPException(status_code=400, detail="date cannot be in the future")
+        return d
 
     # Note: the compound unique index `uniq_user_date_meal` is created
     # at app startup in `server.py::_lifespan`. Per-request builds were
@@ -1228,7 +1244,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         # Soft-delete if any purchase or issue references the item so
         # historic data keeps rendering the item name. Otherwise hard delete.
         has_hist = await db.meal_purchases.find_one({"lines.item_id": item_id}) \
-                   or await db.meal_issues.find_one({"lines.item_id": item_id})
+                   or await db.meal_issues.find_one({"lines.item_id": item_id}) \
+                   or await db.meal_wastage.find_one({"lines.item_id": item_id})
         if has_hist:
             await db.meal_items.update_one(
                 {"id": item_id},
@@ -1261,7 +1278,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         date_str: str, body: IssuesUpsertIn,
         user: dict = Depends(require_chef_or_admin),
     ):
-        d = _valid_date(date_str)
+        d = _not_future(_valid_date(date_str))
         item_ids = [str(l.get("item_id") or "") for l in body.lines if l.get("item_id")]
         items = await db.meal_items.find(
             {"id": {"$in": item_ids}}, {"_id": 0},
@@ -1301,7 +1318,82 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         return {"date": d, "lines": clean}
 
     # ------------------------------------------------------------------
-    # Stock on hand — opening + Σ purchases − Σ issues, per item.
+    # Wastage & losses — event log with reason + optional notes.
+    # ------------------------------------------------------------------
+    def _valid_reason(r: str) -> str:
+        r = (r or "").strip().lower()
+        if r not in VALID_WASTAGE_REASONS:
+            raise HTTPException(status_code=400,
+                                detail=f"reason must be one of {list(VALID_WASTAGE_REASONS)}")
+        return r
+
+    @router.get("/meals/wastage")
+    async def list_wastage(
+        start: str, end: str, user: dict = Depends(require_chef_or_admin),
+    ):
+        s, e = _valid_date(start), _valid_date(end)
+        if s > e:
+            raise HTTPException(status_code=400, detail="start must be before end")
+        rows = await db.meal_wastage.find(
+            {"date": {"$gte": s, "$lte": e}}, {"_id": 0},
+        ).sort("date", 1).to_list(400)
+        return {"start": s, "end": e, "wastage": rows,
+                "reasons": list(VALID_WASTAGE_REASONS)}
+
+    @router.put("/meals/wastage/{date_str}")
+    async def upsert_wastage(
+        date_str: str, body: WastageUpsertIn,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Replace all wastage lines for a date. Same shape as issues but
+        each line carries {reason, notes}. Zero/blank qty rows silently
+        dropped so a partial save doesn't null everything."""
+        d = _not_future(_valid_date(date_str))
+        item_ids = [str(l.get("item_id") or "") for l in body.lines if l.get("item_id")]
+        items = await db.meal_items.find(
+            {"id": {"$in": item_ids}}, {"_id": 0},
+        ).to_list(len(item_ids) or 1)
+        by_id = {i["id"]: i for i in items}
+
+        clean: list[dict] = []
+        for raw in body.lines:
+            iid = str(raw.get("item_id") or "").strip()
+            item = by_id.get(iid)
+            if not item:
+                raise HTTPException(status_code=400,
+                                    detail=f"Unknown item_id: {iid or '(blank)'}")
+            qty = _parse_amount(raw.get("qty"))
+            if qty is None or qty <= 0:
+                continue
+            reason = _valid_reason(raw.get("reason") or "wasted")
+            notes = str(raw.get("notes") or "").strip()[:400]
+            clean.append({
+                "id": str(raw.get("id") or uuid.uuid4()),
+                "item_id": iid,
+                "item_name": item.get("name"),
+                "category_key": item.get("category_key"),
+                "qty": round(qty, 4),
+                "unit": item.get("unit"),
+                "reason": reason,
+                "notes": notes,
+            })
+
+        stamp = {
+            "updated_at": now_utc().isoformat(),
+            "updated_by": user.get("id"),
+            "updated_by_name": user.get("full_name") or user.get("email"),
+        }
+        await db.meal_wastage.update_one(
+            {"date": d},
+            {"$set": {"date": d, "lines": clean, **stamp},
+             "$setOnInsert": {"id": str(uuid.uuid4())}},
+            upsert=True,
+        )
+        return {"date": d, "lines": clean}
+
+    # ------------------------------------------------------------------
+    # Stock on hand — opening + Σ purchases − Σ issues − Σ wastage,
+    # per item.
     # ------------------------------------------------------------------
     @router.get("/meals/stock")
     async def stock_on_hand(
@@ -1315,51 +1407,32 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         cats = await _purchase_categories()
         cat_label = {c["key"]: c["label"] for c in cats}
 
-        # Purchases and issues from earliest opening_as_of onward. One
-        # fetch each covers the whole date range — volume is tiny (< 400
-        # docs even at 1 doc/day for a year).
         purch_docs = await db.meal_purchases.find(
             {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
         ).to_list(2000)
         iss_docs = await db.meal_issues.find(
             {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
         ).to_list(2000)
+        wast_docs = await db.meal_wastage.find(
+            {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
+        ).to_list(2000)
 
-        # Aggregate qty per item, respecting each item's opening_as_of.
-        purch_by_item: dict[str, float] = {}
-        for doc in purch_docs:
-            for line in doc.get("lines") or []:
-                iid = line.get("item_id")
-                if iid:
-                    purch_by_item[iid] = purch_by_item.get(iid, 0.0) + float(line.get("qty") or 0)
-        iss_by_item: dict[str, float] = {}
-        for doc in iss_docs:
-            for line in doc.get("lines") or []:
-                iid = line.get("item_id")
-                if iid:
-                    iss_by_item[iid] = iss_by_item.get(iid, 0.0) + float(line.get("qty") or 0)
-
-        # Per-item purchase / issue sums ONLY count movements from the
-        # opening_as_of date onward — earlier movements are assumed to
-        # already be baked into `opening_stock`. Re-aggregate with a
-        # date filter using the docs we already have to avoid a second
-        # DB round-trip.
-        purch_from: dict[str, float] = {}
-        iss_from: dict[str, float] = {}
         item_opening_as_of = {i["id"]: i.get("opening_stock_as_of") or "1970-01-01"
                               for i in items}
-        for doc in purch_docs:
-            d = doc.get("date")
-            for line in doc.get("lines") or []:
-                iid = line.get("item_id")
-                if iid and d and d >= item_opening_as_of.get(iid, "1970-01-01"):
-                    purch_from[iid] = purch_from.get(iid, 0.0) + float(line.get("qty") or 0)
-        for doc in iss_docs:
-            d = doc.get("date")
-            for line in doc.get("lines") or []:
-                iid = line.get("item_id")
-                if iid and d and d >= item_opening_as_of.get(iid, "1970-01-01"):
-                    iss_from[iid] = iss_from.get(iid, 0.0) + float(line.get("qty") or 0)
+
+        def _sum_from(docs) -> dict[str, float]:
+            out: dict[str, float] = {}
+            for doc in docs:
+                d = doc.get("date")
+                for line in doc.get("lines") or []:
+                    iid = line.get("item_id")
+                    if iid and d and d >= item_opening_as_of.get(iid, "1970-01-01"):
+                        out[iid] = out.get(iid, 0.0) + float(line.get("qty") or 0)
+            return out
+
+        purch_from = _sum_from(purch_docs)
+        iss_from = _sum_from(iss_docs)
+        wast_from = _sum_from(wast_docs)
 
         rows = []
         for it in items:
@@ -1367,7 +1440,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             opening = float(it.get("opening_stock") or 0)
             p = round(purch_from.get(iid, 0.0), 4)
             iq = round(iss_from.get(iid, 0.0), 4)
-            on_hand = round(opening + p - iq, 4)
+            w = round(wast_from.get(iid, 0.0), 4)
+            on_hand = round(opening + p - iq - w, 4)
             rows.append({
                 "item_id": iid,
                 "name": it.get("name"),
@@ -1378,6 +1452,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "opening_stock_as_of": it.get("opening_stock_as_of"),
                 "purchased": p,
                 "issued": iq,
+                "wasted": w,
                 "on_hand": on_hand,
             })
         return {"as_of": as_of_iso, "rows": rows,
@@ -1404,7 +1479,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         Either way, `amounts` (the derived category totals) is kept in
         sync so the expense report keeps working with zero changes.
         """
-        d = _valid_date(date_str)
+        d = _not_future(_valid_date(date_str))
         stamp = {
             "updated_at": now_utc().isoformat(),
             "updated_by": user.get("id"),

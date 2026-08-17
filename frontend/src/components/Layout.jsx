@@ -238,9 +238,11 @@ export default function Layout() {
               onToggle={() => toggleSection("coaches")}
               tone="cyan"
             />
-            {isOpen("coaches") && NAV_COACH.map((item) => (
-              <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
-            ))}
+            {isOpen("coaches") && NAV_COACH
+              .filter((item) => !(isAdmin && item.to === "/admin/meals-report"))
+              .map((item) => (
+                <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
+              ))}
           </>
         )}
         {!isEscort && isChef && (

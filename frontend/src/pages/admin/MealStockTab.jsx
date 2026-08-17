@@ -72,6 +72,7 @@ export default function MealStockTab() {
                 <th className="text-right p-2">Opening</th>
                 <th className="text-right p-2">Purchased</th>
                 <th className="text-right p-2">Issued</th>
+                <th className="text-right p-2">Wasted</th>
                 <th className="text-right p-2 bg-slate-100">On-hand</th>
               </tr>
             </thead>
@@ -79,7 +80,7 @@ export default function MealStockTab() {
               {grouped.map(({ cat, rows: grows }) => (
                 <React.Fragment key={cat.key}>
                   <tr className="bg-slate-100/60">
-                    <td colSpan={6} className="px-2 py-1 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    <td colSpan={7} className="px-2 py-1 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                       {cat.label} <span className="text-slate-400">· {grows.length}</span>
                     </td>
                   </tr>
@@ -95,6 +96,7 @@ export default function MealStockTab() {
                         <td className="p-2 text-right tabular-nums text-slate-600">{fmt(r.opening_stock)}</td>
                         <td className="p-2 text-right tabular-nums text-emerald-700">{r.purchased ? `+${fmt(r.purchased)}` : "0"}</td>
                         <td className="p-2 text-right tabular-nums text-rose-700">{r.issued ? `−${fmt(r.issued)}` : "0"}</td>
+                        <td className="p-2 text-right tabular-nums text-amber-700" data-testid={`stock-wasted-${r.item_id}`}>{r.wasted ? `−${fmt(r.wasted)}` : "0"}</td>
                         <td className={`p-2 text-right tabular-nums font-bold bg-slate-50/70 ${low ? "text-rose-700" : "text-slate-900"}`} data-testid={`stock-onhand-${r.item_id}`}>
                           {fmt(r.on_hand)}
                         </td>

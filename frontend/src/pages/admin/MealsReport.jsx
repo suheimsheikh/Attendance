@@ -11,13 +11,14 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Boxes } from "lucide-react";
+import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Boxes, Flame } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import MealExpensesTab from "./MealExpensesTab";
 import MealPurchasesTab from "./MealPurchasesTab";
 import MealIssuesTab from "./MealIssuesTab";
 import MealStockTab from "./MealStockTab";
+import MealWastageTab from "./MealWastageTab";
 
 const MEAL_ORDER = ["breakfast", "lunch", "snacks", "dinner"];
 const MEAL_LABELS = {
@@ -463,6 +464,7 @@ export default function MealsReport() {
     { key: "expenses",  label: "Expense report", Icon: IndianRupee },
     { key: "purchases", label: "Purchases",     Icon: ShoppingCart },
     { key: "issues",    label: "Daily issues",  Icon: ClipboardList },
+    { key: "wastage",   label: "Wastage & losses", Icon: Flame },
     { key: "stock",     label: "Stock on hand", Icon: Boxes },
   ];
   return (
@@ -494,6 +496,7 @@ export default function MealsReport() {
       {tab === "expenses" && <MealExpensesTab />}
       {tab === "purchases" && <MealPurchasesTab />}
       {tab === "issues" && <MealIssuesTab />}
+      {tab === "wastage" && <MealWastageTab />}
       {tab === "stock" && <MealStockTab />}
     </div>
   );

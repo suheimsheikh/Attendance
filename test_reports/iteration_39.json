@@ -1,0 +1,39 @@
+{
+  "summary": "End-to-end test of the new Pantry Stock (formerly Meals Report) surface. Wrote 9 pytest cases covering items master, purchases, issues, wastage (with reasons) and stock-on-hand math including the opening_stock_as_of exclusion rule — all 9 pass. Frontend Playwright smoke: admin login → sidebar 'Pantry Stock' opens the page, header reads 'Pantry Stock', all 7 tabs render (Daily counts / Monthly / Expense / Purchases / Daily issues / Wastage & losses / Stock on hand), Wastage tab shows reason dropdown + item picker, Stock tab shows Opening / Purchased / Issued / Wasted / On-hand columns, purchases date input capped at today. Zero console errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/meals/purchases/{date}", "issue": "Backend does not reject future dates. Frontend blocks via max attr, but a direct API call with a future date would be accepted. Same applies to /api/meals/issues/{date} and /api/meals/wastage/{date}."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Layout sidebar", "issue": "'Pantry Stock' appears TWICE in the admin sidebar — once under Coaches (NAV_COACH renders because canMuster=true for admin) and once under Admin (NAV_ADMIN). Not a functional bug but visually confusing.", "selector": "[data-testid='nav-pantry-stock']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pantry_stock_iter39.py",
+    "/app/test_reports/pytest/iter39_pantry.xml",
+    "/app/test_reports/screens_pantry_iter39_stock.jpeg"
+  ],
+  "action_items": [
+    "Consider deduping 'Pantry Stock' in the sidebar for admins (remove from NAV_COACH, or gate NAV_COACH on !isAdmin).",
+    "Optionally add server-side future-date guard to /api/meals/{purchases,issues,wastage}/{date} — currently only enforced by the frontend max attr."
+  ],
+  "critical_code_review_comments": [
+    "meals.py has grown past ~1780 lines and mixes Chef's View, meal muster, purchases, items, issues, wastage and stock in one router — worth splitting into meals_muster.py + meals_pantry.py.",
+    "Stock math loads ALL purchase/issue/wastage docs up to as_of (to_list(2000)) — fine for now, but should get an as_of >= earliest opening_as_of lower bound too, or a date-range index-friendly pipeline once row counts grow."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pantry_stock_iter39.py"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (all tabs + math verified)"},
+  "test_credentials": "admin@attendance.app / Admin@12345",
+  "seed_data_creation": "Created TEST_Rice_<uuid> (grocery/kg/opening=10 as-of today) and TEST_Onion_<uuid> (vegetables/kg/opening=3) during pytest run. Items auto-soft-deleted at teardown; associated purchase/issue/wastage rows for today remain in DB (small, marked with TEST_ item names).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reusable pytest file: /app/backend/tests/test_pantry_stock_iter39.py covers full Pantry Stock backend flow. Admin sidebar has duplicate 'Pantry Stock' entry (Coaches + Admin sections) — cosmetic. Stock math (opening + purchased − issued − wasted, with opening_stock_as_of gating) verified correct on the server.",
+  "rca of the issue": "No issues found. The Wastage tab + Wasted column integrate correctly with the stock formula. Backend correctly excludes purchase/issue/wastage entries dated before the item's opening_stock_as_of."
+}
