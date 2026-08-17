@@ -1,4 +1,8 @@
-# I Showed Up — Browser-based Campus Attendance App
+# I Showed Up
+
+> Jun 2026: Calendar Grid now drops members whose leaving_date is before the
+> viewed month's start — they appear only up to their leaving month (LF cells
+> after leaving day). Fix in routes/reports.py calendar_grid roster filter. — Browser-based Campus Attendance App
 
 ## Original Problem Statement
 > Need to create a new app called I-showed-up that needs to take all the code and database from the Attendance app (attendance-app-220) I already created which was a mobile app but this needs to be a browser based app.

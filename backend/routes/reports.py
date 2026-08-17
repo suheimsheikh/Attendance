@@ -868,6 +868,11 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
              # 14 Feb 2026 (user request).
              "joining_date": 1, "leaving_date": 1},
         ).to_list(2000)
+        # Members who left BEFORE this month starts are dropped entirely —
+        # they only appear up to (and including) their leaving month, where
+        # post-leaving days paint LF (user request, Jun 2026).
+        users = [u for u in users
+                 if not (u.get("leaving_date") and u["leaving_date"] < start_iso)]
         athlete_like = await _athlete_like_keys(db)
         if category == "athlete":
             users = [u for u in users if u.get("category") in athlete_like]
