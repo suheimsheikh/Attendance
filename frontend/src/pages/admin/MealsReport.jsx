@@ -11,9 +11,11 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight } from "lucide-react";
+import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
+import MealExpensesTab from "./MealExpensesTab";
+import MealPurchasesTab from "./MealPurchasesTab";
 
 const MEAL_ORDER = ["breakfast", "lunch", "snacks", "dinner"];
 const MEAL_LABELS = {
@@ -453,37 +455,40 @@ function MonthlyGridTab() {
 
 export default function MealsReport() {
   const [tab, setTab] = useState("daily");
+  const TABS = [
+    { key: "daily",     label: "Daily counts",  Icon: Utensils },
+    { key: "monthly",   label: "Monthly grid",  Icon: CalendarDays },
+    { key: "expenses",  label: "Expense report", Icon: IndianRupee },
+    { key: "purchases", label: "Purchases",     Icon: ShoppingCart },
+  ];
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto" data-testid="meals-report-page">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto" data-testid="meals-report-page">
       <header className="mb-6">
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Meals Report</h1>
         <p className="text-slate-500 text-sm mt-1">
-          Portion planning (daily) and month-long audit (monthly grid) of who ate what.
+          Portion planning, month-long audit, purchase entry and the expense report.
         </p>
       </header>
 
-      <div className="flex gap-2 mb-5 border-b border-slate-200" data-testid="meals-report-tabs">
-        <button
-          data-testid="meals-report-tab-daily"
-          onClick={() => setTab("daily")}
-          className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 ${
-            tab === "daily" ? "border-emerald-600 text-emerald-700" : "border-transparent text-slate-500 hover:text-slate-700"
-          }`}
-        >
-          <span className="inline-flex items-center gap-2"><Utensils size={14}/> Daily counts</span>
-        </button>
-        <button
-          data-testid="meals-report-tab-monthly"
-          onClick={() => setTab("monthly")}
-          className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 ${
-            tab === "monthly" ? "border-emerald-600 text-emerald-700" : "border-transparent text-slate-500 hover:text-slate-700"
-          }`}
-        >
-          <span className="inline-flex items-center gap-2"><CalendarDays size={14}/> Monthly grid</span>
-        </button>
+      <div className="flex gap-2 mb-5 border-b border-slate-200 overflow-x-auto" data-testid="meals-report-tabs">
+        {TABS.map(({ key, label, Icon }) => (
+          <button
+            key={key}
+            data-testid={`meals-report-tab-${key}`}
+            onClick={() => setTab(key)}
+            className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 whitespace-nowrap ${
+              tab === key ? "border-emerald-600 text-emerald-700" : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <span className="inline-flex items-center gap-2"><Icon size={14}/> {label}</span>
+          </button>
+        ))}
       </div>
 
-      {tab === "daily" ? <DailyTab /> : <MonthlyGridTab />}
+      {tab === "daily" && <DailyTab />}
+      {tab === "monthly" && <MonthlyGridTab />}
+      {tab === "expenses" && <MealExpensesTab />}
+      {tab === "purchases" && <MealPurchasesTab />}
     </div>
   );
 }

@@ -23,7 +23,7 @@ import uuid
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
@@ -63,6 +63,73 @@ MEAL_SHORT: dict[str, str] = {
     "snacks":    "S",
     "dinner":    "D",
 }
+
+
+# ---------------------------------------------------------------------------
+# Meal purchases & expense report (Jun 2026)
+# ---------------------------------------------------------------------------
+PURCHASE_CFG_ID = "meal_purchase_categories"
+DEFAULT_PURCHASE_CATEGORIES = [
+    {"key": "fruits",         "label": "Fruits"},
+    {"key": "grocery",        "label": "Grocery"},
+    {"key": "vegetables",     "label": "Vegetables"},
+    {"key": "chicken_mutton", "label": "Chicken/Mutton"},
+    {"key": "paneer",         "label": "Paneer"},
+]
+
+
+def _slug_key(label: str) -> str:
+    import re
+    s = re.sub(r"[^a-z0-9]+", "_", (label or "").strip().lower()).strip("_")
+    return s or "item"
+
+
+def _norm_header(s: str) -> str:
+    import re
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def _parse_any_date(v) -> Optional[str]:
+    if isinstance(v, datetime):
+        return v.date().isoformat()
+    if isinstance(v, date):
+        return v.isoformat()
+    s = str(v or "").strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%d/%m/%y"):
+        try:
+            return datetime.strptime(s, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_amount(v) -> Optional[float]:
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip().replace(",", "").replace("₹", "").replace("Rs.", "").replace("Rs", "")
+    if not s or s in ("-", "—"):
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+class PurchaseCategoryItem(BaseModel):
+    key: Optional[str] = None
+    label: str = Field(..., min_length=1, max_length=60)
+
+
+class PurchaseCategoriesIn(BaseModel):
+    categories: List[PurchaseCategoryItem]
+
+
+class PurchaseUpsertIn(BaseModel):
+    amounts: dict
 
 
 class MealMarkIn(BaseModel):
@@ -939,6 +1006,321 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                       for k in MEAL_KEYS],
             "rows": rows,
             "per_day_totals": per_day_totals,
+        }
+
+    # ==================================================================
+    # Meal purchases + expense report (Jun 2026)
+    # ------------------------------------------------------------------
+    # Daily purchase amounts per configurable category (fruits, grocery,
+    # vegetables, …) stored one doc per date in `meal_purchases`.
+    # Combined with `meal_records` counts to build the accountant-style
+    # expense report (meals per group + spend per category + avg cost).
+    # ==================================================================
+    async def _purchase_categories() -> list[dict]:
+        doc = await db.config.find_one({"id": PURCHASE_CFG_ID}, {"_id": 0})
+        cats = (doc or {}).get("categories") or []
+        if not cats:
+            return [dict(c) for c in DEFAULT_PURCHASE_CATEGORIES]
+        return cats
+
+    @router.get("/meals/purchase-categories")
+    async def get_purchase_categories(user: dict = Depends(require_chef_or_admin)):
+        return {"categories": await _purchase_categories()}
+
+    @router.put("/meals/purchase-categories")
+    async def put_purchase_categories(
+        body: PurchaseCategoriesIn, admin: dict = Depends(require_admin)
+    ):
+        if not body.categories:
+            raise HTTPException(status_code=400, detail="At least one category is required")
+        if len(body.categories) > 25:
+            raise HTTPException(status_code=400, detail="Max 25 purchase categories")
+        out, seen = [], set()
+        for c in body.categories:
+            label = c.label.strip()
+            key = (c.key or "").strip().lower() or _slug_key(label)
+            if key in seen:
+                raise HTTPException(status_code=400, detail=f"Duplicate category key '{key}'")
+            seen.add(key)
+            out.append({"key": key, "label": label})
+        await db.config.update_one(
+            {"id": PURCHASE_CFG_ID},
+            {"$set": {"categories": out,
+                      "updated_at": now_utc().isoformat(),
+                      "updated_by": admin.get("id")}},
+            upsert=True,
+        )
+        return {"categories": out}
+
+    @router.get("/meals/purchases")
+    async def list_purchases(
+        start: str, end: str, user: dict = Depends(require_chef_or_admin)
+    ):
+        s, e = _valid_date(start), _valid_date(end)
+        if s > e:
+            raise HTTPException(status_code=400, detail="start must be before end")
+        rows = await db.meal_purchases.find(
+            {"date": {"$gte": s, "$lte": e}},
+            {"_id": 0},
+        ).sort("date", 1).to_list(400)
+        return {"start": s, "end": e, "purchases": rows}
+
+    @router.put("/meals/purchases/{date_str}")
+    async def upsert_purchase(
+        date_str: str, body: PurchaseUpsertIn,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        d = _valid_date(date_str)
+        amounts: dict[str, float] = {}
+        for k, v in (body.amounts or {}).items():
+            amt = _parse_amount(v)
+            if amt is None:
+                continue
+            if amt < 0:
+                raise HTTPException(status_code=400, detail=f"Amount for '{k}' cannot be negative")
+            if amt > 0:
+                amounts[str(k)] = round(amt, 2)
+        await db.meal_purchases.update_one(
+            {"date": d},
+            {"$set": {"date": d, "amounts": amounts,
+                      "updated_at": now_utc().isoformat(),
+                      "updated_by": user.get("id"),
+                      "updated_by_name": user.get("full_name") or user.get("email")},
+             "$setOnInsert": {"id": str(uuid.uuid4())}},
+            upsert=True,
+        )
+        return {"date": d, "amounts": amounts,
+                "total": round(sum(amounts.values()), 2)}
+
+    @router.post("/meals/purchases/bulk-upload")
+    async def bulk_upload_purchases(
+        file: UploadFile = File(...),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Import daily purchase amounts from a spreadsheet (CSV or XLSX).
+
+        Expected layout: first column = date, remaining columns matched
+        against the configured purchase categories by fuzzy header
+        (case/punctuation-insensitive — "CHICKEN/ MUTTON" matches
+        "Chicken/Mutton"). Dates accept ISO or day-first formats
+        (1/7/2026 = 1 July). Amounts may contain commas. Existing dates
+        are merged (only uploaded columns overwritten)."""
+        name = (file.filename or "").lower()
+        content = await file.read()
+        if len(content) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large (max 5 MB)")
+
+        rows: list[list] = []
+        if name.endswith(".csv"):
+            import csv as _csv
+            import io as _io
+            try:
+                text = content.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                text = content.decode("latin-1")
+            rows = [r for r in _csv.reader(_io.StringIO(text))]
+        elif name.endswith(".xlsx"):
+            import io as _io
+            from openpyxl import load_workbook
+            try:
+                wb = load_workbook(_io.BytesIO(content), read_only=True, data_only=True)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Could not read the Excel file — is it a valid .xlsx?")
+            ws = wb.active
+            rows = [list(r) for r in ws.iter_rows(values_only=True)]
+            wb.close()
+        else:
+            raise HTTPException(status_code=400, detail="Upload a .csv or .xlsx file")
+
+        # Locate the header row: first row containing a cell that maps
+        # to a known category OR literally "date".
+        cats = await _purchase_categories()
+        norm_to_key = {}
+        for c in cats:
+            norm_to_key[_norm_header(c["key"])] = c["key"]
+            norm_to_key[_norm_header(c["label"])] = c["key"]
+
+        header_idx, col_map, date_col = None, {}, 0
+        for i, r in enumerate(rows[:10]):
+            hits = {}
+            dcol = None
+            for j, cell in enumerate(r or []):
+                n = _norm_header(str(cell)) if cell is not None else ""
+                if not n:
+                    continue
+                if n == "date":
+                    dcol = j
+                elif n in norm_to_key:
+                    hits[j] = norm_to_key[n]
+            if hits:
+                header_idx, col_map = i, hits
+                date_col = dcol if dcol is not None else 0
+                break
+        if header_idx is None:
+            raise HTTPException(
+                status_code=400,
+                detail="No recognisable header row — need a 'Date' column plus at least one "
+                       "column matching a purchase category "
+                       f"({', '.join(c['label'] for c in cats)}).",
+            )
+        unmatched = []
+        header_row = rows[header_idx] or []
+        for j, cell in enumerate(header_row):
+            if j == date_col or j in col_map or cell is None:
+                continue
+            n = _norm_header(str(cell))
+            if n and n != "date":
+                unmatched.append(str(cell).strip())
+
+        imported_dates, skipped, errors = [], 0, []
+        now_iso = now_utc().isoformat()
+        for r in rows[header_idx + 1:]:
+            if not r:
+                continue
+            d = _parse_any_date(r[date_col] if date_col < len(r) else None)
+            if not d:
+                raw = str(r[date_col] if date_col < len(r) else "").strip().lower()
+                has_amounts = any(
+                    _parse_amount(r[j]) not in (None, 0.0)
+                    for j in col_map if j < len(r)
+                )
+                # Footer rows ("TOTAL", "Grand total", …) are expected in
+                # accountant sheets — skip silently even with amounts.
+                if has_amounts and "total" not in raw:
+                    errors.append(f"Row skipped — unreadable date: {r[date_col] if date_col < len(r) else ''!r}")
+                skipped += 1
+                continue
+            sets = {}
+            for j, key in col_map.items():
+                amt = _parse_amount(r[j] if j < len(r) else None)
+                if amt is None or amt == 0:
+                    continue
+                if amt < 0:
+                    errors.append(f"{d}: negative amount ignored for {key}")
+                    continue
+                sets[f"amounts.{key}"] = round(amt, 2)
+            if not sets:
+                skipped += 1
+                continue
+            await db.meal_purchases.update_one(
+                {"date": d},
+                {"$set": {**sets, "date": d,
+                          "updated_at": now_iso,
+                          "updated_by": user.get("id"),
+                          "updated_by_name": user.get("full_name") or user.get("email"),
+                          "source": "bulk_upload"},
+                 "$setOnInsert": {"id": str(uuid.uuid4())}},
+                upsert=True,
+            )
+            imported_dates.append(d)
+
+        cats_by_key = {c["key"]: c["label"] for c in cats}
+        return {
+            "imported_days": len(imported_dates),
+            "dates": sorted(imported_dates),
+            "skipped_rows": skipped,
+            "matched_columns": [cats_by_key.get(k, k)
+                                for k in sorted({v for v in col_map.values()})],
+            "unmatched_columns": unmatched,
+            "errors": errors[:20],
+        }
+
+    @router.get("/meals/expense-report")
+    async def meal_expense_report(
+        start: str, end: str, user: dict = Depends(require_chef_or_admin)
+    ):
+        """Accountant-style report: per-day meal counts split into
+        Athletes vs Staff (B/F, Lunch, Snacks, Dinner), daily meal
+        total, purchase spend per category, and grand totals with
+        average cost per meal."""
+        s, e = _valid_date(start), _valid_date(end)
+        if s > e:
+            raise HTTPException(status_code=400, detail="start must be before end")
+        s_d, e_d = date.fromisoformat(s), date.fromisoformat(e)
+        if (e_d - s_d).days > 370:
+            raise HTTPException(status_code=400, detail="Range too large (max 1 year)")
+
+        athlete_like = {
+            c["key"] async for c in db.categories.find(
+                {"is_athlete_like": True}, {"_id": 0, "key": 1})
+        } or {"athlete", "elite"}
+
+        recs = await db.meal_records.find(
+            {"date": {"$gte": s, "$lte": e}},
+            {"_id": 0, "date": 1, "meal": 1, "category": 1},
+        ).to_list(200000)
+        purchases = await db.meal_purchases.find(
+            {"date": {"$gte": s, "$lte": e}}, {"_id": 0},
+        ).to_list(400)
+        cats = await _purchase_categories()
+        cat_keys = [c["key"] for c in cats]
+        # Surface orphan keys (category deleted after data existed) so
+        # historic money never silently disappears from totals.
+        for p in purchases:
+            for k in (p.get("amounts") or {}):
+                if k not in cat_keys:
+                    cat_keys.append(k)
+                    cats.append({"key": k, "label": k.replace("_", " ").title(),
+                                 "orphan": True})
+
+        counts: dict[str, dict[str, dict[str, int]]] = {}
+        for r in recs:
+            m = (r.get("meal") or "").lower()
+            if m not in MEAL_KEYS:
+                continue
+            grp = "athletes" if (r.get("category") in athlete_like) else "staff"
+            counts.setdefault(r["date"], {}) \
+                  .setdefault(grp, {k: 0 for k in MEAL_KEYS})[m] += 1
+        purch_by_date = {p["date"]: (p.get("amounts") or {}) for p in purchases}
+
+        def _grp(day_iso: str, grp: str) -> dict:
+            g = counts.get(day_iso, {}).get(grp) or {k: 0 for k in MEAL_KEYS}
+            return {**g, "total": sum(g.values())}
+
+        days_out = []
+        tot_grp = {"athletes": {k: 0 for k in MEAL_KEYS},
+                   "staff":    {k: 0 for k in MEAL_KEYS}}
+        tot_purch = {k: 0.0 for k in cat_keys}
+        cur = s_d
+        while cur <= e_d:
+            iso = cur.isoformat()
+            a, st = _grp(iso, "athletes"), _grp(iso, "staff")
+            amounts = purch_by_date.get(iso, {})
+            day_expense = round(sum(float(v or 0) for v in amounts.values()), 2)
+            days_out.append({
+                "date": iso,
+                "athletes": a,
+                "staff": st,
+                "meal_count": a["total"] + st["total"],
+                "purchases": {k: amounts.get(k) for k in cat_keys if amounts.get(k)},
+                "expense_total": day_expense,
+            })
+            for k in MEAL_KEYS:
+                tot_grp["athletes"][k] += a[k]
+                tot_grp["staff"][k] += st[k]
+            for k, v in amounts.items():
+                if k in tot_purch:
+                    tot_purch[k] += float(v or 0)
+            cur += timedelta(days=1)
+
+        tot_a = sum(tot_grp["athletes"].values())
+        tot_s = sum(tot_grp["staff"].values())
+        total_meals = tot_a + tot_s
+        total_expenses = round(sum(tot_purch.values()), 2)
+        return {
+            "start": s, "end": e,
+            "categories": cats,
+            "meals": [{"key": k, "label": MEAL_LABELS[k], "short": MEAL_SHORT[k]}
+                      for k in MEAL_KEYS],
+            "days": days_out,
+            "totals": {
+                "athletes": {**tot_grp["athletes"], "total": tot_a},
+                "staff":    {**tot_grp["staff"],    "total": tot_s},
+                "meal_count": total_meals,
+                "purchases": {k: round(v, 2) for k, v in tot_purch.items()},
+                "expenses": total_expenses,
+                "avg_cost_per_meal": round(total_expenses / total_meals, 2) if total_meals else None,
+            },
         }
 
     return router

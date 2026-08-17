@@ -1,0 +1,35 @@
+{
+  "summary": "Tested Meal Purchases + Expense Report feature end-to-end. Backend: 20/20 pytest cases passed (categories CRUD + admin gate, purchase upsert with comma/negative/zero handling, GET list, bulk-upload CSV+XLSX+txt-reject with TOTAL footer skip and unmatched columns, expense-report bucketing athletes vs staff + totals + avg cost + 400 range validations, chef allowed / member forbidden across all endpoints). Frontend: admin login, /admin/meals-report shows all 4 tabs (daily, monthly, expenses, purchases). Expense report tab: month/date-range toggle, month picker, from/to inputs, 3 summary cards (expenses/meals/avg), table with totals row, CSV download triggers file (meal_expenses_2026-08-01_2026-08-17.csv), Print button present. Purchases tab: 5 category inputs, day-total live-updates (\u20b9750 from 250+500), Save persists (success toast + row appears in Last-30-days table with today 2026-08-17), template CSV downloads, Categories manager modal opens. Regression: /api/reports/calendar-grid?month=2026-08 returns 200; Daily & Monthly grid tabs still load.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/meals/purchases/bulk-upload", "issue": "Inconsistent with PUT: bulk-upload stores zero amounts (e.g. chicken_mutton=0.0) rather than dropping them like PUT /meals/purchases/{date} does. Cosmetic — reports still sum correctly — but leaves stray 0 entries in the amounts map."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_meal_purchases_and_expense.py",
+    "/app/test_reports/pytest/meal_purchases_results.xml"
+  ],
+  "action_items": [
+    "(Minor, optional) Align bulk-upload with PUT to drop zero amounts instead of persisting {key: 0.0}."
+  ],
+  "critical_code_review_comments": [
+    "meals.py is now ~1327 lines — well past the 700-line comfort limit. Consider splitting purchases/expense-report block into a separate router module.",
+    "expense-report avg_cost_per_meal is computed even when purchases exist but total_meals=0 (returns None correctly), but when meals>0 and expenses=0 it still returns 0.0 which is fine — no fix needed.",
+    "Bulk-upload consistency (see minor issue) — recommend threading zero-drop through _parse_amount usage in bulk import path."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_meal_purchases_and_expense.py (new)"
+  ],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "100% of listed selectors + flows"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (from /app/memory/test_credentials.md). Chef+plain-member users created dynamically per test module using @meals.example.com domain.",
+  "seed_data_creation": "meal_purchases rows written for 2026-08-13/14/15 (manual), 2026-08-17 (via UI save), 2026-09-01/02/03 (bulk upload csv/xlsx). breakfast meal marks added for 2026-08-14 (1 athlete + 1 staff). Purchase categories set was mutated (added 'Spices & Masala') and restored to original 5 in the same test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test file is at /app/backend/tests/test_meal_purchases_and_expense.py — reuse the chef_user/plain_member fixtures. Note that emails ending in .local are rejected as invalid by email-validator, so test users use @meals.example.com."
+}

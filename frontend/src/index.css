@@ -178,5 +178,16 @@ input[data-testid^="search-"]::placeholder {
   body.meals-print-active [data-testid="meals-details-print-region"] {
     display: block !important;
   }
+  /* Meals EXPENSE report print — same portal pattern, landscape-wide
+     table so all purchase columns fit. */
+  body.expense-print-active > *:not([data-testid="meal-expense-print-region"]) {
+    display: none !important;
+  }
+  body.expense-print-active [data-testid="meal-expense-print-region"] {
+    display: block !important;
+  }
+  body.expense-print-active [data-testid="meal-expense-print-region"] table {
+    font-size: 9px;
+  }
   @page { margin: 1cm; }
 }
