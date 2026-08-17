@@ -29,7 +29,7 @@ always limited to athlete-like categories regardless of `scope`.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -381,6 +381,8 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 skipped.append({"id": sid, "name": athlete["full_name"], "reason": "not checked in"})
                 continue
             cin = datetime.fromisoformat(sess["check_in_at"])
+            if cin.tzinfo is None:
+                cin = cin.replace(tzinfo=timezone.utc)
             excursions = sess.get("excursions") or []
             for e in excursions:
                 if e.get("out_at") and not e.get("in_at"):

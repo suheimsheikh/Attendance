@@ -345,7 +345,7 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             td = date.fromisoformat(target_date)
         except ValueError:
             raise HTTPException(status_code=400, detail="target_date must be YYYY-MM-DD")
-        today = date.today()
+        today = date.fromisoformat(local_date_str(None))
         if td > today:
             raise HTTPException(status_code=400, detail="target_date cannot be in the future")
         if (today - td).days > CORRECTION_WINDOW_DAYS:
@@ -412,7 +412,7 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
                 td = date.fromisoformat(body.target_date)
             except ValueError:
                 raise HTTPException(status_code=400, detail="target_date must be YYYY-MM-DD")
-            if td > date.today():
+            if td > date.fromisoformat(local_date_str(None)):
                 raise HTTPException(status_code=400, detail="target_date cannot be in the future")
 
         doc = {
@@ -509,7 +509,7 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
                 raise HTTPException(status_code=403,
                                     detail="Only admins may look up other members' correction candidates.")
             target_id = on_behalf_of
-        cutoff = (date.today() - timedelta(days=CORRECTION_WINDOW_DAYS - 1)).isoformat()
+        cutoff = (date.fromisoformat(local_date_str(None)) - timedelta(days=CORRECTION_WINDOW_DAYS - 1)).isoformat()
         atts = await db.attendance.find(
             {"user_id": target_id, "date": {"$gte": cutoff}},
             {"_id": 0, "id": 1, "date": 1,

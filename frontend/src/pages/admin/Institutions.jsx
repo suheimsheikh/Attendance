@@ -362,12 +362,12 @@ function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSave
   const isEdit = !!initial;
   const [name, setName] = useState(initial?.name || "");
   const [phone, setPhone] = useState(initial?.phone || "");
-  const [startDate, setStartDate] = useState(initial?.start_date || new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(initial?.start_date || new Date().toLocaleDateString("sv-SE"));
   // Validity window (added 28 Jun 2026). `valid_from` defaults to the
   // start date when missing on a legacy row; `valid_until` is required
   // on create and when next editing a backfilled escort with null.
   const [validFrom, setValidFrom] = useState(
-    initial?.valid_from || initial?.start_date || new Date().toISOString().slice(0, 10)
+    initial?.valid_from || initial?.start_date || new Date().toLocaleDateString("sv-SE")
   );
   const [validUntil, setValidUntil] = useState(initial?.valid_until || "");
   const [status, setStatus] = useState(initial?.status || "active");

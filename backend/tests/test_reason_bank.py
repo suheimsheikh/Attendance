@@ -14,7 +14,8 @@ def _cleanup(admin_client, base_url):
     """Best-effort — clear whatever the tests seeded so they can be
     re-run against the same DB."""
     admin_client.get(f"{base_url}/api/me/reasons", timeout=15).json()
-    for r in ("Picking up Rainbow Kids", "Agape Camp", "Came to arrange breakfast"):
+    for r in ("Picking up Rainbow Kids", "Agape Camp", "Came to arrange breakfast",
+              "Early-out reason smoke — medical appt"):
         admin_client.delete(f"{base_url}/api/me/reasons",
                             params={"reason": r}, timeout=15)
 

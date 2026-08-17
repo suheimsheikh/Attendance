@@ -15,6 +15,7 @@ from datetime import date
 from typing import List, Optional
 
 from services.attendance_calc import ATHLETE_CATEGORIES
+from services.time_utils import local_date_str
 
 
 WEEKDAY_KEY = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
@@ -96,7 +97,7 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
     """
     co = await compute_comp_off_balance(db, user, year=year)
     if not year:
-        year = str(date.today().year)
+        year = local_date_str(None)[:4]
     yr_start, yr_end = f"{year}-01-01", f"{year}-12-31"
     opening = user.get("leave_balance_opening")
     tracked = (user.get("category") != "athlete") and (opening is not None)
@@ -109,7 +110,7 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
         "paid_leave_used": 1, "lop_days": 1, "comp_off_used": 1,
         "half_day": 1}).to_list(2000)
 
-    today = date.today().isoformat()
+    today = local_date_str(None)
     buckets = _bucket_leave_rows(rows, today)
     paid_avail = max(0.0, float(opening) - buckets["paid_used"]) if tracked else 0
 
@@ -170,7 +171,7 @@ async def _absent_days_ytd(db, user: dict, weekly_off: str) -> int:
       - Breaks are checked via the same model the Presence Board uses
         (scope = "all" | "category" | "institution" | "selected").
     """
-    today_d = date.today()
+    today_d = date.fromisoformat(local_date_str(None))
     yr_start = date(today_d.year, 1, 1)
     if today_d < yr_start:
         return 0
@@ -397,7 +398,7 @@ async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -
     `available = max(0, accrued - used)`.
     """
     if not year:
-        year = str(date.today().year)
+        year = local_date_str(None)[:4]
 
     weekly_off = await _resolve_weekly_off(db, user)
     yr_start = f"{year}-01-01"
@@ -437,7 +438,7 @@ async def compute_comp_off_balance(db, user: dict, year: Optional[str] = None) -
             "start_date": {"$lte": yr_end},
             "end_date": {"$gte": yr_start},
         }, {"_id": 0, "start_date": 1, "end_date": 1}).to_list(500)
-        today_iso = date.today().isoformat()
+        today_iso = local_date_str(None)
         att_seen = set(distinct_dates)
         tour_accrued, tour_rows_out = _accrual_from_tours(
             tour_rows, weekly_off, today_iso, att_seen, yr_start, yr_end,

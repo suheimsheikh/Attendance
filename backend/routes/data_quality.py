@@ -26,6 +26,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends
 
+from services.time_utils import local_date_str
+
 
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3}
 
@@ -290,7 +292,7 @@ def make_router(db, require_admin) -> APIRouter:
                 else:
                     try:
                         d_ = date.fromisoformat(dob)
-                        if d_ > date.today():
+                        if d_.isoformat() > local_date_str(None):
                             findings.append({
                                 "category": "Suspicious values",
                                 "code": "member.dob_in_future",
@@ -340,6 +342,8 @@ def make_router(db, require_admin) -> APIRouter:
                 if u.get("category") == "athlete" and captured:
                     try:
                         capt_dt = datetime.fromisoformat(captured.replace("Z", "+00:00"))
+                        if capt_dt.tzinfo is None:
+                            capt_dt = capt_dt.replace(tzinfo=timezone.utc)
                         age_days = (now - capt_dt).days
                         if age_days > 365:
                             findings.append({
@@ -408,6 +412,8 @@ def make_router(db, require_admin) -> APIRouter:
             if ci and not co:
                 try:
                     ci_dt = datetime.fromisoformat(ci)
+                    if ci_dt.tzinfo is None:
+                        ci_dt = ci_dt.replace(tzinfo=timezone.utc)
                     if ci_dt < stale_cutoff:
                         findings.append({
                             "category": "Stale data",
@@ -426,7 +432,7 @@ def make_router(db, require_admin) -> APIRouter:
         # the original suite. Each finding may carry `auto_fix: true`
         # so the frontend renders a Fix-Now button (POST) instead of
         # the default navigate-to-edit link.
-        today_iso = date.today().isoformat()
+        today_iso = local_date_str(None)
 
         # --- Members: missing individual fields (surfaced separately
         #     from the `member.missing_fields` roll-up so filters can
@@ -732,7 +738,7 @@ def make_router(db, require_admin) -> APIRouter:
             })
 
         # --- Config: no upcoming holidays in next 6 months ---
-        horizon = (date.today() + timedelta(days=180)).isoformat()
+        horizon = (date.fromisoformat(today_iso) + timedelta(days=180)).isoformat()
         upcoming_hols = await db.holidays.count_documents({"date": {"$gte": today_iso, "$lte": horizon}})
         if upcoming_hols == 0:
             findings.append({
@@ -872,7 +878,7 @@ def make_router(db, require_admin) -> APIRouter:
 
     @router.post("/admin/data-quality/fix/device.approved_for_ex_member")
     async def fix_ex_devices(admin: dict = Depends(require_admin)):
-        today_iso = date.today().isoformat()
+        today_iso = local_date_str(None)
         ex_users = await db.users.find(
             {"leaving_date": {"$nin": [None, ""], "$lt": today_iso}},
             {"_id": 0, "id": 1}

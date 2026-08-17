@@ -595,7 +595,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
 
     def _not_future(d: str) -> str:
-        if d > date.today().isoformat():
+        if d > local_date_str(None):
             raise HTTPException(status_code=400, detail="date cannot be in the future")
         return d
 
@@ -1170,7 +1170,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         if opening < 0:
             raise HTTPException(status_code=400, detail="Opening stock cannot be negative")
         as_of = _valid_date(body.opening_stock_as_of) if body.opening_stock_as_of \
-            else date.today().isoformat()
+            else local_date_str(None)
         doc = {
             "id": str(uuid.uuid4()),
             "category_key": body.category_key,
@@ -1400,7 +1400,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         as_of: Optional[str] = Query(None),
         user: dict = Depends(require_chef_or_admin),
     ):
-        as_of_iso = _valid_date(as_of) if as_of else date.today().isoformat()
+        as_of_iso = _valid_date(as_of) if as_of else local_date_str(None)
         items = await db.meal_items.find(
             {"active": True}, {"_id": 0},
         ).sort([("category_key", 1), ("sort_order", 1), ("name", 1)]).to_list(500)

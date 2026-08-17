@@ -120,7 +120,7 @@ export default function ChurnRisk() {
 
   const onExport = () => {
     if (!displayedRows.length) { toast.info("Nothing to export"); return; }
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = new Date().toLocaleDateString("sv-SE");
     downloadCsv(displayedRows, `churn_risk_${stamp}.csv`);
   };
 

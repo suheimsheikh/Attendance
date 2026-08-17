@@ -111,12 +111,16 @@ def excursion_seconds(excursions: List[dict], up_to: Optional[datetime] = None) 
             continue
         try:
             o = datetime.fromisoformat(e["out_at"])
+            if o.tzinfo is None:
+                o = o.replace(tzinfo=timezone.utc)
         except Exception:
             continue
         end = None
         if e.get("in_at"):
             try:
                 end = datetime.fromisoformat(e["in_at"])
+                if end.tzinfo is None:
+                    end = end.replace(tzinfo=timezone.utc)
             except Exception:
                 end = None
         elif up_to is not None:

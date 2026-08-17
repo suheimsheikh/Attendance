@@ -968,9 +968,11 @@ async def list_members(user: dict = Depends(get_current_user)):
     """
     users = await db.users.find({}, {"_id": 0, "hashed_password": 0}).sort("full_name", 1).to_list(2000)
 
-    # Bulk: latest check-in per user.
+    # Bulk: latest check-in date per user. $sort+$first rides the existing
+    # {user_id:1, date:-1} index (DISTINCT_SCAN) — O(#users), not O(#rows).
     last_seen_rows = await db.attendance.aggregate([
-        {"$group": {"_id": "$user_id", "last": {"$max": "$check_in_at"}}},
+        {"$sort": {"user_id": 1, "date": -1}},
+        {"$group": {"_id": "$user_id", "last": {"$first": "$date"}}},
     ]).to_list(5000)
     last_seen_map = {r["_id"]: r["last"] for r in last_seen_rows if r.get("last")}
 
@@ -978,17 +980,25 @@ async def list_members(user: dict = Depends(get_current_user)):
     office = await db.config.find_one({"id": "office"})
     today = local_date_str(office)
     year = today[:4]
+    # Mirrors /leave-balances: prefer the explicit paid_leave_used stamp
+    # (covers half-days & comp-off-funded leaves); legacy rows fall back
+    # to the whole inclusive window. Overlap query matches too.
     leaves_ytd = await db.leaves.find({
         "status": "approved", "type": "leave",
-        "start_date": {"$gte": f"{year}-01-01", "$lte": f"{year}-12-31"},
-    }, {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1}).to_list(20000)
+        "start_date": {"$lte": f"{year}-12-31"},
+        "end_date": {"$gte": f"{year}-01-01"},
+    }, {"_id": 0, "user_id": 1, "start_date": 1, "end_date": 1,
+        "paid_leave_used": 1}).to_list(20000)
     ytd_map: dict = {}
     for leave in leaves_ytd:
-        try:
-            n = (date.fromisoformat(leave["end_date"]) - date.fromisoformat(leave["start_date"])).days + 1
-        except Exception:
-            n = 1
-        ytd_map[leave["user_id"]] = ytd_map.get(leave["user_id"], 0) + n
+        if leave.get("paid_leave_used") is not None:
+            n = float(leave["paid_leave_used"])
+        else:
+            try:
+                n = (date.fromisoformat(leave["end_date"]) - date.fromisoformat(leave["start_date"])).days + 1
+            except Exception:
+                n = 1
+        ytd_map[leave["user_id"]] = ytd_map.get(leave["user_id"], 0.0) + n
 
     out: List[UserPublic] = []
     for u in users:
@@ -3861,10 +3871,13 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         in_progress_today = 1 if (
             end_is_today and today_iso not in accounted_dates
         ) else 0
-        days_off = unworked_weekly_offs + in_progress_today
         off_dates = set(weekly_off_dates)
         if in_progress_today:
             off_dates.add(today_iso)
+        # len(set) — today can be BOTH the in-progress day and an unworked
+        # weekly off (e.g. running the report on a Monday); the set dedupes
+        # so days_off always equals len(dates_off).
+        days_off = len(off_dates)
         days_absent = max(0, span_days - days_accounted - days_off)
         # Absent-date set: enumerate the span and exclude accounted + off.
         # Used by the drill-down tooltip so admins can see WHICH specific

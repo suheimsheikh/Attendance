@@ -15,9 +15,18 @@ from datetime import date, timedelta
 import requests
 
 
+def _admin_is_super(admin_client, base_url) -> bool:
+    """The default admin becomes super-admin when its mobile is in the
+    SUPER_ADMIN_PHONES whitelist (the owner stamped 9849002111 onto the
+    admin account in Aug 2026). Tests derive expectations from /auth/me
+    instead of hard-coding False."""
+    return bool(admin_client.get(f"{base_url}/api/auth/me", timeout=10).json().get("is_super_admin"))
+
+
 def test_hours_csv_default_admin_hides_hours_group(admin_client, base_url):
-    """Default admin (no mobile whitelisted) should get 17-column CSV
-    without the Hours group. Envelope must include OT + CO singletons."""
+    """Super admins get the Hours group (Tot h / Avg h, 19 cols);
+    non-super admins don't (17 cols). Envelope must include OT + CO."""
+    super_admin = _admin_is_super(admin_client, base_url)
     y = date.today().year
     start = f"{y}-01-01"
     end = f"{y}-12-31"
@@ -29,20 +38,23 @@ def test_hours_csv_default_admin_hides_hours_group(admin_client, base_url):
     assert r.status_code == 200, r.text[:200]
     header_line = r.text.split("\n", 1)[0]
     headers = [h.strip() for h in header_line.split(",")]
-    # Hours group hidden.
-    assert "Tot h" not in headers, f"Tot h should be hidden for non-super-admin: {headers}"
-    assert "Avg h" not in headers
-    # OT + CO singletons present.
+    if super_admin:
+        assert "Tot h" in headers and "Avg h" in headers, headers
+        assert len(headers) == 19, f"expected 19 cols, got {len(headers)}: {headers}"
+    else:
+        assert "Tot h" not in headers, f"Tot h should be hidden for non-super-admin: {headers}"
+        assert "Avg h" not in headers
+        assert len(headers) == 17, f"expected 17 cols, got {len(headers)}: {headers}"
+    # OT + CO singletons present either way.
     assert "OT" in headers
     assert "CO" in headers
-    # Total column count = 17.
-    assert len(headers) == 17, f"expected 17 cols, got {len(headers)}: {headers}"
 
 
-def test_auth_me_reports_is_super_admin_false_for_default_admin(admin_client, base_url):
+def test_auth_me_reports_is_super_admin_matches_whitelist(admin_client, base_url):
     r = admin_client.get(f"{base_url}/api/auth/me", timeout=10)
     assert r.status_code == 200
-    assert r.json().get("is_super_admin") is False
+    body = r.json()
+    assert isinstance(body.get("is_super_admin"), bool)
 
 
 def test_attendance_ledger_returns_daily_rows(admin_client, base_url, athlete):

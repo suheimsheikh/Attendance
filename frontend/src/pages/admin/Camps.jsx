@@ -14,7 +14,7 @@ const WEEKDAYS = [
   { key: "sun", label: "Sun" },
 ];
 
-const TODAY_ISO = new Date().toISOString().slice(0, 10);
+const TODAY_ISO = new Date().toLocaleDateString("sv-SE");
 
 export default function Camps() {
   const [rows, setRows] = useState([]);

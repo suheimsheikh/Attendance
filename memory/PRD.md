@@ -14,6 +14,32 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 17 Aug 2026 (perf + code review sweep)
+- **Code review (read-only agent) + fixes, full suite now 665 passed / 0 failed:**
+  - IST off-by-one: all backend `date.today()` "today" gates now use office-local
+    (Asia/Kolkata) date via `local_date_str` — meals.py (_not_future, item as_of,
+    stock as_of), corrections.py (window + future gates), holidays.py (year, buckets,
+    absent-YTD, comp-off accrual), data_quality.py (dob/stale/horizon/ex-device).
+    Previously blocked meal saves + shifted gates between 00:00–05:30 IST.
+  - Members list leave_balance_remaining now mirrors /leave-balances (prefers
+    paid_leave_used stamp → half-days/comp-off-funded leaves counted right; overlap
+    query). Verified 42/42 members agree with Leave Balances page.
+  - days_off double-count fix (server.py hours report): running the report on a
+    member's weekly-off day counted today twice (unworked WO + in-progress). Now
+    days_off = len(dates_off) set.
+  - Naive-vs-aware datetime crashes fixed (legacy rows without tz offset): muster
+    bulk checkout (500), data-quality stale-session scan (500), excursion_seconds,
+    stale-photo check — naive stamps now assumed UTC.
+  - Perf: /api/members last-seen aggregation rewritten to $sort+$group-$first riding
+    the {user_id:1,date:-1} index (DISTINCT_SCAN, O(#users) vs full collection scan).
+  - Frontend "today" standardized to local `toLocaleDateString("sv-SE")` in Camps,
+    Institutions, ChurnRisk (were UTC toISOString — off-by-one before 05:30 IST).
+  - Stale tests updated: LF cell code allowed (iter24), super-admin expectations
+    derived dynamically (admin account now carries mobile 9849002111 → is super),
+    reason-bank cleanup includes early-out smoke reason.
+- NOTE (known, unfixed by design): purchases entered via legacy bulk-upload
+  `amounts` map (no lines) are invisible to Stock-on-hand math.
+
 ### 17 Aug 2026 (Pantry Stock session)
 - **Renamed "Meals Report" → "Pantry Stock"** everywhere (sidebar Layout.jsx, App.js, page header).
   Deduped: admins now see it only under ADMIN section (filtered out of Coaches nav).
