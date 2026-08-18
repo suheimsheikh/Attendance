@@ -10,6 +10,7 @@ import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import MusterRow from "./muster/MusterRow";
 import { MusterScopeChips, MusterInstitutionChips } from "./muster/MusterFilters";
 import MusterBreakdownBar from "./muster/MusterBreakdownBar";
+import AbsentShareBanner from "./muster/AbsentShareBanner";
 import ExMemberToggle, { useExMemberToggle } from "../components/ExMemberToggle";
 import { isExMember } from "../utils/exMember";
 
@@ -339,6 +340,8 @@ export default function Muster() {
       </header>
 
       <GeoPermissionBanner state={geoPerm} />
+
+      <AbsentShareBanner />
 
       {/* Mode toggle */}
       <div className="grid grid-cols-2 gap-2 mb-4">

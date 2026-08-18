@@ -186,6 +186,11 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Roles.jsx duplicate title props removed; shareWhatsApp caption time now Asia/Kolkata; MealMastersTab dropOn reorder 404 → toast + refetch.
 - A full DB backup exists at /tmp/backup.tar.gz (18 Aug snapshot, 142 users) — used once for recovery during testing.
 
+## Absent-list WhatsApp share (18 Jun 2026 fork)
+- `GET /api/muster/absent-report` — "Absent without information" for today: active athletes + coaches with no attendance row and no approved leave/tour; ex-members excluded. Returns ready flag (office default_work_start + parent_notify_grace_minutes, currently 09:30+5m).
+- Muster page banner (`pages/muster/AbsentShareBanner.jsx`) appears once past ready time when absentees exist; one-tap "Share to WhatsApp" composes the bulleted list (athletes + coaches sections, counts, office name) via existing Web Share util.
+- User explicitly wants FULL automation later (option b: unofficial gateway like Green API, or c: Twilio per-parent SMS) — semi-automatic chosen for now.
+
 ## Notes for agents
 - Print PDFs: portal print region to document.body, body class + print CSS in index.css.
 - Test users: emails ending .local are rejected by email-validator; use @meals.example.com.

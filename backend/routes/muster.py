@@ -29,13 +29,13 @@ always limited to athlete-like categories regardless of `scope`.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from services.time_utils import now_utc, local_date_str
+from services.time_utils import now_utc, local_date_str, local_now
 from services.attendance_calc import compute_late, excursion_seconds
 from services.permissions import is_ex_member
 from services.photo import member_photo_url
@@ -214,6 +214,61 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
 
         out.sort(key=lambda x: (x["full_name"] or "").lower())
         return {"mode": mode, "date": today, "athletes": out, "count": len(out)}
+
+    @router.get("/muster/absent-report")
+    async def muster_absent_report(user: dict = Depends(get_current_user)):
+        """'Absent without information' list for today — active athletes and
+        coaches with no attendance row today and no approved leave/tour.
+        Becomes `ready` at reporting time + parent_notify_grace_minutes so
+        the frontend can surface a one-tap WhatsApp share banner."""
+        _require_muster(user)
+        office = await db.config.find_one({"id": "office"}) or {}
+        today = local_date_str(office)
+        athlete_keys = await _athlete_like_keys()
+        cats = list({*athlete_keys, "coach"})
+        members = await db.users.find(
+            {"active": {"$ne": False}, "category": {"$in": cats}},
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1},
+        ).to_list(2000)
+        members = [m for m in members if not is_ex_member(m, today)]
+        present_ids = set(await db.attendance.distinct("user_id", {"date": today}))
+        on_leave_ids = set(await db.leaves.distinct("user_id", {
+            "status": "approved", "type": {"$in": ["leave", "tour"]},
+            "start_date": {"$lte": today}, "end_date": {"$gte": today},
+        }))
+        absent_athletes: List[str] = []
+        absent_coaches: List[str] = []
+        total_athletes = total_coaches = 0
+        for m in members:
+            is_coach = m.get("category") == "coach"
+            if is_coach:
+                total_coaches += 1
+            else:
+                total_athletes += 1
+            if m["id"] in present_ids or m["id"] in on_leave_ids:
+                continue
+            (absent_coaches if is_coach else absent_athletes).append(m["full_name"])
+        absent_athletes.sort(key=str.lower)
+        absent_coaches.sort(key=str.lower)
+        ws = office.get("default_work_start") or "09:00"
+        grace = int(office.get("parent_notify_grace_minutes") or 5)
+        try:
+            h, mi = (int(x) for x in ws.split(":")[:2])
+        except Exception:
+            h, mi = 9, 0
+        ln = local_now(office)
+        ready_at = ln.replace(hour=h, minute=mi, second=0, microsecond=0) + timedelta(minutes=grace)
+        return {
+            "date": today,
+            "office_name": (office.get("name") or "").strip(),
+            "reporting_time": ws,
+            "ready_at_hm": ready_at.strftime("%H:%M"),
+            "ready": ln >= ready_at,
+            "athletes": absent_athletes,
+            "coaches": absent_coaches,
+            "total_athletes": total_athletes,
+            "total_coaches": total_coaches,
+        }
 
     @router.post("/muster/checkin-bulk")
     async def muster_checkin_bulk(body: MusterBulkIn, user: dict = Depends(get_current_user)):
