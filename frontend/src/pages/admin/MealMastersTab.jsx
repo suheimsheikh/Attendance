@@ -155,9 +155,9 @@ function AddItemForm({ catKey, units, onDone, onCancel }) {
 }
 
 // Shared column widths so the sticky header, category rows and item rows
-// all line up in a single grid — 6 numeric columns on the right.
-// Unit(w-14) Opening(w-24) Min(w-20) Purch(w-32) Issue(w-32) Close(w-32).
-const COL_GRID = "grid grid-cols-[3.5rem_6rem_5rem_8rem_8rem_8rem] gap-x-4 shrink-0";
+// all line up in a single grid — 7 numeric columns on the right.
+// Unit(w-14) Opening(w-24) Min(w-20) Norm(w-20) Purch(w-32) Issue(w-32) Close(w-32).
+const COL_GRID = "grid grid-cols-[3.5rem_6rem_5rem_5rem_8rem_8rem_8rem] gap-x-4 shrink-0";
 
 function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd }) {
   const [renaming, setRenaming] = useState(false);
@@ -263,6 +263,19 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
             />
           ) : (
             <span className="text-right text-slate-500">{fmt(item.min_stock || 0)}</span>
+          )}
+          {/* Norm per serving (editable qty) — expected quantity of THIS
+              item consumed per meal serving. Used by the Cross-check tab
+              to compare expected vs actual issues. 0 = untracked. */}
+          {isAdmin ? (
+            <InlineNum
+              value={item.norm_per_serving || 0}
+              onSave={(n) => onPatch(item.id, { norm_per_serving: n })}
+              testid={`masters-item-norm-${item.id}`}
+              hint="Click to edit norm per serving (expected qty per meal — used by Cross-check)"
+            />
+          ) : (
+            <span className="text-right text-slate-500">{fmt(item.norm_per_serving || 0)}</span>
           )}
           {/* Purch qty + ₹ inline */}
           <span className="text-right whitespace-nowrap" title="Total purchases since opening date">
@@ -531,6 +544,7 @@ export default function MealMastersTab() {
               <span className="text-center">Unit</span>
               <span className="text-right" title="Opening stock — click any item's value to edit">Opening</span>
               <span className="text-right" title="Low-stock alert level — click any item's value to edit">Min</span>
+              <span className="text-right" title="Norm per serving — expected qty per meal (used by Cross-check). Click any item's value to edit">Norm</span>
               <span className="text-right text-emerald-600">Purch <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
               <span className="text-right text-amber-600">Issue <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
               <span className="text-right text-slate-700">Close <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
@@ -548,6 +562,7 @@ export default function MealMastersTab() {
             <span className={`${COL_GRID} text-[11px] tabular-nums items-center`}>
               <span/>
               <span className="text-right font-bold text-amber-900" title="Sum of opening stock value across ALL categories">{fmtRs(grandTotals.opening_value)}</span>
+              <span/>
               <span/>
               <span className="text-right font-bold text-amber-900" title="Sum of total purchase amounts across ALL categories">{fmtRs(grandTotals.purchased_amount)}</span>
               <span className="text-right font-bold text-amber-900" title="Sum of total issue values across ALL categories">{fmtRs(grandTotals.issued_value)}</span>
@@ -605,9 +620,11 @@ export default function MealMastersTab() {
                   <span className="text-[10px] font-bold uppercase text-rose-700 bg-rose-100 px-1.5 h-4 rounded inline-flex items-center">inactive</span>
                 )}
                 <span className={`ml-auto ${COL_GRID} text-[11px] tabular-nums items-center`} data-testid={`masters-cat-totals-${cat.key}`}>
-                  {/* Unit + Min columns don't apply at the category level (mixed units) — kept empty so the grid lines stay aligned with items. */}
+                  {/* Unit / Min / Norm columns don't apply at the category level
+                      (mixed units) — kept empty so the grid lines stay aligned with items. */}
                   <span/>
                   <span className="text-right font-bold text-slate-700" title="Sum of opening stock value across items in this category">{fmtRs(totals.opening_value)}</span>
+                  <span/>
                   <span/>
                   <span className="text-right font-bold text-emerald-700" title="Sum of total purchase amounts across items in this category">{fmtRs(totals.purchased_amount)}</span>
                   <span className="text-right font-bold text-amber-700" title="Sum of total issue values across items in this category">{fmtRs(totals.issued_value)}</span>
