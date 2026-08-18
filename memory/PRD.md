@@ -302,6 +302,11 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - FIX MEDIUM — DB restore self-preservation (`admin_tools.py`): user re-attach changed `$setOnInsert` → `$set` so a backup containing an older copy of the acting admin can no longer revert their role/state after a replace restore.
 - Known cosmetic (NOT fixed, verified fine in testing): hardcoded sticky offsets top-[104px]/top-[216px] in Meals tabs vs page header ~111-132px; MealCrossCheckTab sticky treatment still pending.
 
+## Grid / Approvals / Leave-form tweaks (June 2026 fork — round 3, screenshot-verified)
+- Approvals "When" column now prefixes day-of-week (new `dayOfWeek()` in utils.js) for leaves, check-ins and corrections — weekend leave requests jump out at the approver.
+- Leave application form (self + on-behalf): static note that Sat/Sun leave is mostly not allowed and likely rejected into LOP, plus dynamic amber `weekend-leave-notice` counting Sat/Sun days in the picked range (type=leave only; tours/postings exempt).
+- Calendar Grid zebra rows changed bg-slate-100/40 → opaque bg-slate-50 (removed ghost outlines under sticky totals; user later said outline was unimportant, change kept as it's visually identical).
+
 ## Notes for agents
 - Print PDFs: portal print region to document.body, body class + print CSS in index.css.
 - Test users: emails ending .local are rejected by email-validator; use @meals.example.com.

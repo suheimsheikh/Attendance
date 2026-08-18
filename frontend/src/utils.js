@@ -65,6 +65,21 @@ export function formatDate(d) {
 }
 
 /**
+ * Short weekday name ("Mon", "Sat"…) for a date. Same parsing rules as
+ * `formatDate`: pure `YYYY-MM-DD` strings parse as local midnight, full
+ * ISO timestamps render in IST.
+ */
+export function dayOfWeek(d) {
+  if (!d) return "";
+  try {
+    if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      return new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" });
+    }
+    return new Date(d).toLocaleDateString("en-GB", { weekday: "short", timeZone: OFFICE_TZ });
+  } catch { return ""; }
+}
+
+/**
  * Compact `dd/mm/yy` — same as `formatDate` since we standardised on
  * 2-digit year (9 Feb 2026). Kept as a distinct export so any code
  * expecting the "shortest possible" flavour stays wired up.

@@ -254,6 +254,26 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
     }
   }, [start, end, halfDay, type]);
 
+  // Weekend guard (Jun 2026 user request): count Sat/Sun days inside the
+  // requested Leave window so the form can warn — at the point of
+  // application — that weekend leave is mostly not allowed and likely to
+  // be rejected into LOP. Tours/postings/late-coming are duty-adjacent
+  // and exempt.
+  const weekendDays = useMemo(() => {
+    if (type !== "leave") return 0;
+    try {
+      const s = new Date(start + "T00:00:00");
+      const e = new Date(((halfDay ? start : end) < start ? start : (halfDay ? start : end)) + "T00:00:00");
+      if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return 0;
+      let n = 0;
+      for (let d = new Date(s), i = 0; d <= e && i < 370; d.setDate(d.getDate() + 1), i++) {
+        const dow = d.getDay();
+        if (dow === 0 || dow === 6) n++;
+      }
+      return n;
+    } catch { return 0; }
+  }, [type, start, end, halfDay]);
+
   // R3 — calendar days between today and `start`. Negative when start is
   // in the past (a late application). Used to gate the Submit button on
   // the member-side path when type=leave & notice_days > 0.
@@ -455,7 +475,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
               )}
             </div>
             {type === "leave" && (
-              <p className="text-[11px] text-slate-500 mt-1.5">Days are deducted from your Comp-Off balance first, then your Paid Leave. Anything left is treated as Loss of Pay.</p>
+              <p className="text-[11px] text-slate-500 mt-1.5">Days are deducted from your Comp-Off balance first, then your Paid Leave. Anything left is treated as Loss of Pay. <span className="text-amber-700 font-semibold">Leave on Saturdays &amp; Sundays is mostly not allowed and is likely to be rejected into LOP.</span></p>
             )}
             {type === "leave" && (
               <HalfDayPicker
@@ -517,6 +537,16 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
               <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" />
               <div className="text-xs text-red-700">
                 <strong>Late application.</strong> Start date is in the past — this will be flagged for the admin to review.
+              </div>
+            </div>
+          )}
+          {weekendDays > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 flex items-start gap-2" data-testid="weekend-leave-notice">
+              <AlertTriangle size={14} className="text-amber-700 mt-0.5 shrink-0" />
+              <div className="text-xs text-amber-900 leading-snug">
+                <strong>Your dates include {weekendDays} Saturday/Sunday day{weekendDays === 1 ? "" : "s"}.</strong>{" "}
+                Leave on Sat &amp; Sun (training days) is mostly not allowed and is likely to be
+                rejected or converted to <strong>Loss of Pay (LOP)</strong>.
               </div>
             </div>
           )}

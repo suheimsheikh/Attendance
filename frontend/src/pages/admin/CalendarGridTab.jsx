@@ -298,7 +298,12 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 <tr><td colSpan={2 + days.length + 7} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
               )}
               {displayedRows.map((r, i) => {
-                const rowBg = i % 2 === 1 ? "bg-slate-100/40" : "bg-white";
+                // Opaque zebra bg (NOT the translucent slate-100/40) — the
+                // serial / name / totals cells are position:sticky and float
+                // OVER the day columns while scrolling; a translucent bg let
+                // the underlying day-cell borders bleed through, drawing
+                // ghost outlines below the AB/P/LV totals headers.
+                const rowBg = i % 2 === 1 ? "bg-slate-50" : "bg-white";
                 const isDouble = rowsMode === "double";
                 const openAttn = () => setAttnLedger({
                   member_id: r.member_id,

@@ -17,7 +17,7 @@ import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw, Check, X, Plane, LogIn, PencilRuler, Plus, Coffee, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
-import { formatDate, formatTime } from "../../utils";
+import { formatDate, formatTime, dayOfWeek } from "../../utils";
 import { ApplyForm } from "../MyLeaves";
 import { BreakForm } from "./Calendar";
 import LeaveContextPanel from "./LeaveContextPanel";
@@ -60,7 +60,9 @@ function normLeave(row) {
     id: row.id,
     member_name: row.member_name || row.user_name || "—",
     submitted_at: row.created_at || row.applied_at || row.start_date,
-    when: `${formatDate(row.start_date)}${row.end_date && row.end_date !== row.start_date ? ` → ${formatDate(row.end_date)}` : ""}`,
+    // Include the weekday so weekend (Sat/Sun) leave requests jump out
+    // at the approver — user request, Jun 2026.
+    when: `${dayOfWeek(row.start_date)} ${formatDate(row.start_date)}${row.end_date && row.end_date !== row.start_date ? ` → ${dayOfWeek(row.end_date)} ${formatDate(row.end_date)}` : ""}`,
     details: [
       (row.type || "leave").toUpperCase(),
       days ? `${days}d` : null,
@@ -89,7 +91,7 @@ function normCheckin(row) {
     id: row.id,
     member_name: row.user_name || row.member_name || "—",
     submitted_at: row.requested_at || row.check_in_at,
-    when: `${formatDate(row.date)} · ${formatTime(row.check_in_at)}`,
+    when: `${dayOfWeek(row.date)} ${formatDate(row.date)} · ${formatTime(row.check_in_at)}`,
     details: [
       row.method ? row.method.toUpperCase() : null,
       row.geofence_status || (row.distance_m ? `${Math.round(row.distance_m)}m from site` : null),
@@ -110,7 +112,7 @@ function normCorrection(row) {
     id: row.id,
     member_name: row.requester_name || "—",
     submitted_at: row.requested_at,
-    when: formatDate(row.target_date),
+    when: `${dayOfWeek(row.target_date)} ${formatDate(row.target_date)}`,
     details: [
       (row.kind || "").replace(/_/g, " "),
       row.filed_by_admin_name ? `filed by ${row.filed_by_admin_name}` : null,
