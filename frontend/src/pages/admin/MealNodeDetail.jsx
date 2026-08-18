@@ -61,9 +61,9 @@ function RangePicker({ start, end, setStart, setEnd }) {
   );
 }
 
-function Chip({ label, value, tone = "slate" }) {
+function Chip({ label, value }) {
   return (
-    <div className={`rounded-xl border border-${tone}-200 bg-${tone}-50/60 px-3 py-2`}>
+    <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2">
       <p className="text-[10px] uppercase font-bold text-slate-500">{label}</p>
       <p className="text-sm font-extrabold text-slate-900 tabular-nums">{value}</p>
     </div>

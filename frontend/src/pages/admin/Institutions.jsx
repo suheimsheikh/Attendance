@@ -82,7 +82,6 @@ export default function Institutions() {
                 title="Manage the escorts (parents/guardians) linked to this institution"
                 className="iu-btn-secondary !h-9 !px-2.5 !text-xs"
                 data-testid={`inst-escorts-${r.id}`}
-                title="Manage escorts"
               >
                 <UserCheck size={14}/> Escorts
               </button>

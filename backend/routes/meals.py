@@ -1448,13 +1448,13 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
         purch_docs = await db.meal_purchases.find(
             {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
-        ).to_list(2000)
+        ).to_list(5000)
         iss_docs = await db.meal_issues.find(
             {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
-        ).to_list(2000)
+        ).to_list(5000)
         wast_docs = await db.meal_wastage.find(
             {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
-        ).to_list(2000)
+        ).to_list(5000)
 
         item_opening_as_of = {i["id"]: i.get("opening_stock_as_of") or "1970-01-01"
                               for i in items}

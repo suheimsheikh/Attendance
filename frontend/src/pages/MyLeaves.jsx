@@ -56,9 +56,8 @@ export default function MyLeaves() {
             type="button"
             data-testid="myleaves-request-correction"
             onClick={() => setCorrectionOpen(true)}
-            title="Ask an admin to fix a wrong or missing leave record"
-            className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2"
             title="Report a mistake on one of your existing leaves (wrong dates, wrong type, or shouldn't have run)"
+            className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2"
           >
             Request a correction
           </button>

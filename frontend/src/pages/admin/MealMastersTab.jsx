@@ -319,7 +319,9 @@ export default function MealMastersTab() {
   // ---- drag-and-drop reorder within a category ----
   const dropOn = async (catKey, targetId) => {
     if (!drag || drag.catKey !== catKey || drag.itemId === targetId) { setDrag(null); return; }
-    const list = (itemsByCat.get(catKey) || []).map((i) => i.id);
+    // Reorder against the FULL category list (not the filtered view) so
+    // hidden items (inactive / not-low) keep their relative slots.
+    const list = items.filter((i) => i.category_key === catKey).map((i) => i.id);
     const from = list.indexOf(drag.itemId);
     const to = list.indexOf(targetId);
     if (from < 0 || to < 0) { setDrag(null); return; }

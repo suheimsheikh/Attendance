@@ -14,6 +14,16 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 18 Aug 2026 (code review #2 + fixes)
+- Fixed drag-reorder while a filter is on: dropOn now reorders against the FULL
+  category list (items state) so hidden (inactive / not-low) items keep slots.
+- Removed 3 duplicate title props from hint sweep (MyLeaves, Meals copy-yesterday,
+  Institutions escorts) — kept the more specific hint on each.
+- _stock_snapshot to_list caps raised 2000 → 5000; MealNodeDetail Chip uses static
+  slate classes (JIT-safe). All 37 pantry pytest cases pass; UI drag verified.
+- Reviewer note (deferred, product call): consumption-check "servings" = count of
+  ALL meal_records that day (every member × meal tick). Norm is per meal-tick.
+
 ### 18 Aug 2026 (Cross-check + Reorder Suggestions)
 - Consumption Cross-Check: new "Cross-check" tab (MealCrossCheckTab.jsx) — compares
   issued qty vs meal servings × per-item norms, flags OVER/UNDER per day-item.

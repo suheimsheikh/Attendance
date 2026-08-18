@@ -307,7 +307,6 @@ export default function Meals() {
           data-testid="meals-copy-yesterday"
           onClick={copyFromYesterday}
           disabled={copying || saving}
-          title="Pre-tick the same people who had this meal yesterday"
           className="iu-btn-secondary !h-9 !px-3 text-xs"
           title={`Copy ${activeMealDef.label} marks from yesterday to ${dateStr}`}
         >
