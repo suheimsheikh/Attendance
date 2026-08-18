@@ -29,6 +29,22 @@ from services.time_utils import (
 
 logger = logging.getLogger(__name__)
 
+# Collections included in the full backup / restore. Keep this list in sync
+# whenever a new persistent collection is introduced. `login_attempts` is
+# intentionally omitted (ephemeral brute-force tracking that shouldn't cross
+# environments).
+BACKUP_COLLECTIONS = [
+    "users", "institutions", "config", "attendance", "leaves",
+    "devices", "parent_notifications", "camps", "regattas",
+    "guests", "daily_content", "sms_log", "breaks", "fleets",
+    "sites", "roles", "categories", "holidays",
+    "escorts", "escort_attendance", "corrections", "audit_log",
+    # Pantry / meals — added 02/2026 after prod->preview restore dropped
+    # the pantry masters and every purchase/issue/wastage row.
+    "meal_items", "meal_purchases", "meal_issues", "meal_wastage",
+    "meal_records",
+]
+
 
 def make_router(db, require_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
@@ -59,11 +75,7 @@ def make_router(db, require_admin) -> APIRouter:
         buf = io.BytesIO()
         tf = tarfile.open(fileobj=buf, mode="w:gz")
 
-        collections = [
-            "users", "institutions", "config", "attendance", "leaves",
-            "devices", "parent_notifications", "camps", "regattas",
-            "guests", "daily_content", "sms_log", "breaks", "fleets",
-        ]
+        collections = BACKUP_COLLECTIONS
         manifest = {
             "created_at": datetime.now(timezone.utc).isoformat(),
             "kind": "ych-full",
@@ -136,11 +148,7 @@ def make_router(db, require_admin) -> APIRouter:
             raise HTTPException(status_code=400, detail=f"Could not open archive: {e}")
 
         counts: dict = {}
-        collections = [
-            "users", "institutions", "config", "attendance", "leaves",
-            "devices", "parent_notifications", "camps", "regattas",
-            "guests", "daily_content", "sms_log", "breaks", "fleets",
-        ]
+        collections = BACKUP_COLLECTIONS
         from pymongo import InsertOne
         BATCH = 500
         for tname in collections:

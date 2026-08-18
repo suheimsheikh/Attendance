@@ -15,6 +15,7 @@ import HelpChat from "./HelpChat";
 import { api } from "../api";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { useEscape } from "../hooks/useEscape";
 import { useQueryClient } from "@tanstack/react-query";
 
 /** Map: route path → [reactQueryKey to prefetch, api-path, params].
@@ -110,6 +111,7 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
+  useEscape(open ? () => setOpen(false) : null);
   const isAdmin = user?.role === "admin";
   const isChef = user?.role === "chef";
   const canMuster = isAdmin || user?.category === "coach" || isChef;

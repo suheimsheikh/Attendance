@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import Avatar from "../components/Avatar";
 import SelfieCapture from "../components/SelfieCapture";
 import { fileToResizedDataUrl } from "../utils";
+import { useEscape } from "../hooks/useEscape";
 
 /**
  * EscortCheckIn — kiosk-style page used by both escorts themselves
@@ -449,6 +450,7 @@ function SelfieThumbnail({ attId, kind, localDataUrl, hasOnServer, label, testId
   const [fetched, setFetched] = useState("");
   const [loading, setLoading] = useState(false);
   const [zoom, setZoom] = useState(false);
+  useEscape(zoom ? () => setZoom(false) : null);
 
   useEffect(() => {
     let cancelled = false;

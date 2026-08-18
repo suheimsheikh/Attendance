@@ -9,6 +9,7 @@
  */
 import React, { useState } from "react";
 import { AlertTriangle, MapPin, X } from "lucide-react";
+import { useEscape } from "../hooks/useEscape";
 
 const QUICK_REASONS = [
   "At an unlisted training venue",
@@ -28,6 +29,7 @@ export default function OutOfGeofenceModal({
   title = "You're outside every training location",
 }) {
   const [reason, setReason] = useState("");
+  useEscape(open && !submitting ? onClose : null);
   if (!open) return null;
 
   const canSubmit = reason.trim().length >= 3 && !submitting;

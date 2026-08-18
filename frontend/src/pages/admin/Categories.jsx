@@ -13,6 +13,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Loader2, Plus, Pencil, Trash2, X, ShieldCheck, Palette } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
+import { useEscape } from "../../hooks/useEscape";
 
 const COLORS = [
   { key: "sky",     tw: "bg-sky-500" },
@@ -42,6 +43,7 @@ function CategoryForm({ initial, onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  useEscape(saving ? null : onClose);
 
   const save = async (e) => {
     e.preventDefault();
@@ -256,9 +258,8 @@ export default function Categories() {
               <button
                 type="button"
                 onClick={() => setEditing(r)}
-                title="Edit this category's name, colour and rules"
                 className="p-2 rounded-lg text-slate-500 hover:bg-slate-100"
-                title="Edit"
+                title="Edit this category's name, colour and rules"
                 data-testid={`category-edit-${r.key}`}
               >
                 <Pencil size={15} />
@@ -267,11 +268,8 @@ export default function Categories() {
                 type="button"
                 onClick={() => remove(r)}
                 disabled={r.is_seeded || r.member_count > 0}
-                title={r.is_seeded ? "Built-in categories can't be deleted" : r.member_count > 0 ? "Move its members out before deleting" : "Delete this category"}
                 className="p-2 rounded-lg text-rose-500 hover:bg-rose-50 disabled:opacity-30 disabled:cursor-not-allowed"
-                title={r.is_seeded ? "Seeded — protected"
-                       : r.member_count > 0 ? "Reassign members first"
-                       : "Delete"}
+                title={r.is_seeded ? "Built-in categories can't be deleted" : r.member_count > 0 ? "Move its members out before deleting" : "Delete this category"}
                 data-testid={`category-delete-${r.key}`}
               >
                 <Trash2 size={15} />

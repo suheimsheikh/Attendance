@@ -19,6 +19,7 @@ import React, { useEffect, useState } from "react";
 import { Loader2, Plus, Pencil, Trash2, X, Lock, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
+import { useEscape } from "../../hooks/useEscape";
 
 // Keys of the 3 seeded system roles — mirrors SEEDED_ROLE_KEYS in
 // backend/routes/roles.py. Cannot be renamed or deleted because the
@@ -36,6 +37,7 @@ function RoleForm({ initial, onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  useEscape(saving ? null : onClose);
 
   const save = async (e) => {
     e.preventDefault();

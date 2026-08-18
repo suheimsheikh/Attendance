@@ -20,6 +20,7 @@ import MealIssuesTab from "./MealIssuesTab";
 import MealWastageTab from "./MealWastageTab";
 import MealMastersTab from "./MealMastersTab";
 import MealCrossCheckTab from "./MealCrossCheckTab";
+import { useEscape } from "../../hooks/useEscape";
 
 const MEAL_ORDER = ["breakfast", "lunch", "snacks", "dinner"];
 const MEAL_LABELS = {
@@ -50,6 +51,7 @@ function currentMonth() {
 function DailyDetailsModal({ dateStr, meal, mealLabel, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  useEscape(onClose);
 
   useEffect(() => {
     setLoading(true);

@@ -19,6 +19,7 @@ import React from "react";
 import { X, Check, Loader2 } from "lucide-react";
 import { formatDate } from "../../utils";
 import LeaveContextPanel from "./LeaveContextPanel";
+import { useEscape } from "../../hooks/useEscape";
 
 function daysBetween(start, end) {
   try {
@@ -35,6 +36,7 @@ export default function LeaveApprovalConfirmModal({
   onConfirm,
 }) {
   const ctx = row?.context;
+  useEscape(row && ctx && !busy ? onCancel : null);
   if (!row || !ctx) return null;
 
   const days = daysBetween(ctx.start_date, ctx.end_date);

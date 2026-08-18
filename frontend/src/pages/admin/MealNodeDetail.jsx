@@ -7,6 +7,7 @@ import React, { useEffect, useState } from "react";
 import { Loader2, X, ShoppingCart, ClipboardList, Flame, AlertTriangle } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
+import { useEscape } from "../../hooks/useEscape";
 
 const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
 const rupee = (n) => (n == null ? "—" : `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`);
@@ -25,6 +26,7 @@ const TYPE_META = {
 };
 
 function Sheet({ title, subtitle, onClose, children, testid }) {
+  useEscape(onClose);
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40" onClick={onClose} data-testid={`${testid}-backdrop`}>
       <div

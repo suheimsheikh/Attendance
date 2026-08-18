@@ -99,8 +99,10 @@ export default function BackupRestore() {
             <p className="text-sm text-slate-600 mb-3">
               Saves a single <code className="text-xs bg-white px-1.5 py-0.5 rounded border">.tar.gz</code>
               containing every collection &mdash; members (with photos &amp; parent contacts), institutions,
-              office settings, devices, attendance, leaves, camps, regattas, guests, daily content, SMS log,
-              and parent notifications. Suitable for cloning the entire deployment to another environment.
+              office settings, sites, roles, categories, devices, attendance, leaves, corrections,
+              camps, regattas, guests, holidays, escorts, daily content, SMS log, parent notifications,
+              audit log, and the full pantry &mdash; masters, purchases, issues, wastage, and daily meal counts.
+              Suitable for cloning the entire deployment to another environment.
             </p>
             <button
               onClick={downloadBackup}
