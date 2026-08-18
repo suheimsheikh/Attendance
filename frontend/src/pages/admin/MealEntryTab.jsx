@@ -42,6 +42,7 @@ export default function MealEntryTab() {
   const [cats, setCats] = useState([]);
   const [items, setItems] = useState([]);
   const [stock, setStock] = useState({});      // item_id → on_hand (end of prev day)
+  const [avgRate, setAvgRate] = useState({});  // item_id → weighted-avg cost (₹ / unit)
   const [purch, setPurch] = useState({});      // item_id → { qty, rate }
   const [issues, setIssues] = useState({});    // item_id → qty
   const [saving, setSaving] = useState({ purch: false, issues: false });
@@ -88,11 +89,27 @@ export default function MealEntryTab() {
       .catch(() => setIssues({}));
 
     // On-hand at end of previous day = what the chef physically has at
-    // the start of today's cooking.
+    // the start of today's cooking (used only as a sanity check on the
+    // Issue column).
     api.get(`/meals/stock?as_of=${addDays(dateStr, -1)}`)
       .then((r) => setStock(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x.on_hand]))))
       .catch(() => setStock({}));
+    // Weighted-average purchase cost — as of TODAY so a purchase entered
+    // this morning immediately flows into the same day's issue valuation.
+    // Refetched after every purchase save (see flushPurchases below).
+    api.get(`/meals/stock?as_of=${dateStr}`)
+      .then((r) => setAvgRate(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x.avg_rate || 0]))))
+      .catch(() => setAvgRate({}));
   }, [dateStr]);
+
+  // Standalone refresher for the avg-rate map — called after a purchase
+  // save so the Issue Rate / Amount columns update without needing a
+  // full page reload.
+  const refreshAvgRate = () => {
+    api.get(`/meals/stock?as_of=${dateStr}`)
+      .then((r) => setAvgRate(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x.avg_rate || 0]))))
+      .catch(() => {});
+  };
 
   // ---------------------------------------------------------------------
   // Auto-save. Each half (purchases / issues) has its own debounce so a
@@ -121,6 +138,9 @@ export default function MealEntryTab() {
     try {
       await api.put(`/meals/purchases/${dateStr}`, { lines });
       setSavedAt(Date.now());
+      // Purchases just changed → weighted-avg rate for this day changed
+      // → issue amounts on this same screen must update.
+      refreshAvgRate();
     } catch (err) {
       showApiError(err, "Couldn't auto-save purchases");
     } finally {
@@ -176,6 +196,15 @@ export default function MealEntryTab() {
     }
     return s;
   }, [items, purch]);
+
+  // Day-wide issue value = Σ (issued_qty × item's weighted-avg cost).
+  const issueDayTotal = useMemo(() => {
+    let s = 0;
+    for (const it of items) {
+      s += num(issues[it.id]) * (avgRate[it.id] || 0);
+    }
+    return s;
+  }, [items, issues, avgRate]);
 
   const nextDate = addDays(dateStr, +1);
   const canGoForward = nextDate <= todayISO();
@@ -239,6 +268,8 @@ export default function MealEntryTab() {
                 <th className="text-right p-2 w-24 text-emerald-600">Rate ₹</th>
                 <th className="text-right p-2 w-28 text-emerald-700">Amount ₹</th>
                 <th className="text-right p-2 w-24 border-l border-slate-200 text-amber-600">Issue qty</th>
+                <th className="text-right p-2 w-24 text-amber-600" title="Weighted-average purchase cost — auto-calculated, not editable">Rate ₹</th>
+                <th className="text-right p-2 w-28 text-amber-700">Amount ₹</th>
               </tr>
             </thead>
             <tbody>
@@ -247,15 +278,17 @@ export default function MealEntryTab() {
                   {/* Category header — warm yellow band + bold uppercase
                       label. Requested Feb 2026 to visually anchor scans. */}
                   <tr className="bg-amber-100 border-y border-amber-200" data-testid={`entry-cat-header-${cat.key}`}>
-                    <td colSpan={7} className="px-2 py-1.5 text-xs font-extrabold text-amber-900 uppercase tracking-wider">
+                    <td colSpan={9} className="px-2 py-1.5 text-xs font-extrabold text-amber-900 uppercase tracking-wider">
                       {cat.label}
                     </td>
                   </tr>
                   {rows.map((it) => {
                     const e = purch[it.id] || {};
-                    const amt = num(e.qty) * num(e.rate);
+                    const purchAmt = num(e.qty) * num(e.rate);
                     const oh = stock[it.id];
                     const issueQty = issues[it.id];
+                    const rate = avgRate[it.id] || 0;
+                    const issueAmt = num(issueQty) * rate;
                     const over = oh != null && num(issueQty) > oh + 1e-6;
                     return (
                       <tr key={it.id} className={`border-t border-slate-100 hover:bg-slate-50/70 ${over ? "bg-rose-50/60" : ""}`} data-testid={`entry-row-${it.id}`}>
@@ -287,7 +320,7 @@ export default function MealEntryTab() {
                           />
                         </td>
                         <td className="p-2 text-right font-semibold tabular-nums text-emerald-700" data-testid={`entry-purch-amt-${it.id}`}>
-                          {amt > 0 ? `₹${inr(amt)}` : ""}
+                          {purchAmt > 0 ? `₹${inr(purchAmt)}` : ""}
                         </td>
                         <td className="p-2 border-l border-slate-100">
                           <input
@@ -301,6 +334,14 @@ export default function MealEntryTab() {
                             title={over ? "Issue exceeds on-hand — will drive stock negative" : ""}
                           />
                         </td>
+                        {/* Issue Rate — weighted-avg purchase cost, read-only.
+                            Chef doesn't type this; it's inherited from history. */}
+                        <td className="p-2 text-right tabular-nums text-slate-500 text-xs" data-testid={`entry-issue-rate-${it.id}`} title="Weighted-average purchase cost across all recorded purchases">
+                          {rate > 0 ? `₹${inr(rate)}` : "—"}
+                        </td>
+                        <td className="p-2 text-right font-semibold tabular-nums text-amber-700" data-testid={`entry-issue-amt-${it.id}`}>
+                          {issueAmt > 0 ? `₹${inr(issueAmt)}` : ""}
+                        </td>
                       </tr>
                     );
                   })}
@@ -313,7 +354,10 @@ export default function MealEntryTab() {
                 <td className="p-3 text-right text-lg font-extrabold tabular-nums text-emerald-700" data-testid="entry-day-total">
                   ₹{inr(dayTotal)}
                 </td>
-                <td/>
+                <td colSpan={2} className="p-3 text-right font-bold text-slate-600">Day issue total</td>
+                <td className="p-3 text-right text-lg font-extrabold tabular-nums text-amber-700" data-testid="entry-day-issue-total">
+                  ₹{inr(issueDayTotal)}
+                </td>
               </tr>
             </tfoot>
           </table>

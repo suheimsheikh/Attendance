@@ -14,6 +14,20 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 18 Aug 2026 (Masters right-align + Issue valuation)
+- **Masters**: Fixed right-alignment of grand-total & category-total ₹
+  amounts with item cells. Item row's `ml-6` outer indent was shrinking
+  the row width, so its ml-auto stat grid ended 24px short of the
+  category grid. Moved the indent to inner `pl-8` padding — right edge
+  now flush across all three row types.
+- **Daily entry**: Issue column now displays TWO computed cells:
+  Rate ₹ (weighted-average purchase cost) and Amount ₹ (issue qty × avg
+  rate). Loaded from `/meals/stock?as_of=<selected date>` so any purchase
+  entered earlier the same day feeds today's issue valuation.
+- After every purchase auto-save the avg-rate map is refetched, so the
+  issue rate/amount cells refresh live without a manual reload.
+- Table footer now shows both Day purchase total AND Day issue total.
+
 ### 18 Aug 2026 (Masters v3 + unified Daily Entry tab)
 - **Masters**: LOW-stock pill moved to the extreme-left of every item row
   (dedicated w-6 slot) — scan-and-spot restock candidates without reading

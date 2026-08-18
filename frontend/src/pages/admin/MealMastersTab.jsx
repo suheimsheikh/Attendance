@@ -165,7 +165,7 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
   const showStock = !inactive && stock;
   return (
     <div
-      className={`ml-6 rounded-lg border ${dnd.over ? "border-emerald-400 bg-emerald-50/60" : "border-transparent"} ${inactive ? "opacity-60" : ""}`}
+      className={`rounded-lg border ${dnd.over ? "border-emerald-400 bg-emerald-50/60" : "border-transparent"} ${inactive ? "opacity-60" : ""}`}
       draggable={isAdmin && !renaming}
       onDragStart={dnd.onDragStart}
       onDragOver={dnd.onDragOver}
@@ -173,7 +173,11 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
       onDragEnd={dnd.onDragEnd}
       data-testid={`masters-item-${item.id}`}
     >
-      <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-200/70 rounded-lg group">
+      {/* Indent moved from outer `ml-6` to inner `pl-8` (was `px-2`) so
+          the item row occupies the SAME width as category / grand-total
+          rows — otherwise the right-aligned stat grid ended 24px shy of
+          the category grid, breaking column alignment (Feb 2026 fix). */}
+      <div className="flex items-center gap-2 pl-8 pr-2 py-1.5 hover:bg-slate-200/70 rounded-lg group">
         {/* Extreme-left LOW pill — moved here from beside the item name so
             it's the first thing you scan and can spot restock candidates
             at a glance without reading the row. Fixed-width slot keeps the
