@@ -222,7 +222,7 @@ function EscortActionCard({ escort, att, athletes, onChange, onBack, isEscort: _
           <div className="text-xs text-slate-500 truncate">{escort.institution}</div>
         </div>
         {onBack && (
-          <button onClick={onBack} className="text-slate-400 hover:text-slate-700" data-testid="escort-back">
+          <button onClick={onBack} className="text-slate-400 hover:text-slate-700" data-testid="escort-back" title="Back to the escort list">
             <X size={18} />
           </button>
         )}
@@ -371,8 +371,8 @@ function OnCampusActions({ escort, att, athletes, openExcursion, localInSelfie, 
         </button>
       ) : (
         <div className="grid grid-cols-2 gap-2">
-          <button data-testid="escort-step-out" onClick={() => setShowStepOut(true)} className="iu-btn-secondary"><Coffee size={14}/> Step out</button>
-          <button data-testid="escort-checkout-open" onClick={() => setShowCheckOut(true)} className="iu-btn-primary"><LogOut size={14}/> Check out</button>
+          <button data-testid="escort-step-out" onClick={() => setShowStepOut(true)} title="Escort steps out briefly and will return" className="iu-btn-secondary"><Coffee size={14}/> Step out</button>
+          <button data-testid="escort-checkout-open" onClick={() => setShowCheckOut(true)} title="Escort is leaving for the day — take a photo and check out" className="iu-btn-primary"><LogOut size={14}/> Check out</button>
         </div>
       )}
 

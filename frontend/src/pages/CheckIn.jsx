@@ -185,6 +185,7 @@ export default function CheckIn() {
             data-testid="temp-return-button"
             onClick={handleTempReturn}
             disabled={working}
+            title="You're back on campus — end the temporary exit"
             className="iu-btn-primary mt-4 mx-auto"
           >
             {working ? <Loader2 className="animate-spin" size={16} /> : <ArrowLeftRight size={16} />} I&apos;m back
@@ -251,6 +252,7 @@ export default function CheckIn() {
             data-testid="gps-toggle-button"
             disabled={working}
             onClick={handleGpsToggle}
+            title="Your GPS position is checked against the campus geofence"
             className="iu-btn-primary mt-5 mx-auto"
           >
             {working ? <Loader2 className="animate-spin" size={16} /> : (action === "checkin" ? <LogIn size={16} /> : <LogOutIcon size={16} />)}
@@ -265,6 +267,7 @@ export default function CheckIn() {
             type="button"
             data-testid="capture-location-button"
             onClick={captureLocation}
+            title="Re-read your GPS position if it looks wrong"
             className="block mx-auto mt-3 text-xs font-semibold text-slate-500 underline hover:text-slate-900"
           >
             Just show my location (don&apos;t check in)
@@ -284,6 +287,7 @@ export default function CheckIn() {
           type="button"
           data-testid="checkin-request-correction"
           onClick={() => setCorrectionOpen(true)}
+          title="Ask an admin to fix a missed or wrong check-in/out"
           className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2"
         >
           Forgot to punch in earlier? Request a correction
@@ -406,7 +410,7 @@ function TempExitCard({ onCreated }) {
           <div className="font-semibold text-slate-900 text-sm">Stepping out for a bit?</div>
           <div className="text-xs text-slate-600">Log a temporary exit (lunch, errand, etc.). You remain on office hours.</div>
         </div>
-        <button data-testid="temp-exit-open" onClick={() => setOpen(true)} className="iu-btn-secondary !h-9 !px-3 shrink-0">
+        <button data-testid="temp-exit-open" onClick={() => setOpen(true)} title="Step out briefly (lunch, errand) without ending your day" className="iu-btn-secondary !h-9 !px-3 shrink-0">
           <ArrowLeftRight size={14} /> Temp exit
         </button>
       </div>

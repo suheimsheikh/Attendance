@@ -149,6 +149,7 @@ class ItemIn(BaseModel):
     unit: str
     opening_stock: float = 0.0
     opening_stock_as_of: Optional[str] = None   # ISO date; defaults to today
+    min_stock: float = 0.0                      # low-stock alert level; 0 = off
     sort_order: int = 100
 
 
@@ -158,6 +159,7 @@ class ItemPatch(BaseModel):
     unit: Optional[str] = None
     opening_stock: Optional[float] = None
     opening_stock_as_of: Optional[str] = None
+    min_stock: Optional[float] = None
     sort_order: Optional[int] = None
     active: Optional[bool] = None
 
@@ -1178,6 +1180,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         opening = float(body.opening_stock or 0)
         if opening < 0:
             raise HTTPException(status_code=400, detail="Opening stock cannot be negative")
+        if (body.min_stock or 0) < 0:
+            raise HTTPException(status_code=400, detail="Min level cannot be negative")
         as_of = _valid_date(body.opening_stock_as_of) if body.opening_stock_as_of \
             else local_date_str(None)
         doc = {
@@ -1188,6 +1192,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "unit": body.unit,
             "opening_stock": round(opening, 4),
             "opening_stock_as_of": as_of,
+            "min_stock": round(float(body.min_stock or 0), 4),
             "sort_order": int(body.sort_order),
             "active": True,
             "created_at": now_utc().isoformat(),
@@ -1233,6 +1238,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             update["opening_stock"] = round(float(body.opening_stock), 4)
         if body.opening_stock_as_of is not None:
             update["opening_stock_as_of"] = _valid_date(body.opening_stock_as_of)
+        if body.min_stock is not None:
+            if body.min_stock < 0:
+                raise HTTPException(status_code=400, detail="Min level cannot be negative")
+            update["min_stock"] = round(float(body.min_stock), 4)
         if body.sort_order is not None:
             update["sort_order"] = int(body.sort_order)
         if body.active is not None:
@@ -1466,6 +1475,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             iq = round(iss_from.get(iid, 0.0), 4)
             w = round(wast_from.get(iid, 0.0), 4)
             on_hand = round(opening + p - iq - w, 4)
+            min_s = round(float(it.get("min_stock") or 0), 4)
+            low = on_hand <= (min_s if min_s > 0 else 0.001)
             rows.append({
                 "item_id": iid,
                 "name": it.get("name"),
@@ -1478,9 +1489,134 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "issued": iq,
                 "wasted": w,
                 "on_hand": on_hand,
+                "min_stock": min_s,
+                "low": low,
             })
         return {"as_of": as_of_iso, "rows": rows,
+                "low_count": sum(1 for r in rows if r["low"]),
                 "categories": cats, "units": list(VALID_UNITS)}
+
+    def _range_or_default(start: Optional[str], end: Optional[str]) -> tuple[str, str]:
+        e = _valid_date(end) if end else local_date_str(None)
+        s = _valid_date(start) if start else \
+            (date.fromisoformat(e) - timedelta(days=29)).isoformat()
+        if s > e:
+            raise HTTPException(status_code=400, detail="start must be before end")
+        return s, e
+
+    @router.get("/meals/items/{item_id}/ledger")
+    async def item_ledger(
+        item_id: str,
+        start: Optional[str] = Query(None),
+        end: Optional[str] = Query(None),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Merged purchase/issue/wastage history for one item, newest first."""
+        item = await db.meal_items.find_one({"id": item_id}, {"_id": 0})
+        if not item:
+            raise HTTPException(status_code=404, detail="Item not found")
+        s, e = _range_or_default(start, end)
+        q = {"date": {"$gte": s, "$lte": e}, "lines.item_id": item_id}
+        proj = {"_id": 0, "date": 1, "lines": 1, "updated_by_name": 1}
+        purch = await db.meal_purchases.find(q, proj).to_list(400)
+        iss = await db.meal_issues.find(q, proj).to_list(400)
+        wast = await db.meal_wastage.find(q, proj).to_list(400)
+
+        events: list[dict] = []
+        tot = {"purchased_qty": 0.0, "purchased_amount": 0.0,
+               "issued_qty": 0.0, "wasted_qty": 0.0}
+
+        def _collect(docs, typ):
+            for doc in docs:
+                for line in doc.get("lines") or []:
+                    if line.get("item_id") != item_id:
+                        continue
+                    qty = float(line.get("qty") or 0)
+                    ev = {"date": doc["date"], "type": typ, "qty": qty,
+                          "by": doc.get("updated_by_name")}
+                    if typ == "purchase":
+                        ev["rate"] = line.get("rate")
+                        ev["amount"] = line.get("amount")
+                        tot["purchased_qty"] += qty
+                        tot["purchased_amount"] += float(line.get("amount") or 0)
+                    elif typ == "issue":
+                        tot["issued_qty"] += qty
+                    else:
+                        ev["reason"] = line.get("reason")
+                        ev["notes"] = line.get("notes")
+                        tot["wasted_qty"] += qty
+                    events.append(ev)
+
+        _collect(purch, "purchase")
+        _collect(iss, "issue")
+        _collect(wast, "wastage")
+        events.sort(key=lambda x: (x["date"], x["type"]), reverse=True)
+
+        # Current on-hand (same math as /meals/stock, single item, as of today).
+        today = local_date_str(None)
+        as_of = item.get("opening_stock_as_of") or "1970-01-01"
+        oq = {"date": {"$gte": as_of, "$lte": today}, "lines.item_id": item_id}
+
+        async def _qty_sum(coll) -> float:
+            total = 0.0
+            for doc in await coll.find(oq, {"_id": 0, "lines": 1}).to_list(2000):
+                for line in doc.get("lines") or []:
+                    if line.get("item_id") == item_id:
+                        total += float(line.get("qty") or 0)
+            return total
+
+        on_hand = round(float(item.get("opening_stock") or 0)
+                        + await _qty_sum(db.meal_purchases)
+                        - await _qty_sum(db.meal_issues)
+                        - await _qty_sum(db.meal_wastage), 4)
+        return {"item": item, "start": s, "end": e, "events": events,
+                "totals": {k: round(v, 4) for k, v in tot.items()},
+                "on_hand": on_hand}
+
+    @router.get("/meals/categories/{category_key}/summary")
+    async def category_summary(
+        category_key: str,
+        start: Optional[str] = Query(None),
+        end: Optional[str] = Query(None),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Per-item purchase/issue/wastage totals for a category in a range."""
+        cats = await _purchase_categories()
+        cat = next((c for c in cats if c["key"] == category_key), None)
+        if not cat:
+            raise HTTPException(status_code=404, detail="Category not found")
+        s, e = _range_or_default(start, end)
+        items = await db.meal_items.find(
+            {"category_key": category_key}, {"_id": 0},
+        ).sort([("sort_order", 1), ("name", 1)]).to_list(500)
+        ids = {i["id"] for i in items}
+        per = {i["id"]: {"purchased_qty": 0.0, "purchased_amount": 0.0,
+                         "issued_qty": 0.0, "wasted_qty": 0.0} for i in items}
+        rng = {"date": {"$gte": s, "$lte": e}}
+        spend = 0.0
+        for doc in await db.meal_purchases.find(
+                rng, {"_id": 0, "lines": 1, "amounts": 1}).to_list(1000):
+            spend += float((doc.get("amounts") or {}).get(category_key) or 0)
+            for line in doc.get("lines") or []:
+                iid = line.get("item_id")
+                if iid in ids:
+                    per[iid]["purchased_qty"] += float(line.get("qty") or 0)
+                    per[iid]["purchased_amount"] += float(line.get("amount") or 0)
+        for coll, key in ((db.meal_issues, "issued_qty"),
+                          (db.meal_wastage, "wasted_qty")):
+            for doc in await coll.find(rng, {"_id": 0, "lines": 1}).to_list(1000):
+                for line in doc.get("lines") or []:
+                    iid = line.get("item_id")
+                    if iid in ids:
+                        per[iid][key] += float(line.get("qty") or 0)
+        return {
+            "category": cat, "start": s, "end": e, "spend": round(spend, 2),
+            "items": [{
+                "item_id": i["id"], "name": i["name"], "unit": i["unit"],
+                "active": i.get("active", True),
+                **{k: round(v, 4) for k, v in per[i["id"]].items()},
+            } for i in items],
+        }
 
 
     @router.put("/meals/purchases/{date_str}")

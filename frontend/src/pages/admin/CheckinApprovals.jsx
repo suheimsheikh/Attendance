@@ -119,6 +119,7 @@ function DecideRow({ row, onDecide, working }) {
                   type="button"
                   onClick={() => submit("approved")}
                   disabled={working}
+                  title="Accept this out-of-campus check-in"
                   className="inline-flex items-center gap-1 px-2.5 h-8 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
                   data-testid={`checkin-approve-${row.id}`}
                 >
@@ -128,6 +129,7 @@ function DecideRow({ row, onDecide, working }) {
                   type="button"
                   onClick={() => setExpanded(true)}
                   disabled={working}
+                  title="Reject with a note explaining why"
                   className="inline-flex items-center gap-1 px-2.5 h-8 rounded-lg text-xs font-semibold bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                   data-testid={`checkin-reject-open-${row.id}`}
                 >
@@ -231,6 +233,7 @@ export default function CheckinApprovals() {
           <button
             key={t.key}
             onClick={() => setStatus(t.key)}
+            title={`Show ${t.label.toLowerCase()} check-in requests`}
             className={`px-2.5 h-7 rounded-full text-[11px] font-bold transition border ${
               status === t.key
                 ? "bg-slate-900 text-white border-transparent"
@@ -244,6 +247,7 @@ export default function CheckinApprovals() {
         <button
           onClick={load}
           disabled={loading}
+          title="Reload the queue from the server"
           className="ml-auto inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 hover:bg-slate-50"
           data-testid="checkin-approvals-refresh"
         >
@@ -256,6 +260,7 @@ export default function CheckinApprovals() {
           <button
             onClick={approveAll}
             disabled={working || loading}
+            title="Approve every pending check-in request in one click"
             className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-[11px] font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
             data-testid="checkin-approvals-approve-all"
             title={`Approve all ${rows.length} pending check-ins`}

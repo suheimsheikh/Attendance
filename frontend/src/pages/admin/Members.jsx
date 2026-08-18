@@ -377,7 +377,7 @@ export default function Members() {
           >
             <FileSpreadsheet size={16}/> Import parents
           </Link>
-          <button data-testid="new-member-button" onClick={() => setEditing("new")} className="iu-btn-primary"><Plus size={16}/> Add member</button>
+          <button data-testid="new-member-button" onClick={() => setEditing("new")} title="Create a new athlete, coach, staff or chef profile" className="iu-btn-primary"><Plus size={16}/> Add member</button>
         </div>
       </header>
 
@@ -419,7 +419,7 @@ export default function Members() {
       ) : (
         <div className="iu-card overflow-hidden">
           <div className="overflow-auto max-h-[75vh]">
-            <table className="w-full text-sm iu-table-compact">              <thead className="bg-slate-50 sticky top-0 z-20">
+            <table className="w-full text-sm iu-table-compact"><thead className="bg-slate-50 sticky top-0 z-20">
                 <tr>
                   <th className="iu-table-th w-10 text-center sticky left-0 z-30 bg-slate-50">
                     <input

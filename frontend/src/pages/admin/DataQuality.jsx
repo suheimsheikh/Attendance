@@ -62,6 +62,7 @@ function FixButton({ finding, onFixed }) {
         type="button"
         onClick={trigger}
         disabled={busy}
+        title="Run all data-quality checks now instead of waiting for the daily scan"
         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 transition disabled:opacity-50"
         data-testid={`dq-autofix-${finding.code}`}
       >
@@ -165,6 +166,7 @@ export default function DataQuality() {
           <button
             type="button"
             onClick={() => setSeverityFilter("all")}
+            title="Show findings of every severity"
             className={`iu-card p-3 text-left transition ${severityFilter === "all" ? "ring-2 ring-slate-800" : ""}`}
             data-testid="dq-total"
           >
@@ -176,6 +178,7 @@ export default function DataQuality() {
               type="button"
               key={sev}
               onClick={() => setSeverityFilter(sev)}
+              title={`Show only ${sev}-severity findings`}
               className={`iu-card p-3 text-left transition ${severityFilter === sev ? "ring-2 ring-slate-800" : ""}`}
               data-testid={`dq-count-${sev}`}
             >

@@ -61,7 +61,7 @@ export default function Fleets() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">Define boat classes once; assign athletes anytime. Renaming a fleet cascades to every athlete in it.</p>
         </div>
-        <button onClick={() => setEditing({})} data-testid="fleet-new" className="iu-btn-primary">
+        <button onClick={() => setEditing({})} data-testid="fleet-new" title="Create a boat fleet / class grouping" className="iu-btn-primary">
           <Plus size={16} /> New fleet
         </button>
       </header>
@@ -94,10 +94,10 @@ export default function Fleets() {
               <button onClick={() => setAssigning(f)} data-testid={`fleet-assign-${f.id}`} className="iu-btn-secondary !px-3 !h-9" title="Pick athletes for this fleet">
                 <UserPlus size={14} />
               </button>
-              <button onClick={() => setEditing(f)} data-testid={`fleet-edit-${f.id}`} className="iu-btn-secondary !px-3 !h-9">
+              <button onClick={() => setEditing(f)} data-testid={`fleet-edit-${f.id}`} title="Rename this fleet" className="iu-btn-secondary !px-3 !h-9">
                 <Edit3 size={14} />
               </button>
-              <button onClick={() => remove(f)} data-testid={`fleet-delete-${f.id}`} className="iu-btn-secondary !px-3 !h-9 hover:!bg-rose-50 hover:!text-rose-700">
+              <button onClick={() => remove(f)} data-testid={`fleet-delete-${f.id}`} title="Delete this fleet" className="iu-btn-secondary !px-3 !h-9 hover:!bg-rose-50 hover:!text-rose-700">
                 <Trash2 size={14} />
               </button>
             </div>

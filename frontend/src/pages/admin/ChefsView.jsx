@@ -139,6 +139,7 @@ export default function ChefsView() {
           <button
             type="button"
             onClick={load}
+            title="Reload today's meal counts"
             disabled={loading}
             className="inline-flex items-center gap-2 px-3 h-9 rounded-lg text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50"
             data-testid="chefs-refresh"

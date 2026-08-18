@@ -100,6 +100,7 @@ export default function Dashboard() {
           type="button"
           onClick={() => load(true)}
           disabled={reloading}
+          title="Fetch the latest numbers from the server"
           className="inline-flex items-center gap-2 px-3 h-9 rounded-lg text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50"
           data-testid="dashboard-refresh"
         >

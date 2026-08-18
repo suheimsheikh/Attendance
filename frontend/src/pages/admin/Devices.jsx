@@ -95,12 +95,12 @@ export default function Devices() {
               <div className="flex items-center gap-2">
                 {filter === "pending" && (
                   <>
-                    <button data-testid={`approve-device-${d.id}`} onClick={() => setEditing(d)} className="iu-btn-primary !h-9 !px-3"><Check size={14}/> Approve</button>
-                    <button data-testid={`reject-device-${d.id}`} onClick={() => reject(d)} className="iu-btn-secondary !h-9 !px-3"><X size={14}/> Reject</button>
+                    <button data-testid={`approve-device-${d.id}`} onClick={() => setEditing(d)} title="Approve this device and link it to a member" className="iu-btn-primary !h-9 !px-3"><Check size={14}/> Approve</button>
+                    <button data-testid={`reject-device-${d.id}`} onClick={() => reject(d)} title="Turn down this access request" className="iu-btn-secondary !h-9 !px-3"><X size={14}/> Reject</button>
                   </>
                 )}
                 {filter === "approved" && (
-                  <button data-testid={`revoke-device-${d.id}`} onClick={() => revoke(d)} className="iu-btn-danger !h-9 !px-3"><Ban size={14}/> Revoke</button>
+                  <button data-testid={`revoke-device-${d.id}`} onClick={() => revoke(d)} title="Block this device from signing in again" className="iu-btn-danger !h-9 !px-3"><Ban size={14}/> Revoke</button>
                 )}
                 {(filter === "rejected" || filter === "revoked") && (
                   <>

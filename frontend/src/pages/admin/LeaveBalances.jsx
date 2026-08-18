@@ -214,6 +214,7 @@ export default function LeaveBalances() {
           data-testid="lb-save"
           onClick={saveAll}
           disabled={saving || dirtyCount === 0}
+          title="Save every edited opening balance in one go"
           className="iu-btn-primary !h-9 !px-3"
         >
           {saving ? <Loader2 className="animate-spin" size={14}/> : <Save size={14}/>} Save

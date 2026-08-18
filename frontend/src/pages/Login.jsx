@@ -141,6 +141,7 @@ export default function Login() {
           <button
             data-testid="check-now-button"
             onClick={() => checkStatus(deviceIdRef.current)}
+            title="Check whether an admin has approved this device yet"
             className="iu-btn-secondary mx-auto"
           >
             <RefreshCw size={14} /> Check now
@@ -178,6 +179,7 @@ export default function Login() {
                 type="button"
                 data-testid="login-not-me"
                 onClick={() => { forgetRememberedUser(); setRemembered(null); }}
+                title="Sign in with a different phone number"
                 className="text-[11px] text-slate-500 hover:text-slate-800 underline mt-0.5"
               >
                 Not me?
@@ -226,6 +228,7 @@ export default function Login() {
         <button
           data-testid="toggle-admin-login"
           onClick={() => setShowAdmin((s) => !s)}
+          title="Admins can also sign in with email and password"
           className="mt-7 mx-auto flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-900"
         >
           {showAdmin ? <ChevronUp size={14} /> : <ChevronDown size={14} />}

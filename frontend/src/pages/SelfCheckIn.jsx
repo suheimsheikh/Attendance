@@ -281,6 +281,7 @@ export default function SelfCheckIn() {
             data-testid="temp-return-button"
             onClick={handleTempReturn}
             disabled={working}
+            title="You're back on campus — end the temporary exit"
             className="iu-btn-primary mt-4 mx-auto"
           >
             {working ? <Loader2 className="animate-spin" size={16} /> : <ArrowLeftRight size={16} />} I&apos;m back
@@ -390,6 +391,7 @@ export default function SelfCheckIn() {
           type="button"
           data-testid="selfcheckin-request-correction"
           onClick={() => setCorrectionOpen(true)}
+          title="Ask an admin to fix a missed or wrong check-in/out"
           className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2"
         >
           Forgot to punch in earlier? Request a correction
@@ -539,7 +541,7 @@ function TempExitCard({ onCreated }) {
           <div className="font-semibold text-slate-900 text-sm">Stepping out for a bit?</div>
           <div className="text-xs text-slate-600">Quick lunch, errand, meeting — one tap and you&apos;re out.</div>
         </div>
-        <button data-testid="temp-exit-open" onClick={() => setOpen(true)} className="iu-btn-secondary !h-9 !px-3 shrink-0">
+        <button data-testid="temp-exit-open" onClick={() => setOpen(true)} title="Step out briefly (lunch, errand) without ending your day" className="iu-btn-secondary !h-9 !px-3 shrink-0">
           <ArrowLeftRight size={14} /> Step out
         </button>
       </div>

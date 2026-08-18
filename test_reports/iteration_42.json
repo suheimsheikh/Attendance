@@ -1,0 +1,32 @@
+{
+  "summary": "Iter42 — Pantry restructure (Masters as central hub) + app-wide title-attribute hover-hint sweep. Backend: existing suite /app/backend/tests/test_pantry_iter41.py 12/12 PASS; live /api/meals/stock reports low_count=2 with Chicken(0)+Apples(0) low, Rice(62, min 10) OK, Sunflower Oil(10L) OK — matches problem statement. Frontend (Playwright, admin@attendance.app): /admin/meals-report opens with default tab=Masters (emerald border), tab order matches [masters, purchases, issues, wastage, daily, monthly, expenses], NO 'Stock on hand' tab present (meals-report-tab-stock count=0), stock-low-badge shows '2' on Masters tab. New Masters controls masters-low-only + masters-as-of both visible; low-only ON reveals exactly 2 LOW chips (Chicken+Apples); as-of=2026-08-05 refetch works, reset link clears the input. Purchases tab shows purchase-go-masters button (visible), NO old 'Manage items/categories' buttons; clicking purchase-go-masters switches active tab to Masters. Hover hint sweep verified: nav-muster-roll ('Roll-call: check members in/out in bulk with photos'), nav-presence, nav-dashboard, nav-calendar, nav-leave-balances, nav-approvals all have non-empty title; all 7 pantry tab buttons carry hints; muster-toggle-all/refresh/submit titles present; apply-break/apply-on-behalf/approvals-refresh titles present; meals-copy-yesterday title present ('Copy Breakfast marks from yesterday to 2026-08-18'); calendar cal-prev/cal-next/camp-add/regatta-add titles present. Route smoke on /admin/dashboard, /muster, /presence, /admin/approvals, /admin/members, /admin/leave-balances, /admin/calendar, /meals, /my-leaves, /, /admin/devices — all render with no error boundary. No React runtime console errors from this iteration.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin/members", "issues": ["Pre-existing (not this iter): React HTML warning 'whitespace text nodes cannot be a child of <table>' inside Members.jsx table around line 422 — cosmetic hydration warning, not a title-attr regression"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pantry_iter41.py",
+    "/app/test_reports/pytest/iter42_pantry.xml"
+  ],
+  "action_items": [
+    "(Optional cosmetic) Fix stray whitespace between <table> and <thead>/<tbody> in /app/frontend/src/pages/admin/Members.jsx ~line 422 to silence React hydration warning — unrelated to iter42 but noticed during regression."
+  ],
+  "critical_code_review_comments": [
+    "MealsReport.jsx refetches /meals/stock on EVERY tab change to keep the low badge in sync — still true post-restructure and now that Masters is default it's the first fetch on landing, which is fine. Consider moving badge into a global store to avoid duplicate fetches when switching to non-masters tabs.",
+    "MealMastersTab.jsx: masters-as-of applies to /meals/stock but not to the tree's minimum-stock evaluation elsewhere — verified 'reset' link only shows when asOf is non-empty (guarded correctly).",
+    "MealPurchasesTab.jsx trimmed to 298 lines (was ~550+). Good.",
+    "Route /admin/muster-roll, /admin/presence, /admin/approvals-unified, /admin/meals, /self-checkin all silently redirect to '/' via catch-all Navigate — Layout still shows correct nav for admin. Consider adding explicit aliases if any external doc/link uses those paths."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (12/12 iter41 suite still green + live /meals/stock verified)", "frontend": "100% (all iter42 flows verified)"},
+  "test_credentials": "admin@attendance.app / Admin@12345",
+  "seed_data_creation": "None. TEST_ items in pytest fixtures self-clean.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Pantry restructure is stable. All new testids present: stock-low-badge (on masters tab), masters-low-only, masters-as-of, purchase-go-masters. Correct FE routes are /muster, /presence, /meals, /admin/approvals, NOT the /admin/muster-roll style paths some testids mention. When testing my-leaves apply form, note that /admin/devices and /admin/categories briefly hit 429 rate limits when navigated repeatedly in quick succession — add small waits between navigations.",
+  "rca of the issue": "No bugs found. Rice min_stock has been restored to 10 (as recommended in iter41 action_items). low_count is now the expected 2 (Apples + Chicken)."
+}

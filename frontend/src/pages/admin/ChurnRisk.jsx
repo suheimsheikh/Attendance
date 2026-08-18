@@ -139,6 +139,7 @@ export default function ChurnRisk() {
         </div>
         <button
           onClick={load}
+          title="Recompute churn scores from the latest attendance"
           className="iu-btn-secondary"
           disabled={loading}
           data-testid="churn-risk-refresh"

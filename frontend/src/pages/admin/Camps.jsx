@@ -51,6 +51,7 @@ export default function Camps() {
         <button
           data-testid="camp-add"
           onClick={() => setEditing({})}
+          title="Create a camp or regatta — attendees are marked on tour for those dates"
           className="iu-btn-primary"
         >
           <Plus size={16} /> New camp

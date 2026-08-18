@@ -31,19 +31,19 @@ const PREFETCH_MAP = {
 };
 
 const NAV_MEMBER = [
-  { to: "/", label: "My Check In/Out", icon: ScanLine, end: true },
-  { to: "/my-leaves", label: "Leave/Tour/Late", icon: CalendarCheck2 },
+  { to: "/", label: "My Check In/Out", icon: ScanLine, end: true, hint: "Check yourself in or out with a selfie and location" },
+  { to: "/my-leaves", label: "Leave/Tour/Late", icon: CalendarCheck2, hint: "Apply for leave, tour or late arrival and track approvals" },
   // Correction requests raised by the member (missed check-ins, wrong
   // times, leave changes). Badge count = personal pending corrections,
   // fetched from `/api/me/corrections?status=pending` in the polling
   // loop below (8 Jul 2026 user request "bring all correction requests
   // by a member under member in the main menu").
-  { to: "/my-corrections", label: "My Corrections", icon: PencilRuler, badgeKey: "my_corrections" },
+  { to: "/my-corrections", label: "My Corrections", icon: PencilRuler, badgeKey: "my_corrections", hint: "Request fixes for missed or wrong check-ins and see their status" },
   // Escort kiosk: visible to every signed-in user. Athletes/coaches/staff
   // help mark escorts in/out — escorts themselves land here after phone
   // login (auth.jsx forces the redirect when `is_escort=true`).
-  { to: "/escort-checkin", label: "Escorts Check in/Out", icon: UserCheck },
-  { to: "/profile", label: "My Profile", icon: UserCog },
+  { to: "/escort-checkin", label: "Escorts Check in/Out", icon: UserCheck, hint: "Mark escorts (parents/guardians) in and out of campus" },
+  { to: "/profile", label: "My Profile", icon: UserCog, hint: "Your photo, contact details and login settings" },
 ];
 
 // Coach + Chef sections — visible to coaches, chefs & admins per role.
@@ -51,19 +51,19 @@ const NAV_MEMBER = [
 // Chef's View is now shared across coaches/chefs/admins so on-the-ground
 // staff can see meal counts alongside the muster.
 const NAV_COACH = [
-  { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
-  { to: "/meals", label: "Meals", icon: Utensils },
-  { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2 },
-  { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat },
-  { to: "/presence", label: "Presence", icon: LayoutDashboard },
+  { to: "/muster", label: "Muster Roll", icon: ClipboardCheck, hint: "Roll-call: check members in/out in bulk with photos" },
+  { to: "/meals", label: "Meals", icon: Utensils, hint: "Mark who is eating which meal today" },
+  { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, issues, wastage and stock" },
+  { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
+  { to: "/presence", label: "Presence", icon: LayoutDashboard, hint: "Who is on campus right now" },
 ];
 
 const NAV_CHEF = [
-  { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
-  { to: "/meals", label: "Meals", icon: Utensils },
-  { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2 },
-  { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat },
-  { to: "/presence", label: "Presence", icon: LayoutDashboard },
+  { to: "/muster", label: "Muster Roll", icon: ClipboardCheck, hint: "Roll-call: check members in/out in bulk with photos" },
+  { to: "/meals", label: "Meals", icon: Utensils, hint: "Mark who is eating which meal today" },
+  { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, issues, wastage and stock" },
+  { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
+  { to: "/presence", label: "Presence", icon: LayoutDashboard, hint: "Who is on campus right now" },
 ];
 
 // ADMIN section — day-to-day operational surfaces. Kept intentionally
@@ -71,25 +71,25 @@ const NAV_CHEF = [
 // SMS Log moved to SYSTEM section on 15 Feb 2026 per admin — it's a
 // diagnostics / audit surface, not a day-to-day tool.
 const NAV_ADMIN = [
-  { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
-  { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true },
-  { to: "/admin/members", label: "Manage Members", icon: Users },
+  { to: "/admin/calendar", label: "Calendar", icon: CalendarDays, hint: "Holidays, weekly offs, camps and regattas at a glance" },
+  { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true, hint: "Single-glance summary: on campus, on leave, alerts" },
+  { to: "/admin/members", label: "Manage Members", icon: Users, hint: "Add, edit and organise athletes, staff and coaches" },
   // Highlighted bright yellow — this is the single most-visited
   // reporting surface (all-in-one 31-day view).
-  { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, spotlight: true },
-  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page" },
-  { to: "/admin/meals-report", label: "Pantry Stock", icon: Utensils },
-  { to: "/admin/churn-risk", label: "Churn Risk", icon: TrendingDown },
-  { to: "/admin/devices", label: "Access Requests", icon: IdCard },
-  { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2 },
+  { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, spotlight: true, hint: "All-in-one 31-day attendance grid with drill-downs and exports" },
+  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page", hint: "Pending leaves, corrections and check-in approvals in one queue" },
+  { to: "/admin/meals-report", label: "Pantry Stock", icon: Utensils, hint: "Kitchen inventory: items, purchases, issues, wastage and stock" },
+  { to: "/admin/churn-risk", label: "Churn Risk", icon: TrendingDown, hint: "Members whose attendance is fading — catch them before they drop off" },
+  { to: "/admin/devices", label: "Access Requests", icon: IdCard, hint: "Approve or block new phones/devices requesting access" },
+  { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2, hint: "Paid leave, comp-off and tour balances for every member" },
 ];
 
 // MASTERS section — reference data admins tune occasionally.
 const NAV_MASTERS = [
-  { to: "/admin/institutions", label: "Institutions", icon: Building2 },
-  { to: "/admin/fleets", label: "Fleets", icon: Sailboat },
-  { to: "/admin/categories", label: "Categories", icon: ShieldAlert },
-  { to: "/admin/roles", label: "Roles", icon: KeyRound },
+  { to: "/admin/institutions", label: "Institutions", icon: Building2, hint: "Schools/colleges members belong to" },
+  { to: "/admin/fleets", label: "Fleets", icon: Sailboat, hint: "Boat fleets and class groupings" },
+  { to: "/admin/categories", label: "Categories", icon: ShieldAlert, hint: "Member categories and their attendance rules" },
+  { to: "/admin/roles", label: "Roles", icon: KeyRound, hint: "Who can see and do what in the app" },
 ];
 
 // SYSTEM section — configuration, diagnostics, and safety nets.
@@ -97,13 +97,13 @@ const NAV_MASTERS = [
 // /admin/sites route still works but is reached via a card inside the
 // Office Settings page, not the sidebar.
 const NAV_SYSTEM = [
-  { to: "/admin/office", label: "Office Settings", icon: Settings },
-  { to: "/admin/data-quality", label: "Data Quality", icon: ShieldAlert },
-  { to: "/admin/category-health", label: "Category Health", icon: ShieldAlert },
-  { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare },
-  { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera },
-  { to: "/admin/audit-log", label: "Audit Log", icon: ScanLine },
-  { to: "/admin/backup", label: "Backup & Restore", icon: Database },
+  { to: "/admin/office", label: "Office Settings", icon: Settings, hint: "Working hours, geofence, training locations and app configuration" },
+  { to: "/admin/data-quality", label: "Data Quality", icon: ShieldAlert, hint: "Automatic checks that flag suspicious or missing data" },
+  { to: "/admin/category-health", label: "Category Health", icon: ShieldAlert, hint: "Members whose category setup looks wrong" },
+  { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare, hint: "Every OTP and SMS the app has sent" },
+  { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera, hint: "Review and purge old escort check-in photos" },
+  { to: "/admin/audit-log", label: "Audit Log", icon: ScanLine, hint: "Who changed what, when — full history" },
+  { to: "/admin/backup", label: "Backup & Restore", icon: Database, hint: "Download backups or restore data" },
 ];
 
 export default function Layout() {
@@ -409,7 +409,7 @@ function SectionHeader({ label, open, onToggle, tone = "cyan" }) {
   );
 }
 
-function NavItem({ to, label, icon: Icon, end, onClick, onHoverPrefetch, disabled, disabledReason, highlight, spotlight, badge }) {
+function NavItem({ to, label, icon: Icon, end, onClick, onHoverPrefetch, disabled, disabledReason, highlight, spotlight, badge, hint }) {
   if (disabled) {
     return (
       <div
@@ -430,6 +430,7 @@ function NavItem({ to, label, icon: Icon, end, onClick, onHoverPrefetch, disable
       onClick={onClick}
       onMouseEnter={onHoverPrefetch}
       onFocus={onHoverPrefetch}
+      title={hint}
       data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
       className={({ isActive }) =>
         // Three variants, mutually exclusive:

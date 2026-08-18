@@ -45,7 +45,7 @@ export default function Institutions() {
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Institutions</h1>
           <p className="text-slate-500 text-sm mt-1">Master list — appears in member onboarding dropdown.</p>
         </div>
-        <button onClick={() => setEditing({})} className="iu-btn-primary" data-testid="new-institution"><Plus size={16}/> Add institution</button>
+        <button onClick={() => setEditing({})} className="iu-btn-primary" data-testid="new-institution" title="Add a school or college that members belong to"><Plus size={16}/> Add institution</button>
       </header>
 
       {loading ? (
@@ -79,6 +79,7 @@ export default function Institutions() {
               {!r.active && <span className="text-[10px] uppercase font-bold text-slate-400 mr-2">Inactive</span>}
               <button
                 onClick={() => setEscortsFor(r)}
+                title="Manage the escorts (parents/guardians) linked to this institution"
                 className="iu-btn-secondary !h-9 !px-2.5 !text-xs"
                 data-testid={`inst-escorts-${r.id}`}
                 title="Manage escorts"

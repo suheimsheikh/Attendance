@@ -9,11 +9,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Loader2, Folder, FolderOpen, ChevronRight, ChevronDown, Plus, Pencil,
-  Check, X, GripVertical, Power, Trash2, CornerDownRight, EyeOff,
+  Check, X, GripVertical, Power, Trash2, CornerDownRight, EyeOff, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
 import { useAuth } from "../../auth";
+import { ItemDetailPanel, CategoryDetailPanel } from "./MealNodeDetail";
 
 const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
 
@@ -39,7 +40,7 @@ function InlineEdit({ value, onSave, onCancel, testid }) {
 }
 
 function AddItemForm({ catKey, units, onDone, onCancel }) {
-  const [d, setD] = useState({ name: "", unit: "kg", opening_stock: "", opening_stock_as_of: "" });
+  const [d, setD] = useState({ name: "", unit: "kg", opening_stock: "", opening_stock_as_of: "", min_stock: "" });
   const [busy, setBusy] = useState(false);
   const save = async () => {
     if (!d.name.trim()) { toast.error("Item name is required"); return; }
@@ -50,6 +51,7 @@ function AddItemForm({ catKey, units, onDone, onCancel }) {
         name: d.name.trim(),
         unit: d.unit,
         opening_stock: parseFloat(d.opening_stock) || 0,
+        min_stock: parseFloat(d.min_stock) || 0,
         ...(d.opening_stock_as_of ? { opening_stock_as_of: d.opening_stock_as_of } : {}),
       });
       toast.success(`Added ${d.name.trim()}`);
@@ -74,6 +76,9 @@ function AddItemForm({ catKey, units, onDone, onCancel }) {
              className="iu-input !h-8 !w-28 text-sm" data-testid={`masters-add-item-opening-${catKey}`}/>
       <input type="date" value={d.opening_stock_as_of} onChange={(e) => setD({ ...d, opening_stock_as_of: e.target.value })}
              className="iu-input !h-8 !w-auto text-sm" title="Opening stock as-of date (defaults to today)"/>
+      <input type="number" min="0" step="any" placeholder="Min level" value={d.min_stock}
+             onChange={(e) => setD({ ...d, min_stock: e.target.value })}
+             className="iu-input !h-8 !w-24 text-sm" title="Low-stock alert level (0 = off)" data-testid={`masters-add-item-min-${catKey}`}/>
       <button onClick={save} disabled={busy} className="iu-btn-primary !h-8 !px-3 text-xs" data-testid={`masters-add-item-save-${catKey}`}>
         {busy ? <Loader2 size={13} className="animate-spin"/> : <Check size={13}/>} Add
       </button>
@@ -82,13 +87,15 @@ function AddItemForm({ catKey, units, onDone, onCancel }) {
   );
 }
 
-function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, dnd }) {
+function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd }) {
   const [renaming, setRenaming] = useState(false);
   const [editing, setEditing] = useState(false);
   const [d, setD] = useState({});
   const inactive = item.active === false;
   const startEdit = () => {
-    setD({ unit: item.unit, opening_stock: item.opening_stock, opening_stock_as_of: item.opening_stock_as_of || "" });
+    setD({ unit: item.unit, opening_stock: item.opening_stock,
+           opening_stock_as_of: item.opening_stock_as_of || "",
+           min_stock: item.min_stock || 0 });
     setEditing(true);
   };
   return (
@@ -112,7 +119,9 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, dnd }) {
             onCancel={() => setRenaming(false)}
           />
         ) : (
-          <span className="font-semibold text-sm text-slate-900">{item.name}</span>
+          <button onClick={() => onOpen(item.id)} className="font-semibold text-sm text-slate-900 hover:text-emerald-700 hover:underline underline-offset-2 text-left" data-testid={`masters-item-open-${item.id}`} title="View purchase/issue/wastage history">
+            {item.name}
+          </button>
         )}
         <span className="text-[10px] font-bold uppercase text-slate-500 bg-slate-100 px-1.5 h-4 rounded inline-flex items-center">{item.unit}</span>
         {inactive && (
@@ -120,11 +129,16 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, dnd }) {
         )}
         {!inactive && stock && (
           <span
-            className={`text-xs tabular-nums font-semibold ${stock.on_hand <= 0.001 ? "text-rose-600" : "text-emerald-700"}`}
-            title={`Opening ${fmt(stock.opening_stock)} + purchased ${fmt(stock.purchased)} − issued ${fmt(stock.issued)} − wasted ${fmt(stock.wasted)}`}
+            className={`text-xs tabular-nums font-semibold ${stock.low ? "text-rose-600" : "text-emerald-700"}`}
+            title={`Opening ${fmt(stock.opening_stock)} + purchased ${fmt(stock.purchased)} − issued ${fmt(stock.issued)} − wasted ${fmt(stock.wasted)}${stock.min_stock > 0 ? ` · min level ${fmt(stock.min_stock)}` : ""}`}
             data-testid={`masters-item-stock-${item.id}`}
           >
             {fmt(stock.on_hand)} {item.unit} on hand
+          </span>
+        )}
+        {!inactive && stock?.low && (
+          <span className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase text-rose-700 bg-rose-100 px-1.5 h-4 rounded" data-testid={`masters-item-low-${item.id}`}>
+            <AlertTriangle size={9}/> low
           </span>
         )}
         {isAdmin && (
@@ -163,11 +177,14 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, dnd }) {
           <input type="number" min="0" step="any" value={d.opening_stock} onChange={(e) => setD({ ...d, opening_stock: e.target.value })} className="iu-input !h-7 !w-24 text-xs"/>
           <label className="text-[11px] text-slate-500">as of</label>
           <input type="date" value={d.opening_stock_as_of} onChange={(e) => setD({ ...d, opening_stock_as_of: e.target.value })} className="iu-input !h-7 !w-auto text-xs"/>
+          <label className="text-[11px] text-slate-500">Min level</label>
+          <input type="number" min="0" step="any" value={d.min_stock} onChange={(e) => setD({ ...d, min_stock: e.target.value })} className="iu-input !h-7 !w-20 text-xs" title="Low-stock alert level (0 = off)" data-testid={`masters-item-edit-min-${item.id}`}/>
           <button
             onClick={async () => {
               await onPatch(item.id, {
                 unit: d.unit,
                 opening_stock: parseFloat(d.opening_stock) || 0,
+                min_stock: parseFloat(d.min_stock) || 0,
                 ...(d.opening_stock_as_of ? { opening_stock_as_of: d.opening_stock_as_of } : {}),
               });
               setEditing(false);
@@ -192,17 +209,20 @@ export default function MealMastersTab() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);       // null = all expanded initially
   const [showInactive, setShowInactive] = useState(false);
+  const [lowOnly, setLowOnly] = useState(false);
+  const [asOf, setAsOf] = useState("");
   const [renamingCat, setRenamingCat] = useState(null);
   const [addingItemCat, setAddingItemCat] = useState(null);
   const [newCatLabel, setNewCatLabel] = useState("");
   const [drag, setDrag] = useState(null);               // {catKey, itemId, overId}
+  const [detail, setDetail] = useState(null);           // {type:'item'|'cat', id}
 
-  const load = async () => {
+  const load = async (asOfVal = asOf) => {
     try {
       const [c, i, s] = await Promise.all([
         api.get("/meals/purchase-categories"),
         api.get("/meals/items?include_inactive=true"),
-        api.get("/meals/stock"),
+        api.get(`/meals/stock${asOfVal ? `?as_of=${asOfVal}` : ""}`),
       ]);
       setCats(c.categories || []);
       setItems(i.items || []);
@@ -216,7 +236,7 @@ export default function MealMastersTab() {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(asOf); }, [asOf]);
 
   const isExpanded = (key) => (expanded == null ? true : expanded.has(key));
   const toggleExpand = (key) => {
@@ -229,11 +249,12 @@ export default function MealMastersTab() {
     const m = new Map();
     items.forEach((it) => {
       if (!showInactive && it.active === false) return;
+      if (lowOnly && !stockMap[it.id]?.low) return;
       if (!m.has(it.category_key)) m.set(it.category_key, []);
       m.get(it.category_key).push(it);
     });
     return m;
-  }, [items, showInactive]);
+  }, [items, showInactive, lowOnly, stockMap]);
 
   const visibleCats = useMemo(
     () => cats.filter((c) => showInactive || c.active !== false),
@@ -318,7 +339,25 @@ export default function MealMastersTab() {
             ? "Manage categories and items in one tree. Drag items to reorder within a category."
             : "Read-only view of the pantry masters."}
         </p>
-        <label className="ml-auto inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+        <label className="ml-auto inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer" title="Show stock on hand as it stood on a past date">
+          Stock as of
+          <input
+            type="date"
+            value={asOf}
+            max={new Date().toLocaleDateString("sv-SE")}
+            onChange={(e) => setAsOf(e.target.value)}
+            className="iu-input !h-7 !w-auto text-xs"
+            data-testid="masters-as-of"
+          />
+          {asOf && (
+            <button onClick={() => setAsOf("")} className="text-[10px] font-bold text-slate-400 hover:text-slate-600" title="Back to today's stock">reset</button>
+          )}
+        </label>
+        <label className="inline-flex items-center gap-2 text-xs text-rose-700 cursor-pointer" title="Show only items at or below their minimum stock level">
+          <input type="checkbox" checked={lowOnly} onChange={(e) => setLowOnly(e.target.checked)} data-testid="masters-low-only"/>
+          <AlertTriangle size={12}/> Only low stock
+        </label>
+        <label className="inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer" title="Include deactivated categories and items in the tree">
           <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} data-testid="masters-show-inactive"/>
           <EyeOff size={12}/> Show inactive
         </label>
@@ -327,6 +366,7 @@ export default function MealMastersTab() {
       <div className="iu-card p-3 space-y-1" data-testid="masters-tree">
         {visibleCats.map((cat) => {
           const catItems = itemsByCat.get(cat.key) || [];
+          if (lowOnly && catItems.length === 0) return null;
           const open = isExpanded(cat.key);
           const catInactive = cat.active === false;
           return (
@@ -344,7 +384,9 @@ export default function MealMastersTab() {
                     onCancel={() => setRenamingCat(null)}
                   />
                 ) : (
-                  <span className="font-bold text-sm text-slate-900">{cat.label}</span>
+                  <button onClick={() => setDetail({ type: "cat", id: cat.key })} className="font-bold text-sm text-slate-900 hover:text-emerald-700 hover:underline underline-offset-2" data-testid={`masters-cat-open-${cat.key}`} title="View category totals">
+                    {cat.label}
+                  </button>
                 )}
                 <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 h-4 rounded-full inline-flex items-center" data-testid={`masters-cat-count-${cat.key}`}>
                   {catItems.length} {catItems.length === 1 ? "item" : "items"}
@@ -380,6 +422,7 @@ export default function MealMastersTab() {
                       isAdmin={isAdmin}
                       onPatch={patchItem}
                       onDelete={deleteItem}
+                      onOpen={(id) => setDetail({ type: "item", id })}
                       dnd={{
                         over: drag?.overId === it.id && drag?.catKey === cat.key && drag?.itemId !== it.id,
                         onDragStart: () => setDrag({ catKey: cat.key, itemId: it.id }),
@@ -420,6 +463,13 @@ export default function MealMastersTab() {
           </div>
         )}
       </div>
+
+      {detail?.type === "item" && (
+        <ItemDetailPanel itemId={detail.id} onClose={() => setDetail(null)}/>
+      )}
+      {detail?.type === "cat" && (
+        <CategoryDetailPanel categoryKey={detail.id} stockMap={stockMap} onClose={() => setDetail(null)}/>
+      )}
     </div>
   );
 }

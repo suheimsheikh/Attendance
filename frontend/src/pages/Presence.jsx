@@ -404,6 +404,7 @@ export default function Presence() {
             type="button"
             onClick={() => setQuery("")}
             data-testid="presence-search-clear"
+            title="Clear the search and show everyone"
             className="text-[11px] font-semibold text-sky-700 hover:text-sky-900"
           >
             Clear · {filteredTotal} match{filteredTotal === 1 ? "" : "es"}

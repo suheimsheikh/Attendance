@@ -183,10 +183,10 @@ export default function AdminLeaves({ embedded = false }) {
             <p className="text-slate-500 text-sm mt-1">Review and decide on leave & tour requests.</p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button data-testid="apply-break" onClick={openBreakModal} className="iu-btn-secondary !bg-amber-50 !text-amber-800 hover:!bg-amber-100 !border-amber-200">
+            <button data-testid="apply-break" onClick={openBreakModal} title="Log a short mid-day break for a member (auto-approved)" className="iu-btn-secondary !bg-amber-50 !text-amber-800 hover:!bg-amber-100 !border-amber-200">
               <Coffee size={16}/> Apply break
             </button>
-            <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} className="iu-btn-primary">
+            <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} title="File a leave, tour or late arrival for a member who can't do it themselves" className="iu-btn-primary">
               <Plus size={16}/> Apply on behalf
             </button>
           </div>
@@ -206,10 +206,10 @@ export default function AdminLeaves({ embedded = false }) {
         </div>
         {embedded && (
           <div className="flex gap-2 shrink-0">
-            <button data-testid="apply-break" onClick={openBreakModal} className="iu-btn-secondary !h-9 !px-3 !bg-amber-50 !text-amber-800 hover:!bg-amber-100 !border-amber-200">
+            <button data-testid="apply-break" onClick={openBreakModal} title="Log a short mid-day break for a member (auto-approved)" className="iu-btn-secondary !h-9 !px-3 !bg-amber-50 !text-amber-800 hover:!bg-amber-100 !border-amber-200">
               <Coffee size={14}/> Apply break
             </button>
-            <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} className="iu-btn-primary !h-9 !px-3">
+            <button data-testid="apply-on-behalf" onClick={() => setShowOnBehalf(true)} title="File a leave, tour or late arrival for a member who can't do it themselves" className="iu-btn-primary !h-9 !px-3">
               <Plus size={14}/> Apply on behalf
             </button>
           </div>
@@ -264,6 +264,7 @@ export default function AdminLeaves({ embedded = false }) {
                           type="button"
                           onClick={() => toggleExpand(l)}
                           data-testid={`expand-${l.id}`}
+                          title="Show attendance context and leave balance for this request"
                           aria-expanded={isExpanded}
                           title={isExpanded ? "Hide details" : "Show overlap & balance"}
                           className="p-1 rounded hover:bg-slate-200 text-slate-500"
@@ -331,12 +332,13 @@ export default function AdminLeaves({ embedded = false }) {
                             >
                               <Check size={12}/> Approve
                             </button>
-                            <button data-testid={`reject-${l.id}`} onClick={() => decide(l.id, "rejected")} className="iu-btn-secondary !h-8 !px-2.5 !text-xs"><X size={12}/> Reject</button>
+                            <button data-testid={`reject-${l.id}`} onClick={() => decide(l.id, "rejected")} title="Turn down this request — the member is notified" className="iu-btn-secondary !h-8 !px-2.5 !text-xs"><X size={12}/> Reject</button>
                           </>
                         ) : (
                           <button
                             data-testid={`reopen-${l.id}`}
                             onClick={() => decide(l.id, "pending")}
+                            title="Move this decided request back to pending for a fresh decision"
                             className="text-[11px] text-slate-500 hover:text-slate-800 hover:underline"
                             title="Re-open: move back to Pending for re-decision"
                           >

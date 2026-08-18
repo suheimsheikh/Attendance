@@ -236,6 +236,7 @@ export default function Meals() {
               key={m.key}
               data-testid={`meals-meal-${m.key}`}
               onClick={() => setMeal(m.key)}
+              title={`Mark who is having ${m.label?.toLowerCase?.() || m.key} today`}
               className={`iu-btn ${active ? "iu-btn-primary" : "iu-btn-secondary"} text-xs md:text-sm`}
               style={active ? { background: MEAL_COLOR[m.key] } : undefined}
             >
@@ -296,6 +297,7 @@ export default function Meals() {
           data-testid="meals-toggle-all"
           onClick={toggleAllVisible}
           disabled={filtered.length === 0}
+          title="Tick or untick everyone currently shown"
           className="iu-btn-ghost !h-9 !px-3 text-xs"
         >
           {allVisiblePicked ? <CheckSquare size={14}/> : <Square size={14}/>}
@@ -305,13 +307,14 @@ export default function Meals() {
           data-testid="meals-copy-yesterday"
           onClick={copyFromYesterday}
           disabled={copying || saving}
+          title="Pre-tick the same people who had this meal yesterday"
           className="iu-btn-secondary !h-9 !px-3 text-xs"
           title={`Copy ${activeMealDef.label} marks from yesterday to ${dateStr}`}
         >
           {copying ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
           <span className="hidden sm:inline">Copy yesterday</span>
         </button>
-        <button onClick={load} className="iu-btn-secondary !h-9 !px-3" data-testid="meals-refresh">
+        <button onClick={load} className="iu-btn-secondary !h-9 !px-3" data-testid="meals-refresh" title="Reload the list from the server">
           <RefreshCw size={14} />
         </button>
       </div>
@@ -380,6 +383,7 @@ export default function Meals() {
             data-testid="meals-submit"
             onClick={submit}
             disabled={saving || picked.size === 0}
+            title="Save the meal list for the kitchen"
             className="iu-btn-primary"
             style={{ background: picked.size > 0 ? color : undefined }}
           >

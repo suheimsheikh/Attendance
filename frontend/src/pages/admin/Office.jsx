@@ -162,7 +162,7 @@ export default function OfficeSettings() {
             <input data-testid="of-lng" type="number" step="any" value={form.longitude} onChange={(e) => set("longitude", e.target.value)} className="iu-input" />
           </div>
         </div>
-        <button type="button" data-testid="of-here" onClick={pickHere} disabled={picking} className="iu-btn-secondary">
+        <button type="button" data-testid="of-here" onClick={pickHere} disabled={picking} title="Set the campus geofence centre to where you're standing right now" className="iu-btn-secondary">
           {picking ? <Loader2 className="animate-spin" size={14}/> : <MapPin size={14}/>} Use my current location
         </button>
 
@@ -438,7 +438,7 @@ export default function OfficeSettings() {
           onDismiss={formErr.clear}
           testId="of-save-error"
         />
-        <button data-testid="of-save" disabled={saving} className="iu-btn-primary w-full">
+        <button data-testid="of-save" disabled={saving} title="Save working hours, geofence and app configuration" className="iu-btn-primary w-full">
           {saving ? <Loader2 className="animate-spin" size={16}/> : <><Save size={16}/> Save settings</>}
         </button>
       </form>

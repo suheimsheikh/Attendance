@@ -56,12 +56,13 @@ export default function MyLeaves() {
             type="button"
             data-testid="myleaves-request-correction"
             onClick={() => setCorrectionOpen(true)}
+            title="Ask an admin to fix a wrong or missing leave record"
             className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2"
             title="Report a mistake on one of your existing leaves (wrong dates, wrong type, or shouldn't have run)"
           >
             Request a correction
           </button>
-          <button data-testid="apply-leave-button" onClick={() => setShowForm(true)} className="iu-btn-primary">
+          <button data-testid="apply-leave-button" onClick={() => setShowForm(true)} title="Apply for a leave, tour or late arrival" className="iu-btn-primary">
             <Plus size={16} /> Apply
           </button>
         </div>
@@ -423,7 +424,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
       <div className={`bg-white w-full ${asAdmin ? "md:max-w-3xl" : "md:max-w-md"} rounded-t-2xl md:rounded-2xl p-6 max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()} data-testid="apply-leave-form">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-extrabold">{asAdmin ? "Apply on behalf of members" : "New request"}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg" title="Close without saving"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="space-y-4">
           {asAdmin && (
@@ -445,13 +446,13 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           <div>
             <label className="iu-label">Type</label>
             <div className={`grid ${asAdmin ? "grid-cols-2 md:grid-cols-4" : "grid-cols-3"} gap-2`}>
-              <button data-testid="leave-type-leave" type="button" onClick={() => setType("leave")} className={`iu-btn ${type === "leave" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Bed size={16}/> Leave</button>
-              <button data-testid="leave-type-tour" type="button" onClick={() => setType("tour")} className={`iu-btn ${type === "tour" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Plane size={16}/> Tour</button>
-              <button data-testid="leave-type-late-coming" type="button" onClick={() => setType("late_coming")} className={`iu-btn ${type === "late_coming" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Clock size={16}/> Late Coming</button>
+              <button data-testid="leave-type-leave" type="button" onClick={() => setType("leave")} title="Full or half day off — deducted from comp-off first, then paid leave" className={`iu-btn ${type === "leave" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Bed size={16}/> Leave</button>
+              <button data-testid="leave-type-tour" type="button" onClick={() => setType("tour")} title="Away on official duty — counts as present, not leave" className={`iu-btn ${type === "tour" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Plane size={16}/> Tour</button>
+              <button data-testid="leave-type-late-coming" type="button" onClick={() => setType("late_coming")} title="Inform in advance that you'll arrive late on a day" className={`iu-btn ${type === "late_coming" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Clock size={16}/> Late Coming</button>
               {/* R2: Posting is admin-only on-behalf — member self-apply
                   must never see this option. */}
               {asAdmin && (
-                <button data-testid="leave-type-posting" type="button" onClick={() => setType("posting")} className={`iu-btn ${type === "posting" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Briefcase size={16}/> Posting</button>
+                <button data-testid="leave-type-posting" type="button" onClick={() => setType("posting")} title="Long assignment away from campus (admin only)" className={`iu-btn ${type === "posting" ? "iu-btn-primary" : "iu-btn-secondary"}`}><Briefcase size={16}/> Posting</button>
               )}
             </div>
             {type === "leave" && (

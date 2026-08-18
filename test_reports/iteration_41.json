@@ -1,0 +1,27 @@
+{
+  "summary": "Iter41 — Pantry Stock Tree Data View + Low Stock Alerts. Backend: 12/12 pytest cases pass in /app/backend/tests/test_pantry_iter41.py covering min_stock on POST/PATCH (incl. negative-rejection 400), GET /meals/stock rows now carry min_stock+low and top-level low_count (=3, includes Rice/Apples/Chicken; Rice on-hand 62 confirmed), GET /meals/items/{id}/ledger for Rice returns purchased_qty=20 / purchased_amount=1200 / issued_qty=8 / on_hand=62 with typed events (purchase carries rate+amount), default range = last 30 days, 404 for unknown item, chef can read; GET /meals/categories/grocery/summary returns per-item totals + spend >= 1200 (legacy amounts map summed), 404 for unknown category, chef read allowed. Frontend Playwright (admin@attendance.app): Pantry Stock page shows red 3 badge on 'Stock on hand' tab (data-testid stock-low-badge). Masters tree renders LOW chips (masters-item-low-{id}) for Apples, Rice, Chicken; Sunflower Oil (10 L, no min) has NO chip — matches expectation. Clicking item name opens item-detail-panel with header, range picker (detail-range-start/end), item-detail-onhand chip, and item-detail-ledger table; close via item-detail-panel-close works. Clicking category name opens cat-detail-panel with cat-detail-table (2 rows for grocery). Stock on hand tab has new stock-min-{id} column (Rice shows min, Sunflower shows '—'); 'Show low-stock only' toggle filters 4 rows → 3 (matches low_count). All add/edit min fields present (masters-add-item-min-{catKey}, masters-item-edit-min-{id}). No console errors, no regressions on masters CRUD.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_pantry_iter41.py",
+    "/app/test_reports/pytest/iter41_pantry.xml"
+  ],
+  "action_items": [
+    "Restore Rice min_stock back to a sensible value (e.g. 10) — currently 70 per test seed leaves Rice permanently LOW; problem statement itself says 'restore to a sensible value like 10 after testing'.",
+    "meals.py is now ~1947 lines — split into meals_muster.py / meals_pantry.py / meals_masters.py (carry-over from iter39/iter40)."
+  ],
+  "critical_code_review_comments": [
+    "item_ledger endpoint returns the raw item dict including all mongo fields (no _id since projection excludes) — fine, but any future-added internal fields will leak; consider whitelisting fields returned.",
+    "MealsReport.jsx refetches /meals/stock on every tab change to keep badge in sync — works, but for a tab that isn't 'stock' this is a duplicate fetch. Minor perf; not a blocker.",
+    "MealNodeDetail.jsx (new file) is compact and testid-rich — good.",
+    "min_stock stored as float rounded to 4 dp; UI supports step=any. Consistent with opening_stock handling."
+  ],
+  "updated_files": ["/app/backend/tests/test_pantry_iter41.py"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (all iter41 flows verified)"},
+  "test_credentials": "admin@attendance.app / Admin@12345",
+  "seed_data_creation": "Only TEST_-prefixed items created (TEST_Min_*, TEST_NegMin_*, TEST_PatchMin_*) each cleaned up in the same test. One chef-iter41-*@meals.example.com user created (not cleaned up — same pattern as iter40 chef fixture). No modifications to Rice/Apples/Sunflower Oil/Chicken min_stock or purchase/issue/wastage lines.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reusable pytest: /app/backend/tests/test_pantry_iter41.py (min_stock, ledger, category summary). All new testids present: masters-item-open-{id}, masters-cat-open-{key}, masters-item-low-{id}, item-detail-panel(+close/backdrop), item-detail-onhand, item-detail-ledger, detail-range-start/end, cat-detail-panel, cat-detail-table, stock-min-{id}, stock-low-badge, masters-item-edit-min-{id}, masters-add-item-min-{catKey}. Note: tree cat-expand buttons are toggles; if you fetch masters-item-open-* selectors immediately after expand click they may return 0 — wait 500-800ms first and verify state via the item children count.",
+  "rca of the issue": "No bugs found. Rice remains LOW because min_stock=70 was set as part of the current iteration's seed; per the problem statement's own note this should be lowered to ~10 by the main agent post-test."
+}

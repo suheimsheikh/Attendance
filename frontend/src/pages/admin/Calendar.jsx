@@ -144,6 +144,7 @@ export default function Calendar() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
+            title="Import the official YAI 2026 regatta calendar — updates existing events, adds new ones"
             onClick={async () => {
               if (!window.confirm("Import the YAI 2026 sailing calendar?\n\nAlready-present events will be updated, new ones added. No existing data is deleted.")) return;
               try {
@@ -158,13 +159,13 @@ export default function Calendar() {
           >
             <Download size={16} /> Import from YAI
           </button>
-          <button onClick={() => setEditingCamp({})} data-testid="camp-add" className="iu-btn-secondary !bg-emerald-50 !text-emerald-700 hover:!bg-emerald-100 !border-emerald-200">
+          <button onClick={() => setEditingCamp({})} data-testid="camp-add" title="Create a training camp — attendees show as on tour for those dates" className="iu-btn-secondary !bg-emerald-50 !text-emerald-700 hover:!bg-emerald-100 !border-emerald-200">
             <Tent size={16} /> New camp
           </button>
-          <button onClick={() => setEditingBreak({})} data-testid="break-add" className="iu-btn-secondary !bg-amber-50 !text-amber-800 hover:!bg-amber-100 !border-amber-200">
+          <button onClick={() => setEditingBreak({})} data-testid="break-add" title="Declare an academy break — no attendance expected on those days" className="iu-btn-secondary !bg-amber-50 !text-amber-800 hover:!bg-amber-100 !border-amber-200">
             <Coffee size={16} /> Apply break
           </button>
-          <button onClick={() => setEditingRegatta({})} data-testid="regatta-add" className="iu-btn-primary">
+          <button onClick={() => setEditingRegatta({})} data-testid="regatta-add" title="Create a regatta — participants show as on tour for those dates" className="iu-btn-primary">
             <Plus size={16} /> New regatta
           </button>
         </div>
@@ -184,9 +185,9 @@ export default function Calendar() {
 
       {/* Month nav */}
       <div className="flex items-center justify-between mb-2">
-        <button onClick={() => setCursor(addMonths(cursor, -1))} className="iu-btn-secondary !px-3 !h-9" data-testid="cal-prev"><ChevronLeft size={16} /></button>
+        <button onClick={() => setCursor(addMonths(cursor, -1))} className="iu-btn-secondary !px-3 !h-9" data-testid="cal-prev" title="Previous month"><ChevronLeft size={16} /></button>
         <h2 className="text-xl font-bold text-slate-700">{monthLabel}</h2>
-        <button onClick={() => setCursor(addMonths(cursor, 1))} className="iu-btn-secondary !px-3 !h-9" data-testid="cal-next"><ChevronRight size={16} /></button>
+        <button onClick={() => setCursor(addMonths(cursor, 1))} className="iu-btn-secondary !px-3 !h-9" data-testid="cal-next" title="Next month"><ChevronRight size={16} /></button>
       </div>
 
       {loading ? (
@@ -275,8 +276,8 @@ export default function Calendar() {
                     <span>{c.member_ids?.length ? `${c.member_ids.length} enrolled` : (c.institution ? `all ${c.institution}` : "0 enrolled")}</span>
                   </div>
                 </div>
-                <button onClick={() => setEditingCamp(c)} data-testid={`camp-edit-${c.id}`} className="iu-btn-secondary !px-3 !h-9"><Edit3 size={14} /></button>
-                <button onClick={() => removeCamp(c)} data-testid={`camp-delete-${c.id}`} className="iu-btn-secondary !px-3 !h-9 hover:!bg-rose-50 hover:!text-rose-700"><Trash2 size={14} /></button>
+                <button onClick={() => setEditingCamp(c)} data-testid={`camp-edit-${c.id}`} title="Edit this camp's dates and attendees" className="iu-btn-secondary !px-3 !h-9"><Edit3 size={14} /></button>
+                <button onClick={() => removeCamp(c)} data-testid={`camp-delete-${c.id}`} title="Delete this camp" className="iu-btn-secondary !px-3 !h-9 hover:!bg-rose-50 hover:!text-rose-700"><Trash2 size={14} /></button>
               </div>
             ))}
           </div>
@@ -303,8 +304,8 @@ export default function Calendar() {
                     {b.scope === "selected" && <span>{(b.member_ids || []).length} members</span>}
                   </div>
                 </div>
-                <button onClick={() => setEditingBreak(b)} data-testid={`break-edit-${b.id}`} className="iu-btn-secondary !px-3 !h-9"><Edit3 size={14} /></button>
-                <button onClick={() => removeBreak(b)} data-testid={`break-delete-${b.id}`} className="iu-btn-secondary !px-3 !h-9 hover:!bg-rose-50 hover:!text-rose-700"><Trash2 size={14} /></button>
+                <button onClick={() => setEditingBreak(b)} data-testid={`break-edit-${b.id}`} title="Edit this break" className="iu-btn-secondary !px-3 !h-9"><Edit3 size={14} /></button>
+                <button onClick={() => removeBreak(b)} data-testid={`break-delete-${b.id}`} title="Delete this break" className="iu-btn-secondary !px-3 !h-9 hover:!bg-rose-50 hover:!text-rose-700"><Trash2 size={14} /></button>
               </div>
             ))}
           </div>
@@ -331,8 +332,8 @@ export default function Calendar() {
                       {r.host_org && <span className="italic">{r.host_org}</span>}
                     </div>
                   </div>
-                  <button onClick={() => setEditingRegatta(r)} data-testid={`regatta-edit-${r.id}`} className="iu-btn-secondary !px-3 !h-9"><Edit3 size={14} /></button>
-                  <button onClick={() => removeRegatta(r)} data-testid={`regatta-delete-${r.id}`} className="iu-btn-secondary !px-3 !h-9 hover:!bg-rose-50 hover:!text-rose-700"><Trash2 size={14} /></button>
+                  <button onClick={() => setEditingRegatta(r)} data-testid={`regatta-edit-${r.id}`} title="Edit this regatta's dates and participants" className="iu-btn-secondary !px-3 !h-9"><Edit3 size={14} /></button>
+                  <button onClick={() => removeRegatta(r)} data-testid={`regatta-delete-${r.id}`} title="Delete this regatta" className="iu-btn-secondary !px-3 !h-9 hover:!bg-rose-50 hover:!text-rose-700"><Trash2 size={14} /></button>
                 </div>
               );
             })}

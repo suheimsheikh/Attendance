@@ -143,7 +143,7 @@ export default function MealIssuesTab() {
             </tbody>
           </table>
           <div className="p-3 border-t border-slate-100 flex justify-end">
-            <button onClick={save} disabled={saving} className="iu-btn-primary !h-9 !px-4 text-sm" data-testid="issues-save">
+            <button onClick={save} disabled={saving} title="Save today's kitchen consumption — stock on hand updates instantly" className="iu-btn-primary !h-9 !px-4 text-sm" data-testid="issues-save">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
             </button>
           </div>

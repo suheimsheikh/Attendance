@@ -11,13 +11,12 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Boxes, Flame, FolderTree } from "lucide-react";
+import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import MealExpensesTab from "./MealExpensesTab";
 import MealPurchasesTab from "./MealPurchasesTab";
 import MealIssuesTab from "./MealIssuesTab";
-import MealStockTab from "./MealStockTab";
 import MealWastageTab from "./MealWastageTab";
 import MealMastersTab from "./MealMastersTab";
 
@@ -458,16 +457,19 @@ function MonthlyGridTab() {
 }
 
 export default function MealsReport() {
-  const [tab, setTab] = useState("daily");
+  const [tab, setTab] = useState("masters");
+  const [lowCount, setLowCount] = useState(0);
+  useEffect(() => {
+    api.get("/meals/stock").then((r) => setLowCount(r.low_count || 0)).catch(() => {});
+  }, [tab]);
   const TABS = [
-    { key: "daily",     label: "Daily counts",  Icon: Utensils },
-    { key: "monthly",   label: "Monthly grid",  Icon: CalendarDays },
-    { key: "expenses",  label: "Expense report", Icon: IndianRupee },
-    { key: "purchases", label: "Purchases",     Icon: ShoppingCart },
-    { key: "issues",    label: "Daily issues",  Icon: ClipboardList },
-    { key: "wastage",   label: "Wastage & losses", Icon: Flame },
-    { key: "stock",     label: "Stock on hand", Icon: Boxes },
-    { key: "masters",   label: "Masters",       Icon: FolderTree },
+    { key: "masters",   label: "Masters",       Icon: FolderTree, hint: "Central tree of categories and items — stock on hand, history, low-stock alerts and item management" },
+    { key: "purchases", label: "Purchases",     Icon: ShoppingCart, hint: "Enter supplier bills for a day — item, quantity and rate" },
+    { key: "issues",    label: "Daily issues",  Icon: ClipboardList, hint: "Log what the kitchen drew from stock each day" },
+    { key: "wastage",   label: "Wastage & losses", Icon: Flame, hint: "Record rotten, spilled or lost stock with a reason" },
+    { key: "daily",     label: "Daily counts",  Icon: Utensils, hint: "Headcount of meals served per day" },
+    { key: "monthly",   label: "Monthly grid",  Icon: CalendarDays, hint: "Month-long meal count audit grid" },
+    { key: "expenses",  label: "Expense report", Icon: IndianRupee, hint: "Category-wise purchase spend for the accountant" },
   ];
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto" data-testid="meals-report-page">
@@ -479,16 +481,24 @@ export default function MealsReport() {
       </header>
 
       <div className="flex gap-2 mb-5 border-b border-slate-200 overflow-x-auto" data-testid="meals-report-tabs">
-        {TABS.map(({ key, label, Icon }) => (
+        {TABS.map(({ key, label, Icon, hint }) => (
           <button
             key={key}
             data-testid={`meals-report-tab-${key}`}
             onClick={() => setTab(key)}
+            title={hint}
             className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 whitespace-nowrap ${
               tab === key ? "border-emerald-600 text-emerald-700" : "border-transparent text-slate-500 hover:text-slate-700"
             }`}
           >
-            <span className="inline-flex items-center gap-2"><Icon size={14}/> {label}</span>
+            <span className="inline-flex items-center gap-2">
+              <Icon size={14}/> {label}
+              {key === "masters" && lowCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold" title={`${lowCount} item${lowCount === 1 ? "" : "s"} at or below the minimum stock level`} data-testid="stock-low-badge">
+                  {lowCount}
+                </span>
+              )}
+            </span>
           </button>
         ))}
       </div>
@@ -496,10 +506,9 @@ export default function MealsReport() {
       {tab === "daily" && <DailyTab />}
       {tab === "monthly" && <MonthlyGridTab />}
       {tab === "expenses" && <MealExpensesTab />}
-      {tab === "purchases" && <MealPurchasesTab />}
+      {tab === "purchases" && <MealPurchasesTab onGoMasters={() => setTab("masters")} />}
       {tab === "issues" && <MealIssuesTab />}
       {tab === "wastage" && <MealWastageTab />}
-      {tab === "stock" && <MealStockTab />}
       {tab === "masters" && <MealMastersTab />}
     </div>
   );

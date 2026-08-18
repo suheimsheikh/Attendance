@@ -14,6 +14,28 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 18 Aug 2026 (Masters as central hub + hover hints)
+- Tree Data View: item click → ledger slide-over (merged purchase/issue/wastage
+  events, range picker w/ 30d/90d/1y presets, totals, on-hand); category click →
+  per-item summary panel + spend. NEW endpoints: GET /meals/items/{id}/ledger,
+  GET /meals/categories/{key}/summary (MealNodeDetail.jsx).
+- Low Stock Alerts: `min_stock` on meal_items (add/edit forms in Masters),
+  /meals/stock rows carry min_stock+low, low_count; LOW chips in tree, red count
+  badge on the Masters tab (MealsReport refetches per tab switch).
+- RESTRUCTURE (user approved): "Stock on hand" tab REMOVED (MealStockTab.jsx
+  deleted) — folded into Masters via "Only low stock" filter + "Stock as of" date
+  picker. Masters is now FIRST tab + default landing. Purchases tab's duplicate
+  Items/Categories manager modals removed → single "Manage in Masters" button.
+- App-wide hover hints: title tooltips on all sidebar nav items (Layout.jsx hint
+  field) and buttons/toggles across ~30 pages (Muster, Presence, Dashboard, Grid
+  tabs, Approvals, Leaves, MyLeaves, CheckIn/SelfCheckIn/Escort, Login, Profile,
+  Members, Meals, ChefsView, LeaveBalances, all Meal tabs, Calendar, Camps,
+  Institutions, Categories, Fleets, Roles, Devices, CheckinApprovals,
+  AdminCorrections, DataQuality, ImportMembers, Office, Sites, EscortPhotoCleanup).
+- Fixed React table-whitespace warning in Members.jsx.
+- Tested: iteration_41.json (Tree Data View + Low Stock, 100%), iteration_42.json
+  (restructure + hints sweep + full regression, 100%).
+
 ### 18 Aug 2026 (Pantry Masters tree)
 - New "Masters" tab in Pantry Stock (MealMastersTab.jsx): tree of Categories → Items.
   - Add/rename/deactivate categories (categories config now carries `active` flag;

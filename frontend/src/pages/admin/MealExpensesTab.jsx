@@ -208,11 +208,13 @@ export default function MealExpensesTab() {
           <button
             data-testid="meal-expense-mode-month"
             onClick={() => setMode("month")}
+            title="Report for one calendar month"
             className={`px-3 h-9 text-xs font-bold ${mode === "month" ? "bg-slate-800 text-white" : "bg-white text-slate-600"}`}
           >Month</button>
           <button
             data-testid="meal-expense-mode-range"
             onClick={() => setMode("range")}
+            title="Report for any start–end date range"
             className={`px-3 h-9 text-xs font-bold ${mode === "range" ? "bg-slate-800 text-white" : "bg-white text-slate-600"}`}
           >Date range</button>
         </div>
@@ -233,11 +235,11 @@ export default function MealExpensesTab() {
           </>
         )}
         <div className="ml-auto flex gap-2">
-          <button onClick={exportCSV} disabled={!trimmed || loading}
+          <button onClick={exportCSV} disabled={!trimmed || loading} title="Download this report as a spreadsheet"
                   className="iu-btn-secondary !h-9 !px-3 text-sm" data-testid="meal-expense-csv">
             <Download size={14} /> CSV
           </button>
-          <button onClick={handlePrint} disabled={!trimmed || loading}
+          <button onClick={handlePrint} disabled={!trimmed || loading} title="Open a print-ready view (save as PDF from the print dialog)"
                   className="iu-btn-secondary !h-9 !px-3 text-sm" data-testid="meal-expense-print">
             <Printer size={14} /> Print / PDF
           </button>

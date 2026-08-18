@@ -90,7 +90,7 @@ export default function EscortPhotoCleanup() {
       ) : (
         <>
           <div className="iu-card p-3 mb-3 flex items-center gap-3 sticky top-0 z-10" data-testid="cleanup-toolbar">
-            <button onClick={toggleAll} className="text-slate-500 hover:text-slate-800" data-testid="cleanup-toggle-all">
+            <button onClick={toggleAll} className="text-slate-500 hover:text-slate-800" data-testid="cleanup-toggle-all" title="Select or unselect every photo shown">
               {selected.size === rows.length && rows.length > 0
                 ? <CheckSquare size={18} className="text-emerald-600"/>
                 : <Square size={18}/>}

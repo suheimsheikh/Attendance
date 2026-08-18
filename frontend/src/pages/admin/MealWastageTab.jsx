@@ -192,10 +192,10 @@ export default function MealWastageTab() {
             </tbody>
           </table>
           <div className="p-3 border-t border-slate-100 flex justify-between items-center">
-            <button onClick={addLine} className="iu-btn-secondary !h-9 !px-3 text-sm" data-testid="wastage-add-line">
+            <button onClick={addLine} title="Record another wasted or lost item for this date" className="iu-btn-secondary !h-9 !px-3 text-sm" data-testid="wastage-add-line">
               + Add line
             </button>
-            <button onClick={save} disabled={saving} className="iu-btn-primary !h-9 !px-4 text-sm" data-testid="wastage-save">
+            <button onClick={save} disabled={saving} title="Save wastage for this date — stock on hand updates instantly" className="iu-btn-primary !h-9 !px-4 text-sm" data-testid="wastage-save">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
             </button>
           </div>

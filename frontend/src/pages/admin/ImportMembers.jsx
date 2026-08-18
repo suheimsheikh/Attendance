@@ -44,10 +44,10 @@ export default function ImportMembers() {
           />
         </div>
         <div className="flex flex-wrap gap-2">
-          <button data-testid="import-submit" type="submit" disabled={busy || !file} className="iu-btn-primary">
+          <button data-testid="import-submit" type="submit" disabled={busy || !file} title="Upload the filled-in spreadsheet and create/update members" className="iu-btn-primary">
             {busy ? <Loader2 className="animate-spin" size={14}/> : <Upload size={14}/>} Upload
           </button>
-          <button data-testid="import-template" type="button" onClick={downloadTemplate} className="iu-btn-secondary">
+          <button data-testid="import-template" type="button" onClick={downloadTemplate} title="Download a blank spreadsheet with the expected columns" className="iu-btn-secondary">
             <FileDown size={14}/> Download template
           </button>
         </div>
@@ -166,7 +166,7 @@ function ParentImport() {
           />
           <p className="text-[11px] text-slate-500 mt-1.5">Expected columns at row 2: S/No · Institution · Sailor Name · G · DOB · DOJ · Father Name · Father Contact · Mother Name · Mother Contact · Guardian Name · Guardian Contact.</p>
         </div>
-        <button data-testid="parents-preview" type="submit" disabled={busy !== null || !file} className="iu-btn-primary">
+        <button data-testid="parents-preview" type="submit" disabled={busy !== null || !file} title="Check the file first — nothing is saved until you apply" className="iu-btn-primary">
           {busy === "preview" ? <Loader2 className="animate-spin" size={14}/> : <Upload size={14}/>} Preview
         </button>
       </form>
@@ -266,7 +266,7 @@ function ParentImport() {
           )}
 
           <div className="flex flex-wrap gap-2 pt-2">
-            <button data-testid="parents-apply" onClick={applyAll} disabled={busy !== null} className="iu-btn-primary">
+            <button data-testid="parents-apply" onClick={applyAll} disabled={busy !== null} title="Save the matched rows into the database" className="iu-btn-primary">
               {busy === "apply" ? <Loader2 className="animate-spin" size={14}/> : <CheckCircle2 size={14}/>}
               Apply import ({preview.matched_count + Object.values(decisions).filter((d) => d.member_id && !d.skip).length} rows)
             </button>

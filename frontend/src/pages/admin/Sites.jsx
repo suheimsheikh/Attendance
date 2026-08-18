@@ -50,7 +50,7 @@ export default function Sites() {
             The main club location is set on <b>Office Settings</b>.
           </p>
         </div>
-        <button onClick={() => setEditing({})} data-testid="site-new" className="iu-btn-primary">
+        <button onClick={() => setEditing({})} data-testid="site-new" title="Add a training location with its own geofence for check-ins" className="iu-btn-primary">
           <Plus size={16} /> New location
         </button>
       </header>
@@ -89,11 +89,13 @@ export default function Sites() {
               <button
                 onClick={() => setEditing(s)}
                 data-testid={`site-edit-${s.id}`}
+                title="Edit this location's name, coordinates and radius"
                 className="iu-btn-ghost-sm" aria-label="Edit"
               ><Edit3 size={16} /></button>
               <button
                 onClick={() => remove(s)}
                 data-testid={`site-delete-${s.id}`}
+                title="Delete this training location"
                 className="iu-btn-ghost-sm text-rose-600" aria-label="Delete"
               ><Trash2 size={16} /></button>
             </div>
@@ -227,6 +229,7 @@ function SiteForm({ initial, onClose, onSaved }) {
             type="button"
             onClick={useMyLocation}
             disabled={locating}
+            title="Fill the coordinates with where you're standing right now"
             data-testid="site-use-location"
             className="text-xs text-sky-700 hover:text-sky-900 flex items-center gap-1 disabled:opacity-50"
           >

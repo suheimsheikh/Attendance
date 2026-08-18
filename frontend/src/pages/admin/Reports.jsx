@@ -88,9 +88,9 @@ export default function Reports() {
       </header>
 
       <div className="flex gap-2 mb-4">
-        <button data-testid="tab-calendar" onClick={() => setTab("calendar")} className={`iu-chip ${tab === "calendar" ? "iu-chip-active" : ""}`}>Calendar Grid</button>
-        <button data-testid="tab-attendance" onClick={() => setTab("attendance")} className={`iu-chip ${tab === "attendance" ? "iu-chip-active" : ""}`}>Attendance</button>
-        <button data-testid="tab-daily" onClick={() => setTab("daily")} className={`iu-chip ${tab === "daily" ? "iu-chip-active" : ""}`}>Daily Leave/Tour</button>
+        <button data-testid="tab-calendar" onClick={() => setTab("calendar")} title="31-day per-member grid: presence, leaves, offs, hours and payroll columns" className={`iu-chip ${tab === "calendar" ? "iu-chip-active" : ""}`}>Calendar Grid</button>
+        <button data-testid="tab-attendance" onClick={() => setTab("attendance")} title="Date-range attendance summary with drill-down and CSV export" className={`iu-chip ${tab === "attendance" ? "iu-chip-active" : ""}`}>Attendance</button>
+        <button data-testid="tab-daily" onClick={() => setTab("daily")} title="Who was on leave or tour on a given day" className={`iu-chip ${tab === "daily" ? "iu-chip-active" : ""}`}>Daily Leave/Tour</button>
       </div>
 
       {tab === "attendance" && (

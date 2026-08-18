@@ -484,6 +484,7 @@ function CollapsibleList({ title, Icon, count, empty, testid, children }) {
     <section className="iu-card overflow-hidden" data-testid={testid}>
       <button
         onClick={() => setOpen(!open)}
+        title={open ? "Collapse this section" : "Expand this section"}
         className="w-full px-4 py-2.5 flex items-center gap-2 hover:bg-slate-50 transition-colors text-left"
         aria-expanded={open}
       >
@@ -654,6 +655,7 @@ function MyReasonsSection() {
                 type="button"
                 onClick={() => remove(r)}
                 disabled={busy === r}
+                title="Remove this saved reason from your quick-pick list"
                 data-testid="my-reasons-remove"
                 aria-label={`Remove ${r}`}
                 className="ml-0.5 text-slate-400 hover:text-red-600 disabled:opacity-40"

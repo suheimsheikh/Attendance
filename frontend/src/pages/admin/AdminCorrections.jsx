@@ -103,6 +103,7 @@ export default function AdminCorrections() {
           <button
             key={t.key}
             onClick={() => setStatus(t.key)}
+            title={`Show ${t.label.toLowerCase()} correction requests`}
             data-testid={`corr-tab-${t.key}`}
             className={`px-3 h-8 rounded-full text-xs font-semibold border transition ${
               status === t.key ? "bg-slate-800 text-white border-slate-800"
@@ -113,6 +114,7 @@ export default function AdminCorrections() {
         <button
           onClick={load}
           disabled={loading}
+          title="Reload the queue from the server"
           className="ml-auto inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-[11px] font-semibold bg-white border border-slate-200 hover:bg-slate-50"
           data-testid="corr-refresh"
         >
@@ -123,6 +125,7 @@ export default function AdminCorrections() {
           <button
             onClick={approveAll}
             disabled={busyId === "bulk"}
+            title="Approve every pending correction in one click"
             className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-[11px] font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
             data-testid="corr-approve-all"
           >

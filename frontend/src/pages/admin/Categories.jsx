@@ -217,7 +217,7 @@ export default function Categories() {
             You can add custom categories (e.g. Volunteers) for reporting and Chef&apos;s View grouping.
           </p>
         </div>
-        <button onClick={() => setEditing({})} data-testid="category-new" className="iu-btn-primary">
+        <button onClick={() => setEditing({})} data-testid="category-new" title="Create a member category with its own attendance rules" className="iu-btn-primary">
           <Plus size={16} /> New category
         </button>
       </header>
@@ -256,6 +256,7 @@ export default function Categories() {
               <button
                 type="button"
                 onClick={() => setEditing(r)}
+                title="Edit this category's name, colour and rules"
                 className="p-2 rounded-lg text-slate-500 hover:bg-slate-100"
                 title="Edit"
                 data-testid={`category-edit-${r.key}`}
@@ -266,6 +267,7 @@ export default function Categories() {
                 type="button"
                 onClick={() => remove(r)}
                 disabled={r.is_seeded || r.member_count > 0}
+                title={r.is_seeded ? "Built-in categories can't be deleted" : r.member_count > 0 ? "Move its members out before deleting" : "Delete this category"}
                 className="p-2 rounded-lg text-rose-500 hover:bg-rose-50 disabled:opacity-30 disabled:cursor-not-allowed"
                 title={r.is_seeded ? "Seeded — protected"
                        : r.member_count > 0 ? "Reassign members first"

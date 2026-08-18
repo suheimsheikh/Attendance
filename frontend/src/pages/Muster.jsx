@@ -347,6 +347,7 @@ export default function Muster() {
             key={m.key}
             data-testid={`muster-mode-${m.key}`}
             onClick={() => setMode(m.key)}
+            title={m.key === "checkin" ? "Tick members arriving and log their check-in" : "Tick members leaving and log their check-out"}
             className={`iu-btn ${mode === m.key ? "iu-btn-primary" : "iu-btn-secondary"}`}
           >
             <m.Icon size={16} /> {m.label}
@@ -393,12 +394,13 @@ export default function Muster() {
           data-testid="muster-toggle-all"
           onClick={toggleAllVisible}
           disabled={filtered.length === 0}
+          title="Tick or untick everyone currently shown by the filters"
           className="iu-btn-ghost !h-9 !px-3 text-xs"
         >
           {allVisiblePicked ? <CheckSquare size={14}/> : <Square size={14}/>}
           {allVisiblePicked ? "Untick visible" : "Tick all visible"}
         </button>
-        <button onClick={load} className="iu-btn-secondary !h-9 !px-3" data-testid="muster-refresh">
+        <button onClick={load} className="iu-btn-secondary !h-9 !px-3" data-testid="muster-refresh" title="Reload the list from the server">
           <RefreshCw size={14} />
         </button>
       </div>
@@ -484,6 +486,7 @@ export default function Muster() {
             data-testid="muster-submit"
             onClick={submit}
             disabled={saving || picked.size === 0}
+            title="Save attendance for all ticked members — your GPS is stamped on each record"
             className="iu-btn-primary"
             style={{ background: picked.size > 0 ? meta.color : undefined }}
           >

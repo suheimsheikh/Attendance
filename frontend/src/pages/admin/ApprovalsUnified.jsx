@@ -310,6 +310,7 @@ export default function ApprovalsUnified() {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={openBreakModal}
+            title="Log a short mid-day break for a member (auto-approved)"
             className="iu-btn-secondary !bg-amber-50 !text-amber-800 hover:!bg-amber-100 !border-amber-200"
             data-testid="apply-break"
           >
@@ -317,6 +318,7 @@ export default function ApprovalsUnified() {
           </button>
           <button
             onClick={() => setShowOnBehalf(true)}
+            title="File a leave, tour or late arrival for a member who can't do it themselves"
             className="iu-btn-primary"
             data-testid="apply-on-behalf"
           >
@@ -324,6 +326,7 @@ export default function ApprovalsUnified() {
           </button>
           <button
             onClick={load}
+            title="Reload the pending queue from the server"
             className="iu-btn-secondary"
             disabled={loading}
             data-testid="approvals-refresh"
@@ -341,6 +344,7 @@ export default function ApprovalsUnified() {
             <button
               key={f.key}
               onClick={() => setFilter(f.key)}
+              title={`Show only ${f.label.toLowerCase()} requests`}
               className={`iu-chip ${active ? "iu-chip-active" : ""}`}
               data-testid={`approvals-filter-${f.key}`}
             >
