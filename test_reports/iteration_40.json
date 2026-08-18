@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 40 — Meal Masters tree tab. Backend: 8/8 pytest cases pass in /app/backend/tests/test_meal_masters_iter40.py covering PUT /api/meals/purchase-categories active-flag round-trip + duplicate-key rejection, PUT /api/meals/items/reorder (happy path, unknown-id 400, chef 403), item soft-delete when history exists + hard-delete when no history, and PATCH move-between-categories. Frontend Playwright: admin login → Pantry Stock → Masters tab renders tree with folder icons, item counts, unit + stock-on-hand hints. Expand/collapse, add category (slug key), add item under category, deactivate category (INACTIVE badge shown with Show inactive on; hidden when off), reactivate, rename category — all verified. Chef login → Masters tab visible in read-only mode, all admin-only controls (add category, rename, toggle, item delete) absent. No console errors. iter39 sidebar-dedupe bug also appears fixed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_meal_masters_iter40.py",
+    "/app/test_reports/pytest/iter40_masters.xml",
+    "/app/test_reports/masters_tree_iter40.jpeg",
+    "/app/test_reports/masters_chef_iter40.jpeg"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "meals.py is now 1810 lines — the iter39 note to split into meals_muster.py + meals_pantry.py + meals_masters.py is more pressing now.",
+    "MealMastersTab.jsx (425 lines) is fine but note the drag-and-drop reorder handler is present in the UI — only tested via backend API here; UI drag was not exercised by playwright."
+  ],
+  "updated_files": ["/app/backend/tests/test_meal_masters_iter40.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (all masters flows)"},
+  "test_credentials": "admin@attendance.app / Admin@12345",
+  "seed_data_creation": "TEST_Reorder_* items (grocery/kg), TEST_SoftDel_/TEST_HardDel_/TEST_Move_ items, and one TEST inactive purchase category created during tests. Chef user chef-masters-*@meals.example.com and ui-chef-@meals.example.com created and cleaned up post-run. TEST_UI_Cat + TEST_UI_Item created via UI and cleaned up (item hard-deleted, categories restored via PUT).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reusable pytest: /app/backend/tests/test_meal_masters_iter40.py (masters + reorder + role gate) and /app/backend/tests/test_pantry_stock_iter39.py (pantry flow). UI drag-and-drop reorder was NOT exercised by playwright — only the backend endpoint. If retesting drag on the tree, target row selectors are masters-item-{id}.",
+  "rca of the issue": "No bugs found."
+}

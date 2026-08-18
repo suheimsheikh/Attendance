@@ -48,7 +48,7 @@ export default function MealWastageTab() {
         api.get("/meals/purchase-categories"),
         api.get("/meals/items?include_inactive=false"),
       ]);
-      setCats(c.categories || []);
+      setCats((c.categories || []).filter((x) => x.active !== false));
       setItems(i.items || []);
     } catch (err) { showApiError(err, "Couldn't load masters"); }
   };

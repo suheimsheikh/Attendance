@@ -14,6 +14,21 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 18 Aug 2026 (Pantry Masters tree)
+- New "Masters" tab in Pantry Stock (MealMastersTab.jsx): tree of Categories → Items.
+  - Add/rename/deactivate categories (categories config now carries `active` flag;
+    inactive cats hidden from Purchases/Issues/Wastage entry dropdowns).
+  - Add/rename/edit (unit, opening stock + as-of)/deactivate/delete items;
+    move item to another category via "Move to…" select.
+  - Drag-and-drop reorder within a category → NEW `PUT /api/meals/items/reorder`
+    (sets sort_order (idx+1)*10; validates ids belong to category; admin-only).
+  - Read-only hints: unit badge + stock-on-hand per item (from /meals/stock),
+    item count per category; "Show inactive" toggle; chefs get read-only tree.
+- Tested: iteration_40.json — 8/8 backend (tests/test_meal_masters_iter40.py),
+  all UI flows + chef read-only verified; UI drag-and-drop self-tested & persisted.
+- Future (user's words): "then to decide what data we need to manage directly
+  from the tree" — next iteration may hang purchases/issues data off tree nodes.
+
 ### 17 Aug 2026 (perf + code review sweep)
 - **Code review (read-only agent) + fixes, full suite now 665 passed / 0 failed:**
   - IST off-by-one: all backend `date.today()` "today" gates now use office-local

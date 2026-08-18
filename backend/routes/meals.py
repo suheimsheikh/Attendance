@@ -128,6 +128,7 @@ def _parse_amount(v) -> Optional[float]:
 class PurchaseCategoryItem(BaseModel):
     key: Optional[str] = None
     label: str = Field(..., min_length=1, max_length=60)
+    active: Optional[bool] = None
 
 
 class PurchaseCategoriesIn(BaseModel):
@@ -159,6 +160,13 @@ class ItemPatch(BaseModel):
     opening_stock_as_of: Optional[str] = None
     sort_order: Optional[int] = None
     active: Optional[bool] = None
+
+
+class ItemsReorderIn(BaseModel):
+    """Body for PUT /api/meals/items/reorder — drag-and-drop ordering
+    of items within one category from the Masters tree."""
+    category_key: str
+    item_ids: List[str]
 
 
 class IssuesUpsertIn(BaseModel):
@@ -1093,7 +1101,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             if key in seen:
                 raise HTTPException(status_code=400, detail=f"Duplicate category key '{key}'")
             seen.add(key)
-            out.append({"key": key, "label": label})
+            out.append({"key": key, "label": label,
+                        "active": c.active is not False})
         await db.config.update_one(
             {"id": PURCHASE_CFG_ID},
             {"$set": {"categories": out,
@@ -1257,6 +1266,21 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             return {"ok": True, "soft_deleted": True}
         await db.meal_items.delete_one({"id": item_id})
         return {"ok": True, "soft_deleted": False}
+
+    @router.put("/meals/items/reorder")
+    async def reorder_items(body: ItemsReorderIn, admin: dict = Depends(require_admin)):
+        rows = await db.meal_items.find(
+            {"category_key": body.category_key}, {"_id": 0, "id": 1},
+        ).to_list(500)
+        valid = {r["id"] for r in rows}
+        ids = [i for i in body.item_ids if i in valid]
+        if not ids:
+            raise HTTPException(status_code=400,
+                                detail="No valid item ids for this category")
+        for idx, iid in enumerate(ids):
+            await db.meal_items.update_one(
+                {"id": iid}, {"$set": {"sort_order": (idx + 1) * 10}})
+        return {"ok": True, "ordered": len(ids)}
 
     # ------------------------------------------------------------------
     # Daily issues (consumption)
