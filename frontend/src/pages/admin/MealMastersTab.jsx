@@ -174,6 +174,17 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
       data-testid={`masters-item-${item.id}`}
     >
       <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-200/70 rounded-lg group">
+        {/* Extreme-left LOW pill — moved here from beside the item name so
+            it's the first thing you scan and can spot restock candidates
+            at a glance without reading the row. Fixed-width slot keeps the
+            grid aligned even for items that aren't low. */}
+        <span className="w-6 shrink-0 flex justify-center" data-testid={`masters-item-lowcell-${item.id}`}>
+          {!inactive && stock?.low && (
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-100 text-rose-600" title="Low stock — at or below the minimum level" data-testid={`masters-item-low-${item.id}`}>
+              <AlertTriangle size={11}/>
+            </span>
+          )}
+        </span>
         {isAdmin && <GripVertical size={13} className="text-slate-300 group-hover:text-slate-400 cursor-grab shrink-0"/>}
         {isAdmin && (
           <span className="flex items-center gap-0.5 shrink-0" data-testid={`masters-item-ops-${item.id}`}>
@@ -214,11 +225,6 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
         )}
         {inactive && (
           <span className="text-[10px] font-bold uppercase text-rose-700 bg-rose-100 px-1.5 h-4 rounded inline-flex items-center">inactive</span>
-        )}
-        {!inactive && stock?.low && (
-          <span className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase text-rose-700 bg-rose-100 px-1.5 h-4 rounded" data-testid={`masters-item-low-${item.id}`}>
-            <AlertTriangle size={9}/> low
-          </span>
         )}
         <span className={`ml-auto ${COL_GRID} text-[11px] tabular-nums items-center`} data-testid={`masters-item-stock-${item.id}`}>
           {/* Unit — inline editable */}
@@ -368,6 +374,19 @@ export default function MealMastersTab() {
     return m;
   }, [items, stockMap]);
 
+  // Grand-total across all categories, used by the fixed row at the top
+  // of the tree. Sums the same fields the sticky header exposes.
+  const grandTotals = useMemo(() => {
+    const t = { opening_value: 0, purchased_amount: 0, issued_value: 0, on_hand_value: 0 };
+    for (const v of catTotals.values()) {
+      t.opening_value += v.opening_value || 0;
+      t.purchased_amount += v.purchased_amount || 0;
+      t.issued_value += v.issued_value || 0;
+      t.on_hand_value += v.on_hand_value || 0;
+    }
+    return t;
+  }, [catTotals]);
+
   const visibleCats = useMemo(
     () => cats.filter((c) => showInactive || c.active !== false),
     [cats, showInactive],
@@ -498,16 +517,39 @@ export default function MealMastersTab() {
             right. Stays fixed at the top of the tree while scrolling so
             you always know what each cell means without repeating labels
             on every row. */}
-        <div className="sticky top-0 z-10 bg-gradient-to-b from-slate-100 to-slate-50 border-b border-slate-200 flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500" data-testid="masters-tree-header">
-          <span className="flex-1">Item / Category</span>
-          <span className={`${COL_GRID} items-center`}>
-            <span className="text-center">Unit</span>
-            <span className="text-right" title="Opening stock — click any item's value to edit">Opening</span>
-            <span className="text-right" title="Low-stock alert level — click any item's value to edit">Min</span>
-            <span className="text-right text-emerald-600">Purch <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
-            <span className="text-right text-amber-600">Issue <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
-            <span className="text-right text-slate-700">Close <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
-          </span>
+        <div className="sticky top-0 z-10 bg-gradient-to-b from-slate-100 to-slate-50 border-b border-slate-200" data-testid="masters-tree-header">
+          <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            {/* LOW-flag slot (extreme-left) — an empty box keeps the grid
+                aligned with rows that DO carry the LOW pill. */}
+            <span className="w-6 shrink-0"/>
+            <span className="flex-1">Item / Category</span>
+            <span className={`${COL_GRID} items-center`}>
+              <span className="text-center">Unit</span>
+              <span className="text-right" title="Opening stock — click any item's value to edit">Opening</span>
+              <span className="text-right" title="Low-stock alert level — click any item's value to edit">Min</span>
+              <span className="text-right text-emerald-600">Purch <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
+              <span className="text-right text-amber-600">Issue <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
+              <span className="text-right text-slate-700">Close <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
+            </span>
+          </div>
+          {/* Grand-totals row — sums ALL visible category totals so the
+              admin sees the pantry's overall opening/purch/issue/closing
+              value at a glance without collapsing categories. Amounts
+              only (qty roll-ups impossible across mixed units). */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50/70 border-t border-amber-100" data-testid="masters-grand-totals">
+            <span className="w-6 shrink-0"/>
+            <span className="flex-1 text-[11px] font-bold uppercase tracking-wider text-amber-800">
+              Grand total <span className="text-[10px] font-semibold text-amber-600/80 normal-case">· {visibleCats.length} categor{visibleCats.length === 1 ? "y" : "ies"} · {items.filter((it) => showInactive || it.active !== false).length} items</span>
+            </span>
+            <span className={`${COL_GRID} text-[11px] tabular-nums items-center`}>
+              <span/>
+              <span className="text-right font-bold text-slate-800" title="Sum of opening stock value across ALL categories">{fmtRs(grandTotals.opening_value)}</span>
+              <span/>
+              <span className="text-right font-bold text-emerald-700" title="Sum of total purchase amounts across ALL categories">{fmtRs(grandTotals.purchased_amount)}</span>
+              <span className="text-right font-bold text-amber-700" title="Sum of total issue values across ALL categories">{fmtRs(grandTotals.issued_value)}</span>
+              <span className="text-right font-bold text-slate-900" title="Sum of closing stock value across ALL categories">{fmtRs(grandTotals.on_hand_value)}</span>
+            </span>
+          </div>
         </div>
 
         <div className="p-3 space-y-1">
@@ -520,6 +562,10 @@ export default function MealMastersTab() {
           return (
             <div key={cat.key} data-testid={`masters-cat-${cat.key}`}>
               <div className={`flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-200/70 group ${catInactive ? "opacity-60" : ""}`}>
+                {/* Extreme-left slot mirrors the item rows' LOW pill area
+                    so category and item cells line up. Kept empty for
+                    categories — LOW is a per-item concept. */}
+                <span className="w-6 shrink-0"/>
                 <button onClick={() => toggleExpand(cat.key)} className="p-0.5 rounded hover:bg-white text-slate-500" data-testid={`masters-cat-expand-${cat.key}`}>
                   {open ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}
                 </button>

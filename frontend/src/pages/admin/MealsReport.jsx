@@ -17,6 +17,7 @@ import { formatDate } from "../../utils";
 import MealExpensesTab from "./MealExpensesTab";
 import MealPurchasesTab from "./MealPurchasesTab";
 import MealIssuesTab from "./MealIssuesTab";
+import MealEntryTab from "./MealEntryTab";
 import MealWastageTab from "./MealWastageTab";
 import MealMastersTab from "./MealMastersTab";
 import MealCrossCheckTab from "./MealCrossCheckTab";
@@ -467,8 +468,7 @@ export default function MealsReport() {
   }, [tab]);
   const TABS = [
     { key: "masters",   label: "Masters",       Icon: FolderTree, hint: "Central tree of categories and items — stock on hand, history, low-stock alerts and item management" },
-    { key: "purchases", label: "Purchases",     Icon: ShoppingCart, hint: "Enter supplier bills for a day — item, quantity and rate" },
-    { key: "issues",    label: "Daily issues",  Icon: ClipboardList, hint: "Log what the kitchen drew from stock each day" },
+    { key: "entry",     label: "Daily entry",   Icon: ShoppingCart, hint: "One screen to enter both supplier purchases (qty · rate) and kitchen issues (qty) for a day — auto-saves as you type" },
     { key: "wastage",   label: "Wastage & losses", Icon: Flame, hint: "Record rotten, spilled or lost stock with a reason" },
     { key: "crosscheck", label: "Cross-check", Icon: Scale, hint: "Compare what the kitchen issued vs meals served × per-item norms — flags over/under days" },
     { key: "daily",     label: "Daily counts",  Icon: Utensils, hint: "Headcount of meals served per day" },
@@ -510,6 +510,10 @@ export default function MealsReport() {
       {tab === "daily" && <DailyTab />}
       {tab === "monthly" && <MonthlyGridTab />}
       {tab === "expenses" && <MealExpensesTab />}
+      {tab === "entry" && <MealEntryTab />}
+      {/* Legacy: keep old tabs reachable via deep-link only, in case a
+          user has a purchases/issues URL bookmarked from before the
+          Feb-2026 merge. */}
       {tab === "purchases" && <MealPurchasesTab onGoMasters={() => setTab("masters")} />}
       {tab === "issues" && <MealIssuesTab />}
       {tab === "wastage" && <MealWastageTab />}

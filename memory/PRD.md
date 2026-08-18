@@ -14,6 +14,26 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 18 Aug 2026 (Masters v3 + unified Daily Entry tab)
+- **Masters**: LOW-stock pill moved to the extreme-left of every item row
+  (dedicated w-6 slot) — scan-and-spot restock candidates without reading
+  the whole row. Category rows carry an empty matching slot so the grid
+  stays aligned.
+- **Masters**: Grand-total row pinned at the top of the tree (below the
+  sticky column header) — sums Opening / Purch / Issue / Close ₹amounts
+  across ALL visible categories. Warm amber band + category/item count.
+- **Daily entry** (new): Merged the old Purchases + Daily-issues tabs into
+  a single `MealEntryTab`. One row per item with columns for Purch qty ·
+  Rate ₹ · Amount ₹ AND Issue qty on the same line.
+- Auto-saves on blur (350ms debounce per half). Silent when idle, spinner
+  during flush, green "Saved ✓" tick for 3s post-save.
+- Prev/next-day arrows flanking the date picker. Next disabled when it
+  would run past today.
+- Category headers rendered in bold uppercase on a warm yellow band
+  (`bg-amber-100`) to anchor scans down a long grocery list.
+- Legacy `MealPurchasesTab` and `MealIssuesTab` kept reachable via URL
+  deep-links only so any old browser bookmarks still work.
+
 ### 18 Aug 2026 (Pantry Master v2 — sticky header + one-line rows)
 - Added a **sticky column header** at the top of the Masters tree:
   `Item/Category | Unit | Opening | Min | Purch(qty·₹) | Issue(qty·₹) | Close(qty·₹)`.
