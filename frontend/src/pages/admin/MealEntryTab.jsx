@@ -226,67 +226,67 @@ export default function MealEntryTab() {
 
   return (
     <div data-testid="meal-entry-tab">
-      {/* Date navigator + save indicator */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <button
-          onClick={() => setDateStr(addDays(dateStr, -1))}
-          className="iu-btn-secondary !h-9 !w-9 !p-0"
-          title="Previous day"
-          data-testid="entry-prev-day"
-        ><ChevronLeft size={16}/></button>
-        <input
-          type="date"
-          value={dateStr}
-          max={todayISO()}
-          onChange={(e) => setDateStr(e.target.value)}
-          className="iu-input !h-9 !w-auto text-sm"
-          data-testid="entry-date"
-        />
-        <button
-          onClick={() => canGoForward && setDateStr(nextDate)}
-          disabled={!canGoForward}
-          className="iu-btn-secondary !h-9 !w-9 !p-0 disabled:opacity-40 disabled:cursor-not-allowed"
-          title={canGoForward ? "Next day" : "Can't go past today"}
-          data-testid="entry-next-day"
-        ><ChevronRight size={16}/></button>
-        <span className="text-sm font-semibold text-slate-700">{formatDate(dateStr)}</span>
-
-        <label className="ml-4 inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer" title="Hide items with no purchases and no issues today">
+      {/* Everything above the item list stays latched to the top while
+          the chef scrolls a long grocery grid — day navigator, save
+          indicator, per-day totals, PURCHASES/ISSUES group header AND
+          column labels. Wrapped in one sticky div so nav + totals move
+          as a unit; the thead below uses a matching `top` offset so it
+          stacks cleanly under this block. */}
+      <div className="sticky top-0 z-30 bg-slate-50 pb-3 -mx-4 md:-mx-8 px-4 md:px-8" data-testid="entry-sticky-top">
+        <div className="flex items-center gap-2 pt-1 pb-2 flex-wrap">
+          <button
+            onClick={() => setDateStr(addDays(dateStr, -1))}
+            className="iu-btn-secondary !h-9 !w-9 !p-0"
+            title="Previous day"
+            data-testid="entry-prev-day"
+          ><ChevronLeft size={16}/></button>
           <input
-            type="checkbox"
-            checked={nonZeroOnly}
-            onChange={(e) => setNonZeroOnly(e.target.checked)}
-            data-testid="entry-nonzero-toggle"
+            type="date"
+            value={dateStr}
+            max={todayISO()}
+            onChange={(e) => setDateStr(e.target.value)}
+            className="iu-input !h-9 !w-auto text-sm"
+            data-testid="entry-date"
           />
-          <Filter size={12}/> Only touched rows
-        </label>
+          <button
+            onClick={() => canGoForward && setDateStr(nextDate)}
+            disabled={!canGoForward}
+            className="iu-btn-secondary !h-9 !w-9 !p-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            title={canGoForward ? "Next day" : "Can't go past today"}
+            data-testid="entry-next-day"
+          ><ChevronRight size={16}/></button>
+          <span className="text-sm font-semibold text-slate-700">{formatDate(dateStr)}</span>
 
-        {/* Save indicator — silent when idle, spinner while flushing,
-            tick immediately after a successful save (auto-clears after
-            a couple of seconds). */}
-        <span className="ml-auto text-xs inline-flex items-center gap-1" data-testid="entry-save-indicator">
-          {(saving.purch || saving.issues) ? (
-            <span className="text-slate-500 inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin"/> Saving…</span>
-          ) : savedAt && (Date.now() - savedAt) < 3000 ? (
-            <span className="text-emerald-600 inline-flex items-center gap-1"><Check size={12}/> Saved</span>
-          ) : (
-            <span className="text-slate-400">Auto-saves as you type</span>
-          )}
-        </span>
-      </div>
+          <label className="ml-4 inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer" title="Hide items with no purchases and no issues today">
+            <input
+              type="checkbox"
+              checked={nonZeroOnly}
+              onChange={(e) => setNonZeroOnly(e.target.checked)}
+              data-testid="entry-nonzero-toggle"
+            />
+            <Filter size={12}/> Only touched rows
+          </label>
 
-      {/* Day totals — pinned above the grid so the chef sees the running
-          spend / consumption for the day without scrolling to a footer.
-          Two coloured chips visually match the PURCHASES / ISSUES groups
-          in the grid header below. */}
-      <div className="grid grid-cols-2 gap-3 mb-3" data-testid="entry-totals-bar">
-        <div className="iu-card p-3 flex items-center justify-between border-emerald-200 bg-emerald-50/60">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Purchases · Day total</span>
-          <span className="text-xl font-extrabold tabular-nums text-emerald-800" data-testid="entry-day-total">₹{inr(dayTotal)}</span>
+          <span className="ml-auto text-xs inline-flex items-center gap-1" data-testid="entry-save-indicator">
+            {(saving.purch || saving.issues) ? (
+              <span className="text-slate-500 inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin"/> Saving…</span>
+            ) : savedAt && (Date.now() - savedAt) < 3000 ? (
+              <span className="text-emerald-600 inline-flex items-center gap-1"><Check size={12}/> Saved</span>
+            ) : (
+              <span className="text-slate-400">Auto-saves as you type</span>
+            )}
+          </span>
         </div>
-        <div className="iu-card p-3 flex items-center justify-between border-amber-200 bg-amber-50/60">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Issues · Day total</span>
-          <span className="text-xl font-extrabold tabular-nums text-amber-800" data-testid="entry-day-issue-total">₹{inr(issueDayTotal)}</span>
+
+        <div className="grid grid-cols-2 gap-3" data-testid="entry-totals-bar">
+          <div className="iu-card p-2.5 flex items-center justify-between border-emerald-200 bg-emerald-50/60">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Purchases · Day total</span>
+            <span className="text-lg font-extrabold tabular-nums text-emerald-800" data-testid="entry-day-total">₹{inr(dayTotal)}</span>
+          </div>
+          <div className="iu-card p-2.5 flex items-center justify-between border-amber-200 bg-amber-50/60">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Issues · Day total</span>
+            <span className="text-lg font-extrabold tabular-nums text-amber-800" data-testid="entry-day-issue-total">₹{inr(issueDayTotal)}</span>
+          </div>
         </div>
       </div>
 
@@ -306,7 +306,7 @@ export default function MealEntryTab() {
         // via the inner card style instead — but not on this wrapper.
         <div className="iu-card" data-testid="entry-grid-card">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 z-20 shadow-sm">
+            <thead className="sticky top-[112px] z-20 shadow-sm">
               {/* Group-header row: visually splits the grid into a
                   PURCHASES half (emerald) and an ISSUES half (amber) so
                   chefs immediately see which side of the row they're in.

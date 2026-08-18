@@ -497,45 +497,46 @@ export default function MealMastersTab() {
 
   return (
     <div data-testid="meal-masters-tab">
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <p className="text-xs text-slate-500">
-          {isAdmin
-            ? "Manage categories and items in one tree. Drag items to reorder within a category."
-            : "Read-only view of the pantry masters."}
-        </p>
-        <label className="ml-auto inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer" title="Show stock on hand as it stood on a past date">
-          Stock as of
-          <input
-            type="date"
-            value={asOf}
-            max={new Date().toLocaleDateString("sv-SE")}
-            onChange={(e) => setAsOf(e.target.value)}
-            className="iu-input !h-7 !w-auto text-xs"
-            data-testid="masters-as-of"
-          />
-          {asOf && (
-            <button onClick={() => setAsOf("")} className="text-[10px] font-bold text-slate-400 hover:text-slate-600" title="Back to today's stock">reset</button>
-          )}
-        </label>
-        <label className="inline-flex items-center gap-2 text-xs text-rose-700 cursor-pointer" title="Show only items at or below their minimum stock level">
-          <input type="checkbox" checked={lowOnly} onChange={(e) => setLowOnly(e.target.checked)} data-testid="masters-low-only"/>
-          <AlertTriangle size={12}/> Only low stock
-        </label>
-        <label className="inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer" title="Include deactivated categories and items in the tree">
-          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} data-testid="masters-show-inactive"/>
-          <EyeOff size={12}/> Show inactive
-        </label>
-      </div>
-
       <ShoppingListPanel data={shop}/>
 
       <div className="iu-card p-0" data-testid="masters-tree">
-        {/* Sticky column header — labels for the 6 numeric columns on the
-            right. Stays fixed at the top of the tree while scrolling so
-            you always know what each cell means without repeating labels
-            on every row. */}
-        <div className="sticky top-0 z-10 bg-gradient-to-b from-slate-100 to-slate-50 border-b border-slate-200" data-testid="masters-tree-header">
-          <div className="flex items-center gap-2 pl-3 pr-5 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        {/* Sticky header — everything the user needs above the list stays
+            latched to the top while scrolling: page-scoped filter toolbar
+            (Stock as of / Only low / Show inactive), column labels, and
+            the Grand Total roll-up. */}
+        <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm" data-testid="masters-tree-header">
+          {/* Row 1 — filter toolbar */}
+          <div className="flex items-center gap-3 pl-3 pr-5 py-2 flex-wrap border-b border-slate-100">
+            <p className="text-xs text-slate-500">
+              {isAdmin
+                ? "Manage categories and items in one tree. Drag items to reorder."
+                : "Read-only view of the pantry masters."}
+            </p>
+            <label className="ml-auto inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer" title="Show stock on hand as it stood on a past date">
+              Stock as of
+              <input
+                type="date"
+                value={asOf}
+                max={new Date().toLocaleDateString("sv-SE")}
+                onChange={(e) => setAsOf(e.target.value)}
+                className="iu-input !h-7 !w-auto text-xs"
+                data-testid="masters-as-of"
+              />
+              {asOf && (
+                <button onClick={() => setAsOf("")} className="text-[10px] font-bold text-slate-400 hover:text-slate-600" title="Back to today's stock">reset</button>
+              )}
+            </label>
+            <label className="inline-flex items-center gap-2 text-xs text-rose-700 cursor-pointer" title="Show only items at or below their minimum stock level">
+              <input type="checkbox" checked={lowOnly} onChange={(e) => setLowOnly(e.target.checked)} data-testid="masters-low-only"/>
+              <AlertTriangle size={12}/> Only low stock
+            </label>
+            <label className="inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer" title="Include deactivated categories and items in the tree">
+              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} data-testid="masters-show-inactive"/>
+              <EyeOff size={12}/> Show inactive
+            </label>
+          </div>
+          {/* Row 2 — column labels */}
+          <div className="flex items-center gap-2 pl-3 pr-5 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-gradient-to-b from-slate-100 to-slate-50">
             {/* LOW-flag slot (extreme-left) — an empty box keeps the grid
                 aligned with rows that DO carry the LOW pill. */}
             <span className="w-6 shrink-0"/>
