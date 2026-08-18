@@ -14,6 +14,21 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 18 Aug 2026 (Pantry Master v2 — sticky header + one-line rows)
+- Added a **sticky column header** at the top of the Masters tree:
+  `Item/Category | Unit | Opening | Min | Purch(qty·₹) | Issue(qty·₹) | Close(qty·₹)`.
+  Labels no longer repeat on every row.
+- Item rows compressed to **one line**: qty and ₹amount inline in each of
+  the Purch/Issue/Close cells (was stacked qty-over-₹).
+- **Unit / Opening / Min are now inline-editable** on the item row itself
+  via `InlineUnit` and `InlineNum` helper components — removed the `⋯`
+  edit panel entirely. Click any value to edit, Enter/blur saves, Esc
+  cancels.
+- Category-total row aligned to the same 6-column grid (Unit + Min cells
+  intentionally blank because units are mixed at the category level).
+- Hover contrast bumped from `slate-100` to `slate-200/70` for a more
+  visible band while scrolling.
+
 ### 18 Aug 2026 (Pantry Master row redesign)
 - Moved row actions to the LEFT of the item/category name (previously
   hover-revealed on the right). Always visible now — no layout shift.

@@ -41,6 +41,67 @@ function InlineEdit({ value, onSave, onCancel, testid }) {
   );
 }
 
+// Inline number cell — displays a value, click to turn into an input. Used
+// for editable Opening Stock and Min Level columns in the Masters tree so
+// admins don't need a separate `⋯` panel. Enter/blur saves, Escape cancels.
+function InlineNum({ value, onSave, testid, hint }) {
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState(value ?? 0);
+  useEffect(() => { setV(value ?? 0); }, [value]);
+  if (!editing) {
+    return (
+      <button
+        className="w-full text-right px-1 py-0.5 rounded hover:bg-white hover:ring-1 hover:ring-emerald-300 text-slate-800 font-semibold tabular-nums transition"
+        onClick={() => setEditing(true)}
+        data-testid={testid}
+        title={hint || "Click to edit"}
+      >
+        {value == null || value === "" ? "—" : fmt(value)}
+      </button>
+    );
+  }
+  const commit = () => {
+    const n = parseFloat(v);
+    setEditing(false);
+    if (!isNaN(n) && n !== Number(value)) onSave(n);
+  };
+  return (
+    <input
+      autoFocus
+      type="number"
+      min="0"
+      step="any"
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+        if (e.key === "Escape") { setV(value ?? 0); setEditing(false); }
+      }}
+      className="iu-input !h-6 !w-full !py-0 !px-1.5 text-[11px] text-right tabular-nums"
+      data-testid={`${testid}-input`}
+    />
+  );
+}
+
+// Inline unit picker — small transparent-looking select that saves on
+// change. Used in the Masters tree Unit column.
+function InlineUnit({ value, options, onSave, testid }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => e.target.value !== value && onSave(e.target.value)}
+      className="w-full h-6 text-[10px] font-bold uppercase text-slate-600 bg-transparent border border-transparent hover:bg-white hover:ring-1 hover:ring-emerald-300 rounded px-1 text-center transition cursor-pointer"
+      data-testid={testid}
+      title="Change unit"
+    >
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
+const UNIT_OPTIONS = ["kg", "g", "L", "mL", "pcs", "dozen", "packet"];
+
 function AddItemForm({ catKey, units, onDone, onCancel }) {
   const [d, setD] = useState({ name: "", unit: "kg", opening_stock: "", opening_stock_as_of: "", min_stock: "", norm_per_serving: "" });
   const [busy, setBusy] = useState(false);
@@ -93,29 +154,26 @@ function AddItemForm({ catKey, units, onDone, onCancel }) {
   );
 }
 
+// Shared column widths so the sticky header, category rows and item rows
+// all line up in a single grid — 6 numeric columns on the right.
+// Unit(w-14) Opening(w-24) Min(w-20) Purch(w-32) Issue(w-32) Close(w-32).
+const COL_GRID = "grid grid-cols-[3.5rem_6rem_5rem_8rem_8rem_8rem] gap-x-4 shrink-0";
+
 function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd }) {
   const [renaming, setRenaming] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [d, setD] = useState({});
   const inactive = item.active === false;
-  const startEdit = () => {
-    setD({ unit: item.unit, opening_stock: item.opening_stock,
-           opening_stock_as_of: item.opening_stock_as_of || "",
-           min_stock: item.min_stock || 0,
-           norm_per_serving: item.norm_per_serving || 0 });
-    setEditing(true);
-  };
+  const showStock = !inactive && stock;
   return (
     <div
-      className={`ml-8 rounded-lg border ${dnd.over ? "border-emerald-400 bg-emerald-50/60" : "border-transparent"} ${inactive ? "opacity-60" : ""}`}
-      draggable={isAdmin && !renaming && !editing}
+      className={`ml-6 rounded-lg border ${dnd.over ? "border-emerald-400 bg-emerald-50/60" : "border-transparent"} ${inactive ? "opacity-60" : ""}`}
+      draggable={isAdmin && !renaming}
       onDragStart={dnd.onDragStart}
       onDragOver={dnd.onDragOver}
       onDrop={dnd.onDrop}
       onDragEnd={dnd.onDragEnd}
       data-testid={`masters-item-${item.id}`}
     >
-      <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-100 rounded-lg group">
+      <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-200/70 rounded-lg group">
         {isAdmin && <GripVertical size={13} className="text-slate-300 group-hover:text-slate-400 cursor-grab shrink-0"/>}
         {isAdmin && (
           <span className="flex items-center gap-0.5 shrink-0" data-testid={`masters-item-ops-${item.id}`}>
@@ -131,8 +189,7 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
                 <option key={c.key} value={c.key}>{c.label}</option>
               ))}
             </select>
-            <button onClick={() => setRenaming(true)} className="p-1 rounded hover:bg-slate-200 text-slate-500" title="Rename" data-testid={`masters-item-rename-btn-${item.id}`}><Pencil size={12}/></button>
-            <button onClick={startEdit} className="p-1 rounded hover:bg-slate-200 text-slate-500 text-[10px] font-bold" title="Edit unit / opening stock" data-testid={`masters-item-edit-btn-${item.id}`}>⋯</button>
+            <button onClick={() => setRenaming(true)} className="p-1 rounded hover:bg-white text-slate-500" title="Rename" data-testid={`masters-item-rename-btn-${item.id}`}><Pencil size={12}/></button>
             <button
               onClick={() => onPatch(item.id, { active: inactive })}
               className={`p-1 rounded ${inactive ? "hover:bg-emerald-100 text-emerald-600" : "hover:bg-amber-100 text-amber-600"}`}
@@ -151,11 +208,10 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
             onCancel={() => setRenaming(false)}
           />
         ) : (
-          <button onClick={() => onOpen(item.id)} className="font-semibold text-sm text-slate-900 hover:text-emerald-700 hover:underline underline-offset-2 text-left" data-testid={`masters-item-open-${item.id}`} title="View purchase/issue/wastage history">
+          <button onClick={() => onOpen(item.id)} className="font-semibold text-sm text-slate-900 hover:text-emerald-700 hover:underline underline-offset-2 text-left truncate" data-testid={`masters-item-open-${item.id}`} title="View purchase / issue / wastage history">
             {item.name}
           </button>
         )}
-        <span className="text-[10px] font-bold uppercase text-slate-500 bg-slate-100 px-1.5 h-4 rounded inline-flex items-center">{item.unit}</span>
         {inactive && (
           <span className="text-[10px] font-bold uppercase text-rose-700 bg-rose-100 px-1.5 h-4 rounded inline-flex items-center">inactive</span>
         )}
@@ -164,65 +220,72 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
             <AlertTriangle size={9}/> low
           </span>
         )}
-        {!inactive && stock && (
-          <span
-            className="ml-auto grid grid-cols-4 gap-x-3 text-[11px] tabular-nums shrink-0"
-            data-testid={`masters-item-stock-${item.id}`}
-          >
-            <span className="text-right" title={`Opening stock as of ${stock.opening_stock_as_of || "start"}`}>
-              <span className="block text-[9px] font-bold uppercase text-slate-400 tracking-wider">Open</span>
-              <span className="block font-semibold text-slate-700">{fmt(stock.opening_stock)} {item.unit}</span>
-              <span className="block text-[10px] text-slate-500">{fmtRs(stock.opening_value)}</span>
-            </span>
-            <span className="text-right" title="Total purchases since opening date">
-              <span className="block text-[9px] font-bold uppercase text-emerald-500 tracking-wider">Purch</span>
-              <span className="block font-semibold text-slate-700">{fmt(stock.purchased)} {item.unit}</span>
-              <span className="block text-[10px] text-emerald-700 font-medium">{fmtRs(stock.purchased_amount)}</span>
-            </span>
-            <span className="text-right" title="Total issues (kitchen consumption) since opening date">
-              <span className="block text-[9px] font-bold uppercase text-amber-500 tracking-wider">Issue</span>
-              <span className="block font-semibold text-slate-700">{fmt(stock.issued)} {item.unit}</span>
-              <span className="block text-[10px] text-amber-700 font-medium">{fmtRs(stock.issued_value)}</span>
-            </span>
-            <span className="text-right" title={`Closing stock on hand${stock.avg_rate ? ` · valued at ₹${stock.avg_rate}/${item.unit} (weighted-avg cost)` : ""}`}>
-              <span className="block text-[9px] font-bold uppercase text-slate-500 tracking-wider">Close</span>
-              <span className={`block font-bold ${stock.low ? "text-rose-600" : "text-emerald-700"}`}>{fmt(stock.on_hand)} {item.unit}</span>
-              <span className={`block text-[10px] font-medium ${stock.low ? "text-rose-500" : "text-slate-600"}`}>{fmtRs(stock.on_hand_value)}</span>
-            </span>
+        <span className={`ml-auto ${COL_GRID} text-[11px] tabular-nums items-center`} data-testid={`masters-item-stock-${item.id}`}>
+          {/* Unit — inline editable */}
+          {isAdmin ? (
+            <InlineUnit
+              value={item.unit}
+              options={UNIT_OPTIONS}
+              onSave={(u) => onPatch(item.id, { unit: u })}
+              testid={`masters-item-unit-${item.id}`}
+            />
+          ) : (
+            <span className="text-[10px] font-bold uppercase text-slate-500 text-center">{item.unit}</span>
+          )}
+          {/* Opening (editable qty) */}
+          {isAdmin ? (
+            <InlineNum
+              value={item.opening_stock || 0}
+              onSave={(n) => onPatch(item.id, { opening_stock: n })}
+              testid={`masters-item-opening-${item.id}`}
+              hint={`Click to edit opening stock${item.opening_stock_as_of ? ` (as of ${item.opening_stock_as_of})` : ""}`}
+            />
+          ) : (
+            <span className="text-right font-semibold text-slate-700">{fmt(item.opening_stock || 0)}</span>
+          )}
+          {/* Min level (editable qty) */}
+          {isAdmin ? (
+            <InlineNum
+              value={item.min_stock || 0}
+              onSave={(n) => onPatch(item.id, { min_stock: n })}
+              testid={`masters-item-min-${item.id}`}
+              hint="Click to edit low-stock alert level (0 = off)"
+            />
+          ) : (
+            <span className="text-right text-slate-500">{fmt(item.min_stock || 0)}</span>
+          )}
+          {/* Purch qty + ₹ inline */}
+          <span className="text-right whitespace-nowrap" title="Total purchases since opening date">
+            {showStock ? (
+              <>
+                <span className="font-semibold text-slate-700">{fmt(stock.purchased)}</span>
+                <span className="text-[10px] text-emerald-700 font-medium ml-1.5">{fmtRs(stock.purchased_amount)}</span>
+              </>
+            ) : <span className="text-slate-300">—</span>}
           </span>
-        )}
+          {/* Issue qty + ₹ inline */}
+          <span className="text-right whitespace-nowrap" title="Total kitchen issues since opening date">
+            {showStock ? (
+              <>
+                <span className="font-semibold text-slate-700">{fmt(stock.issued)}</span>
+                <span className="text-[10px] text-amber-700 font-medium ml-1.5">{fmtRs(stock.issued_value)}</span>
+              </>
+            ) : <span className="text-slate-300">—</span>}
+          </span>
+          {/* Close qty + ₹ inline */}
+          <span
+            className="text-right whitespace-nowrap"
+            title={showStock && stock.avg_rate ? `Valued at ₹${stock.avg_rate}/${item.unit} (weighted-avg cost)` : "Closing stock on hand"}
+          >
+            {showStock ? (
+              <>
+                <span className={`font-bold ${stock.low ? "text-rose-600" : "text-emerald-700"}`}>{fmt(stock.on_hand)}</span>
+                <span className={`text-[10px] font-medium ml-1.5 ${stock.low ? "text-rose-500" : "text-slate-600"}`}>{fmtRs(stock.on_hand_value)}</span>
+              </>
+            ) : <span className="text-slate-300">—</span>}
+          </span>
+        </span>
       </div>
-      {editing && (
-        <div className="flex items-center gap-2 flex-wrap px-8 pb-2" data-testid={`masters-item-edit-form-${item.id}`}>
-          <label className="text-[11px] text-slate-500">Unit</label>
-          <select value={d.unit} onChange={(e) => setD({ ...d, unit: e.target.value })} className="iu-input !h-7 !w-auto text-xs">
-            {(["kg", "g", "L", "mL", "pcs", "dozen", "packet"]).map((u) => <option key={u} value={u}>{u}</option>)}
-          </select>
-          <label className="text-[11px] text-slate-500">Opening stock</label>
-          <input type="number" min="0" step="any" value={d.opening_stock} onChange={(e) => setD({ ...d, opening_stock: e.target.value })} className="iu-input !h-7 !w-24 text-xs"/>
-          <label className="text-[11px] text-slate-500">as of</label>
-          <input type="date" value={d.opening_stock_as_of} onChange={(e) => setD({ ...d, opening_stock_as_of: e.target.value })} className="iu-input !h-7 !w-auto text-xs"/>
-          <label className="text-[11px] text-slate-500">Min level</label>
-          <input type="number" min="0" step="any" value={d.min_stock} onChange={(e) => setD({ ...d, min_stock: e.target.value })} className="iu-input !h-7 !w-20 text-xs" title="Low-stock alert level (0 = off)" data-testid={`masters-item-edit-min-${item.id}`}/>
-          <label className="text-[11px] text-slate-500" title="Expected quantity per meal serving — used by the Cross-check tab">Norm/serving</label>
-          <input type="number" min="0" step="any" value={d.norm_per_serving} onChange={(e) => setD({ ...d, norm_per_serving: e.target.value })} className="iu-input !h-7 !w-20 text-xs" title="Expected quantity per meal serving (0 = untracked)" data-testid={`masters-item-edit-norm-${item.id}`}/>
-          <button
-            onClick={async () => {
-              await onPatch(item.id, {
-                unit: d.unit,
-                opening_stock: parseFloat(d.opening_stock) || 0,
-                min_stock: parseFloat(d.min_stock) || 0,
-                norm_per_serving: parseFloat(d.norm_per_serving) || 0,
-                ...(d.opening_stock_as_of ? { opening_stock_as_of: d.opening_stock_as_of } : {}),
-              });
-              setEditing(false);
-            }}
-            className="iu-btn-primary !h-7 !px-2 text-xs"
-            data-testid={`masters-item-edit-save-${item.id}`}
-          ><Check size={12}/> Save</button>
-          <button onClick={() => setEditing(false)} className="iu-btn-secondary !h-7 !px-2 text-xs">Cancel</button>
-        </div>
-      )}
     </div>
   );
 }
@@ -430,7 +493,24 @@ export default function MealMastersTab() {
 
       <ShoppingListPanel data={shop}/>
 
-      <div className="iu-card p-3 space-y-1" data-testid="masters-tree">
+      <div className="iu-card p-0 overflow-hidden" data-testid="masters-tree">
+        {/* Sticky column header — labels for the 6 numeric columns on the
+            right. Stays fixed at the top of the tree while scrolling so
+            you always know what each cell means without repeating labels
+            on every row. */}
+        <div className="sticky top-0 z-10 bg-gradient-to-b from-slate-100 to-slate-50 border-b border-slate-200 flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500" data-testid="masters-tree-header">
+          <span className="flex-1">Item / Category</span>
+          <span className={`${COL_GRID} items-center`}>
+            <span className="text-center">Unit</span>
+            <span className="text-right" title="Opening stock — click any item's value to edit">Opening</span>
+            <span className="text-right" title="Low-stock alert level — click any item's value to edit">Min</span>
+            <span className="text-right text-emerald-600">Purch <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
+            <span className="text-right text-amber-600">Issue <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
+            <span className="text-right text-slate-700">Close <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
+          </span>
+        </div>
+
+        <div className="p-3 space-y-1">
         {visibleCats.map((cat) => {
           const catItems = itemsByCat.get(cat.key) || [];
           if (lowOnly && catItems.length === 0) return null;
@@ -439,14 +519,14 @@ export default function MealMastersTab() {
           const totals = catTotals.get(cat.key) || { opening_value: 0, purchased_amount: 0, issued_value: 0, on_hand_value: 0 };
           return (
             <div key={cat.key} data-testid={`masters-cat-${cat.key}`}>
-              <div className={`flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-100 group ${catInactive ? "opacity-60" : ""}`}>
-                <button onClick={() => toggleExpand(cat.key)} className="p-0.5 rounded hover:bg-slate-200 text-slate-500" data-testid={`masters-cat-expand-${cat.key}`}>
+              <div className={`flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-200/70 group ${catInactive ? "opacity-60" : ""}`}>
+                <button onClick={() => toggleExpand(cat.key)} className="p-0.5 rounded hover:bg-white text-slate-500" data-testid={`masters-cat-expand-${cat.key}`}>
                   {open ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}
                 </button>
                 {isAdmin && (
                   <span className="flex items-center gap-0.5 shrink-0" data-testid={`masters-cat-ops-${cat.key}`}>
                     <button onClick={() => { setAddingItemCat(cat.key); if (!open) toggleExpand(cat.key); }} className="p-1 rounded hover:bg-emerald-100 text-emerald-600" title="Add item" data-testid={`masters-cat-add-item-${cat.key}`}><Plus size={13}/></button>
-                    <button onClick={() => setRenamingCat(cat.key)} className="p-1 rounded hover:bg-slate-200 text-slate-500" title="Rename" data-testid={`masters-cat-rename-btn-${cat.key}`}><Pencil size={13}/></button>
+                    <button onClick={() => setRenamingCat(cat.key)} className="p-1 rounded hover:bg-white text-slate-500" title="Rename" data-testid={`masters-cat-rename-btn-${cat.key}`}><Pencil size={13}/></button>
                     <button
                       onClick={() => toggleCategory(cat.key, catInactive)}
                       className={`p-1 rounded ${catInactive ? "hover:bg-emerald-100 text-emerald-600" : "hover:bg-amber-100 text-amber-600"}`}
@@ -474,23 +554,14 @@ export default function MealMastersTab() {
                 {catInactive && (
                   <span className="text-[10px] font-bold uppercase text-rose-700 bg-rose-100 px-1.5 h-4 rounded inline-flex items-center">inactive</span>
                 )}
-                <span className="ml-auto grid grid-cols-4 gap-x-3 text-[11px] tabular-nums shrink-0" data-testid={`masters-cat-totals-${cat.key}`}>
-                  <span className="text-right" title="Sum of opening stock value across items in this category">
-                    <span className="block text-[9px] font-bold uppercase text-slate-400 tracking-wider">Open</span>
-                    <span className="block font-bold text-slate-700">{fmtRs(totals.opening_value)}</span>
-                  </span>
-                  <span className="text-right" title="Sum of total purchase amounts across items in this category">
-                    <span className="block text-[9px] font-bold uppercase text-emerald-500 tracking-wider">Purch</span>
-                    <span className="block font-bold text-emerald-700">{fmtRs(totals.purchased_amount)}</span>
-                  </span>
-                  <span className="text-right" title="Sum of total issue values across items in this category">
-                    <span className="block text-[9px] font-bold uppercase text-amber-500 tracking-wider">Issue</span>
-                    <span className="block font-bold text-amber-700">{fmtRs(totals.issued_value)}</span>
-                  </span>
-                  <span className="text-right" title="Sum of closing stock value across items in this category">
-                    <span className="block text-[9px] font-bold uppercase text-slate-500 tracking-wider">Close</span>
-                    <span className="block font-bold text-slate-900">{fmtRs(totals.on_hand_value)}</span>
-                  </span>
+                <span className={`ml-auto ${COL_GRID} text-[11px] tabular-nums items-center`} data-testid={`masters-cat-totals-${cat.key}`}>
+                  {/* Unit + Min columns don't apply at the category level (mixed units) — kept empty so the grid lines stay aligned with items. */}
+                  <span/>
+                  <span className="text-right font-bold text-slate-700" title="Sum of opening stock value across items in this category">{fmtRs(totals.opening_value)}</span>
+                  <span/>
+                  <span className="text-right font-bold text-emerald-700" title="Sum of total purchase amounts across items in this category">{fmtRs(totals.purchased_amount)}</span>
+                  <span className="text-right font-bold text-amber-700" title="Sum of total issue values across items in this category">{fmtRs(totals.issued_value)}</span>
+                  <span className="text-right font-bold text-slate-900" title="Sum of closing stock value across items in this category">{fmtRs(totals.on_hand_value)}</span>
                 </span>
               </div>
 
@@ -548,6 +619,7 @@ export default function MealMastersTab() {
             </button>
           </div>
         )}
+        </div>
       </div>
 
       {detail?.type === "item" && (
