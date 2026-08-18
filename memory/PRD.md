@@ -180,6 +180,12 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 ### Intentionally skipped
 - JWT → HttpOnly cookies (would log out all prod users; needs explicit user approval)
 
+## Code review fixes (18 Jun 2026 fork)
+- useEscape.js rewritten: shared modal stack (only top-most modal closes per Esc) + Esc while typing in input/textarea only blurs the field (2nd Esc closes). Verified in browser.
+- admin restore (replace mode) now atomic: all archive JSON parsed/validated BEFORE any delete_many; corrupt archive → 400 with zero data loss. Verified via curl.
+- Roles.jsx duplicate title props removed; shareWhatsApp caption time now Asia/Kolkata; MealMastersTab dropOn reorder 404 → toast + refetch.
+- A full DB backup exists at /tmp/backup.tar.gz (18 Aug snapshot, 142 users) — used once for recovery during testing.
+
 ## Notes for agents
 - Print PDFs: portal print region to document.body, body class + print CSS in index.css.
 - Test users: emails ending .local are rejected by email-validator; use @meals.example.com.

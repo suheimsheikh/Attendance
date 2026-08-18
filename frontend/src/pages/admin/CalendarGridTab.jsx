@@ -12,6 +12,7 @@ import MemberForm from "./MemberForm";
 import { GridCell, GridTimeCell, CELL_STYLE, correctionForCode } from "./calendar-grid/gridHelpers";
 import GridFilterBar from "./calendar-grid/GridFilterBar";
 import GridRowTotals from "./calendar-grid/GridRowTotals";
+import { useUiPrefs } from "../../hooks/useUiPrefs";
 
 /**
  * Calendar Grid tab — one row per member, one column per day of the
@@ -20,7 +21,15 @@ import GridRowTotals from "./calendar-grid/GridRowTotals";
  */
 
 export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPrevMonth, onNextMonth, onJumpToday, MonthNav, athleteLikeKeys }) {
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  // Category filter defaults to "rest" (Staff & Coaches) per user
+  // request — the population admins actually manage day to day.
+  // Persisted per-user via useUiPrefs so tweaks stick across reloads
+  // but the pill row remains fully editable.
+  const [uiPrefs, patchUiPrefs] = useUiPrefs({ reports_calendar_category: "rest" });
+  const categoryFilter = uiPrefs.reports_calendar_category || "rest";
+  const setCategoryFilter = useCallback((v) => {
+    patchUiPrefs({ reports_calendar_category: v });
+  }, [patchUiPrefs]);
   const [fleetFilter, setFleetFilter] = useState("");
   const [institutionFilter, setInstitutionFilter] = useState("");
   // Name / rank search (13 Feb 2026) — case-insensitive substring

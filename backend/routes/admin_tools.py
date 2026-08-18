@@ -151,18 +151,18 @@ def make_router(db, require_admin) -> APIRouter:
         collections = BACKUP_COLLECTIONS
         from pymongo import InsertOne
         BATCH = 500
+        # Parse & validate EVERY file up front so a corrupt archive aborts
+        # cleanly before any collection is wiped (no half-restored DB).
+        parsed: dict = {}
         for tname in collections:
             member = None
             for m in tf.getmembers():
                 if m.name.endswith(f"/{tname}.json") or m.name == f"{tname}.json":
                     member = m
                     break
-            if not member:
-                counts[tname] = 0
-                continue
-            fh = tf.extractfile(member)
+            fh = tf.extractfile(member) if member else None
             if not fh:
-                counts[tname] = 0
+                parsed[tname] = None
                 continue
             try:
                 docs = json.loads(fh.read().decode("utf-8"))
@@ -170,6 +170,12 @@ def make_router(db, require_admin) -> APIRouter:
                 raise HTTPException(status_code=400, detail=f"{tname}.json parse failed: {e}")
             if not isinstance(docs, list):
                 raise HTTPException(status_code=400, detail=f"{tname}.json must be a JSON list")
+            parsed[tname] = docs
+        for tname in collections:
+            docs = parsed[tname]
+            if docs is None:
+                counts[tname] = 0
+                continue
             col = db[tname]
             if mode == "replace":
                 await col.delete_many({})

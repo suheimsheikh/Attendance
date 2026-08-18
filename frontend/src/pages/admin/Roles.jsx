@@ -242,7 +242,6 @@ export default function Roles() {
                         onClick={() => setEditing(r)}
                         title="Edit this role's permissions"
                         className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"
-                        title="Edit"
                         data-testid={`role-edit-${r.key}`}
                       >
                         <Pencil size={16} />
@@ -252,7 +251,6 @@ export default function Roles() {
                         disabled={SYSTEM_KEYS.has(r.key)}
                         title={SYSTEM_KEYS.has(r.key) ? "Built-in roles can't be deleted" : "Delete this role"}
                         className="p-2 rounded-lg hover:bg-rose-100 text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title={SYSTEM_KEYS.has(r.key) ? "System roles cannot be deleted" : "Delete"}
                         data-testid={`role-delete-${r.key}`}
                       >
                         <Trash2 size={16} />

@@ -15,6 +15,7 @@ import { CATEGORY_FILTERS, SORT_OPTIONS } from "./constants";
 import ExMemberToggle, { useExMemberToggle } from "../../../components/ExMemberToggle";
 import ExMemberChip from "../../../components/ExMemberChip";
 import { isExMember } from "../../../utils/exMember";
+import { useUiPrefs } from "../../../hooks/useUiPrefs";
 
 /**
  * The Attendance tab of Reports — big monthly table with per-member
@@ -42,7 +43,15 @@ export default function AttendanceTab({
 
   const [loading, setLoading] = useState(false);
   const [attendance, setAttendance] = useState(null);
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  // Category filter now defaults to "rest" (Staff & Coaches) per user
+  // request — that's the population admins actually manage day to day.
+  // Persisted per-user via useUiPrefs so a coach's tweak sticks across
+  // reloads but is still fully editable from the pill row.
+  const [uiPrefs, patchUiPrefs] = useUiPrefs({ reports_attendance_category: "rest" });
+  const categoryFilter = uiPrefs.reports_attendance_category || "rest";
+  const setCategoryFilter = useCallback((v) => {
+    patchUiPrefs({ reports_attendance_category: v });
+  }, [patchUiPrefs]);
   const [fleetFilter, setFleetFilter] = useState("");
   const [institutionFilter, setInstitutionFilter] = useState("");
   // OT-only filter — replaces the previous Comp-off filter (8 Jul 2026

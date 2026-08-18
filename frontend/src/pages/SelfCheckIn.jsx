@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { Loader2, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, Camera } from "lucide-react";
+import { Loader2, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, Camera, Share2 } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { getLocation, speakLateMessage, resolveNearestSite } from "../utils";
@@ -11,6 +11,7 @@ import ReasonPrompt from "../components/ReasonPrompt";
 import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import OutOfGeofenceModal from "../components/OutOfGeofenceModal";
 import CorrectionRequestModal from "../components/CorrectionRequestModal";
+import { shareToWhatsApp, formatCheckinCaption } from "../utils/shareWhatsApp";
 
 function hmNow() {
   const d = new Date();
@@ -45,6 +46,10 @@ export default function SelfCheckIn() {
   // Pending off-geofence check-in awaiting a reason from the user.
   // { lat, lng, distance_m, nearest_name, nearest_distance_m }.
   const [offGeoPending, setOffGeoPending] = useState(null);
+  // Last check-in / check-out just performed this session — powers the
+  // one-tap "Share to WhatsApp" button. Cleared when the member acts again.
+  // { action: "checkin"|"checkout", name, siteName, at: Date }
+  const [lastAction, setLastAction] = useState(null);
   const geoPerm = useGeoPermission();
 
   const photoNeeded = photoStatus ? photoStatus.needs_photo : !user?.photo;
@@ -119,6 +124,7 @@ export default function SelfCheckIn() {
   // is confirmed, so the reason lands on the attendance row.
   const performToggle = async (geoReason = null) => {
     setWorking(true);
+    setLastAction(null);
     setLocating("Getting your location…");
     let lat = null, lng = null, acc = null;
     try {
@@ -167,6 +173,15 @@ export default function SelfCheckIn() {
           ? `Checked in${locBit} — welcome, ${res.member}!`
           : `Checked out${locBit} — ${res.member} (${res.hours}h)`
       );
+      // Stash the just-completed action so the card can offer a
+      // one-tap "Share to WhatsApp" button. Cleared when the member
+      // acts again (see start of performToggle).
+      setLastAction({
+        action: res.action,
+        name: res.member,
+        siteName: res.site_name || "",
+        at: new Date(),
+      });
       // Play a friendly Indian-female voice nudge when a check-in is marked
       // late — handy reminder for the member at the device.
       if (res.action === "checkin" && res.late) {
@@ -372,6 +387,30 @@ export default function SelfCheckIn() {
               {lastDistance.acc ? <span className="text-slate-400">· ±{Math.round(lastDistance.acc)} m</span> : null}
               {lastDistance.off ? <span className="ml-1 text-amber-600 font-semibold">off-site</span> : <span className="ml-1 text-emerald-600 font-semibold">on-site</span>}
             </div>
+          )}
+
+          {/* Share to WhatsApp — surfaces the just-completed action as a
+              one-tap share into any WhatsApp chat. Uses the OS share
+              sheet on mobile; falls back to a wa.me deep link on
+              desktop. Cleared on the next toggle. */}
+          {lastAction && (
+            <button
+              type="button"
+              data-testid="share-whatsapp-btn"
+              onClick={() => shareToWhatsApp({
+                text: formatCheckinCaption({
+                  action: lastAction.action,
+                  name: lastAction.name,
+                  siteName: lastAction.siteName,
+                  when: lastAction.at,
+                }),
+              })}
+              title="Share this check-in to a WhatsApp chat or group"
+              className="mt-5 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition"
+            >
+              <Share2 size={15} />
+              Share to WhatsApp
+            </button>
           )}
         </div>
       )}

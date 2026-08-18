@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, ArrowLeftRight, Camera, X, Clock, Coffee, Search, CheckCircle2, LogOut, LogIn } from "lucide-react";
+import { Loader2, ArrowLeftRight, Camera, X, Clock, Coffee, Search, CheckCircle2, LogOut, LogIn, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import { useAuth } from "../auth";
@@ -7,6 +7,7 @@ import Avatar from "../components/Avatar";
 import SelfieCapture from "../components/SelfieCapture";
 import { fileToResizedDataUrl } from "../utils";
 import { useEscape } from "../hooks/useEscape";
+import { shareToWhatsApp, formatCheckinCaption, dataUrlToBlob } from "../utils/shareWhatsApp";
 
 /**
  * EscortCheckIn — kiosk-style page used by both escorts themselves
@@ -320,6 +321,7 @@ function OnCampusActions({ escort, att, athletes, openExcursion, localInSelfie, 
   const [showStepOut, setShowStepOut] = useState(false);
   const [showCheckOut, setShowCheckOut] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const doReturn = async () => {
     setBusy(true);
@@ -329,6 +331,40 @@ function OnCampusActions({ escort, att, athletes, openExcursion, localInSelfie, 
       await onChange();
     } catch (err) { toast.error(err?.message || "Failed"); }
     finally { setBusy(false); }
+  };
+
+  // One-tap WhatsApp share of the check-in — pulls the just-captured
+  // selfie (when available) or the server thumbnail, and hands the
+  // OS share sheet the photo + caption. Coach then picks the parents
+  // WhatsApp group. Falls back to a text-only wa.me link on desktop.
+  const doShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      let blob = null;
+      if (localInSelfie) {
+        blob = await dataUrlToBlob(localInSelfie);
+      } else if (att.has_check_in_selfie) {
+        try {
+          const res = await api.get(`/escort-attendance/${att.id}/selfie`, { kind: "in" });
+          blob = await dataUrlToBlob(res?.data_url);
+        } catch { /* text-only fallback below */ }
+      }
+      await shareToWhatsApp({
+        text: formatCheckinCaption({
+          action: "checkin",
+          name: escort.name,
+          siteName: escort.institution || "",
+          when: att.check_in_at ? new Date(att.check_in_at) : new Date(),
+        }),
+        imageBlob: blob,
+        filename: `checkin-${escort.name.replace(/\s+/g, "-")}.jpg`,
+      });
+    } catch (err) {
+      toast.error(err?.message || "Could not open share sheet");
+    } finally {
+      setSharing(false);
+    }
   };
 
   return (
@@ -359,6 +395,17 @@ function OnCampusActions({ escort, att, athletes, openExcursion, localInSelfie, 
             testId="escort-checkin-thumb"
           />
         </div>
+        <button
+          type="button"
+          data-testid="escort-share-whatsapp"
+          onClick={doShare}
+          disabled={sharing}
+          title="Share this check-in with parents on WhatsApp"
+          className="mt-2 inline-flex items-center gap-2 px-3 h-8 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition disabled:opacity-60"
+        >
+          {sharing ? <Loader2 className="animate-spin" size={13} /> : <Share2 size={13} />}
+          Share to WhatsApp
+        </button>
       </div>
 
       {openExcursion ? (

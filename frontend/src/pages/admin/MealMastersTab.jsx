@@ -348,7 +348,11 @@ export default function MealMastersTab() {
     try {
       await api.put("/meals/items/reorder", { category_key: catKey, item_ids: list });
     } catch (err) {
-      showApiError(err, "Couldn't save the new order");
+      if (err?.status === 404) {
+        toast.error("An item in this category no longer exists — refreshing the list");
+      } else {
+        showApiError(err, "Couldn't save the new order");
+      }
       await load();
     }
   };
