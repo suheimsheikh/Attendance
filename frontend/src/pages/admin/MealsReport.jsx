@@ -491,8 +491,8 @@ export default function MealsReport() {
             data-testid={`meals-report-tab-${key}`}
             onClick={() => setTab(key)}
             title={hint}
-            className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 whitespace-nowrap ${
-              tab === key ? "border-emerald-600 text-emerald-700" : "border-transparent text-slate-500 hover:text-slate-700"
+            className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 whitespace-nowrap rounded-t-md ${
+              tab === key ? "border-blue-600 bg-blue-100 text-blue-800" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
             }`}
           >
             <span className="inline-flex items-center gap-2">

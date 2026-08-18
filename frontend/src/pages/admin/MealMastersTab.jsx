@@ -522,7 +522,7 @@ export default function MealMastersTab() {
             you always know what each cell means without repeating labels
             on every row. */}
         <div className="sticky top-0 z-10 bg-gradient-to-b from-slate-100 to-slate-50 border-b border-slate-200" data-testid="masters-tree-header">
-          <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          <div className="flex items-center gap-2 pl-3 pr-5 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
             {/* LOW-flag slot (extreme-left) — an empty box keeps the grid
                 aligned with rows that DO carry the LOW pill. */}
             <span className="w-6 shrink-0"/>
@@ -540,7 +540,7 @@ export default function MealMastersTab() {
               admin sees the pantry's overall opening/purch/issue/closing
               value at a glance without collapsing categories. Amounts
               only (qty roll-ups impossible across mixed units). */}
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50/70 border-t border-amber-100" data-testid="masters-grand-totals">
+          <div className="flex items-center gap-2 pl-3 pr-5 py-1.5 bg-amber-50/70 border-t border-amber-100" data-testid="masters-grand-totals">
             <span className="w-6 shrink-0"/>
             <span className="flex-1 text-[11px] font-bold uppercase tracking-wider text-amber-800">
               Grand total <span className="text-[10px] font-semibold text-amber-600/80 normal-case">· {visibleCats.length} categor{visibleCats.length === 1 ? "y" : "ies"} · {items.filter((it) => showInactive || it.active !== false).length} items</span>

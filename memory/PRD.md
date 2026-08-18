@@ -14,6 +14,16 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 18 Aug 2026 (alignment polish + active-tab highlight)
+- **Masters**: Fixed lingering right-alignment drift — sticky header and
+  grand-total row were using `px-3` while item/category rows sit inside
+  a `p-3` wrapper AND have their own `pr-2`, adding 8px of hidden right
+  offset. Sticky rows now use `pl-3 pr-5`. Grand Total and category
+  totals now stack pixel-perfect over item cells.
+- **Meals tab bar**: Active tab now renders on a `bg-blue-100` band with
+  a `border-blue-600` under-bar and `text-blue-800` label (was green
+  underline only) — the selected option is immediately obvious.
+
 ### 18 Aug 2026 (Daily Entry v2 — totals-top, filter, group headers)
 - **Masters**: All category rows now render on a bright yellow band
   (`bg-amber-100` always, not just on hover). Grocery / Fruits / Meat
