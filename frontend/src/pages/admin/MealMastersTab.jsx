@@ -540,18 +540,18 @@ export default function MealMastersTab() {
               admin sees the pantry's overall opening/purch/issue/closing
               value at a glance without collapsing categories. Amounts
               only (qty roll-ups impossible across mixed units). */}
-          <div className="flex items-center gap-2 pl-3 pr-5 py-1.5 bg-amber-50/70 border-t border-amber-100" data-testid="masters-grand-totals">
+          <div className="flex items-center gap-2 pl-3 pr-5 py-1.5 bg-amber-200 border-t border-amber-300" data-testid="masters-grand-totals">
             <span className="w-6 shrink-0"/>
-            <span className="flex-1 text-[11px] font-bold uppercase tracking-wider text-amber-800">
-              Grand total <span className="text-[10px] font-semibold text-amber-600/80 normal-case">· {visibleCats.length} categor{visibleCats.length === 1 ? "y" : "ies"} · {items.filter((it) => showInactive || it.active !== false).length} items</span>
+            <span className="flex-1 text-[11px] font-bold uppercase tracking-wider text-amber-900">
+              Grand total <span className="text-[10px] font-semibold text-amber-800/80 normal-case">· {visibleCats.length} categor{visibleCats.length === 1 ? "y" : "ies"} · {items.filter((it) => showInactive || it.active !== false).length} items</span>
             </span>
             <span className={`${COL_GRID} text-[11px] tabular-nums items-center`}>
               <span/>
-              <span className="text-right font-bold text-slate-800" title="Sum of opening stock value across ALL categories">{fmtRs(grandTotals.opening_value)}</span>
+              <span className="text-right font-bold text-amber-900" title="Sum of opening stock value across ALL categories">{fmtRs(grandTotals.opening_value)}</span>
               <span/>
-              <span className="text-right font-bold text-emerald-700" title="Sum of total purchase amounts across ALL categories">{fmtRs(grandTotals.purchased_amount)}</span>
-              <span className="text-right font-bold text-amber-700" title="Sum of total issue values across ALL categories">{fmtRs(grandTotals.issued_value)}</span>
-              <span className="text-right font-bold text-slate-900" title="Sum of closing stock value across ALL categories">{fmtRs(grandTotals.on_hand_value)}</span>
+              <span className="text-right font-bold text-amber-900" title="Sum of total purchase amounts across ALL categories">{fmtRs(grandTotals.purchased_amount)}</span>
+              <span className="text-right font-bold text-amber-900" title="Sum of total issue values across ALL categories">{fmtRs(grandTotals.issued_value)}</span>
+              <span className="text-right font-bold text-amber-900" title="Sum of closing stock value across ALL categories">{fmtRs(grandTotals.on_hand_value)}</span>
             </span>
           </div>
         </div>
