@@ -529,7 +529,7 @@ export default function MealMastersTab() {
 
       <ShoppingListPanel data={shop}/>
 
-      <div className="iu-card p-0 overflow-hidden" data-testid="masters-tree">
+      <div className="iu-card p-0" data-testid="masters-tree">
         {/* Sticky column header — labels for the 6 numeric columns on the
             right. Stays fixed at the top of the tree while scrolling so
             you always know what each cell means without repeating labels
