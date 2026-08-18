@@ -151,6 +151,18 @@ def make_router(db, require_admin) -> APIRouter:
         collections = BACKUP_COLLECTIONS
         from pymongo import InsertOne
         BATCH = 500
+        # Preserve the caller's own login across restore. In `replace` mode
+        # every collection is wiped before reloading — including `devices`
+        # and (if the backup lacks the caller's user row) `users`. Their JWT
+        # references those IDs, so the very next request after restore fails
+        # with "This device is no longer authorised". Snapshotting the caller
+        # here and upserting after the restore keeps them signed in without
+        # forcing a re-login on the environment they're restoring INTO.
+        # Added 02/2026 after admin reported this exact lockout in preview.
+        self_user = await db.users.find_one({"id": admin["id"]}, {"_id": 0})
+        self_devices = await db.devices.find(
+            {"user_id": admin["id"]}, {"_id": 0},
+        ).to_list(50)
         # Parse & validate EVERY file up front so a corrupt archive aborts
         # cleanly before any collection is wiped (no half-restored DB).
         parsed: dict = {}
@@ -217,6 +229,33 @@ def make_router(db, require_admin) -> APIRouter:
                     logger.warning("bulk_write partial failure for %s: %s", tname, e)
                     added += getattr(getattr(e, "details", {}), "get", lambda *_: 0)("nInserted") or 0
             counts[tname] = added
+        # ------------------------------------------------------------------
+        # Re-attach the caller so their session survives the restore.
+        # `replace` mode nuked the devices collection (and possibly the user
+        # row too). Upsert both back — idempotent, so merge mode is a no-op.
+        # Devices are re-inserted with status="approved" so the very next
+        # authenticated request from the admin's browser passes the check in
+        # server.get_current_user (device.status must be "approved").
+        # ------------------------------------------------------------------
+        if self_user:
+            await db.users.update_one(
+                {"id": self_user["id"]},
+                {"$setOnInsert": self_user},
+                upsert=True,
+            )
+        for dev in self_devices:
+            dev_id = dev.get("device_id")
+            if not dev_id:
+                continue
+            # Force status=approved so the current browser tab stays logged
+            # in even if the backup happened to hold a revoked/pending copy
+            # of the same device_id.
+            payload = {**dev, "status": "approved"}
+            await db.devices.update_one(
+                {"device_id": dev_id, "user_id": admin["id"]},
+                {"$set": payload},
+                upsert=True,
+            )
         return {"mode": mode, "inserted": counts}
 
     @router.get("/admin/preflight")

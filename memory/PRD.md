@@ -14,6 +14,16 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 18 Aug 2026 (restore lockout fix)
+- Fixed "This device is no longer authorised" after `POST /api/admin/restore?mode=replace`.
+  The restore was wiping `devices` (and possibly `users`) before reload — the caller's
+  JWT still referenced the old device_id, so the very next request 401'd.
+- admin_tools.admin_restore now snapshots the caller's user row + all their device
+  rows BEFORE the wipe, and upserts them back AFTER the restore (device status
+  forced to "approved" so the current browser tab stays signed in). Idempotent for
+  merge mode. Verified end-to-end: preflight + /auth/me both return 200 after a
+  full replace restore.
+
 ### 18 Aug 2026 (preview login fix + auth hardening)
 - Preview phone login 403 root cause: 3 revoked device rows (super phone
   9849002111) were linked to a DELETED old admin user id, so the admin
