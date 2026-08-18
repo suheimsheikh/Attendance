@@ -232,7 +232,7 @@ export default function MealEntryTab() {
           column labels. Wrapped in one sticky div so nav + totals move
           as a unit; the thead below uses a matching `top` offset so it
           stacks cleanly under this block. */}
-      <div className="sticky top-0 z-30 bg-slate-50 pb-3 -mx-4 md:-mx-8 px-4 md:px-8" data-testid="entry-sticky-top">
+      <div className="sticky top-[104px] z-30 bg-slate-50 pb-3 -mx-4 md:-mx-8 px-4 md:px-8" data-testid="entry-sticky-top">
         <div className="flex items-center gap-2 pt-1 pb-2 flex-wrap">
           <button
             onClick={() => setDateStr(addDays(dateStr, -1))}
@@ -306,7 +306,7 @@ export default function MealEntryTab() {
         // via the inner card style instead — but not on this wrapper.
         <div className="iu-card" data-testid="entry-grid-card">
           <table className="w-full text-sm">
-            <thead className="sticky top-[112px] z-20 shadow-sm">
+            <thead className="sticky top-[216px] z-20 shadow-sm">
               {/* Group-header row: visually splits the grid into a
                   PURCHASES half (emerald) and an ISSUES half (amber) so
                   chefs immediately see which side of the row they're in.

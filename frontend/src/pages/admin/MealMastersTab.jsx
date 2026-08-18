@@ -504,7 +504,7 @@ export default function MealMastersTab() {
             latched to the top while scrolling: page-scoped filter toolbar
             (Stock as of / Only low / Show inactive), column labels, and
             the Grand Total roll-up. */}
-        <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm" data-testid="masters-tree-header">
+        <div className="sticky top-[104px] z-20 bg-white border-b border-slate-200 shadow-sm" data-testid="masters-tree-header">
           {/* Row 1 — filter toolbar */}
           <div className="flex items-center gap-3 pl-3 pr-5 py-2 flex-wrap border-b border-slate-100">
             <p className="text-xs text-slate-500">

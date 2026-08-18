@@ -477,36 +477,43 @@ export default function MealsReport() {
   ];
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto" data-testid="meals-report-page">
-      <header className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Pantry Stock</h1>
-        <p className="text-slate-500 text-sm mt-1">
-          Portion planning, month-long audit, purchase entry and the expense report.
-        </p>
-      </header>
+      {/* Page title + tab bar stay latched to the very top of the viewport
+          so the chef always sees where they are and can jump tabs while
+          scrolling a long pantry list. Height ≈ 132px on desktop; child
+          sticky regions inside each tab must offset by this amount. */}
+      <div className="sticky top-0 z-40 bg-slate-50 -mx-4 md:-mx-8 px-4 md:px-8 pt-1 pb-0" data-testid="meals-report-sticky-top">
+        <header className="pb-3">
+          <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">Pantry Stock</h1>
+          <p className="text-slate-500 text-xs mt-0.5">
+            Portion planning, month-long audit, purchase entry and the expense report.
+          </p>
+        </header>
 
-      <div className="flex gap-2 mb-5 border-b border-slate-200 overflow-x-auto" data-testid="meals-report-tabs">
-        {TABS.map(({ key, label, Icon, hint }) => (
-          <button
-            key={key}
-            data-testid={`meals-report-tab-${key}`}
-            onClick={() => setTab(key)}
-            title={hint}
-            className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 whitespace-nowrap rounded-t-md ${
-              tab === key ? "border-blue-600 bg-blue-100 text-blue-800" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-            }`}
-          >
-            <span className="inline-flex items-center gap-2">
-              <Icon size={14}/> {label}
-              {key === "masters" && lowCount > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold" title={`${lowCount} item${lowCount === 1 ? "" : "s"} at or below the minimum stock level`} data-testid="stock-low-badge">
-                  {lowCount}
-                </span>
-              )}
-            </span>
-          </button>
-        ))}
+        <div className="flex gap-2 border-b border-slate-200 overflow-x-auto" data-testid="meals-report-tabs">
+          {TABS.map(({ key, label, Icon, hint }) => (
+            <button
+              key={key}
+              data-testid={`meals-report-tab-${key}`}
+              onClick={() => setTab(key)}
+              title={hint}
+              className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 whitespace-nowrap rounded-t-md ${
+                tab === key ? "border-blue-600 bg-blue-100 text-blue-800" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <span className="inline-flex items-center gap-2">
+                <Icon size={14}/> {label}
+                {key === "masters" && lowCount > 0 && (
+                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold" title={`${lowCount} item${lowCount === 1 ? "" : "s"} at or below the minimum stock level`} data-testid="stock-low-badge">
+                    {lowCount}
+                  </span>
+                )}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
+      <div className="pt-4">
       {tab === "daily" && <DailyTab />}
       {tab === "monthly" && <MonthlyGridTab />}
       {tab === "expenses" && <MealExpensesTab />}
@@ -519,6 +526,7 @@ export default function MealsReport() {
       {tab === "wastage" && <MealWastageTab />}
       {tab === "crosscheck" && <MealCrossCheckTab onGoMasters={() => setTab("masters")} />}
       {tab === "masters" && <MealMastersTab />}
+      </div>
     </div>
   );
 }
