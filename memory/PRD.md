@@ -14,6 +14,18 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 18 Aug 2026 (preview login fix + auth hardening)
+- Preview phone login 403 root cause: 3 revoked device rows (super phone
+  9849002111) were linked to a DELETED old admin user id, so the admin
+  self-recovery bypass refused (`device.user_id != matched.id`) → perma-403.
+  Deleted the stale rows (preview DB).
+- Hardened auth.py self-recovery: an admin may also recover a revoked device
+  whose linked user no longer exists (ghost link). Non-admin revoked devices
+  remain blocked (verified 403).
+- "Item not found" on move/delete: NOT reproducible in preview (UI+API verified);
+  likely stale item list on production. Added 404 auto-refresh safety net in
+  MealMastersTab (patchItem/deleteItem). AWAITING user answer: preview or prod?
+
 ### 18 Aug 2026 (code review #2 + fixes)
 - Fixed drag-reorder while a filter is on: dropOn now reorders against the FULL
   category list (items state) so hidden (inactive / not-low) items keep slots.

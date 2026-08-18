@@ -406,11 +406,17 @@ def make_router(
         # own browser and shouldn't get perma-locked out of preview/staging.
         # Non-admins (regular members) stay blocked — the audit trail matters
         # for them and admin re-enable is the documented path.
+        # Also recover when the device's linked user no longer exists (ghost
+        # link after an admin row was recreated) — otherwise the admin gets
+        # perma-403'd on a device pointing at a deleted account.
+        device_owner_is_ghost = bool(device.get("user_id")) and not await db.users.find_one(
+            {"id": device["user_id"]}, {"_id": 1})
         revoked_admin_self = (
             device["status"] == "revoked"
             and matched
             and matched.get("role") == "admin"
-            and (not device.get("user_id") or device.get("user_id") == matched["id"])
+            and (not device.get("user_id") or device.get("user_id") == matched["id"]
+                 or device_owner_is_ghost)
         )
         if device["status"] == "revoked" and not revoked_admin_self:
             raise HTTPException(status_code=403, detail="This device was revoked. Contact your admin.")

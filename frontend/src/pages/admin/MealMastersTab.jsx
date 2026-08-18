@@ -302,6 +302,11 @@ export default function MealMastersTab() {
       await load();
       if (patch.category_key) toast.success("Item moved");
     } catch (err) {
+      if (err?.status === 404) {
+        toast.error("That item no longer exists — refreshing the list");
+        await load();
+        return;
+      }
       showApiError(err, "Couldn't update item");
     }
   };
@@ -312,6 +317,11 @@ export default function MealMastersTab() {
       toast.success(r.soft_deleted ? "Item deactivated (has history)" : "Item deleted");
       await load();
     } catch (err) {
+      if (err?.status === 404) {
+        toast.error("That item no longer exists — refreshing the list");
+        await load();
+        return;
+      }
       showApiError(err, "Couldn't delete item");
     }
   };
