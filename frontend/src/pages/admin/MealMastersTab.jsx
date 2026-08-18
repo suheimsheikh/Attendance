@@ -565,7 +565,7 @@ export default function MealMastersTab() {
           const totals = catTotals.get(cat.key) || { opening_value: 0, purchased_amount: 0, issued_value: 0, on_hand_value: 0 };
           return (
             <div key={cat.key} data-testid={`masters-cat-${cat.key}`}>
-              <div className={`flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-200/70 group ${catInactive ? "opacity-60" : ""}`}>
+              <div className={`flex items-center gap-2 px-2 py-2 rounded-lg bg-amber-100 hover:bg-amber-200 group ${catInactive ? "opacity-60" : ""}`}>
                 {/* Extreme-left slot mirrors the item rows' LOW pill area
                     so category and item cells line up. Kept empty for
                     categories — LOW is a per-item concept. */}

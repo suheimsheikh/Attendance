@@ -14,6 +14,24 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 18 Aug 2026 (Daily Entry v2 — totals-top, filter, group headers)
+- **Masters**: All category rows now render on a bright yellow band
+  (`bg-amber-100` always, not just on hover). Grocery / Fruits / Meat
+  etc. stand out at a glance.
+- **Daily entry — totals at top**: Two summary chips pinned above the
+  grid — "Purchases · Day total ₹X" (emerald) and "Issues · Day total
+  ₹Y" (amber). Removed the old bottom tfoot totals row.
+- **Non-zero filter**: "Only touched rows" checkbox in the header. When
+  on, hides items with zero purchase-qty, zero rate AND zero issue-qty.
+  A category is hidden entirely once all its rows are filtered out.
+- **Group headers**: Above the column labels, a two-cell band splits the
+  grid into PURCHASES (emerald) and ISSUES (amber) so chefs can't confuse
+  the two halves. Column cells beneath keep matching tints for reinforcement.
+- **Sticky thead**: Removed the `overflow-hidden` on the card wrapper so
+  the sticky positioning actually latches. Both the group-header row and
+  the column-label row stay glued to the viewport top while scrolling
+  down a long pantry list.
+
 ### 18 Aug 2026 (Masters right-align + Issue valuation)
 - **Masters**: Fixed right-alignment of grand-total & category-total ₹
   amounts with item cells. Item row's `ml-6` outer indent was shrinking

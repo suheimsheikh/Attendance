@@ -16,7 +16,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Loader2, Check, Boxes } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Check, Boxes, Filter } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 
@@ -47,6 +47,10 @@ export default function MealEntryTab() {
   const [issues, setIssues] = useState({});    // item_id → qty
   const [saving, setSaving] = useState({ purch: false, issues: false });
   const [savedAt, setSavedAt] = useState(null); // last successful save timestamp
+  // Show only rows where either purch qty OR issue qty is > 0 — handy on
+  // busy days when the pantry list is long but the chef only touched a
+  // handful of items and wants to verify their entries at a glance.
+  const [nonZeroOnly, setNonZeroOnly] = useState(false);
 
   // ---------------------------------------------------------------------
   // Load masters once. Item / category list stays stable across day nav.
@@ -188,6 +192,17 @@ export default function MealEntryTab() {
     return Array.from(m.values()).filter((g) => g.rows.length > 0);
   }, [items, cats]);
 
+  // Applied view — hides zero-qty rows when the filter is on. A category
+  // is hidden entirely once it has no visible rows so the header doesn't
+  // stand alone above nothing.
+  const isTouched = (it) => num(purch[it.id]?.qty) > 0 || num(purch[it.id]?.rate) > 0 || num(issues[it.id]) > 0;
+  const filteredGrouped = useMemo(() => {
+    if (!nonZeroOnly) return grouped;
+    return grouped
+      .map(({ cat, rows }) => ({ cat, rows: rows.filter(isTouched) }))
+      .filter((g) => g.rows.length > 0);
+  }, [grouped, nonZeroOnly, purch, issues]);
+
   const dayTotal = useMemo(() => {
     let s = 0;
     for (const it of items) {
@@ -211,7 +226,7 @@ export default function MealEntryTab() {
 
   return (
     <div data-testid="meal-entry-tab">
-      {/* Date navigator */}
+      {/* Date navigator + save indicator */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <button
           onClick={() => setDateStr(addDays(dateStr, -1))}
@@ -236,6 +251,16 @@ export default function MealEntryTab() {
         ><ChevronRight size={16}/></button>
         <span className="text-sm font-semibold text-slate-700">{formatDate(dateStr)}</span>
 
+        <label className="ml-4 inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer" title="Hide items with no purchases and no issues today">
+          <input
+            type="checkbox"
+            checked={nonZeroOnly}
+            onChange={(e) => setNonZeroOnly(e.target.checked)}
+            data-testid="entry-nonzero-toggle"
+          />
+          <Filter size={12}/> Only touched rows
+        </label>
+
         {/* Save indicator — silent when idle, spinner while flushing,
             tick immediately after a successful save (auto-clears after
             a couple of seconds). */}
@@ -250,34 +275,69 @@ export default function MealEntryTab() {
         </span>
       </div>
 
-      {grouped.length === 0 ? (
+      {/* Day totals — pinned above the grid so the chef sees the running
+          spend / consumption for the day without scrolling to a footer.
+          Two coloured chips visually match the PURCHASES / ISSUES groups
+          in the grid header below. */}
+      <div className="grid grid-cols-2 gap-3 mb-3" data-testid="entry-totals-bar">
+        <div className="iu-card p-3 flex items-center justify-between border-emerald-200 bg-emerald-50/60">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Purchases · Day total</span>
+          <span className="text-xl font-extrabold tabular-nums text-emerald-800" data-testid="entry-day-total">₹{inr(dayTotal)}</span>
+        </div>
+        <div className="iu-card p-3 flex items-center justify-between border-amber-200 bg-amber-50/60">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Issues · Day total</span>
+          <span className="text-xl font-extrabold tabular-nums text-amber-800" data-testid="entry-day-issue-total">₹{inr(issueDayTotal)}</span>
+        </div>
+      </div>
+
+      {filteredGrouped.length === 0 ? (
         <div className="iu-card p-8 text-center" data-testid="entry-no-items">
           <Boxes size={30} className="mx-auto text-slate-300 mb-2"/>
-          <p className="font-semibold text-slate-700">No items configured yet.</p>
-          <p className="text-sm text-slate-500 mt-1">Ask an admin to add items in the Masters tab.</p>
+          <p className="font-semibold text-slate-700">
+            {nonZeroOnly ? "No purchases or issues entered yet for this day." : "No items configured yet."}
+          </p>
+          <p className="text-sm text-slate-500 mt-1">
+            {nonZeroOnly ? "Turn off \"Only touched rows\" to enter values." : "Ask an admin to add items in the Masters tab."}
+          </p>
         </div>
       ) : (
-        <div className="iu-card overflow-hidden" data-testid="entry-grid-card">
+        // `overflow-hidden` on the card would break sticky positioning
+        // for the thead. Use `overflow-clip` around the rounded corners
+        // via the inner card style instead — but not on this wrapper.
+        <div className="iu-card" data-testid="entry-grid-card">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-[11px] uppercase text-slate-500 sticky top-0 z-10">
-              <tr>
+            <thead className="sticky top-0 z-20 shadow-sm">
+              {/* Group-header row: visually splits the grid into a
+                  PURCHASES half (emerald) and an ISSUES half (amber) so
+                  chefs immediately see which side of the row they're in.
+                  Requested Feb 2026. */}
+              <tr data-testid="entry-group-header">
+                <th colSpan={3} className="bg-slate-100 border-b border-slate-200"/>
+                <th colSpan={3} className="bg-emerald-600 text-white text-[11px] font-extrabold uppercase tracking-wider px-3 py-1.5 border-b border-emerald-700 text-left">
+                  ↓ Purchases
+                </th>
+                <th colSpan={3} className="bg-amber-500 text-white text-[11px] font-extrabold uppercase tracking-wider px-3 py-1.5 border-b border-amber-600 text-left">
+                  ↓ Issues
+                </th>
+              </tr>
+              <tr className="bg-slate-50 text-[11px] uppercase text-slate-500">
                 <th className="text-left p-2 w-1/4">Item</th>
                 <th className="text-left p-2 w-14">Unit</th>
                 <th className="text-right p-2 w-24" title="Stock on hand at end of previous day">On-hand</th>
-                <th className="text-right p-2 w-24 border-l border-slate-200 text-emerald-600">Purch qty</th>
-                <th className="text-right p-2 w-24 text-emerald-600">Rate ₹</th>
-                <th className="text-right p-2 w-28 text-emerald-700">Amount ₹</th>
-                <th className="text-right p-2 w-24 border-l border-slate-200 text-amber-600">Issue qty</th>
-                <th className="text-right p-2 w-24 text-amber-600" title="Weighted-average purchase cost — auto-calculated, not editable">Rate ₹</th>
-                <th className="text-right p-2 w-28 text-amber-700">Amount ₹</th>
+                <th className="text-right p-2 w-24 border-l-2 border-emerald-500 bg-emerald-50/70">Qty</th>
+                <th className="text-right p-2 w-24 bg-emerald-50/70">Rate ₹</th>
+                <th className="text-right p-2 w-28 bg-emerald-50/70">Amount ₹</th>
+                <th className="text-right p-2 w-24 border-l-2 border-amber-500 bg-amber-50/70">Qty</th>
+                <th className="text-right p-2 w-24 bg-amber-50/70" title="Weighted-average purchase cost — auto-calculated, not editable">Rate ₹</th>
+                <th className="text-right p-2 w-28 bg-amber-50/70">Amount ₹</th>
               </tr>
             </thead>
             <tbody>
-              {grouped.map(({ cat, rows }) => (
+              {filteredGrouped.map(({ cat, rows }) => (
                 <React.Fragment key={cat.key}>
-                  {/* Category header — warm yellow band + bold uppercase
-                      label. Requested Feb 2026 to visually anchor scans. */}
-                  <tr className="bg-amber-100 border-y border-amber-200" data-testid={`entry-cat-header-${cat.key}`}>
+                  {/* Category header — bright yellow band + bold uppercase
+                      label. Anchors visual scans down a long grocery list. */}
+                  <tr className="bg-amber-100 border-y border-amber-300" data-testid={`entry-cat-header-${cat.key}`}>
                     <td colSpan={9} className="px-2 py-1.5 text-xs font-extrabold text-amber-900 uppercase tracking-wider">
                       {cat.label}
                     </td>
@@ -297,7 +357,7 @@ export default function MealEntryTab() {
                         <td className="p-2 text-right tabular-nums text-slate-600" data-testid={`entry-onhand-${it.id}`}>
                           {oh != null ? fmtQty(oh) : "—"}
                         </td>
-                        <td className="p-2 border-l border-slate-100">
+                        <td className="p-2 border-l-2 border-emerald-100">
                           <input
                             type="number" min="0" step="0.01"
                             value={e.qty ?? ""}
@@ -322,7 +382,7 @@ export default function MealEntryTab() {
                         <td className="p-2 text-right font-semibold tabular-nums text-emerald-700" data-testid={`entry-purch-amt-${it.id}`}>
                           {purchAmt > 0 ? `₹${inr(purchAmt)}` : ""}
                         </td>
-                        <td className="p-2 border-l border-slate-100">
+                        <td className="p-2 border-l-2 border-amber-100">
                           <input
                             type="number" min="0" step="0.01"
                             value={issueQty ?? ""}
@@ -334,8 +394,7 @@ export default function MealEntryTab() {
                             title={over ? "Issue exceeds on-hand — will drive stock negative" : ""}
                           />
                         </td>
-                        {/* Issue Rate — weighted-avg purchase cost, read-only.
-                            Chef doesn't type this; it's inherited from history. */}
+                        {/* Issue Rate — weighted-avg purchase cost, read-only. */}
                         <td className="p-2 text-right tabular-nums text-slate-500 text-xs" data-testid={`entry-issue-rate-${it.id}`} title="Weighted-average purchase cost across all recorded purchases">
                           {rate > 0 ? `₹${inr(rate)}` : "—"}
                         </td>
@@ -348,18 +407,6 @@ export default function MealEntryTab() {
                 </React.Fragment>
               ))}
             </tbody>
-            <tfoot className="bg-slate-50 border-t-2 border-slate-200">
-              <tr>
-                <td colSpan={5} className="p-3 text-right font-bold text-slate-600">Day purchase total</td>
-                <td className="p-3 text-right text-lg font-extrabold tabular-nums text-emerald-700" data-testid="entry-day-total">
-                  ₹{inr(dayTotal)}
-                </td>
-                <td colSpan={2} className="p-3 text-right font-bold text-slate-600">Day issue total</td>
-                <td className="p-3 text-right text-lg font-extrabold tabular-nums text-amber-700" data-testid="entry-day-issue-total">
-                  ₹{inr(issueDayTotal)}
-                </td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       )}
