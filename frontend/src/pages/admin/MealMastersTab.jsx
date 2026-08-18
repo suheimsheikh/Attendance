@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { api, showApiError } from "../../api";
 import { useAuth } from "../../auth";
 import { ItemDetailPanel, CategoryDetailPanel } from "./MealNodeDetail";
+import ShoppingListPanel from "../../components/ShoppingListPanel";
 
 const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
 
@@ -40,7 +41,7 @@ function InlineEdit({ value, onSave, onCancel, testid }) {
 }
 
 function AddItemForm({ catKey, units, onDone, onCancel }) {
-  const [d, setD] = useState({ name: "", unit: "kg", opening_stock: "", opening_stock_as_of: "", min_stock: "" });
+  const [d, setD] = useState({ name: "", unit: "kg", opening_stock: "", opening_stock_as_of: "", min_stock: "", norm_per_serving: "" });
   const [busy, setBusy] = useState(false);
   const save = async () => {
     if (!d.name.trim()) { toast.error("Item name is required"); return; }
@@ -52,6 +53,7 @@ function AddItemForm({ catKey, units, onDone, onCancel }) {
         unit: d.unit,
         opening_stock: parseFloat(d.opening_stock) || 0,
         min_stock: parseFloat(d.min_stock) || 0,
+        norm_per_serving: parseFloat(d.norm_per_serving) || 0,
         ...(d.opening_stock_as_of ? { opening_stock_as_of: d.opening_stock_as_of } : {}),
       });
       toast.success(`Added ${d.name.trim()}`);
@@ -79,6 +81,9 @@ function AddItemForm({ catKey, units, onDone, onCancel }) {
       <input type="number" min="0" step="any" placeholder="Min level" value={d.min_stock}
              onChange={(e) => setD({ ...d, min_stock: e.target.value })}
              className="iu-input !h-8 !w-24 text-sm" title="Low-stock alert level (0 = off)" data-testid={`masters-add-item-min-${catKey}`}/>
+      <input type="number" min="0" step="any" placeholder="Norm/serving" value={d.norm_per_serving}
+             onChange={(e) => setD({ ...d, norm_per_serving: e.target.value })}
+             className="iu-input !h-8 !w-28 text-sm" title="Expected quantity per meal serving — used by the Cross-check tab (0 = untracked)" data-testid={`masters-add-item-norm-${catKey}`}/>
       <button onClick={save} disabled={busy} className="iu-btn-primary !h-8 !px-3 text-xs" data-testid={`masters-add-item-save-${catKey}`}>
         {busy ? <Loader2 size={13} className="animate-spin"/> : <Check size={13}/>} Add
       </button>
@@ -95,7 +100,8 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
   const startEdit = () => {
     setD({ unit: item.unit, opening_stock: item.opening_stock,
            opening_stock_as_of: item.opening_stock_as_of || "",
-           min_stock: item.min_stock || 0 });
+           min_stock: item.min_stock || 0,
+           norm_per_serving: item.norm_per_serving || 0 });
     setEditing(true);
   };
   return (
@@ -179,12 +185,15 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
           <input type="date" value={d.opening_stock_as_of} onChange={(e) => setD({ ...d, opening_stock_as_of: e.target.value })} className="iu-input !h-7 !w-auto text-xs"/>
           <label className="text-[11px] text-slate-500">Min level</label>
           <input type="number" min="0" step="any" value={d.min_stock} onChange={(e) => setD({ ...d, min_stock: e.target.value })} className="iu-input !h-7 !w-20 text-xs" title="Low-stock alert level (0 = off)" data-testid={`masters-item-edit-min-${item.id}`}/>
+          <label className="text-[11px] text-slate-500" title="Expected quantity per meal serving — used by the Cross-check tab">Norm/serving</label>
+          <input type="number" min="0" step="any" value={d.norm_per_serving} onChange={(e) => setD({ ...d, norm_per_serving: e.target.value })} className="iu-input !h-7 !w-20 text-xs" title="Expected quantity per meal serving (0 = untracked)" data-testid={`masters-item-edit-norm-${item.id}`}/>
           <button
             onClick={async () => {
               await onPatch(item.id, {
                 unit: d.unit,
                 opening_stock: parseFloat(d.opening_stock) || 0,
                 min_stock: parseFloat(d.min_stock) || 0,
+                norm_per_serving: parseFloat(d.norm_per_serving) || 0,
                 ...(d.opening_stock_as_of ? { opening_stock_as_of: d.opening_stock_as_of } : {}),
               });
               setEditing(false);
@@ -216,14 +225,17 @@ export default function MealMastersTab() {
   const [newCatLabel, setNewCatLabel] = useState("");
   const [drag, setDrag] = useState(null);               // {catKey, itemId, overId}
   const [detail, setDetail] = useState(null);           // {type:'item'|'cat', id}
+  const [shop, setShop] = useState(null);               // reorder suggestions
 
   const load = async (asOfVal = asOf) => {
     try {
-      const [c, i, s] = await Promise.all([
+      const [c, i, s, rs] = await Promise.all([
         api.get("/meals/purchase-categories"),
         api.get("/meals/items?include_inactive=true"),
         api.get(`/meals/stock${asOfVal ? `?as_of=${asOfVal}` : ""}`),
+        api.get("/meals/reorder-suggestions"),
       ]);
+      setShop(rs);
       setCats(c.categories || []);
       setItems(i.items || []);
       if (i.units?.length) setUnits(i.units);
@@ -362,6 +374,8 @@ export default function MealMastersTab() {
           <EyeOff size={12}/> Show inactive
         </label>
       </div>
+
+      <ShoppingListPanel data={shop}/>
 
       <div className="iu-card p-3 space-y-1" data-testid="masters-tree">
         {visibleCats.map((cat) => {

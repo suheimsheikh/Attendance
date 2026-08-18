@@ -11,7 +11,7 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree } from "lucide-react";
+import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import MealExpensesTab from "./MealExpensesTab";
@@ -19,6 +19,7 @@ import MealPurchasesTab from "./MealPurchasesTab";
 import MealIssuesTab from "./MealIssuesTab";
 import MealWastageTab from "./MealWastageTab";
 import MealMastersTab from "./MealMastersTab";
+import MealCrossCheckTab from "./MealCrossCheckTab";
 
 const MEAL_ORDER = ["breakfast", "lunch", "snacks", "dinner"];
 const MEAL_LABELS = {
@@ -467,6 +468,7 @@ export default function MealsReport() {
     { key: "purchases", label: "Purchases",     Icon: ShoppingCart, hint: "Enter supplier bills for a day — item, quantity and rate" },
     { key: "issues",    label: "Daily issues",  Icon: ClipboardList, hint: "Log what the kitchen drew from stock each day" },
     { key: "wastage",   label: "Wastage & losses", Icon: Flame, hint: "Record rotten, spilled or lost stock with a reason" },
+    { key: "crosscheck", label: "Cross-check", Icon: Scale, hint: "Compare what the kitchen issued vs meals served × per-item norms — flags over/under days" },
     { key: "daily",     label: "Daily counts",  Icon: Utensils, hint: "Headcount of meals served per day" },
     { key: "monthly",   label: "Monthly grid",  Icon: CalendarDays, hint: "Month-long meal count audit grid" },
     { key: "expenses",  label: "Expense report", Icon: IndianRupee, hint: "Category-wise purchase spend for the accountant" },
@@ -509,6 +511,7 @@ export default function MealsReport() {
       {tab === "purchases" && <MealPurchasesTab onGoMasters={() => setTab("masters")} />}
       {tab === "issues" && <MealIssuesTab />}
       {tab === "wastage" && <MealWastageTab />}
+      {tab === "crosscheck" && <MealCrossCheckTab onGoMasters={() => setTab("masters")} />}
       {tab === "masters" && <MealMastersTab />}
     </div>
   );

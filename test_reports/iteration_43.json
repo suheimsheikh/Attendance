@@ -1,0 +1,29 @@
+{
+  "summary": "Iter43 — Consumption Cross-Check + Reorder Suggestions. Backend: 8/8 new pytest cases pass (/app/backend/tests/test_pantry_iter43.py) covering (a) norm_per_serving field on items — GET returns it, Rice=0.15 as seeded; POST/PATCH accept it; negative values rejected 400. (b) GET /api/meals/consumption-check — correct shape, known flags verified: 2026-08-15 Rice issued 8kg / 0 servings → flag 'over' pct=null; 2026-08-14 servings=2 expected=0.3 issued=0 → flag 'under'. Tolerance validated at 0.01–1.0 (422 outside). (c) GET /api/meals/reorder-suggestions — window_days=30, horizon_days=14, contains Chicken + Apples (both on_hand 0, 'Out of stock'), Rice NOT suggested; sorted low-first; all required keys present. (d) /meals/stock regression: 4 rows, low_count=2. iter41 suite (12/12) still passes. Frontend: Playwright (admin session via API token injection) verified — tab order [masters, purchases, issues, wastage, crosscheck, daily, monthly, expenses] all present; Shopping panel on Masters shows badge=2, expands to 2 rows (Chicken + Apples), Copy button writes plain text to clipboard ('Pantry shopping list — 18/8/2026\\n• Chicken: buy 1 kg (0 on hand)\\n• Apples: buy 1 kg (0 on hand)'); Cross-check tab title hint present ('Compare what the kitchen issued vs meals served × per-item norms — flags over/under days'), summary '1 item with norms · 2 flagged day-items in this range', tolerance default 20, flagged-only default ON, table shows OVER (rose) chip on 15/08 Rice and UNDER (amber) chip on 14/08 Rice; tolerance change refetches; unchecking flagged-only preserves the 2 rows (both are flagged in default range). Masters Rice edit form exposes 'Norm/serving' input with data-testid=masters-item-edit-norm-{id}, current value 0.15. No console errors, no non-Rice items were mutated; Rice norm untouched (still 0.15). TEST_-prefixed items self-cleaned in fixtures.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pantry_iter43.py",
+    "/app/test_reports/pytest/iter43_pantry.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "reorder_suggestions correctly computes suggested = ceil(max(need,0)*10)/10 with 14-day horizon + min_stock cover, and handles rate=0 by falling back to min_stock*2 (Chicken/Apples both hit this branch — displays 1.0 kg because min_stock=0 for Apples/Chicken and floor of 1.0 kicks in).",
+    "consumption_check treats 'expected==0 and iq==0' as skip (no row) and 'expected==0 and iq>0' as flag='over' with pct=null — matches the spec. Consider surfacing 'issued with zero servings' as its own flag color later; currently reused OVER chip is fine.",
+    "_stock_snapshot refactor is clean; /meals/stock and reorder-suggestions both share the same math which prevents drift.",
+    "ItemPatch.norm_per_serving cannot be reset to 0 via a PATCH that omits the field (only explicit 0 works) — expected pattern for Optional[float]. No action.",
+    "Frontend crosscheck-tolerance input uses % (1–100) but posts fractional (÷100) to backend; validated at UI level with min=1/max=100 — matches backend's 0.01–1.0 clamp."
+  ],
+  "updated_files": ["/app/backend/tests/test_pantry_iter43.py"],
+  "success_rate": {"backend": "100% (8/8 iter43 + 12/12 iter41 regression)", "frontend": "100% (all iter43 flows verified)"},
+  "test_credentials": "admin@attendance.app / Admin@12345",
+  "seed_data_creation": "None persisted. TEST_norm_iter43 item created and deleted within the test class.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "New testids verified: shopping-list-panel/toggle/count/table/copy, shopping-row-{id}, shopping-buy-{id}; meals-report-tab-crosscheck (with title hint), crosscheck-start/end/tolerance/flagged-only/summary/table/empty/no-norms/go-masters, crosscheck-row-{date}-{itemId}; masters-item-edit-norm-{id}. Note the masters-add-item-norm-{catKey} input is only rendered once user opens the per-category 'Add item' form (there is no visible 'add-item-btn' testid in the empty-category rows we saw — the add form appears at bottom of category tree instead). For UI login prefer POST /api/auth/login then inject localStorage keys access_token/token/ishowedup_token + user/ishowedup_user — the phone/email toggle form on /login can be flaky under automation.",
+  "rca of the issue": "No bugs. All spec items verified. Rice norm remains 0.15, min 10 as required."
+}

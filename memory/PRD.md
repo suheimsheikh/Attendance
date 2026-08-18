@@ -14,6 +14,20 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 18 Aug 2026 (Cross-check + Reorder Suggestions)
+- Consumption Cross-Check: new "Cross-check" tab (MealCrossCheckTab.jsx) — compares
+  issued qty vs meal servings × per-item norms, flags OVER/UNDER per day-item.
+  `norm_per_serving` field on meal_items (Masters add/edit forms). Endpoint:
+  GET /meals/consumption-check?start&end&tolerance (0.01–1.0, default 0.2).
+  UI: range picker, tolerance % input, "Only flagged" toggle, grouped-by-date table.
+- Reorder Suggestions: amber "Suggested shopping list" panel atop Masters
+  (ShoppingListPanel.jsx) — low items + items running out at 30-day pace;
+  suggested buy = ceil(rate×14 + min − on_hand); Copy-list to clipboard.
+  Endpoint: GET /meals/reorder-suggestions. /meals/stock refactored into shared
+  _stock_snapshot helper.
+- Tested: iteration_43.json — 8/8 new pytest + 12/12 iter41 regression, all UI
+  flows verified, zero issues. (Rice norm=0.15, min=10 seeded as demo.)
+
 ### 18 Aug 2026 (Masters as central hub + hover hints)
 - Tree Data View: item click → ledger slide-over (merged purchase/issue/wastage
   events, range picker w/ 30d/90d/1y presets, totals, on-hand); category click →

@@ -19,6 +19,7 @@ lunch/dinner variations.
 from __future__ import annotations
 
 import logging
+import math
 import uuid
 from datetime import date, datetime, timedelta
 from typing import List, Optional
@@ -150,6 +151,7 @@ class ItemIn(BaseModel):
     opening_stock: float = 0.0
     opening_stock_as_of: Optional[str] = None   # ISO date; defaults to today
     min_stock: float = 0.0                      # low-stock alert level; 0 = off
+    norm_per_serving: float = 0.0               # expected qty per meal serving; 0 = untracked
     sort_order: int = 100
 
 
@@ -160,6 +162,7 @@ class ItemPatch(BaseModel):
     opening_stock: Optional[float] = None
     opening_stock_as_of: Optional[str] = None
     min_stock: Optional[float] = None
+    norm_per_serving: Optional[float] = None
     sort_order: Optional[int] = None
     active: Optional[bool] = None
 
@@ -1182,6 +1185,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             raise HTTPException(status_code=400, detail="Opening stock cannot be negative")
         if (body.min_stock or 0) < 0:
             raise HTTPException(status_code=400, detail="Min level cannot be negative")
+        if (body.norm_per_serving or 0) < 0:
+            raise HTTPException(status_code=400, detail="Norm per serving cannot be negative")
         as_of = _valid_date(body.opening_stock_as_of) if body.opening_stock_as_of \
             else local_date_str(None)
         doc = {
@@ -1193,6 +1198,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "opening_stock": round(opening, 4),
             "opening_stock_as_of": as_of,
             "min_stock": round(float(body.min_stock or 0), 4),
+            "norm_per_serving": round(float(body.norm_per_serving or 0), 4),
             "sort_order": int(body.sort_order),
             "active": True,
             "created_at": now_utc().isoformat(),
@@ -1242,6 +1248,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             if body.min_stock < 0:
                 raise HTTPException(status_code=400, detail="Min level cannot be negative")
             update["min_stock"] = round(float(body.min_stock), 4)
+        if body.norm_per_serving is not None:
+            if body.norm_per_serving < 0:
+                raise HTTPException(status_code=400, detail="Norm per serving cannot be negative")
+            update["norm_per_serving"] = round(float(body.norm_per_serving), 4)
         if body.sort_order is not None:
             update["sort_order"] = int(body.sort_order)
         if body.active is not None:
@@ -1428,12 +1438,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     # Stock on hand — opening + Σ purchases − Σ issues − Σ wastage,
     # per item.
     # ------------------------------------------------------------------
-    @router.get("/meals/stock")
-    async def stock_on_hand(
-        as_of: Optional[str] = Query(None),
-        user: dict = Depends(require_chef_or_admin),
-    ):
-        as_of_iso = _valid_date(as_of) if as_of else local_date_str(None)
+    async def _stock_snapshot(as_of_iso: str):
+        """Shared stock math for /meals/stock and reorder suggestions."""
         items = await db.meal_items.find(
             {"active": True}, {"_id": 0},
         ).sort([("category_key", 1), ("sort_order", 1), ("name", 1)]).to_list(500)
@@ -1492,6 +1498,15 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "min_stock": min_s,
                 "low": low,
             })
+        return rows, cats
+
+    @router.get("/meals/stock")
+    async def stock_on_hand(
+        as_of: Optional[str] = Query(None),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        as_of_iso = _valid_date(as_of) if as_of else local_date_str(None)
+        rows, cats = await _stock_snapshot(as_of_iso)
         return {"as_of": as_of_iso, "rows": rows,
                 "low_count": sum(1 for r in rows if r["low"]),
                 "categories": cats, "units": list(VALID_UNITS)}
@@ -1617,6 +1632,115 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 **{k: round(v, 4) for k, v in per[i["id"]].items()},
             } for i in items],
         }
+
+    @router.get("/meals/consumption-check")
+    async def consumption_check(
+        start: Optional[str] = Query(None),
+        end: Optional[str] = Query(None),
+        tolerance: float = Query(0.2, ge=0.01, le=1.0),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Compare issued qty vs meal counts × per-item norms, day by day.
+        Only items with norm_per_serving > 0 participate."""
+        s, e = _range_or_default(start, end)
+        items = await db.meal_items.find(
+            {"active": True, "norm_per_serving": {"$gt": 0}}, {"_id": 0},
+        ).sort([("category_key", 1), ("sort_order", 1), ("name", 1)]).to_list(500)
+        if not items:
+            return {"start": s, "end": e, "tolerance": tolerance,
+                    "items_with_norm": 0, "rows": [], "flagged": 0}
+
+        servings: dict[str, int] = {}
+        async for g in db.meal_records.aggregate([
+            {"$match": {"date": {"$gte": s, "$lte": e}}},
+            {"$group": {"_id": "$date", "n": {"$sum": 1}}},
+        ]):
+            servings[g["_id"]] = int(g["n"])
+
+        issued: dict[tuple, float] = {}
+        for doc in await db.meal_issues.find(
+                {"date": {"$gte": s, "$lte": e}},
+                {"_id": 0, "date": 1, "lines": 1}).to_list(2000):
+            for line in doc.get("lines") or []:
+                iid = line.get("item_id")
+                if iid:
+                    k = (doc["date"], iid)
+                    issued[k] = issued.get(k, 0.0) + float(line.get("qty") or 0)
+
+        dates = sorted({d for d in servings} | {d for d, _ in issued}, reverse=True)
+        rows, flagged = [], 0
+        for d in dates:
+            n_serv = servings.get(d, 0)
+            for it in items:
+                norm = float(it.get("norm_per_serving") or 0)
+                expected = round(norm * n_serv, 3)
+                iq = round(issued.get((d, it["id"]), 0.0), 3)
+                if expected == 0 and iq == 0:
+                    continue
+                diff = round(iq - expected, 3)
+                if expected > 0:
+                    pct = round(diff / expected * 100, 1)
+                    flag = "over" if iq > expected * (1 + tolerance) else \
+                           "under" if iq < expected * (1 - tolerance) else "ok"
+                else:
+                    pct = None
+                    flag = "over"  # issued with zero servings recorded
+                if flag != "ok":
+                    flagged += 1
+                rows.append({"date": d, "servings": n_serv, "item_id": it["id"],
+                             "name": it["name"], "unit": it["unit"], "norm": norm,
+                             "expected": expected, "issued": iq, "diff": diff,
+                             "pct": pct, "flag": flag})
+        return {"start": s, "end": e, "tolerance": tolerance,
+                "items_with_norm": len(items), "rows": rows, "flagged": flagged}
+
+    @router.get("/meals/reorder-suggestions")
+    async def reorder_suggestions(user: dict = Depends(require_chef_or_admin)):
+        """Shopping list: low items + items running out at their recent pace.
+        Pace = (issues + wastage over last 30 days) / 30; suggestion covers
+        the next 14 days plus the min level."""
+        today = local_date_str(None)
+        rows, _cats = await _stock_snapshot(today)
+        s30 = (date.fromisoformat(today) - timedelta(days=29)).isoformat()
+        cons: dict[str, float] = {}
+        for coll in (db.meal_issues, db.meal_wastage):
+            for doc in await coll.find(
+                    {"date": {"$gte": s30, "$lte": today}},
+                    {"_id": 0, "lines": 1}).to_list(2000):
+                for line in doc.get("lines") or []:
+                    iid = line.get("item_id")
+                    if iid:
+                        cons[iid] = cons.get(iid, 0.0) + float(line.get("qty") or 0)
+
+        out = []
+        for r in rows:
+            rate = round(cons.get(r["item_id"], 0.0) / 30.0, 4)
+            days_left = round(r["on_hand"] / rate, 1) if rate > 0 and r["on_hand"] > 0 \
+                else (0.0 if rate > 0 else None)
+            running_out = days_left is not None and days_left <= 7
+            if not (r["low"] or running_out):
+                continue
+            if rate > 0:
+                need = rate * 14 + r["min_stock"] - r["on_hand"]
+            else:
+                need = max(r["min_stock"] * 2 - r["on_hand"], r["min_stock"], 1.0)
+            suggested = math.ceil(max(need, 0) * 10) / 10
+            if suggested <= 0:
+                continue
+            reasons = []
+            if r["low"]:
+                reasons.append("Below min level" if r["min_stock"] > 0 else "Out of stock")
+            if running_out:
+                reasons.append(f"~{days_left:g} days left at current pace")
+            out.append({
+                "item_id": r["item_id"], "name": r["name"], "unit": r["unit"],
+                "category_label": r["category_label"], "on_hand": r["on_hand"],
+                "min_stock": r["min_stock"], "daily_rate": rate,
+                "days_left": days_left, "suggested_qty": suggested,
+                "reasons": reasons, "low": r["low"],
+            })
+        out.sort(key=lambda x: (not x["low"], x["days_left"] if x["days_left"] is not None else 999))
+        return {"window_days": 30, "horizon_days": 14, "items": out}
 
 
     @router.put("/meals/purchases/{date_str}")
