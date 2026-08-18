@@ -51,6 +51,23 @@ body {
     @apply w-full h-11 px-3.5 rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 transition;
     border-color: #e5e7eb;
   }
+  /* Hide number-input spinner arrows on every .iu-input. Users type
+     quantities directly and the tiny up/down arrows crowd narrow inline
+     inputs (Pantry Stock Master, add-item form, edit-item form, etc.).
+     Requested 02/2026. Applies across the app — keyboard entry, mobile
+     numeric keypad, and paste all still work.
+     Firefox uses `appearance` on the input itself; WebKit/Blink uses
+     the ::-webkit-inner/outer-spin-button pseudo-elements. */
+  .iu-input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  .iu-input[type="number"]::-webkit-outer-spin-button,
+  .iu-input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+  }
   .iu-input:focus { border-color: var(--ych-navy); --tw-ring-color: rgba(28,45,72,0.15); }
   .iu-label {
     @apply block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide;

@@ -18,6 +18,7 @@ import { ItemDetailPanel, CategoryDetailPanel } from "./MealNodeDetail";
 import ShoppingListPanel from "../../components/ShoppingListPanel";
 
 const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
+const fmtRs = (n) => (n == null || !Number(n) ? "₹0" : `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`);
 
 function InlineEdit({ value, onSave, onCancel, testid }) {
   const [v, setV] = useState(value);
@@ -114,8 +115,33 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
       onDragEnd={dnd.onDragEnd}
       data-testid={`masters-item-${item.id}`}
     >
-      <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded-lg group">
+      <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-100 rounded-lg group">
         {isAdmin && <GripVertical size={13} className="text-slate-300 group-hover:text-slate-400 cursor-grab shrink-0"/>}
+        {isAdmin && (
+          <span className="flex items-center gap-0.5 shrink-0" data-testid={`masters-item-ops-${item.id}`}>
+            <select
+              value=""
+              onChange={(e) => e.target.value && onPatch(item.id, { category_key: e.target.value })}
+              className="iu-input !h-6 !w-auto !py-0 !px-1 text-[11px]"
+              title="Move to another category"
+              data-testid={`masters-item-move-${item.id}`}
+            >
+              <option value="">Move…</option>
+              {cats.filter((c) => c.key !== item.category_key && c.active !== false).map((c) => (
+                <option key={c.key} value={c.key}>{c.label}</option>
+              ))}
+            </select>
+            <button onClick={() => setRenaming(true)} className="p-1 rounded hover:bg-slate-200 text-slate-500" title="Rename" data-testid={`masters-item-rename-btn-${item.id}`}><Pencil size={12}/></button>
+            <button onClick={startEdit} className="p-1 rounded hover:bg-slate-200 text-slate-500 text-[10px] font-bold" title="Edit unit / opening stock" data-testid={`masters-item-edit-btn-${item.id}`}>⋯</button>
+            <button
+              onClick={() => onPatch(item.id, { active: inactive })}
+              className={`p-1 rounded ${inactive ? "hover:bg-emerald-100 text-emerald-600" : "hover:bg-amber-100 text-amber-600"}`}
+              title={inactive ? "Reactivate" : "Deactivate"}
+              data-testid={`masters-item-toggle-${item.id}`}
+            ><Power size={12}/></button>
+            <button onClick={() => onDelete(item)} className="p-1 rounded hover:bg-rose-100 text-rose-500" title="Delete" data-testid={`masters-item-delete-${item.id}`}><Trash2 size={12}/></button>
+          </span>
+        )}
         <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0"/>
         {renaming ? (
           <InlineEdit
@@ -133,43 +159,36 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
         {inactive && (
           <span className="text-[10px] font-bold uppercase text-rose-700 bg-rose-100 px-1.5 h-4 rounded inline-flex items-center">inactive</span>
         )}
-        {!inactive && stock && (
-          <span
-            className={`text-xs tabular-nums font-semibold ${stock.low ? "text-rose-600" : "text-emerald-700"}`}
-            title={`Opening ${fmt(stock.opening_stock)} + purchased ${fmt(stock.purchased)} − issued ${fmt(stock.issued)} − wasted ${fmt(stock.wasted)}${stock.min_stock > 0 ? ` · min level ${fmt(stock.min_stock)}` : ""}`}
-            data-testid={`masters-item-stock-${item.id}`}
-          >
-            {fmt(stock.on_hand)} {item.unit} on hand
-          </span>
-        )}
         {!inactive && stock?.low && (
           <span className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase text-rose-700 bg-rose-100 px-1.5 h-4 rounded" data-testid={`masters-item-low-${item.id}`}>
             <AlertTriangle size={9}/> low
           </span>
         )}
-        {isAdmin && (
-          <span className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <select
-              value=""
-              onChange={(e) => e.target.value && onPatch(item.id, { category_key: e.target.value })}
-              className="iu-input !h-6 !w-auto !py-0 text-[11px]"
-              title="Move to another category"
-              data-testid={`masters-item-move-${item.id}`}
-            >
-              <option value="">Move to…</option>
-              {cats.filter((c) => c.key !== item.category_key && c.active !== false).map((c) => (
-                <option key={c.key} value={c.key}>{c.label}</option>
-              ))}
-            </select>
-            <button onClick={() => setRenaming(true)} className="p-1 rounded hover:bg-slate-200 text-slate-500" title="Rename" data-testid={`masters-item-rename-btn-${item.id}`}><Pencil size={12}/></button>
-            <button onClick={startEdit} className="p-1 rounded hover:bg-slate-200 text-slate-500 text-[10px] font-bold" title="Edit unit / opening stock" data-testid={`masters-item-edit-btn-${item.id}`}>⋯</button>
-            <button
-              onClick={() => onPatch(item.id, { active: inactive })}
-              className={`p-1 rounded ${inactive ? "hover:bg-emerald-100 text-emerald-600" : "hover:bg-amber-100 text-amber-600"}`}
-              title={inactive ? "Reactivate" : "Deactivate"}
-              data-testid={`masters-item-toggle-${item.id}`}
-            ><Power size={12}/></button>
-            <button onClick={() => onDelete(item)} className="p-1 rounded hover:bg-rose-100 text-rose-500" title="Delete" data-testid={`masters-item-delete-${item.id}`}><Trash2 size={12}/></button>
+        {!inactive && stock && (
+          <span
+            className="ml-auto grid grid-cols-4 gap-x-3 text-[11px] tabular-nums shrink-0"
+            data-testid={`masters-item-stock-${item.id}`}
+          >
+            <span className="text-right" title={`Opening stock as of ${stock.opening_stock_as_of || "start"}`}>
+              <span className="block text-[9px] font-bold uppercase text-slate-400 tracking-wider">Open</span>
+              <span className="block font-semibold text-slate-700">{fmt(stock.opening_stock)} {item.unit}</span>
+              <span className="block text-[10px] text-slate-500">{fmtRs(stock.opening_value)}</span>
+            </span>
+            <span className="text-right" title="Total purchases since opening date">
+              <span className="block text-[9px] font-bold uppercase text-emerald-500 tracking-wider">Purch</span>
+              <span className="block font-semibold text-slate-700">{fmt(stock.purchased)} {item.unit}</span>
+              <span className="block text-[10px] text-emerald-700 font-medium">{fmtRs(stock.purchased_amount)}</span>
+            </span>
+            <span className="text-right" title="Total issues (kitchen consumption) since opening date">
+              <span className="block text-[9px] font-bold uppercase text-amber-500 tracking-wider">Issue</span>
+              <span className="block font-semibold text-slate-700">{fmt(stock.issued)} {item.unit}</span>
+              <span className="block text-[10px] text-amber-700 font-medium">{fmtRs(stock.issued_value)}</span>
+            </span>
+            <span className="text-right" title={`Closing stock on hand${stock.avg_rate ? ` · valued at ₹${stock.avg_rate}/${item.unit} (weighted-avg cost)` : ""}`}>
+              <span className="block text-[9px] font-bold uppercase text-slate-500 tracking-wider">Close</span>
+              <span className={`block font-bold ${stock.low ? "text-rose-600" : "text-emerald-700"}`}>{fmt(stock.on_hand)} {item.unit}</span>
+              <span className={`block text-[10px] font-medium ${stock.low ? "text-rose-500" : "text-slate-600"}`}>{fmtRs(stock.on_hand_value)}</span>
+            </span>
           </span>
         )}
       </div>
@@ -267,6 +286,24 @@ export default function MealMastersTab() {
     });
     return m;
   }, [items, showInactive, lowOnly, stockMap]);
+
+  // Roll up per-category amounts (opening / purchases / issues / closing)
+  // from the item-level stock rows. Only amounts are shown at the category
+  // level — qty roll-ups would mix incompatible units (kg + L + pcs).
+  const catTotals = useMemo(() => {
+    const m = new Map();
+    items.forEach((it) => {
+      const s = stockMap[it.id];
+      if (!s) return;
+      const t = m.get(it.category_key) || { opening_value: 0, purchased_amount: 0, issued_value: 0, on_hand_value: 0 };
+      t.opening_value += Number(s.opening_value) || 0;
+      t.purchased_amount += Number(s.purchased_amount) || 0;
+      t.issued_value += Number(s.issued_value) || 0;
+      t.on_hand_value += Number(s.on_hand_value) || 0;
+      m.set(it.category_key, t);
+    });
+    return m;
+  }, [items, stockMap]);
 
   const visibleCats = useMemo(
     () => cats.filter((c) => showInactive || c.active !== false),
@@ -399,12 +436,25 @@ export default function MealMastersTab() {
           if (lowOnly && catItems.length === 0) return null;
           const open = isExpanded(cat.key);
           const catInactive = cat.active === false;
+          const totals = catTotals.get(cat.key) || { opening_value: 0, purchased_amount: 0, issued_value: 0, on_hand_value: 0 };
           return (
             <div key={cat.key} data-testid={`masters-cat-${cat.key}`}>
-              <div className={`flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-50 group ${catInactive ? "opacity-60" : ""}`}>
+              <div className={`flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-100 group ${catInactive ? "opacity-60" : ""}`}>
                 <button onClick={() => toggleExpand(cat.key)} className="p-0.5 rounded hover:bg-slate-200 text-slate-500" data-testid={`masters-cat-expand-${cat.key}`}>
                   {open ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}
                 </button>
+                {isAdmin && (
+                  <span className="flex items-center gap-0.5 shrink-0" data-testid={`masters-cat-ops-${cat.key}`}>
+                    <button onClick={() => { setAddingItemCat(cat.key); if (!open) toggleExpand(cat.key); }} className="p-1 rounded hover:bg-emerald-100 text-emerald-600" title="Add item" data-testid={`masters-cat-add-item-${cat.key}`}><Plus size={13}/></button>
+                    <button onClick={() => setRenamingCat(cat.key)} className="p-1 rounded hover:bg-slate-200 text-slate-500" title="Rename" data-testid={`masters-cat-rename-btn-${cat.key}`}><Pencil size={13}/></button>
+                    <button
+                      onClick={() => toggleCategory(cat.key, catInactive)}
+                      className={`p-1 rounded ${catInactive ? "hover:bg-emerald-100 text-emerald-600" : "hover:bg-amber-100 text-amber-600"}`}
+                      title={catInactive ? "Reactivate category" : "Deactivate category (hides from entry dropdowns; items stay)"}
+                      data-testid={`masters-cat-toggle-${cat.key}`}
+                    ><Power size={13}/></button>
+                  </span>
+                )}
                 {open ? <FolderOpen size={16} className="text-amber-500 shrink-0"/> : <Folder size={16} className="text-amber-500 shrink-0"/>}
                 {renamingCat === cat.key ? (
                   <InlineEdit
@@ -424,18 +474,24 @@ export default function MealMastersTab() {
                 {catInactive && (
                   <span className="text-[10px] font-bold uppercase text-rose-700 bg-rose-100 px-1.5 h-4 rounded inline-flex items-center">inactive</span>
                 )}
-                {isAdmin && (
-                  <span className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => { setAddingItemCat(cat.key); if (!open) toggleExpand(cat.key); }} className="p-1 rounded hover:bg-emerald-100 text-emerald-600" title="Add item" data-testid={`masters-cat-add-item-${cat.key}`}><Plus size={13}/></button>
-                    <button onClick={() => setRenamingCat(cat.key)} className="p-1 rounded hover:bg-slate-200 text-slate-500" title="Rename" data-testid={`masters-cat-rename-btn-${cat.key}`}><Pencil size={13}/></button>
-                    <button
-                      onClick={() => toggleCategory(cat.key, catInactive)}
-                      className={`p-1 rounded ${catInactive ? "hover:bg-emerald-100 text-emerald-600" : "hover:bg-amber-100 text-amber-600"}`}
-                      title={catInactive ? "Reactivate category" : "Deactivate category (hides from entry dropdowns; items stay)"}
-                      data-testid={`masters-cat-toggle-${cat.key}`}
-                    ><Power size={13}/></button>
+                <span className="ml-auto grid grid-cols-4 gap-x-3 text-[11px] tabular-nums shrink-0" data-testid={`masters-cat-totals-${cat.key}`}>
+                  <span className="text-right" title="Sum of opening stock value across items in this category">
+                    <span className="block text-[9px] font-bold uppercase text-slate-400 tracking-wider">Open</span>
+                    <span className="block font-bold text-slate-700">{fmtRs(totals.opening_value)}</span>
                   </span>
-                )}
+                  <span className="text-right" title="Sum of total purchase amounts across items in this category">
+                    <span className="block text-[9px] font-bold uppercase text-emerald-500 tracking-wider">Purch</span>
+                    <span className="block font-bold text-emerald-700">{fmtRs(totals.purchased_amount)}</span>
+                  </span>
+                  <span className="text-right" title="Sum of total issue values across items in this category">
+                    <span className="block text-[9px] font-bold uppercase text-amber-500 tracking-wider">Issue</span>
+                    <span className="block font-bold text-amber-700">{fmtRs(totals.issued_value)}</span>
+                  </span>
+                  <span className="text-right" title="Sum of closing stock value across items in this category">
+                    <span className="block text-[9px] font-bold uppercase text-slate-500 tracking-wider">Close</span>
+                    <span className="block font-bold text-slate-900">{fmtRs(totals.on_hand_value)}</span>
+                  </span>
+                </span>
               </div>
 
               {open && (

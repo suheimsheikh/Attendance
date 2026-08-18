@@ -1469,9 +1469,23 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                         out[iid] = out.get(iid, 0.0) + float(line.get("qty") or 0)
             return out
 
+        def _sum_amount_from(docs) -> dict[str, float]:
+            """Same as _sum_from but sums the `amount` field. Only purchase
+            lines carry an amount (qty×rate) — issues/wastage don't. Used to
+            compute weighted-avg cost per item for stock valuation."""
+            out: dict[str, float] = {}
+            for doc in docs:
+                d = doc.get("date")
+                for line in doc.get("lines") or []:
+                    iid = line.get("item_id")
+                    if iid and d and d >= item_opening_as_of.get(iid, "1970-01-01"):
+                        out[iid] = out.get(iid, 0.0) + float(line.get("amount") or 0)
+            return out
+
         purch_from = _sum_from(purch_docs)
         iss_from = _sum_from(iss_docs)
         wast_from = _sum_from(wast_docs)
+        purch_amount = _sum_amount_from(purch_docs)
 
         rows = []
         for it in items:
@@ -1483,6 +1497,15 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             on_hand = round(opening + p - iq - w, 4)
             min_s = round(float(it.get("min_stock") or 0), 4)
             low = on_hand <= (min_s if min_s > 0 else 0.001)
+            # Weighted-avg cost for stock valuation. Standard WAC approach:
+            # avg_rate = Σ purchase amounts ÷ Σ purchase qtys, applied to
+            # opening / issued / closing (which have no per-line rate).
+            purch_amt = round(purch_amount.get(iid, 0.0), 2)
+            avg_rate = round(purch_amt / p, 4) if p > 0 else 0.0
+            opening_value = round(opening * avg_rate, 2)
+            issued_value = round(iq * avg_rate, 2)
+            wasted_value = round(w * avg_rate, 2)
+            on_hand_value = round(opening_value + purch_amt - issued_value - wasted_value, 2)
             rows.append({
                 "item_id": iid,
                 "name": it.get("name"),
@@ -1497,6 +1520,13 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "on_hand": on_hand,
                 "min_stock": min_s,
                 "low": low,
+                # Amounts (in ₹). avg_rate is weighted-avg purchase price.
+                "avg_rate": avg_rate,
+                "opening_value": opening_value,
+                "purchased_amount": purch_amt,
+                "issued_value": issued_value,
+                "wasted_value": wasted_value,
+                "on_hand_value": on_hand_value,
             })
         return rows, cats
 

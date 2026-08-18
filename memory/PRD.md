@@ -14,6 +14,24 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 18 Aug 2026 (Pantry Master row redesign)
+- Moved row actions to the LEFT of the item/category name (previously
+  hover-revealed on the right). Always visible now — no layout shift.
+- Darker row hover: `hover:bg-slate-50` → `hover:bg-slate-100` on both
+  categories and items.
+- Per-item stats: 4-column grid showing OPEN / PURCH / ISSUE / CLOSE with
+  qty + ₹amount stacked. Amounts use weighted-avg cost (WAC) — avg_rate =
+  Σ purchase amounts ÷ Σ purchase qty, applied to opening / issued /
+  closing which have no per-line rate. Closing value = opening_value +
+  purchased_amount − issued_value − wasted_value.
+- Per-category stats: only ₹amount totals (qty roll-ups impossible across
+  units like kg + L + pcs). Computed on the frontend from item rows.
+- Backend `_stock_snapshot` now returns `avg_rate`, `opening_value`,
+  `purchased_amount`, `issued_value`, `wasted_value`, `on_hand_value` per
+  item alongside existing qty fields (backwards compatible).
+- Removed number-input spinner arrows app-wide via `.iu-input[type=number]`
+  CSS rule in index.css (WebKit + Firefox). Keyboard entry unaffected.
+
 ### 18 Aug 2026 (restore lockout fix)
 - Fixed "This device is no longer authorised" after `POST /api/admin/restore?mode=replace`.
   The restore was wiping `devices` (and possibly `users`) before reload — the caller's
