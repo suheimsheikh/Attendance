@@ -73,45 +73,68 @@ export default function MealEntryTab() {
   // selected date changes. Purchases and issues live in separate Mongo
   // collections but share the same `date` key.
   // ---------------------------------------------------------------------
+  // Token guards against out-of-order GET responses on rapid day flips —
+  // only the latest date's responses get applied to state.
+  const loadToken = useRef(0);
+  const dateRef = useRef(dateStr);
+  useEffect(() => { dateRef.current = dateStr; }, [dateStr]);
   useEffect(() => {
+    const token = ++loadToken.current;
+    const fresh = () => loadToken.current === token;
     api.get(`/meals/purchases?start=${dateStr}&end=${dateStr}`)
       .then((r) => {
+        if (!fresh()) return;
         const lines = r.purchases?.[0]?.lines || [];
         const next = {};
         lines.forEach((l) => { next[l.item_id] = { qty: l.qty, rate: l.rate }; });
         setPurch(next);
       })
-      .catch(() => setPurch({}));
+      .catch(() => { if (fresh()) setPurch({}); });
 
     api.get(`/meals/issues?start=${dateStr}&end=${dateStr}`)
       .then((r) => {
+        if (!fresh()) return;
         const lines = r.issues?.[0]?.lines || [];
         const next = {};
         lines.forEach((l) => { next[l.item_id] = l.qty; });
         setIssues(next);
       })
-      .catch(() => setIssues({}));
+      .catch(() => { if (fresh()) setIssues({}); });
 
     // On-hand at end of previous day = what the chef physically has at
     // the start of today's cooking (used only as a sanity check on the
     // Issue column).
     api.get(`/meals/stock?as_of=${addDays(dateStr, -1)}`)
-      .then((r) => setStock(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x.on_hand]))))
-      .catch(() => setStock({}));
+      .then((r) => { if (fresh()) setStock(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x.on_hand]))); })
+      .catch(() => { if (fresh()) setStock({}); });
     // Weighted-average purchase cost — as of TODAY so a purchase entered
     // this morning immediately flows into the same day's issue valuation.
     // Refetched after every purchase save (see flushPurchases below).
     api.get(`/meals/stock?as_of=${dateStr}`)
-      .then((r) => setAvgRate(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x.avg_rate || 0]))))
-      .catch(() => setAvgRate({}));
+      .then((r) => { if (fresh()) setAvgRate(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x.avg_rate || 0]))); })
+      .catch(() => { if (fresh()) setAvgRate({}); });
+
+    // Before this day's view is replaced (day nav) or unmounted (tab
+    // switch), flush any pending debounced save FOR THIS DAY. This
+    // cleanup runs before the next day's data loads, so the refs still
+    // hold this day's lines — preventing a blur + immediate day-nav from
+    // writing the NEW day's lines onto the OLD date.
+    return () => {
+      if (purchTimer.current) { clearTimeout(purchTimer.current); purchTimer.current = null; flushPurchases(dateStr); }
+      if (issuesTimer.current) { clearTimeout(issuesTimer.current); issuesTimer.current = null; flushIssues(dateStr); }
+    };
   }, [dateStr]);
 
   // Standalone refresher for the avg-rate map — called after a purchase
   // save so the Issue Rate / Amount columns update without needing a
-  // full page reload.
-  const refreshAvgRate = () => {
-    api.get(`/meals/stock?as_of=${dateStr}`)
-      .then((r) => setAvgRate(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x.avg_rate || 0]))))
+  // full page reload. Ignored if the user has navigated to another day
+  // by the time the response lands.
+  const refreshAvgRate = (targetDate) => {
+    api.get(`/meals/stock?as_of=${targetDate}`)
+      .then((r) => {
+        if (dateRef.current !== targetDate) return;
+        setAvgRate(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x.avg_rate || 0])));
+      })
       .catch(() => {});
   };
 
@@ -128,7 +151,10 @@ export default function MealEntryTab() {
   useEffect(() => { latestPurch.current = purch; }, [purch]);
   useEffect(() => { latestIssues.current = issues; }, [issues]);
 
-  const flushPurchases = async () => {
+  // Both flushes take the TARGET date explicitly (captured at queue time)
+  // so the PUT URL always matches the day the lines belong to, even if
+  // the user has since navigated to another day.
+  const flushPurchases = async (targetDate) => {
     setSaving((s) => ({ ...s, purch: true }));
     const lines = items
       .map((it) => {
@@ -140,24 +166,24 @@ export default function MealEntryTab() {
       })
       .filter(Boolean);
     try {
-      await api.put(`/meals/purchases/${dateStr}`, { lines });
+      await api.put(`/meals/purchases/${targetDate}`, { lines });
       setSavedAt(Date.now());
-      // Purchases just changed → weighted-avg rate for this day changed
-      // → issue amounts on this same screen must update.
-      refreshAvgRate();
+      // Purchases just changed → weighted-avg rate changed → issue
+      // amounts on the currently displayed day must update.
+      refreshAvgRate(dateRef.current);
     } catch (err) {
       showApiError(err, "Couldn't auto-save purchases");
     } finally {
       setSaving((s) => ({ ...s, purch: false }));
     }
   };
-  const flushIssues = async () => {
+  const flushIssues = async (targetDate) => {
     setSaving((s) => ({ ...s, issues: true }));
     const lines = items
       .filter((it) => num(latestIssues.current[it.id]) > 0)
       .map((it) => ({ item_id: it.id, qty: num(latestIssues.current[it.id]) }));
     try {
-      await api.put(`/meals/issues/${dateStr}`, { lines });
+      await api.put(`/meals/issues/${targetDate}`, { lines });
       setSavedAt(Date.now());
       // Refresh on-hand so any subsequent issue lines see the new stock
       // (an issue lowers next-day opening — but for TODAY's grid the
@@ -171,11 +197,13 @@ export default function MealEntryTab() {
 
   const queuePurch = () => {
     clearTimeout(purchTimer.current);
-    purchTimer.current = setTimeout(flushPurchases, 350);
+    const d = dateStr;
+    purchTimer.current = setTimeout(() => { purchTimer.current = null; flushPurchases(d); }, 350);
   };
   const queueIssues = () => {
     clearTimeout(issuesTimer.current);
-    issuesTimer.current = setTimeout(flushIssues, 350);
+    const d = dateStr;
+    issuesTimer.current = setTimeout(() => { issuesTimer.current = null; flushIssues(d); }, 350);
   };
 
   const setPurchField = (itemId, field, value) => {

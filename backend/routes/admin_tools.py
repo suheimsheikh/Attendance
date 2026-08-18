@@ -238,9 +238,12 @@ def make_router(db, require_admin) -> APIRouter:
         # server.get_current_user (device.status must be "approved").
         # ------------------------------------------------------------------
         if self_user:
+            # $set (not $setOnInsert) — if the backup contained an OLDER copy
+            # of this admin (e.g. pre-promotion role), the restore must not
+            # revert it; the acting admin's current snapshot always wins.
             await db.users.update_one(
                 {"id": self_user["id"]},
-                {"$setOnInsert": self_user},
+                {"$set": self_user},
                 upsert=True,
             )
         for dev in self_devices:

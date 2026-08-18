@@ -296,6 +296,12 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Muster page banner (`pages/muster/AbsentShareBanner.jsx`) appears once past ready time when absentees exist; one-tap "Share to WhatsApp" composes the bulleted list (athletes + coaches sections, counts, office name) via existing Web Share util.
 - User explicitly wants FULL automation later (option b: unofficial gateway like Green API, or c: Twilio per-parent SMS) — semi-automatic chosen for now.
 
+## Code review fixes (June 2026 fork — round 2, all tested via testing agent iteration_44, 100% pass)
+- FIX HIGH — Daily entry auto-save day-nav race (`MealEntryTab.jsx`): blur + immediate day-arrow click could write the NEW day's lines onto the OLD date (data corruption) and drop the edit. Now: queuePurch/queueIssues capture the target date; flushPurchases/flushIssues(targetDate) use it in the PUT URL; the dateStr effect's cleanup flushes pending timers with the OLD date before the new day loads; loadToken stale-response guard on all 4 GETs prevents wrong-day paints on rapid day flipping.
+- FIX MEDIUM — Opening Stock Rate (was P1 backlog item): new optional `opening_rate` (₹/unit) on meal_items. Backend: ItemIn/ItemPatch + create/update endpoints + `_stock_snapshot` WAC now blends opening value → items with opening stock but no purchases show real valuations instead of ₹0. Frontend: 'Opening ₹/unit' input in Masters add-item form; inline-editable `@₹x/unit` (InlineRate) under the Opening qty in the tree (shown when opening_stock > 0). Curl-verified: opening-only avg_rate=45→value ₹450; blend (10@50 + 10@60) → avg 55.
+- FIX MEDIUM — DB restore self-preservation (`admin_tools.py`): user re-attach changed `$setOnInsert` → `$set` so a backup containing an older copy of the acting admin can no longer revert their role/state after a replace restore.
+- Known cosmetic (NOT fixed, verified fine in testing): hardcoded sticky offsets top-[104px]/top-[216px] in Meals tabs vs page header ~111-132px; MealCrossCheckTab sticky treatment still pending.
+
 ## Notes for agents
 - Print PDFs: portal print region to document.body, body class + print CSS in index.css.
 - Test users: emails ending .local are rejected by email-validator; use @meals.example.com.

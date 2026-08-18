@@ -150,6 +150,7 @@ class ItemIn(BaseModel):
     unit: str
     opening_stock: float = 0.0
     opening_stock_as_of: Optional[str] = None   # ISO date; defaults to today
+    opening_rate: float = 0.0                   # ₹/unit cost of opening stock; 0 = unknown
     min_stock: float = 0.0                      # low-stock alert level; 0 = off
     norm_per_serving: float = 0.0               # expected qty per meal serving; 0 = untracked
     sort_order: int = 100
@@ -161,6 +162,7 @@ class ItemPatch(BaseModel):
     unit: Optional[str] = None
     opening_stock: Optional[float] = None
     opening_stock_as_of: Optional[str] = None
+    opening_rate: Optional[float] = None
     min_stock: Optional[float] = None
     norm_per_serving: Optional[float] = None
     sort_order: Optional[int] = None
@@ -1183,6 +1185,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         opening = float(body.opening_stock or 0)
         if opening < 0:
             raise HTTPException(status_code=400, detail="Opening stock cannot be negative")
+        if (body.opening_rate or 0) < 0:
+            raise HTTPException(status_code=400, detail="Opening rate cannot be negative")
         if (body.min_stock or 0) < 0:
             raise HTTPException(status_code=400, detail="Min level cannot be negative")
         if (body.norm_per_serving or 0) < 0:
@@ -1197,6 +1201,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "unit": body.unit,
             "opening_stock": round(opening, 4),
             "opening_stock_as_of": as_of,
+            "opening_rate": round(float(body.opening_rate or 0), 4),
             "min_stock": round(float(body.min_stock or 0), 4),
             "norm_per_serving": round(float(body.norm_per_serving or 0), 4),
             "sort_order": int(body.sort_order),
@@ -1244,6 +1249,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             update["opening_stock"] = round(float(body.opening_stock), 4)
         if body.opening_stock_as_of is not None:
             update["opening_stock_as_of"] = _valid_date(body.opening_stock_as_of)
+        if body.opening_rate is not None:
+            if body.opening_rate < 0:
+                raise HTTPException(status_code=400, detail="Opening rate cannot be negative")
+            update["opening_rate"] = round(float(body.opening_rate), 4)
         if body.min_stock is not None:
             if body.min_stock < 0:
                 raise HTTPException(status_code=400, detail="Min level cannot be negative")
@@ -1498,11 +1507,20 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             min_s = round(float(it.get("min_stock") or 0), 4)
             low = on_hand <= (min_s if min_s > 0 else 0.001)
             # Weighted-avg cost for stock valuation. Standard WAC approach:
-            # avg_rate = Σ purchase amounts ÷ Σ purchase qtys, applied to
-            # opening / issued / closing (which have no per-line rate).
+            # avg_rate = Σ amounts ÷ Σ qtys. If the item has an explicit
+            # opening_rate, opening stock joins the blend (so items with
+            # opening stock but no purchases still carry a real value);
+            # otherwise opening is valued at the purchase-only WAC as before.
             purch_amt = round(purch_amount.get(iid, 0.0), 2)
-            avg_rate = round(purch_amt / p, 4) if p > 0 else 0.0
-            opening_value = round(opening * avg_rate, 2)
+            opening_rate = round(float(it.get("opening_rate") or 0), 4)
+            if opening_rate > 0:
+                denom = opening + p
+                avg_rate = round((opening * opening_rate + purch_amt) / denom, 4) \
+                    if denom > 0 else 0.0
+                opening_value = round(opening * opening_rate, 2)
+            else:
+                avg_rate = round(purch_amt / p, 4) if p > 0 else 0.0
+                opening_value = round(opening * avg_rate, 2)
             issued_value = round(iq * avg_rate, 2)
             wasted_value = round(w * avg_rate, 2)
             on_hand_value = round(opening_value + purch_amt - issued_value - wasted_value, 2)
@@ -1514,6 +1532,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "unit": it.get("unit"),
                 "opening_stock": round(opening, 4),
                 "opening_stock_as_of": it.get("opening_stock_as_of"),
+                "opening_rate": opening_rate,
                 "purchased": p,
                 "issued": iq,
                 "wasted": w,

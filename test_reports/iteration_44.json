@@ -1,0 +1,22 @@
+{
+  "summary": "Verified the 3 code-review fixes for the I-Showed-Up pantry-stock feature. FIX 1 (auto-save day-nav race in Meals > Daily entry) and FIX 2 (new opening_rate on pantry items) both PASS via end-to-end Playwright + network-trace testing. FIX 3 ($set self-user restore) verified by code review at /app/backend/routes/admin_tools.py line 246. All regressions (Masters tab layout, Daily entry split headers, rapid day-arrow clicks) also pass. Backend spot-check: GET /api/meals/stock returns opening_rate on every row (53/53, as_of=2026-08-19, Asia/Kolkata).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "MealEntryTab.jsx queuePurch/queueIssues correctly capture dateStr into closure variable d before setTimeout — the flush URL now always matches the day the lines belong to.",
+    "MealEntryTab.jsx useEffect cleanup flushes pending debounced saves BEFORE the next day's data loads (refs still hold old-day lines) — this was the actual root cause of the race and the fix is correct.",
+    "loadToken.current stale-response guard properly rejects late GETs after user has flipped to another day — verified with 6 rapid prev-day clicks + 6 rapid next-day clicks; date returned to origin and no wrong-day data painted.",
+    "MealMastersTab.jsx AddItemForm passes opening_rate through parseFloat, InlineRate component renders under InlineNum only when opening_stock>0 which is sensible.",
+    "admin_tools.py line 246 uses $set (not $setOnInsert) so if backup contains an older copy of the admin user it is overwritten with the current logged-in password/session data — self-preservation on restore is correct."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (email toggle on /login)",
+  "seed_data_creation": "Created and DELETED a temporary Fruits item 'TEST_openrate_item' (opening_stock=10, opening_rate=45, later edited to 50) to verify FIX 2. Also typed and cleared purchase qty=5/rate=20 and issue qty=2 on Apple to verify FIX 1. All test data cleaned up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "FIX 1 verified via network trace: rapid blur → prev-day click within debounce window sent PUT to /api/meals/purchases/2026-08-18 (TODAY) — NEVER to yesterday's URL. Also verified for issues (qty=2 wrote to /issues/2026-08-18). FIX 2: created test item, saw '@₹45/kg' under opening qty, Close column = ₹450, inline rate edit persisted after reload. FIX 3: verified in code only per instructions (no runtime restore). Backend today (as_of returned by /meals/stock) is 2026-08-19 while container UTC is 2026-08-18 — expected due to Asia/Kolkata TZ. Daily entry currently uses 2026-08-18 as the picked date via the browser date input; the fix is date-string based so this discrepancy does not affect the test.",
+  "rca_of_the_issue": "Original race: onBlur fires queuePurch which arms a 350ms setTimeout; if user clicks prev-day within that window, dateStr changes and the useEffect re-runs, but the old setTimeout still fires with the NEW dateStr closure (or via the flush call after dateStr changed) — PUT went to the WRONG date. FIX bundles two guards: (a) queuePurch captures dateStr as local const d and passes it to flushPurchases(d) — closure now sees the ORIGINAL date; (b) useEffect cleanup on dateStr change synchronously clears the timer and calls flushPurchases(dateStr) using the OLD dateStr before the effect body re-runs for the new day. Additionally loadToken.current guards the four GETs so late responses for the old day don't overwrite the new day's state. All three mitigations verified in end-to-end test."
+}

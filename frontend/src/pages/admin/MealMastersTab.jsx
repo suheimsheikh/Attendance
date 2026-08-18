@@ -84,6 +84,45 @@ function InlineNum({ value, onSave, testid, hint }) {
   );
 }
 
+// Tiny inline editor for the opening RATE (₹/unit) shown under the opening
+// qty. Values opening stock before an item's first recorded purchase so
+// closing / issue valuations aren't ₹0 for opening-only items.
+function InlineRate({ value, unit, onSave, testid }) {
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState(value ?? 0);
+  useEffect(() => { setV(value ?? 0); }, [value]);
+  if (!editing) {
+    return (
+      <button
+        className="w-full text-right text-[9px] leading-tight tabular-nums text-emerald-700 hover:underline underline-offset-2"
+        onClick={() => setEditing(true)}
+        data-testid={testid}
+        title="Opening rate (₹ per unit) — click to edit. Used to value opening stock before the first purchase."
+      >
+        {Number(value) > 0 ? `@₹${fmt(value)}/${unit}` : "@₹—"}
+      </button>
+    );
+  }
+  const commit = () => {
+    const n = parseFloat(v);
+    setEditing(false);
+    if (!isNaN(n) && n !== Number(value)) onSave(n);
+  };
+  return (
+    <input
+      autoFocus type="number" min="0" step="any" value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+        if (e.key === "Escape") { setV(value ?? 0); setEditing(false); }
+      }}
+      className="iu-input !h-5 !w-full !py-0 !px-1 text-[10px] text-right tabular-nums"
+      data-testid={`${testid}-input`}
+    />
+  );
+}
+
 // Inline unit picker — small transparent-looking select that saves on
 // change. Used in the Masters tree Unit column.
 function InlineUnit({ value, options, onSave, testid }) {
@@ -103,7 +142,7 @@ function InlineUnit({ value, options, onSave, testid }) {
 const UNIT_OPTIONS = ["kg", "g", "L", "mL", "pcs", "dozen", "packet"];
 
 function AddItemForm({ catKey, units, onDone, onCancel }) {
-  const [d, setD] = useState({ name: "", unit: "kg", opening_stock: "", opening_stock_as_of: "", min_stock: "", norm_per_serving: "" });
+  const [d, setD] = useState({ name: "", unit: "kg", opening_stock: "", opening_stock_as_of: "", opening_rate: "", min_stock: "", norm_per_serving: "" });
   const [busy, setBusy] = useState(false);
   const save = async () => {
     if (!d.name.trim()) { toast.error("Item name is required"); return; }
@@ -114,6 +153,7 @@ function AddItemForm({ catKey, units, onDone, onCancel }) {
         name: d.name.trim(),
         unit: d.unit,
         opening_stock: parseFloat(d.opening_stock) || 0,
+        opening_rate: parseFloat(d.opening_rate) || 0,
         min_stock: parseFloat(d.min_stock) || 0,
         norm_per_serving: parseFloat(d.norm_per_serving) || 0,
         ...(d.opening_stock_as_of ? { opening_stock_as_of: d.opening_stock_as_of } : {}),
@@ -140,6 +180,9 @@ function AddItemForm({ catKey, units, onDone, onCancel }) {
              className="iu-input !h-8 !w-28 text-sm" data-testid={`masters-add-item-opening-${catKey}`}/>
       <input type="date" value={d.opening_stock_as_of} onChange={(e) => setD({ ...d, opening_stock_as_of: e.target.value })}
              className="iu-input !h-8 !w-auto text-sm" title="Opening stock as-of date (defaults to today)"/>
+      <input type="number" min="0" step="any" placeholder="Opening ₹/unit" value={d.opening_rate}
+             onChange={(e) => setD({ ...d, opening_rate: e.target.value })}
+             className="iu-input !h-8 !w-28 text-sm" title="Cost per unit of the opening stock — values the opening stock before the first purchase (0 = unknown)" data-testid={`masters-add-item-openrate-${catKey}`}/>
       <input type="number" min="0" step="any" placeholder="Min level" value={d.min_stock}
              onChange={(e) => setD({ ...d, min_stock: e.target.value })}
              className="iu-input !h-8 !w-24 text-sm" title="Low-stock alert level (0 = off)" data-testid={`masters-add-item-min-${catKey}`}/>
@@ -242,16 +285,31 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
           ) : (
             <span className="text-[10px] font-bold uppercase text-slate-500 text-center">{item.unit}</span>
           )}
-          {/* Opening (editable qty) */}
+          {/* Opening (editable qty + optional editable ₹/unit rate) */}
           {isAdmin ? (
-            <InlineNum
-              value={item.opening_stock || 0}
-              onSave={(n) => onPatch(item.id, { opening_stock: n })}
-              testid={`masters-item-opening-${item.id}`}
-              hint={`Click to edit opening stock${item.opening_stock_as_of ? ` (as of ${item.opening_stock_as_of})` : ""}`}
-            />
+            <span className="flex flex-col">
+              <InlineNum
+                value={item.opening_stock || 0}
+                onSave={(n) => onPatch(item.id, { opening_stock: n })}
+                testid={`masters-item-opening-${item.id}`}
+                hint={`Click to edit opening stock${item.opening_stock_as_of ? ` (as of ${item.opening_stock_as_of})` : ""}`}
+              />
+              {Number(item.opening_stock) > 0 && (
+                <InlineRate
+                  value={item.opening_rate || 0}
+                  unit={item.unit}
+                  onSave={(n) => onPatch(item.id, { opening_rate: n })}
+                  testid={`masters-item-openrate-${item.id}`}
+                />
+              )}
+            </span>
           ) : (
-            <span className="text-right font-semibold text-slate-700">{fmt(item.opening_stock || 0)}</span>
+            <span className="flex flex-col text-right">
+              <span className="font-semibold text-slate-700">{fmt(item.opening_stock || 0)}</span>
+              {Number(item.opening_stock) > 0 && Number(item.opening_rate) > 0 && (
+                <span className="text-[9px] leading-tight text-emerald-700 tabular-nums">@₹{fmt(item.opening_rate)}/{item.unit}</span>
+              )}
+            </span>
           )}
           {/* Min level (editable qty) */}
           {isAdmin ? (
