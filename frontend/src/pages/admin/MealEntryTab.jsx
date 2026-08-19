@@ -509,6 +509,12 @@ export default function MealEntryTab({ liveSig }) {
     } else if (key === "ArrowLeft") {
       ev.preventDefault();
       if (colIdx > 0) focusCell(gridCols[colIdx - 1], itemId);
+      else if (kind === "purch-qty") {
+        // Step further left into the row's Supplier picker so the whole
+        // Purchases half is keyboard-walkable end to end.
+        const sel = document.querySelector(`[data-testid="entry-row-vendor-${itemId}"]`);
+        if (sel) sel.focus();
+      }
     } else if (key === "ArrowRight") {
       ev.preventDefault();
       if (colIdx < gridCols.length - 1) focusCell(gridCols[colIdx + 1], itemId);
