@@ -742,40 +742,68 @@ export default function MealEntryTab({ liveSig }) {
           </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-3" data-testid="entry-totals-bar">
-          <div
-            className="iu-card p-2.5 flex items-center justify-between border-emerald-200 bg-emerald-50/60 cursor-pointer hover:bg-emerald-50 hover:border-emerald-300 select-none transition"
-            onDoubleClick={() => setHistoryKind("purchase")}
-            title="Double-click to see date-wise purchase totals and download a PDF"
-            data-testid="entry-purchase-total-card"
-          >
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
-              Purchases · Day total
-              <span className="ml-1 text-[9px] font-normal text-emerald-600/80 normal-case tracking-normal">(dbl-click for history)</span>
-            </span>
-            <span className="text-lg font-extrabold tabular-nums text-emerald-800" data-testid="entry-day-total">₹{inr(dayTotal)}</span>
-          </div>
-          <div
-            className="iu-card p-2.5 flex items-center justify-between border-amber-200 bg-amber-50/60 cursor-pointer hover:bg-amber-50 hover:border-amber-300 select-none transition"
-            onDoubleClick={() => setHistoryKind("issue")}
-            title="Double-click to see date-wise issue totals and download a PDF"
-            data-testid="entry-issue-total-card"
-          >
-            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
-              Issues · Day total
-              <span className="ml-1 text-[9px] font-normal text-amber-600/80 normal-case tracking-normal">(dbl-click for history)</span>
-            </span>
-            <span className="text-lg font-extrabold tabular-nums text-amber-800" data-testid="entry-day-issue-total">₹{inr(issueDayTotal)}</span>
-          </div>
-          <div
-            className="iu-card p-2.5 flex items-center justify-between border-rose-200 bg-rose-50/60 select-none"
-            title="Total stock value lost to wastage today (at weighted-avg cost)"
-            data-testid="entry-wastage-total-card"
-          >
-            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Wastage · Day total</span>
-            <span className="text-lg font-extrabold tabular-nums text-rose-800" data-testid="entry-day-wastage-total">₹{inr(wastageDayTotal)}</span>
-          </div>
-        </div>
+        {/* Day totals — laid out as a mini-table that shares the SAME
+            column widths as the grid below, so each amount sits
+            directly above its column's item Amounts. Labels tuck to
+            the left of each band, numbers hang on the right rail. */}
+        <table className="w-full text-sm" data-testid="entry-totals-bar">
+          <colgroup>
+            <col className="w-[14%]"/>
+            <col className="w-10"/>
+            <col className="w-14"/>
+            <col className="w-36"/>
+            <col className="w-20"/>
+            <col className="w-24"/>
+            <col className="w-28"/>
+            <col className="w-20"/>
+            <col className="w-24"/>
+            <col className="w-28"/>
+            <col className="w-20"/>
+            <col className="w-28"/>
+            <col className="w-28"/>
+          </colgroup>
+          <tbody>
+            <tr>
+              <td colSpan={3}/>
+              <td colSpan={3}
+                className="px-2 py-2 border border-emerald-200 bg-emerald-50/60 rounded-l-lg border-r-0 cursor-pointer hover:bg-emerald-50 select-none"
+                onDoubleClick={() => setHistoryKind("purchase")}
+                title="Double-click to see date-wise purchase totals and download a PDF">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
+                  Purchases · Day total
+                  <span className="ml-1 text-[9px] font-normal text-emerald-600/80 normal-case tracking-normal">(dbl-click for history)</span>
+                </span>
+              </td>
+              <td className="px-3 py-2 text-right border border-emerald-200 bg-emerald-50/60 rounded-r-lg border-l-0 cursor-pointer hover:bg-emerald-50 select-none"
+                  onDoubleClick={() => setHistoryKind("purchase")}
+                  data-testid="entry-purchase-total-card">
+                <span className="text-lg font-extrabold tabular-nums text-emerald-800" data-testid="entry-day-total">₹{inr(dayTotal)}</span>
+              </td>
+              <td colSpan={2}
+                className="px-2 py-2 border border-amber-200 bg-amber-50/60 rounded-l-lg border-r-0 ml-2 cursor-pointer hover:bg-amber-50 select-none"
+                onDoubleClick={() => setHistoryKind("issue")}
+                title="Double-click to see date-wise issue totals and download a PDF">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
+                  Issues · Day total
+                  <span className="ml-1 text-[9px] font-normal text-amber-600/80 normal-case tracking-normal">(dbl-click for history)</span>
+                </span>
+              </td>
+              <td className="px-3 py-2 text-right border border-amber-200 bg-amber-50/60 rounded-r-lg border-l-0 cursor-pointer hover:bg-amber-50 select-none"
+                  onDoubleClick={() => setHistoryKind("issue")}
+                  data-testid="entry-issue-total-card">
+                <span className="text-lg font-extrabold tabular-nums text-amber-800" data-testid="entry-day-issue-total">₹{inr(issueDayTotal)}</span>
+              </td>
+              <td colSpan={2}
+                className="px-2 py-2 border border-rose-200 bg-rose-50/60 rounded-l-lg border-r-0"
+                title="Total stock value lost to wastage today (at weighted-avg cost)">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Wastage · Day total</span>
+              </td>
+              <td className="px-3 py-2 text-right border border-rose-200 bg-rose-50/60 rounded-r-lg border-l-0" data-testid="entry-wastage-total-card">
+                <span className="text-lg font-extrabold tabular-nums text-rose-800" data-testid="entry-day-wastage-total">₹{inr(wastageDayTotal)}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {historyKind && (
