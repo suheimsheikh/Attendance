@@ -69,6 +69,30 @@ body {
     margin: 0;
   }
   .iu-input:focus { border-color: var(--ych-navy); --tw-ring-color: rgba(28,45,72,0.15); }
+  /* Unified visible colour for every search / filter input across the
+     app (Aug 2026 user request). Targets inputs by `type="search"` or
+     by placeholder text starting with "Search" / "Filter" — case-
+     insensitive attribute matching so we don't have to edit every
+     component to add a class. Warm amber wash + amber-300 border so
+     search boxes read as a distinct affordance everywhere they appear
+     (Muster filter, Members search, Meals filter, Pantry item search,
+     Presence, Escorts, Fleets, SMS Log, Camps, Leave Balances, Grid). */
+  .iu-input[type="search"],
+  input[type="search"].iu-input,
+  input[type="search"],
+  input[placeholder^="Search" i],
+  input[placeholder^="Filter" i] {
+    background-color: #fffbeb;         /* amber-50 */
+    border-color: #fcd34d;              /* amber-300 */
+  }
+  .iu-input[type="search"]:focus,
+  input[type="search"].iu-input:focus,
+  input[type="search"]:focus,
+  input[placeholder^="Search" i]:focus,
+  input[placeholder^="Filter" i]:focus {
+    border-color: #d97706;              /* amber-600 */
+    --tw-ring-color: rgba(217, 119, 6, 0.20);
+  }
   .iu-label {
     @apply block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide;
   }
