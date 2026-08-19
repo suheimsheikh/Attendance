@@ -741,15 +741,15 @@ export default function MealEntryTab({ liveSig }) {
               </tr>
               <tr className="bg-slate-50 text-[11px] uppercase text-slate-500">
                 <th className="text-left p-2 w-1/5">Item</th>
-                <th className="text-left p-2 w-14">Unit</th>
-                <th className="text-right p-2 w-24" title="Stock on hand at end of previous day">On-hand</th>
-                <th className="text-left p-2 w-40 border-l-2 border-emerald-500 bg-emerald-50/70" title="Supplier for this item on this day">Supplier</th>
+                <th className="text-left px-1 py-2 w-10">Unit</th>
+                <th className="text-right px-1 py-2 w-16" title="Stock on hand at end of previous day">On-hand</th>
+                <th className="text-left p-2 w-44 border-l-2 border-emerald-500 bg-emerald-50/70" title="Supplier for this item on this day">Supplier</th>
                 <th className="text-right p-2 w-24 bg-emerald-50/70">Qty</th>
-                <th className="text-right p-2 w-24 bg-emerald-50/70">Rate ₹</th>
-                <th className="text-right p-2 w-28 bg-emerald-50/70">Amount ₹</th>
+                <th className="text-right p-2 w-28 bg-emerald-50/70">Rate ₹</th>
+                <th className="text-right p-2 w-32 bg-emerald-50/70">Amount ₹</th>
                 <th className="text-right p-2 w-24 border-l-2 border-amber-500 bg-amber-50/70">Qty</th>
-                <th className="text-right p-2 w-24 bg-amber-50/70" title="Weighted-average purchase cost — auto-calculated, not editable">Rate ₹</th>
-                <th className="text-right p-2 w-28 bg-amber-50/70">Amount ₹</th>
+                <th className="text-right p-2 w-28 bg-amber-50/70" title="Weighted-average purchase cost — auto-calculated, not editable">Rate ₹</th>
+                <th className="text-right p-2 w-32 bg-amber-50/70">Amount ₹</th>
               </tr>
             </thead>
             <tbody>
@@ -847,8 +847,8 @@ export default function MealEntryTab({ liveSig }) {
                         <td className="p-2">
                           <div className="font-semibold text-slate-900">{it.name}</div>
                         </td>
-                        <td className="p-2 text-slate-500 text-xs">{it.unit}</td>
-                        <td className="p-2 text-right tabular-nums text-slate-600" data-testid={`entry-onhand-${it.id}`}>
+                        <td className="px-1 py-2 text-slate-500 text-xs">{it.unit}</td>
+                        <td className="px-1 py-2 text-right tabular-nums text-slate-600" data-testid={`entry-onhand-${it.id}`}>
                           {oh != null ? fmtQty(oh) : "—"}
                         </td>
                         <td className="p-2 border-l-2 border-emerald-100">
