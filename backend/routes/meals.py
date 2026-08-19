@@ -1261,6 +1261,71 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         ).sort("name", 1).to_list(500)
         return {"vendors": rows}
 
+    @router.get("/meals/vendor-trends")
+    async def vendor_trends(
+        months: int = 6, user: dict = Depends(require_chef_or_admin),
+    ):
+        """Per-vendor rolling monthly spend for a sparkline on the
+        Vendors master screen (Aug 2026 user request — "spot who is
+        quietly getting expensive"). Returns each vendor + a series of
+        `{ym, amount}` from `months` ago (default 6) up to the current
+        office-local month.
+        """
+        try:
+            m = int(months)
+        except Exception:
+            m = 6
+        m = max(1, min(m, 24))
+
+        office = await db.config.find_one({"id": "office"}) or {}
+        today_iso = local_date_str(office)
+        y, mth = int(today_iso[:4]), int(today_iso[5:7])
+        # Build the list of YYYY-MM buckets from oldest → newest.
+        buckets: list = []
+        yy, mm = y, mth
+        for _ in range(m):
+            buckets.append(f"{yy:04d}-{mm:02d}")
+            mm -= 1
+            if mm == 0:
+                mm = 12
+                yy -= 1
+        buckets.reverse()
+        start_ym = buckets[0]
+        # Wide-range date filter that safely captures the earliest bucket.
+        start_iso = f"{start_ym}-01"
+
+        # Load every purchase line since the start of the window and
+        # sum by (vendor_id, YYYY-MM). Missing vendor_id → skipped.
+        totals: dict = {}   # vendor_id → {ym: amount}
+        async for p in db.meal_purchases.find(
+            {"date": {"$gte": start_iso}},
+            {"_id": 0, "date": 1, "lines": 1},
+        ):
+            ym = p["date"][:7]
+            if ym < start_ym:
+                continue
+            for ln in (p.get("lines") or []):
+                vid = ln.get("vendor_id")
+                q = float(ln.get("qty") or 0)
+                r = float(ln.get("rate") or 0)
+                if not vid or q <= 0:
+                    continue
+                slot = totals.setdefault(vid, {})
+                slot[ym] = slot.get(ym, 0.0) + q * r
+
+        vendors = await db.meal_vendors.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
+        out = []
+        for v in vendors:
+            series_map = totals.get(v["id"], {})
+            series = [{"ym": ym, "amount": round(series_map.get(ym, 0.0), 2)} for ym in buckets]
+            out.append({
+                "id": v["id"],
+                "name": v["name"],
+                "series": series,
+                "total": round(sum(x["amount"] for x in series), 2),
+            })
+        return {"months": buckets, "vendors": out}
+
     @router.post("/meals/vendors")
     async def create_vendor(body: VendorIn, admin: dict = Depends(require_admin)):
         name = body.name.strip()

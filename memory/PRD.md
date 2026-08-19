@@ -14,6 +14,21 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 19 Aug 2026 (Sidebar reorg + Vendor sparklines)
+- **Sidebar** now visually splits into three colour-coded "system"
+  groups (`SystemGroup` wrapper — coloured left rail + tinted bg +
+  icon in the header): **Attendance** (cyan), **Kitchen** (amber),
+  **System** (slate). Attendance houses all live ops + a nested
+  Masters strip; Kitchen houses Meals + Pantry Stock + Chef's View.
+  Coach/chef roles get a trimmed variant of the same layout.
+- **New endpoint** `GET /api/meals/vendor-trends?months=N` — per
+  vendor monthly spend rollup for the last N months.
+- **Vendors master** grew a **6-mo trend** column: inline SVG
+  `Sparkline` (green when flat/declining, red when the last month
+  exceeds the first non-zero month) with the total ₹ printed next
+  to it. Tooltip lists each month's amount so admins can spot the
+  supplier that is quietly getting expensive.
+
 ### 19 Aug 2026 (Vendors master + Stock Master rename + Opening as-of date)
 - **New collection** `meal_vendors` + full CRUD at `GET/POST /api/meals/vendors`, `PATCH/DELETE /api/meals/vendors/{id}`. Fields: name (required, case-insensitive dedupe) + phone (digits-only). Deletion is soft when the vendor is already referenced on any purchase line, hard otherwise. Added to `BACKUP_COLLECTIONS` so restore preserves it.
 - **New `vendor_id` field** on `meal_purchases.lines[]` — optional, kept null when blank. Wire-preserved through the PUT `/meals/purchases/{date_str}` endpoint.

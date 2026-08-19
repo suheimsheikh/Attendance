@@ -48,50 +48,49 @@ const NAV_MEMBER = [
   { to: "/profile", label: "My Profile", icon: UserCog, hint: "Your photo, contact details and login settings" },
 ];
 
-// Coach + Chef sections — visible to coaches, chefs & admins per role.
-// Ordered per user spec (04 Feb 2026): Muster Roll → Chef's View → Presence.
-// Chef's View is now shared across coaches/chefs/admins so on-the-ground
-// staff can see meal counts alongside the muster.
-const NAV_COACH = [
+// Coach live surfaces (kept for backwards-compat with existing role
+// checks; the sections below actually render into the new
+// Attendance / Kitchen split — see the sidebar body).
+const NAV_COACH_ATTENDANCE = [
   { to: "/muster", label: "Muster Roll", icon: ClipboardCheck, hint: "Roll-call: check members in/out in bulk with photos" },
+  { to: "/presence", label: "Presence", icon: LayoutDashboard, hint: "Who is on campus right now" },
+];
+const NAV_COACH_KITCHEN = [
   { to: "/meals", label: "Meals", icon: Utensils, hint: "Mark who is eating which meal today" },
   { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, issues, wastage and stock" },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
-  { to: "/presence", label: "Presence", icon: LayoutDashboard, hint: "Who is on campus right now" },
 ];
 
-const NAV_CHEF = [
+// ATTENDANCE system — one visually-cohesive group for every
+// attendance-related screen (live ops + masters). Aug 2026 reorg so
+// the "two systems" (Attendance vs Kitchen) are obvious at a glance.
+const NAV_ATTENDANCE_LIVE = [
   { to: "/muster", label: "Muster Roll", icon: ClipboardCheck, hint: "Roll-call: check members in/out in bulk with photos" },
-  { to: "/meals", label: "Meals", icon: Utensils, hint: "Mark who is eating which meal today" },
-  { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, issues, wastage and stock" },
-  { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
   { to: "/presence", label: "Presence", icon: LayoutDashboard, hint: "Who is on campus right now" },
+  { to: "/admin/calendar", label: "Calendar", icon: CalendarDays, hint: "Holidays, weekly offs, camps and regattas at a glance", adminOnly: true },
+  { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true, hint: "Single-glance summary: on campus, on leave, alerts", adminOnly: true },
+  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page", hint: "Pending leaves, corrections and check-in approvals in one queue", adminOnly: true },
+  { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, spotlight: true, hint: "All-in-one 31-day attendance grid with drill-downs and exports", adminOnly: true },
+  { to: "/admin/churn-risk", label: "Churn Risk", icon: TrendingDown, hint: "Members whose attendance is fading — catch them before they drop off", adminOnly: true },
+  { to: "/admin/devices", label: "Access Requests", icon: IdCard, hint: "Approve or block new phones/devices requesting access", adminOnly: true },
+  { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2, hint: "Paid leave, comp-off and tour balances for every member", adminOnly: true },
 ];
 
-// ADMIN section — day-to-day operational surfaces. Kept intentionally
-// short so the sidebar stays scannable; masters + system live below.
-// SMS Log moved to SYSTEM section on 15 Feb 2026 per admin — it's a
-// diagnostics / audit surface, not a day-to-day tool.
-const NAV_ADMIN = [
-  { to: "/admin/calendar", label: "Calendar", icon: CalendarDays, hint: "Holidays, weekly offs, camps and regattas at a glance" },
-  { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true, hint: "Single-glance summary: on campus, on leave, alerts" },
+const NAV_ATTENDANCE_MASTERS = [
   { to: "/admin/members", label: "Manage Members", icon: Users, hint: "Add, edit and organise athletes, staff and coaches" },
-  // Highlighted bright yellow — this is the single most-visited
-  // reporting surface (all-in-one 31-day view).
-  { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, spotlight: true, hint: "All-in-one 31-day attendance grid with drill-downs and exports" },
-  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page", hint: "Pending leaves, corrections and check-in approvals in one queue" },
-  { to: "/admin/meals-report", label: "Pantry Stock", icon: Utensils, hint: "Kitchen inventory: items, purchases, issues, wastage and stock" },
-  { to: "/admin/churn-risk", label: "Churn Risk", icon: TrendingDown, hint: "Members whose attendance is fading — catch them before they drop off" },
-  { to: "/admin/devices", label: "Access Requests", icon: IdCard, hint: "Approve or block new phones/devices requesting access" },
-  { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2, hint: "Paid leave, comp-off and tour balances for every member" },
-];
-
-// MASTERS section — reference data admins tune occasionally.
-const NAV_MASTERS = [
   { to: "/admin/institutions", label: "Institutions", icon: Building2, hint: "Schools/colleges members belong to" },
   { to: "/admin/fleets", label: "Fleets", icon: Sailboat, hint: "Boat fleets and class groupings" },
   { to: "/admin/categories", label: "Categories", icon: ShieldAlert, hint: "Member categories and their attendance rules" },
   { to: "/admin/roles", label: "Roles", icon: KeyRound, hint: "Who can see and do what in the app" },
+];
+
+// KITCHEN system — meals, pantry stock, chef's view, vendors. Kept
+// visually distinct with an amber accent (matches the pantry warm-
+// yellow banding on the Daily-entry grid).
+const NAV_KITCHEN = [
+  { to: "/meals", label: "Meals", icon: Utensils, hint: "Mark who is eating which meal today" },
+  { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, issues, wastage and stock" },
+  { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
 ];
 
 // SYSTEM section — configuration, diagnostics, and safety nets.
@@ -233,87 +232,79 @@ export default function Layout() {
             <NavItem key={item.to} {...item} badge={badge} onClick={() => setOpen(false)} />
           );
         })}
-        {!isEscort && canMuster && !isChef && (
+        {!isEscort && (canMuster || isChef) && !isAdmin && (
           <>
-            <SectionHeader
-              label="Coaches"
-              open={isOpen("coaches")}
-              onToggle={() => toggleSection("coaches")}
-              tone="cyan"
-            />
-            {isOpen("coaches") && NAV_COACH
-              .filter((item) => !(isAdmin && item.to === "/admin/meals-report"))
-              .map((item) => (
+            {/* Non-admin coach / chef — get the trimmed attendance + kitchen
+                lists tuned to their role. Admins see the full split
+                below (with masters). */}
+            {(!isChef && NAV_COACH_ATTENDANCE.length > 0) && (
+              <SystemGroup label="Attendance" tone="cyan" icon={ClipboardCheck}
+                           open={isOpen("attendance")} onToggle={() => toggleSection("attendance")}>
+                {NAV_COACH_ATTENDANCE.map((item) => (
+                  <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
+                ))}
+              </SystemGroup>
+            )}
+            <SystemGroup label="Kitchen" tone="amber" icon={ChefHat}
+                         open={isOpen("kitchen")} onToggle={() => toggleSection("kitchen")}>
+              {NAV_COACH_KITCHEN.map((item) => (
                 <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
               ))}
-          </>
-        )}
-        {!isEscort && isChef && (
-          <>
-            <SectionHeader
-              label="Chef"
-              open={isOpen("chef")}
-              onToggle={() => toggleSection("chef")}
-              tone="amber"
-            />
-            {isOpen("chef") && NAV_CHEF.map((item) => (
-              <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
-            ))}
+            </SystemGroup>
           </>
         )}
         {!isEscort && isAdmin && (
           <>
-            <SectionHeader
-              label="Admin"
-              open={isOpen("admin")}
-              onToggle={() => toggleSection("admin")}
-              tone="cyan"
-            />
-            {isOpen("admin") && NAV_ADMIN.map((item) => {
-              // Synthetic key `approvals_page` sums only the queues that the
-              // Approvals page actually surfaces (leaves + overtime + checkins
-              // + corrections). Device approvals live on their own
-              // /admin/devices page so including them here would confuse
-              // admins: the sidebar badge would always be higher than the
-              // number of items visible when they land on the Approvals page.
-              let badge;
-              if (item.badgeKey === "approvals_page" && approvalsSummary) {
-                const n = (approvalsSummary.leaves || 0)
-                        + (approvalsSummary.overtime || 0)
-                        + (approvalsSummary.checkins || 0)
-                        + (approvalsSummary.corrections || 0);
-                badge = n > 0 ? n : undefined;
-              } else if (item.badgeKey) {
-                badge = approvalsSummary?.[item.badgeKey];
-              }
-              return (
-                <NavItem
-                  key={item.to}
-                  {...item}
-                  badge={badge}
-                  onClick={() => setOpen(false)}
-                  onHoverPrefetch={prefetchFor(item.to)}
-                />
-              );
-            })}
-            <SectionHeader
-              label="Masters"
-              open={isOpen("masters")}
-              onToggle={() => toggleSection("masters")}
-              tone="cyan"
-            />
-            {isOpen("masters") && NAV_MASTERS.map((item) => (
-              <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
-            ))}
-            <SectionHeader
-              label="System"
-              open={isOpen("system")}
-              onToggle={() => toggleSection("system")}
-              tone="cyan"
-            />
-            {isOpen("system") && NAV_SYSTEM.map((item) => (
-              <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
-            ))}
+            <SystemGroup label="Attendance" tone="cyan" icon={ClipboardCheck}
+                         open={isOpen("attendance")} onToggle={() => toggleSection("attendance")}>
+              {NAV_ATTENDANCE_LIVE.map((item) => {
+                // Synthetic key `approvals_page` sums only the queues that the
+                // Approvals page actually surfaces (leaves + overtime + checkins
+                // + corrections). Device approvals live on their own
+                // /admin/devices page so including them here would confuse
+                // admins: the sidebar badge would always be higher than the
+                // number of items visible when they land on the Approvals page.
+                let badge;
+                if (item.badgeKey === "approvals_page" && approvalsSummary) {
+                  const n = (approvalsSummary.leaves || 0)
+                          + (approvalsSummary.overtime || 0)
+                          + (approvalsSummary.checkins || 0)
+                          + (approvalsSummary.corrections || 0);
+                  badge = n > 0 ? n : undefined;
+                } else if (item.badgeKey) {
+                  badge = approvalsSummary?.[item.badgeKey];
+                }
+                return (
+                  <NavItem
+                    key={item.to}
+                    {...item}
+                    badge={badge}
+                    onClick={() => setOpen(false)}
+                    onHoverPrefetch={prefetchFor(item.to)}
+                  />
+                );
+              })}
+              {/* Attendance masters — nested under the same Attendance
+                  section so admins don't lose the visual grouping. */}
+              <div className="mt-2 mb-1 px-3 text-[10px] font-black uppercase tracking-[0.15em] text-cyan-300/60">Masters</div>
+              {NAV_ATTENDANCE_MASTERS.map((item) => (
+                <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
+              ))}
+            </SystemGroup>
+
+            <SystemGroup label="Kitchen" tone="amber" icon={ChefHat}
+                         open={isOpen("kitchen")} onToggle={() => toggleSection("kitchen")}>
+              {NAV_KITCHEN.map((item) => (
+                <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
+              ))}
+            </SystemGroup>
+
+            <SystemGroup label="System" tone="slate" icon={Settings}
+                         open={isOpen("system")} onToggle={() => toggleSection("system")}>
+              {NAV_SYSTEM.map((item) => (
+                <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
+              ))}
+            </SystemGroup>
           </>
         )}
       </nav>
@@ -402,13 +393,36 @@ export default function Layout() {
   );
 }
 
-function SectionHeader({ label, open, onToggle, tone = "cyan" }) {
+function SystemGroup({ label, tone = "cyan", icon: Icon, open, onToggle, children }) {
+  // "System group" — top-level colour-coded container that houses one
+  // whole subsystem (Attendance / Kitchen / System). A thin left border
+  // in the accent colour visually ties every item inside the group
+  // back to its section header. Aug 2026 sidebar reorg.
+  const rail =
+    tone === "amber" ? "border-amber-400/60"
+    : tone === "slate" ? "border-slate-500/50"
+    : "border-cyan-400/60";
+  const bgTint =
+    tone === "amber" ? "bg-amber-500/[0.04]"
+    : tone === "slate" ? "bg-slate-500/[0.04]"
+    : "bg-cyan-500/[0.04]";
+  return (
+    <div className={`mt-3 rounded-md border-l-2 ${rail} ${bgTint} pl-1.5 pr-0.5 py-1`}
+         data-testid={`sysgroup-${label.toLowerCase()}`}>
+      <SectionHeader label={label} open={open} onToggle={onToggle} tone={tone} icon={Icon} />
+      {open && <div className="pl-1 pt-1">{children}</div>}
+    </div>
+  );
+}
+
+function SectionHeader({ label, open, onToggle, tone = "cyan", icon: Icon }) {
   // Collapsible section divider. Chevron indicates state, glow tint
-  // matches the sidebar accent (cyan for member/coach/admin/masters/
-  // system; amber for chef). Chevron rotation avoids re-rendering the
-  // whole child list on state flips.
-  const glow = tone === "amber"
-    ? "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.45)]"
+  // matches the sidebar accent — cyan (attendance / member), amber
+  // (kitchen), slate (system). Chevron rotation avoids re-rendering
+  // the whole child list on state flips.
+  const glow =
+    tone === "amber" ? "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.45)]"
+    : tone === "slate" ? "text-slate-300"
     : "text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]";
   return (
     <button
@@ -416,9 +430,10 @@ function SectionHeader({ label, open, onToggle, tone = "cyan" }) {
       onClick={onToggle}
       data-testid={`section-${label.toLowerCase()}-toggle`}
       aria-expanded={open}
-      className={`w-full flex items-center gap-1 text-[13px] font-black uppercase tracking-widest px-3 py-1.5 mt-2 hover:bg-white/5 rounded-md transition ${glow}`}
+      className={`w-full flex items-center gap-1.5 text-[13px] font-black uppercase tracking-widest px-3 py-1.5 hover:bg-white/5 rounded-md transition ${glow}`}
     >
       {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+      {Icon && <Icon size={13} />}
       <span>{label}</span>
     </button>
   );
