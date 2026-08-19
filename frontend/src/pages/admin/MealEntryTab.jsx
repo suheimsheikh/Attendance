@@ -743,24 +743,18 @@ export default function MealEntryTab({ liveSig }) {
                       </span>
                     </td>
                     <td colSpan={3} className="px-2 py-1.5"/>
-                    {/* Purch subtotal — aligned under the Purchases
-                        "Amount ₹" column so the eye tracks straight down
-                        the currency column. */}
-                    <td className="px-3 py-1.5 text-right align-middle">
-                      <div className="text-[9px] font-semibold uppercase tracking-wider text-emerald-700/70 leading-tight">Purch</div>
-                      <div className="text-xs font-extrabold tabular-nums leading-tight text-emerald-800" data-testid={`entry-cat-purch-total-${cat.key}`}>
-                        {purchAmt > 0 ? `₹${inr(purchAmt)}` : <span className="text-emerald-700/40">—</span>}
-                      </div>
+                    {/* Purch subtotal — same typography as the item-row
+                        Amount cells so the eye reads the column as one
+                        continuous currency stream. */}
+                    <td className="p-2 text-right font-semibold tabular-nums text-emerald-700" data-testid={`entry-cat-purch-total-${cat.key}`}>
+                      {purchAmt > 0 ? `₹${inr(purchAmt)}` : <span className="text-emerald-700/40">—</span>}
                     </td>
                     {/* Two-cell spacer over Issues Qty & Rate so the
                         Issue subtotal lines up under the Issues Amount
                         column. */}
                     <td colSpan={2}/>
-                    <td className="px-3 py-1.5 text-right align-middle">
-                      <div className="text-[9px] font-semibold uppercase tracking-wider text-amber-700/70 leading-tight">Issue</div>
-                      <div className="text-xs font-extrabold tabular-nums leading-tight text-amber-800" data-testid={`entry-cat-issue-total-${cat.key}`}>
-                        {issueAmt > 0 ? `₹${inr(issueAmt)}` : <span className="text-amber-700/40">—</span>}
-                      </div>
+                    <td className="p-2 text-right font-semibold tabular-nums text-amber-700" data-testid={`entry-cat-issue-total-${cat.key}`}>
+                      {issueAmt > 0 ? `₹${inr(issueAmt)}` : <span className="text-amber-700/40">—</span>}
                     </td>
                   </tr>
                   {!isCollapsed && rows.map((it) => {
