@@ -64,7 +64,7 @@ function Sparkline({ series }) {
  * bills keep their supplier context; unused vendors are hard-deleted
  * to keep the master tidy.
  */
-export default function MealVendorsTab() {
+export default function MealVendorsTab({ liveSig }) {
   const [rows, setRows] = useState([]);
   const [trends, setTrends] = useState({}); // vendor_id → { series, total }
   const [loading, setLoading] = useState(true);
@@ -91,6 +91,13 @@ export default function MealVendorsTab() {
       .finally(() => setLoading(false));
   };
   useEffect(refresh, []);
+
+  // Live refresh — skipped while a row editor or the add form is open
+  // so another machine's change never wipes an in-progress edit.
+  useEffect(() => {
+    if (!liveSig || editingId || adding) return;
+    refresh();
+  }, [liveSig]);
 
   const submitCreate = async () => {
     const name = draft.name.trim();

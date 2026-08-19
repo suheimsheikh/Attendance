@@ -131,3 +131,20 @@ frontend:
 agent_communication:
   - agent: "main"
     message: "Preview DB holds REAL production data. Test Daily Entry saves on PAST dates (e.g. 2026-08-01..02) and zero-out any values entered. 9 pre-existing pytest failures are stale seeded-data assertions (prod restore), unrelated."
+
+## Session: Live pantry updates via SSE (19 Jun 2026 fork)
+user_problem_statement: "Purchases entered in Daily Entry take >10 min to update on other machines (preview + production)". Root cause: no refresh mechanism — tabs fetched only on mount/date change. User chose pushed update signals over polling.
+backend:
+  - task: "SSE /api/meals/events + Mongo-backed meals_signal seq bump on all pantry mutations (purchases/issues/wastage/items/vendors/categories)"
+    implemented: true
+    working: true
+    file: "backend/routes/meals.py, backend/services/client_ctx.py, backend/server.py"
+    comment: "curl-verified externally: PUT from machine-B pushed frame seq=3 within 2s; 2KB padding + Content-Encoding identity defeat ingress/gzip buffering; 401 on bad token"
+frontend:
+  - task: "useMealsEvents hook (EventSource + baseline + echo suppression via X-Client-Id) wired into MealsReport parent; live refresh in MealEntryTab (guarded vs typing/pending saves), MealMastersTab, MealWastageTab, MealExpensesTab, MealCrossCheckTab, MealVendorsTab"
+    implemented: true
+    working: "needs_retest"
+    file: "frontend/src/hooks/useMealsEvents.js, frontend/src/api.js, pages/admin/Meal*.jsx"
+agent_communication:
+  - agent: "main"
+    message: "Preview DB holds REAL production data. Test with PAST dates (2026-08-01/02) and zero-out test values. Two-browser-context test needed: machine A saves purchase, machine B (on same date, Daily entry tab) should show it within ~5s without reload."

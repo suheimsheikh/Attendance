@@ -23,7 +23,7 @@ const FLAG = {
   ok:    { label: "OK",    cls: "bg-emerald-100 text-emerald-700", Icon: Check },
 };
 
-export default function MealCrossCheckTab({ onGoMasters }) {
+export default function MealCrossCheckTab({ onGoMasters, liveSig }) {
   const [start, setStart] = useState(isoDaysAgo(13));
   const [end, setEnd] = useState(todayISO());
   const [tolPct, setTolPct] = useState(20);
@@ -38,7 +38,7 @@ export default function MealCrossCheckTab({ onGoMasters }) {
       .then(setData)
       .catch((err) => showApiError(err, "Couldn't run the cross-check"))
       .finally(() => setLoading(false));
-  }, [start, end, tolPct]);
+  }, [start, end, tolPct, liveSig]);
 
   const byDate = useMemo(() => {
     const m = new Map();

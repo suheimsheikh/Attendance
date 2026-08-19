@@ -12,9 +12,16 @@ export const apiUrl = (path) => `${BASE}/api${path}`;
 
 const client = axios.create({ baseURL: `${BASE}/api` });
 
+// Per-tab client id — sent on every request so the meals live-update
+// signal can tell which tab originated a change (echo suppression).
+export const CLIENT_ID =
+  (window.crypto?.randomUUID && window.crypto.randomUUID()) ||
+  Math.random().toString(36).slice(2) + Date.now().toString(36);
+
 client.interceptors.request.use((cfg) => {
   const t = getToken();
   if (t) cfg.headers.Authorization = `Bearer ${t}`;
+  cfg.headers["X-Client-Id"] = CLIENT_ID;
   return cfg;
 });
 

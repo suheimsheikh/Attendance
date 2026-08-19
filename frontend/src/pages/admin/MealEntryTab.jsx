@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
+import { isUserEditing } from "../../hooks/useMealsEvents";
 
 function todayISO() {
   const d = new Date();
@@ -105,7 +106,7 @@ function RowVendorPicker({ rowVendorId, catVendorId, vendors, onChange, onAddNew
   );
 }
 
-export default function MealEntryTab() {
+export default function MealEntryTab({ liveSig }) {
   const [dateStr, setDateStr] = useState(todayISO());
   const [cats, setCats] = useState([]);
   const [items, setItems] = useState([]);
@@ -148,22 +149,22 @@ export default function MealEntryTab() {
   const [historyKind, setHistoryKind] = useState(null);
 
   // ---------------------------------------------------------------------
-  // Load masters once. Item / category list stays stable across day nav.
+  // Load masters once. Item / category list stays stable across day nav
+  // (re-fetched only when a live signal says another machine changed them).
   // ---------------------------------------------------------------------
-  useEffect(() => {
-    (async () => {
-      try {
-        const [c, i, v] = await Promise.all([
-          api.get("/meals/purchase-categories"),
-          api.get("/meals/items?include_inactive=false"),
-          api.get("/meals/vendors"),
-        ]);
-        setCats((c.categories || []).filter((x) => x.active !== false));
-        setItems(i.items || []);
-        setVendors(v.vendors || []);
-      } catch (err) { showApiError(err, "Couldn't load pantry masters"); }
-    })();
-  }, []);
+  const loadMasters = async () => {
+    try {
+      const [c, i, v] = await Promise.all([
+        api.get("/meals/purchase-categories"),
+        api.get("/meals/items?include_inactive=false"),
+        api.get("/meals/vendors"),
+      ]);
+      setCats((c.categories || []).filter((x) => x.active !== false));
+      setItems(i.items || []);
+      setVendors(v.vendors || []);
+    } catch (err) { showApiError(err, "Couldn't load pantry masters"); }
+  };
+  useEffect(() => { loadMasters(); }, []);
 
   // Re-fetch vendors on demand (e.g. after inline "Add vendor" flow).
   const refreshVendors = () => {
@@ -180,10 +181,12 @@ export default function MealEntryTab() {
   const loadToken = useRef(0);
   const dateRef = useRef(dateStr);
   useEffect(() => { dateRef.current = dateStr; }, [dateStr]);
-  useEffect(() => {
+  // Loads one day's purchases / issues / stock / avg-rate. Reused by the
+  // dateStr effect AND the live-update signal handler below.
+  const loadDay = (d) => {
     const token = ++loadToken.current;
     const fresh = () => loadToken.current === token;
-    api.get(`/meals/purchases?start=${dateStr}&end=${dateStr}`)
+    api.get(`/meals/purchases?start=${d}&end=${d}`)
       .then((r) => {
         if (!fresh()) return;
         const lines = r.purchases?.[0]?.lines || [];
@@ -193,7 +196,7 @@ export default function MealEntryTab() {
       })
       .catch(() => { if (fresh()) setPurch({}); });
 
-    api.get(`/meals/issues?start=${dateStr}&end=${dateStr}`)
+    api.get(`/meals/issues?start=${d}&end=${d}`)
       .then((r) => {
         if (!fresh()) return;
         const lines = r.issues?.[0]?.lines || [];
@@ -206,15 +209,17 @@ export default function MealEntryTab() {
     // On-hand at end of previous day = what the chef physically has at
     // the start of today's cooking (used only as a sanity check on the
     // Issue column).
-    api.get(`/meals/stock?as_of=${addDays(dateStr, -1)}`)
+    api.get(`/meals/stock?as_of=${addDays(d, -1)}`)
       .then((r) => { if (fresh()) setStock(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x.on_hand]))); })
       .catch(() => { if (fresh()) setStock({}); });
-    // Weighted-average purchase cost — as of TODAY so a purchase entered
+    // Weighted-average purchase cost — as of the day so a purchase entered
     // this morning immediately flows into the same day's issue valuation.
-    // Refetched after every purchase save (see flushPurchases below).
-    api.get(`/meals/stock?as_of=${dateStr}`)
+    api.get(`/meals/stock?as_of=${d}`)
       .then((r) => { if (fresh()) setAvgRate(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x.avg_rate || 0]))); })
       .catch(() => { if (fresh()) setAvgRate({}); });
+  };
+  useEffect(() => {
+    loadDay(dateStr);
 
     // Before this day's view is replaced (day nav) or unmounted (tab
     // switch), flush any pending debounced save FOR THIS DAY. This
@@ -226,6 +231,31 @@ export default function MealEntryTab() {
       if (issuesTimer.current) { clearTimeout(issuesTimer.current); issuesTimer.current = null; flushIssues(dateStr); }
     };
   }, [dateStr]);
+
+  // ---------------------------------------------------------------------
+  // Live refresh — the server pushes a signal (SSE) when ANOTHER machine
+  // changes pantry data. Deferred while a save is pending/in-flight or
+  // the user is typing so it never clobbers an in-progress edit.
+  // ---------------------------------------------------------------------
+  const savingRef = useRef(saving);
+  useEffect(() => { savingRef.current = saving; }, [saving]);
+  useEffect(() => {
+    if (!liveSig) return;
+    if (!["purchases", "issues", "wastage", "items", "categories", "vendors"].includes(liveSig.scope)) return;
+    if (liveSig.scope === "vendors") { refreshVendors(); return; }
+    let cancelled = false;
+    const attempt = () => {
+      if (cancelled) return;
+      const busy = savingRef.current.purch || savingRef.current.issues ||
+        purchTimer.current || issuesTimer.current ||
+        pendingSave.current.purch || pendingSave.current.issues;
+      if (busy || isUserEditing()) { setTimeout(attempt, 4000); return; }
+      if (liveSig.scope === "items" || liveSig.scope === "categories") loadMasters();
+      loadDay(dateRef.current);
+    };
+    attempt();
+    return () => { cancelled = true; };
+  }, [liveSig]);
 
   // Standalone refresher for the avg-rate map — called after a purchase
   // save so the Issue Rate / Amount columns update without needing a

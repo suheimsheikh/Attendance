@@ -33,7 +33,7 @@ function blankLine() {
   return { id: crypto.randomUUID?.() || String(Math.random()), item_id: "", qty: "", reason: "wasted", notes: "" };
 }
 
-export default function MealWastageTab() {
+export default function MealWastageTab({ liveSig }) {
   const [dateStr, setDateStr] = useState(todayISO());
   const [cats, setCats] = useState([]);
   const [items, setItems] = useState([]);
@@ -89,6 +89,18 @@ export default function MealWastageTab() {
       .catch(() => {});
   };
   useEffect(loadRecent, []);
+
+  // Live refresh — reload the read-only bits (masters, recent list,
+  // stock) when another machine changes pantry data. The editable
+  // `lines` grid is left alone so an in-progress entry is never lost.
+  useEffect(() => {
+    if (!liveSig) return;
+    if (["items", "categories"].includes(liveSig.scope)) loadMasters();
+    loadRecent();
+    api.get(`/meals/stock?as_of=${dateStr}`)
+      .then((r) => setStock(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x]))))
+      .catch(() => {});
+  }, [liveSig]);
 
   const itemOptions = useMemo(() => {
     // Group items by category label for the option groups.

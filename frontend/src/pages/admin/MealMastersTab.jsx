@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
+import { isUserEditing } from "../../hooks/useMealsEvents";
 import { useAuth } from "../../auth";
 import { ItemDetailPanel, CategoryDetailPanel } from "./MealNodeDetail";
 import ShoppingListPanel from "../../components/ShoppingListPanel";
@@ -424,7 +425,7 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
   );
 }
 
-export default function MealMastersTab() {
+export default function MealMastersTab({ liveSig }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [cats, setCats] = useState([]);
@@ -465,6 +466,20 @@ export default function MealMastersTab() {
     }
   };
   useEffect(() => { load(asOf); }, [asOf]);
+
+  // Live refresh — another machine changed pantry data. Deferred while
+  // the user is typing in an inline editor so it never clobbers an edit.
+  useEffect(() => {
+    if (!liveSig) return;
+    let cancelled = false;
+    const attempt = () => {
+      if (cancelled) return;
+      if (isUserEditing()) { setTimeout(attempt, 4000); return; }
+      load();
+    };
+    attempt();
+    return () => { cancelled = true; };
+  }, [liveSig]);
 
   const isExpanded = (key) => (expanded == null ? true : expanded.has(key));
   const toggleExpand = (key) => {

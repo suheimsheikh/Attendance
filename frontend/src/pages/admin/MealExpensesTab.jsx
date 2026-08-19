@@ -123,7 +123,7 @@ function ReportTable({ data, printable }) {
   );
 }
 
-export default function MealExpensesTab() {
+export default function MealExpensesTab({ liveSig }) {
   const [mode, setMode] = useState("month");
   const [month, setMonth] = useState(currentMonth());
   const [from, setFrom] = useState(() => monthRange(currentMonth())[0]);
@@ -143,7 +143,7 @@ export default function MealExpensesTab() {
       .then(setData)
       .catch((err) => showApiError(err, "Couldn't load expense report"))
       .finally(() => setLoading(false));
-  }, [start, end]);
+  }, [start, end, liveSig]);
 
   // Hide trailing future days (they're all zeros) but keep past zeros.
   const trimmed = useMemo(() => {

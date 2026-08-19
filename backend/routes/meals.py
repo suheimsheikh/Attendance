@@ -18,13 +18,20 @@ lunch/dinner variations.
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import math
 import uuid
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 
+import jwt
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
+
+from services.auth_utils import JWT_ALGO, JWT_SECRET
+from services.client_ctx import current_client_id
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
@@ -270,6 +277,77 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     # server.py. Added 4 Feb 2026 with the Roles master.
     if require_chef_or_admin is None:
         require_chef_or_admin = require_admin
+
+    # ------------------------------------------------------------------
+    # Live update signal (Jun 2026 — user asked for pushed updates instead
+    # of client polling). Every pantry mutation bumps a monotonic `seq` on
+    # a single db.config doc; connected clients hold an SSE stream open at
+    # GET /meals/events and refetch when seq moves. Mongo-backed so it
+    # works across multiple workers/pods in production. `client` carries
+    # the originating browser tab's X-Client-Id so that tab can ignore
+    # its own echo.
+    # ------------------------------------------------------------------
+    async def _signal_meals(scope: str, date_iso: Optional[str] = None):
+        try:
+            await db.config.update_one(
+                {"id": "meals_signal"},
+                {"$inc": {"seq": 1},
+                 "$set": {"scope": scope, "date": date_iso,
+                          "client": current_client_id.get(),
+                          "at": now_utc().isoformat()}},
+                upsert=True,
+            )
+        except Exception:
+            logging.getLogger(__name__).warning("meals signal bump failed", exc_info=True)
+
+    @router.get("/meals/events")
+    async def meals_events(token: str):
+        """SSE stream of pantry-change signals. EventSource cannot set an
+        Authorization header, so the JWT arrives as a `token` query param.
+        Emits the current seq on connect (client baselines against it) and
+        a new frame whenever any pantry data changes; `: ping` keepalives
+        every ~20s stop proxies from dropping the idle connection."""
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        u = await db.users.find_one(
+            {"id": payload.get("sub")}, {"_id": 0, "role": 1, "active": 1})
+        if not u or u.get("active") is False or u.get("role") not in ("admin", "chef"):
+            raise HTTPException(status_code=403, detail="Not allowed")
+
+        async def stream():
+            # 2KB comment padding defeats proxy buffer thresholds so the
+            # first real frame is delivered immediately through the ingress.
+            yield ":" + (" " * 2048) + "\n\n"
+            last = None
+            beat = 0
+            while True:
+                doc = await db.config.find_one(
+                    {"id": "meals_signal"},
+                    {"_id": 0, "seq": 1, "scope": 1, "date": 1, "client": 1})
+                seq = int((doc or {}).get("seq") or 0)
+                if seq != last:
+                    last = seq
+                    yield "data: " + json.dumps({
+                        "seq": seq,
+                        "scope": (doc or {}).get("scope"),
+                        "date": (doc or {}).get("date"),
+                        "client": (doc or {}).get("client") or "",
+                    }) + "\n\n"
+                beat += 1
+                if beat % 10 == 0:
+                    yield ": ping\n\n"
+                await asyncio.sleep(2)
+
+        return StreamingResponse(
+            stream(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache, no-transform",
+                     "X-Accel-Buffering": "no",
+                     # Opt out of GZipMiddleware — gzip buffers tiny SSE
+                     # frames and stalls delivery.
+                     "Content-Encoding": "identity"},
+        )
 
     # ------------------------------------------------------------------
     # Categories master — full CRUD (8 Jul 2026). The 5 seed categories
@@ -1133,6 +1211,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                       "updated_by": admin.get("id")}},
             upsert=True,
         )
+        await _signal_meals("categories")
         return {"categories": out}
 
     @router.get("/meals/purchases")
@@ -1340,6 +1419,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         }
         await db.meal_vendors.insert_one(doc)
         doc.pop("_id", None)
+        await _signal_meals("vendors")
         return doc
 
     @router.patch("/meals/vendors/{vendor_id}")
@@ -1369,6 +1449,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             await db.meal_vendors.update_one({"id": vendor_id}, {"$set": update})
         merged = {**vendor, **update}
         merged.pop("_id", None)
+        await _signal_meals("vendors")
         return merged
 
     @router.delete("/meals/vendors/{vendor_id}")
@@ -1382,8 +1463,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         used = await db.meal_purchases.find_one({"lines.vendor_id": vendor_id})
         if used:
             await db.meal_vendors.update_one({"id": vendor_id}, {"$set": {"active": False}})
+            await _signal_meals("vendors")
             return {"soft_deleted": True}
         await db.meal_vendors.delete_one({"id": vendor_id})
+        await _signal_meals("vendors")
         return {"deleted": True}
 
     # ------------------------------------------------------------------
@@ -1466,6 +1549,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         }
         await db.meal_items.insert_one(doc)
         doc.pop("_id", None)
+        await _signal_meals("items")
         return doc
 
     @router.patch("/meals/items/{item_id}")
@@ -1525,6 +1609,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             update["updated_by_name"] = admin.get("full_name") or admin.get("email")
             await db.meal_items.update_one({"id": item_id}, {"$set": update})
             row.update(update)
+            await _signal_meals("items")
         return row
 
     @router.delete("/meals/items/{item_id}")
@@ -1545,8 +1630,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                           "updated_by": admin.get("id"),
                           "updated_by_name": admin.get("full_name") or admin.get("email")}},
             )
+            await _signal_meals("items")
             return {"ok": True, "soft_deleted": True}
         await db.meal_items.delete_one({"id": item_id})
+        await _signal_meals("items")
         return {"ok": True, "soft_deleted": False}
 
     @router.put("/meals/items/reorder")
@@ -1562,6 +1649,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         for idx, iid in enumerate(ids):
             await db.meal_items.update_one(
                 {"id": iid}, {"$set": {"sort_order": (idx + 1) * 10}})
+        await _signal_meals("items")
         return {"ok": True, "ordered": len(ids)}
 
     # ------------------------------------------------------------------
@@ -1621,6 +1709,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
              "$setOnInsert": {"id": str(uuid.uuid4())}},
             upsert=True,
         )
+        await _signal_meals("issues", d)
         return {"date": d, "lines": clean}
 
     # ------------------------------------------------------------------
@@ -1695,6 +1784,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
              "$setOnInsert": {"id": str(uuid.uuid4())}},
             upsert=True,
         )
+        await _signal_meals("wastage", d)
         return {"date": d, "lines": clean}
 
     # ------------------------------------------------------------------
@@ -2122,6 +2212,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                  "$setOnInsert": {"id": str(uuid.uuid4())}},
                 upsert=True,
             )
+            await _signal_meals("purchases", d)
             return {"date": d, "lines": clean_lines, "amounts": amounts,
                     "total": round(sum(amounts.values()), 2)}
 
@@ -2141,6 +2232,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
              "$setOnInsert": {"id": str(uuid.uuid4())}},
             upsert=True,
         )
+        await _signal_meals("purchases", d)
         return {"date": d, "amounts": amounts,
                 "total": round(sum(amounts.values()), 2)}
 
@@ -2267,6 +2359,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             imported_dates.append(d)
 
         cats_by_key = {c["key"]: c["label"] for c in cats}
+        if imported_dates:
+            await _signal_meals("purchases")
         return {
             "imported_days": len(imported_dates),
             "dates": sorted(imported_dates),

@@ -14,6 +14,29 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 19 Jun 2026 fork — Live pantry updates (SSE push, testing iteration_46 — 100% pass)
+- **FIX (user bug)**: "Purchases entered in Daily Entry take >10 min to appear on other
+  machines" (preview + prod). Root cause: no refresh mechanism anywhere — tabs fetched
+  only on mount/date change. User chose PUSHED signals over polling.
+- Backend: every pantry mutation (purchases/issues/wastage/items/vendors/categories)
+  bumps a monotonic `seq` on db.config `meals_signal` ($inc — atomic, multi-worker-safe);
+  new SSE endpoint `GET /api/meals/events?token=` (EventSource can't send headers)
+  streams frames when seq moves + `: ping` keepalives. 2KB padding preamble +
+  `Content-Encoding: identity` + `X-Accel-Buffering: no` defeat ingress/gzip buffering
+  (external delivery verified <1s). Admin/chef only; 401/403 otherwise.
+- Echo suppression: api.js sends per-tab `X-Client-Id` on all requests (captured by a
+  server middleware into a contextvar → carried in the signal); the originating tab
+  ignores its own frames.
+- Frontend: `useMealsEvents` hook (baseline frame on connect; auto-reconnect re-emits
+  current seq so missed changes still trigger one refetch) wired in MealsReport parent;
+  `liveSig` prop → MealEntryTab (guarded: defers while saving/pending/typing, 4s retry;
+  loadDay/loadMasters extracted), MealMastersTab, MealWastageTab (read-only bits only),
+  MealExpensesTab, MealCrossCheckTab, MealVendorsTab (skips while row editor open).
+- Two-browser-context test: machine B mirrors machine A's save in ~1s without reload;
+  focused input never clobbered. Test file: backend/tests/test_meals_sse_iter46.py.
+- NOTE for prod: fix reaches production on next deploy.
+
+
 ### 19 Jun 2026 fork (code review #3 + queue-interrupt fix + perf, testing agent iteration_45 — 100% pass)
 - **FIX P0 (user-reported)** — Daily Entry auto-save queue interrupt: overlapping
   debounced PUTs could race/arrive out of order (lost updates). `MealEntryTab.jsx`

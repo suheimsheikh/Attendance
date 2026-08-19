@@ -4250,6 +4250,13 @@ _CACHEABLE_GET_PREFIXES = (
     "/api/version",
 )
 
+from services.client_ctx import current_client_id  # noqa: E402
+
+@app.middleware("http")
+async def _capture_client_id(request, call_next):  # noqa: ANN001
+    current_client_id.set(request.headers.get("x-client-id", ""))
+    return await call_next(request)
+
 @app.middleware("http")
 async def _add_stable_cache_headers(request, call_next):  # noqa: ANN001
     response = await call_next(request)

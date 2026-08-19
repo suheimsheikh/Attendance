@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale, Store } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
+import { useMealsEvents } from "../../hooks/useMealsEvents";
 import MealExpensesTab from "./MealExpensesTab";
 import MealPurchasesTab from "./MealPurchasesTab";
 import MealIssuesTab from "./MealIssuesTab";
@@ -464,9 +465,13 @@ function MonthlyGridTab() {
 export default function MealsReport() {
   const [tab, setTab] = useState("masters");
   const [lowCount, setLowCount] = useState(0);
+  // Live update signal — pushed from the server whenever ANY machine
+  // changes pantry data. Passed down so the active tab can refetch.
+  const [liveSig, setLiveSig] = useState(null);
+  useMealsEvents(setLiveSig);
   useEffect(() => {
     api.get("/meals/stock").then((r) => setLowCount(r.low_count || 0)).catch(() => {});
-  }, [tab]);
+  }, [tab, liveSig]);
   const TABS = [
     { key: "masters",   label: "Stock Master",       Icon: FolderTree, hint: "Central tree of categories and items — stock on hand, opening balance as-of date, low-stock alerts and item management" },
     { key: "entry",     label: "Daily entry",   Icon: ShoppingCart, hint: "One screen to enter both supplier purchases (qty · rate) and kitchen issues (qty) for a day — auto-saves as you type" },
@@ -518,17 +523,17 @@ export default function MealsReport() {
       <div className="pt-4">
       {tab === "daily" && <DailyTab />}
       {tab === "monthly" && <MonthlyGridTab />}
-      {tab === "expenses" && <MealExpensesTab />}
-      {tab === "entry" && <MealEntryTab />}
+      {tab === "expenses" && <MealExpensesTab liveSig={liveSig} />}
+      {tab === "entry" && <MealEntryTab liveSig={liveSig} />}
       {/* Legacy: keep old tabs reachable via deep-link only, in case a
           user has a purchases/issues URL bookmarked from before the
           Feb-2026 merge. */}
       {tab === "purchases" && <MealPurchasesTab onGoMasters={() => setTab("masters")} />}
       {tab === "issues" && <MealIssuesTab />}
-      {tab === "wastage" && <MealWastageTab />}
-      {tab === "crosscheck" && <MealCrossCheckTab onGoMasters={() => setTab("masters")} />}
-      {tab === "masters" && <MealMastersTab />}
-      {tab === "vendors" && <MealVendorsTab />}
+      {tab === "wastage" && <MealWastageTab liveSig={liveSig} />}
+      {tab === "crosscheck" && <MealCrossCheckTab onGoMasters={() => setTab("masters")} liveSig={liveSig} />}
+      {tab === "masters" && <MealMastersTab liveSig={liveSig} />}
+      {tab === "vendors" && <MealVendorsTab liveSig={liveSig} />}
       </div>
     </div>
   );
