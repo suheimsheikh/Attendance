@@ -16,7 +16,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search, StickyNote } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 
@@ -525,6 +525,14 @@ export default function MealEntryTab({ liveSig }) {
     persistLastReason(reason);
     queueWastage();
   };
+  const setWastageNotes = (itemId, notes) => {
+    dirtyWastage.current.add(itemId);
+    setWastage((prev) => ({ ...prev, [itemId]: { ...(prev[itemId] || {}), notes } }));
+    queueWastage();
+  };
+  // Which row's notes popover is currently open (null = none). Only one
+  // is visible at a time to avoid the grid getting noisy.
+  const [notesEditor, setNotesEditor] = useState(null);
 
   // ---------------------------------------------------------------------
   // Group items by category for the grid layout. Only categories that
@@ -620,6 +628,12 @@ export default function MealEntryTab({ liveSig }) {
     } else if (key === "ArrowRight") {
       ev.preventDefault();
       if (colIdx < gridCols.length - 1) focusCell(gridCols[colIdx + 1], itemId);
+      else if (kind === "wastage-qty") {
+        // Step further right into the row's Reason picker so the
+        // Wastage half is keyboard-walkable end to end.
+        const sel = document.querySelector(`[data-testid="entry-wastage-reason-${itemId}"]`);
+        if (sel) sel.focus();
+      }
     } else if (key === "Enter") {
       ev.preventDefault();
       if (kind === "purch-qty") {
@@ -1025,19 +1039,59 @@ export default function MealEntryTab({ liveSig }) {
                             title={over ? "Issues + Wastage exceed on-hand — will drive stock negative" : "Quantity lost to wastage / spoilage"}
                           />
                         </td>
-                        <td className="p-2">
-                          <select
-                            value={w.reason || ""}
-                            onChange={(ev) => setRowReason(it.id, ev.target.value)}
-                            className={`iu-input !h-8 !px-2 text-xs w-full text-slate-700 ${w.reason ? "font-semibold" : "text-slate-400"}`}
-                            data-testid={`entry-wastage-reason-${it.id}`}
-                            title="Why this stock was lost. First pick becomes the sticky default for the next blank wastage row."
-                          >
-                            <option value="">— pick reason —</option>
-                            {reasons.map((r) => (
-                              <option key={r} value={r}>{r}</option>
-                            ))}
-                          </select>
+                        <td className="p-2 relative">
+                          <div className="flex items-center gap-1">
+                            <select
+                              value={w.reason || ""}
+                              onChange={(ev) => setRowReason(it.id, ev.target.value)}
+                              onKeyDown={(ev) => {
+                                // Left-arrow steps back into the Wastage-Qty
+                                // cell so the row is keyboard-walkable both
+                                // ways. Up/Down keep native option-cycling.
+                                if (ev.key === "ArrowLeft") { ev.preventDefault(); focusCell("wastage-qty", it.id); }
+                              }}
+                              className={`iu-input !h-8 !px-2 text-xs flex-1 min-w-0 text-slate-700 ${w.reason ? "font-semibold" : "text-slate-400"}`}
+                              data-testid={`entry-wastage-reason-${it.id}`}
+                              title="Why this stock was lost. First pick becomes the sticky default for the next blank wastage row."
+                            >
+                              <option value="">— pick reason —</option>
+                              {reasons.map((r) => (
+                                <option key={r} value={r}>{r}</option>
+                              ))}
+                            </select>
+                            {/* Notes icon — subtle when empty, rose when
+                                a note exists. Hover shows the note as a
+                                native tooltip; click opens a popover to
+                                edit it. */}
+                            <button
+                              type="button"
+                              onClick={() => setNotesEditor(notesEditor === it.id ? null : it.id)}
+                              title={w.notes ? `Note: ${w.notes}` : "Add a note about why this was wasted"}
+                              className={`shrink-0 p-1 rounded transition ${w.notes ? "text-rose-500 hover:bg-rose-100" : "text-slate-300 hover:text-slate-600 hover:bg-slate-100"}`}
+                              data-testid={`entry-wastage-notes-btn-${it.id}`}
+                            >
+                              <StickyNote size={13}/>
+                            </button>
+                          </div>
+                          {notesEditor === it.id && (
+                            <div className="absolute right-0 top-full mt-1 z-40 w-64 bg-white border border-slate-300 rounded-lg shadow-lg p-2" data-testid={`entry-wastage-notes-popover-${it.id}`}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Note · {it.name}</span>
+                                <button type="button" onClick={() => setNotesEditor(null)} className="p-0.5 rounded hover:bg-slate-100 text-slate-400" title="Close">
+                                  <X size={12}/>
+                                </button>
+                              </div>
+                              <textarea
+                                autoFocus
+                                rows={3}
+                                value={w.notes || ""}
+                                onChange={(ev) => setWastageNotes(it.id, ev.target.value)}
+                                placeholder="e.g. left in sun, spoiled"
+                                className="iu-input !h-auto !py-1.5 text-xs w-full"
+                                data-testid={`entry-wastage-notes-textarea-${it.id}`}
+                              />
+                            </div>
+                          )}
                         </td>
                         <td className="p-2 text-right font-semibold tabular-nums text-rose-700" data-testid={`entry-wastage-amt-${it.id}`}>
                           {wasteAmt > 0 ? `₹${inr(wasteAmt)}` : ""}
