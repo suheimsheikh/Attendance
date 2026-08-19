@@ -1,13 +1,11 @@
 /**
- * MealWastageTab — event log for wasted, spoilt, rotten, lost or
- * damaged pantry items. Same rhythm as MealIssuesTab (pick date, tick
- * items with qty), plus a Reason dropdown and free-text Notes so a
- * month later the chef remembers why.
+ * MealWastageTab — read-only 30-day audit history of wasted / spoilt /
+ * lost / damaged pantry items. Entry moved into Daily Entry (Feb 2026);
+ * this tab keeps the historical view so past data stays auditable.
  */
-import React, { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { Loader2, Save, Boxes, Trash2 } from "lucide-react";
-import { api, showApiError } from "../../api";
+import React, { useEffect, useState } from "react";
+import { Boxes } from "lucide-react";
+import { api } from "../../api";
 import { formatDate } from "../../utils";
 
 const REASONS = [
@@ -25,58 +23,10 @@ function todayISO() {
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
-const num = (v) => (v === "" || v == null ? 0 : Number(v) || 0);
 const fmtQty = (n) => (n == null ? "0" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
 
-// A single wastage line row in the entry form.
-function blankLine() {
-  return { id: crypto.randomUUID?.() || String(Math.random()), item_id: "", qty: "", reason: "wasted", notes: "" };
-}
-
 export default function MealWastageTab({ liveSig }) {
-  const [dateStr, setDateStr] = useState(todayISO());
-  const [cats, setCats] = useState([]);
-  const [items, setItems] = useState([]);
-  const [stock, setStock] = useState({});
-  const [lines, setLines] = useState([blankLine()]);
-  const [saving, setSaving] = useState(false);
   const [recent, setRecent] = useState([]);
-
-  const loadMasters = async () => {
-    try {
-      const [c, i] = await Promise.all([
-        api.get("/meals/purchase-categories"),
-        api.get("/meals/items?include_inactive=false"),
-      ]);
-      setCats((c.categories || []).filter((x) => x.active !== false));
-      setItems(i.items || []);
-    } catch (err) { showApiError(err, "Couldn't load masters"); }
-  };
-  useEffect(() => { loadMasters(); }, []);
-
-  // Stock as-of the wastage date (this is discovery-loss, not
-  // consumption — we want what was in hand THAT day).
-  useEffect(() => {
-    api.get(`/meals/stock?as_of=${dateStr}`)
-      .then((r) => setStock(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x]))))
-      .catch(() => setStock({}));
-  }, [dateStr]);
-
-  // Load existing wastage for the date and hydrate into editable rows.
-  useEffect(() => {
-    api.get(`/meals/wastage?start=${dateStr}&end=${dateStr}`)
-      .then((r) => {
-        const rows = r.wastage?.[0]?.lines || [];
-        setLines(rows.length ? rows.map((l) => ({
-          id: l.id || crypto.randomUUID?.() || String(Math.random()),
-          item_id: l.item_id,
-          qty: l.qty,
-          reason: l.reason || "wasted",
-          notes: l.notes || "",
-        })) : [blankLine()]);
-      })
-      .catch(() => setLines([blankLine()]));
-  }, [dateStr]);
 
   const loadRecent = () => {
     const end = todayISO();
@@ -90,49 +40,12 @@ export default function MealWastageTab({ liveSig }) {
   };
   useEffect(loadRecent, []);
 
-  // Live refresh — reload the read-only bits (masters, recent list,
-  // stock) when another machine changes pantry data. The editable
-  // `lines` grid is left alone so an in-progress entry is never lost.
+  // Live refresh — reload the recent list when another machine posts
+  // a wastage change via SSE.
   useEffect(() => {
     if (!liveSig) return;
-    if (["items", "categories"].includes(liveSig.scope)) loadMasters();
     loadRecent();
-    api.get(`/meals/stock?as_of=${dateStr}`)
-      .then((r) => setStock(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x]))))
-      .catch(() => {});
   }, [liveSig]);
-
-  const itemOptions = useMemo(() => {
-    // Group items by category label for the option groups.
-    const map = new Map();
-    cats.forEach((c) => map.set(c.key, { label: c.label, rows: [] }));
-    items.forEach((it) => map.get(it.category_key)?.rows.push(it));
-    return Array.from(map.values()).filter((g) => g.rows.length > 0);
-  }, [items, cats]);
-
-  const updateLine = (id, patch) =>
-    setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
-  const addLine = () => setLines((prev) => [...prev, blankLine()]);
-  const removeLine = (id) => setLines((prev) => prev.filter((l) => l.id !== id));
-
-  const save = async () => {
-    const payload = lines
-      .filter((l) => l.item_id && num(l.qty) > 0)
-      .map((l) => ({
-        item_id: l.item_id,
-        qty: num(l.qty),
-        reason: l.reason || "wasted",
-        notes: (l.notes || "").trim(),
-      }));
-    setSaving(true);
-    try {
-      await api.put(`/meals/wastage/${dateStr}`, { lines: payload });
-      toast.success(`Wastage saved for ${formatDate(dateStr)}`);
-      loadRecent();
-    } catch (err) {
-      showApiError(err, "Couldn't save wastage");
-    } finally { setSaving(false); }
-  };
 
   return (
     <div data-testid="meal-wastage-tab">

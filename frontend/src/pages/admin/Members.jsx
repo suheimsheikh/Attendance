@@ -153,8 +153,14 @@ export default function Members() {
     const q = search.trim().toLowerCase();
     let list = filterEx(members, showEx);
     if (bucket !== "all") list = list.filter((m) => bucketOf(m) === bucket);
-    if (onlyAdmins) list = list.filter((m) => m.role === "admin");
-    if (onlyChefs) list = list.filter((m) => m.role === "chef");
+    // Role toggles OR-combine — a member with EITHER selected role
+    // shows. AND-combining was the review's Low finding: enabling both
+    // yields an empty list since no member is both admin AND chef.
+    if (onlyAdmins || onlyChefs) {
+      const wantAdmin = onlyAdmins;
+      const wantChef = onlyChefs;
+      list = list.filter((m) => (wantAdmin && m.role === "admin") || (wantChef && m.role === "chef"));
+    }
     if (instFilter) list = list.filter((m) => m.institution === instFilter);
     if (!q) return list;
     return list.filter((m) =>

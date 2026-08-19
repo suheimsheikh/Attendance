@@ -1878,12 +1878,16 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             if not item:
                 raise HTTPException(status_code=400,
                                     detail=f"Unknown item_id: {iid or '(blank)'}")
-            qty = _parse_amount(raw.get("qty"))
-            if qty is None or qty <= 0:
+            qty = _parse_amount(raw.get("qty")) or 0.0
+            notes = str(raw.get("notes") or "").strip()[:400]
+            # Persist any line with a positive qty OR a non-empty note
+            # (notes-only rows are legitimate — "check tomorrow" scribble
+            # before the chef weighs the loss). Rows with neither are
+            # treated as "remove this line".
+            if qty <= 0 and not notes:
                 removes.append(iid)
                 continue
             reason = _valid_reason(raw.get("reason") or "wasted")
-            notes = str(raw.get("notes") or "").strip()[:400]
             line = {
                 "id": str(uuid.uuid4()),
                 "item_id": iid,

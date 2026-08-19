@@ -448,8 +448,16 @@ export default function MealEntryTab({ liveSig }) {
     ids.forEach((iid) => {
       const w = latestWastage.current[iid];
       const qty = num(w?.qty);
-      if (qty > 0) upserts.push({ item_id: iid, qty, reason: w?.reason || "wasted", notes: w?.notes || "" });
-      else removes.push(iid);
+      const notes = (w?.notes || "").trim();
+      // Persist any row that has either a positive qty OR a non-empty
+      // note. Notes-without-qty is a legitimate case ("check tomorrow"
+      // scribble before the chef weighs the loss) — dropping it silently
+      // was the Feb 2026 code-review Medium finding.
+      if (qty > 0 || notes) {
+        upserts.push({ item_id: iid, qty, reason: w?.reason || "wasted", notes });
+      } else {
+        removes.push(iid);
+      }
     });
     const seq = ++saveSeq.current.wastage;
     pendingSave.current.wastage = { seq, targetDate, ids, upserts, removes };
