@@ -12,6 +12,7 @@ import { MusterScopeChips, MusterInstitutionChips } from "./muster/MusterFilters
 import MusterBreakdownBar from "./muster/MusterBreakdownBar";
 import AbsentShareBanner from "./muster/AbsentShareBanner";
 import DailyRosterShareButton from "./muster/DailyRosterShareButton";
+import PresentShareButton from "./muster/PresentShareButton";
 import ExMemberToggle, { useExMemberToggle } from "../components/ExMemberToggle";
 import { isExMember } from "../utils/exMember";
 
@@ -345,6 +346,19 @@ export default function Muster() {
       <AbsentShareBanner />
 
       <DailyRosterShareButton />
+
+      {/* Photo-mosaic "who's present" batch share (Feb 2026). Sits
+          as its own emerald banner so admins/coaches can tap once
+          after muster and blast the collage to the parents' group. */}
+      <div className="mb-4 rounded-xl border border-emerald-300 bg-emerald-50 p-3 flex items-center gap-3 flex-wrap" data-testid="muster-present-share-banner">
+        <div className="flex-1 min-w-[180px]">
+          <p className="text-sm font-semibold text-emerald-800">Present today · photo collage</p>
+          <p className="text-xs text-emerald-700">
+            One-tap WhatsApp share with a mosaic of everyone currently checked in.
+          </p>
+        </div>
+        <PresentShareButton officeName={office?.name} />
+      </div>
 
       {/* Mode toggle */}
       <div className="grid grid-cols-2 gap-2 mb-4">
