@@ -43,8 +43,10 @@ export default function MealEntryTab() {
   const [items, setItems] = useState([]);
   const [stock, setStock] = useState({});      // item_id → on_hand (end of prev day)
   const [avgRate, setAvgRate] = useState({});  // item_id → weighted-avg cost (₹ / unit)
-  const [purch, setPurch] = useState({});      // item_id → { qty, rate }
+  const [purch, setPurch] = useState({});      // item_id → { qty, rate, vendor_id }
   const [issues, setIssues] = useState({});    // item_id → qty
+  const [vendors, setVendors] = useState([]);  // {id, name, phone}[]
+  const [showAddVendor, setShowAddVendor] = useState(null); // category_key on demand
   const [saving, setSaving] = useState({ purch: false, issues: false });
   const [savedAt, setSavedAt] = useState(null); // last successful save timestamp
   // Show only rows where either purch qty OR issue qty is > 0 — handy on
@@ -79,15 +81,22 @@ export default function MealEntryTab() {
   useEffect(() => {
     (async () => {
       try {
-        const [c, i] = await Promise.all([
+        const [c, i, v] = await Promise.all([
           api.get("/meals/purchase-categories"),
           api.get("/meals/items?include_inactive=false"),
+          api.get("/meals/vendors"),
         ]);
         setCats((c.categories || []).filter((x) => x.active !== false));
         setItems(i.items || []);
+        setVendors(v.vendors || []);
       } catch (err) { showApiError(err, "Couldn't load pantry masters"); }
     })();
   }, []);
+
+  // Re-fetch vendors on demand (e.g. after inline "Add vendor" flow).
+  const refreshVendors = () => {
+    api.get("/meals/vendors").then((r) => setVendors(r.vendors || [])).catch(() => {});
+  };
 
   // ---------------------------------------------------------------------
   // Load the day's purchases, issues, and previous-day stock whenever the
@@ -107,7 +116,7 @@ export default function MealEntryTab() {
         if (!fresh()) return;
         const lines = r.purchases?.[0]?.lines || [];
         const next = {};
-        lines.forEach((l) => { next[l.item_id] = { qty: l.qty, rate: l.rate }; });
+        lines.forEach((l) => { next[l.item_id] = { qty: l.qty, rate: l.rate, vendor_id: l.vendor_id || "" }; });
         setPurch(next);
       })
       .catch(() => { if (fresh()) setPurch({}); });
@@ -183,7 +192,7 @@ export default function MealEntryTab() {
         const qty = num(e?.qty);
         const rate = num(e?.rate);
         if (qty <= 0 && rate <= 0) return null;
-        return { item_id: it.id, qty, rate };
+        return { item_id: it.id, qty, rate, vendor_id: e?.vendor_id || null };
       })
       .filter(Boolean);
     try {
@@ -254,14 +263,35 @@ export default function MealEntryTab() {
       : grouped;
     return base.map(({ cat, rows }) => {
       let pAmt = 0, iAmt = 0;
+      // Category vendor = first non-empty vendor_id on any row in this
+      // category today. When the header picker changes, we push the
+      // new id onto every row so historical picks stay consistent.
+      let catVendor = "";
       for (const it of rows) {
         const e = purch[it.id] || {};
         pAmt += num(e.qty) * num(e.rate);
         iAmt += num(issues[it.id]) * (avgRate[it.id] || 0);
+        if (!catVendor && e.vendor_id) catVendor = e.vendor_id;
       }
-      return { cat, rows, purchAmt: pAmt, issueAmt: iAmt };
+      return { cat, rows, purchAmt: pAmt, issueAmt: iAmt, catVendor };
     });
   }, [grouped, nonZeroOnly, purch, issues, avgRate]);
+
+  // Set (or clear) the vendor for every item in a category on the
+  // current day. Save is deferred via the existing debounce so bulk
+  // dropdown changes don't hammer the PUT endpoint.
+  const setCategoryVendor = (catKey, vendorId) => {
+    setPurch((prev) => {
+      const next = { ...prev };
+      items
+        .filter((it) => it.category_key === catKey)
+        .forEach((it) => {
+          next[it.id] = { ...(next[it.id] || {}), vendor_id: vendorId || "" };
+        });
+      return next;
+    });
+    queuePurch();
+  };
 
   const dayTotal = useMemo(() => {
     let s = 0;
@@ -417,21 +447,23 @@ export default function MealEntryTab() {
               </tr>
             </thead>
             <tbody>
-              {filteredGrouped.map(({ cat, rows, purchAmt, issueAmt }) => {
+              {filteredGrouped.map(({ cat, rows, purchAmt, issueAmt, catVendor }) => {
                 const isCollapsed = collapsedCats.has(cat.key);
                 return (
                 <React.Fragment key={cat.key}>
                   {/* Category header — bright yellow band + bold uppercase
-                      label with per-category subtotals for both sides.
-                      Clicking the row toggles collapse of its items.
-                      Aug 2026 request. */}
+                      label with a supplier picker and per-category
+                      subtotals for both sides.  Aug 2026 request. */}
                   <tr
-                    className="bg-amber-100 border-y border-amber-300 cursor-pointer hover:bg-amber-200/80 select-none"
-                    onClick={() => toggleCat(cat.key)}
+                    className="bg-amber-100 border-y border-amber-300 select-none"
                     data-testid={`entry-cat-header-${cat.key}`}
-                    title={isCollapsed ? "Click to expand this category" : "Click to collapse this category"}
                   >
-                    <td colSpan={3} className="px-2 py-1.5">
+                    <td
+                      colSpan={3}
+                      className="px-2 py-1.5 cursor-pointer hover:bg-amber-200/60"
+                      onClick={() => toggleCat(cat.key)}
+                      title={isCollapsed ? "Click to expand this category" : "Click to collapse this category"}
+                    >
                       <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-amber-900 uppercase tracking-wider">
                         {isCollapsed
                           ? <ChevronRight size={14} className="stroke-[3]"/>
@@ -442,11 +474,42 @@ export default function MealEntryTab() {
                         </span>
                       </span>
                     </td>
-                    <td colSpan={3} className="px-3 py-1.5 text-right text-xs font-extrabold tabular-nums text-emerald-800" data-testid={`entry-cat-purch-total-${cat.key}`}>
-                      {purchAmt > 0 ? `₹${inr(purchAmt)}` : <span className="text-emerald-700/40">—</span>}
+                    <td colSpan={3} className="px-2 py-1.5">
+                      {/* Vendor picker — one supplier per category per day.
+                          Selecting a value propagates the vendor_id to
+                          every row's purchase line on the next save. */}
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-[10px] font-semibold uppercase text-emerald-800/70 tracking-wider">Vendor</span>
+                        <select
+                          value={catVendor || ""}
+                          onChange={(ev) => {
+                            const v = ev.target.value;
+                            if (v === "__add__") setShowAddVendor(cat.key);
+                            else setCategoryVendor(cat.key, v);
+                          }}
+                          className="flex-1 h-7 text-xs bg-white border border-emerald-200 rounded px-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                          data-testid={`entry-cat-vendor-${cat.key}`}
+                          title="Set the supplier for every item in this category on this day"
+                        >
+                          <option value="">— pick supplier —</option>
+                          {vendors.map((v) => (
+                            <option key={v.id} value={v.id}>{v.name}</option>
+                          ))}
+                          <option value="__add__">＋ Add new vendor…</option>
+                        </select>
+                      </div>
                     </td>
-                    <td colSpan={3} className="px-3 py-1.5 text-right text-xs font-extrabold tabular-nums text-amber-800" data-testid={`entry-cat-issue-total-${cat.key}`}>
-                      {issueAmt > 0 ? `₹${inr(issueAmt)}` : <span className="text-amber-700/40">—</span>}
+                    <td colSpan={3} className="px-3 py-1.5 text-right">
+                      <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-500 leading-tight">Purch · Issue</div>
+                      <div className="inline-flex items-center gap-2 text-xs font-extrabold tabular-nums leading-tight">
+                        <span className="text-emerald-800" data-testid={`entry-cat-purch-total-${cat.key}`}>
+                          {purchAmt > 0 ? `₹${inr(purchAmt)}` : <span className="text-emerald-700/40">—</span>}
+                        </span>
+                        <span className="text-slate-400">·</span>
+                        <span className="text-amber-800" data-testid={`entry-cat-issue-total-${cat.key}`}>
+                          {issueAmt > 0 ? `₹${inr(issueAmt)}` : <span className="text-amber-700/40">—</span>}
+                        </span>
+                      </div>
                     </td>
                   </tr>
                   {!isCollapsed && rows.map((it) => {
@@ -518,6 +581,81 @@ export default function MealEntryTab() {
           </table>
         </div>
       )}
+      {showAddVendor && (
+        <AddVendorInlineModal
+          onClose={() => setShowAddVendor(null)}
+          onCreated={(vendor) => {
+            // Refresh master list, apply the new supplier to the
+            // triggering category, close the modal.
+            setVendors((prev) => [...prev, vendor].sort((a, b) => a.name.localeCompare(b.name)));
+            setCategoryVendor(showAddVendor, vendor.id);
+            setShowAddVendor(null);
+            refreshVendors();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Small in-place vendor create dialog reachable from the "＋ Add new
+// vendor…" option in the category-header dropdown on Daily entry.
+// Keeps chefs on the pantry screen instead of context-switching to
+// the Vendors master when a new supplier turns up mid-entry.
+function AddVendorInlineModal({ onClose, onCreated }) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+  const submit = async () => {
+    const n = name.trim();
+    if (!n) { toast.error("Name required"); return; }
+    setSaving(true);
+    try {
+      const v = await api.post("/meals/vendors", { name: n, phone: phone.trim() || null });
+      toast.success(`Added ${v.name}`);
+      onCreated(v);
+    } catch (e) { showApiError(e); }
+    finally { setSaving(false); }
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" data-testid="add-vendor-inline-modal">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+          <h2 className="text-lg font-extrabold text-slate-900">Add new vendor</h2>
+          <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100" data-testid="add-vendor-close" title="Close"><X size={18}/></button>
+        </div>
+        <div className="p-5 space-y-3">
+          <label className="block text-xs font-semibold text-slate-600">
+            <div className="mb-1">Name</div>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Reliance Fresh"
+              className="iu-input !h-10 !w-full text-sm"
+              data-testid="add-vendor-name"
+              onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+            />
+          </label>
+          <label className="block text-xs font-semibold text-slate-600">
+            <div className="mb-1">Phone (optional)</div>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="98765 43210"
+              className="iu-input !h-10 !w-full text-sm"
+              data-testid="add-vendor-phone"
+              onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+            />
+          </label>
+        </div>
+        <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
+          <button className="iu-btn-secondary !h-9" onClick={onClose} data-testid="add-vendor-cancel">Cancel</button>
+          <button className="iu-btn-primary !h-9" onClick={submit} disabled={saving} data-testid="add-vendor-save">
+            {saving ? "Saving…" : "Save vendor"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

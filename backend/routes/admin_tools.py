@@ -42,7 +42,7 @@ BACKUP_COLLECTIONS = [
     # Pantry / meals — added 02/2026 after prod->preview restore dropped
     # the pantry masters and every purchase/issue/wastage row.
     "meal_items", "meal_purchases", "meal_issues", "meal_wastage",
-    "meal_records",
+    "meal_records", "meal_vendors",
 ]
 
 

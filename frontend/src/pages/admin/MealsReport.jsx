@@ -11,7 +11,7 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale } from "lucide-react";
+import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale, Store } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import MealExpensesTab from "./MealExpensesTab";
@@ -21,6 +21,7 @@ import MealEntryTab from "./MealEntryTab";
 import MealWastageTab from "./MealWastageTab";
 import MealMastersTab from "./MealMastersTab";
 import MealCrossCheckTab from "./MealCrossCheckTab";
+import MealVendorsTab from "./MealVendorsTab";
 import { useEscape } from "../../hooks/useEscape";
 
 const MEAL_ORDER = ["breakfast", "lunch", "snacks", "dinner"];
@@ -467,13 +468,14 @@ export default function MealsReport() {
     api.get("/meals/stock").then((r) => setLowCount(r.low_count || 0)).catch(() => {});
   }, [tab]);
   const TABS = [
-    { key: "masters",   label: "Masters",       Icon: FolderTree, hint: "Central tree of categories and items — stock on hand, history, low-stock alerts and item management" },
+    { key: "masters",   label: "Stock Master",       Icon: FolderTree, hint: "Central tree of categories and items — stock on hand, opening balance as-of date, low-stock alerts and item management" },
     { key: "entry",     label: "Daily entry",   Icon: ShoppingCart, hint: "One screen to enter both supplier purchases (qty · rate) and kitchen issues (qty) for a day — auto-saves as you type" },
     { key: "wastage",   label: "Wastage & losses", Icon: Flame, hint: "Record rotten, spilled or lost stock with a reason" },
     { key: "crosscheck", label: "Cross-check", Icon: Scale, hint: "Compare what the kitchen issued vs meals served × per-item norms — flags over/under days" },
     { key: "daily",     label: "Daily counts",  Icon: Utensils, hint: "Headcount of meals served per day" },
     { key: "monthly",   label: "Monthly grid",  Icon: CalendarDays, hint: "Month-long meal count audit grid" },
     { key: "expenses",  label: "Expense report", Icon: IndianRupee, hint: "Category-wise purchase spend for the accountant" },
+    { key: "vendors",   label: "Vendors",       Icon: Store, hint: "Suppliers you can attribute purchase lines to — name and phone" },
   ];
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto" data-testid="meals-report-page">
@@ -526,6 +528,7 @@ export default function MealsReport() {
       {tab === "wastage" && <MealWastageTab />}
       {tab === "crosscheck" && <MealCrossCheckTab onGoMasters={() => setTab("masters")} />}
       {tab === "masters" && <MealMastersTab />}
+      {tab === "vendors" && <MealVendorsTab />}
       </div>
     </div>
   );

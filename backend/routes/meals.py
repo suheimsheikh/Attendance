@@ -182,6 +182,22 @@ class IssuesUpsertIn(BaseModel):
     lines: List[dict]
 
 
+# Vendors master (Aug 2026). Very light — just name + phone — used to
+# annotate each purchase line so the accountant can trace which supplier
+# a given day's veg / grocery / milk bill came from. Storing the
+# `vendor_id` on the purchase line keeps history stable if a vendor is
+# later renamed.
+class VendorIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=80)
+    phone: Optional[str] = Field(default=None, max_length=20)
+
+
+class VendorPatch(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    phone: Optional[str] = Field(default=None, max_length=20)
+    active: Optional[bool] = None
+
+
 # Wastage & losses — separate event log so consumption vs loss is easy
 # to split in reports. Each line: {item_id, qty, reason, notes?}. Reason
 # picked from a fixed list so category totals stay clean; free-text
@@ -1216,6 +1232,105 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         }
 
     # ------------------------------------------------------------------
+    # Vendors master (Aug 2026). Light-weight supplier registry with
+    # just name + phone. Purchase lines optionally carry `vendor_id` so
+    # the accountant can trace who each ₹ came from. Any chef/admin can
+    # read (fills the dropdown on the Daily entry grid); only admins
+    # can create / edit / soft-delete.
+    # ------------------------------------------------------------------
+    def _norm_vendor_name(n: str) -> str:
+        import re
+        return re.sub(r"\s+", " ", (n or "").strip().lower())
+
+    def _norm_phone(p: Optional[str]) -> Optional[str]:
+        if not p:
+            return None
+        import re
+        digits = re.sub(r"\D+", "", str(p))
+        return digits or None
+
+    @router.get("/meals/vendors")
+    async def list_vendors(user: dict = Depends(require_chef_or_admin)):
+        """All active vendors sorted by name — feeds the vendor
+        dropdown on the Daily-entry grid and the Vendors master screen.
+        Inactive vendors are hidden here; use ?include_inactive=1 for
+        the admin screen if we ever need it.
+        """
+        rows = await db.meal_vendors.find(
+            {"active": {"$ne": False}}, {"_id": 0},
+        ).sort("name", 1).to_list(500)
+        return {"vendors": rows}
+
+    @router.post("/meals/vendors")
+    async def create_vendor(body: VendorIn, admin: dict = Depends(require_admin)):
+        name = body.name.strip()
+        norm = _norm_vendor_name(name)
+        if not norm:
+            raise HTTPException(status_code=400, detail="Name required")
+        # Case-insensitive dedupe against active AND inactive to avoid
+        # accidentally creating a second row for a supplier whose old
+        # entry was soft-deleted.
+        clash = await db.meal_vendors.find_one({"name_norm": norm})
+        if clash:
+            raise HTTPException(status_code=409, detail=f'Vendor "{clash["name"]}" already exists')
+        doc = {
+            "id": str(uuid.uuid4()),
+            "name": name,
+            "name_norm": norm,
+            "phone": _norm_phone(body.phone),
+            "active": True,
+            "created_at": now_utc().isoformat(),
+            "created_by": admin["id"],
+        }
+        await db.meal_vendors.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
+
+    @router.patch("/meals/vendors/{vendor_id}")
+    async def update_vendor(
+        vendor_id: str, body: VendorPatch,
+        admin: dict = Depends(require_admin),
+    ):
+        vendor = await db.meal_vendors.find_one({"id": vendor_id}, {"_id": 0})
+        if not vendor:
+            raise HTTPException(status_code=404, detail="Vendor not found")
+        update: dict = {}
+        if body.name is not None:
+            new_name = body.name.strip()
+            new_norm = _norm_vendor_name(new_name)
+            if not new_norm:
+                raise HTTPException(status_code=400, detail="Name required")
+            clash = await db.meal_vendors.find_one({"name_norm": new_norm, "id": {"$ne": vendor_id}})
+            if clash:
+                raise HTTPException(status_code=409, detail=f'Vendor "{clash["name"]}" already exists')
+            update["name"] = new_name
+            update["name_norm"] = new_norm
+        if body.phone is not None:
+            update["phone"] = _norm_phone(body.phone)
+        if body.active is not None:
+            update["active"] = bool(body.active)
+        if update:
+            await db.meal_vendors.update_one({"id": vendor_id}, {"$set": update})
+        merged = {**vendor, **update}
+        merged.pop("_id", None)
+        return merged
+
+    @router.delete("/meals/vendors/{vendor_id}")
+    async def delete_vendor(vendor_id: str, admin: dict = Depends(require_admin)):
+        vendor = await db.meal_vendors.find_one({"id": vendor_id}, {"_id": 0})
+        if not vendor:
+            raise HTTPException(status_code=404, detail="Vendor not found")
+        # If the vendor was ever attached to a purchase line we soft-delete
+        # (active=False) so historical audits keep their supplier context;
+        # otherwise a hard delete keeps the master screen tidy.
+        used = await db.meal_purchases.find_one({"lines.vendor_id": vendor_id})
+        if used:
+            await db.meal_vendors.update_one({"id": vendor_id}, {"$set": {"active": False}})
+            return {"soft_deleted": True}
+        await db.meal_vendors.delete_one({"id": vendor_id})
+        return {"deleted": True}
+
+    # ------------------------------------------------------------------
     # Items master (Feb 2026) — sub-categories under each purchase
     # category. Admin manages CRUD; anyone chef/admin can read so the
     # purchase entry dropdown works.
@@ -1935,6 +2050,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                     "unit": item.get("unit"),
                     "rate": round(rate, 2),
                     "amount": amount,
+                    # Optional supplier attribution (Aug 2026). Blank string
+                    # / missing / null → stored as None so filters and the
+                    # audit UI can distinguish "no vendor" from "vendor X".
+                    "vendor_id": (str(raw.get("vendor_id")).strip() or None)
+                                 if raw.get("vendor_id") is not None else None,
                 })
                 cat = item.get("category_key") or "other"
                 amounts[cat] = round(amounts.get(cat, 0.0) + amount, 2)

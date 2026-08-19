@@ -123,6 +123,47 @@ function InlineRate({ value, unit, onSave, testid }) {
   );
 }
 
+// Inline as-of date pill for opening stock. Shown right under the
+// opening qty / rate on Master rows so admins can see + edit when the
+// opening balance was struck (Aug 2026 user ask).
+function InlineDate({ value, onSave, testid }) {
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState(value || "");
+  useEffect(() => { setV(value || ""); }, [value]);
+  const display = value
+    ? new Date(value + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })
+    : "set date";
+  if (!editing) {
+    return (
+      <button
+        className="w-full text-right text-[9px] leading-tight tabular-nums text-slate-500 hover:text-slate-700 hover:underline underline-offset-2"
+        onClick={() => setEditing(true)}
+        data-testid={testid}
+        title="Opening stock as-of date — click to edit"
+      >
+        as of {display}
+      </button>
+    );
+  }
+  const commit = () => {
+    setEditing(false);
+    if (v && v !== (value || "")) onSave(v);
+  };
+  return (
+    <input
+      autoFocus type="date" value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+        if (e.key === "Escape") { setV(value || ""); setEditing(false); }
+      }}
+      className="iu-input !h-5 !w-full !py-0 !px-1 text-[10px] text-right tabular-nums"
+      data-testid={`${testid}-input`}
+    />
+  );
+}
+
 // Inline unit picker — small transparent-looking select that saves on
 // change. Used in the Masters tree Unit column.
 function InlineUnit({ value, options, onSave, testid }) {
@@ -285,7 +326,7 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
           ) : (
             <span className="text-[10px] font-bold uppercase text-slate-500 text-center">{item.unit}</span>
           )}
-          {/* Opening (editable qty + optional editable ₹/unit rate) */}
+          {/* Opening (editable qty + optional editable ₹/unit rate + as-of date) */}
           {isAdmin ? (
             <span className="flex flex-col">
               <InlineNum
@@ -302,12 +343,24 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
                   testid={`masters-item-openrate-${item.id}`}
                 />
               )}
+              {Number(item.opening_stock) > 0 && (
+                <InlineDate
+                  value={item.opening_stock_as_of || ""}
+                  onSave={(iso) => onPatch(item.id, { opening_stock_as_of: iso })}
+                  testid={`masters-item-openasof-${item.id}`}
+                />
+              )}
             </span>
           ) : (
             <span className="flex flex-col text-right">
               <span className="font-semibold text-slate-700">{fmt(item.opening_stock || 0)}</span>
               {Number(item.opening_stock) > 0 && Number(item.opening_rate) > 0 && (
                 <span className="text-[9px] leading-tight text-emerald-700 tabular-nums">@₹{fmt(item.opening_rate)}/{item.unit}</span>
+              )}
+              {Number(item.opening_stock) > 0 && item.opening_stock_as_of && (
+                <span className="text-[9px] leading-tight text-slate-500 tabular-nums">
+                  as of {new Date(item.opening_stock_as_of + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                </span>
               )}
             </span>
           )}

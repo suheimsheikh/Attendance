@@ -14,6 +14,15 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 19 Aug 2026 (Vendors master + Stock Master rename + Opening as-of date)
+- **New collection** `meal_vendors` + full CRUD at `GET/POST /api/meals/vendors`, `PATCH/DELETE /api/meals/vendors/{id}`. Fields: name (required, case-insensitive dedupe) + phone (digits-only). Deletion is soft when the vendor is already referenced on any purchase line, hard otherwise. Added to `BACKUP_COLLECTIONS` so restore preserves it.
+- **New `vendor_id` field** on `meal_purchases.lines[]` — optional, kept null when blank. Wire-preserved through the PUT `/meals/purchases/{date_str}` endpoint.
+- **New `MealVendorsTab.jsx`** screen (tab "Vendors" under Pantry Stock) — add / edit / delete with inline row editors.
+- **Category header on Daily entry** now hosts a Vendor dropdown that applies the selected supplier to every item in that category on that day. Options: existing vendors + "＋ Add new vendor…" which opens an inline modal so chefs can add on the fly without leaving the page.
+- **Masters tab renamed** to **Stock Master** (tab label + hint updated).
+- **Opening balance as-of date** now surfaced inline under the opening qty/rate on each item row in Stock Master — click-to-edit `InlineDate` for admins, read-only `as of DD MMM YY` for chefs.
+- **Monthly grid** — kept per user confirmation (still used for meal-count audits).
+
 ### 19 Aug 2026 (Daily-entry drill-down + collapsible categories + PDF)
 - **New endpoint** `GET /api/meals/daily-totals?start=&end=`: per-day
   purchase and issue rupee totals across ALL items in the range. Issue
