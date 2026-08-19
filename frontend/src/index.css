@@ -206,5 +206,16 @@ input[data-testid^="search-"]::placeholder {
   body.expense-print-active [data-testid="meal-expense-print-region"] table {
     font-size: 9px;
   }
+  /* Meal daily totals drill-down PDF — Aug 2026 user request.
+     Follows the same body-class-portal pattern as the two above. */
+  body.meal-totals-print-active > *:not(:has(#meal-totals-print-region)) {
+    display: none !important;
+  }
+  body.meal-totals-print-active #meal-totals-print-region {
+    display: block !important;
+    position: static !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
   @page { margin: 1cm; }
 }

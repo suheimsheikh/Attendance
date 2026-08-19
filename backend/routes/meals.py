@@ -1132,6 +1132,89 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         ).sort("date", 1).to_list(400)
         return {"start": s, "end": e, "purchases": rows}
 
+    @router.get("/meals/daily-totals")
+    async def daily_totals(
+        start: str, end: str,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Per-day purchase + issue totals across ALL items for a date
+        range. Powers the double-click drill-down on the Daily entry
+        totals cards and the printable Purchases/Issues PDF report
+        (19 Aug 2026 user request).
+
+        Issue amount uses the SAME weighted-average purchase rate the
+        Daily-entry UI shows (Σ purch amount / Σ purch qty per item)
+        so the numbers on this drill-down agree with the entry grid.
+        """
+        s, e = _valid_date(start), _valid_date(end)
+        if s > e:
+            raise HTTPException(status_code=400, detail="start must be before end")
+
+        # Weighted-avg purchase rate per item across ALL time — matches
+        # the frontend `avgRate` calculation in MealEntryTab.
+        avg_rate: dict = {}
+        totals_by_item: dict = {}  # item_id → {qty, amt}
+        async for p in db.meal_purchases.find({}, {"_id": 0, "lines": 1}):
+            for ln in (p.get("lines") or []):
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                r = float(ln.get("rate") or 0)
+                if not iid or q <= 0:
+                    continue
+                t = totals_by_item.setdefault(iid, {"qty": 0.0, "amt": 0.0})
+                t["qty"] += q
+                t["amt"] += q * r
+        for iid, t in totals_by_item.items():
+            avg_rate[iid] = (t["amt"] / t["qty"]) if t["qty"] > 0 else 0.0
+
+        # Per-day rollup.
+        by_date: dict = {}
+        async for p in db.meal_purchases.find(
+            {"date": {"$gte": s, "$lte": e}},
+            {"_id": 0, "date": 1, "lines": 1},
+        ):
+            d = p["date"]
+            slot = by_date.setdefault(d, {"purchase_amt": 0.0, "issue_amt": 0.0,
+                                          "purchase_lines": 0, "issue_lines": 0})
+            for ln in (p.get("lines") or []):
+                q = float(ln.get("qty") or 0)
+                r = float(ln.get("rate") or 0)
+                if q > 0:
+                    slot["purchase_amt"] += q * r
+                    slot["purchase_lines"] += 1
+
+        async for i in db.meal_issues.find(
+            {"date": {"$gte": s, "$lte": e}},
+            {"_id": 0, "date": 1, "lines": 1},
+        ):
+            d = i["date"]
+            slot = by_date.setdefault(d, {"purchase_amt": 0.0, "issue_amt": 0.0,
+                                          "purchase_lines": 0, "issue_lines": 0})
+            for ln in (i.get("lines") or []):
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                if q <= 0 or not iid:
+                    continue
+                slot["issue_amt"] += q * avg_rate.get(iid, 0.0)
+                slot["issue_lines"] += 1
+
+        days = [
+            {
+                "date": d,
+                "purchase_amt": round(v["purchase_amt"], 2),
+                "issue_amt": round(v["issue_amt"], 2),
+                "purchase_lines": v["purchase_lines"],
+                "issue_lines": v["issue_lines"],
+            }
+            for d, v in sorted(by_date.items())
+        ]
+        return {
+            "start": s, "end": e,
+            "days": days,
+            "grand_purchase_amt": round(sum(x["purchase_amt"] for x in days), 2),
+            "grand_issue_amt": round(sum(x["issue_amt"] for x in days), 2),
+        }
+
     # ------------------------------------------------------------------
     # Items master (Feb 2026) — sub-categories under each purchase
     # category. Admin manages CRUD; anyone chef/admin can read so the

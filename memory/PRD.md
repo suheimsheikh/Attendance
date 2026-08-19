@@ -14,6 +14,32 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 19 Aug 2026 (Daily-entry drill-down + collapsible categories + PDF)
+- **New endpoint** `GET /api/meals/daily-totals?start=&end=`: per-day
+  purchase and issue rupee totals across ALL items in the range. Issue
+  amount uses the SAME weighted-avg purchase rate the entry grid shows
+  so numbers agree.
+- **Double-click** the Purchases or Issues day-total card → opens a
+  `DailyTotalsHistoryModal` with a from/to date picker (defaults to a
+  7-day trailing window ending on the selected day), a scrollable
+  date-wise table and a **Print / Save PDF** button. Print uses the
+  body-class-portal pattern already in `index.css` so the sidebar and
+  app chrome drop off in the PDF.
+- **Category header rows** now show per-category `₹ purchases` and
+  `₹ issues` subtotals for the selected day AND toggle collapse on
+  click (chevron flips). Collapsed state is persisted per-device in
+  `localStorage["mealEntry.collapsedCats"]`.
+- **Day navigator arrows** got a proper glow-up: dark gradient
+  rounded-xl 40×40 buttons with hover-translate + active-scale.
+
+### 19 Aug 2026 (Persistent user-creds chip)
+- **New floating chip** (`UserCredsChip.jsx`) pinned to `top-3 right-3`
+  on every authenticated desktop screen showing avatar + full name +
+  role + login handle (email for admins, mobile for phone accounts).
+  Glass background + `pointer-events` link through to `/profile`.
+- **Mobile header** now also shows name + role + handle next to the
+  avatar so the same info is visible without the chip on small screens.
+
 ### 19 Aug 2026 (Daily Roster WhatsApp share — staff & coaches)
 - **New endpoint** `GET /api/muster/daily-roster`: for active staff+coach
   members only, categorises each into one of four mutually-exclusive

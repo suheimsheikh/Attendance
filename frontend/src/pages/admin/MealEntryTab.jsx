@@ -16,7 +16,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Loader2, Check, Boxes, Filter } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 
@@ -51,6 +51,27 @@ export default function MealEntryTab() {
   // busy days when the pantry list is long but the chef only touched a
   // handful of items and wants to verify their entries at a glance.
   const [nonZeroOnly, setNonZeroOnly] = useState(false);
+  // Category keys that are user-collapsed on this device. Persisted in
+  // localStorage so a chef's preferred fold state survives reloads.
+  // Added 19 Aug 2026 (user asked for collapsible category sections).
+  const [collapsedCats, setCollapsedCats] = useState(() => {
+    try {
+      const raw = localStorage.getItem("mealEntry.collapsedCats");
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch { return new Set(); }
+  });
+  const toggleCat = (key) => {
+    setCollapsedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      try { localStorage.setItem("mealEntry.collapsedCats", JSON.stringify([...next])); } catch { /* storage blocked → not fatal */ }
+      return next;
+    });
+  };
+  // Date-wise totals drill-down: opened by double-clicking either the
+  // Purchases or the Issues day-total card. `historyKind` picks which
+  // column is emphasised in the modal ('purchase' | 'issue').
+  const [historyKind, setHistoryKind] = useState(null);
 
   // ---------------------------------------------------------------------
   // Load masters once. Item / category list stays stable across day nav.
@@ -222,14 +243,25 @@ export default function MealEntryTab() {
 
   // Applied view — hides zero-qty rows when the filter is on. A category
   // is hidden entirely once it has no visible rows so the header doesn't
-  // stand alone above nothing.
+  // stand alone above nothing. Each group also carries per-category
+  // subtotals so the header row can surface them (Aug 2026 request).
   const isTouched = (it) => num(purch[it.id]?.qty) > 0 || num(purch[it.id]?.rate) > 0 || num(issues[it.id]) > 0;
   const filteredGrouped = useMemo(() => {
-    if (!nonZeroOnly) return grouped;
-    return grouped
-      .map(({ cat, rows }) => ({ cat, rows: rows.filter(isTouched) }))
-      .filter((g) => g.rows.length > 0);
-  }, [grouped, nonZeroOnly, purch, issues]);
+    const base = nonZeroOnly
+      ? grouped
+          .map(({ cat, rows }) => ({ cat, rows: rows.filter(isTouched) }))
+          .filter((g) => g.rows.length > 0)
+      : grouped;
+    return base.map(({ cat, rows }) => {
+      let pAmt = 0, iAmt = 0;
+      for (const it of rows) {
+        const e = purch[it.id] || {};
+        pAmt += num(e.qty) * num(e.rate);
+        iAmt += num(issues[it.id]) * (avgRate[it.id] || 0);
+      }
+      return { cat, rows, purchAmt: pAmt, issueAmt: iAmt };
+    });
+  }, [grouped, nonZeroOnly, purch, issues, avgRate]);
 
   const dayTotal = useMemo(() => {
     let s = 0;
@@ -264,25 +296,25 @@ export default function MealEntryTab() {
         <div className="flex items-center gap-2 pt-1 pb-2 flex-wrap">
           <button
             onClick={() => setDateStr(addDays(dateStr, -1))}
-            className="iu-btn-secondary !h-9 !w-9 !p-0"
+            className="group h-10 w-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-700 text-white shadow-md ring-1 ring-slate-900/10 hover:from-slate-900 hover:to-slate-800 hover:shadow-lg hover:-translate-x-0.5 active:translate-x-0 active:scale-95 transition-all inline-flex items-center justify-center"
             title="Previous day"
             data-testid="entry-prev-day"
-          ><ChevronLeft size={16}/></button>
+          ><ChevronLeft size={20} className="stroke-[2.5]"/></button>
           <input
             type="date"
             value={dateStr}
             max={todayISO()}
             onChange={(e) => setDateStr(e.target.value)}
-            className="iu-input !h-9 !w-auto text-sm"
+            className="iu-input !h-10 !w-auto text-sm font-semibold"
             data-testid="entry-date"
           />
           <button
             onClick={() => canGoForward && setDateStr(nextDate)}
             disabled={!canGoForward}
-            className="iu-btn-secondary !h-9 !w-9 !p-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="group h-10 w-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-700 text-white shadow-md ring-1 ring-slate-900/10 hover:from-slate-900 hover:to-slate-800 hover:shadow-lg hover:translate-x-0.5 active:translate-x-0 active:scale-95 transition-all inline-flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:shadow-md"
             title={canGoForward ? "Next day" : "Can't go past today"}
             data-testid="entry-next-day"
-          ><ChevronRight size={16}/></button>
+          ><ChevronRight size={20} className="stroke-[2.5]"/></button>
           <span className="text-sm font-semibold text-slate-700">{formatDate(dateStr)}</span>
 
           <label className="ml-4 inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer" title="Hide items with no purchases and no issues today">
@@ -307,16 +339,40 @@ export default function MealEntryTab() {
         </div>
 
         <div className="grid grid-cols-2 gap-3" data-testid="entry-totals-bar">
-          <div className="iu-card p-2.5 flex items-center justify-between border-emerald-200 bg-emerald-50/60">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Purchases · Day total</span>
+          <div
+            className="iu-card p-2.5 flex items-center justify-between border-emerald-200 bg-emerald-50/60 cursor-pointer hover:bg-emerald-50 hover:border-emerald-300 select-none transition"
+            onDoubleClick={() => setHistoryKind("purchase")}
+            title="Double-click to see date-wise purchase totals and download a PDF"
+            data-testid="entry-purchase-total-card"
+          >
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
+              Purchases · Day total
+              <span className="ml-1 text-[9px] font-normal text-emerald-600/80 normal-case tracking-normal">(dbl-click for history)</span>
+            </span>
             <span className="text-lg font-extrabold tabular-nums text-emerald-800" data-testid="entry-day-total">₹{inr(dayTotal)}</span>
           </div>
-          <div className="iu-card p-2.5 flex items-center justify-between border-amber-200 bg-amber-50/60">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Issues · Day total</span>
+          <div
+            className="iu-card p-2.5 flex items-center justify-between border-amber-200 bg-amber-50/60 cursor-pointer hover:bg-amber-50 hover:border-amber-300 select-none transition"
+            onDoubleClick={() => setHistoryKind("issue")}
+            title="Double-click to see date-wise issue totals and download a PDF"
+            data-testid="entry-issue-total-card"
+          >
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
+              Issues · Day total
+              <span className="ml-1 text-[9px] font-normal text-amber-600/80 normal-case tracking-normal">(dbl-click for history)</span>
+            </span>
             <span className="text-lg font-extrabold tabular-nums text-amber-800" data-testid="entry-day-issue-total">₹{inr(issueDayTotal)}</span>
           </div>
         </div>
       </div>
+
+      {historyKind && (
+        <DailyTotalsHistoryModal
+          kind={historyKind}
+          selectedDate={dateStr}
+          onClose={() => setHistoryKind(null)}
+        />
+      )}
 
       {filteredGrouped.length === 0 ? (
         <div className="iu-card p-8 text-center" data-testid="entry-no-items">
@@ -361,16 +417,39 @@ export default function MealEntryTab() {
               </tr>
             </thead>
             <tbody>
-              {filteredGrouped.map(({ cat, rows }) => (
+              {filteredGrouped.map(({ cat, rows, purchAmt, issueAmt }) => {
+                const isCollapsed = collapsedCats.has(cat.key);
+                return (
                 <React.Fragment key={cat.key}>
                   {/* Category header — bright yellow band + bold uppercase
-                      label. Anchors visual scans down a long grocery list. */}
-                  <tr className="bg-amber-100 border-y border-amber-300" data-testid={`entry-cat-header-${cat.key}`}>
-                    <td colSpan={9} className="px-2 py-1.5 text-xs font-extrabold text-amber-900 uppercase tracking-wider">
-                      {cat.label}
+                      label with per-category subtotals for both sides.
+                      Clicking the row toggles collapse of its items.
+                      Aug 2026 request. */}
+                  <tr
+                    className="bg-amber-100 border-y border-amber-300 cursor-pointer hover:bg-amber-200/80 select-none"
+                    onClick={() => toggleCat(cat.key)}
+                    data-testid={`entry-cat-header-${cat.key}`}
+                    title={isCollapsed ? "Click to expand this category" : "Click to collapse this category"}
+                  >
+                    <td colSpan={3} className="px-2 py-1.5">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-amber-900 uppercase tracking-wider">
+                        {isCollapsed
+                          ? <ChevronRight size={14} className="stroke-[3]"/>
+                          : <ChevronDown size={14} className="stroke-[3]"/>}
+                        {cat.label}
+                        <span className="ml-1 text-[10px] font-semibold text-amber-800/70 normal-case tracking-normal">
+                          ({rows.length} item{rows.length === 1 ? "" : "s"})
+                        </span>
+                      </span>
+                    </td>
+                    <td colSpan={3} className="px-3 py-1.5 text-right text-xs font-extrabold tabular-nums text-emerald-800" data-testid={`entry-cat-purch-total-${cat.key}`}>
+                      {purchAmt > 0 ? `₹${inr(purchAmt)}` : <span className="text-emerald-700/40">—</span>}
+                    </td>
+                    <td colSpan={3} className="px-3 py-1.5 text-right text-xs font-extrabold tabular-nums text-amber-800" data-testid={`entry-cat-issue-total-${cat.key}`}>
+                      {issueAmt > 0 ? `₹${inr(issueAmt)}` : <span className="text-amber-700/40">—</span>}
                     </td>
                   </tr>
-                  {rows.map((it) => {
+                  {!isCollapsed && rows.map((it) => {
                     const e = purch[it.id] || {};
                     const purchAmt = num(e.qty) * num(e.rate);
                     const oh = stock[it.id];
@@ -433,11 +512,178 @@ export default function MealEntryTab() {
                     );
                   })}
                 </React.Fragment>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Date-wise drill-down modal (Aug 2026 user request).
+// Opened by double-clicking either the Purchases or Issues totals card.
+// Defaults to a 7-day window ending on the currently selected date;
+// user can pick any start/end. `Print PDF` triggers window.print()
+// against a purpose-styled #meal-totals-print-region so the rest of
+// the app UI is stripped from the printout via @media print rules
+// already living in index.css (print:hidden classes elsewhere).
+// ---------------------------------------------------------------------
+function DailyTotalsHistoryModal({ kind, selectedDate, onClose }) {
+  // Sensible default: 7-day trailing window ending on the selected day.
+  const [start, setStart] = useState(() => addDays(selectedDate, -6));
+  const [end, setEnd] = useState(selectedDate);
+  const [rows, setRows] = useState([]);
+  const [totals, setTotals] = useState({ grand_purchase_amt: 0, grand_issue_amt: 0 });
+  const [loading, setLoading] = useState(false);
+  const printRef = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    if (start > end) return;
+    setLoading(true);
+    api.get("/meals/daily-totals", { start, end })
+      .then((r) => {
+        if (!alive) return;
+        setRows(r.days || []);
+        setTotals({
+          grand_purchase_amt: r.grand_purchase_amt || 0,
+          grand_issue_amt:    r.grand_issue_amt    || 0,
+        });
+      })
+      .catch(showApiError)
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [start, end]);
+
+  const isPurch = kind === "purchase";
+  const title = isPurch ? "Purchases · Date-wise totals" : "Issues · Date-wise totals";
+  const accent = isPurch ? "emerald" : "amber";
+
+  const doPrint = () => {
+    // Apply the body-class-portal pattern used by the other Meals
+    // print flows (see index.css). CSS hides every sibling except the
+    // `#meal-totals-print-region` while this class is active.
+    const cls = "meal-totals-print-active";
+    document.body.classList.add(cls);
+    setTimeout(() => {
+      window.print();
+      document.body.classList.remove(cls);
+    }, 50);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 print:static print:bg-transparent print:p-0" data-testid="daily-totals-modal">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col print:shadow-none print:rounded-none print:max-h-none print:w-full">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 print:hidden">
+          <div>
+            <h2 className="text-lg font-extrabold text-slate-900">{title}</h2>
+            <p className="text-xs text-slate-500">Double-clicked from the Daily entry card</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-slate-100"
+            data-testid="daily-totals-modal-close"
+            title="Close"
+          ><X size={18}/></button>
+        </div>
+
+        <div className="px-5 py-3 flex items-end gap-3 flex-wrap border-b border-slate-100 print:hidden">
+          <label className="text-xs font-semibold text-slate-600">
+            <div className="mb-1 inline-flex items-center gap-1"><CalendarRange size={12}/> From</div>
+            <input
+              type="date"
+              value={start}
+              max={end}
+              onChange={(e) => setStart(e.target.value)}
+              className="iu-input !h-9 !w-auto text-sm"
+              data-testid="daily-totals-start"
+            />
+          </label>
+          <label className="text-xs font-semibold text-slate-600">
+            <div className="mb-1">To</div>
+            <input
+              type="date"
+              value={end}
+              min={start}
+              max={todayISO()}
+              onChange={(e) => setEnd(e.target.value)}
+              className="iu-input !h-9 !w-auto text-sm"
+              data-testid="daily-totals-end"
+            />
+          </label>
+          <div className="flex-1"/>
+          <button
+            type="button"
+            onClick={doPrint}
+            className="iu-btn-primary !h-9"
+            data-testid="daily-totals-print-btn"
+            title="Open the browser print dialog — pick 'Save as PDF' to download"
+          ><Printer size={14}/> Print / Save PDF</button>
+        </div>
+
+        <div id="meal-totals-print-region" ref={printRef} className="flex-1 overflow-y-auto p-5 print:overflow-visible print:p-6">
+          <div className="hidden print:block mb-4">
+            <h1 className="text-2xl font-extrabold text-slate-900">{title}</h1>
+            <p className="text-sm text-slate-600">
+              {formatDate(start)} — {formatDate(end)}
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="py-10 text-center text-slate-500 inline-flex items-center gap-2 w-full justify-center">
+              <Loader2 size={16} className="animate-spin"/> Loading…
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="py-10 text-center text-slate-500" data-testid="daily-totals-empty">
+              No purchases or issues recorded in this window.
+            </div>
+          ) : (
+            <table className="w-full text-sm" data-testid="daily-totals-table">
+              <thead>
+                <tr className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
+                  <th className="text-left p-2">Date</th>
+                  <th className={`text-right p-2 ${isPurch ? "bg-emerald-50 text-emerald-800" : ""}`}>Purchases ₹</th>
+                  <th className="text-right p-2 hidden sm:table-cell">Purch. lines</th>
+                  <th className={`text-right p-2 ${!isPurch ? "bg-amber-50 text-amber-800" : ""}`}>Issues ₹</th>
+                  <th className="text-right p-2 hidden sm:table-cell">Issue lines</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.date} className="border-t border-slate-100 hover:bg-slate-50/70" data-testid={`daily-totals-row-${r.date}`}>
+                    <td className="p-2 font-semibold text-slate-800 whitespace-nowrap">{formatDate(r.date)}</td>
+                    <td className={`p-2 text-right tabular-nums font-semibold ${isPurch ? "text-emerald-800" : "text-slate-700"}`}>
+                      ₹{inr(r.purchase_amt)}
+                    </td>
+                    <td className="p-2 text-right text-slate-500 hidden sm:table-cell tabular-nums">{r.purchase_lines}</td>
+                    <td className={`p-2 text-right tabular-nums font-semibold ${!isPurch ? "text-amber-800" : "text-slate-700"}`}>
+                      ₹{inr(r.issue_amt)}
+                    </td>
+                    <td className="p-2 text-right text-slate-500 hidden sm:table-cell tabular-nums">{r.issue_lines}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-300 bg-slate-100">
+                  <td className="p-2 font-extrabold text-slate-900">Grand Total</td>
+                  <td className={`p-2 text-right tabular-nums font-extrabold ${isPurch ? `text-${accent}-900` : "text-slate-900"}`} data-testid="daily-totals-grand-purch">
+                    ₹{inr(totals.grand_purchase_amt)}
+                  </td>
+                  <td className="p-2 hidden sm:table-cell"/>
+                  <td className={`p-2 text-right tabular-nums font-extrabold ${!isPurch ? `text-${accent}-900` : "text-slate-900"}`} data-testid="daily-totals-grand-issue">
+                    ₹{inr(totals.grand_issue_amt)}
+                  </td>
+                  <td className="p-2 hidden sm:table-cell"/>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
