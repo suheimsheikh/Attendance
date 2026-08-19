@@ -8,6 +8,37 @@ problem statement + user personas; long-form change history lives here.
 
 
 ---
+## 19 Feb 2026 — Sticky "last-used supplier" + per-row Supplier column
+
+User request: "modify to enter a supplier which carries over for all
+items thereafter but with the facility to change the supplier for a
+given item ... We need a column for supplier for each item".
+
+### Changes (`MealEntryTab.jsx`)
+- **New "Supplier" column** inside the Purchases half of the Daily-entry
+  grid. Every row now has a visible dropdown (no more tiny "override" chip
+  hidden under the item name). Group-header colSpan bumped from 3 → 4.
+- **Sticky `lastVendor` state**, persisted in `localStorage`
+  (`mealEntry.lastVendor`) so it survives day-nav AND browser reloads.
+- **Auto-fill on typing:** `setPurchField` now stamps `lastVendor` onto
+  a row that has no vendor yet the moment the chef enters qty or rate.
+  Rows that already have a vendor are left completely untouched.
+- **`setRowVendor(itemId, vendorId)`** — explicit per-row supplier change
+  that updates `lastVendor` (so the next blank row auto-fills with the
+  new supplier) but never touches any other row.
+- Category-header bulk picker still works; it now also seeds `lastVendor`.
+- Removed the now-redundant `RowVendorPicker` inline hint from below the
+  item name (replaced by the full-width column).
+
+### Behaviour confirmed via playwright test
+- Pick Vendor A on Apple → type qty on Banana → Banana auto-fills Vendor A ✓
+- Change Guava to Vendor B → next blank row picks up Vendor B ✓
+- Already-entered rows keep their original supplier ✓
+- Persists across days (localStorage) ✓
+
+
+
+---
 ## 26 Feb 2026 — Code review response: 1 real bug fixed, rest declined
 
 User posted an automated code-review report with 1000+ recommendations

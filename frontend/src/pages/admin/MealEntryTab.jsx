@@ -38,65 +38,32 @@ const fmtQty = (n) =>
   n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 });
 
 /**
- * Per-item vendor override on the Daily-entry grid (Aug 2026 user
- * request — "sometimes different vendors for different items in the
- * same category on the same day, but only sometimes").
+ * Per-row Supplier picker — visible column on the Daily-entry grid
+ * (Feb 2026 user request: "modify to enter a supplier which carries
+ * over for all items thereafter but with the facility to change the
+ * supplier for a given item").
  *
  * Behaviour:
- *   • Collapsed state — just a tiny "same as category" hint (dim) OR
- *     an amber "override → Vendor X" chip if the row already differs
- *     from the category default. Never clutters the row.
- *   • Clicking either state expands an inline <select> so the chef can
- *     pick a different supplier for this one item. Choosing the same
- *     value as the category default clears the override.
- *   • The category-header picker still bulk-sets the vendor for every
- *     row; overrides are only shown when the row was explicitly
- *     pointed elsewhere.
+ *   • Every row shows a full inline <select> so the chef can pick or
+ *     change the supplier without extra clicks or menus.
+ *   • Whichever supplier is picked becomes the "sticky last-used"
+ *     default that auto-fills the vendor of any BLANK row the chef
+ *     touches next (existing rows are left alone).
  */
-function RowVendorPicker({ rowVendorId, catVendorId, vendors, onChange, onAddNew, testid }) {
-  const [open, setOpen] = React.useState(false);
-  // Row is "overriding" when it has an explicit vendor different from
-  // the category default. An empty catVendorId + non-empty rowVendorId
-  // also counts as override (row has a vendor, category doesn't).
-  const isOverride = rowVendorId && rowVendorId !== catVendorId;
-  const rowVendor = vendors.find((v) => v.id === rowVendorId);
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={`mt-0.5 text-[10px] leading-tight inline-flex items-center gap-1 rounded px-1 -mx-1 hover:bg-slate-100 ${
-          isOverride ? "text-amber-700 font-semibold" : "text-slate-400"
-        }`}
-        data-testid={testid}
-        title={isOverride
-          ? "This row uses a different supplier from the category default. Click to change."
-          : "Same supplier as the category default. Click to override for this item only."}
-      >
-        {isOverride
-          ? <>↳ {rowVendor?.name || "unknown vendor"}</>
-          : "↳ same as category"}
-      </button>
-    );
-  }
+function RowVendorPicker({ rowVendorId, vendors, onChange, onAddNew, testid }) {
   return (
     <select
-      autoFocus
       value={rowVendorId || ""}
-      onBlur={() => setOpen(false)}
       onChange={(ev) => {
         const v = ev.target.value;
-        if (v === "__add__") { onAddNew(); setOpen(false); return; }
-        // Choosing the same value as the category default clears the
-        // per-row override so the row stops looking "overridden".
-        onChange(v === catVendorId ? "" : v);
-        setOpen(false);
+        if (v === "__add__") { onAddNew(); return; }
+        onChange(v);
       }}
-      className="mt-0.5 h-6 text-[11px] w-full max-w-[220px] bg-white border border-emerald-200 rounded px-1 text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-      data-testid={`${testid}-select`}
+      className={`iu-input !h-8 text-xs w-full text-slate-700 ${rowVendorId ? "font-semibold" : "text-slate-400"}`}
+      data-testid={testid}
+      title="Supplier for this item on this day. Picking a supplier makes it the sticky default for the next blank row you touch."
     >
-      <option value="">— use category default —</option>
+      <option value="">— pick supplier —</option>
       {vendors.map((v) => (
         <option key={v.id} value={v.id}>{v.name}</option>
       ))}
@@ -134,6 +101,20 @@ export default function MealEntryTab({ liveSig }) {
       return new Set(raw ? JSON.parse(raw) : []);
     } catch { return new Set(); }
   });
+  // Sticky "last-used supplier" (Feb 2026 request). Whichever supplier
+  // the chef picked most recently auto-fills the vendor of any BLANK
+  // row they touch next — including the first row of the next day.
+  // Persisted in localStorage so it survives reloads and day-nav.
+  const [lastVendor, setLastVendor] = useState(() => {
+    try { return localStorage.getItem("mealEntry.lastVendor") || ""; } catch { return ""; }
+  });
+  const persistLastVendor = (id) => {
+    setLastVendor(id || "");
+    try {
+      if (id) localStorage.setItem("mealEntry.lastVendor", id);
+      else localStorage.removeItem("mealEntry.lastVendor");
+    } catch { /* storage blocked → not fatal */ }
+  };
   const toggleCat = (key) => {
     setCollapsedCats((prev) => {
       const next = new Set(prev);
@@ -415,7 +396,29 @@ export default function MealEntryTab({ liveSig }) {
 
   const setPurchField = (itemId, field, value) => {
     dirtyPurch.current.add(itemId);
-    setPurch((prev) => ({ ...prev, [itemId]: { ...(prev[itemId] || {}), [field]: value } }));
+    setPurch((prev) => {
+      const existing = prev[itemId] || {};
+      const updated = { ...existing, [field]: value };
+      // Sticky-vendor auto-fill (Feb 2026): when the chef starts entering
+      // qty/rate on a row that has NO supplier yet, quietly stamp the
+      // last-used supplier so most rows get their vendor set without an
+      // extra click. Rows that already have a vendor are left untouched.
+      if ((field === "qty" || field === "rate") && !existing.vendor_id && lastVendor) {
+        updated.vendor_id = lastVendor;
+      }
+      return { ...prev, [itemId]: updated };
+    });
+  };
+
+  // Explicit per-row supplier change. Sets the sticky "last-used"
+  // default (so the NEXT blank row auto-fills with this vendor) but
+  // never touches any other row — only new/edited rows use the new
+  // supplier; already-entered rows keep their existing vendor.
+  const setRowVendor = (itemId, vendorId) => {
+    dirtyPurch.current.add(itemId);
+    setPurch((prev) => ({ ...prev, [itemId]: { ...(prev[itemId] || {}), vendor_id: vendorId } }));
+    persistLastVendor(vendorId);
+    queuePurch();
   };
 
   // ---------------------------------------------------------------------
@@ -470,6 +473,10 @@ export default function MealEntryTab({ liveSig }) {
   // Save is deferred via the existing debounce so bulk dropdown
   // changes don't hammer the PUT endpoint.
   const setCategoryVendor = (catKey, vendorId) => {
+    // Category picks also seed the sticky "last-used" default so the
+    // next blank row the chef touches (in ANY category) auto-fills
+    // with the same supplier.
+    persistLastVendor(vendorId);
     setPurch((prev) => {
       // Detect the outgoing "category consensus" vendor — the value
       // shared by every non-empty row in the category. If rows disagree
@@ -654,7 +661,7 @@ export default function MealEntryTab({ liveSig }) {
                   Requested Feb 2026. */}
               <tr data-testid="entry-group-header">
                 <th colSpan={3} className="bg-slate-100 border-b border-slate-200"/>
-                <th colSpan={3} className="bg-emerald-600 text-white text-[11px] font-extrabold uppercase tracking-wider px-3 py-1.5 border-b border-emerald-700 text-left">
+                <th colSpan={4} className="bg-emerald-600 text-white text-[11px] font-extrabold uppercase tracking-wider px-3 py-1.5 border-b border-emerald-700 text-left">
                   ↓ Purchases
                 </th>
                 <th colSpan={3} className="bg-amber-500 text-white text-[11px] font-extrabold uppercase tracking-wider px-3 py-1.5 border-b border-amber-600 text-left">
@@ -662,10 +669,11 @@ export default function MealEntryTab({ liveSig }) {
                 </th>
               </tr>
               <tr className="bg-slate-50 text-[11px] uppercase text-slate-500">
-                <th className="text-left p-2 w-1/4">Item</th>
+                <th className="text-left p-2 w-1/5">Item</th>
                 <th className="text-left p-2 w-14">Unit</th>
                 <th className="text-right p-2 w-24" title="Stock on hand at end of previous day">On-hand</th>
-                <th className="text-right p-2 w-24 border-l-2 border-emerald-500 bg-emerald-50/70">Qty</th>
+                <th className="text-left p-2 w-40 border-l-2 border-emerald-500 bg-emerald-50/70" title="Supplier for this item on this day">Supplier</th>
+                <th className="text-right p-2 w-24 bg-emerald-50/70">Qty</th>
                 <th className="text-right p-2 w-24 bg-emerald-50/70">Rate ₹</th>
                 <th className="text-right p-2 w-28 bg-emerald-50/70">Amount ₹</th>
                 <th className="text-right p-2 w-24 border-l-2 border-amber-500 bg-amber-50/70">Qty</th>
@@ -701,7 +709,7 @@ export default function MealEntryTab({ liveSig }) {
                         </span>
                       </span>
                     </td>
-                    <td colSpan={3} className="px-2 py-1.5">
+                    <td colSpan={4} className="px-2 py-1.5">
                       {/* Vendor picker — one supplier per category per day.
                           Selecting a value propagates the vendor_id to
                           every row's purchase line on the next save. */}
@@ -757,27 +765,26 @@ export default function MealEntryTab({ liveSig }) {
                       <tr key={it.id} className={`border-t border-slate-100 hover:bg-slate-50/70 ${over ? "bg-rose-50/60" : ""}`} data-testid={`entry-row-${it.id}`}>
                         <td className="p-2">
                           <div className="font-semibold text-slate-900">{it.name}</div>
-                          {/* Optional per-row vendor override — Aug 2026
-                              user request. Category header sets the vendor
-                              in bulk; this dropdown lets the chef point ONE
-                              item at a different supplier on the same day. */}
-                          <RowVendorPicker
-                            rowVendorId={e.vendor_id || ""}
-                            catVendorId={catVendor || ""}
-                            vendors={vendors}
-                            onChange={(v) => {
-                              setPurchField(it.id, "vendor_id", v);
-                              queuePurch();
-                            }}
-                            onAddNew={() => setShowAddVendor(cat.key)}
-                            testid={`entry-row-vendor-${it.id}`}
-                          />
                         </td>
                         <td className="p-2 text-slate-500 text-xs">{it.unit}</td>
                         <td className="p-2 text-right tabular-nums text-slate-600" data-testid={`entry-onhand-${it.id}`}>
                           {oh != null ? fmtQty(oh) : "—"}
                         </td>
                         <td className="p-2 border-l-2 border-emerald-100">
+                          {/* Per-row Supplier column — visible dropdown so
+                              the chef can set or change the vendor for
+                              this one item. Picking here also updates the
+                              sticky "last-used" default that auto-fills
+                              the next blank row the chef touches. */}
+                          <RowVendorPicker
+                            rowVendorId={e.vendor_id || ""}
+                            vendors={vendors}
+                            onChange={(v) => setRowVendor(it.id, v)}
+                            onAddNew={() => setShowAddVendor(cat.key)}
+                            testid={`entry-row-vendor-${it.id}`}
+                          />
+                        </td>
+                        <td className="p-2">
                           <input
                             type="number" min="0" step="0.01"
                             value={e.qty ?? ""}
