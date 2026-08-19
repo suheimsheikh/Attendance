@@ -4,7 +4,7 @@ import { Plus, Trash2, Pencil, Save, X, Store, Phone, TrendingUp } from "lucide-
 import { api, showApiError } from "../../api";
 
 const inr = (n) =>
-  n == null ? "0" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+  n == null ? "0.00" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /**
  * Sparkline — tiny inline SVG showing a vendor's monthly spend trend

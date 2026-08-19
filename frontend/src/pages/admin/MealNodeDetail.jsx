@@ -10,7 +10,7 @@ import { formatDate } from "../../utils";
 import { useEscape } from "../../hooks/useEscape";
 
 const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
-const rupee = (n) => (n == null ? "—" : `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`);
+const rupee = (n) => (n == null ? "—" : `₹${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
 function isoDaysAgo(days) {
   const d = new Date();

@@ -26,7 +26,7 @@ function monthRange(month) {
   return [`${month}-01`, `${month}-${String(last).padStart(2, "0")}`];
 }
 const inr = (n) =>
-  n == null ? "" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  n == null ? "" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const ddmy = (iso) => {
   const [y, m, d] = iso.split("-");
   return `${Number(d)}/${Number(m)}/${y}`;

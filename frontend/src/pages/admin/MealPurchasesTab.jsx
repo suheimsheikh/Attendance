@@ -20,7 +20,7 @@ function todayISO() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 const inr = (n) =>
-  n == null ? "0" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  n == null ? "0.00" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const num = (v) => (v === "" || v == null ? 0 : Number(v) || 0);
 
 // ---------------------------------------------------------------------------
