@@ -12,6 +12,7 @@ import StaleSessionPrompt from "./StaleSessionPrompt";
 import InstallPrompt from "./InstallPrompt";
 import OfflineBanner from "./OfflineBanner";
 import HelpChat from "./HelpChat";
+import UserCredsChip from "./UserCredsChip";
 import { api } from "../api";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { useApiQuery } from "../hooks/useApiQuery";
@@ -373,7 +374,18 @@ export default function Layout() {
             <img src="/favicon.png" alt="YCH" className="w-6 h-6 object-contain" />
             <span className="font-extrabold">Yacht Club</span>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2 min-w-0">
+            <div
+              className="hidden xs:flex flex-col text-right leading-tight min-w-0 max-w-[45vw]"
+              data-testid="mobile-user-creds"
+            >
+              <span className="text-xs font-semibold truncate">{user?.full_name}</span>
+              <span className="text-[10px] text-slate-500 truncate">
+                {(user?.rank || user?.role || user?.category || "")}
+                {(user?.email || user?.mobile) ? " · " : ""}
+                {user?.email || user?.mobile || ""}
+              </span>
+            </div>
             <Avatar name={user?.full_name} photo={user?.photo} size={32} />
           </div>
         </header>
@@ -381,6 +393,7 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      <UserCredsChip />
       <StaleSessionPrompt />
       <InstallPrompt />
       <OfflineBanner />
