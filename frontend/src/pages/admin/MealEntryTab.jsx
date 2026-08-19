@@ -50,7 +50,7 @@ const fmtQty = (n) =>
  *     default that auto-fills the vendor of any BLANK row the chef
  *     touches next (existing rows are left alone).
  */
-function RowVendorPicker({ rowVendorId, vendors, onChange, onAddNew, testid }) {
+function RowVendorPicker({ rowVendorId, vendors, onChange, onAddNew, onArrowRight, testid }) {
   return (
     <select
       value={rowVendorId || ""}
@@ -58,6 +58,12 @@ function RowVendorPicker({ rowVendorId, vendors, onChange, onAddNew, testid }) {
         const v = ev.target.value;
         if (v === "__add__") { onAddNew(); return; }
         onChange(v);
+      }}
+      onKeyDown={(ev) => {
+        // Right-arrow steps into the row's Purch-Qty cell so the whole
+        // Purchases half stays keyboard-walkable. Up/Down/Left keep
+        // their native option-cycling behaviour.
+        if (ev.key === "ArrowRight") { ev.preventDefault(); onArrowRight?.(); }
       }}
       className={`iu-input !h-8 text-xs w-full text-slate-700 ${rowVendorId ? "font-semibold" : "text-slate-400"}`}
       data-testid={testid}
@@ -856,6 +862,7 @@ export default function MealEntryTab({ liveSig }) {
                             vendors={vendors}
                             onChange={(v) => setRowVendor(it.id, v)}
                             onAddNew={() => setShowAddVendor(cat.key)}
+                            onArrowRight={() => focusCell("purch-qty", it.id)}
                             testid={`entry-row-vendor-${it.id}`}
                           />
                         </td>
