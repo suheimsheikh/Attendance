@@ -1,11 +1,11 @@
 import React from "react";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, ChefHat } from "lucide-react";
 import { BUCKETS } from "./helpers";
 
 /**
  * MemberBucketFilters — the row of category-chip filters (All / Coaches /
- * Staff / Executives / Athletes), an orthogonal "Admin role" toggle, and
- * an Institution dropdown.
+ * Staff / Executives / Athletes), orthogonal "Admin role" and "Chef role"
+ * toggles, and an Institution dropdown.
  *
  * Extracted from Members.jsx so the parent stays focused on data ops.
  * All state is owned by the parent; this component is pure presentation
@@ -17,6 +17,8 @@ export default function MemberBucketFilters({
   counts,
   onlyAdmins,
   onAdminToggle,
+  onlyChefs,
+  onChefToggle,
   institutions,
   instFilter,
   onInstFilterChange,
@@ -58,6 +60,24 @@ export default function MemberBucketFilters({
         Admin role
         <span className={`min-w-[22px] h-5 px-1.5 rounded-full text-[10px] flex items-center justify-center ${onlyAdmins ? "bg-white/20 text-white" : "bg-white border border-indigo-200 text-indigo-700"}`}>
           {counts.admin}
+        </span>
+      </button>
+      {/* Chef role toggle — kitchen crew who log meal purchases / issues
+          / wastage. Same orthogonal treatment as Admin role. */}
+      <button
+        data-testid="bucket-chef"
+        onClick={onChefToggle}
+        className={`inline-flex items-center gap-2 px-3 h-8 rounded-full text-xs font-semibold border transition ${
+          onlyChefs
+            ? "bg-orange-600 text-white border-transparent"
+            : "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
+        }`}
+        title="Filter to members with the chef role (orthogonal — combines with category)"
+      >
+        <ChefHat size={13} />
+        Chef role
+        <span className={`min-w-[22px] h-5 px-1.5 rounded-full text-[10px] flex items-center justify-center ${onlyChefs ? "bg-white/20 text-white" : "bg-white border border-orange-200 text-orange-700"}`}>
+          {counts.chef ?? 0}
         </span>
       </button>
       {institutions.length > 0 && (

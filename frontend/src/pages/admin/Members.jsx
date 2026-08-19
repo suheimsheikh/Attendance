@@ -38,6 +38,9 @@ export default function Members() {
   // a ROLE, not a category — a coach who is also an admin is BOTH a coach
   // and an admin and should appear under either filter.
   const [onlyAdmins, setOnlyAdmins] = useState(false);
+  // Same orthogonal treatment for chefs (kitchen crew who log meal purchases
+  // & issues). Requested Feb 2026.
+  const [onlyChefs, setOnlyChefs] = useState(false);
   const [instFilter, setInstFilter] = useState("");
   const [institutions, setInstitutions] = useState([]);
   // Ex-member visibility toggle — default OFF (hide members who have
@@ -134,12 +137,15 @@ export default function Members() {
   const counts = useMemo(() => {
     const c = { all: members.length, coach: 0, staff: 0, executive: 0, athlete: 0, elite: 0 };
     let adminCount = 0;
+    let chefCount = 0;
     for (const m of members) {
       const b = bucketOf(m);
       if (c[b] !== undefined) c[b] += 1;
       if (m.role === "admin") adminCount += 1;
+      if (m.role === "chef") chefCount += 1;
     }
     c.admin = adminCount;  // orthogonal — sums across categories, not exclusive
+    c.chef = chefCount;
     return c;
   }, [members]);
 
@@ -148,6 +154,7 @@ export default function Members() {
     let list = filterEx(members, showEx);
     if (bucket !== "all") list = list.filter((m) => bucketOf(m) === bucket);
     if (onlyAdmins) list = list.filter((m) => m.role === "admin");
+    if (onlyChefs) list = list.filter((m) => m.role === "chef");
     if (instFilter) list = list.filter((m) => m.institution === instFilter);
     if (!q) return list;
     return list.filter((m) =>
@@ -157,7 +164,7 @@ export default function Members() {
       (m.mobile || "").includes(q) ||
       (m.institution || "").toLowerCase().includes(q)
     );
-  }, [members, showEx, search, bucket, onlyAdmins, instFilter]);
+  }, [members, showEx, search, bucket, onlyAdmins, onlyChefs, instFilter]);
 
   const exCount = useMemo(() => members.filter((m) => isExMember(m)).length, [members]);
 
@@ -398,6 +405,8 @@ export default function Members() {
         counts={counts}
         onlyAdmins={onlyAdmins}
         onAdminToggle={() => setOnlyAdmins((v) => !v)}
+        onlyChefs={onlyChefs}
+        onChefToggle={() => setOnlyChefs((v) => !v)}
         institutions={institutions}
         instFilter={instFilter}
         onInstFilterChange={setInstFilter}
