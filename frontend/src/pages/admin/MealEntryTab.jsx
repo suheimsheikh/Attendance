@@ -613,7 +613,6 @@ export default function MealEntryTab({ liveSig }) {
             title={canGoForward ? "Next day" : "Can't go past today"}
             data-testid="entry-next-day"
           ><ChevronRight size={20} className="stroke-[2.5]"/></button>
-          <span className="text-sm font-semibold text-slate-700">{formatDate(dateStr)}</span>
 
           <div className="ml-4 relative">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
