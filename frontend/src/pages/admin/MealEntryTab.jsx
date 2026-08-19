@@ -455,20 +455,17 @@ export default function MealEntryTab({ liveSig }) {
           .filter((g) => g.rows.length > 0)
       : bySearch;
     return base.map(({ cat, rows }) => {
+      // Just sum Purch and Issue amounts for the category header
+      // chips. Per-row vendor bookkeeping was dropped Feb 2026 when
+      // the category-level vendor picker was removed in favour of the
+      // per-row Supplier column + sticky last-used default.
       let pAmt = 0, iAmt = 0;
-      // Category vendor consensus — the shared value across every
-      // non-empty row. `mixed` = true when at least two rows point at
-      // different vendors (i.e. per-row overrides exist).
-      const rowVs = new Set();
       for (const it of rows) {
         const e = purch[it.id] || {};
         pAmt += num(e.qty) * num(e.rate);
         iAmt += num(issues[it.id]) * (avgRate[it.id] || 0);
-        if (e.vendor_id) rowVs.add(e.vendor_id);
       }
-      const catVendor = rowVs.size === 1 ? [...rowVs][0] : "";
-      const mixed = rowVs.size > 1;
-      return { cat, rows, purchAmt: pAmt, issueAmt: iAmt, catVendor, mixed };
+      return { cat, rows, purchAmt: pAmt, issueAmt: iAmt };
     });
   }, [grouped, nonZeroOnly, purch, issues, avgRate, search]);
 
@@ -536,41 +533,6 @@ export default function MealEntryTab({ liveSig }) {
         if (next) focusCell("issue-qty", next);
       }
     }
-  };
-
-  // Set (or clear) the vendor for items in a category on the current
-  // day. Rows that already point at a different vendor (an explicit
-  // per-row override, Aug 2026) are LEFT ALONE — only rows currently
-  // matching the outgoing category vendor (or unset) are re-pointed.
-  // Save is deferred via the existing debounce so bulk dropdown
-  // changes don't hammer the PUT endpoint.
-  const setCategoryVendor = (catKey, vendorId) => {
-    // Category picks also seed the sticky "last-used" default so the
-    // next blank row the chef touches (in ANY category) auto-fills
-    // with the same supplier.
-    persistLastVendor(vendorId);
-    setPurch((prev) => {
-      // Detect the outgoing "category consensus" vendor — the value
-      // shared by every non-empty row in the category. If rows disagree
-      // (some already overridden) we treat consensus as empty so we
-      // only touch the truly-blank rows.
-      const catItems = items.filter((it) => it.category_key === catKey);
-      const rowVendors = new Set(
-        catItems.map((it) => prev[it.id]?.vendor_id).filter(Boolean)
-      );
-      const outgoing = rowVendors.size === 1 ? [...rowVendors][0] : "";
-      const next = { ...prev };
-      catItems.forEach((it) => {
-        const current = next[it.id]?.vendor_id || "";
-        if (current === "" || current === outgoing) {
-          if (current !== (vendorId || "")) dirtyPurch.current.add(it.id);
-          next[it.id] = { ...(next[it.id] || {}), vendor_id: vendorId || "" };
-        }
-        // else: row is an explicit override — preserve it.
-      });
-      return next;
-    });
-    queuePurch();
   };
 
   const dayTotal = useMemo(() => {
@@ -753,7 +715,7 @@ export default function MealEntryTab({ liveSig }) {
               </tr>
             </thead>
             <tbody>
-              {filteredGrouped.map(({ cat, rows, purchAmt, issueAmt, catVendor, mixed }) => {
+              {filteredGrouped.map(({ cat, rows, purchAmt, issueAmt }) => {
                 const isCollapsed = collapsedCats.has(cat.key);
                 return (
                 <React.Fragment key={cat.key}>
@@ -780,40 +742,7 @@ export default function MealEntryTab({ liveSig }) {
                         </span>
                       </span>
                     </td>
-                    <td colSpan={3} className="px-2 py-1.5">
-                      {/* Vendor picker — one supplier per category per day.
-                          Selecting a value propagates the vendor_id to
-                          every row's purchase line on the next save.
-                          Sits in the Supplier + Qty + Rate slots so the
-                          Purch subtotal below can align under the Amount
-                          column. */}
-                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        <span className="text-[10px] font-semibold uppercase text-emerald-800/70 tracking-wider">Vendor</span>
-                        <select
-                          value={catVendor || ""}
-                          onChange={(ev) => {
-                            const v = ev.target.value;
-                            if (v === "__add__") setShowAddVendor(cat.key);
-                            else setCategoryVendor(cat.key, v);
-                          }}
-                          className="flex-1 h-7 text-xs bg-white border border-emerald-200 rounded px-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                          data-testid={`entry-cat-vendor-${cat.key}`}
-                          title="Set the supplier for every item in this category on this day (rows explicitly overridden are left alone)"
-                        >
-                          <option value="">{mixed ? "— mixed (per-row overrides) —" : "— pick supplier —"}</option>
-                          {vendors.map((v) => (
-                            <option key={v.id} value={v.id}>{v.name}</option>
-                          ))}
-                          <option value="__add__">＋ Add new vendor…</option>
-                        </select>
-                        {mixed && (
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 border border-amber-200 rounded px-1 py-0.5"
-                                title="Items in this category use different suppliers today. Click a row to see or change its vendor.">
-                            mixed
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                    <td colSpan={3} className="px-2 py-1.5"/>
                     {/* Purch subtotal — aligned under the Purchases
                         "Amount ₹" column so the eye tracks straight down
                         the currency column. */}
@@ -861,7 +790,7 @@ export default function MealEntryTab({ liveSig }) {
                             rowVendorId={e.vendor_id || ""}
                             vendors={vendors}
                             onChange={(v) => setRowVendor(it.id, v)}
-                            onAddNew={() => setShowAddVendor(cat.key)}
+                            onAddNew={() => setShowAddVendor({ catKey: cat.key, itemId: it.id })}
                             onArrowRight={() => focusCell("purch-qty", it.id)}
                             testid={`entry-row-vendor-${it.id}`}
                           />
@@ -938,10 +867,12 @@ export default function MealEntryTab({ liveSig }) {
         <AddVendorInlineModal
           onClose={() => setShowAddVendor(null)}
           onCreated={(vendor) => {
-            // Refresh master list, apply the new supplier to the
-            // triggering category, close the modal.
+            // Refresh master list, stamp the newly-created vendor onto
+            // the row that opened the modal (which also seeds it as
+            // the sticky last-used default for the next blank row),
+            // then close.
             setVendors((prev) => [...prev, vendor].sort((a, b) => a.name.localeCompare(b.name)));
-            setCategoryVendor(showAddVendor, vendor.id);
+            if (showAddVendor?.itemId) setRowVendor(showAddVendor.itemId, vendor.id);
             setShowAddVendor(null);
             refreshVendors();
           }}
