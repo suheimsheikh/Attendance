@@ -1,0 +1,40 @@
+{
+  "summary": "Iter 48 — retested iteration_47's SSE-collapse P0 across two admin browser contexts on /admin/meals-report → Daily entry → 2026-08-01 using mcp_browser_automation with two independent contexts. RESULT: the seq-jump fix in useMealsEvents.js WORKS reliably. In two independent runs (T1R1, T1R2) of the exact iteration_47 failure scenario (A saves qty=5/rate=10 on ITEM_1 and B saves qty=3/rate=20 on ITEM_2 with concurrent blur via asyncio.gather within the same SSE 1s window), BOTH tabs converged within ~1.6s — A_sees_B and B_sees_A were both TRUE both runs. Cell-clear from A propagates to a fully-idle B in ~0.5-1.0s (previously failed in iter47). Typing-clobber protection is intact — B's mid-typing ITEM_3 value survives A's concurrent save and persists after reload alongside A's ITEM_1 value. Single-machine multi-cell rapid entry persists all 3 lines and there are ZERO idle refetch storms (0 GETs to /meals/purchases in a 10s idle window after save). BACKEND SSE endpoint verified emitting frames with correct scope/date/client via a raw-stream pytest (1/1 pass). One nuance about the focus safety-net documented below (by-design, not a regression).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Window-focus safety-net refetch when a passive INPUT (e.g. the date navigator input) still holds focus on the idle tab",
+        "issue": "MealsReport's window-focus listener synthesises a liveSig, but MealEntryTab's liveSig attempt() gates the refetch on isUserEditing() (any focused INPUT/TEXTAREA/SELECT). If the idle tab has the date <input type='date'> focused (or any purchase/issue cell focused but not being typed into), the synthetic focus signal keeps deferring by 2s in a loop and the tab never refetches until focus leaves the input. Verified reproducibly: with B unfocused (document.body) A's solo save propagates in 0.5s; with B's date input focused it does not propagate in 12s. This is arguably by-design (protects the user's in-progress typing) but a passive focus on the date navigator is a plausible real-world state where users would expect a refresh — consider excluding empty/passive inputs (e.g. type=date, or the specific date navigator element, or gate only when the input is DIRTY) from isUserEditing.",
+        "affected_selectors": ["input[type='date'] in MealEntryTab", "entry-purch-qty-*"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_meals_sse_iter48.py",
+    "/app/backend/tests/test_meals_patch_iter47.py",
+    "/app/test_reports/pytest/iter48_sse.xml"
+  ],
+  "action_items": [
+    "OPTIONAL P2: relax isUserEditing() so a merely-focused passive input (particularly the date navigator, or any input whose value equals its last-saved value) does not indefinitely block SSE-driven refetches. Real user flow with actively-typed cells is unaffected (T3 already validated).",
+    "No P0/P1 items — all iteration_47 blockers are resolved."
+  ],
+  "critical_code_review_comments": [
+    "useMealsEvents.js seq-jump fix (line 41 `jumped = d.seq - baseline > 1`) correctly disables own-echo suppression when frames collapse, verified end-to-end in two consecutive concurrent runs.",
+    "MealEntryTab.loadDay's mergePurch/mergeIssues preserve dirtyPurch/dirtyIssues ids on refetch — verified: B's mid-typing ITEM_3 value ('9') was NOT clobbered while A's ITEM_1 save was refetched into B's grid, and both persisted after reload.",
+    "MealsReport.jsx window-focus synthetic liveSig fires as intended but is neutralised by MealEntryTab.attempt()'s isUserEditing() guard when any INPUT holds focus — see integration_issue above; consider tightening the guard to `activeElement is a MealEntryTab qty/rate/vendor input AND value !== last-saved`."
+  ],
+  "updated_files": ["/app/backend/tests/test_meals_sse_iter48.py"],
+  "success_rate": {
+    "backend": "100% (previous 9/9 PATCH tests unchanged; +1/1 new SSE-frame emission test)",
+    "frontend": "100% on P0 & P1 targets (T1 concurrent SSE-collapse x2 runs, T2 cell-clear, T3 typing-clobber, T5 single-machine + no-refetch-storm). T4 window-focus net is limited by isUserEditing (by-design, documented above)."
+  },
+  "test_credentials": "admin@attendance.app / Admin@12345 (Admin sign in with email on /login)",
+  "seed_data_creation": "None — used existing pantry items (ITEM_1=Chicken, ITEM_2=Egg, ITEM_3=Mutton) on 2026-08-01 only. Server-side cleanup ran after every scenario (PUT /api/meals/purchases/2026-08-01 and /issues/... with empty lines). Final GET confirmed 0 lines on 2026-08-01.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The iteration_47 P0 (SSE frame collapse on concurrent PATCHes) is FIXED — do not retest that scenario unless code in useMealsEvents.js seq-jump logic or _signal_meals changes. If retesting: use two browser.new_context() sessions, both admin, expand collapsed categories (button[aria-expanded=false]), and CRITICALLY blur B's date input before the mutation test to avoid the isUserEditing() gate false-negative. Backend tests remain at 9/9 in iter47 PATCH suite + 1/1 SSE frame emission in iter48; run with `cd /app/backend && REACT_APP_BACKEND_URL='<url>' TEST_ADMIN_PASSWORD='Admin@12345' pytest tests/test_meals_patch_iter47.py tests/test_meals_sse_iter48.py -v`.",
+  "rca_of_the_issue": "P0 (iter47) root cause was the SSE meals_signal doc collapsing multiple concurrent-client bumps into a single frame carrying only the last mutator's client_id, which the last-mutator's tab then dropped as own-echo. Iter48 verified the applied fix: useMealsEvents.js now tracks the seq delta since the last processed frame and, when it jumps by more than 1, disables the own-echo drop (since ≥1 other-client mutation must have been collapsed in). Combined with MealsReport's window-focus safety net and MealEntryTab's dirty-set preservation in loadDay, all iter47 concurrent-edit failure modes are eliminated. Remaining edge case: the safety-net is neutralised while any INPUT holds focus (isUserEditing gate) — documented as a P2 UX polish, not a regression."
+}

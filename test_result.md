@@ -148,3 +148,23 @@ frontend:
 agent_communication:
   - agent: "main"
     message: "Preview DB holds REAL production data. Test with PAST dates (2026-08-01/02) and zero-out test values. Two-browser-context test needed: machine A saves purchase, machine B (on same date, Daily entry tab) should show it within ~5s without reload."
+
+## Session: Granular per-line saves (19 Jun 2026 fork, follow-up)
+user_problem_statement: "Cross-machine lag 3-7s + RANDOM DATA appearing in Daily Entry Purchases/Issues on production". Root cause of random data: whole-table PUT on every auto-save = last-writer-wins, two machines editing the same day wiped each other's lines. Fixed: new PATCH /api/meals/purchases/{date} and /api/meals/issues/{date} (upserts+removes, atomic per-item positional $set/$push/$pull, amounts recomputed); frontend dirty-set tracking sends ONLY edited cells. SSE poll 2s→1s, busy retry 4s→2s.
+backend:
+  - task: "PATCH per-line merge endpoints"
+    implemented: true
+    working: true
+    comment: "curl-verified: A patches item1, B patches item2 — both coexist; update keeps other's line; removes + amounts recompute + issues merge all correct"
+frontend:
+  - task: "dirtyPurch/dirtyIssues refs; flushes PATCH only dirty ids; failed ids re-marked; pending same-date snapshots merge ids; busy guard includes dirty sets"
+    implemented: true
+    working: "needs_retest"
+    file: "frontend/src/pages/admin/MealEntryTab.jsx"
+
+## Session: SSE collapse + clobber fixes (19 Jun 2026 fork, follow-up 2)
+user_problem_statement: "Data entered for 19th under purchases all vanished (production, old whole-table PUT code — needs redeploy)". iteration_47 found: (1) SSE frame collapse — near-simultaneous saves suppress refetch on last mutator's tab; (2) potential typing-clobber when refetch responses land mid-edit.
+frontend fixes:
+  - useMealsEvents.js: seq jump >1 disables own-echo suppression (collapsed frames always refetch)
+  - MealsReport.jsx: window-focus synthetic signal as missed-frame safety net
+  - MealEntryTab.jsx loadDay: fresh() also checks dateRef; merge-preserve dirty item values when applying purchases/issues responses (refetch never clobbers unsaved edits)

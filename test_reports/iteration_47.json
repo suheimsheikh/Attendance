@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 47 — verified the new granular PATCH per-line merge for pantry Daily Entry. BACKEND: 9/9 pytest pass — concurrent different-item PATCH upserts coexist (no last-writer-wins), qty<=0 acts as remove, explicit removes list pulls, amounts recompute, legacy PUT still clears the day, future/unknown item 400. FRONTEND (two-context Playwright, admin logged in on both): DATA persists correctly — after reload BOTH machines' rows are present (A's ITEM_1 5/10 AND B's ITEM_2 3/20 on 2026-08-01). HOWEVER live propagation (without reload) is ASYMMETRIC and only works for the FIRST mutator's tab. When A and B save near-simultaneously (both within the SSE 1s poll window), the tab that saved LAST does NOT see the other tab's edit — its refetch is suppressed as own-echo. Details in rca. Concurrent Issues test happened to work (both saw both) but same race applies. Cell-clear from A did not propagate to idle B within 15s in this run. Cleaned up all test data (server verified empty on 2026-08-01).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Two-machine live propagation of near-simultaneous PATCHes (SSE meals_signal)",
+        "issue": "When Context A and Context B save within the same 1s SSE poll window, only ONE frame is emitted (Mongo doc has $inc:seq but $set:{client:<last-mutator>}). The tab whose client_id equals the collapsed frame's client suppresses it as own-echo (useMealsEvents.js line 40) and never refetches — so it never sees the other tab's edit until page reload. Observed: A entered qty=5/rate=10 on ITEM_1; B entered qty=3/rate=20 on ITEM_2 near-simultaneously → A_sees_B=TRUE (2/2), B_sees_A=FALSE (0/2) within 15s. After manual reload BOTH lines show on BOTH tabs, so backend PATCH merge is correct — this is purely a live-refresh signal bug.",
+        "affected_selectors": ["entry-purch-qty-{itemId}", "entry-purch-rate-{itemId}"]
+      },
+      {
+        "flow": "Cell clear propagation to idle other machine",
+        "issue": "Context A cleared qty+rate on ITEM_1 (single PATCH, B was idle) — B did NOT show empty within 15s. May be same SSE-collapse artefact if a stale earlier signal's client_id was B's, or a separate refetch-deferred race. Data on server was correctly cleared."
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_meals_patch_iter47.py",
+    "/app/test_reports/pytest/iter47_patch.xml"
+  ],
+  "action_items": [
+    "P0 (main agent): fix SSE signal collapse — options: (a) emit a frame per mutation instead of polling latest (e.g. queue new-mutation events in Mongo or in-process) OR (b) drop own-echo suppression when seq jumps by >1 since last delivered (indicates >=1 other-client mutation collapsed in) OR (c) store the set of clients since last delivery (client_ids array $addToSet) and suppress only if OUR id is the sole contributor.",
+    "P1: even without concurrent races, verify cell-clear propagation to an idle other tab reliably lands within the 10s SLA — repro this deterministically before/after fix.",
+    "NO change needed to PATCH backend — merge semantics are correct (9/9 backend tests pass)."
+  ],
+  "critical_code_review_comments": [
+    "backend/routes/meals.py::_signal_meals only stores the LAST mutator's client_id in the meals_signal doc; when two PATCHes commit inside a 1s SSE tick their frames coalesce and the last mutator's tab silently drops the frame as own-echo — this is the root cause of the reported 'random data / cross-machine lag' in concurrent-editing scenarios. Backend PATCH merge itself is atomic and correct.",
+    "useMealsEvents.js#L40 unconditionally suppresses frames whose client==CLIENT_ID; combined with the collapse above, the last mutator NEVER refetches. Consider comparing seq deltas: if new_seq - last_seq > 1, refetch regardless of client.",
+    "MealEntryTab liveSig effect defers refetch for 2s if any of savingRef/pendingSave/purchTimer/issuesTimer/dirtyPurch/dirtyIssues non-empty OR any INPUT is focused — solid, but combined with the SSE collapse means a subsequent unrelated signal is required to trigger the missed refetch (worst case: user must reload).",
+    "Frontend flushPurchases: qty<=0 && rate<=0 → remove; but qty=0 with a lingering non-zero rate stays as an upsert with qty=0 which the backend converts into a remove anyway — semantics correct but adds an unnecessary payload key."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_meals_patch_iter47.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 PATCH tests pass — concurrent merge, qty<=0 remove, removes, unknown-item 400, future 400, legacy PUT, expense-report)",
+    "frontend": "50% — data persistence via PATCH works and reload shows both machines' rows on both tabs; live propagation to the LAST mutator's tab is broken (SSE frame collapse). Concurrent issues test happened to pass in this run but shares the same race."
+  },
+  "test_credentials": "admin@attendance.app / Admin@12345",
+  "seed_data_creation": "None — used existing pantry items and TEST_DATE=2026-08-01/2026-08-02, cleaned to empty after each test.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Run backend PATCH tests with: cd /app/backend && REACT_APP_BACKEND_URL='<public>' TEST_ADMIN_PASSWORD='Admin@12345' python -m pytest tests/test_meals_patch_iter47.py -v. All 9 pass. For the frontend concurrent race, use two browser contexts (browser.new_context()), both logged in as admin, navigate both to /admin/meals-report → Daily entry → date 2026-08-01, expand categories (buttons[aria-expanded=false]), edit different items simultaneously via asyncio.gather. Note the SSE-collapse bug: check propagation on BOTH tabs — the first mutator sees the second's edit, but the LAST mutator suppresses the collapsed frame as own-echo. After fix, both should converge within ≤3s (SSE poll now 1s + refetch ≤2s). BASE_URL must come from /app/frontend/.env REACT_APP_BACKEND_URL.",
+  "rca_of_the_issue": "Root cause: _signal_meals uses a SINGLE Mongo doc (meals_signal) with $inc:seq and $set:client=<latest-mutator>. SSE stream polls that doc every 1s and only emits a frame when seq changes. If two mutations from DIFFERENT client_ids commit within the same 1s window, only ONE frame is emitted with the LATER mutator's client_id. The later mutator's tab sees client == its own CLIENT_ID and drops the frame as an echo (useMealsEvents.js#L40), so it never refetches. Reproduction: two admin tabs on Daily entry same date, edit different items, blur near-simultaneously → last mutator's tab retains only its own edit locally; a page reload reveals the correctly-merged server state. Mitigation until fix: (1) don't rely on immediate live-refresh for two-machine concurrent editing — reload after ~2s to verify; (2) preferred fix listed in action_items."
+}

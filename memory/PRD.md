@@ -14,6 +14,31 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 19 Jun 2026 fork — Multi-machine data-wipe fix + SSE hardening (iterations 47-48, all P0 pass)
+- **ROOT CAUSE of "data for 19th vanished / random data" (production)**: auto-save PUT
+  the ENTIRE day's lines — a second machine holding a stale view wiped everyone else's
+  rows on its next save (last-writer-wins). Fixed with granular per-line saves:
+  - Backend: `PATCH /api/meals/purchases/{date}` + `PATCH /api/meals/issues/{date}`
+    (`LinesPatchIn {upserts, removes}`) — atomic per-item positional $set/$push/$pull,
+    `amounts` recomputed from merged doc. Legacy PUTs kept for bulk ops.
+  - Frontend: `dirtyPurch/dirtyIssues` sets — flush sends ONLY cells this machine
+    edited; failed ids re-marked; same-date pending snapshots merge ids.
+- **SSE hardening (iter47 finding)**: frames collapsing within the 1s poll window hid
+  the other machine's change from the last saver — client now disables own-echo
+  suppression when seq jumps >1. SSE poll 2s→1s. Window-focus fires a synthetic signal
+  (missed-frame safety net).
+- **Typing-clobber protection**: loadDay merge-preserves dirty item values so a refetch
+  never overwrites unsaved typing; responses dropped if user changed date. This made
+  the isUserEditing gate unnecessary in Daily entry (passive focus, e.g. date picker,
+  no longer blocks refreshes forever); isUserEditing now ignores passive input types.
+- Verified (iteration_48, two browser contexts): near-simultaneous saves converge both
+  ways in ~1.6s; cell-clear propagates ~1s; mid-typing value survives concurrent save;
+  zero idle refetch storms. Test files: tests/test_meals_patch_iter47.py, test_meals_sse_iter48.py.
+- **PRODUCTION NOTE**: user must REDEPLOY to get all of this. Wiped purchase rows are
+  unrecoverable (no purchase audit history yet — accelerate the P2 audit-log backlog item).
+- Playwright note: SSE keeps network busy — never use wait_until="networkidle" on pantry pages.
+
+
 ### 19 Jun 2026 fork — Live pantry updates (SSE push, testing iteration_46 — 100% pass)
 - **FIX (user bug)**: "Purchases entered in Daily Entry take >10 min to appear on other
   machines" (preview + prod). Root cause: no refresh mechanism anywhere — tabs fetched

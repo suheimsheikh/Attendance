@@ -189,6 +189,16 @@ class IssuesUpsertIn(BaseModel):
     lines: List[dict]
 
 
+class LinesPatchIn(BaseModel):
+    """Body for PATCH /api/meals/purchases/{date} and /meals/issues/{date}.
+    Granular per-line merge (Jun 2026 multi-machine fix): the client sends
+    ONLY the lines it actually edited, so two machines entering different
+    items on the same day never overwrite each other (the old PUT replaced
+    the whole day's lines wholesale — last writer wiped the other's rows)."""
+    upserts: List[dict] = Field(default_factory=list)
+    removes: List[str] = Field(default_factory=list)
+
+
 # Vendors master (Aug 2026). Very light — just name + phone — used to
 # annotate each purchase line so the accountant can trace which supplier
 # a given day's veg / grocery / milk bill came from. Storing the
@@ -336,9 +346,9 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                         "client": (doc or {}).get("client") or "",
                     }) + "\n\n"
                 beat += 1
-                if beat % 10 == 0:
+                if beat % 20 == 0:
                     yield ": ping\n\n"
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
 
         return StreamingResponse(
             stream(), media_type="text/event-stream",
@@ -1712,6 +1722,60 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         await _signal_meals("issues", d)
         return {"date": d, "lines": clean}
 
+    @router.patch("/meals/issues/{date_str}")
+    async def patch_issue_lines(
+        date_str: str, body: LinesPatchIn,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Merge ONLY the edited lines into the day's issues doc — each
+        item updated atomically (positional $set / $push / $pull) so
+        concurrent machines editing different items never clash."""
+        d = _not_future(_valid_date(date_str))
+        item_ids = [str(l.get("item_id") or "") for l in body.upserts if l.get("item_id")]
+        items = await db.meal_items.find(
+            {"id": {"$in": item_ids}}, {"_id": 0},
+        ).to_list(len(item_ids) or 1)
+        by_id = {i["id"]: i for i in items}
+        await db.meal_issues.update_one(
+            {"date": d},
+            {"$setOnInsert": {"id": str(uuid.uuid4()), "date": d, "lines": []}},
+            upsert=True,
+        )
+        removes = [str(r) for r in body.removes]
+        for raw in body.upserts:
+            iid = str(raw.get("item_id") or "").strip()
+            item = by_id.get(iid)
+            if not item:
+                raise HTTPException(status_code=400,
+                                    detail=f"Unknown item_id: {iid or '(blank)'}")
+            qty = _parse_amount(raw.get("qty"))
+            if qty is None or qty <= 0:
+                removes.append(iid)
+                continue
+            line = {
+                "id": str(uuid.uuid4()),
+                "item_id": iid,
+                "item_name": item.get("name"),
+                "category_key": item.get("category_key"),
+                "qty": round(qty, 4),
+                "unit": item.get("unit"),
+            }
+            res = await db.meal_issues.update_one(
+                {"date": d, "lines.item_id": iid}, {"$set": {"lines.$": line}})
+            if res.matched_count == 0:
+                await db.meal_issues.update_one({"date": d}, {"$push": {"lines": line}})
+        for iid in removes:
+            await db.meal_issues.update_one(
+                {"date": d}, {"$pull": {"lines": {"item_id": iid}}})
+        await db.meal_issues.update_one({"date": d}, {"$set": {
+            "updated_at": now_utc().isoformat(),
+            "updated_by": user.get("id"),
+            "updated_by_name": user.get("full_name") or user.get("email"),
+        }})
+        await _signal_meals("issues", d)
+        doc = await db.meal_issues.find_one({"date": d}, {"_id": 0})
+        return {"date": d, "lines": (doc or {}).get("lines") or []}
+
     # ------------------------------------------------------------------
     # Wastage & losses — event log with reason + optional notes.
     # ------------------------------------------------------------------
@@ -2234,6 +2298,78 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         )
         await _signal_meals("purchases", d)
         return {"date": d, "amounts": amounts,
+                "total": round(sum(amounts.values()), 2)}
+
+    @router.patch("/meals/purchases/{date_str}")
+    async def patch_purchase_lines(
+        date_str: str, body: LinesPatchIn,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Merge ONLY the edited lines into the day's purchases doc — each
+        item updated atomically (positional $set / $push / $pull) so
+        concurrent machines editing different items never clash. The
+        derived `amounts` category totals are recomputed from the merged
+        doc afterwards so the expense report stays consistent."""
+        d = _not_future(_valid_date(date_str))
+        item_ids = [str(l.get("item_id") or "") for l in body.upserts if l.get("item_id")]
+        items = await db.meal_items.find(
+            {"id": {"$in": item_ids}}, {"_id": 0},
+        ).to_list(len(item_ids) or 1)
+        by_id = {i["id"]: i for i in items}
+        await db.meal_purchases.update_one(
+            {"date": d},
+            {"$setOnInsert": {"id": str(uuid.uuid4()), "date": d,
+                              "lines": [], "amounts": {}}},
+            upsert=True,
+        )
+        removes = [str(r) for r in body.removes]
+        for raw in body.upserts:
+            iid = str(raw.get("item_id") or "").strip()
+            item = by_id.get(iid)
+            if not item:
+                raise HTTPException(status_code=400,
+                                    detail=f"Unknown item_id: {iid or '(blank)'}")
+            qty = _parse_amount(raw.get("qty"))
+            rate = _parse_amount(raw.get("rate"))
+            if qty is None or qty <= 0:
+                removes.append(iid)
+                continue
+            if rate is None or rate < 0:
+                raise HTTPException(status_code=400,
+                                    detail=f"Rate for '{item['name']}' must be ≥ 0")
+            line = {
+                "id": str(uuid.uuid4()),
+                "item_id": iid,
+                "item_name": item.get("name"),
+                "category_key": item.get("category_key"),
+                "qty": round(qty, 4),
+                "unit": item.get("unit"),
+                "rate": round(rate, 2),
+                "amount": round(qty * rate, 2),
+                "vendor_id": (str(raw.get("vendor_id")).strip() or None)
+                             if raw.get("vendor_id") is not None else None,
+            }
+            res = await db.meal_purchases.update_one(
+                {"date": d, "lines.item_id": iid}, {"$set": {"lines.$": line}})
+            if res.matched_count == 0:
+                await db.meal_purchases.update_one({"date": d}, {"$push": {"lines": line}})
+        for iid in removes:
+            await db.meal_purchases.update_one(
+                {"date": d}, {"$pull": {"lines": {"item_id": iid}}})
+
+        doc = await db.meal_purchases.find_one({"date": d}, {"_id": 0}) or {}
+        amounts: dict[str, float] = {}
+        for ln in (doc.get("lines") or []):
+            cat = ln.get("category_key") or "other"
+            amounts[cat] = round(amounts.get(cat, 0.0) + float(ln.get("amount") or 0), 2)
+        await db.meal_purchases.update_one({"date": d}, {"$set": {
+            "amounts": amounts,
+            "updated_at": now_utc().isoformat(),
+            "updated_by": user.get("id"),
+            "updated_by_name": user.get("full_name") or user.get("email"),
+        }})
+        await _signal_meals("purchases", d)
+        return {"date": d, "lines": doc.get("lines") or [], "amounts": amounts,
                 "total": round(sum(amounts.values()), 2)}
 
     @router.post("/meals/purchases/bulk-upload")

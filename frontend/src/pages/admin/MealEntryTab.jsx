@@ -19,7 +19,6 @@ import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
-import { isUserEditing } from "../../hooks/useMealsEvents";
 
 function todayISO() {
   const d = new Date();
@@ -185,16 +184,27 @@ export default function MealEntryTab({ liveSig }) {
   // dateStr effect AND the live-update signal handler below.
   const loadDay = (d) => {
     const token = ++loadToken.current;
-    const fresh = () => loadToken.current === token;
+    const fresh = () => loadToken.current === token && dateRef.current === d;
+    // Merge helper: server state wins EXCEPT for items with local unsaved
+    // edits (dirty) — a refetch racing the user's typing must never
+    // clobber what they just entered.
+    const mergePurch = (next) => setPurch((prev) => {
+      dirtyPurch.current.forEach((id) => { if (prev[id] !== undefined) next[id] = prev[id]; });
+      return next;
+    });
+    const mergeIssues = (next) => setIssues((prev) => {
+      dirtyIssues.current.forEach((id) => { if (prev[id] !== undefined) next[id] = prev[id]; });
+      return next;
+    });
     api.get(`/meals/purchases?start=${d}&end=${d}`)
       .then((r) => {
         if (!fresh()) return;
         const lines = r.purchases?.[0]?.lines || [];
         const next = {};
         lines.forEach((l) => { next[l.item_id] = { qty: l.qty, rate: l.rate, vendor_id: l.vendor_id || "" }; });
-        setPurch(next);
+        mergePurch(next);
       })
-      .catch(() => { if (fresh()) setPurch({}); });
+      .catch(() => { if (fresh()) mergePurch({}); });
 
     api.get(`/meals/issues?start=${d}&end=${d}`)
       .then((r) => {
@@ -202,9 +212,9 @@ export default function MealEntryTab({ liveSig }) {
         const lines = r.issues?.[0]?.lines || [];
         const next = {};
         lines.forEach((l) => { next[l.item_id] = l.qty; });
-        setIssues(next);
+        mergeIssues(next);
       })
-      .catch(() => { if (fresh()) setIssues({}); });
+      .catch(() => { if (fresh()) mergeIssues({}); });
 
     // On-hand at end of previous day = what the chef physically has at
     // the start of today's cooking (used only as a sanity check on the
@@ -249,7 +259,9 @@ export default function MealEntryTab({ liveSig }) {
       const busy = savingRef.current.purch || savingRef.current.issues ||
         purchTimer.current || issuesTimer.current ||
         pendingSave.current.purch || pendingSave.current.issues;
-      if (busy || isUserEditing()) { setTimeout(attempt, 4000); return; }
+      // Note: a merely-focused cell no longer blocks the refetch —
+      // loadDay's dirty merge-preserve already protects unsaved typing.
+      if (busy) { setTimeout(attempt, 2000); return; }
       if (liveSig.scope === "items" || liveSig.scope === "categories") loadMasters();
       loadDay(dateRef.current);
     };
@@ -292,39 +304,57 @@ export default function MealEntryTab({ liveSig }) {
   const saveChain = useRef({ purch: Promise.resolve(), issues: Promise.resolve() });
   const pendingSave = useRef({ purch: null, issues: null }); // seq de-dupe
   const saveSeq = useRef({ purch: 0, issues: 0 });
+  // Dirty tracking (Jun 2026 multi-machine fix): each save sends ONLY the
+  // item lines THIS machine edited (PATCH merge on the server) so two
+  // machines entering different items on the same day never wipe each
+  // other's rows — the old whole-table PUT was last-writer-wins.
+  const dirtyPurch = useRef(new Set());
+  const dirtyIssues = useRef(new Set());
 
   // Both flushes take the TARGET date explicitly (captured at queue time)
-  // so the PUT URL always matches the day the lines belong to, even if
+  // so the PATCH URL always matches the day the lines belong to, even if
   // the user has since navigated to another day.
   const flushPurchases = (targetDate) => {
-    // Snapshot NOW — refs still hold this day's lines at call time.
-    const lines = items
-      .map((it) => {
-        const e = latestPurch.current[it.id];
-        const qty = num(e?.qty);
-        const rate = num(e?.rate);
-        if (qty <= 0 && rate <= 0) return null;
-        return { item_id: it.id, qty, rate, vendor_id: e?.vendor_id || null };
-      })
-      .filter(Boolean);
+    // Snapshot NOW — refs still hold this day's values at call time.
+    const ids = Array.from(dirtyPurch.current);
+    dirtyPurch.current = new Set();
+    // Merge ids from an unsent pending snapshot for the same date (it
+    // will be skipped in favour of this one).
+    const prev = pendingSave.current.purch;
+    if (prev && prev.targetDate === targetDate) {
+      prev.ids.forEach((i) => { if (!ids.includes(i)) ids.push(i); });
+    }
+    if (!ids.length) return saveChain.current.purch;
+    const upserts = [];
+    const removes = [];
+    ids.forEach((iid) => {
+      const e = latestPurch.current[iid];
+      const qty = num(e?.qty);
+      const rate = num(e?.rate);
+      if (qty <= 0 && rate <= 0) removes.push(iid);
+      else upserts.push({ item_id: iid, qty, rate, vendor_id: e?.vendor_id || null });
+    });
     const seq = ++saveSeq.current.purch;
-    pendingSave.current.purch = { seq, targetDate, lines };
+    pendingSave.current.purch = { seq, targetDate, ids, upserts, removes };
     const run = async () => {
       const p = pendingSave.current.purch;
-      // A newer snapshot for the SAME date superseded this one while we
-      // waited in the chain — skip; the newer queued run will send it.
+      // A newer snapshot for the SAME date superseded this one (our ids
+      // were merged into it) — skip; the newer queued run sends them.
       if (!p || (p.seq !== seq && p.targetDate === targetDate)) return;
       const mine = p.seq === seq;
-      const payload = mine ? p : { targetDate, lines };
+      const payload = mine ? p : { targetDate, ids, upserts, removes };
       if (mine) pendingSave.current.purch = null;
       setSaving((s) => ({ ...s, purch: true }));
       try {
-        await api.put(`/meals/purchases/${payload.targetDate}`, { lines: payload.lines });
+        await api.patch(`/meals/purchases/${payload.targetDate}`,
+          { upserts: payload.upserts, removes: payload.removes });
         setSavedAt(Date.now());
         // Purchases just changed → weighted-avg rate changed → issue
         // amounts on the currently displayed day must update.
         refreshAvgRate(dateRef.current);
       } catch (err) {
+        // Re-mark failed ids so the next edit / flush retries them.
+        payload.ids.forEach((i) => dirtyPurch.current.add(i));
         showApiError(err, "Couldn't auto-save purchases");
       } finally {
         setSaving((s) => ({ ...s, purch: false }));
@@ -334,22 +364,35 @@ export default function MealEntryTab({ liveSig }) {
     return saveChain.current.purch;
   };
   const flushIssues = (targetDate) => {
-    const lines = items
-      .filter((it) => num(latestIssues.current[it.id]) > 0)
-      .map((it) => ({ item_id: it.id, qty: num(latestIssues.current[it.id]) }));
+    const ids = Array.from(dirtyIssues.current);
+    dirtyIssues.current = new Set();
+    const prev = pendingSave.current.issues;
+    if (prev && prev.targetDate === targetDate) {
+      prev.ids.forEach((i) => { if (!ids.includes(i)) ids.push(i); });
+    }
+    if (!ids.length) return saveChain.current.issues;
+    const upserts = [];
+    const removes = [];
+    ids.forEach((iid) => {
+      const qty = num(latestIssues.current[iid]);
+      if (qty > 0) upserts.push({ item_id: iid, qty });
+      else removes.push(iid);
+    });
     const seq = ++saveSeq.current.issues;
-    pendingSave.current.issues = { seq, targetDate, lines };
+    pendingSave.current.issues = { seq, targetDate, ids, upserts, removes };
     const run = async () => {
       const p = pendingSave.current.issues;
       if (!p || (p.seq !== seq && p.targetDate === targetDate)) return;
       const mine = p.seq === seq;
-      const payload = mine ? p : { targetDate, lines };
+      const payload = mine ? p : { targetDate, ids, upserts, removes };
       if (mine) pendingSave.current.issues = null;
       setSaving((s) => ({ ...s, issues: true }));
       try {
-        await api.put(`/meals/issues/${payload.targetDate}`, { lines: payload.lines });
+        await api.patch(`/meals/issues/${payload.targetDate}`,
+          { upserts: payload.upserts, removes: payload.removes });
         setSavedAt(Date.now());
       } catch (err) {
+        payload.ids.forEach((i) => dirtyIssues.current.add(i));
         showApiError(err, "Couldn't auto-save issues");
       } finally {
         setSaving((s) => ({ ...s, issues: false }));
@@ -371,6 +414,7 @@ export default function MealEntryTab({ liveSig }) {
   };
 
   const setPurchField = (itemId, field, value) => {
+    dirtyPurch.current.add(itemId);
     setPurch((prev) => ({ ...prev, [itemId]: { ...(prev[itemId] || {}), [field]: value } }));
   };
 
@@ -440,6 +484,7 @@ export default function MealEntryTab({ liveSig }) {
       catItems.forEach((it) => {
         const current = next[it.id]?.vendor_id || "";
         if (current === "" || current === outgoing) {
+          if (current !== (vendorId || "")) dirtyPurch.current.add(it.id);
           next[it.id] = { ...(next[it.id] || {}), vendor_id: vendorId || "" };
         }
         // else: row is an explicit override — preserve it.
@@ -761,7 +806,7 @@ export default function MealEntryTab({ liveSig }) {
                           <input
                             type="number" min="0" step="0.01"
                             value={issueQty ?? ""}
-                            onChange={(ev) => setIssues({ ...issues, [it.id]: ev.target.value })}
+                            onChange={(ev) => { dirtyIssues.current.add(it.id); setIssues({ ...issues, [it.id]: ev.target.value }); }}
                             onBlur={queueIssues}
                             className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`}
                             placeholder="0"

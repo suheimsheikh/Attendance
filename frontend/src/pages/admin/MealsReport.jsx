@@ -469,6 +469,14 @@ export default function MealsReport() {
   // changes pantry data. Passed down so the active tab can refetch.
   const [liveSig, setLiveSig] = useState(null);
   useMealsEvents(setLiveSig);
+  // Safety net: whenever the window regains focus, synthesize a signal so
+  // the active tab refetches even if an SSE frame was missed while the
+  // machine slept / the stream was reconnecting.
+  useEffect(() => {
+    const onFocus = () => setLiveSig({ seq: -1, scope: "purchases", date: null, client: "", synthetic: true });
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
   useEffect(() => {
     api.get("/meals/stock").then((r) => setLowCount(r.low_count || 0)).catch(() => {});
   }, [tab, liveSig]);

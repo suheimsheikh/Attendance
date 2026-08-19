@@ -36,8 +36,11 @@ export function useMealsEvents(onSignal) {
       if (typeof d?.seq !== "number") return;
       if (baseline === null) { baseline = d.seq; return; }
       if (d.seq <= baseline) return;
+      // seq jumped by >1 → several changes collapsed into one frame, and
+      // at least one may be another machine's — never suppress those.
+      const jumped = d.seq - baseline > 1;
       baseline = d.seq;
-      if (d.client && d.client === CLIENT_ID) return; // our own echo
+      if (!jumped && d.client && d.client === CLIENT_ID) return; // our own echo
       cb.current?.(d);
     };
     return () => es.close();
@@ -45,10 +48,15 @@ export function useMealsEvents(onSignal) {
 }
 
 /** True while the user is actively typing in a form control — used to
- * defer a live refresh so it never clobbers an in-progress edit. */
+ * defer a live refresh so it never clobbers an in-progress edit.
+ * Passive controls (date pickers, checkboxes, buttons) don't count:
+ * merely resting focus on them must not block refreshes forever. */
 export function isUserEditing() {
   const el = document.activeElement;
   if (!el) return false;
   const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  if (tag === "TEXTAREA" || el.isContentEditable) return true;
+  if (tag !== "INPUT") return false;
+  const type = (el.type || "text").toLowerCase();
+  return !["date", "checkbox", "radio", "button", "submit", "range", "file"].includes(type);
 }
