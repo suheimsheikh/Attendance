@@ -188,7 +188,7 @@ export default function MealEntryTab({ liveSig }) {
         if (!fresh()) return;
         const lines = r.purchases?.[0]?.lines || [];
         const next = {};
-        lines.forEach((l) => { next[l.item_id] = { qty: l.qty, rate: l.rate, vendor_id: l.vendor_id || "" }; });
+        lines.forEach((l) => { next[l.item_id] = { qty: l.qty, rate: l.rate != null && l.rate !== "" ? Number(l.rate).toFixed(2) : l.rate, vendor_id: l.vendor_id || "" }; });
         mergePurch(next);
       })
       .catch(() => { if (fresh()) mergePurch({}); });
@@ -883,10 +883,21 @@ export default function MealEntryTab({ liveSig }) {
                             type="number" min="0" step="0.01"
                             value={e.rate ?? ""}
                             onChange={(ev) => setPurchField(it.id, "rate", ev.target.value)}
-                            onBlur={queuePurch}
+                            onBlur={() => {
+                              // Snap the typed rate to a fixed 2-decimal
+                              // string on blur so the column reads as
+                              // proper currency (e.g. "50" → "50.00",
+                              // "60.5" → "60.50"). Empty stays empty.
+                              const raw = latestPurch.current[it.id]?.rate;
+                              if (raw !== undefined && raw !== "" && !isNaN(Number(raw))) {
+                                const fixed = Number(raw).toFixed(2);
+                                if (fixed !== String(raw)) setPurchField(it.id, "rate", fixed);
+                              }
+                              queuePurch();
+                            }}
                             onKeyDown={onGridKeyDown("purch-rate", it.id)}
                             className="iu-input !h-8 text-sm w-full text-right tabular-nums"
-                            placeholder="0"
+                            placeholder="0.00"
                             data-testid={`entry-purch-rate-${it.id}`}
                           />
                         </td>
