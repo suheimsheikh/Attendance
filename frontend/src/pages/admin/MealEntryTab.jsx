@@ -50,7 +50,7 @@ const fmtQty = (n) =>
  *     default that auto-fills the vendor of any BLANK row the chef
  *     touches next (existing rows are left alone).
  */
-function RowVendorPicker({ rowVendorId, vendors, onChange, onAddNew, onArrowRight, testid }) {
+function RowVendorPicker({ rowVendorId, vendors, onChange, onAddNew, onArrowRight, onArrowUp, onArrowDown, testid }) {
   return (
     <select
       value={rowVendorId || ""}
@@ -60,14 +60,17 @@ function RowVendorPicker({ rowVendorId, vendors, onChange, onAddNew, onArrowRigh
         onChange(v);
       }}
       onKeyDown={(ev) => {
-        // Right-arrow steps into the row's Purch-Qty cell so the whole
-        // Purchases half stays keyboard-walkable. Up/Down/Left keep
-        // their native option-cycling behaviour.
+        // Arrow keys navigate BETWEEN cells rather than cycling
+        // options — matches the spreadsheet muscle memory the chefs
+        // already have from the numeric cells. Space, click and
+        // first-letter type still open the dropdown for picking.
         if (ev.key === "ArrowRight") { ev.preventDefault(); onArrowRight?.(); }
+        else if (ev.key === "ArrowUp") { ev.preventDefault(); onArrowUp?.(); }
+        else if (ev.key === "ArrowDown") { ev.preventDefault(); onArrowDown?.(); }
       }}
       className={`iu-input !h-8 !px-2 text-xs w-full text-slate-700 ${rowVendorId ? "font-semibold" : "text-slate-400"}`}
       data-testid={testid}
-      title="Supplier for this item on this day. Picking a supplier makes it the sticky default for the next blank row you touch."
+      title="Supplier for this item on this day. Click or press Space to pick; arrow keys move between cells."
     >
       <option value="">— pick supplier —</option>
       {vendors.map((v) => (
@@ -603,6 +606,13 @@ export default function MealEntryTab({ liveSig }) {
     const el = document.querySelector(`[data-testid="entry-${kind}-${itemId}"]`);
     if (el) { el.focus(); if (el.select) el.select(); }
   };
+  // Focus one of the two per-row picker selects (Supplier / Reason).
+  // Kept separate from focusCell because select elements don't take a
+  // .select() text range and their data-testid pattern differs.
+  const focusPicker = (kind, itemId) => {
+    const el = document.querySelector(`[data-testid="entry-${kind}-${itemId}"]`);
+    if (el) el.focus();
+  };
   const onGridKeyDown = (kind, itemId) => (ev) => {
     const idx = flatVisibleItemIds.indexOf(itemId);
     if (idx < 0) return;
@@ -962,6 +972,16 @@ export default function MealEntryTab({ liveSig }) {
                             onChange={(v) => setRowVendor(it.id, v)}
                             onAddNew={() => setShowAddVendor({ catKey: cat.key, itemId: it.id })}
                             onArrowRight={() => focusCell("purch-qty", it.id)}
+                            onArrowUp={() => {
+                              const idx = flatVisibleItemIds.indexOf(it.id);
+                              const prev = flatVisibleItemIds[idx - 1];
+                              if (prev) focusPicker("row-vendor", prev);
+                            }}
+                            onArrowDown={() => {
+                              const idx = flatVisibleItemIds.indexOf(it.id);
+                              const next = flatVisibleItemIds[idx + 1];
+                              if (next) focusPicker("row-vendor", next);
+                            }}
                             testid={`entry-row-vendor-${it.id}`}
                           />
                         </td>
@@ -1045,14 +1065,25 @@ export default function MealEntryTab({ liveSig }) {
                               value={w.reason || ""}
                               onChange={(ev) => setRowReason(it.id, ev.target.value)}
                               onKeyDown={(ev) => {
-                                // Left-arrow steps back into the Wastage-Qty
-                                // cell so the row is keyboard-walkable both
-                                // ways. Up/Down keep native option-cycling.
+                                // Arrows navigate between cells;
+                                // click / Space still open the dropdown
+                                // natively for picking a value.
                                 if (ev.key === "ArrowLeft") { ev.preventDefault(); focusCell("wastage-qty", it.id); }
+                                else if (ev.key === "ArrowUp") {
+                                  ev.preventDefault();
+                                  const idx = flatVisibleItemIds.indexOf(it.id);
+                                  const prev = flatVisibleItemIds[idx - 1];
+                                  if (prev) focusPicker("wastage-reason", prev);
+                                } else if (ev.key === "ArrowDown") {
+                                  ev.preventDefault();
+                                  const idx = flatVisibleItemIds.indexOf(it.id);
+                                  const next = flatVisibleItemIds[idx + 1];
+                                  if (next) focusPicker("wastage-reason", next);
+                                }
                               }}
                               className={`iu-input !h-8 !px-2 text-xs flex-1 min-w-0 text-slate-700 ${w.reason ? "font-semibold" : "text-slate-400"}`}
                               data-testid={`entry-wastage-reason-${it.id}`}
-                              title="Why this stock was lost. First pick becomes the sticky default for the next blank wastage row."
+                              title="Why this stock was lost. Click or press Space to pick; arrow keys move between cells."
                             >
                               <option value="">— pick reason —</option>
                               {reasons.map((r) => (
