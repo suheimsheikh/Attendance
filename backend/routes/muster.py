@@ -29,7 +29,7 @@ always limited to athlete-like categories regardless of `scope`.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -268,6 +268,113 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             "coaches": absent_coaches,
             "total_athletes": total_athletes,
             "total_coaches": total_coaches,
+        }
+
+    @router.get("/muster/daily-roster")
+    async def muster_daily_roster(user: dict = Depends(get_current_user)):
+        """Today's day-roster of staff + coaches: who is On Leave, On Tour,
+        On LOP, or Absent-without-information. Feeds the 'Share Today's
+        Roster' WhatsApp button on the Muster page (Feb 2026 user request).
+
+        Buckets are mutually exclusive per member — the categoriser
+        picks the first matching bucket in this priority order:
+        LOP → Tour → Leave → Absent (fall-through: not present + no
+        approved leave/tour/LOP).
+
+        LOP detection follows the Grid rules (see reports.py:_classify):
+          • APPROVED `type=leave` with `lop_days > 0` and today sits in
+            the last `lop_days` positions of the leave window → LOP.
+          • `status=cancelled` with `converted_to_lop=True` covering
+            today → LOP for the entire range.
+        """
+        _require_muster(user)
+        office = await db.config.find_one({"id": "office"}) or {}
+        today = local_date_str(office)
+
+        members = await db.users.find(
+            {"active": {"$ne": False}, "category": {"$in": ["staff", "coach"]}},
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1},
+        ).to_list(2000)
+        members = [m for m in members if not is_ex_member(m, today)]
+        member_ids = [m["id"] for m in members]
+
+        present_ids = set(await db.attendance.distinct(
+            "user_id", {"date": today, "user_id": {"$in": member_ids}},
+        ))
+
+        # Fetch every leave that touches today (approved OR cancelled+LOP).
+        leaves = await db.leaves.find(
+            {
+                "user_id": {"$in": member_ids},
+                "start_date": {"$lte": today},
+                "end_date": {"$gte": today},
+                "$or": [
+                    {"status": "approved"},
+                    {"status": "cancelled", "converted_to_lop": True},
+                ],
+            },
+            {"_id": 0, "user_id": 1, "type": 1, "status": 1,
+             "start_date": 1, "end_date": 1, "lop_days": 1,
+             "converted_to_lop": 1},
+        ).to_list(5000)
+
+        def _classify(leave: dict) -> str:
+            """Return 'lop' | 'tour' | 'leave' for this leave-today intersection."""
+            if leave.get("status") == "cancelled" and leave.get("converted_to_lop"):
+                return "lop"
+            typ = (leave.get("type") or "").lower()
+            if typ in ("tour", "posting"):
+                return "tour"
+            if typ == "leave":
+                lop_d = float(leave.get("lop_days") or 0)
+                if lop_d > 0:
+                    try:
+                        end_d = date.fromisoformat(leave["end_date"])
+                        days_from_end = (end_d - date.fromisoformat(today)).days
+                        if days_from_end < lop_d:
+                            return "lop"
+                    except Exception:
+                        pass
+                return "leave"
+            return "leave"  # comp_off / late_coming don't reach here as absent-blockers
+
+        # Per-member: pick the highest-priority active bucket (LOP > Tour > Leave).
+        priority = {"lop": 0, "tour": 1, "leave": 2}
+        by_user: dict = {}
+        for L in leaves:
+            bucket = _classify(L)
+            best = by_user.get(L["user_id"])
+            if not best or priority[bucket] < priority[best["bucket"]]:
+                by_user[L["user_id"]] = {"bucket": bucket, "till": L.get("end_date")}
+
+        on_leave, on_tour, on_lop, absent = [], [], [], []
+        for m in members:
+            entry = by_user.get(m["id"])
+            if entry:
+                item = {"name": m["full_name"], "till": entry["till"],
+                        "category": m.get("category")}
+                if entry["bucket"] == "lop":
+                    on_lop.append(item)
+                elif entry["bucket"] == "tour":
+                    on_tour.append(item)
+                else:
+                    on_leave.append(item)
+                continue
+            if m["id"] in present_ids:
+                continue
+            absent.append({"name": m["full_name"], "category": m.get("category")})
+
+        for lst in (on_leave, on_tour, on_lop, absent):
+            lst.sort(key=lambda x: (x["name"] or "").lower())
+
+        return {
+            "date": today,
+            "office_name": (office.get("name") or "").strip(),
+            "on_leave": on_leave,
+            "on_tour": on_tour,
+            "on_lop": on_lop,
+            "absent": absent,
+            "total_members": len(members),
         }
 
     @router.post("/muster/checkin-bulk")

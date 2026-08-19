@@ -14,6 +14,25 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 19 Aug 2026 (Daily Roster WhatsApp share — staff & coaches)
+- **New endpoint** `GET /api/muster/daily-roster`: for active staff+coach
+  members only, categorises each into one of four mutually-exclusive
+  buckets for today — **On Leave** / **On Tour** / **On LOP** /
+  **Absent (reason unknown)** — with priority `LOP > Tour > Leave > Absent`.
+  Returns each with a `till` (leave end_date).
+- **LOP detection** matches the Grid rules exactly (reports.py:_classify):
+  (a) approved `type=leave` with `lop_days>0` where today sits in the last
+  `lop_days` positions of the range, AND (b) `status=cancelled` +
+  `converted_to_lop=True` for the entire range.
+- **New UI banner** `DailyRosterShareButton` on the Muster page (below the
+  existing Absent-without-info banner). Shows `Away today: N leave, N tour,
+  N LOP, N absent` and a "Share Today's Roster" WhatsApp button. Message
+  format: emoji-tagged section headers with per-person `• name — till Fri 22 Aug`.
+- Coexists with the Absent-without-info banner (kept for morning use).
+- Verified end-to-end with production data: 2 on leave, 1 on LOP till
+  Sat 22 Aug, 17 unaccounted-for — banner + share message render correctly.
+
+
 ### 18 Aug 2026 (alignment polish + active-tab highlight)
 - **Masters**: Fixed lingering right-alignment drift — sticky header and
   grand-total row were using `px-3` while item/category rows sit inside
