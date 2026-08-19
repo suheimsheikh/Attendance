@@ -16,7 +16,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 
@@ -53,6 +53,10 @@ export default function MealEntryTab() {
   // busy days when the pantry list is long but the chef only touched a
   // handful of items and wants to verify their entries at a glance.
   const [nonZeroOnly, setNonZeroOnly] = useState(false);
+  // Free-text item filter (Aug 2026 user request). Case-insensitive
+  // substring match against item name; categories with no matching
+  // items are hidden entirely to keep the grid clean.
+  const [search, setSearch] = useState("");
   // Category keys that are user-collapsed on this device. Persisted in
   // localStorage so a chef's preferred fold state survives reloads.
   // Added 19 Aug 2026 (user asked for collapsible category sections).
@@ -256,11 +260,17 @@ export default function MealEntryTab() {
   // subtotals so the header row can surface them (Aug 2026 request).
   const isTouched = (it) => num(purch[it.id]?.qty) > 0 || num(purch[it.id]?.rate) > 0 || num(issues[it.id]) > 0;
   const filteredGrouped = useMemo(() => {
-    const base = nonZeroOnly
+    const q = search.trim().toLowerCase();
+    const bySearch = q
       ? grouped
-          .map(({ cat, rows }) => ({ cat, rows: rows.filter(isTouched) }))
+          .map(({ cat, rows }) => ({ cat, rows: rows.filter((it) => (it.name || "").toLowerCase().includes(q)) }))
           .filter((g) => g.rows.length > 0)
       : grouped;
+    const base = nonZeroOnly
+      ? bySearch
+          .map(({ cat, rows }) => ({ cat, rows: rows.filter(isTouched) }))
+          .filter((g) => g.rows.length > 0)
+      : bySearch;
     return base.map(({ cat, rows }) => {
       let pAmt = 0, iAmt = 0;
       // Category vendor = first non-empty vendor_id on any row in this
@@ -275,7 +285,7 @@ export default function MealEntryTab() {
       }
       return { cat, rows, purchAmt: pAmt, issueAmt: iAmt, catVendor };
     });
-  }, [grouped, nonZeroOnly, purch, issues, avgRate]);
+  }, [grouped, nonZeroOnly, purch, issues, avgRate, search]);
 
   // Set (or clear) the vendor for every item in a category on the
   // current day. Save is deferred via the existing debounce so bulk
@@ -347,7 +357,29 @@ export default function MealEntryTab() {
           ><ChevronRight size={20} className="stroke-[2.5]"/></button>
           <span className="text-sm font-semibold text-slate-700">{formatDate(dateStr)}</span>
 
-          <label className="ml-4 inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer" title="Hide items with no purchases and no issues today">
+          <div className="ml-4 relative">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search item…"
+              className="iu-input !h-9 !pl-8 !pr-7 !w-52 text-sm"
+              data-testid="entry-search"
+              title="Filter the grid by item name"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-slate-200 text-slate-500"
+                data-testid="entry-search-clear"
+                title="Clear search"
+              ><X size={12}/></button>
+            )}
+          </div>
+
+          <label className="ml-2 inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer" title="Hide items with no purchases and no issues today">
             <input
               type="checkbox"
               checked={nonZeroOnly}
@@ -408,10 +440,14 @@ export default function MealEntryTab() {
         <div className="iu-card p-8 text-center" data-testid="entry-no-items">
           <Boxes size={30} className="mx-auto text-slate-300 mb-2"/>
           <p className="font-semibold text-slate-700">
-            {nonZeroOnly ? "No purchases or issues entered yet for this day." : "No items configured yet."}
+            {search
+              ? `No items match "${search}".`
+              : nonZeroOnly ? "No purchases or issues entered yet for this day." : "No items configured yet."}
           </p>
           <p className="text-sm text-slate-500 mt-1">
-            {nonZeroOnly ? "Turn off \"Only touched rows\" to enter values." : "Ask an admin to add items in the Masters tab."}
+            {search
+              ? "Try a different word or clear the search."
+              : nonZeroOnly ? "Turn off \"Only touched rows\" to enter values." : "Ask an admin to add items in the Masters tab."}
           </p>
         </div>
       ) : (
