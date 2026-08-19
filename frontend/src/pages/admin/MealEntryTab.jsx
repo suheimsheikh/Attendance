@@ -37,6 +37,74 @@ const inr = (n) =>
 const fmtQty = (n) =>
   n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 });
 
+/**
+ * Per-item vendor override on the Daily-entry grid (Aug 2026 user
+ * request — "sometimes different vendors for different items in the
+ * same category on the same day, but only sometimes").
+ *
+ * Behaviour:
+ *   • Collapsed state — just a tiny "same as category" hint (dim) OR
+ *     an amber "override → Vendor X" chip if the row already differs
+ *     from the category default. Never clutters the row.
+ *   • Clicking either state expands an inline <select> so the chef can
+ *     pick a different supplier for this one item. Choosing the same
+ *     value as the category default clears the override.
+ *   • The category-header picker still bulk-sets the vendor for every
+ *     row; overrides are only shown when the row was explicitly
+ *     pointed elsewhere.
+ */
+function RowVendorPicker({ rowVendorId, catVendorId, vendors, onChange, onAddNew, testid }) {
+  const [open, setOpen] = React.useState(false);
+  // Row is "overriding" when it has an explicit vendor different from
+  // the category default. An empty catVendorId + non-empty rowVendorId
+  // also counts as override (row has a vendor, category doesn't).
+  const isOverride = rowVendorId && rowVendorId !== catVendorId;
+  const rowVendor = vendors.find((v) => v.id === rowVendorId);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={`mt-0.5 text-[10px] leading-tight inline-flex items-center gap-1 rounded px-1 -mx-1 hover:bg-slate-100 ${
+          isOverride ? "text-amber-700 font-semibold" : "text-slate-400"
+        }`}
+        data-testid={testid}
+        title={isOverride
+          ? "This row uses a different supplier from the category default. Click to change."
+          : "Same supplier as the category default. Click to override for this item only."}
+      >
+        {isOverride
+          ? <>↳ {rowVendor?.name || "unknown vendor"}</>
+          : "↳ same as category"}
+      </button>
+    );
+  }
+  return (
+    <select
+      autoFocus
+      value={rowVendorId || ""}
+      onBlur={() => setOpen(false)}
+      onChange={(ev) => {
+        const v = ev.target.value;
+        if (v === "__add__") { onAddNew(); setOpen(false); return; }
+        // Choosing the same value as the category default clears the
+        // per-row override so the row stops looking "overridden".
+        onChange(v === catVendorId ? "" : v);
+        setOpen(false);
+      }}
+      className="mt-0.5 h-6 text-[11px] w-full max-w-[220px] bg-white border border-emerald-200 rounded px-1 text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+      data-testid={`${testid}-select`}
+    >
+      <option value="">— use category default —</option>
+      {vendors.map((v) => (
+        <option key={v.id} value={v.id}>{v.name}</option>
+      ))}
+      <option value="__add__">＋ Add new vendor…</option>
+    </select>
+  );
+}
+
 export default function MealEntryTab() {
   const [dateStr, setDateStr] = useState(todayISO());
   const [cats, setCats] = useState([]);
@@ -273,31 +341,47 @@ export default function MealEntryTab() {
       : bySearch;
     return base.map(({ cat, rows }) => {
       let pAmt = 0, iAmt = 0;
-      // Category vendor = first non-empty vendor_id on any row in this
-      // category today. When the header picker changes, we push the
-      // new id onto every row so historical picks stay consistent.
-      let catVendor = "";
+      // Category vendor consensus — the shared value across every
+      // non-empty row. `mixed` = true when at least two rows point at
+      // different vendors (i.e. per-row overrides exist).
+      const rowVs = new Set();
       for (const it of rows) {
         const e = purch[it.id] || {};
         pAmt += num(e.qty) * num(e.rate);
         iAmt += num(issues[it.id]) * (avgRate[it.id] || 0);
-        if (!catVendor && e.vendor_id) catVendor = e.vendor_id;
+        if (e.vendor_id) rowVs.add(e.vendor_id);
       }
-      return { cat, rows, purchAmt: pAmt, issueAmt: iAmt, catVendor };
+      const catVendor = rowVs.size === 1 ? [...rowVs][0] : "";
+      const mixed = rowVs.size > 1;
+      return { cat, rows, purchAmt: pAmt, issueAmt: iAmt, catVendor, mixed };
     });
   }, [grouped, nonZeroOnly, purch, issues, avgRate, search]);
 
-  // Set (or clear) the vendor for every item in a category on the
-  // current day. Save is deferred via the existing debounce so bulk
-  // dropdown changes don't hammer the PUT endpoint.
+  // Set (or clear) the vendor for items in a category on the current
+  // day. Rows that already point at a different vendor (an explicit
+  // per-row override, Aug 2026) are LEFT ALONE — only rows currently
+  // matching the outgoing category vendor (or unset) are re-pointed.
+  // Save is deferred via the existing debounce so bulk dropdown
+  // changes don't hammer the PUT endpoint.
   const setCategoryVendor = (catKey, vendorId) => {
     setPurch((prev) => {
+      // Detect the outgoing "category consensus" vendor — the value
+      // shared by every non-empty row in the category. If rows disagree
+      // (some already overridden) we treat consensus as empty so we
+      // only touch the truly-blank rows.
+      const catItems = items.filter((it) => it.category_key === catKey);
+      const rowVendors = new Set(
+        catItems.map((it) => prev[it.id]?.vendor_id).filter(Boolean)
+      );
+      const outgoing = rowVendors.size === 1 ? [...rowVendors][0] : "";
       const next = { ...prev };
-      items
-        .filter((it) => it.category_key === catKey)
-        .forEach((it) => {
+      catItems.forEach((it) => {
+        const current = next[it.id]?.vendor_id || "";
+        if (current === "" || current === outgoing) {
           next[it.id] = { ...(next[it.id] || {}), vendor_id: vendorId || "" };
-        });
+        }
+        // else: row is an explicit override — preserve it.
+      });
       return next;
     });
     queuePurch();
@@ -483,7 +567,7 @@ export default function MealEntryTab() {
               </tr>
             </thead>
             <tbody>
-              {filteredGrouped.map(({ cat, rows, purchAmt, issueAmt, catVendor }) => {
+              {filteredGrouped.map(({ cat, rows, purchAmt, issueAmt, catVendor, mixed }) => {
                 const isCollapsed = collapsedCats.has(cat.key);
                 return (
                 <React.Fragment key={cat.key}>
@@ -525,14 +609,20 @@ export default function MealEntryTab() {
                           }}
                           className="flex-1 h-7 text-xs bg-white border border-emerald-200 rounded px-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-400"
                           data-testid={`entry-cat-vendor-${cat.key}`}
-                          title="Set the supplier for every item in this category on this day"
+                          title="Set the supplier for every item in this category on this day (rows explicitly overridden are left alone)"
                         >
-                          <option value="">— pick supplier —</option>
+                          <option value="">{mixed ? "— mixed (per-row overrides) —" : "— pick supplier —"}</option>
                           {vendors.map((v) => (
                             <option key={v.id} value={v.id}>{v.name}</option>
                           ))}
                           <option value="__add__">＋ Add new vendor…</option>
                         </select>
+                        {mixed && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 border border-amber-200 rounded px-1 py-0.5"
+                                title="Items in this category use different suppliers today. Click a row to see or change its vendor.">
+                            mixed
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td colSpan={3} className="px-3 py-1.5 text-right">
@@ -558,7 +648,24 @@ export default function MealEntryTab() {
                     const over = oh != null && num(issueQty) > oh + 1e-6;
                     return (
                       <tr key={it.id} className={`border-t border-slate-100 hover:bg-slate-50/70 ${over ? "bg-rose-50/60" : ""}`} data-testid={`entry-row-${it.id}`}>
-                        <td className="p-2 font-semibold text-slate-900">{it.name}</td>
+                        <td className="p-2">
+                          <div className="font-semibold text-slate-900">{it.name}</div>
+                          {/* Optional per-row vendor override — Aug 2026
+                              user request. Category header sets the vendor
+                              in bulk; this dropdown lets the chef point ONE
+                              item at a different supplier on the same day. */}
+                          <RowVendorPicker
+                            rowVendorId={e.vendor_id || ""}
+                            catVendorId={catVendor || ""}
+                            vendors={vendors}
+                            onChange={(v) => {
+                              setPurchField(it.id, "vendor_id", v);
+                              queuePurch();
+                            }}
+                            onAddNew={() => setShowAddVendor(cat.key)}
+                            testid={`entry-row-vendor-${it.id}`}
+                          />
+                        </td>
                         <td className="p-2 text-slate-500 text-xs">{it.unit}</td>
                         <td className="p-2 text-right tabular-nums text-slate-600" data-testid={`entry-onhand-${it.id}`}>
                           {oh != null ? fmtQty(oh) : "—"}
