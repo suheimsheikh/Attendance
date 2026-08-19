@@ -46,22 +46,26 @@ export default function OutOfGeofenceModal({
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-start gap-3 p-4 border-b border-slate-100">
-          <div className="p-2 rounded-lg bg-amber-100 shrink-0">
-            <AlertTriangle size={20} className="text-amber-700" />
+        <div className="flex items-start gap-3 p-4 border-b border-rose-200 bg-rose-50">
+          <div className="p-2 rounded-lg bg-rose-600 shrink-0 shadow-sm">
+            <AlertTriangle size={22} className="text-white" strokeWidth={2.5} />
           </div>
           <div className="flex-1">
-            <h2 className="text-base font-bold text-slate-900">{title}</h2>
-            <p className="text-[12px] text-slate-600 mt-0.5 flex items-center gap-1.5">
-              <MapPin size={12} className="text-slate-400" />
+            <div className="text-[10px] font-extrabold uppercase tracking-wider text-rose-700">Warning · Off-site check-in</div>
+            <h2 className="text-lg font-extrabold text-rose-900 leading-tight">{title}</h2>
+            <p className="text-[12px] text-rose-800 mt-1 flex items-center gap-1.5">
+              <MapPin size={12} className="text-rose-500" />
               {distanceM != null && nearestName
                 ? <>You are <b>~{distanceM >= 1000 ? `${(distanceM / 1000).toFixed(1)} km` : `${distanceM} m`}</b> from <b>{nearestName}</b>.</>
                 : <>Location fix received but no training location matched.</>}
             </p>
+            <p className="text-[11px] text-rose-700 mt-1 font-semibold">
+              This check-in will be flagged on the admin dashboard. Please give a clear reason.
+            </p>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 -mt-1"
+            className="text-rose-400 hover:text-rose-700 -mt-1"
             aria-label="Close"
             data-testid="off-geo-close"
           >
@@ -123,7 +127,7 @@ export default function OutOfGeofenceModal({
             type="button"
             disabled={!canSubmit}
             onClick={() => onConfirm(reason.trim())}
-            className="px-3 h-9 rounded-lg text-sm font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 h-9 rounded-lg text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             data-testid="off-geo-confirm"
           >
             {submitting ? "Submitting…" : "Check in anyway"}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { Loader2, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, Camera, Share2 } from "lucide-react";
+import { Loader2, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, Camera, Share2, AlertTriangle } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { getLocation, speakLateMessage, resolveNearestSite } from "../utils";
@@ -170,13 +170,22 @@ export default function SelfCheckIn() {
       const dist = res.distance_m;
       setLastDistance({ dist, acc, off: res.out_of_geofence });
       // Location-aware toast — tell the member which geofence they landed
-      // in so they can spot a mis-tagged check-in immediately.
+      // in so they can spot a mis-tagged check-in immediately. When the
+      // check-in was accepted OUTSIDE the geofence, use the red error
+      // toast so the member notices at a glance (Feb 2026 user request).
       const locBit = res.site_name ? ` at ${res.site_name}` : "";
-      toast.success(
-        res.action === "checkin"
-          ? `Checked in${locBit} — welcome, ${res.member}!`
-          : `Checked out${locBit} — ${res.member} (${res.hours}h)`
-      );
+      if (res.out_of_geofence && res.action === "checkin") {
+        toast.error(
+          `Checked in OFF-SITE${locBit} — this will be flagged for review.`,
+          { duration: 6000 }
+        );
+      } else {
+        toast.success(
+          res.action === "checkin"
+            ? `Checked in${locBit} — welcome, ${res.member}!`
+            : `Checked out${locBit} — ${res.member} (${res.hours}h)`
+        );
+      }
       // Stash the just-completed action so the card can offer a
       // one-tap "Share to WhatsApp" button. Cleared when the member
       // acts again (see start of performToggle).
@@ -390,7 +399,26 @@ export default function SelfCheckIn() {
               <MapPin size={13} className="text-slate-400" />
               Logged {Math.round(lastDistance.dist)} m from the office
               {lastDistance.acc ? <span className="text-slate-400">· ±{Math.round(lastDistance.acc)} m</span> : null}
-              {lastDistance.off ? <span className="ml-1 text-amber-600 font-semibold">off-site</span> : <span className="ml-1 text-emerald-600 font-semibold">on-site</span>}
+              {lastDistance.off ? <span className="ml-1 text-rose-600 font-bold">off-site</span> : <span className="ml-1 text-emerald-600 font-semibold">on-site</span>}
+            </div>
+          )}
+
+          {/* Strong red banner when the last check-in was off-site.
+              Highlights the exception so the member (or a supervisor
+              standing next to them) can't miss that this attendance
+              row will be flagged for review. */}
+          {lastAction?.action === "checkin" && lastDistance?.off && (
+            <div
+              className="mt-4 mx-auto max-w-md border-2 border-rose-500 bg-rose-50 rounded-xl p-3 flex items-start gap-2 shadow-sm"
+              data-testid="offsite-warning-banner"
+              role="alert"
+            >
+              <AlertTriangle size={18} className="text-rose-600 shrink-0 mt-0.5" strokeWidth={2.5}/>
+              <div className="text-left">
+                <div className="text-[11px] font-extrabold uppercase tracking-wider text-rose-700">Off-site check-in</div>
+                <div className="text-sm font-semibold text-rose-900 leading-tight">You checked in outside the geofence.</div>
+                <div className="text-[11px] text-rose-800 mt-0.5">This attendance row is flagged for admin review.</div>
+              </div>
             </div>
           )}
 
