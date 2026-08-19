@@ -14,6 +14,30 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 19 Jun 2026 fork (code review #3 + queue-interrupt fix + perf, testing agent iteration_45 — 100% pass)
+- **FIX P0 (user-reported)** — Daily Entry auto-save queue interrupt: overlapping
+  debounced PUTs could race/arrive out of order (lost updates). `MealEntryTab.jsx`
+  flushPurchases/flushIssues now: (a) snapshot payload synchronously at call time,
+  (b) serialize through `saveChain.current.X.then(run, run)` — a new save NEVER
+  starts before the in-flight one settles, (c) coalesce same-date snapshots via
+  pendingSave+saveSeq (latest wins, no PUT spam). Verified: rapid 3-cell edits,
+  day-nav mid-save (old-date URL preserved), issues column — zero wrong-date writes.
+- **PERF** — new Mongo indexes: meal_purchases(date, lines.item_id, lines.vendor_id),
+  meal_issues(date, lines.item_id), meal_wastage(date), meal_items(category_key+sort_order).
+  Prevents latent full-collection scans as daily docs accumulate.
+- **FIX MEDIUM** — `/meals/daily-totals` issue valuation now reuses `_stock_snapshot(end)`
+  avg_rate (opening_rate blend + as-of cap) instead of a private all-time purchase-only
+  scan — drill-down/PDF now agrees with the entry grid's Issues card by construction;
+  also removed the unbounded `find({})`.
+- **FIX LOW** — `/muster/daily-roster` now 403s escort tokens (staff absence data is
+  internal); CheckinApprovals.jsx duplicate `title` prop removed.
+- Reviewer open question (product call, NOT changed): daily-roster lists a staff member
+  who checked in DESPITE approved leave under Leave/Tour/LOP, whereas the Grid counts
+  attendance as present. Ask user if roster should prefer attendance.
+- NOTE: 9 pre-existing pytest failures (iter40/41/43) are stale seeded-data assertions
+  broken by the production-backup restore (e.g. expected low_count=2, prod has 53) — not code bugs.
+- New test file: backend/tests/test_iter45_review.py (6 cases).
+
 ### 19 Aug 2026 (Sidebar reorg + Vendor sparklines)
 - **Sidebar** now visually splits into three colour-coded "system"
   groups (`SystemGroup` wrapper — coloured left rail + tinted bg +

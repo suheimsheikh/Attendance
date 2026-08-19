@@ -288,6 +288,10 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             today → LOP for the entire range.
         """
         _require_muster(user)
+        # Staff/coach absence data is internal — escort tokens (external,
+        # institution-scoped) must not see it (code review, Jun 2026).
+        if user.get("is_escort"):
+            raise HTTPException(status_code=403, detail="Escorts cannot view the staff roster")
         office = await db.config.find_one({"id": "office"}) or {}
         today = local_date_str(office)
 

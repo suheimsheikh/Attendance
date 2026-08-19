@@ -1,0 +1,28 @@
+{
+  "summary": "Verified iter45 fixes end-to-end: (1) Daily-Entry auto-save serialization on past date 2026-08-01 — rapid overlapping qty+rate+row2 edits within debounce window all persist correctly on reload (P0 Test1 PASS). (2) Day-nav mid-save — value typed on 2026-08-01 followed by immediate next-day click writes to 2026-08-01 URL only, 2026-08-02 stays empty (P0 Test2 PASS, zero wrong-date writes in network trace). (3) Issues overlapping edits — both cells persist after reload (P0 Test3 PASS). Backend: 6/6 pytest cases pass — /api/meals/daily-totals (200 admin, 400 bad range, 401 no-auth, issue_amt matches Σ(qty × avg_rate from /api/meals/stock as_of=end) within ₹1 rounding); /api/muster/daily-roster admin 200 with buckets, 401 no-auth (escort 403 verified by code inspection at muster.py:293-294). Regressions: Purchases drill-down modal opens with date-wise table + grand totals, Check-in Approvals page renders clean (no dup-prop warnings, 0 console errors), Vendors tab lists vendors with sparkline column, category vendor dropdown works in Daily entry. All test data (qty 7/rate 22, qty 3, qty 9, issues 2 & 1) zeroed out on both 2026-08-01 and 2026-08-02 — production data restored.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter45_review.py",
+    "/app/test_reports/pytest/iter45_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "MealEntryTab.jsx flushPurchases/flushIssues correctly SNAPSHOT payload synchronously at call time (before .then queueing), so the queued network PUT always carries the day-of-blur values — even if the user has since typed into another day.",
+    "saveChain.current.purch = saveChain.current.purch.then(run, run) ensures serial execution: a new save NEVER starts before the previous one settles (either resolve OR reject). Verified via 3-cell rapid-blur test — server saw 2 sequential PUTs, no interleaving.",
+    "pendingSave + saveSeq de-dup collapses N queued saves for the same date into the LATEST snapshot, preventing spam PUTs while still preserving the last-write-wins semantics.",
+    "useEffect([dateStr]) cleanup calls flushPurchases(dateStr)/flushIssues(dateStr) BEFORE re-run — verified: blur+next-day within 350ms debounce sent PUT to /meals/purchases/2026-08-01 (old date), never /2026-08-02. Zero wrong-date writes across ~10 test cycles.",
+    "muster.py:293-294 escort guard raises 403 BEFORE any DB reads — correct short-circuit, no data leak risk.",
+    "daily_totals endpoint reuses _stock_snapshot(e) so issues drill-down and stock report agree by construction — cross-check test confirms Σ manual = server value within ₹1."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter45_review.py (new pytest file — 6 cases covering daily-totals + muster roster + issue-valuation cross-check)"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (all P0 + regressions pass)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (via 'Admin sign in with email' toggle on /login). Backend pytest needs env TEST_ADMIN_PASSWORD='Admin@12345' + REACT_APP_BACKEND_URL='https://attendance-portal-56.preview.emergentagent.com'.",
+  "seed_data_creation": "Temporarily entered purchase qty=7 rate=22 (Apple), qty=3 (Banana), qty=9 (Guava), issues qty=2 (Apple) & qty=1 (Banana) on 2026-08-01 during testing. ALL cleaned to 0 at end. Verified 2026-08-02 has zero residual (no wrong-date leak).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Serialised save chain + dateStr closure capture + cleanup-flush are the 3 mitigations. To retest race: type in row-A qty, Tab, immediately type in row-A rate, Tab, immediately type in row-B qty, Tab (all under ~200ms per interaction), then wait 4s and reload — all 3 values must persist. Network trace should show ≥1 coalesced PUT with all 3 items (or 2 PUTs where the 2nd is superset). For day-nav race: same first blur then click entry-next-day within 350ms — PUT URL must still be the OLD date. Escort-token 403 on muster/daily-roster was NOT tested at runtime (no easy escort mint path); code inspection confirms guard is present and correct.",
+  "rca_of_the_issue": "Race BEFORE fix: two setTimeouts (purchTimer, issuesTimer) could each fire independently and each fire could start a fresh fetch() while another was already in flight — HTTP arrival order at server not guaranteed → older payload could overwrite newer one → 'lost update'. FIX: (a) synchronous snapshot in flushX() captures ref-map state at call time so queued PUT carries the intended date's data; (b) saveChain.current.X = saveChain.current.X.then(run, run) forces strict serialization — Promise chain ensures next run() only starts after previous settles (both success + failure paths chained via .then(run, run)); (c) pendingSave + monotonic saveSeq collapse coalescible saves for same date so we never blast N PUTs; (d) useEffect cleanup flushes pending timer before dateStr changes so old-day blur can't be routed to new-day URL. All 4 mitigations independently verified at UI + network level."
+}

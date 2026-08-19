@@ -513,6 +513,16 @@ async def _seed_database() -> None:
         unique=True, name="uniq_user_date_meal",
     )
     await db.meal_records.create_index([("date", 1), ("meal", 1)])
+    # Pantry-stock collections grow one doc per day forever — every stock /
+    # expense / drill-down read filters by date (or lines.*), so index them
+    # before the scans get slow (code review, Jun 2026).
+    await db.meal_purchases.create_index("date")
+    await db.meal_purchases.create_index("lines.item_id")
+    await db.meal_purchases.create_index("lines.vendor_id")
+    await db.meal_issues.create_index("date")
+    await db.meal_issues.create_index("lines.item_id")
+    await db.meal_wastage.create_index("date")
+    await db.meal_items.create_index([("category_key", 1), ("sort_order", 1)])
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({

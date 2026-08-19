@@ -260,7 +260,6 @@ export default function CheckinApprovals() {
           <button
             onClick={approveAll}
             disabled={working || loading}
-            title="Approve every pending check-in request in one click"
             className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-[11px] font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
             data-testid="checkin-approvals-approve-all"
             title={`Approve all ${rows.length} pending check-ins`}

@@ -101,3 +101,33 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+## Session: Code review + fixes + perf (19 Jun 2026 fork)
+user_problem_statement: "Do a code review and fix and also see if we can speed up the app" + prioritize the auto-save queue-interrupt bug in Daily Entry.
+backend:
+  - task: "Mongo indexes for meal_* collections (perf)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    comment: "date + lines.item_id + lines.vendor_id indexes verified via index_information()"
+  - task: "daily-totals issue valuation now reuses _stock_snapshot avg_rate (consistency + removed unbounded find({}))"
+    implemented: true
+    working: true
+    file: "backend/routes/meals.py"
+    comment: "curl verified: days rollup + grand totals return"
+  - task: "muster/daily-roster blocked for escort tokens"
+    implemented: true
+    working: "needs_retest"
+    file: "backend/routes/muster.py"
+frontend:
+  - task: "Daily Entry auto-save serialized promise chain (no overlapping/out-of-order PUTs)"
+    implemented: true
+    working: "needs_retest"
+    file: "frontend/src/pages/admin/MealEntryTab.jsx"
+    comment: "flushPurchases/flushIssues snapshot payload at call time, chain behind in-flight save, coalesce same-date snapshots"
+  - task: "CheckinApprovals duplicate title prop removed"
+    implemented: true
+    working: "needs_retest"
+    file: "frontend/src/pages/admin/CheckinApprovals.jsx"
+agent_communication:
+  - agent: "main"
+    message: "Preview DB holds REAL production data. Test Daily Entry saves on PAST dates (e.g. 2026-08-01..02) and zero-out any values entered. 9 pre-existing pytest failures are stale seeded-data assertions (prod restore), unrelated."

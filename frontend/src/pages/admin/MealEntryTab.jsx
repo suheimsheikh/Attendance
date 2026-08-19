@@ -253,11 +253,21 @@ export default function MealEntryTab() {
   useEffect(() => { latestPurch.current = purch; }, [purch]);
   useEffect(() => { latestIssues.current = issues; }, [issues]);
 
+  // Serialised save chains — a new save NEVER interrupts one already in
+  // flight (user request, Aug 2026). Each flush snapshots its payload
+  // synchronously (so it belongs to the right day) and then queues the
+  // network PUT behind whatever save is currently running, guaranteeing
+  // in-order arrival at the server. Consecutive queued saves for the
+  // same date coalesce to the latest snapshot.
+  const saveChain = useRef({ purch: Promise.resolve(), issues: Promise.resolve() });
+  const pendingSave = useRef({ purch: null, issues: null }); // seq de-dupe
+  const saveSeq = useRef({ purch: 0, issues: 0 });
+
   // Both flushes take the TARGET date explicitly (captured at queue time)
   // so the PUT URL always matches the day the lines belong to, even if
   // the user has since navigated to another day.
-  const flushPurchases = async (targetDate) => {
-    setSaving((s) => ({ ...s, purch: true }));
+  const flushPurchases = (targetDate) => {
+    // Snapshot NOW — refs still hold this day's lines at call time.
     const lines = items
       .map((it) => {
         const e = latestPurch.current[it.id];
@@ -267,34 +277,56 @@ export default function MealEntryTab() {
         return { item_id: it.id, qty, rate, vendor_id: e?.vendor_id || null };
       })
       .filter(Boolean);
-    try {
-      await api.put(`/meals/purchases/${targetDate}`, { lines });
-      setSavedAt(Date.now());
-      // Purchases just changed → weighted-avg rate changed → issue
-      // amounts on the currently displayed day must update.
-      refreshAvgRate(dateRef.current);
-    } catch (err) {
-      showApiError(err, "Couldn't auto-save purchases");
-    } finally {
-      setSaving((s) => ({ ...s, purch: false }));
-    }
+    const seq = ++saveSeq.current.purch;
+    pendingSave.current.purch = { seq, targetDate, lines };
+    const run = async () => {
+      const p = pendingSave.current.purch;
+      // A newer snapshot for the SAME date superseded this one while we
+      // waited in the chain — skip; the newer queued run will send it.
+      if (!p || (p.seq !== seq && p.targetDate === targetDate)) return;
+      const mine = p.seq === seq;
+      const payload = mine ? p : { targetDate, lines };
+      if (mine) pendingSave.current.purch = null;
+      setSaving((s) => ({ ...s, purch: true }));
+      try {
+        await api.put(`/meals/purchases/${payload.targetDate}`, { lines: payload.lines });
+        setSavedAt(Date.now());
+        // Purchases just changed → weighted-avg rate changed → issue
+        // amounts on the currently displayed day must update.
+        refreshAvgRate(dateRef.current);
+      } catch (err) {
+        showApiError(err, "Couldn't auto-save purchases");
+      } finally {
+        setSaving((s) => ({ ...s, purch: false }));
+      }
+    };
+    saveChain.current.purch = saveChain.current.purch.then(run, run);
+    return saveChain.current.purch;
   };
-  const flushIssues = async (targetDate) => {
-    setSaving((s) => ({ ...s, issues: true }));
+  const flushIssues = (targetDate) => {
     const lines = items
       .filter((it) => num(latestIssues.current[it.id]) > 0)
       .map((it) => ({ item_id: it.id, qty: num(latestIssues.current[it.id]) }));
-    try {
-      await api.put(`/meals/issues/${targetDate}`, { lines });
-      setSavedAt(Date.now());
-      // Refresh on-hand so any subsequent issue lines see the new stock
-      // (an issue lowers next-day opening — but for TODAY's grid the
-      // "on-hand" is prev-day, so refresh isn't needed here. Skipped.)
-    } catch (err) {
-      showApiError(err, "Couldn't auto-save issues");
-    } finally {
-      setSaving((s) => ({ ...s, issues: false }));
-    }
+    const seq = ++saveSeq.current.issues;
+    pendingSave.current.issues = { seq, targetDate, lines };
+    const run = async () => {
+      const p = pendingSave.current.issues;
+      if (!p || (p.seq !== seq && p.targetDate === targetDate)) return;
+      const mine = p.seq === seq;
+      const payload = mine ? p : { targetDate, lines };
+      if (mine) pendingSave.current.issues = null;
+      setSaving((s) => ({ ...s, issues: true }));
+      try {
+        await api.put(`/meals/issues/${payload.targetDate}`, { lines: payload.lines });
+        setSavedAt(Date.now());
+      } catch (err) {
+        showApiError(err, "Couldn't auto-save issues");
+      } finally {
+        setSaving((s) => ({ ...s, issues: false }));
+      }
+    };
+    saveChain.current.issues = saveChain.current.issues.then(run, run);
+    return saveChain.current.issues;
   };
 
   const queuePurch = () => {

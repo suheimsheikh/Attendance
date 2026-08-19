@@ -1166,22 +1166,13 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         if s > e:
             raise HTTPException(status_code=400, detail="start must be before end")
 
-        # Weighted-avg purchase rate per item across ALL time — matches
-        # the frontend `avgRate` calculation in MealEntryTab.
-        avg_rate: dict = {}
-        totals_by_item: dict = {}  # item_id → {qty, amt}
-        async for p in db.meal_purchases.find({}, {"_id": 0, "lines": 1}):
-            for ln in (p.get("lines") or []):
-                iid = ln.get("item_id")
-                q = float(ln.get("qty") or 0)
-                r = float(ln.get("rate") or 0)
-                if not iid or q <= 0:
-                    continue
-                t = totals_by_item.setdefault(iid, {"qty": 0.0, "amt": 0.0})
-                t["qty"] += q
-                t["amt"] += q * r
-        for iid, t in totals_by_item.items():
-            avg_rate[iid] = (t["amt"] / t["qty"]) if t["qty"] > 0 else 0.0
+        # Weighted-avg cost per item — reuse the SAME stock-snapshot math
+        # the entry grid's Issues card uses (/meals/stock: opening_rate
+        # blend + as-of date cap) so this drill-down agrees with the grid.
+        snap_rows, _snap_cats = await _stock_snapshot(e)
+        avg_rate: dict = {
+            r["item_id"]: float(r.get("avg_rate") or 0) for r in snap_rows
+        }
 
         # Per-day rollup.
         by_date: dict = {}
