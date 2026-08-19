@@ -875,7 +875,7 @@ export default function MealEntryTab({ liveSig }) {
                   ↓ Wastage
                 </th>
               </tr>
-              <tr className="bg-slate-50 text-[11px] uppercase text-slate-500">
+              <tr className="bg-slate-50 text-[11px] uppercase font-bold text-slate-700">
                 <th className="text-left p-2 w-[14%]">Item</th>
                 <th className="text-left px-1 py-2 w-10">Unit</th>
                 <th className="text-right px-1 py-2 w-14" title="Stock on hand at end of previous day">On-hand</th>
