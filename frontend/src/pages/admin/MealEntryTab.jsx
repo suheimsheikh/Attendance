@@ -466,6 +466,66 @@ export default function MealEntryTab({ liveSig }) {
     });
   }, [grouped, nonZeroOnly, purch, issues, avgRate, search]);
 
+  // Flat list of currently-VISIBLE item ids in the exact order they
+  // appear in the grid (respects category collapse + filters). Used by
+  // the keyboard-navigation handler below so ArrowUp/Down jumps to the
+  // next row the eye can actually see, skipping collapsed categories.
+  const flatVisibleItemIds = useMemo(() => {
+    const out = [];
+    for (const { cat, rows } of filteredGrouped) {
+      if (collapsedCats.has(cat.key)) continue;
+      for (const it of rows) out.push(it.id);
+    }
+    return out;
+  }, [filteredGrouped, collapsedCats]);
+
+  // Keyboard grid navigation (Feb 2026 user request). Arrow keys move
+  // between cells INSTEAD of nudging the number spinner; Enter after
+  // Rate jumps to the next row's Qty so a chef can rattle through a
+  // supplier's bill without touching the mouse.
+  //   Column order across a row: purch-qty → purch-rate → issue-qty.
+  //   Enter        purch-qty  → purch-rate         (same row)
+  //   Enter        purch-rate → next row purch-qty
+  //   Enter        issue-qty  → next row issue-qty
+  //   Arrow keys always move between cells; number step is suppressed.
+  const gridCols = ["purch-qty", "purch-rate", "issue-qty"];
+  const focusCell = (kind, itemId) => {
+    const el = document.querySelector(`[data-testid="entry-${kind}-${itemId}"]`);
+    if (el) { el.focus(); if (el.select) el.select(); }
+  };
+  const onGridKeyDown = (kind, itemId) => (ev) => {
+    const idx = flatVisibleItemIds.indexOf(itemId);
+    if (idx < 0) return;
+    const colIdx = gridCols.indexOf(kind);
+    const key = ev.key;
+    if (key === "ArrowUp") {
+      ev.preventDefault();
+      const prev = flatVisibleItemIds[idx - 1];
+      if (prev) focusCell(kind, prev);
+    } else if (key === "ArrowDown") {
+      ev.preventDefault();
+      const next = flatVisibleItemIds[idx + 1];
+      if (next) focusCell(kind, next);
+    } else if (key === "ArrowLeft") {
+      ev.preventDefault();
+      if (colIdx > 0) focusCell(gridCols[colIdx - 1], itemId);
+    } else if (key === "ArrowRight") {
+      ev.preventDefault();
+      if (colIdx < gridCols.length - 1) focusCell(gridCols[colIdx + 1], itemId);
+    } else if (key === "Enter") {
+      ev.preventDefault();
+      if (kind === "purch-qty") {
+        focusCell("purch-rate", itemId);
+      } else if (kind === "purch-rate") {
+        const next = flatVisibleItemIds[idx + 1];
+        if (next) focusCell("purch-qty", next);
+      } else if (kind === "issue-qty") {
+        const next = flatVisibleItemIds[idx + 1];
+        if (next) focusCell("issue-qty", next);
+      }
+    }
+  };
+
   // Set (or clear) the vendor for items in a category on the current
   // day. Rows that already point at a different vendor (an explicit
   // per-row override, Aug 2026) are LEFT ALONE — only rows currently
@@ -800,6 +860,7 @@ export default function MealEntryTab({ liveSig }) {
                             value={e.qty ?? ""}
                             onChange={(ev) => setPurchField(it.id, "qty", ev.target.value)}
                             onBlur={queuePurch}
+                            onKeyDown={onGridKeyDown("purch-qty", it.id)}
                             className="iu-input !h-8 text-sm w-full text-right tabular-nums"
                             placeholder="0"
                             data-testid={`entry-purch-qty-${it.id}`}
@@ -811,6 +872,7 @@ export default function MealEntryTab({ liveSig }) {
                             value={e.rate ?? ""}
                             onChange={(ev) => setPurchField(it.id, "rate", ev.target.value)}
                             onBlur={queuePurch}
+                            onKeyDown={onGridKeyDown("purch-rate", it.id)}
                             className="iu-input !h-8 text-sm w-full text-right tabular-nums"
                             placeholder="0"
                             data-testid={`entry-purch-rate-${it.id}`}
@@ -825,6 +887,7 @@ export default function MealEntryTab({ liveSig }) {
                             value={issueQty ?? ""}
                             onChange={(ev) => { dirtyIssues.current.add(it.id); setIssues({ ...issues, [it.id]: ev.target.value }); }}
                             onBlur={queueIssues}
+                            onKeyDown={onGridKeyDown("issue-qty", it.id)}
                             className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`}
                             placeholder="0"
                             data-testid={`entry-issue-qty-${it.id}`}
