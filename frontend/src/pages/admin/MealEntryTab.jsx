@@ -65,7 +65,7 @@ function RowVendorPicker({ rowVendorId, vendors, onChange, onAddNew, onArrowRigh
         // their native option-cycling behaviour.
         if (ev.key === "ArrowRight") { ev.preventDefault(); onArrowRight?.(); }
       }}
-      className={`iu-input !h-8 text-xs w-full text-slate-700 ${rowVendorId ? "font-semibold" : "text-slate-400"}`}
+      className={`iu-input !h-8 !px-2 text-xs w-full text-slate-700 ${rowVendorId ? "font-semibold" : "text-slate-400"}`}
       data-testid={testid}
       title="Supplier for this item on this day. Picking a supplier makes it the sticky default for the next blank row you touch."
     >
@@ -86,9 +86,11 @@ export default function MealEntryTab({ liveSig }) {
   const [avgRate, setAvgRate] = useState({});  // item_id → weighted-avg cost (₹ / unit)
   const [purch, setPurch] = useState({});      // item_id → { qty, rate, vendor_id }
   const [issues, setIssues] = useState({});    // item_id → qty
+  const [wastage, setWastage] = useState({});  // item_id → { qty, reason, notes }
+  const [reasons, setReasons] = useState(["wasted","spoilt","rotten","lost","damaged","other"]);
   const [vendors, setVendors] = useState([]);  // {id, name, phone}[]
-  const [showAddVendor, setShowAddVendor] = useState(null); // category_key on demand
-  const [saving, setSaving] = useState({ purch: false, issues: false });
+  const [showAddVendor, setShowAddVendor] = useState(null); // {catKey,itemId} on demand
+  const [saving, setSaving] = useState({ purch: false, issues: false, wastage: false });
   const [savedAt, setSavedAt] = useState(null); // last successful save timestamp
   // Show only rows where either purch qty OR issue qty is > 0 — handy on
   // busy days when the pantry list is long but the chef only touched a
@@ -120,6 +122,17 @@ export default function MealEntryTab({ liveSig }) {
       if (id) localStorage.setItem("mealEntry.lastVendor", id);
       else localStorage.removeItem("mealEntry.lastVendor");
     } catch { /* storage blocked → not fatal */ }
+  };
+  // Sticky "last-used wastage reason" — mirrors the sticky supplier
+  // logic. Auto-fills the reason on any BLANK wastage row the chef
+  // enters a qty into; persisted so it survives reloads and day-nav.
+  const [lastReason, setLastReason] = useState(() => {
+    try { return localStorage.getItem("mealEntry.lastReason") || "wasted"; } catch { return "wasted"; }
+  });
+  const persistLastReason = (r) => {
+    const clean = r || "wasted";
+    setLastReason(clean);
+    try { localStorage.setItem("mealEntry.lastReason", clean); } catch { /* not fatal */ }
   };
   const toggleCat = (key) => {
     setCollapsedCats((prev) => {
@@ -183,6 +196,10 @@ export default function MealEntryTab({ liveSig }) {
       dirtyIssues.current.forEach((id) => { if (prev[id] !== undefined) next[id] = prev[id]; });
       return next;
     });
+    const mergeWastage = (next) => setWastage((prev) => {
+      dirtyWastage.current.forEach((id) => { if (prev[id] !== undefined) next[id] = prev[id]; });
+      return next;
+    });
     api.get(`/meals/purchases?start=${d}&end=${d}`)
       .then((r) => {
         if (!fresh()) return;
@@ -202,6 +219,17 @@ export default function MealEntryTab({ liveSig }) {
         mergeIssues(next);
       })
       .catch(() => { if (fresh()) mergeIssues({}); });
+
+    api.get(`/meals/wastage?start=${d}&end=${d}`)
+      .then((r) => {
+        if (!fresh()) return;
+        if (r.reasons?.length) setReasons(r.reasons);
+        const lines = r.wastage?.[0]?.lines || [];
+        const next = {};
+        lines.forEach((l) => { next[l.item_id] = { qty: l.qty, reason: l.reason || "wasted", notes: l.notes || "" }; });
+        mergeWastage(next);
+      })
+      .catch(() => { if (fresh()) mergeWastage({}); });
 
     // On-hand at end of previous day = what the chef physically has at
     // the start of today's cooking (used only as a sanity check on the
@@ -226,6 +254,7 @@ export default function MealEntryTab({ liveSig }) {
     return () => {
       if (purchTimer.current) { clearTimeout(purchTimer.current); purchTimer.current = null; flushPurchases(dateStr); }
       if (issuesTimer.current) { clearTimeout(issuesTimer.current); issuesTimer.current = null; flushIssues(dateStr); }
+      if (wastageTimer.current) { clearTimeout(wastageTimer.current); wastageTimer.current = null; flushWastage(dateStr); }
     };
   }, [dateStr]);
 
@@ -243,9 +272,9 @@ export default function MealEntryTab({ liveSig }) {
     let cancelled = false;
     const attempt = () => {
       if (cancelled) return;
-      const busy = savingRef.current.purch || savingRef.current.issues ||
-        purchTimer.current || issuesTimer.current ||
-        pendingSave.current.purch || pendingSave.current.issues;
+      const busy = savingRef.current.purch || savingRef.current.issues || savingRef.current.wastage ||
+        purchTimer.current || issuesTimer.current || wastageTimer.current ||
+        pendingSave.current.purch || pendingSave.current.issues || pendingSave.current.wastage;
       // Note: a merely-focused cell no longer blocks the refetch —
       // loadDay's dirty merge-preserve already protects unsaved typing.
       if (busy) { setTimeout(attempt, 2000); return; }
@@ -277,10 +306,13 @@ export default function MealEntryTab({ liveSig }) {
   // ---------------------------------------------------------------------
   const purchTimer = useRef(null);
   const issuesTimer = useRef(null);
+  const wastageTimer = useRef(null);
   const latestPurch = useRef(purch);
   const latestIssues = useRef(issues);
+  const latestWastage = useRef(wastage);
   useEffect(() => { latestPurch.current = purch; }, [purch]);
   useEffect(() => { latestIssues.current = issues; }, [issues]);
+  useEffect(() => { latestWastage.current = wastage; }, [wastage]);
 
   // Serialised save chains — a new save NEVER interrupts one already in
   // flight (user request, Aug 2026). Each flush snapshots its payload
@@ -288,15 +320,16 @@ export default function MealEntryTab({ liveSig }) {
   // network PUT behind whatever save is currently running, guaranteeing
   // in-order arrival at the server. Consecutive queued saves for the
   // same date coalesce to the latest snapshot.
-  const saveChain = useRef({ purch: Promise.resolve(), issues: Promise.resolve() });
-  const pendingSave = useRef({ purch: null, issues: null }); // seq de-dupe
-  const saveSeq = useRef({ purch: 0, issues: 0 });
+  const saveChain = useRef({ purch: Promise.resolve(), issues: Promise.resolve(), wastage: Promise.resolve() });
+  const pendingSave = useRef({ purch: null, issues: null, wastage: null }); // seq de-dupe
+  const saveSeq = useRef({ purch: 0, issues: 0, wastage: 0 });
   // Dirty tracking (Jun 2026 multi-machine fix): each save sends ONLY the
   // item lines THIS machine edited (PATCH merge on the server) so two
   // machines entering different items on the same day never wipe each
   // other's rows — the old whole-table PUT was last-writer-wins.
   const dirtyPurch = useRef(new Set());
   const dirtyIssues = useRef(new Set());
+  const dirtyWastage = useRef(new Set());
 
   // Both flushes take the TARGET date explicitly (captured at queue time)
   // so the PATCH URL always matches the day the lines belong to, even if
@@ -399,6 +432,50 @@ export default function MealEntryTab({ liveSig }) {
     const d = dateStr;
     issuesTimer.current = setTimeout(() => { issuesTimer.current = null; flushIssues(d); }, 350);
   };
+  const flushWastage = (targetDate) => {
+    const ids = Array.from(dirtyWastage.current);
+    dirtyWastage.current = new Set();
+    const prev = pendingSave.current.wastage;
+    if (prev && prev.targetDate === targetDate) {
+      prev.ids.forEach((i) => { if (!ids.includes(i)) ids.push(i); });
+    }
+    if (!ids.length) return saveChain.current.wastage;
+    const upserts = [];
+    const removes = [];
+    ids.forEach((iid) => {
+      const w = latestWastage.current[iid];
+      const qty = num(w?.qty);
+      if (qty > 0) upserts.push({ item_id: iid, qty, reason: w?.reason || "wasted", notes: w?.notes || "" });
+      else removes.push(iid);
+    });
+    const seq = ++saveSeq.current.wastage;
+    pendingSave.current.wastage = { seq, targetDate, ids, upserts, removes };
+    const run = async () => {
+      const p = pendingSave.current.wastage;
+      if (!p || (p.seq !== seq && p.targetDate === targetDate)) return;
+      const mine = p.seq === seq;
+      const payload = mine ? p : { targetDate, ids, upserts, removes };
+      if (mine) pendingSave.current.wastage = null;
+      setSaving((s) => ({ ...s, wastage: true }));
+      try {
+        await api.patch(`/meals/wastage/${payload.targetDate}`,
+          { upserts: payload.upserts, removes: payload.removes });
+        setSavedAt(Date.now());
+      } catch (err) {
+        payload.ids.forEach((i) => dirtyWastage.current.add(i));
+        showApiError(err, "Couldn't auto-save wastage");
+      } finally {
+        setSaving((s) => ({ ...s, wastage: false }));
+      }
+    };
+    saveChain.current.wastage = saveChain.current.wastage.then(run, run);
+    return saveChain.current.wastage;
+  };
+  const queueWastage = () => {
+    clearTimeout(wastageTimer.current);
+    const d = dateStr;
+    wastageTimer.current = setTimeout(() => { wastageTimer.current = null; flushWastage(d); }, 350);
+  };
 
   const setPurchField = (itemId, field, value) => {
     dirtyPurch.current.add(itemId);
@@ -427,6 +504,28 @@ export default function MealEntryTab({ liveSig }) {
     queuePurch();
   };
 
+  // Wastage row edits — mirror the purchases sticky-vendor pattern. If
+  // the chef types qty on a row that has no reason yet, quietly stamp
+  // the last-used reason so most rows get their reason set without an
+  // extra click. Existing reason is left untouched.
+  const setWastageField = (itemId, field, value) => {
+    dirtyWastage.current.add(itemId);
+    setWastage((prev) => {
+      const existing = prev[itemId] || {};
+      const updated = { ...existing, [field]: value };
+      if (field === "qty" && !existing.reason && lastReason) {
+        updated.reason = lastReason;
+      }
+      return { ...prev, [itemId]: updated };
+    });
+  };
+  const setRowReason = (itemId, reason) => {
+    dirtyWastage.current.add(itemId);
+    setWastage((prev) => ({ ...prev, [itemId]: { ...(prev[itemId] || {}), reason } }));
+    persistLastReason(reason);
+    queueWastage();
+  };
+
   // ---------------------------------------------------------------------
   // Group items by category for the grid layout. Only categories that
   // actually own at least one item show up.
@@ -441,7 +540,7 @@ export default function MealEntryTab({ liveSig }) {
   // is hidden entirely once it has no visible rows so the header doesn't
   // stand alone above nothing. Each group also carries per-category
   // subtotals so the header row can surface them (Aug 2026 request).
-  const isTouched = (it) => num(purch[it.id]?.qty) > 0 || num(purch[it.id]?.rate) > 0 || num(issues[it.id]) > 0;
+  const isTouched = (it) => num(purch[it.id]?.qty) > 0 || num(purch[it.id]?.rate) > 0 || num(issues[it.id]) > 0 || num(wastage[it.id]?.qty) > 0;
   const filteredGrouped = useMemo(() => {
     const q = search.trim().toLowerCase();
     const bySearch = q
@@ -455,19 +554,19 @@ export default function MealEntryTab({ liveSig }) {
           .filter((g) => g.rows.length > 0)
       : bySearch;
     return base.map(({ cat, rows }) => {
-      // Just sum Purch and Issue amounts for the category header
-      // chips. Per-row vendor bookkeeping was dropped Feb 2026 when
-      // the category-level vendor picker was removed in favour of the
-      // per-row Supplier column + sticky last-used default.
-      let pAmt = 0, iAmt = 0;
+      // Sum Purch, Issue and Wastage amounts for the category header
+      // chips. Wastage merged into the entry grid Feb 2026.
+      let pAmt = 0, iAmt = 0, wAmt = 0;
       for (const it of rows) {
         const e = purch[it.id] || {};
         pAmt += num(e.qty) * num(e.rate);
-        iAmt += num(issues[it.id]) * (avgRate[it.id] || 0);
+        const rate = avgRate[it.id] || 0;
+        iAmt += num(issues[it.id]) * rate;
+        wAmt += num(wastage[it.id]?.qty) * rate;
       }
-      return { cat, rows, purchAmt: pAmt, issueAmt: iAmt };
+      return { cat, rows, purchAmt: pAmt, issueAmt: iAmt, wastageAmt: wAmt };
     });
-  }, [grouped, nonZeroOnly, purch, issues, avgRate, search]);
+  }, [grouped, nonZeroOnly, purch, issues, wastage, avgRate, search]);
 
   // Flat list of currently-VISIBLE item ids in the exact order they
   // appear in the grid (respects category collapse + filters). Used by
@@ -491,7 +590,7 @@ export default function MealEntryTab({ liveSig }) {
   //   Enter        purch-rate → next row purch-qty
   //   Enter        issue-qty  → next row issue-qty
   //   Arrow keys always move between cells; number step is suppressed.
-  const gridCols = ["purch-qty", "purch-rate", "issue-qty"];
+  const gridCols = ["purch-qty", "purch-rate", "issue-qty", "wastage-qty"];
   const focusCell = (kind, itemId) => {
     const el = document.querySelector(`[data-testid="entry-${kind}-${itemId}"]`);
     if (el) { el.focus(); if (el.select) el.select(); }
@@ -531,6 +630,9 @@ export default function MealEntryTab({ liveSig }) {
       } else if (kind === "issue-qty") {
         const next = flatVisibleItemIds[idx + 1];
         if (next) focusCell("issue-qty", next);
+      } else if (kind === "wastage-qty") {
+        const next = flatVisibleItemIds[idx + 1];
+        if (next) focusCell("wastage-qty", next);
       }
     }
   };
@@ -552,6 +654,15 @@ export default function MealEntryTab({ liveSig }) {
     }
     return s;
   }, [items, issues, avgRate]);
+
+  // Day-wide wastage value = Σ (wasted_qty × item's weighted-avg cost).
+  const wastageDayTotal = useMemo(() => {
+    let s = 0;
+    for (const it of items) {
+      s += num(wastage[it.id]?.qty) * (avgRate[it.id] || 0);
+    }
+    return s;
+  }, [items, wastage, avgRate]);
 
   const nextDate = addDays(dateStr, +1);
   const canGoForward = nextDate <= todayISO();
@@ -621,7 +732,7 @@ export default function MealEntryTab({ liveSig }) {
           </label>
 
           <span className="ml-auto text-xs inline-flex items-center gap-1" data-testid="entry-save-indicator">
-            {(saving.purch || saving.issues) ? (
+            {(saving.purch || saving.issues || saving.wastage) ? (
               <span className="text-slate-500 inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin"/> Saving…</span>
             ) : savedAt && (Date.now() - savedAt) < 3000 ? (
               <span className="text-emerald-600 inline-flex items-center gap-1"><Check size={12}/> Saved</span>
@@ -631,7 +742,7 @@ export default function MealEntryTab({ liveSig }) {
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3" data-testid="entry-totals-bar">
+        <div className="grid grid-cols-3 gap-3" data-testid="entry-totals-bar">
           <div
             className="iu-card p-2.5 flex items-center justify-between border-emerald-200 bg-emerald-50/60 cursor-pointer hover:bg-emerald-50 hover:border-emerald-300 select-none transition"
             onDoubleClick={() => setHistoryKind("purchase")}
@@ -655,6 +766,14 @@ export default function MealEntryTab({ liveSig }) {
               <span className="ml-1 text-[9px] font-normal text-amber-600/80 normal-case tracking-normal">(dbl-click for history)</span>
             </span>
             <span className="text-lg font-extrabold tabular-nums text-amber-800" data-testid="entry-day-issue-total">₹{inr(issueDayTotal)}</span>
+          </div>
+          <div
+            className="iu-card p-2.5 flex items-center justify-between border-rose-200 bg-rose-50/60 select-none"
+            title="Total stock value lost to wastage today (at weighted-avg cost)"
+            data-testid="entry-wastage-total-card"
+          >
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Wastage · Day total</span>
+            <span className="text-lg font-extrabold tabular-nums text-rose-800" data-testid="entry-day-wastage-total">₹{inr(wastageDayTotal)}</span>
           </div>
         </div>
       </div>
@@ -700,22 +819,28 @@ export default function MealEntryTab({ liveSig }) {
                 <th colSpan={3} className="bg-amber-500 text-white text-[11px] font-extrabold uppercase tracking-wider px-3 py-1.5 border-b border-amber-600 text-left">
                   ↓ Issues
                 </th>
+                <th colSpan={3} className="bg-rose-600 text-white text-[11px] font-extrabold uppercase tracking-wider px-3 py-1.5 border-b border-rose-700 text-left">
+                  ↓ Wastage
+                </th>
               </tr>
               <tr className="bg-slate-50 text-[11px] uppercase text-slate-500">
-                <th className="text-left p-2 w-1/5">Item</th>
+                <th className="text-left p-2 w-[14%]">Item</th>
                 <th className="text-left px-1 py-2 w-10">Unit</th>
-                <th className="text-right px-1 py-2 w-16" title="Stock on hand at end of previous day">On-hand</th>
-                <th className="text-left p-2 w-44 border-l-2 border-emerald-500 bg-emerald-50/70" title="Supplier for this item on this day">Supplier</th>
-                <th className="text-right p-2 w-24 bg-emerald-50/70">Qty</th>
-                <th className="text-right p-2 w-28 bg-emerald-50/70">Rate ₹</th>
-                <th className="text-right p-2 w-32 bg-emerald-50/70">Amount ₹</th>
-                <th className="text-right p-2 w-24 border-l-2 border-amber-500 bg-amber-50/70">Qty</th>
-                <th className="text-right p-2 w-28 bg-amber-50/70" title="Weighted-average purchase cost — auto-calculated, not editable">Rate ₹</th>
-                <th className="text-right p-2 w-32 bg-amber-50/70">Amount ₹</th>
+                <th className="text-right px-1 py-2 w-14" title="Stock on hand at end of previous day">On-hand</th>
+                <th className="text-left p-2 w-36 border-l-2 border-emerald-500 bg-emerald-50/70" title="Supplier for this item on this day">Supplier</th>
+                <th className="text-right p-2 w-20 bg-emerald-50/70">Qty</th>
+                <th className="text-right p-2 w-24 bg-emerald-50/70">Rate ₹</th>
+                <th className="text-right p-2 w-28 bg-emerald-50/70">Amount ₹</th>
+                <th className="text-right p-2 w-20 border-l-2 border-amber-500 bg-amber-50/70">Qty</th>
+                <th className="text-right p-2 w-24 bg-amber-50/70" title="Weighted-average purchase cost — auto-calculated, not editable">Rate ₹</th>
+                <th className="text-right p-2 w-28 bg-amber-50/70">Amount ₹</th>
+                <th className="text-right p-2 w-20 border-l-2 border-rose-500 bg-rose-50/70">Qty</th>
+                <th className="text-left p-2 w-28 bg-rose-50/70" title="Why the stock was lost — pick from the master list">Reason</th>
+                <th className="text-right p-2 w-28 bg-rose-50/70" title="Wastage value at weighted-average cost">Amount ₹</th>
               </tr>
             </thead>
             <tbody>
-              {filteredGrouped.map(({ cat, rows, purchAmt, issueAmt }) => {
+              {filteredGrouped.map(({ cat, rows, purchAmt, issueAmt, wastageAmt }) => {
                 const isCollapsed = collapsedCats.has(cat.key);
                 return (
                 <React.Fragment key={cat.key}>
@@ -756,6 +881,12 @@ export default function MealEntryTab({ liveSig }) {
                     <td className="p-2 text-right font-semibold tabular-nums text-amber-700" data-testid={`entry-cat-issue-total-${cat.key}`}>
                       {issueAmt > 0 ? `₹${inr(issueAmt)}` : <span className="text-amber-700/40">—</span>}
                     </td>
+                    {/* Two-cell spacer over Wastage Qty & Reason so the
+                        Wastage subtotal lines up under its Amount col. */}
+                    <td colSpan={2}/>
+                    <td className="p-2 text-right font-semibold tabular-nums text-rose-700" data-testid={`entry-cat-wastage-total-${cat.key}`}>
+                      {wastageAmt > 0 ? `₹${inr(wastageAmt)}` : <span className="text-rose-700/40">—</span>}
+                    </td>
                   </tr>
                   {!isCollapsed && rows.map((it) => {
                     const e = purch[it.id] || {};
@@ -764,7 +895,10 @@ export default function MealEntryTab({ liveSig }) {
                     const issueQty = issues[it.id];
                     const rate = avgRate[it.id] || 0;
                     const issueAmt = num(issueQty) * rate;
-                    const over = oh != null && num(issueQty) > oh + 1e-6;
+                    const w = wastage[it.id] || {};
+                    const wasteAmt = num(w.qty) * rate;
+                    // Overshoot on issues + wastage combined (both deplete stock).
+                    const over = oh != null && (num(issueQty) + num(w.qty)) > oh + 1e-6;
                     return (
                       <tr key={it.id} className={`border-t border-slate-100 hover:bg-slate-50/70 ${over ? "bg-rose-50/60" : ""}`} data-testid={`entry-row-${it.id}`}>
                         <td className="p-2">
@@ -796,7 +930,7 @@ export default function MealEntryTab({ liveSig }) {
                             onChange={(ev) => setPurchField(it.id, "qty", ev.target.value)}
                             onBlur={queuePurch}
                             onKeyDown={onGridKeyDown("purch-qty", it.id)}
-                            className="iu-input !h-8 text-sm w-full text-right tabular-nums"
+                            className="iu-input !h-8 !px-2 text-sm w-full text-right tabular-nums"
                             placeholder="0"
                             data-testid={`entry-purch-qty-${it.id}`}
                           />
@@ -819,7 +953,7 @@ export default function MealEntryTab({ liveSig }) {
                               queuePurch();
                             }}
                             onKeyDown={onGridKeyDown("purch-rate", it.id)}
-                            className="iu-input !h-8 text-sm w-full text-right tabular-nums"
+                            className="iu-input !h-8 !px-2 text-sm w-full text-right tabular-nums"
                             placeholder="0.00"
                             data-testid={`entry-purch-rate-${it.id}`}
                           />
@@ -834,7 +968,7 @@ export default function MealEntryTab({ liveSig }) {
                             onChange={(ev) => { dirtyIssues.current.add(it.id); setIssues({ ...issues, [it.id]: ev.target.value }); }}
                             onBlur={queueIssues}
                             onKeyDown={onGridKeyDown("issue-qty", it.id)}
-                            className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`}
+                            className={`iu-input !h-8 !px-2 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`}
                             placeholder="0"
                             data-testid={`entry-issue-qty-${it.id}`}
                             title={over ? "Issue exceeds on-hand — will drive stock negative" : ""}
@@ -846,6 +980,39 @@ export default function MealEntryTab({ liveSig }) {
                         </td>
                         <td className="p-2 text-right font-semibold tabular-nums text-amber-700" data-testid={`entry-issue-amt-${it.id}`}>
                           {issueAmt > 0 ? `₹${inr(issueAmt)}` : ""}
+                        </td>
+                        {/* Wastage half — Qty + Reason + Amount. Both
+                            Issues and Wastage deplete stock, so the
+                            "over" warning fires on the combined total. */}
+                        <td className="p-2 border-l-2 border-rose-100">
+                          <input
+                            type="number" min="0" step="0.01"
+                            value={w.qty ?? ""}
+                            onChange={(ev) => setWastageField(it.id, "qty", ev.target.value)}
+                            onBlur={queueWastage}
+                            onKeyDown={onGridKeyDown("wastage-qty", it.id)}
+                            className={`iu-input !h-8 !px-2 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`}
+                            placeholder="0"
+                            data-testid={`entry-wastage-qty-${it.id}`}
+                            title={over ? "Issues + Wastage exceed on-hand — will drive stock negative" : "Quantity lost to wastage / spoilage"}
+                          />
+                        </td>
+                        <td className="p-2">
+                          <select
+                            value={w.reason || ""}
+                            onChange={(ev) => setRowReason(it.id, ev.target.value)}
+                            className={`iu-input !h-8 !px-2 text-xs w-full text-slate-700 ${w.reason ? "font-semibold" : "text-slate-400"}`}
+                            data-testid={`entry-wastage-reason-${it.id}`}
+                            title="Why this stock was lost. First pick becomes the sticky default for the next blank wastage row."
+                          >
+                            <option value="">— pick reason —</option>
+                            {reasons.map((r) => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="p-2 text-right font-semibold tabular-nums text-rose-700" data-testid={`entry-wastage-amt-${it.id}`}>
+                          {wasteAmt > 0 ? `₹${inr(wasteAmt)}` : ""}
                         </td>
                       </tr>
                     );

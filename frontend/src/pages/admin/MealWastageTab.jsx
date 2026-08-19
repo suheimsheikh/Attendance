@@ -136,85 +136,23 @@ export default function MealWastageTab({ liveSig }) {
 
   return (
     <div data-testid="meal-wastage-tab">
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <input type="date" value={dateStr} max={todayISO()} onChange={(e) => setDateStr(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="wastage-date" />
-        <span className="text-xs text-slate-500">{formatDate(dateStr)}</span>
-        <span className="ml-auto text-xs text-slate-500">Reduces stock but is logged separately from Daily Issues</span>
-      </div>
-
-      {itemOptions.length === 0 ? (
-        <div className="iu-card p-8 text-center" data-testid="wastage-no-items">
-          <Boxes size={30} className="mx-auto text-slate-300 mb-2" />
-          <p className="font-semibold text-slate-700">No items configured yet.</p>
-          <p className="text-sm text-slate-500 mt-1">Ask an admin to set up items in the Purchases tab.</p>
-        </div>
-      ) : (
-        <div className="iu-card overflow-hidden" data-testid="wastage-entry-card">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-[11px] uppercase text-slate-500">
-              <tr>
-                <th className="text-left p-2 w-1/4">Item</th>
-                <th className="text-right p-2 w-24">On-hand</th>
-                <th className="text-right p-2 w-24">Qty lost</th>
-                <th className="text-left p-2 w-16">Unit</th>
-                <th className="text-left p-2 w-28">Reason</th>
-                <th className="text-left p-2">Notes</th>
-                <th className="p-2 w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((l) => {
-                const it = items.find((x) => x.id === l.item_id);
-                const oh = stock[l.item_id]?.on_hand;
-                const qty = num(l.qty);
-                const over = oh != null && qty > oh + 1e-6;
-                return (
-                  <tr key={l.id} className={`border-t border-slate-100 ${over ? "bg-rose-50/60" : ""}`} data-testid={`wastage-row-${l.id}`}>
-                    <td className="p-2">
-                      <select value={l.item_id} onChange={(e) => updateLine(l.id, { item_id: e.target.value })} className="iu-input !h-8 text-sm w-full" data-testid={`wastage-item-${l.id}`}>
-                        <option value="">— Select —</option>
-                        {itemOptions.map((g) => (
-                          <optgroup key={g.label} label={g.label}>
-                            {g.rows.map((it2) => <option key={it2.id} value={it2.id}>{it2.name}</option>)}
-                          </optgroup>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="p-2 text-right tabular-nums text-slate-600">{oh != null ? fmtQty(oh) : "—"}</td>
-                    <td className="p-2">
-                      <input type="number" min="0" step="0.01" value={l.qty} onChange={(e) => updateLine(l.id, { qty: e.target.value })} className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`} placeholder="0" data-testid={`wastage-qty-${l.id}`} />
-                    </td>
-                    <td className="p-2 text-slate-500 text-xs">{it?.unit || "—"}</td>
-                    <td className="p-2">
-                      <select value={l.reason} onChange={(e) => updateLine(l.id, { reason: e.target.value })} className="iu-input !h-8 text-sm w-full" data-testid={`wastage-reason-${l.id}`}>
-                        {REASONS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-                      </select>
-                    </td>
-                    <td className="p-2">
-                      <input value={l.notes} onChange={(e) => updateLine(l.id, { notes: e.target.value })} className="iu-input !h-8 text-sm w-full" placeholder="Optional — e.g. left in sun" data-testid={`wastage-notes-${l.id}`} />
-                    </td>
-                    <td className="p-2 text-right">
-                      <button onClick={() => removeLine(l.id)} className="p-1.5 rounded text-rose-500 hover:bg-rose-50" title="Remove line" data-testid={`wastage-remove-${l.id}`}>
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div className="p-3 border-t border-slate-100 flex justify-between items-center">
-            <button onClick={addLine} title="Record another wasted or lost item for this date" className="iu-btn-secondary !h-9 !px-3 text-sm" data-testid="wastage-add-line">
-              + Add line
-            </button>
-            <button onClick={save} disabled={saving} title="Save wastage for this date — stock on hand updates instantly" className="iu-btn-primary !h-9 !px-4 text-sm" data-testid="wastage-save">
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
-            </button>
+      {/* Entry retired Feb 2026 — wastage now lives inside Daily Entry
+          (three colour bands: Purchases / Issues / Wastage). This tab
+          keeps a read-only history so old data is still auditable. */}
+      <div className="iu-card p-4 mb-4 bg-rose-50/40 border-rose-200" data-testid="wastage-moved-notice">
+        <div className="flex items-start gap-3">
+          <Boxes size={20} className="text-rose-500 mt-0.5"/>
+          <div className="text-sm text-slate-700">
+            <div className="font-bold text-rose-800">Wastage entry has moved.</div>
+            <div className="mt-1">
+              Log wastage directly on the <span className="font-semibold">Daily entry</span> tab — every item row now has a <span className="font-semibold text-rose-700">Wastage</span> column with quantity and reason, right next to Issues.
+            </div>
+            <div className="mt-1 text-xs text-slate-500">This tab is now a read-only 30-day history for audit purposes.</div>
           </div>
         </div>
-      )}
+      </div>
 
-      <div className="iu-card mt-4 overflow-auto" data-testid="wastage-recent">
+      <div className="iu-card overflow-auto" data-testid="wastage-recent">
         <div className="px-4 py-3 border-b border-slate-100 font-bold text-sm">Last 30 days of wastage</div>
         {recent.length === 0 ? (
           <div className="p-6 text-center text-sm text-slate-500" data-testid="wastage-recent-empty">Nothing logged yet — good going.</div>
@@ -234,7 +172,7 @@ export default function MealWastageTab({ liveSig }) {
                 const reasonTags = Array.from(new Set(lineList.map((l) => l.reason))).map((k) => REASON_LABEL[k] || k);
                 const preview = lineList.slice(0, 3).map((l) => `${l.item_name} (${fmtQty(l.qty)} ${l.unit})`).join(", ");
                 return (
-                  <tr key={r.date} className="border-t border-slate-100 hover:bg-slate-50/70 cursor-pointer" onClick={() => setDateStr(r.date)} data-testid={`wastage-recent-row-${r.date}`}>
+                  <tr key={r.date} className="border-t border-slate-100 hover:bg-slate-50/70" data-testid={`wastage-recent-row-${r.date}`}>
                     <td className="px-3 py-1.5 font-semibold whitespace-nowrap">{formatDate(r.date)}</td>
                     <td className="px-3 py-1.5 text-slate-700">
                       {preview}{lineList.length > 3 ? ` +${lineList.length - 3}` : ""}

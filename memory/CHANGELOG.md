@@ -1,6 +1,19 @@
 # I Showed Up — Changelog
 
 Append-only log of feature/bug shipments. PRD.md holds the static
+
+---
+## 19 Feb 2026 — Wastage merged into Daily Entry
+
+- Added `PATCH /api/meals/wastage/{date_str}` — granular per-line patch mirroring the issues endpoint (reason + notes per line).
+- `MealEntryTab.jsx` now has a third colour band (rose/Wastage) alongside Purchases (emerald) and Issues (amber). Every row shows a Wastage Qty, Reason dropdown and computed Amount at weighted-avg cost.
+- Sticky "last-used reason" behaviour mirrors sticky supplier — first pick auto-fills every next blank wastage row; persisted in `localStorage`.
+- New day-wide "Wastage · Day total" card in the sticky header.
+- Category subtotals now include a Wastage row-header cell aligned under the Wastage Amount column.
+- Keyboard nav extended: gridCols now `["purch-qty","purch-rate","issue-qty","wastage-qty"]`. Enter on Wastage-Qty jumps to the next row Wastage-Qty; Arrow keys traverse across all four cells and across categories.
+- `MealWastageTab.jsx` entry form retired — replaced with a "moved" banner and read-only 30-day history view for audit.
+- All rates and amounts render to exactly 2 decimals.
+- Both Issues and Wastage now deplete stock; the "over on-hand" warning fires on the combined total.
 problem statement + user personas; long-form change history lives here.
 
 

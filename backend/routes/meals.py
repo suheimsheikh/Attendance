@@ -1851,6 +1851,65 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         await _signal_meals("wastage", d)
         return {"date": d, "lines": clean}
 
+    @router.patch("/meals/wastage/{date_str}")
+    async def patch_wastage_lines(
+        date_str: str, body: LinesPatchIn,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Merge ONLY the edited wastage lines into the day's doc — each
+        item updated atomically (positional $set / $push / $pull) so
+        concurrent machines editing different items never clash.  Mirrors
+        the issues PATCH, but each line carries reason + notes."""
+        d = _not_future(_valid_date(date_str))
+        item_ids = [str(l.get("item_id") or "") for l in body.upserts if l.get("item_id")]
+        items = await db.meal_items.find(
+            {"id": {"$in": item_ids}}, {"_id": 0},
+        ).to_list(len(item_ids) or 1)
+        by_id = {i["id"]: i for i in items}
+        await db.meal_wastage.update_one(
+            {"date": d},
+            {"$setOnInsert": {"id": str(uuid.uuid4()), "date": d, "lines": []}},
+            upsert=True,
+        )
+        removes = [str(r) for r in body.removes]
+        for raw in body.upserts:
+            iid = str(raw.get("item_id") or "").strip()
+            item = by_id.get(iid)
+            if not item:
+                raise HTTPException(status_code=400,
+                                    detail=f"Unknown item_id: {iid or '(blank)'}")
+            qty = _parse_amount(raw.get("qty"))
+            if qty is None or qty <= 0:
+                removes.append(iid)
+                continue
+            reason = _valid_reason(raw.get("reason") or "wasted")
+            notes = str(raw.get("notes") or "").strip()[:400]
+            line = {
+                "id": str(uuid.uuid4()),
+                "item_id": iid,
+                "item_name": item.get("name"),
+                "category_key": item.get("category_key"),
+                "qty": round(qty, 4),
+                "unit": item.get("unit"),
+                "reason": reason,
+                "notes": notes,
+            }
+            res = await db.meal_wastage.update_one(
+                {"date": d, "lines.item_id": iid}, {"$set": {"lines.$": line}})
+            if res.matched_count == 0:
+                await db.meal_wastage.update_one({"date": d}, {"$push": {"lines": line}})
+        for iid in removes:
+            await db.meal_wastage.update_one(
+                {"date": d}, {"$pull": {"lines": {"item_id": iid}}})
+        await db.meal_wastage.update_one({"date": d}, {"$set": {
+            "updated_at": now_utc().isoformat(),
+            "updated_by": user.get("id"),
+            "updated_by_name": user.get("full_name") or user.get("email"),
+        }})
+        await _signal_meals("wastage", d)
+        doc = await db.meal_wastage.find_one({"date": d}, {"_id": 0})
+        return {"date": d, "lines": (doc or {}).get("lines") or []}
+
     # ------------------------------------------------------------------
     # Stock on hand — opening + Σ purchases − Σ issues − Σ wastage,
     # per item.
