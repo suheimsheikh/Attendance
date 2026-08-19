@@ -11,7 +11,7 @@ import ReasonPrompt from "../components/ReasonPrompt";
 import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import OutOfGeofenceModal from "../components/OutOfGeofenceModal";
 import CorrectionRequestModal from "../components/CorrectionRequestModal";
-import { shareToWhatsApp, formatCheckinCaption } from "../utils/shareWhatsApp";
+import { shareToWhatsApp, formatCheckinCaption, dataUrlToBlob } from "../utils/shareWhatsApp";
 
 function hmNow() {
   const d = new Date();
@@ -50,6 +50,10 @@ export default function SelfCheckIn() {
   // one-tap "Share to WhatsApp" button. Cleared when the member acts again.
   // { action: "checkin"|"checkout", name, siteName, at: Date }
   const [lastAction, setLastAction] = useState(null);
+  // Freshly-captured selfie from THIS session (data URL). Used to attach
+  // the photo to the WhatsApp share when the member's stored profile
+  // photo hasn't propagated yet. Cleared on next toggle.
+  const [freshSelfie, setFreshSelfie] = useState(null);
   const geoPerm = useGeoPermission();
 
   const photoNeeded = photoStatus ? photoStatus.needs_photo : !user?.photo;
@@ -213,6 +217,7 @@ export default function SelfCheckIn() {
   const saveSelfie = async (dataUrl) => {
     if (!user?.id) return;
     setShowSelfie(false);
+    setFreshSelfie(dataUrl);
     try {
       await api.post("/members/me/photo", { photo: dataUrl });
       await refreshMe();
@@ -397,15 +402,33 @@ export default function SelfCheckIn() {
             <button
               type="button"
               data-testid="share-whatsapp-btn"
-              onClick={() => shareToWhatsApp({
-                text: formatCheckinCaption({
-                  action: lastAction.action,
-                  name: lastAction.name,
-                  siteName: lastAction.siteName,
-                  when: lastAction.at,
-                }),
-              })}
-              title="Share this check-in to a WhatsApp chat or group"
+              onClick={async () => {
+                // Attach the member's photo to the WhatsApp share so
+                // the group message shows WHO checked in, not just a
+                // caption. Prefer a fresh selfie captured this session
+                // (before it's compressed to a thumbnail); fall back to
+                // the stored profile photo URL.
+                let imageBlob = null;
+                if (freshSelfie) {
+                  imageBlob = await dataUrlToBlob(freshSelfie);
+                } else if (user?.photo) {
+                  try {
+                    const r = await fetch(user.photo, { credentials: "include" });
+                    if (r.ok) imageBlob = await r.blob();
+                  } catch { /* silent — share text-only */ }
+                }
+                shareToWhatsApp({
+                  text: formatCheckinCaption({
+                    action: lastAction.action,
+                    name: lastAction.name,
+                    siteName: lastAction.siteName,
+                    when: lastAction.at,
+                  }),
+                  imageBlob,
+                  filename: `${(lastAction.name || "member").replace(/\s+/g, "_")}_${lastAction.action}.jpg`,
+                });
+              }}
+              title="Share this check-in with photo to a WhatsApp chat or group"
               className="mt-5 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition"
             >
               <Share2 size={15} />
