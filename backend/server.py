@@ -161,7 +161,47 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     if device_id:
         device = await db.devices.find_one({"device_id": device_id, "user_id": user_id}, {"_id": 0})
         if not device or device.get("status") != "approved":
-            raise HTTPException(status_code=401, detail="This device is no longer authorised")
+            # Self-heal for the "backup restore wiped my device row" case.
+            # We already trust the JWT (signed by us, not expired) and the
+            # user_id inside it maps to an active user record — so a MISSING
+            # device row (or one whose user_id was rewritten by a foreign
+            # backup) is an operational artifact, not a security event.
+            # Look up the device_id alone; if it's outright missing OR
+            # currently owned by a different user AND that other user
+            # doesn't exist any more (ghost pointer post-restore), we
+            # rebind to the JWT holder and mark approved. Explicitly
+            # revoked/rejected rows still block — admins must re-approve
+            # those the deliberate way.
+            other = await db.devices.find_one({"device_id": device_id}, {"_id": 0})
+            can_heal = False
+            if other is None:
+                can_heal = True   # row was wiped
+            elif other.get("status") in ("approved", "pending"):
+                other_user = None
+                if other.get("user_id"):
+                    other_user = await db.users.find_one(
+                        {"id": other["user_id"]}, {"_id": 0, "id": 1})
+                # Ghost pointer (device row references a user that no longer
+                # exists) or explicit user rebind to a fresh, active user.
+                if not other_user and user.get("active") is not False:
+                    can_heal = True
+            if can_heal and user.get("active") is not False:
+                await db.devices.update_one(
+                    {"device_id": device_id},
+                    {"$set": {
+                        "device_id": device_id,
+                        "user_id": user_id,
+                        "status": "approved",
+                        "healed_at": now_utc().isoformat(),
+                    },
+                     "$setOnInsert": {"id": str(uuid.uuid4()),
+                                      "created_at": now_utc().isoformat()}},
+                    upsert=True,
+                )
+                device = await db.devices.find_one(
+                    {"device_id": device_id, "user_id": user_id}, {"_id": 0})
+            if not device or device.get("status") != "approved":
+                raise HTTPException(status_code=401, detail="This device is no longer authorised")
     return user
 
 
