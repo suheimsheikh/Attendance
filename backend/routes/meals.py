@@ -1838,7 +1838,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     async def delete_item(item_id: str, admin: dict = Depends(require_admin)):
         row = await db.meal_items.find_one({"id": item_id}, {"_id": 0})
         if not row:
-            raise HTTPException(status_code=404, detail="Item not found")
+            # Idempotent DELETE: if the row is already gone (another admin
+            # deleted it, or the client is retrying), return success rather
+            # than 404. Removes the recurring "Item not found" toast when
+            # two admins act on the Masters tree at the same time.
+            return {"ok": True, "soft_deleted": False, "already_deleted": True}
         # Soft-delete if any purchase or issue references the item so
         # historic data keeps rendering the item name. Otherwise hard delete.
         has_hist = await db.meal_purchases.find_one({"lines.item_id": item_id}) \

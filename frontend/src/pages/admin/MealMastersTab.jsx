@@ -559,13 +559,23 @@ export default function MealMastersTab({ liveSig }) {
 
   // ---- item ops ----
   const patchItem = async (id, patch) => {
+    // If we no longer have this item in local state (e.g. SSE reload
+    // dropped it while the user's dropdown/inline editor was still open),
+    // skip the round-trip and self-heal quietly. Prevents an "Item not
+    // found" flash when a peer chef just deleted the same row.
+    if (!items.some((i) => i.id === id)) {
+      await load();
+      return;
+    }
     try {
       await api.patch(`/meals/items/${id}`, patch);
       await load();
       if (patch.category_key) toast.success("Item moved");
     } catch (err) {
       if (err?.status === 404) {
-        toast.error("That item no longer exists — refreshing the list");
+        // Another admin deleted this item between the two calls. Reload
+        // silently so the row disappears without an error toast.
+        toast.message("Item was removed by another user — list refreshed");
         await load();
         return;
       }
@@ -574,13 +584,24 @@ export default function MealMastersTab({ liveSig }) {
   };
   const deleteItem = async (item) => {
     if (!window.confirm(`Delete "${item.name}"? Items with purchase/issue history are deactivated instead.`)) return;
+    // Same stale-guard as patchItem — if the row has already vanished
+    // locally, don't fire a doomed request.
+    if (!items.some((i) => i.id === item.id)) {
+      await load();
+      return;
+    }
     try {
       const r = await api.del(`/meals/items/${item.id}`);
-      toast.success(r.soft_deleted ? "Item deactivated (has history)" : "Item deleted");
+      if (r.already_deleted) {
+        toast.success(`"${item.name}" was already deleted`);
+      } else {
+        toast.success(r.soft_deleted ? "Item deactivated (has history)" : "Item deleted");
+      }
       await load();
     } catch (err) {
       if (err?.status === 404) {
-        toast.error("That item no longer exists — refreshing the list");
+        // Idempotent success: someone else already deleted it.
+        toast.success(`"${item.name}" was already deleted`);
         await load();
         return;
       }
@@ -610,8 +631,10 @@ export default function MealMastersTab({ liveSig }) {
     try {
       await api.put("/meals/items/reorder", { category_key: catKey, item_ids: list });
     } catch (err) {
-      if (err?.status === 404) {
-        toast.error("An item in this category no longer exists — refreshing the list");
+      // 404 = whole category gone; 400 = no valid ids left (all items
+      // moved/deleted elsewhere). Either way: silent reconcile.
+      if (err?.status === 404 || err?.status === 400) {
+        toast.message("Some items have moved — list refreshed");
       } else {
         showApiError(err, "Couldn't save the new order");
       }
