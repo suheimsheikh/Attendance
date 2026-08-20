@@ -33,6 +33,7 @@ export async function shareToWhatsApp({ text, imageBlob, filename = "checkin.jpg
   // most desktop browsers `canShare({files})` returns false and we'll
   // fall through to the desktop path below instead of showing a share
   // sheet that has no WhatsApp on it.
+  const onDesktop = isDesktop();
   try {
     if (imageBlob && typeof navigator !== "undefined" && navigator.canShare) {
       const file = new File([imageBlob], filename, {
@@ -45,14 +46,25 @@ export async function shareToWhatsApp({ text, imageBlob, filename = "checkin.jpg
       }
     }
     // Web Share without files — only useful on mobile. Skip on desktop.
-    if (typeof navigator !== "undefined" && navigator.share && !isDesktop()) {
+    if (typeof navigator !== "undefined" && navigator.share && !onDesktop) {
       await navigator.share({ text });
       return { ok: true, mode: "web-share-text" };
     }
   } catch (e) {
     if (e?.name === "AbortError") return { ok: false, mode: "cancelled" };
-    // fall through to desktop-friendly path
+    // On MOBILE, a Web Share failure (usually NotAllowedError from a
+    // lost transient-activation window after awaits) must NOT fall
+    // through to the desktop path — otherwise phones get a useless
+    // WhatsApp Web tab + forced download + clipboard overwrite (Feb
+    // 2026 code-review HIGH finding). Silent no-op is safer; the user
+    // can retry from the visible Share button.
+    if (!onDesktop) {
+      console.debug("web-share failed on mobile (activation lost?):", e?.name);
+      return { ok: false, mode: "web-share-failed" };
+    }
+    // fall through to desktop-friendly path only when we're really on desktop
   }
+  if (!onDesktop) return { ok: false, mode: "no-share-available" };
   return desktopShareFallback({ text, imageBlob, filename });
 }
 
@@ -84,21 +96,34 @@ async function desktopShareFallback({ text, imageBlob, filename }) {
     } catch { /* download blocked — user can still paste text */ }
   }
 
+  let openedWindow = null;
   if (typeof window !== "undefined") {
     const url = `https://web.whatsapp.com/send?text=${encodeURIComponent(text || "")}`;
-    window.open(url, "_blank", "noopener");
+    openedWindow = window.open(url, "_blank", "noopener");
   }
 
   // Nudge the user so they know where the image ended up and what to do.
+  // Toast copy adapts to what actually worked — no false "WhatsApp Web
+  // opened" claim if the popup blocker killed the tab (Feb 2026
+  // code-review MEDIUM finding).
   const bits = [];
   if (copied) bits.push("caption copied");
   if (downloaded) bits.push("image saved to Downloads");
   const suffix = bits.length ? ` · ${bits.join(", ")}` : "";
-  toast.message(
-    "WhatsApp Web opened" + suffix,
-    { description: downloaded ? "Paste the message, then drag the image from Downloads into the chat." : "Paste the message into your chat." }
-  );
-  return { ok: true, mode: "desktop-fallback" };
+  if (openedWindow) {
+    toast.message("WhatsApp Web opened" + suffix, {
+      description: downloaded
+        ? "Paste the message, then drag the image from Downloads into the chat."
+        : "Paste the message into your chat.",
+    });
+  } else {
+    // Popup blocked — user needs to open WhatsApp Web manually.
+    toast.warning("Couldn't open WhatsApp Web" + suffix, {
+      description: "Your browser blocked the popup. Open web.whatsapp.com yourself, then paste"
+        + (downloaded ? " and drag the image from Downloads." : "."),
+    });
+  }
+  return { ok: !!openedWindow, mode: openedWindow ? "desktop-fallback" : "desktop-fallback-blocked" };
 }
 
 /**

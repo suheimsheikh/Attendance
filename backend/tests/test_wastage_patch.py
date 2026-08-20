@@ -54,6 +54,26 @@ def meal_item(admin_client, base_url):
     return ri.json()
 
 
+@pytest.fixture(autouse=True)
+def _cleanup_wastage_line(admin_client, base_url, meal_item):
+    """Wipe the test item's wastage line before AND after each test so
+    the live day's document stays clean if a test aborts mid-run
+    (Feb 2026 code-review teardown request)."""
+    day = _today_iso()
+    iid = meal_item["id"]
+    admin_client.patch(
+        f"{base_url}/api/meals/wastage/{day}",
+        json={"upserts": [], "removes": [iid]},
+        timeout=30,
+    )
+    yield
+    admin_client.patch(
+        f"{base_url}/api/meals/wastage/{day}",
+        json={"upserts": [], "removes": [iid]},
+        timeout=30,
+    )
+
+
 def _wastage_line_for(admin_client, base_url, item_id, day):
     """Fetch today's wastage doc and return the line for `item_id` (or None)."""
     r = admin_client.get(

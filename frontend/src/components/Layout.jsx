@@ -437,7 +437,7 @@ function SectionHeader({ label, open, onToggle, tone = "cyan", icon: Icon }) {
   );
 }
 
-function NavItem({ to, label, icon: Icon, end, onClick, onHoverPrefetch, disabled, disabledReason, highlight, spotlight, badge, hint }) {
+function NavItem({ to, label, icon: Icon, end, onClick, onHoverPrefetch, disabled, disabledReason, highlight, badge, hint }) {
   if (disabled) {
     return (
       <div
@@ -461,27 +461,20 @@ function NavItem({ to, label, icon: Icon, end, onClick, onHoverPrefetch, disable
       title={hint}
       data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
       className={({ isActive }) =>
-        // Three variants, mutually exclusive:
-        //  • `spotlight` — bright yellow (The Grid, 15 Feb 2026): the most-visited
-        //    reporting surface; we want admins to spot it instantly.
+        // Two variants, mutually exclusive:
         //  • `highlight` — amber (Approvals): persistent nag for pending work.
         //  • neutral    — the default slate treatment.
         `flex items-center gap-3 px-3 h-9 rounded-lg text-[13px] font-medium transition mb-px ${
-          spotlight
+          highlight
             ? isActive
-              ? "bg-yellow-400 text-yellow-950 ring-2 ring-yellow-300 font-extrabold"
-              : "bg-yellow-400 text-yellow-950 hover:bg-yellow-300 ring-1 ring-yellow-300/70 font-extrabold"
-            : highlight
-              ? isActive
-                ? "bg-amber-500/25 text-amber-100 ring-1 ring-amber-400/60"
-                : "bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 ring-1 ring-amber-400/25"
-              : isActive
-                // Light-blue "you-are-here" pill on the dark sidebar
-                // (user request 24 Feb 2026). Sky ring + tinted fill
-                // makes the current page unmistakable without
-                // fighting the spotlight/highlight variants above.
-                ? "bg-sky-400/25 text-sky-100 ring-1 ring-sky-400/60 font-semibold"
-                : "text-slate-300 hover:bg-white/5 hover:text-white"
+              ? "bg-amber-500/25 text-amber-100 ring-1 ring-amber-400/60"
+              : "bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 ring-1 ring-amber-400/25"
+            : isActive
+              // Light-blue "you-are-here" pill on the dark sidebar
+              // (user request 24 Feb 2026). Sky ring + tinted fill
+              // makes the current page unmistakable.
+              ? "bg-sky-400/25 text-sky-100 ring-1 ring-sky-400/60 font-semibold"
+              : "text-slate-300 hover:bg-white/5 hover:text-white"
         }`
       }
     >
@@ -490,7 +483,6 @@ function NavItem({ to, label, icon: Icon, end, onClick, onHoverPrefetch, disable
       {typeof badge === "number" && badge > 0 && (
         <span
           className={`min-w-[22px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center tabular-nums ${
-            spotlight ? "bg-yellow-900 text-yellow-100" :
             highlight ? "bg-amber-400 text-amber-950" : "bg-rose-500 text-white"
           }`}
           data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-badge`}
