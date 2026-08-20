@@ -17,6 +17,7 @@ const MyLeaves = lazy(() => import("./pages/MyLeaves"));
 const Muster = lazy(() => import("./pages/Muster"));
 const Meals = lazy(() => import("./pages/Meals"));
 const MealsReport = lazy(() => import("./pages/admin/MealsReport"));
+const MealsCalendar = lazy(() => import("./pages/admin/MealsCalendar"));
 const Members = lazy(() => import("./pages/admin/Members"));
 const AdminLeaves = lazy(() => import("./pages/admin/Leaves"));
 const Devices = lazy(() => import("./pages/admin/Devices"));
@@ -125,6 +126,7 @@ function App() {
             <Route path="muster" element={<RequireMuster><Muster /></RequireMuster>} />
             <Route path="meals" element={<RequireChefOrAdmin><Meals /></RequireChefOrAdmin>} />
             <Route path="admin/meals-report" element={<RequireChefOrAdmin><MealsReport /></RequireChefOrAdmin>} />
+            <Route path="admin/meals-calendar" element={<RequireChefOrAdmin><MealsCalendar /></RequireChefOrAdmin>} />
             <Route path="my-leaves" element={<RequireMember><MyLeaves /></RequireMember>} />
             <Route path="my-corrections" element={<RequireMember><MyCorrections /></RequireMember>} />
             <Route path="escort-checkin" element={<EscortCheckIn />} />

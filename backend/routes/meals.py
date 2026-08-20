@@ -3506,4 +3506,114 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "issues":    _pack(_daily_series(iss_daily),   iss_item_rows,   _cat_pct(iss_cat),    iss_nut),
         }
 
+    # ── Meals Calendar (Feb 2026 chef request) ───────────────────────
+    # Simple date → {breakfast, lunch, dinner, total} aggregate.
+    # Backfilled from the Jul-2026 spreadsheet Sailors + Staff +
+    # MJPTBC-WRES combined. Future entries can be typed in directly
+    # or auto-derived once per-person meal_records catch up.
+    class DailyCountsIn(BaseModel):
+        date: str
+        breakfast: int = 0
+        lunch: int = 0
+        dinner: int = 0
+
+    def _valid_int(v) -> int:
+        try:
+            n = int(v)
+            if n < 0:
+                raise ValueError
+            return n
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"expected non-negative integer, got {v!r}")
+
+    @router.get("/meals/meal-calendar")
+    async def meal_calendar_list(
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Return daily meal counts in [start, end]. If either is
+        omitted, defaults to the last 90 days."""
+        e = _valid_date(end) if end else local_date_str()
+        e_d = date.fromisoformat(e)
+        s = _valid_date(start) if start else (e_d - timedelta(days=90)).isoformat()
+        s_d = date.fromisoformat(s)
+        if s_d > e_d:
+            raise HTTPException(status_code=400, detail="start must be before end")
+        rows = await db.meal_daily_counts.find(
+            {"date": {"$gte": s, "$lte": e}},
+            {"_id": 0},
+        ).sort("date", 1).to_list(500)
+        by_date = {r["date"]: r for r in rows}
+        # Fill every day with a zero row so the calendar view has no
+        # gaps. Only actually-populated days carry a `has_data` flag.
+        out = []
+        cur = s_d
+        while cur <= e_d:
+            iso = cur.isoformat()
+            r = by_date.get(iso)
+            if r:
+                out.append({
+                    "date": iso,
+                    "breakfast": int(r.get("breakfast") or 0),
+                    "lunch":     int(r.get("lunch") or 0),
+                    "dinner":    int(r.get("dinner") or 0),
+                    "total":     int((r.get("breakfast") or 0)
+                                     + (r.get("lunch") or 0)
+                                     + (r.get("dinner") or 0)),
+                    "source":    r.get("source") or "manual",
+                    "updated_at": r.get("updated_at"),
+                    "has_data": True,
+                })
+            else:
+                out.append({"date": iso, "breakfast": 0, "lunch": 0, "dinner": 0,
+                            "total": 0, "source": None, "has_data": False})
+            cur += timedelta(days=1)
+        # Totals for the KPI strip
+        totals = {"breakfast": 0, "lunch": 0, "dinner": 0, "total": 0}
+        populated = 0
+        for r in out:
+            if r["has_data"]:
+                populated += 1
+                totals["breakfast"] += r["breakfast"]
+                totals["lunch"] += r["lunch"]
+                totals["dinner"] += r["dinner"]
+                totals["total"] += r["total"]
+        return {
+            "start": s, "end": e,
+            "days": out,
+            "totals": totals,
+            "populated_days": populated,
+            "day_count": (e_d - s_d).days + 1,
+        }
+
+    @router.put("/meals/meal-calendar")
+    async def meal_calendar_upsert(
+        body: DailyCountsIn, user: dict = Depends(require_admin),
+    ):
+        d = _valid_date(body.date)
+        bf, l, dn = _valid_int(body.breakfast), _valid_int(body.lunch), _valid_int(body.dinner)
+        doc = {
+            "date": d,
+            "breakfast": bf,
+            "lunch": l,
+            "dinner": dn,
+            "total": bf + l + dn,
+            "source": "manual",
+            "updated_at": now_utc().isoformat(),
+            "updated_by": user.get("id"),
+            "updated_by_name": user.get("name"),
+        }
+        await db.meal_daily_counts.update_one(
+            {"date": d}, {"$set": doc, "$setOnInsert": {"id": str(uuid.uuid4())}},
+            upsert=True,
+        )
+        return {"ok": True, "date": d, "total": doc["total"]}
+
+    @router.delete("/meals/meal-calendar/{iso_date}")
+    async def meal_calendar_delete(iso_date: str, user: dict = Depends(require_admin)):
+        d = _valid_date(iso_date)
+        r = await db.meal_daily_counts.delete_one({"date": d})
+        return {"ok": True, "deleted": r.deleted_count}
+
     return router
