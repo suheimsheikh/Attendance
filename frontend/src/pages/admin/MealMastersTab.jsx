@@ -889,7 +889,7 @@ export default function MealMastersTab({ liveSig }) {
               <span className="text-right" title="Low-stock alert level — click any item's value to edit">Min</span>
               <span className="text-right" title="Norm per serving — expected qty per meal (used by Cross-check). Click any item's value to edit">Norm</span>
               <span className="text-right text-emerald-600">Purch <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
-              <span className="text-right text-amber-600">Issue <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
+              <span className="text-right text-amber-600">Consumed <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
               <span className="text-right text-slate-700">Close <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
             </span>
           </div>

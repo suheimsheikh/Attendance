@@ -58,7 +58,7 @@ export default function MealWastageTab({ liveSig }) {
           <div className="text-sm text-slate-700">
             <div className="font-bold text-rose-800">Wastage entry has moved.</div>
             <div className="mt-1">
-              Log wastage directly on the <span className="font-semibold">Daily entry</span> tab — every item row now has a <span className="font-semibold text-rose-700">Wastage</span> column with quantity and reason, right next to Issues.
+              Log wastage directly on the <span className="font-semibold">Daily entry</span> tab — every item row now has a <span className="font-semibold text-rose-700">Wastage</span> column with quantity and reason, right next to Consumption.
             </div>
             <div className="mt-1 text-xs text-slate-500">This tab is now a read-only 30-day history for audit purposes.</div>
           </div>

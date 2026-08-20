@@ -86,7 +86,7 @@ export default function MealIssuesTab() {
     setSaving(true);
     try {
       await api.put(`/meals/issues/${dateStr}`, { lines });
-      toast.success(`Issues saved for ${formatDate(dateStr)}`);
+      toast.success(`Consumption saved for ${formatDate(dateStr)}`);
       loadRecent();
       loadStock();
     } catch (err) {

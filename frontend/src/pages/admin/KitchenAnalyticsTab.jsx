@@ -444,7 +444,7 @@ export default function KitchenAnalyticsTab({ liveSig }) {
             first
           />
           <Section
-            title="Issues"
+            title="Consumption"
             subtitle="What was issued to the kitchen (valued at weighted-avg purchase rate)"
             accent="issues"
             data={data.issues}

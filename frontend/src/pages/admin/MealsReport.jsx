@@ -501,13 +501,13 @@ export default function MealsReport() {
   }, [tab, liveSig]);
   const TABS = [
     { key: "masters",   label: "Stock Master",       Icon: FolderTree, hint: "Central tree of categories and items — stock on hand, opening balance as-of date, low-stock alerts and item management" },
-    { key: "entry",     label: "Daily entry",   Icon: ShoppingCart, hint: "One screen to enter both supplier purchases (qty · rate) and kitchen issues (qty) for a day — auto-saves as you type" },
+    { key: "entry",     label: "Daily entry",   Icon: ShoppingCart, hint: "One screen to enter both supplier purchases (qty · rate) and kitchen consumption (qty) for a day — auto-saves as you type" },
     { key: "wastage",   label: "Wastage & losses", Icon: Flame, hint: "Record rotten, spilled or lost stock with a reason" },
-    { key: "crosscheck", label: "Cross-check", Icon: Scale, hint: "Compare what the kitchen issued vs meals served × per-item norms — flags over/under days" },
+    { key: "crosscheck", label: "Cross-check", Icon: Scale, hint: "Compare what the kitchen consumed vs meals served × per-item norms — flags over/under days" },
     { key: "daily",     label: "Daily counts",  Icon: Utensils, hint: "Headcount of meals served per day" },
     { key: "monthly",   label: "Monthly grid",  Icon: CalendarDays, hint: "Month-long meal count audit grid" },
     { key: "expenses",  label: "Expense report", Icon: IndianRupee, hint: "Category-wise purchase spend for the accountant" },
-    { key: "analytics", label: "Analytics",      Icon: PieChart, hint: "Kitchen graphics panel — purchase/issue trends, top items, category share" },
+    { key: "analytics", label: "Analytics",      Icon: PieChart, hint: "Kitchen graphics panel — purchase/consumption trends, top items, category share" },
     { key: "vendors",   label: "Vendors",       Icon: Store, hint: "Suppliers you can attribute purchase lines to — name and phone" },
   ];
   return (

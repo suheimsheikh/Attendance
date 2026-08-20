@@ -911,9 +911,9 @@ export default function MealEntryTab({ liveSig }) {
               <td colSpan={2}
                 className="px-2 py-2 border border-amber-200 bg-amber-50/60 rounded-l-lg border-r-0 ml-2 cursor-pointer hover:bg-amber-50 select-none"
                 onDoubleClick={() => setHistoryKind("issue")}
-                title="Double-click to see date-wise issue totals and download a PDF">
+                title="Double-click to see date-wise consumption totals and download a PDF">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
-                  Issues · Day total
+                  Consumption · Day total
                   <span className="ml-1 text-[9px] font-normal text-amber-600/80 normal-case tracking-normal">(dbl-click for history)</span>
                 </span>
               </td>
@@ -974,7 +974,7 @@ export default function MealEntryTab({ liveSig }) {
                   ↓ Purchases
                 </th>
                 <th colSpan={3} className="bg-amber-500 text-white text-[11px] font-extrabold uppercase tracking-wider px-3 py-1.5 border-b border-amber-600 text-left">
-                  ↓ Issues
+                  ↓ Consumption
                 </th>
                 <th colSpan={3} className="bg-rose-600 text-white text-[11px] font-extrabold uppercase tracking-wider px-3 py-1.5 border-b border-rose-700 text-left">
                   ↓ Wastage
@@ -1189,7 +1189,7 @@ export default function MealEntryTab({ liveSig }) {
                             className={`iu-input !h-8 !px-2 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`}
                             placeholder="0"
                             data-testid={`entry-issue-qty-${it.id}`}
-                            title={over ? "Issue exceeds on-hand — will drive stock negative" : ""}
+                            title={over ? "Consumption exceeds on-hand — will drive stock negative" : ""}
                           />
                         </td>
                         {/* Issue Rate — weighted-avg purchase cost, read-only. */}
@@ -1429,7 +1429,7 @@ function DailyTotalsHistoryModal({ kind, selectedDate, onClose }) {
   }, [start, end]);
 
   const isPurch = kind === "purchase";
-  const title = isPurch ? "Purchases · Date-wise totals" : "Issues · Date-wise totals";
+  const title = isPurch ? "Purchases · Date-wise totals" : "Consumption · Date-wise totals";
   const accent = isPurch ? "emerald" : "amber";
 
   const doPrint = () => {
@@ -1509,7 +1509,7 @@ function DailyTotalsHistoryModal({ kind, selectedDate, onClose }) {
             </div>
           ) : rows.length === 0 ? (
             <div className="py-10 text-center text-slate-500" data-testid="daily-totals-empty">
-              No purchases or issues recorded in this window.
+              No purchases or consumption recorded in this window.
             </div>
           ) : (
             <table className="w-full text-sm" data-testid="daily-totals-table">
@@ -1518,8 +1518,8 @@ function DailyTotalsHistoryModal({ kind, selectedDate, onClose }) {
                   <th className="text-left p-2">Date</th>
                   <th className={`text-right p-2 ${isPurch ? "bg-emerald-50 text-emerald-800" : ""}`}>Purchases ₹</th>
                   <th className="text-right p-2 hidden sm:table-cell">Purch. lines</th>
-                  <th className={`text-right p-2 ${!isPurch ? "bg-amber-50 text-amber-800" : ""}`}>Issues ₹</th>
-                  <th className="text-right p-2 hidden sm:table-cell">Issue lines</th>
+                  <th className={`text-right p-2 ${!isPurch ? "bg-amber-50 text-amber-800" : ""}`}>Consumption ₹</th>
+                  <th className="text-right p-2 hidden sm:table-cell">Cons. lines</th>
                 </tr>
               </thead>
               <tbody>

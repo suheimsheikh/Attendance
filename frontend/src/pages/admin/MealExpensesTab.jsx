@@ -247,7 +247,7 @@ export default function MealExpensesTab({ liveSig }) {
     }
     if ((trimmed.item_issues || []).length) {
       lines.push("");
-      lines.push("ITEM-WISE ISSUES (valued at wtd-avg rate)");
+      lines.push("ITEM-WISE CONSUMPTION (valued at wtd-avg rate)");
       lines.push(["Item", "Unit", "Qty", "Amount", "Lines"].join(","));
       trimmed.item_issues.forEach((r) => {
         lines.push([q(r.name), q(r.unit), r.qty, r.amount, r.lines].join(","));
@@ -337,13 +337,13 @@ export default function MealExpensesTab({ liveSig }) {
             />
             <ItemBreakdownTable
               rows={trimmed.item_issues}
-              title="Item-wise Issues (valued at wtd-avg rate)"
+              title="Item-wise Consumption (valued at wtd-avg rate)"
               testid="meal-expense-item-issues"
             />
           </div>
           <p className="text-[11px] text-slate-400 mt-2">
             Meal counts come from Meal Muster marks. Purchases are entered on the Purchases tab (or bulk-uploaded).
-            Issue amounts value each item at its weighted-avg purchase rate over this window.
+            Consumption amounts value each item at its weighted-avg purchase rate over this window.
           </p>
         </>
       )}
@@ -370,7 +370,7 @@ export default function MealExpensesTab({ liveSig }) {
           )}
           {(trimmed.item_issues || []).length > 0 && (
             <div className="mt-4 print:break-inside-avoid">
-              <h2 className="font-extrabold text-sm mb-1">Item-wise Issues (valued at wtd-avg rate)</h2>
+              <h2 className="font-extrabold text-sm mb-1">Item-wise Consumption (valued at wtd-avg rate)</h2>
               <table className="w-full text-[11px] border-collapse">
                 <thead><tr className="border-b border-slate-400"><th className="text-left px-1">Item</th><th className="text-right px-1">Qty</th><th className="text-left px-1">Unit</th><th className="text-right px-1">Amount (₹)</th></tr></thead>
                 <tbody>{trimmed.item_issues.map((r) => (<tr key={r.item_id}><td className="px-1">{r.name}</td><td className="text-right px-1 tabular-nums">{Number(r.qty).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td><td className="px-1">{r.unit || ""}</td><td className="text-right px-1 tabular-nums">{inr(r.amount)}</td></tr>))}</tbody>
