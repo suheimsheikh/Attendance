@@ -3482,10 +3482,14 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             total_amount = round(sum(d["amount"] for d in daily), 2)
             total_qty_lines = sum(d["lines"] for d in daily)
             itemised_amount = round(sum(r["amount"] for r in items_rows), 2)
+            # Top-by-qty only makes sense across a single unit — mixing
+            # kg with pcs / packet / L is misleading. Chef requested
+            # (26 Feb 2026) to restrict the qty chart to `kg` items.
+            kg_rows = [r for r in items_rows if (r.get("unit") or "").strip().lower() == "kg"]
             return {
                 "daily": daily,
                 "top_by_amount": items_rows[:12],
-                "top_by_qty": sorted(items_rows, key=lambda r: r["qty"], reverse=True)[:12],
+                "top_by_qty": sorted(kg_rows, key=lambda r: r["qty"], reverse=True)[:12],
                 "category_totals": cat_rows,
                 "items": items_rows,
                 "total_amount": total_amount,
