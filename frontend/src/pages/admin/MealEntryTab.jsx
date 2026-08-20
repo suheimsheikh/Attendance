@@ -16,7 +16,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search, StickyNote, Store } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search, StickyNote, Store, TrendingUp } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import { useRowFocus } from "../../hooks/useRowFocus";
@@ -192,6 +192,20 @@ export default function MealEntryTab({ liveSig }) {
     } catch (err) { showApiError(err, "Couldn't load pantry masters"); }
   };
   useEffect(() => { loadMasters(); }, []);
+
+  // Per-category "sort busiest" — reorders items INSIDE this one
+  // category by 30-day purchase quantity. Wired to the ▶ button on
+  // each category header (Feb 2026 chef request: "This busiest order
+  // has to come on the category row in Daily entry for each category").
+  const sortCategoryByBusiest = async (cat) => {
+    try {
+      await api.post("/meals/items/sort-within-categories", null, {
+        params: { by: "consumption", days: 30, category_key: cat.key },
+      });
+      await loadMasters();
+      toast.success(`${cat.label}: sorted by 30-day purchase (busiest first)`);
+    } catch (err) { showApiError(err, "Couldn't sort this category"); }
+  };
 
   // Re-fetch vendors on demand (e.g. after inline "Add vendor" flow).
   const refreshVendors = () => {
@@ -952,7 +966,19 @@ export default function MealEntryTab({ liveSig }) {
                         </span>
                       </span>
                     </td>
-                    <td colSpan={3} className="px-2 py-1.5"/>
+                    <td colSpan={3} className="px-2 py-1.5 text-right">
+                      {!isCollapsed && rows.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={(ev) => { ev.stopPropagation(); sortCategoryByBusiest(cat); }}
+                          className="inline-flex items-center gap-1 px-2 h-6 rounded-md text-[10px] font-bold uppercase tracking-wider text-amber-900 bg-amber-200/70 hover:bg-amber-300 border border-amber-400/60 transition"
+                          title="Reorder items in this category by 30-day purchase quantity (busiest first)"
+                          data-testid={`entry-cat-sort-busiest-${cat.key}`}
+                        >
+                          <TrendingUp size={11}/> Busiest first
+                        </button>
+                      )}
+                    </td>
                     {/* Purch subtotal — same typography as the item-row
                         Amount cells so the eye reads the column as one
                         continuous currency stream. */}

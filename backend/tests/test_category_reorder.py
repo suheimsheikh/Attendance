@@ -117,3 +117,16 @@ def test_sort_items_alphabetically(hdr):
         names = [i["name"].lower() for i in arr]
         assert names == sorted(names), f"'{ck}' not sorted alphabetically: {names[:5]}"
         break   # one populated category is enough
+
+
+def test_sort_only_one_category(hdr):
+    """Feb 20 request: per-category sort button on Daily Entry rows.
+    Passing category_key limits the renumber to that ONE category and
+    reports it in the response — other categories keep their order."""
+    r = httpx.post(f"{API_URL}/api/meals/items/sort-within-categories",
+                   params={"by": "consumption", "category_key": "chicken_mutton"},
+                   headers=hdr, timeout=15)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["category_key"] == "chicken_mutton"
+    assert body["categories_touched"] in (0, 1), body

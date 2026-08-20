@@ -1293,6 +1293,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     async def sort_items_within_categories(
         by: str = Query("consumption", pattern="^(consumption|alpha)$"),
         days: int = Query(30, ge=1, le=365),
+        category_key: Optional[str] = Query(
+            None, description="Only sort items inside this ONE category — leave blank for every category"),
         user: dict = Depends(require_chef_or_admin),
     ):
         """One-tap reorder of items INSIDE each category. Categories
@@ -1301,16 +1303,26 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         their walk-through order (Fruits, Grocery, …) preserved.
 
         Modes:
-          • `by=consumption` (default) — 30-day sum of ISSUE qty per
-            item, descending. Zero-consumption items fall to the bottom
-            in alpha order so the result is deterministic.
+          • `by=consumption` (default) — 30-day sum of PURCHASE qty per
+            item, descending. Zero-purchase items fall to the bottom in
+            alpha order so the result is deterministic.
           • `by=alpha` — A → Z within each category.
+
+        Pass `category_key=<key>` to sort just ONE category — powers the
+        per-row "▶ busiest" button on the Daily Entry category header.
 
         Only touches `sort_order` on `meal_items`; nothing else moves.
         """
+        item_q: dict = {}
+        if category_key:
+            item_q["category_key"] = category_key
         items = await db.meal_items.find(
-            {}, {"_id": 0, "id": 1, "category_key": 1, "name": 1}
+            item_q, {"_id": 0, "id": 1, "category_key": 1, "name": 1}
         ).to_list(2000)
+        if not items:
+            return {"by": by, "days": days if by == "consumption" else None,
+                    "items_renumbered": 0, "categories_touched": 0,
+                    "category_key": category_key}
 
         per_item: dict = {}
         if by == "consumption":
@@ -1334,7 +1346,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             by_cat.setdefault(it.get("category_key"), []).append(it)
 
         item_updates = 0
-        for ck, arr in by_cat.items():
+        for _ck, arr in by_cat.items():
             if by == "alpha":
                 arr.sort(key=lambda i: (i.get("name") or "").lower())
             else:   # consumption
@@ -1351,6 +1363,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "days": days if by == "consumption" else None,
             "items_renumbered": item_updates,
             "categories_touched": len(by_cat),
+            "category_key": category_key,
         }
 
     @router.get("/meals/purchases")
