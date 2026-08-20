@@ -1,23 +1,38 @@
+import { toast } from "sonner";
+
 /**
  * shareToWhatsApp — one-tap share of a check-in event to any WhatsApp
- * chat (parents' group, coaches' group, individual). Uses the browser
- * Web Share API when available (Android Chrome, iOS Safari, most
- * modern mobile browsers) so the OS share sheet appears with WhatsApp
- * as the natural target. Falls back to the `wa.me` deep link on desktop
- * or older browsers — that pops a "choose contact" screen in WhatsApp.
+ * chat (parents' group, coaches' group, individual).
+ *
+ * Platform behaviour:
+ *   • **Mobile** (Android Chrome, iOS Safari) — uses the Web Share API
+ *     so the OS share sheet appears with WhatsApp as a natural target,
+ *     including the photo File.
+ *   • **Desktop** (Windows/Mac Chrome/Edge/Safari) — the OS share sheet
+ *     does NOT list WhatsApp because WhatsApp Desktop doesn't register
+ *     as a share target. We instead:
+ *       1. Copy the caption to the clipboard
+ *       2. Download the photo (if any) as a JPG so the coach can drag
+ *          it straight into WhatsApp Web / Desktop
+ *       3. Open WhatsApp Web with the text pre-filled (`wa.me`)
+ *       4. Toast "Caption copied · image saved to Downloads — paste in
+ *          WhatsApp Web"
  *
  * WhatsApp's Business/Cloud APIs cannot post into groups (Meta policy),
- * so a human tap is unavoidable. This flow keeps that tap to one click.
+ * so a human tap is unavoidable — this flow reduces it to one click on
+ * mobile and two on desktop.
  *
  * @param {Object} opts
  * @param {string} opts.text        Caption / message body.
- * @param {Blob=}  opts.imageBlob   Optional image (selfie). Included as a
- *                                  File when the platform supports file
- *                                  sharing; silently dropped otherwise.
+ * @param {Blob=}  opts.imageBlob   Optional image (selfie / mosaic).
  * @param {string=} opts.filename   Filename for the image File.
  * @returns {Promise<{ok: boolean, mode: string}>}
  */
 export async function shareToWhatsApp({ text, imageBlob, filename = "checkin.jpg" }) {
+  // Best case: mobile Web Share with files. Try file first because on
+  // most desktop browsers `canShare({files})` returns false and we'll
+  // fall through to the desktop path below instead of showing a share
+  // sheet that has no WhatsApp on it.
   try {
     if (imageBlob && typeof navigator !== "undefined" && navigator.canShare) {
       const file = new File([imageBlob], filename, {
@@ -29,19 +44,76 @@ export async function shareToWhatsApp({ text, imageBlob, filename = "checkin.jpg
         return { ok: true, mode: "web-share-file" };
       }
     }
-    if (typeof navigator !== "undefined" && navigator.share) {
+    // Web Share without files — only useful on mobile. Skip on desktop.
+    if (typeof navigator !== "undefined" && navigator.share && !isDesktop()) {
       await navigator.share({ text });
       return { ok: true, mode: "web-share-text" };
     }
   } catch (e) {
     if (e?.name === "AbortError") return { ok: false, mode: "cancelled" };
-    // fall through to deep-link fallback
+    // fall through to desktop-friendly path
   }
-  // Desktop / older browser fallback — opens WhatsApp with the text
-  // pre-filled; user picks the chat manually.
-  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-  if (typeof window !== "undefined") window.open(url, "_blank", "noopener");
-  return { ok: true, mode: "wa-me" };
+  return desktopShareFallback({ text, imageBlob, filename });
+}
+
+/**
+ * Desktop-friendly fallback: copy caption, download image, open
+ * WhatsApp Web with text pre-filled, and prompt the user to paste.
+ */
+async function desktopShareFallback({ text, imageBlob, filename }) {
+  let copied = false;
+  let downloaded = false;
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text || "");
+      copied = true;
+    }
+  } catch { /* clipboard may be blocked without permission — not fatal */ }
+
+  if (imageBlob && typeof document !== "undefined") {
+    try {
+      const url = URL.createObjectURL(imageBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      downloaded = true;
+    } catch { /* download blocked — user can still paste text */ }
+  }
+
+  if (typeof window !== "undefined") {
+    const url = `https://web.whatsapp.com/send?text=${encodeURIComponent(text || "")}`;
+    window.open(url, "_blank", "noopener");
+  }
+
+  // Nudge the user so they know where the image ended up and what to do.
+  const bits = [];
+  if (copied) bits.push("caption copied");
+  if (downloaded) bits.push("image saved to Downloads");
+  const suffix = bits.length ? ` · ${bits.join(", ")}` : "";
+  toast.message(
+    "WhatsApp Web opened" + suffix,
+    { description: downloaded ? "Paste the message, then drag the image from Downloads into the chat." : "Paste the message into your chat." }
+  );
+  return { ok: true, mode: "desktop-fallback" };
+}
+
+/**
+ * Rough desktop-vs-mobile heuristic. Web Share API is technically
+ * available on desktop Chrome but consumer-side it opens a sheet that
+ * doesn't include WhatsApp, so we treat those as "desktop" for the
+ * purposes of picking the right UX path.
+ */
+function isDesktop() {
+  if (typeof navigator === "undefined") return true;
+  const ua = navigator.userAgent || "";
+  if (/Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua)) return false;
+  // navigator.userAgentData is more reliable when present
+  if (navigator.userAgentData?.mobile) return false;
+  return true;
 }
 
 /** Format the standard check-in caption used across self / escort / muster. */
