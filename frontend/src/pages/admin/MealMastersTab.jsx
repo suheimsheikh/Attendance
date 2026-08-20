@@ -311,7 +311,7 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMove
               title={inactive ? "Reactivate" : "Deactivate"}
               data-testid={`masters-item-toggle-${item.id}`}
             ><Power size={12}/></button>
-            <button onClick={() => onDelete(item)} className="p-1 rounded hover:bg-rose-100 text-rose-500" title="Delete" data-testid={`masters-item-delete-${item.id}`}><Trash2 size={12}/></button>
+            <button onClick={() => onDelete(item)} className="p-1 rounded hover:bg-rose-100 text-rose-500" title="Delete permanently — only allowed when the item has no purchases / issues / wastage. Use ⏻ (Deactivate) to hide items that already have data." data-testid={`masters-item-delete-${item.id}`}><Trash2 size={12}/></button>
           </span>
         )}
         <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0"/>
@@ -634,7 +634,7 @@ export default function MealMastersTab({ liveSig }) {
     }
   };
   const deleteItem = async (item) => {
-    if (!window.confirm(`Delete "${item.name}"? Items with purchase/issue history are deactivated instead.`)) return;
+    if (!window.confirm(`Delete "${item.name}"? Only works when there is no purchase/issue/wastage history — items with data must be Deactivated (⏻) instead.`)) return;
     // Same stale-guard as patchItem — if the row has already vanished
     // locally, don't fire a doomed request.
     if (!items.some((i) => i.id === item.id)) {
@@ -646,7 +646,7 @@ export default function MealMastersTab({ liveSig }) {
       if (r.already_deleted) {
         toast.success(`"${item.name}" was already deleted`);
       } else {
-        toast.success(r.soft_deleted ? "Item deactivated (has history)" : "Item deleted");
+        toast.success("Item deleted");
       }
       await load();
     } catch (err) {
@@ -654,6 +654,12 @@ export default function MealMastersTab({ liveSig }) {
         // Idempotent success: someone else already deleted it.
         toast.success(`"${item.name}" was already deleted`);
         await load();
+        return;
+      }
+      if (err?.status === 409) {
+        // Server refused because the item has history. Surface the
+        // full explanation and nudge toward the Deactivate button.
+        toast.error(err?.message || "This item has data and can't be deleted. Use Deactivate instead.", { duration: 8000 });
         return;
       }
       showApiError(err, "Couldn't delete item");

@@ -9,6 +9,11 @@ Fix has two parts:
   • PATCH still 404s (cannot update a non-existent row) but the frontend
     self-heals with a soft info toast and a silent list reload.
 
+Feb 2026 user rule additionally: "Nobody can delete a master or a Daily
+entry item if there is data in it." So DELETE now returns 409 when the
+item has any purchases / issues / wastage — deactivation is the required
+path for anything with history.
+
 Runs with the same fixtures the other backend tests use.
 """
 import os

@@ -1220,6 +1220,26 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             seen.add(key)
             out.append({"key": key, "label": label,
                         "active": c.active is not False})
+        # 20 Feb 2026 rule: masters with data cannot be deleted. If any
+        # existing category is being removed AND has items pointing at
+        # it, refuse — chefs must move/deactivate those items first.
+        existing = await _purchase_categories()
+        dropped = [c["key"] for c in existing if c["key"] not in seen]
+        if dropped:
+            blockers: list = []
+            for key in dropped:
+                n = await db.meal_items.count_documents({"category_key": key})
+                if n > 0:
+                    lbl = next((e["label"] for e in existing if e["key"] == key), key)
+                    blockers.append(f"{lbl} ({n} item{'s' if n != 1 else ''})")
+            if blockers:
+                raise HTTPException(
+                    status_code=409,
+                    detail=("Can't remove categories that still have items: "
+                            + ", ".join(blockers)
+                            + ". Move the items to another category or "
+                              "delete them first."),
+                )
         await db.config.update_one(
             {"id": PURCHASE_CFG_ID},
             {"$set": {"categories": out,
@@ -1961,21 +1981,27 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             # than 404. Removes the recurring "Item not found" toast when
             # two admins act on the Masters tree at the same time.
             return {"ok": True, "soft_deleted": False, "already_deleted": True}
-        # Soft-delete if any purchase or issue references the item so
-        # historic data keeps rendering the item name. Otherwise hard delete.
-        has_hist = await db.meal_purchases.find_one({"lines.item_id": item_id}) \
-                   or await db.meal_issues.find_one({"lines.item_id": item_id}) \
-                   or await db.meal_wastage.find_one({"lines.item_id": item_id})
-        if has_hist:
-            await db.meal_items.update_one(
-                {"id": item_id},
-                {"$set": {"active": False,
-                          "updated_at": now_utc().isoformat(),
-                          "updated_by": admin.get("id"),
-                          "updated_by_name": admin.get("full_name") or admin.get("email")}},
+        # 20 Feb 2026 user rule: "Nobody can delete a master or a Daily
+        # entry item if there is data in it." Previously we soft-deleted
+        # (active=False) silently — this refuses instead so the audit
+        # trail can't be swept under the rug. Deactivation is still
+        # available as a distinct action (PATCH active=false).
+        purch_ct = await db.meal_purchases.count_documents({"lines.item_id": item_id})
+        issue_ct = await db.meal_issues.count_documents({"lines.item_id": item_id})
+        waste_ct = await db.meal_wastage.count_documents({"lines.item_id": item_id})
+        total = purch_ct + issue_ct + waste_ct
+        if total > 0:
+            parts = []
+            if purch_ct: parts.append(f"{purch_ct} purchase{'s' if purch_ct != 1 else ''}")
+            if issue_ct: parts.append(f"{issue_ct} issue{'s' if issue_ct != 1 else ''}")
+            if waste_ct: parts.append(f"{waste_ct} wastage row{'s' if waste_ct != 1 else ''}")
+            raise HTTPException(
+                status_code=409,
+                detail=(f"Can't delete “{row.get('name')}” — it has "
+                        f"{', '.join(parts)} on record. Deactivate it "
+                        f"instead to hide from Daily Entry while keeping "
+                        f"history intact."),
             )
-            await _signal_meals("items")
-            return {"ok": True, "soft_deleted": True}
         await db.meal_items.delete_one({"id": item_id})
         await _signal_meals("items")
         return {"ok": True, "soft_deleted": False}
