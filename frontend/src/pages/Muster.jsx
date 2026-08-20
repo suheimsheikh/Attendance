@@ -13,6 +13,8 @@ import MusterBreakdownBar from "./muster/MusterBreakdownBar";
 import AbsentShareBanner from "./muster/AbsentShareBanner";
 import DailyRosterShareButton from "./muster/DailyRosterShareButton";
 import PresentShareButton from "./muster/PresentShareButton";
+import { shareToWhatsApp } from "../utils/shareWhatsApp";
+import { buildPhotoMosaicBlob } from "../utils/mosaicShare";
 import ExMemberToggle, { useExMemberToggle } from "../components/ExMemberToggle";
 import { isExMember } from "../utils/exMember";
 
@@ -133,6 +135,37 @@ export default function Muster() {
           ? `${doneCount} ${noun} marked present${skipNote}`
           : `${doneCount} ${noun} marked departed${skipNote}`
       );
+      // Auto-share the just-checked-in batch to WhatsApp (Feb 2026 user
+      // request). Fires the OS share sheet with a photo mosaic of the
+      // members we just ticked in — single or multi treated the same.
+      // Checkout mode is intentionally skipped; parents care about who
+      // just arrived, not who left. Errors are swallowed silently so a
+      // missing share sheet never blocks the check-in success flow.
+      if (mode === "checkin" && doneCount > 0) {
+        const byId = new Map((data?.athletes || []).map((a) => [a.id, a]));
+        const justCheckedIn = ids
+          .map((id) => byId.get(id))
+          .filter((m) => m && !m.already_checked_in);
+        if (justCheckedIn.length) {
+          const now = new Date();
+          const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+          const dayStr = now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+          const title = `✅ Checked in · ${timeStr}`;
+          const subtitle = `${justCheckedIn.length} athlete${justCheckedIn.length > 1 ? "s" : ""} · ${dayStr}${office?.name ? " · " + office.name : ""}`;
+          const namesList = justCheckedIn.slice(0, 40).map((m) => `• ${m.full_name}`);
+          if (justCheckedIn.length > 40) namesList.push(`…and ${justCheckedIn.length - 40} more`);
+          try {
+            const imageBlob = await buildPhotoMosaicBlob(justCheckedIn, title, subtitle);
+            shareToWhatsApp({
+              text: `${title}\n${subtitle}\n\n${namesList.join("\n")}`,
+              imageBlob,
+              filename: `checkin_${dayStr.replace(/\s+/g, "_")}_${timeStr.replace(":", "")}.jpg`,
+            });
+          } catch (err) {
+            console.debug("auto-share failed (share sheet unavailable?):", err?.message);
+          }
+        }
+      }
       // Clear the ticked set so the next round starts fresh (the just-saved
       // members no longer appear in the picker anyway, but state was lingering).
       setPicked(new Set());
@@ -142,7 +175,7 @@ export default function Muster() {
     } finally {
       setSaving(false);
     }
-  }, [mode, office, sites, load]);
+  }, [mode, office, sites, load, data]);
 
   // Inline "Check out" action for a single already-checked-in member on
   // the check-in list. Lets admins close a stale open session without

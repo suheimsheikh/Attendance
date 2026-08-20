@@ -69,7 +69,7 @@ const NAV_ATTENDANCE_LIVE = [
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays, hint: "Holidays, weekly offs, camps and regattas at a glance", adminOnly: true },
   { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true, hint: "Single-glance summary: on campus, on leave, alerts", adminOnly: true },
   { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page", hint: "Pending leaves, corrections and check-in approvals in one queue", adminOnly: true },
-  { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, spotlight: true, hint: "All-in-one 31-day attendance grid with drill-downs and exports", adminOnly: true },
+  { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, hint: "All-in-one 31-day attendance grid with drill-downs and exports", adminOnly: true },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard, hint: "Approve or block new phones/devices requesting access", adminOnly: true },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2, hint: "Paid leave, comp-off and tour balances for every member", adminOnly: true },
 ];
