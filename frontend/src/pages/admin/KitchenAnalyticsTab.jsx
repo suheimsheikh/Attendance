@@ -198,19 +198,21 @@ function ItemsTable({ items, kind, testid }) {
   );
 }
 
-function Section({ title, subtitle, accent, data, testKind }) {
+function Section({ title, subtitle, accent, data, testKind, first }) {
   const colorAmt = accent === "purchases" ? "#2563EB" : "#F97316";
   const colorLines = accent === "purchases" ? "#94A3B8" : "#94A3B8";
+  const bandBg = accent === "purchases" ? "bg-blue-600" : "bg-orange-600";
+  const bandFg = "text-white";
   return (
-    <section className="mb-8" data-testid={`kitchen-analytics-${testKind}`}>
-      <div className={`rounded-t-xl px-4 py-2 flex items-center justify-between ${accent === "purchases" ? "bg-blue-50 text-blue-900" : "bg-orange-50 text-orange-900"}`}>
+    <section className={`mb-10 ${first ? "" : "pt-8 mt-8 border-t-[6px] border-slate-900/80"}`} data-testid={`kitchen-analytics-${testKind}`}>
+      <div className={`rounded-xl px-6 py-5 flex items-center justify-between shadow-lg ${bandBg} ${bandFg} mb-4`} data-testid={`kitchen-${testKind}-band`}>
         <div>
-          <div className="font-extrabold text-sm">{title}</div>
-          <div className="text-[11px] text-slate-500">{subtitle}</div>
+          <div className="text-4xl sm:text-5xl font-black uppercase tracking-widest leading-none" data-testid={`kitchen-${testKind}-title`}>{title}</div>
+          <div className="text-sm opacity-90 mt-2">{subtitle}</div>
         </div>
         <div className="text-right">
-          <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500">Total</div>
-          <div className="text-lg font-extrabold tabular-nums">₹{inr(data?.total_amount || 0)}</div>
+          <div className="text-xs uppercase tracking-wider font-bold opacity-80">Total</div>
+          <div className="text-3xl sm:text-4xl font-black tabular-nums">₹{inr(data?.total_amount || 0)}</div>
         </div>
       </div>
 
@@ -439,6 +441,7 @@ export default function KitchenAnalyticsTab({ liveSig }) {
             accent="purchases"
             data={data.purchases}
             testKind="purchases"
+            first
           />
           <Section
             title="Issues"
