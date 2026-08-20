@@ -29,7 +29,8 @@ const inr = (n) =>
   n == null ? "" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const ddmy = (iso) => {
   const [y, m, d] = iso.split("-");
-  return `${Number(d)}/${Number(m)}/${y}`;
+  const dow = new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short" });
+  return `${dow} ${Number(d)}/${Number(m)}/${y}`;
 };
 
 function SummaryCards({ totals }) {
@@ -123,6 +124,51 @@ function ReportTable({ data, printable }) {
   );
 }
 
+function ItemBreakdownTable({ rows, title, testid }) {
+  if (!rows || rows.length === 0) return null;
+  const total = rows.reduce((s, r) => s + (r.amount || 0), 0);
+  const totalQty = rows.reduce((s, r) => s + (r.qty || 0), 0);
+  return (
+    <div className="iu-card mt-4" data-testid={testid}>
+      <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+        <div className="font-bold text-sm">{title}</div>
+        <div className="text-xs text-slate-500">{rows.length} items · ₹{inr(total)}</div>
+      </div>
+      <div className="overflow-auto max-h-[420px]">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 sticky top-0">
+            <tr className="text-slate-600 border-b border-slate-200">
+              <th className="px-2 py-1.5 text-left">Item</th>
+              <th className="px-2 py-1.5 text-right">Qty</th>
+              <th className="px-2 py-1.5 text-left">Unit</th>
+              <th className="px-2 py-1.5 text-right">Amount (₹)</th>
+              <th className="px-2 py-1.5 text-right">Lines</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.item_id} className="border-b border-slate-100 hover:bg-slate-50" data-testid={`${testid}-row-${r.item_id}`}>
+                <td className="px-2 py-1.5 font-semibold text-slate-800">{r.name}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums">{Number(r.qty || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td>
+                <td className="px-2 py-1.5 text-slate-500">{r.unit || ""}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{inr(r.amount)}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{r.lines}</td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-slate-400 font-extrabold bg-slate-50">
+              <td className="px-2 py-1.5">TOTAL</td>
+              <td className="px-2 py-1.5 text-right tabular-nums">{Number(totalQty).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td>
+              <td></td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-emerald-800">{inr(total)}</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function MealExpensesTab({ liveSig }) {
   const [mode, setMode] = useState("month");
   const [month, setMonth] = useState(currentMonth());
@@ -183,6 +229,22 @@ export default function MealExpensesTab({ liveSig }) {
     lines.push(`Total Expenses,${t.expenses || 0}`);
     lines.push(`Total Meals Count,${t.meal_count || 0}`);
     lines.push(`Avg Cost Per Meal,${t.avg_cost_per_meal ?? ""}`);
+    if ((trimmed.item_purchases || []).length) {
+      lines.push("");
+      lines.push("ITEM-WISE PURCHASES");
+      lines.push(["Item", "Unit", "Qty", "Amount", "Lines"].join(","));
+      trimmed.item_purchases.forEach((r) => {
+        lines.push([`"${(r.name || "").replace(/"/g, '""')}"`, r.unit || "", r.qty, r.amount, r.lines].join(","));
+      });
+    }
+    if ((trimmed.item_issues || []).length) {
+      lines.push("");
+      lines.push("ITEM-WISE ISSUES (valued at wtd-avg rate)");
+      lines.push(["Item", "Unit", "Qty", "Amount", "Lines"].join(","));
+      trimmed.item_issues.forEach((r) => {
+        lines.push([`"${(r.name || "").replace(/"/g, '""')}"`, r.unit || "", r.qty, r.amount, r.lines].join(","));
+      });
+    }
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -254,8 +316,21 @@ export default function MealExpensesTab({ liveSig }) {
           <div className="iu-card overflow-auto" data-testid="meal-expense-table">
             <ReportTable data={trimmed} printable={false} />
           </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <ItemBreakdownTable
+              rows={trimmed.item_purchases}
+              title="Item-wise Purchases"
+              testid="meal-expense-item-purchases"
+            />
+            <ItemBreakdownTable
+              rows={trimmed.item_issues}
+              title="Item-wise Issues (valued at wtd-avg rate)"
+              testid="meal-expense-item-issues"
+            />
+          </div>
           <p className="text-[11px] text-slate-400 mt-2">
             Meal counts come from Meal Muster marks. Purchases are entered on the Purchases tab (or bulk-uploaded).
+            Issue amounts value each item at its weighted-avg purchase rate over this window.
           </p>
         </>
       )}
@@ -271,6 +346,24 @@ export default function MealExpensesTab({ liveSig }) {
             </p>
           </div>
           <ReportTable data={trimmed} printable />
+          {(trimmed.item_purchases || []).length > 0 && (
+            <div className="mt-4 print:break-inside-avoid">
+              <h2 className="font-extrabold text-sm mb-1">Item-wise Purchases</h2>
+              <table className="w-full text-[11px] border-collapse">
+                <thead><tr className="border-b border-slate-400"><th className="text-left px-1">Item</th><th className="text-right px-1">Qty</th><th className="text-left px-1">Unit</th><th className="text-right px-1">Amount (₹)</th></tr></thead>
+                <tbody>{trimmed.item_purchases.map((r) => (<tr key={r.item_id}><td className="px-1">{r.name}</td><td className="text-right px-1 tabular-nums">{Number(r.qty).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td><td className="px-1">{r.unit || ""}</td><td className="text-right px-1 tabular-nums">{inr(r.amount)}</td></tr>))}</tbody>
+              </table>
+            </div>
+          )}
+          {(trimmed.item_issues || []).length > 0 && (
+            <div className="mt-4 print:break-inside-avoid">
+              <h2 className="font-extrabold text-sm mb-1">Item-wise Issues (valued at wtd-avg rate)</h2>
+              <table className="w-full text-[11px] border-collapse">
+                <thead><tr className="border-b border-slate-400"><th className="text-left px-1">Item</th><th className="text-right px-1">Qty</th><th className="text-left px-1">Unit</th><th className="text-right px-1">Amount (₹)</th></tr></thead>
+                <tbody>{trimmed.item_issues.map((r) => (<tr key={r.item_id}><td className="px-1">{r.name}</td><td className="text-right px-1 tabular-nums">{Number(r.qty).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td><td className="px-1">{r.unit || ""}</td><td className="text-right px-1 tabular-nums">{inr(r.amount)}</td></tr>))}</tbody>
+              </table>
+            </div>
+          )}
         </div>,
         document.body,
       )}

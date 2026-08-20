@@ -54,13 +54,19 @@ export function formatDate(d) {
     // as local midnight to avoid the UTC → previous-day flip.
     if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
       const [y, m, day] = d.split("-").map(Number);
-      return `${String(day).padStart(2, "0")}/${String(m).padStart(2, "0")}/${String(y).slice(-2)}`;
+      const dow = dayOfWeek(d);
+      const numeric = `${String(day).padStart(2, "0")}/${String(m).padStart(2, "0")}/${String(y).slice(-2)}`;
+      return dow ? `${dow} ${numeric}` : numeric;
     }
-    // Full ISO timestamps: render in IST via `en-GB` (dd/mm/yy).
-    const parts = new Date(d).toLocaleDateString("en-GB", {
+    // Full ISO timestamps: render in IST via `en-GB` (dd/mm/yy) with a
+    // short day-of-week prefix (user request 26 Feb 2026).
+    const numeric = new Date(d).toLocaleDateString("en-GB", {
       day: "2-digit", month: "2-digit", year: "2-digit", timeZone: OFFICE_TZ,
     });
-    return parts;  // en-GB with 2-digit year already outputs dd/mm/yy
+    const dow = new Date(d).toLocaleDateString("en-GB", {
+      weekday: "short", timeZone: OFFICE_TZ,
+    });
+    return dow ? `${dow} ${numeric}` : numeric;
   } catch { return d; }
 }
 

@@ -14,6 +14,29 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 26 Feb 2026 — Kitchen Analytics Panel + Item-wise Expense Breakdown + DOW dates
+- **Kitchen Analytics tab** (Pantry Stock → Analytics) plus a **sidebar shortcut**
+  ("Kitchen Analytics" under the KITCHEN group). Renders two mirrored sections
+  (Purchases + Issues) each with 4 charts and a searchable item-wise table:
+    • Daily trend (line = amount, dashed = lines/day) — Recharts LineChart
+    • Category share pie
+    • Top 10 items by ₹ (horizontal bar)
+    • Top 10 items by qty (horizontal bar)
+  Issue amounts are valued at the weighted-avg purchase rate over the same window
+  (falls back to current stock snapshot rate when the item has no purchase in the
+  window). Range presets: 7d / 30d / 90d / custom.
+  - Backend: `GET /api/meals/kitchen-analytics?start=&end=`
+  - Frontend: `pages/admin/KitchenAnalyticsTab.jsx`
+- **Expense Report — Item-wise breakdown** — two side-by-side tables under the
+  main daily grid: Item-wise Purchases (qty, unit, ₹) and Item-wise Issues
+  (valued at wtd-avg rate). Included in CSV and Print/PDF output.
+  - Backend: extended `GET /api/meals/expense-report` with `item_purchases`,
+    `item_issues`, `item_purchases_total`, `item_issues_total`.
+- **All dates now show DOW prefix** — `Mon 12/02/26` style via `utils.formatDate`
+  update + local ddmy helpers in MealExpensesTab.
+- **Meals-Report deep-links** — supports `?tab=analytics|expenses|entry|...` so
+  the sidebar shortcut can jump straight to a tab (uses `useSearchParams`).
+
 ### 20 Feb 2026 — Vendor Scorecard + Item Price Trend + Login Presence Toast
 - **Vendor Scorecard drawer** — click any vendor name (Vendors master OR the vendor
   icon in Daily Entry) to see a 30-day scorecard: total spend, line items, per-item

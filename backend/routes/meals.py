@@ -3049,12 +3049,89 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         tot_s = sum(tot_grp["staff"].values())
         total_meals = tot_a + tot_s
         total_expenses = round(sum(tot_purch.values()), 2)
+
+        # Item-wise breakdown (Feb 2026 user request) — piggy-backs on
+        # the same date-range so the accountant can drill from category
+        # totals down to individual item qty × ₹ for purchases AND
+        # issues. Issues are valued at each item's weighted-avg purchase
+        # rate over the same window (fall-back: current stock snapshot).
+        items_master = await db.meal_items.find(
+            {}, {"_id": 0, "id": 1, "name": 1, "unit": 1, "category_key": 1},
+        ).to_list(2000)
+        item_by_id = {i["id"]: i for i in items_master}
+        purch_docs_ext = await db.meal_purchases.find(
+            {"date": {"$gte": s, "$lte": e}},
+            {"_id": 0, "lines": 1},
+        ).to_list(5000)
+        iss_docs_ext = await db.meal_issues.find(
+            {"date": {"$gte": s, "$lte": e}},
+            {"_id": 0, "lines": 1},
+        ).to_list(5000)
+        p_qty: dict[str, float] = {}
+        p_amt: dict[str, float] = {}
+        p_lines: dict[str, int] = {}
+        for doc in purch_docs_ext:
+            for ln in (doc.get("lines") or []):
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                r = float(ln.get("rate") or 0)
+                if not iid or q <= 0:
+                    continue
+                p_qty[iid] = p_qty.get(iid, 0.0) + q
+                p_amt[iid] = p_amt.get(iid, 0.0) + q * r
+                p_lines[iid] = p_lines.get(iid, 0) + 1
+        snap_rows2, _ = await _stock_snapshot(e)
+        snap_rate2 = {r["item_id"]: float(r.get("avg_rate") or 0) for r in snap_rows2}
+
+        def _rate_for2(iid: str) -> float:
+            if p_qty.get(iid, 0) > 0:
+                return p_amt[iid] / p_qty[iid]
+            return snap_rate2.get(iid, 0.0)
+
+        i_qty: dict[str, float] = {}
+        i_amt: dict[str, float] = {}
+        i_lines: dict[str, int] = {}
+        for doc in iss_docs_ext:
+            for ln in (doc.get("lines") or []):
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                if not iid or q <= 0:
+                    continue
+                i_qty[iid] = i_qty.get(iid, 0.0) + q
+                i_amt[iid] = i_amt.get(iid, 0.0) + q * _rate_for2(iid)
+                i_lines[iid] = i_lines.get(iid, 0) + 1
+
+        def _mk_item_rows(qty_map: dict, amt_map: dict, lines_map: dict) -> list:
+            rows = []
+            for iid in qty_map:
+                info = item_by_id.get(iid) or {}
+                rows.append({
+                    "item_id": iid,
+                    "name": info.get("name") or "(deleted item)",
+                    "unit": info.get("unit"),
+                    "category_key": info.get("category_key"),
+                    "qty": round(qty_map.get(iid, 0.0), 3),
+                    "amount": round(amt_map.get(iid, 0.0), 2),
+                    "lines": lines_map.get(iid, 0),
+                })
+            rows.sort(key=lambda r: r["amount"], reverse=True)
+            return rows
+
+        item_purchases = _mk_item_rows(p_qty, p_amt, p_lines)
+        item_issues = _mk_item_rows(i_qty, i_amt, i_lines)
+        item_purchases_total = round(sum(r["amount"] for r in item_purchases), 2)
+        item_issues_total = round(sum(r["amount"] for r in item_issues), 2)
+
         return {
             "start": s, "end": e,
             "categories": cats,
             "meals": [{"key": k, "label": MEAL_LABELS[k], "short": MEAL_SHORT[k]}
                       for k in MEAL_KEYS],
             "days": days_out,
+            "item_purchases": item_purchases,
+            "item_issues": item_issues,
+            "item_purchases_total": item_purchases_total,
+            "item_issues_total": item_issues_total,
             "totals": {
                 "athletes": {**tot_grp["athletes"], "total": tot_a},
                 "staff":    {**tot_grp["staff"],    "total": tot_s},
@@ -3063,6 +3140,201 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "expenses": total_expenses,
                 "avg_cost_per_meal": round(total_expenses / total_meals, 2) if total_meals else None,
             },
+        }
+
+    @router.get("/meals/kitchen-analytics")
+    async def kitchen_analytics(
+        start: str, end: str,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Kitchen graphics panel (Feb 2026 user request).
+
+        Aggregates purchases + issues in the given window and returns
+        the numbers needed to plot:
+          • Daily amount trend
+          • Top items by amount + top items by qty
+          • Category-wise % split
+          • Item-wise breakdown (full list, sortable client-side)
+
+        Issue amounts are valued at the weighted-avg purchase rate for
+        each item over the same window (falls back to the current
+        stock snapshot when the item has no purchase in the window)
+        so purchases and issues use comparable rupee figures.
+        """
+        s, e = _valid_date(start), _valid_date(end)
+        if s > e:
+            raise HTTPException(status_code=400, detail="start must be before end")
+        s_d, e_d = date.fromisoformat(s), date.fromisoformat(e)
+        if (e_d - s_d).days > 400:
+            raise HTTPException(status_code=400, detail="Range too large (max ~13 months)")
+
+        # ---- Item + category master (for names / labels) ----
+        items = await db.meal_items.find(
+            {}, {"_id": 0, "id": 1, "name": 1, "unit": 1, "category_key": 1},
+        ).to_list(2000)
+        by_id = {i["id"]: i for i in items}
+        cats = await _purchase_categories()
+        cat_label = {c["key"]: c.get("label") or c["key"] for c in cats}
+
+        # ---- Pull purchase + issue docs for the window ----
+        purch_docs = await db.meal_purchases.find(
+            {"date": {"$gte": s, "$lte": e}},
+            {"_id": 0, "date": 1, "lines": 1},
+        ).to_list(5000)
+        iss_docs = await db.meal_issues.find(
+            {"date": {"$gte": s, "$lte": e}},
+            {"_id": 0, "date": 1, "lines": 1},
+        ).to_list(5000)
+
+        # ---- Weighted-avg rate per item from THIS window's purchases ----
+        # Falls back to current stock avg_rate when an item was issued but
+        # never purchased in the window (opening-stock consumption).
+        purch_qty: dict[str, float] = {}
+        purch_amt: dict[str, float] = {}
+        for doc in purch_docs:
+            for ln in (doc.get("lines") or []):
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                r = float(ln.get("rate") or 0)
+                if not iid or q <= 0:
+                    continue
+                purch_qty[iid] = purch_qty.get(iid, 0.0) + q
+                purch_amt[iid] = purch_amt.get(iid, 0.0) + q * r
+
+        snap_rows, _snap_cats = await _stock_snapshot(e)
+        snap_rate = {r["item_id"]: float(r.get("avg_rate") or 0) for r in snap_rows}
+
+        def _rate_for(iid: str) -> float:
+            if purch_qty.get(iid, 0) > 0:
+                return purch_amt[iid] / purch_qty[iid]
+            return snap_rate.get(iid, 0.0)
+
+        # ---- Roll-ups ----
+        def _blank_day():
+            return {"amount": 0.0, "qty": 0.0, "lines": 0}
+
+        def _blank_item():
+            return {"qty": 0.0, "amount": 0.0, "lines": 0}
+
+        # Seed every day in the window with a zero row so charts show
+        # gaps as flat points instead of skipping the label.
+        purch_daily: dict[str, dict] = {}
+        iss_daily: dict[str, dict] = {}
+        cur = s_d
+        while cur <= e_d:
+            iso = cur.isoformat()
+            purch_daily[iso] = _blank_day()
+            iss_daily[iso] = _blank_day()
+            cur += timedelta(days=1)
+
+        purch_items: dict[str, dict] = {}
+        iss_items: dict[str, dict] = {}
+        purch_cat: dict[str, float] = {}
+        iss_cat: dict[str, float] = {}
+
+        for doc in purch_docs:
+            d = doc["date"]
+            slot = purch_daily.setdefault(d, _blank_day())
+            for ln in (doc.get("lines") or []):
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                r = float(ln.get("rate") or 0)
+                if not iid or q <= 0:
+                    continue
+                amt = q * r
+                slot["amount"] += amt
+                slot["qty"] += q
+                slot["lines"] += 1
+                it = purch_items.setdefault(iid, _blank_item())
+                it["qty"] += q
+                it["amount"] += amt
+                it["lines"] += 1
+                info = by_id.get(iid) or {}
+                ckey = info.get("category_key") or "uncategorised"
+                purch_cat[ckey] = purch_cat.get(ckey, 0.0) + amt
+
+        for doc in iss_docs:
+            d = doc["date"]
+            slot = iss_daily.setdefault(d, _blank_day())
+            for ln in (doc.get("lines") or []):
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                if not iid or q <= 0:
+                    continue
+                rate = _rate_for(iid)
+                amt = q * rate
+                slot["amount"] += amt
+                slot["qty"] += q
+                slot["lines"] += 1
+                it = iss_items.setdefault(iid, _blank_item())
+                it["qty"] += q
+                it["amount"] += amt
+                it["lines"] += 1
+                info = by_id.get(iid) or {}
+                ckey = info.get("category_key") or "uncategorised"
+                iss_cat[ckey] = iss_cat.get(ckey, 0.0) + amt
+
+        def _daily_series(daily: dict) -> list:
+            return [
+                {"date": d,
+                 "amount": round(v["amount"], 2),
+                 "qty": round(v["qty"], 3),
+                 "lines": v["lines"]}
+                for d, v in sorted(daily.items())
+            ]
+
+        def _item_rows(items_agg: dict) -> list:
+            rows = []
+            for iid, v in items_agg.items():
+                info = by_id.get(iid) or {}
+                rows.append({
+                    "item_id": iid,
+                    "name": info.get("name") or "(deleted item)",
+                    "unit": info.get("unit"),
+                    "category_key": info.get("category_key"),
+                    "category_label": cat_label.get(info.get("category_key"),
+                                                   (info.get("category_key") or "").replace("_", " ").title()),
+                    "qty": round(v["qty"], 3),
+                    "amount": round(v["amount"], 2),
+                    "lines": v["lines"],
+                })
+            rows.sort(key=lambda r: r["amount"], reverse=True)
+            return rows
+
+        def _cat_pct(cat_agg: dict) -> list:
+            total = sum(cat_agg.values()) or 1.0
+            rows = []
+            for k, v in cat_agg.items():
+                rows.append({
+                    "key": k,
+                    "label": cat_label.get(k, k.replace("_", " ").title()),
+                    "amount": round(v, 2),
+                    "pct": round(v * 100.0 / total, 1),
+                })
+            rows.sort(key=lambda r: r["amount"], reverse=True)
+            return rows
+
+        purch_item_rows = _item_rows(purch_items)
+        iss_item_rows = _item_rows(iss_items)
+
+        def _pack(daily, items_rows, cat_rows) -> dict:
+            total_amount = round(sum(d["amount"] for d in daily), 2)
+            total_qty_lines = sum(d["lines"] for d in daily)
+            return {
+                "daily": daily,
+                "top_by_amount": items_rows[:12],
+                "top_by_qty": sorted(items_rows, key=lambda r: r["qty"], reverse=True)[:12],
+                "category_totals": cat_rows,
+                "items": items_rows,
+                "total_amount": total_amount,
+                "total_lines": total_qty_lines,
+                "item_count": len(items_rows),
+            }
+
+        return {
+            "start": s, "end": e,
+            "purchases": _pack(_daily_series(purch_daily), purch_item_rows, _cat_pct(purch_cat)),
+            "issues":    _pack(_daily_series(iss_daily),   iss_item_rows,   _cat_pct(iss_cat)),
         }
 
     return router

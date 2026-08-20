@@ -5,7 +5,7 @@ import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, Building2, IdCard, Sailboat,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, Utensils
+  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, Utensils, PieChart
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -57,6 +57,7 @@ const NAV_COACH_ATTENDANCE = [
 const NAV_COACH_KITCHEN = [
   { to: "/meals", label: "Meals", icon: Utensils, hint: "Mark who is eating which meal today" },
   { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, issues, wastage and stock" },
+  { to: "/admin/meals-report?tab=analytics", label: "Kitchen Analytics", icon: PieChart, hint: "Purchase & issue graphics — trends, top items, category share" },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
 ];
 
@@ -88,6 +89,7 @@ const NAV_ATTENDANCE_MASTERS = [
 const NAV_KITCHEN = [
   { to: "/meals", label: "Meals", icon: Utensils, hint: "Mark who is eating which meal today" },
   { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, issues, wastage and stock" },
+  { to: "/admin/meals-report?tab=analytics", label: "Kitchen Analytics", icon: PieChart, hint: "Purchase & issue graphics — trends, top items, category share" },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
 ];
 

@@ -11,7 +11,8 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale, Store } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale, Store, PieChart } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import { useMealsEvents } from "../../hooks/useMealsEvents";
@@ -24,6 +25,7 @@ import MealWastageTab from "./MealWastageTab";
 import MealMastersTab from "./MealMastersTab";
 import MealCrossCheckTab from "./MealCrossCheckTab";
 import MealVendorsTab from "./MealVendorsTab";
+import KitchenAnalyticsTab from "./KitchenAnalyticsTab";
 import { useEscape } from "../../hooks/useEscape";
 
 const MEAL_ORDER = ["breakfast", "lunch", "snacks", "dinner"];
@@ -464,7 +466,23 @@ function MonthlyGridTab() {
 }
 
 export default function MealsReport() {
-  const [tab, setTab] = useState("masters");
+  // Support ?tab= deep-links (used by the "Kitchen Analytics" sidebar
+  // shortcut so admins can jump straight to the graphics panel).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get("tab");
+  const [tab, setTab] = useState(urlTab || "masters");
+  // Sync tab state whenever the URL query changes (e.g. sidebar click
+  // while already on the page). Also keep the URL in sync when the
+  // user manually clicks a tab so refreshes / deep-links stay stable.
+  useEffect(() => {
+    if (urlTab && urlTab !== tab) setTab(urlTab);
+  }, [urlTab, tab]);
+  const changeTab = (key) => {
+    setTab(key);
+    const next = new URLSearchParams(searchParams);
+    if (key === "masters") next.delete("tab"); else next.set("tab", key);
+    setSearchParams(next, { replace: true });
+  };
   const [lowCount, setLowCount] = useState(0);
   // Live update signal — pushed from the server whenever ANY machine
   // changes pantry data. Passed down so the active tab can refetch.
@@ -489,6 +507,7 @@ export default function MealsReport() {
     { key: "daily",     label: "Daily counts",  Icon: Utensils, hint: "Headcount of meals served per day" },
     { key: "monthly",   label: "Monthly grid",  Icon: CalendarDays, hint: "Month-long meal count audit grid" },
     { key: "expenses",  label: "Expense report", Icon: IndianRupee, hint: "Category-wise purchase spend for the accountant" },
+    { key: "analytics", label: "Analytics",      Icon: PieChart, hint: "Kitchen graphics panel — purchase/issue trends, top items, category share" },
     { key: "vendors",   label: "Vendors",       Icon: Store, hint: "Suppliers you can attribute purchase lines to — name and phone" },
   ];
   return (
@@ -513,7 +532,7 @@ export default function MealsReport() {
             <button
               key={key}
               data-testid={`meals-report-tab-${key}`}
-              onClick={() => setTab(key)}
+              onClick={() => changeTab(key)}
               title={hint}
               className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 whitespace-nowrap rounded-t-md ${
                 tab === key ? "border-blue-600 bg-blue-100 text-blue-800" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
@@ -540,12 +559,13 @@ export default function MealsReport() {
       {/* Legacy: keep old tabs reachable via deep-link only, in case a
           user has a purchases/issues URL bookmarked from before the
           Feb-2026 merge. */}
-      {tab === "purchases" && <MealPurchasesTab onGoMasters={() => setTab("masters")} liveSig={liveSig} />}
+      {tab === "purchases" && <MealPurchasesTab onGoMasters={() => changeTab("masters")} liveSig={liveSig} />}
       {tab === "issues" && <MealIssuesTab />}
       {tab === "wastage" && <MealWastageTab liveSig={liveSig} />}
-      {tab === "crosscheck" && <MealCrossCheckTab onGoMasters={() => setTab("masters")} liveSig={liveSig} />}
+      {tab === "crosscheck" && <MealCrossCheckTab onGoMasters={() => changeTab("masters")} liveSig={liveSig} />}
       {tab === "masters" && <MealMastersTab liveSig={liveSig} />}
       {tab === "vendors" && <MealVendorsTab liveSig={liveSig} />}
+      {tab === "analytics" && <KitchenAnalyticsTab liveSig={liveSig} />}
       </div>
     </div>
   );

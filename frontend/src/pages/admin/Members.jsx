@@ -414,6 +414,8 @@ export default function Members() {
         institutions={institutions}
         instFilter={instFilter}
         onInstFilterChange={setInstFilter}
+        anyFilterOn={anyFilterOn}
+        onClearFilters={clearFilters}
       />
 
       <div className="flex items-center gap-2 mb-2">
