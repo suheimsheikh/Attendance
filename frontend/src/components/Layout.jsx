@@ -55,7 +55,7 @@ const NAV_COACH_ATTENDANCE = [
   { to: "/presence", label: "Presence", icon: LayoutDashboard, hint: "Who is on campus right now" },
 ];
 const NAV_COACH_KITCHEN = [
-  { to: "/meals", label: "Meals", icon: Utensils, hint: "Mark who is eating which meal today" },
+  { to: "/meals", label: "Meals Muster", icon: Utensils, hint: "Mark who is eating which meal today" },
   { to: "/admin/meals-calendar", label: "Meals Calendar", icon: CalendarRange, hint: "Daily headcount log — Breakfast / Lunch / Dinner totals per day" },
   { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, consumption, wastage and stock" },
   { to: "/admin/meals-report?tab=analytics", label: "Kitchen Analytics", icon: PieChart, hint: "Purchase & consumption graphics — trends, top items, category share" },
@@ -88,7 +88,7 @@ const NAV_ATTENDANCE_MASTERS = [
 // visually distinct with an amber accent (matches the pantry warm-
 // yellow banding on the Daily-entry grid).
 const NAV_KITCHEN = [
-  { to: "/meals", label: "Meals", icon: Utensils, hint: "Mark who is eating which meal today" },
+  { to: "/meals", label: "Meals Muster", icon: Utensils, hint: "Mark who is eating which meal today" },
   { to: "/admin/meals-calendar", label: "Meals Calendar", icon: CalendarRange, hint: "Daily headcount log — Breakfast / Lunch / Dinner totals per day" },
   { to: "/admin/meals-report", label: "Pantry Stock", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, consumption, wastage and stock" },
   { to: "/admin/meals-report?tab=analytics", label: "Kitchen Analytics", icon: PieChart, hint: "Purchase & consumption graphics — trends, top items, category share" },

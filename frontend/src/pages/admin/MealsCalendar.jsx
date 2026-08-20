@@ -102,8 +102,8 @@ export default function MealsCalendar() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.is_super_admin;
   const today = isoToday();
-  const [from, setFrom] = useState(firstOfMonth("2026-07-15"));  // Jul defaults so the imported data is visible
-  const [to, setTo] = useState(lastOfMonth("2026-07-15"));
+  const [from, setFrom] = useState(firstOfMonth(today));
+  const [to, setTo] = useState(lastOfMonth(today));
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [editingDate, setEditingDate] = useState(null);
@@ -206,7 +206,13 @@ export default function MealsCalendar() {
                   <td className="p-2 font-semibold text-slate-800 whitespace-nowrap" data-testid={`mc-date-${d.date}`}>
                     {formatDate(d.date)}
                     {d.source === "spreadsheet-jul2026" && (
-                      <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">Imported</span>
+                      <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded" title="Imported from the July 2026 spreadsheet">Imported</span>
+                    )}
+                    {d.source === "muster" && (
+                      <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded" title="Auto-derived from per-person Meals Muster marks">From Muster</span>
+                    )}
+                    {d.source === "manual" && (
+                      <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded" title="Typed in by an admin">Manual</span>
                     )}
                   </td>
                   {isEdit ? (

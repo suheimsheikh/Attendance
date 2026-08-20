@@ -3533,20 +3533,66 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         user: dict = Depends(require_chef_or_admin),
     ):
         """Return daily meal counts in [start, end]. If either is
-        omitted, defaults to the last 90 days."""
+        omitted, defaults to the last 90 days.
+
+        Sources, per date (highest priority wins):
+          1. Manual/spreadsheet row in `meal_daily_counts`.
+          2. Auto-derived count from per-person Meal Muster marks
+             (`meal_records`, distinct users per meal). Includes the
+             count of members who actually marked so the KPI strip
+             reflects live Muster data even before anyone types it
+             into the Calendar.
+        """
         e = _valid_date(end) if end else local_date_str()
         e_d = date.fromisoformat(e)
         s = _valid_date(start) if start else (e_d - timedelta(days=90)).isoformat()
         s_d = date.fromisoformat(s)
         if s_d > e_d:
             raise HTTPException(status_code=400, detail="start must be before end")
+
+        # ── Manual / spreadsheet rows ────────────────────────────────
         rows = await db.meal_daily_counts.find(
             {"date": {"$gte": s, "$lte": e}},
             {"_id": 0},
         ).sort("date", 1).to_list(500)
         by_date = {r["date"]: r for r in rows}
-        # Fill every day with a zero row so the calendar view has no
-        # gaps. Only actually-populated days carry a `has_data` flag.
+
+        # ── Muster derived counts: distinct users per (date, meal) ──
+        # `meal_records` has one row per (user, date, meal). Same user
+        # marking twice for the same meal is deduped via `$addToSet`.
+        muster_pipeline = [
+            {"$match": {"date": {"$gte": s, "$lte": e}}},
+            {"$group": {
+                "_id": {"date": "$date", "meal": "$meal"},
+                "users": {"$addToSet": "$user_id"},
+            }},
+        ]
+        muster_by_date: dict[str, dict[str, int]] = {}
+        async for g in db.meal_records.aggregate(muster_pipeline):
+            d = g["_id"]["date"]
+            m = (g["_id"]["meal"] or "").lower()
+            n = len([u for u in g["users"] if u])
+            muster_by_date.setdefault(d, {})[m] = n
+
+        def _muster_row(iso: str) -> dict | None:
+            m = muster_by_date.get(iso)
+            if not m:
+                return None
+            bf = int(m.get("breakfast") or 0)
+            l = int(m.get("lunch") or 0)
+            dn = int(m.get("dinner") or 0)
+            if bf == 0 and l == 0 and dn == 0:
+                return None
+            return {
+                "date": iso,
+                "breakfast": bf,
+                "lunch":     l,
+                "dinner":    dn,
+                "total":     bf + l + dn,
+                "source":    "muster",
+                "has_data":  True,
+            }
+
         out = []
         cur = s_d
         while cur <= e_d:
@@ -3566,8 +3612,12 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                     "has_data": True,
                 })
             else:
-                out.append({"date": iso, "breakfast": 0, "lunch": 0, "dinner": 0,
-                            "total": 0, "source": None, "has_data": False})
+                mr = _muster_row(iso)
+                if mr:
+                    out.append(mr)
+                else:
+                    out.append({"date": iso, "breakfast": 0, "lunch": 0, "dinner": 0,
+                                "total": 0, "source": None, "has_data": False})
             cur += timedelta(days=1)
         # Totals for the KPI strip
         totals = {"breakfast": 0, "lunch": 0, "dinner": 0, "total": 0}
