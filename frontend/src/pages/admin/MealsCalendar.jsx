@@ -6,9 +6,9 @@
  * can also type new days here — a single PUT upserts the row.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, IndianRupee, Pencil, Check, X as CloseIcon } from "lucide-react";
+import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, IndianRupee, Pencil, Check, X as CloseIcon, Download } from "lucide-react";
 import { toast } from "sonner";
-import { api, showApiError } from "../../api";
+import { api, downloadBlob, showApiError } from "../../api";
 import { formatDate, dayOfWeek } from "../../utils";
 import { useAuth } from "../../auth";
 
@@ -148,6 +148,23 @@ export default function MealsCalendar() {
       <div className="flex items-center gap-2 mb-4">
         <CalendarDays size={22} className="text-emerald-600" />
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Meals Calendar</h1>
+        <div className="flex-1" />
+        <a
+          href="#"
+          onClick={async (e) => {
+            e.preventDefault();
+            try {
+              await downloadBlob("/meals/menu-master-download", "menu_master_combined.xlsx");
+            } catch (err) {
+              showApiError(err, "Couldn't download menu master");
+            }
+          }}
+          className="iu-btn-secondary !h-9 inline-flex items-center gap-1.5 text-sm"
+          data-testid="mc-download-menu-master"
+          title="Download the combined menu-calculations + recipes workbook"
+        >
+          <Download size={14} /> Menu Master (.xlsx)
+        </a>
       </div>
       <p className="text-sm text-slate-500 mb-5">
         Daily meal counts (Sailors + Staff combined). Data before Aug 2026 was imported from the historical

@@ -3666,4 +3666,22 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         r = await db.meal_daily_counts.delete_one({"date": d})
         return {"ok": True, "deleted": r.deleted_count}
 
+    @router.get("/meals/menu-master-download")
+    async def menu_master_download(user: dict = Depends(require_chef_or_admin)):
+        """Download the pre-built menu master workbook (combined
+        `Calculations of menu` + `Recipes` files). Rebuilt at
+        /app/backend/data/menu_master_combined.xlsx during the Feb 2026
+        recipe ingest — regenerate offline via
+        `scripts/build_menu_master.py` if the source spreadsheets change."""
+        from fastapi.responses import FileResponse
+        from pathlib import Path
+        p = Path(__file__).resolve().parents[1] / "data" / "menu_master_combined.xlsx"
+        if not p.exists():
+            raise HTTPException(status_code=404, detail="menu_master_combined.xlsx not built yet")
+        return FileResponse(
+            path=str(p),
+            filename="menu_master_combined.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
     return router
