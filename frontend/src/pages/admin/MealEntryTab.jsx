@@ -194,11 +194,36 @@ export default function MealEntryTab({ liveSig }) {
   useEffect(() => { loadMasters(); }, []);
 
   const [catSortMode, setCatSortMode] = useState({}); // { [catKey]: 'consumption' | 'alpha' }
+  // Derive the ACTUAL current sort state for each category from the
+  // items array — the pill button should always tell the truth about
+  // what order the user is looking at, even after a page reload or a
+  // peer's edit through SSE. If items in a category are in strict
+  // alphabetical order (name asc), we consider it "alpha"; anything
+  // else falls back to "consumption" so the button offers the flip.
+  const detectedCatSortMode = useMemo(() => {
+    const out = {};
+    const byCat = new Map();
+    items.forEach((it) => {
+      const arr = byCat.get(it.category_key) || [];
+      arr.push(it);
+      byCat.set(it.category_key, arr);
+    });
+    byCat.forEach((arr, key) => {
+      if (arr.length < 2) return;
+      const names = arr.map((i) => (i.name || "").toLowerCase());
+      const sorted = names.slice().sort();
+      out[key] = names.every((n, i) => n === sorted[i]) ? "alpha" : "consumption";
+    });
+    return out;
+  }, [items]);
+  const effectiveCatSortMode = (key) =>
+    catSortMode[key] ?? detectedCatSortMode[key] ?? "consumption";
+
   // Toggle a category between "busiest first" (30-day purchase qty) and
   // "A → Z". Persists via the same /sort-within-categories endpoint the
   // Stock Master uses, so both views agree on the order.
   const toggleCategorySort = async (cat) => {
-    const current = catSortMode[cat.key] || "consumption";
+    const current = effectiveCatSortMode(cat.key);
     const next = current === "consumption" ? "alpha" : "consumption";
     setCatSortMode((m) => ({ ...m, [cat.key]: next }));
     try {
@@ -980,7 +1005,7 @@ export default function MealEntryTab({ liveSig }) {
                     <td colSpan={3} className="px-2 py-1.5 text-right">
                       {!isCollapsed && rows.length > 1 && (
                         (() => {
-                          const mode = catSortMode[cat.key] || "consumption";
+                          const mode = effectiveCatSortMode(cat.key);
                           const isAlpha = mode === "alpha";
                           return (
                             <button
