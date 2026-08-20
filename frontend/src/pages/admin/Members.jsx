@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import { Loader2, Plus, Search, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, showApiError } from "../../api";
-import BulkEditBar from "../../components/BulkEditBar";
 import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 import MemberForm from "./MemberForm";
 import MemberBucketFilters from "./members/MemberBucketFilters";
@@ -51,18 +50,6 @@ export default function Members() {
   // free-text + any distinct fleets actually assigned (defensive: handles
   // historic athletes whose fleet label was deleted from the master).
   const [fleets, setFleets] = useState([]);
-  // Bulk-edit selection. `selectedIds` is a Set of member ids (Set is fine
-  // here — React just needs object identity to change to re-render, so we
-  // replace it on mutation). `lastClickedIdx` tracks the most recent
-  // checkbox click so shift+click extends a range. `bulkBusy` disables
-  // the toolbar while a `/members/bulk-update` round-trip is in flight.
-  // `shiftHeldRef` tracks the Shift key state globally — `change` events on
-  // checkboxes don't carry modifier flags reliably (browser quirk), so we
-  // mirror Shift via window-level keydown/keyup listeners instead.
-  const [selectedIds, setSelectedIds] = useState(() => new Set());
-  const lastClickedIdx = useRef(null);
-  const [, setBulkBusy] = useState(false);
-  const shiftHeldRef = useRef(false);
   // Today in local YYYY-MM-DD — used by the Last-seen column to compute
   // "Today / Yesterday / N days ago". Memoised so the date string is stable
   // across re-renders within the same calendar day.
@@ -301,67 +288,12 @@ export default function Members() {
     }
   }, [load]);
 
-  // ── Bulk-edit selection ───────────────────────────────────────────────────
-  // Toggle a single member id. Supports shift+click to extend a range
-  // across the currently visible (`filtered`) list — Excel-style.
-  const toggleRow = useCallback((memberId, idx, shiftKey) => {
-    // Snapshot `lastClickedIdx.current` BEFORE scheduling the state update.
-    // React batches updater functions in event handlers, so by the time
-    // the updater runs the `lastClickedIdx.current = idx` line below has
-    // already executed and the range condition would never match.
-    const lastIdx = lastClickedIdx.current;
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      const isAdding = !next.has(memberId);
-      if (shiftKey && lastIdx != null && lastIdx !== idx) {
-        const [a, b] = [lastIdx, idx].sort((x, y) => x - y);
-        for (let i = a; i <= b; i++) {
-          const id = sortedFiltered[i]?.id;
-          if (!id) continue;
-          if (isAdding) next.add(id);
-          else next.delete(id);
-        }
-      } else {
-        if (isAdding) next.add(memberId);
-        else next.delete(memberId);
-      }
-      return next;
-    });
-    lastClickedIdx.current = idx;
-  }, [sortedFiltered]);
-
-  // Master checkbox in the table header — toggles every member in the
-  // current filtered view. Selecting across pages of filters is intentional;
-  // the bulk apply uses the actual selectedIds set, not the visible rows.
-  const toggleAll = () => {
-    setSelectedIds((prev) => {
-      const visibleIds = sortedFiltered.map((m) => m.id);
-      const allSelected = visibleIds.length > 0 && visibleIds.every((id) => prev.has(id));
-      const next = new Set(prev);
-      if (allSelected) visibleIds.forEach((id) => next.delete(id));
-      else visibleIds.forEach((id) => next.add(id));
-      return next;
-    });
-    lastClickedIdx.current = null;
-  };
-
-  const clearSelection = () => { setSelectedIds(new Set()); lastClickedIdx.current = null; };
-
-  const applyBulk = async (field, value) => {
-    if (selectedIds.size === 0) return;
-    setBulkBusy(true);
-    try {
-      const ids = Array.from(selectedIds);
-      const res = await api.post("/members/bulk-update", { member_ids: ids, updates: { [field]: value } });
-      toast.success(`Updated ${res.updated} member${res.updated === 1 ? "" : "s"}`);
-      clearSelection();
-      load();
-    } catch (err) {
-      showApiError(err, "Bulk update failed");
-    } finally {
-      setBulkBusy(false);
-    }
-  };
+  // ── Multi-selection removed 20 Feb 2026 ──────────────────────────────────
+  // The bulk-select checkbox column and floating BulkEditBar were removed
+  // because inline cell-editing + fleet/institution search covers the same
+  // need without the visual clutter (chef felt the checkboxes distracted
+  // from the members data). If bulk edits are ever needed again, restore
+  // this section along with the header <th> checkbox and BulkEditBar render.
 
   const toggleAttendance = useCallback(async (m) => {
     setBusyId(m.id);
@@ -447,26 +379,9 @@ export default function Members() {
           <div className="overflow-auto max-h-[75vh]">
             <table className="w-full text-sm iu-table-compact"><thead className="bg-slate-50 sticky top-0 z-20">
                 <tr>
-                  <th className="iu-table-th w-10 text-center sticky left-0 z-30 bg-slate-50">
-                    <input
-                      type="checkbox"
-                      data-testid="bulk-select-all"
-                      checked={sortedFiltered.length > 0 && sortedFiltered.every((m) => selectedIds.has(m.id))}
-                      // `indeterminate` isn't a React prop — set it imperatively via ref callback
-                      // so the master-checkbox shows the dash glyph when only some rows are picked.
-                      ref={(el) => {
-                        if (!el) return;
-                        const some = sortedFiltered.some((m) => selectedIds.has(m.id));
-                        const all = sortedFiltered.length > 0 && sortedFiltered.every((m) => selectedIds.has(m.id));
-                        el.indeterminate = some && !all;
-                      }}
-                      onChange={toggleAll}
-                      title="Select all visible (shift+click any row to extend a range)"
-                      className="w-4 h-4 cursor-pointer accent-sky-600"
-                    />
-                  </th>
-                  <th className="iu-table-th w-16 text-center sticky left-10 z-30 bg-slate-50 !text-slate-700 !font-bold" title={COL_HELP.edit}>Edit</th>
-                  <SortableTh k="full_name" className="sticky left-20 z-30 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Member</SortableTh>
+                  <th className="iu-table-th w-16 text-center sticky left-0 z-30 bg-slate-50 !text-slate-700 !font-bold" title={COL_HELP.edit}>Edit</th>
+                  <SortableTh k="full_name" className="sticky left-16 z-30 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Member</SortableTh>
+                  <SortableTh k="ot_eligible" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="center">OT / Meal</SortableTh>
                   <SortableTh k="category" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Category</SortableTh>
                   <SortableTh k="role" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Role</SortableTh>
                   <SortableTh k="rank" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Rank</SortableTh>
@@ -479,7 +394,6 @@ export default function Members() {
                   <SortableTh k="work_start" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Hours</SortableTh>
                   <SortableTh k="weekly_off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Weekly off</SortableTh>
                   <SortableTh k="date_of_birth" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>DOB</SortableTh>
-                  <SortableTh k="ot_eligible" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="center">OT</SortableTh>
                   <th className="iu-table-th !text-slate-700 !font-bold" title={COL_HELP.parents}>Parents / Guardian</th>
                   <th className="iu-table-th !text-slate-700 !font-bold" title={COL_HELP.status}>Status</th>
                   <th className="iu-table-th text-center w-12 !text-slate-700 !font-bold" title={COL_HELP.del}>Del</th>
@@ -494,21 +408,18 @@ export default function Members() {
                     today={today}
                     presenceRow={presence[m.id]}
                     busyId={busyId}
-                    isSelected={selectedIds.has(m.id)}
-                    shiftHeldRef={shiftHeldRef}
                     options={rowOptions}
                     onEdit={setEditing}
                     onDelete={remove}
                     onToggleAttendance={toggleAttendance}
                     onPatchField={patchMember}
-                    onToggleRow={toggleRow}
                     onPhotoUpdated={onPhotoUpdated(m.id)}
                     onFileCorrection={setCorrectingFor}
                     highlighted={highlightId === m.id}
                   />
                 ))}
                 {sortedFiltered.length === 0 && (
-                  <tr><td colSpan={19} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
+                  <tr><td colSpan={17} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
                 )}
               </tbody>
             </table>
@@ -532,18 +443,6 @@ export default function Members() {
           onBehalfOfMember={correctingFor}
         />
       )}
-
-      <BulkEditBar
-        selectedCount={selectedIds.size}
-        onClear={clearSelection}
-        onApply={applyBulk}
-        fleetOptions={FLEET_OPTS}
-        institutionOptions={INSTITUTION_OPTS}
-        categoryOptions={CATEGORY_OPTS}
-        roleOptions={ROLE_OPTS}
-        weeklyOffOptions={WEEKLY_OFF_OPTS}
-        genderOptions={GENDER_OPTS}
-      />
     </div>
   );
 }

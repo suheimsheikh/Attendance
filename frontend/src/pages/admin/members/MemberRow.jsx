@@ -33,9 +33,9 @@ import { BUCKET_BY_KEY, GENDER_LABEL, bucketOf, isInteractive, lastSeenLabel, le
  *   onPhotoUpdated — fires after the InlinePhotoAvatar saves a new photo
  */
 export default React.memo(function MemberRow({
-  m, rowIdx, today, presenceRow, busyId, isSelected, shiftHeldRef,
+  m, rowIdx, today, presenceRow, busyId,
   options,
-  onEdit, onDelete, onToggleAttendance, onPatchField, onToggleRow,
+  onEdit, onDelete, onToggleAttendance, onPatchField,
   onPhotoUpdated,
   onFileCorrection,
   highlighted,
@@ -52,43 +52,21 @@ export default React.memo(function MemberRow({
   };
   // Frozen-column background — sticky td cells must have their own solid
   // background or the un-frozen columns scroll through them. Pick the same
-  // tone the row would show for its state (highlighted → amber, selected →
-  // sky, otherwise white). Bucket hover tints are dropped on frozen cells
-  // by design — matches how Excel/Sheets renders a frozen pane.
-  const frozenBg = highlighted
-    ? "bg-amber-50"
-    : isSelected
-    ? "bg-sky-50"
-    : "bg-white";
+  // tone the row would show for its state (highlighted → amber, otherwise
+  // white). Bucket hover tints are dropped on frozen cells by design.
+  const frozenBg = highlighted ? "bg-amber-50" : "bg-white";
 
   return (
     <tr
       className={`transition cursor-pointer ${
-        highlighted ? "ring-2 ring-amber-400 bg-amber-50/60" :
-        isSelected ? "bg-sky-50/80" : b.rowHover
+        highlighted ? "ring-2 ring-amber-400 bg-amber-50/60" : b.rowHover
       }`}
       data-testid={`member-row-${m.id}`}
       onDoubleClick={(e) => { if (!isInteractive(e.target)) onEdit(m); }}
-      title="Double-click to edit · click checkbox + shift-click for bulk select"
+      title="Double-click to edit"
     >
-      {/* Selection checkbox. Shift state is captured via a synchronous
-          `onMouseDown` handler (fires BEFORE both click and change events,
-          regardless of synthetic-event ordering quirks). The wrapper td's
-          onClick deliberately swallows propagation so the row's
-          double-click-to-edit doesn't trigger. */}
-      <td className={`iu-table-td text-center sticky left-0 z-10 ${frozenBg}`} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-        <input
-          type="checkbox"
-          data-testid={`bulk-select-${m.id}`}
-          checked={isSelected}
-          onMouseDown={(e) => { shiftHeldRef.current = !!e.shiftKey; }}
-          onKeyDown={(e) => { shiftHeldRef.current = !!e.shiftKey; }}
-          onChange={() => onToggleRow(m.id, rowIdx, shiftHeldRef.current)}
-          className="w-4 h-4 cursor-pointer accent-sky-600"
-        />
-      </td>
       {/* Edit pencil + File-correction — extreme left, always visible */}
-      <td className={`iu-table-td text-center relative pl-2 pr-1 sticky left-10 z-10 ${frozenBg}`}>
+      <td className={`iu-table-td text-center relative pl-2 pr-1 sticky left-0 z-10 ${frozenBg}`}>
         <span className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r ${b.stripe}`} aria-hidden="true" />
         <div className="flex items-center justify-center gap-0.5">
           <button
@@ -112,7 +90,7 @@ export default React.memo(function MemberRow({
         </div>
       </td>
       {/* Member: photo + name + email + parent-contact icon */}
-      <td className={`iu-table-td sticky left-20 z-10 ${frozenBg} shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]`}>
+      <td className={`iu-table-td sticky left-16 z-10 ${frozenBg} shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]`}>
         <div className="flex items-center gap-3">
           <InlinePhotoAvatar
             member={m}
@@ -134,6 +112,54 @@ export default React.memo(function MemberRow({
             </div>
             <div className="text-xs text-slate-500 truncate">{m.email}</div>
           </div>
+        </div>
+      </td>
+      {/* OT + Meal eligibility — placed immediately after the sticky
+          Member column so at-a-glance status is visible before you have
+          to scroll into the wider payroll data. 20 Feb 2026 chef request. */}
+      <td className="iu-table-td text-center">
+        <div className="flex flex-col items-center gap-1">
+          <InlineCell
+            kind="checkbox"
+            value={m.ot_eligible !== false}
+            testId={`inline-ot_eligible-${m.id}`}
+            onSave={(v) => onPatchField(m.id, "ot_eligible", v)}
+            renderDisplay={(v) => v
+              ? <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">OT ✓</span>
+              : <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">OT ✗</span>}
+          />
+          {/* Per-member meal eligibility override (Feb 2026). Cycles:
+              inherit (null, category rules) → explicit ON → explicit OFF → inherit.
+              A member with an explicit False is skipped from every meal roster
+              even if their category is meal_eligible; a member with explicit
+              True appears on the roster even if their category is off. */}
+          <button
+            type="button"
+            onClick={() => {
+              const cur = m.meal_eligible;
+              const next = cur == null ? true : cur === true ? false : null;
+              onPatchField(m.id, "meal_eligible", next);
+            }}
+            title={
+              m.meal_eligible === false
+                ? "Meal OFF (excluded from every roster). Click to reset to auto."
+                : m.meal_eligible === true
+                ? "Meal ON (always on the roster, even if the category is off). Click to force OFF."
+                : "Meal auto — follows the category's meal_eligible flag. Click to override ON."
+            }
+            className={
+              m.meal_eligible === false
+                ? "inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"
+                : m.meal_eligible === true
+                ? "inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                : "inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100"
+            }
+            data-testid={`inline-meal_eligible-${m.id}`}
+          >
+            {m.meal_eligible === false ? "🍴 OFF"
+              : m.meal_eligible === true ? "🍴 ON"
+              : "🍴 auto"}
+          </button>
         </div>
       </td>
       {/* Category — inline-editable pill (colour keyed to the category). */}
@@ -284,53 +310,6 @@ export default React.memo(function MemberRow({
           onSave={(v) => onPatchField(m.id, "date_of_birth", v)}
           renderDisplay={dobDisplay}
         />
-      </td>
-      {/* Overtime eligibility — click the pill to flip. Undefined counts as
-          eligible (matches the backend's opt-out semantics used elsewhere). */}
-      <td className="iu-table-td text-center">
-        <div className="flex flex-col items-center gap-1">
-          <InlineCell
-            kind="checkbox"
-            value={m.ot_eligible !== false}
-            testId={`inline-ot_eligible-${m.id}`}
-            onSave={(v) => onPatchField(m.id, "ot_eligible", v)}
-            renderDisplay={(v) => v
-              ? <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">OT ✓</span>
-              : <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">OT ✗</span>}
-          />
-          {/* Per-member meal eligibility override (Feb 2026). Cycles:
-              inherit (null, category rules) → explicit ON → explicit OFF → inherit.
-              A member with an explicit False is skipped from every meal roster
-              even if their category is meal_eligible; a member with explicit
-              True appears on the roster even if their category is off. */}
-          <button
-            type="button"
-            onClick={() => {
-              const cur = m.meal_eligible;
-              const next = cur == null ? true : cur === true ? false : null;
-              onPatchField(m.id, "meal_eligible", next);
-            }}
-            title={
-              m.meal_eligible === false
-                ? "Meal OFF (excluded from every roster). Click to reset to auto."
-                : m.meal_eligible === true
-                ? "Meal ON (always on the roster, even if the category is off). Click to force OFF."
-                : "Meal auto — follows the category's meal_eligible flag. Click to override ON."
-            }
-            className={
-              m.meal_eligible === false
-                ? "inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"
-                : m.meal_eligible === true
-                ? "inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-                : "inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100"
-            }
-            data-testid={`inline-meal_eligible-${m.id}`}
-          >
-            {m.meal_eligible === false ? "🍴 OFF"
-              : m.meal_eligible === true ? "🍴 ON"
-              : "🍴 auto"}
-          </button>
-        </div>
       </td>
       {/* Inline editable parent names + mobile numbers. Names are edited via
           a small text InlineCell in place of the old static badge label. */}

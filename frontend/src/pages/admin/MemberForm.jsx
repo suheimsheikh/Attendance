@@ -43,6 +43,16 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     // Undefined on legacy members → treat as eligible (matches the
     // backend's opt-out semantics). Admin can uncheck to disable.
     ot_eligible: initial?.ot_eligible !== false,
+    // Per-member meal-eligibility override (Feb 2026). Three states,
+    // stored as true / false / null:
+    //   • null (default) → inherit from category.meal_eligible
+    //   • true           → always on the roster
+    //   • false          → never on the roster
+    // Serialised to a select-friendly string in the form ("auto"/"on"/"off").
+    meal_eligible:
+      initial?.meal_eligible === true ? "on"
+      : initial?.meal_eligible === false ? "off"
+      : "auto",
   });
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -110,8 +120,10 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     if (!isEdit && (form.password || "").length < 4) { formErr.setMessage("Password must be ≥ 4 chars"); return; }
     setBusy(true);
     try {
+      // Serialise the 3-state meal_eligible select back to true/false/null.
+      const mealMap = { on: true, off: false, auto: null };
       if (isEdit) {
-        const body = { ...form };
+        const body = { ...form, meal_eligible: mealMap[form.meal_eligible] };
         if (!body.password) delete body.password;
         delete body.email; // backend doesn't update email
         // Strip empty optional fields so Pydantic Literal validators (gender, role, etc.) don't 422.
@@ -122,7 +134,8 @@ export default function MemberForm({ initial, onClose, onSaved }) {
         await api.patch(`/members/${initial.id}`, body);
         toast.success("Member updated");
       } else {
-        await api.post("/members", form);
+        const body = { ...form, meal_eligible: mealMap[form.meal_eligible] };
+        await api.post("/members", body);
         toast.success("Member created");
       }
       onSaved();
@@ -339,6 +352,23 @@ export default function MemberForm({ initial, onClose, onSaved }) {
                 </span>
               </span>
             </label>
+          </div>
+          <div>
+            <label className="iu-label">Meal eligibility</label>
+            <select
+              data-testid="mf-meal-eligible"
+              value={form.meal_eligible}
+              onChange={(e) => set("meal_eligible", e.target.value)}
+              className="iu-input"
+            >
+              <option value="auto">🍴 Auto — follow the category&apos;s meal_eligible flag</option>
+              <option value="on">🍴 Always ON — always on the meal roster</option>
+              <option value="off">🍴 Always OFF — never on the meal roster</option>
+            </select>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Overrides the category-level flag for this one member. Use &ldquo;OFF&rdquo; for
+              drivers, off-site staff and anyone else who never eats mess meals.
+            </p>
           </div>
           <div className="pt-3 mt-3 border-t border-slate-100">
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Parents & guardian</div>
