@@ -591,20 +591,23 @@ export default function MealMastersTab({ liveSig }) {
       showApiError(err, "Couldn't reorder categories");
     }
   };
-  const sortByConsumption = async () => {
-    if (!window.confirm(
-      "Re-sort ALL categories and items by the last 30 days of issues (busiest first). This overwrites the manual order — continue?"
-    )) return;
+  const sortItems = async (mode) => {
+    // mode: "consumption" | "alpha". Categories keep their manual
+    // order — 20 Feb 2026 clarification: chefs want their walk-through
+    // order preserved and only items renumbered inside each folder.
+    const label = mode === "alpha" ? "alphabetically (A→Z)" : "by 30-day purchase quantity (busiest first)";
+    if (!window.confirm(`Re-sort items inside every category ${label}? Category order stays as you set it.`)) return;
     try {
-      const r = await api.post("/meals/purchase-categories/sort-by-consumption",
-                               null, { params: { days: 30, also_items: true } });
-      setCats(r.categories || cats);
+      const r = await api.post("/meals/items/sort-within-categories", null,
+                               { params: { by: mode, days: 30 } });
       toast.success(
-        `Re-sorted ${r.categories_reordered} categories + ${r.items_renumbered} items by 30-day consumption`
+        mode === "alpha"
+          ? `Sorted ${r.items_renumbered} items A→Z across ${r.categories_touched} categor${r.categories_touched === 1 ? "y" : "ies"}`
+          : `Sorted ${r.items_renumbered} items by 30-day purchase across ${r.categories_touched} categor${r.categories_touched === 1 ? "y" : "ies"}`
       );
       await load();
     } catch (err) {
-      showApiError(err, "Couldn't sort by consumption");
+      showApiError(err, "Couldn't sort items");
     }
   };
 
@@ -769,14 +772,24 @@ export default function MealMastersTab({ liveSig }) {
               <EyeOff size={12}/> Show inactive
             </label>
             {isAdmin && (
-              <button
-                onClick={sortByConsumption}
-                className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-xs font-bold bg-sky-100 text-sky-800 hover:bg-sky-200 border border-sky-200 transition"
-                title="Reorder categories and items by 30-day issue quantity — busiest first"
-                data-testid="masters-sort-by-consumption"
-              >
-                <TrendingUp size={12}/> Sort by consumption
-              </button>
+              <span className="inline-flex items-stretch rounded-lg overflow-hidden border border-sky-200 shadow-sm">
+                <button
+                  onClick={() => sortItems("consumption")}
+                  className="inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-bold bg-sky-100 text-sky-800 hover:bg-sky-200 transition"
+                  title="Reorder items INSIDE each category by 30-day purchase quantity — busiest first. Categories stay in your manual order."
+                  data-testid="masters-sort-items-consumption"
+                >
+                  <TrendingUp size={12}/> Sort items · busiest
+                </button>
+                <button
+                  onClick={() => sortItems("alpha")}
+                  className="inline-flex items-center gap-1 px-2 h-7 text-xs font-bold bg-white text-sky-800 hover:bg-sky-50 border-l border-sky-200 transition"
+                  title="Reorder items INSIDE each category alphabetically (A → Z). Categories stay in your manual order."
+                  data-testid="masters-sort-items-alpha"
+                >
+                  A→Z
+                </button>
+              </span>
             )}
           </div>
           {/* Row 2 — column labels */}

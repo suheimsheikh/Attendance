@@ -1289,83 +1289,68 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         await _signal_meals("categories")
         return {"categories": ordered}
 
-    @router.post("/meals/purchase-categories/sort-by-consumption")
-    async def sort_purchase_categories_by_consumption(
+    @router.post("/meals/items/sort-within-categories")
+    async def sort_items_within_categories(
+        by: str = Query("consumption", pattern="^(consumption|alpha)$"),
         days: int = Query(30, ge=1, le=365),
-        also_items: bool = Query(True, description="Also renumber items within each category by their own consumption"),
         user: dict = Depends(require_chef_or_admin),
     ):
-        """One-tap "put the busy stuff at the top" (Feb 2026 user request).
+        """One-tap reorder of items INSIDE each category. Categories
+        themselves keep whatever manual order the admin set — that's a
+        deliberate call from the 20 Feb 2026 clarification: chefs want
+        their walk-through order (Fruits, Grocery, …) preserved.
 
-        Reorders categories descending by ISSUE quantity in the last N days.
-        Categories with zero issues fall to the bottom in alpha order — so
-        a first-time deployment doesn't get random order. When
-        `also_items=true` (default) each category's items are re-numbered
-        the same way against `meal_issues`.
+        Modes:
+          • `by=consumption` (default) — 30-day sum of ISSUE qty per
+            item, descending. Zero-consumption items fall to the bottom
+            in alpha order so the result is deterministic.
+          • `by=alpha` — A → Z within each category.
+
+        Only touches `sort_order` on `meal_items`; nothing else moves.
         """
-        today = local_date_str(None)
-        start = (date.fromisoformat(today) - timedelta(days=days - 1)).isoformat()
-
-        # Fetch items so we can attribute issue lines back to a category_key.
         items = await db.meal_items.find(
             {}, {"_id": 0, "id": 1, "category_key": 1, "name": 1}
         ).to_list(2000)
-        item_cat = {i["id"]: i.get("category_key") for i in items}
-        # Aggregate ISSUE qty per item and per category over the window.
-        per_item: dict = {}
-        per_cat: dict = {}
-        async for doc in db.meal_issues.find(
-            {"date": {"$gte": start, "$lte": today}},
-            {"_id": 0, "lines": 1},
-        ):
-            for ln in (doc.get("lines") or []):
-                iid = ln.get("item_id")
-                q = float(ln.get("qty") or 0)
-                if not iid or q <= 0:
-                    continue
-                per_item[iid] = per_item.get(iid, 0.0) + q
-                ck = item_cat.get(iid)
-                if ck:
-                    per_cat[ck] = per_cat.get(ck, 0.0) + q
 
-        existing = await _purchase_categories()
-        # Sort: consumption desc, then alpha fallback for zero-consumption
-        # so the UI is deterministic across empty-window deployments.
-        def _cat_key(c):
-            return (-(per_cat.get(c["key"]) or 0.0), (c.get("label") or c["key"]).lower())
-        ordered = sorted(existing, key=_cat_key)
-        await db.config.update_one(
-            {"id": PURCHASE_CFG_ID},
-            {"$set": {"categories": ordered,
-                      "updated_at": now_utc().isoformat(),
-                      "updated_by": user.get("id")}},
-            upsert=True,
-        )
-        await _signal_meals("categories")
+        per_item: dict = {}
+        if by == "consumption":
+            today = local_date_str(None)
+            start = (date.fromisoformat(today) - timedelta(days=days - 1)).isoformat()
+            # "How busy" = 30-day PURCHASE qty per item. Chefs asked for
+            # purchase-based ranking (not issued) so newly-added stock
+            # items surface at the top the same day they're bought.
+            async for doc in db.meal_purchases.find(
+                {"date": {"$gte": start, "$lte": today}},
+                {"_id": 0, "lines": 1},
+            ):
+                for ln in (doc.get("lines") or []):
+                    iid = ln.get("item_id")
+                    q = float(ln.get("qty") or 0)
+                    if iid and q > 0:
+                        per_item[iid] = per_item.get(iid, 0.0) + q
+
+        by_cat: dict = {}
+        for it in items:
+            by_cat.setdefault(it.get("category_key"), []).append(it)
 
         item_updates = 0
-        if also_items:
-            # Renumber items within each category by their own consumption.
-            # `sort_order` is the same field the drag-drop reorder writes,
-            # so both mechanisms stay compatible.
-            by_cat: dict = {}
-            for it in items:
-                by_cat.setdefault(it.get("category_key"), []).append(it)
-            for ck, arr in by_cat.items():
+        for ck, arr in by_cat.items():
+            if by == "alpha":
+                arr.sort(key=lambda i: (i.get("name") or "").lower())
+            else:   # consumption
                 arr.sort(key=lambda i: (-(per_item.get(i["id"]) or 0.0),
                                         (i.get("name") or "").lower()))
-                for idx, it in enumerate(arr):
-                    await db.meal_items.update_one(
-                        {"id": it["id"]}, {"$set": {"sort_order": idx * 10}}
-                    )
-                    item_updates += 1
-            await _signal_meals("items")
+            for idx, it in enumerate(arr):
+                await db.meal_items.update_one(
+                    {"id": it["id"]}, {"$set": {"sort_order": idx * 10}}
+                )
+                item_updates += 1
+        await _signal_meals("items")
         return {
-            "categories": ordered,
-            "days": days,
-            "categories_reordered": len(ordered),
+            "by": by,
+            "days": days if by == "consumption" else None,
             "items_renumbered": item_updates,
-            "start": start, "end": today,
+            "categories_touched": len(by_cat),
         }
 
     @router.get("/meals/purchases")

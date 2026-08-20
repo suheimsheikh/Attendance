@@ -74,12 +74,46 @@ def test_reorder_preserves_forgotten_keys_at_tail(hdr):
     assert set(got) == set(initial)
 
 
-def test_sort_by_consumption_returns_counts(hdr):
-    r = httpx.post(f"{API_URL}/api/meals/purchase-categories/sort-by-consumption",
-                   params={"days": 30, "also_items": True},
+def test_sort_items_by_consumption_only_touches_items(hdr):
+    """Feb 20 clarification: categories keep their manual order — ONLY
+    items get renumbered inside each category. The new endpoint returns
+    per-category touched counts and never emits a `categories` array."""
+    before = _keys(hdr)
+    r = httpx.post(f"{API_URL}/api/meals/items/sort-within-categories",
+                   params={"by": "consumption", "days": 30},
                    headers=hdr, timeout=20)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["categories_reordered"] >= 1
-    assert body["items_renumbered"] >= 0   # can be 0 in a fresh DB
-    assert body["days"] == 30
+    assert body["by"] == "consumption"
+    assert body["categories_touched"] >= 1
+    assert body["items_renumbered"] >= 0   # zero in a fresh DB
+    # Categories must NOT have been reordered.
+    after = _keys(hdr)
+    assert after == before, f"categories moved: before {before} → after {after}"
+
+
+def test_sort_items_alphabetically(hdr):
+    r = httpx.post(f"{API_URL}/api/meals/items/sort-within-categories",
+                   params={"by": "alpha"},
+                   headers=hdr, timeout=15)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["by"] == "alpha"
+    # Verify the items inside at least one populated category are now
+    # alphabetically ordered.
+    it_r = httpx.get(f"{API_URL}/api/meals/items",
+                     headers=hdr, timeout=15)
+    it_r.raise_for_status()
+    items = it_r.json().get("items", [])
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for it in items:
+        grouped[it.get("category_key")].append(it)
+    for ck, arr in grouped.items():
+        if len(arr) < 2:
+            continue
+        # API returns items already sorted by (category_key, sort_order,
+        # name) — after the alpha pass sort_order == alpha rank.
+        names = [i["name"].lower() for i in arr]
+        assert names == sorted(names), f"'{ck}' not sorted alphabetically: {names[:5]}"
+        break   # one populated category is enough
