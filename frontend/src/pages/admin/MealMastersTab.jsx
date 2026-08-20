@@ -323,7 +323,7 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMove
             onCancel={() => setRenaming(false)}
           />
         ) : (
-          <button onClick={() => onOpen(item.id)} className="font-semibold text-sm text-slate-900 hover:text-emerald-700 hover:underline underline-offset-2 text-left truncate" data-testid={`masters-item-open-${item.id}`} title="View purchase / issue / wastage history">
+          <button onClick={() => onOpen(item.id)} className="font-semibold text-sm text-slate-900 hover:text-emerald-700 hover:underline underline-offset-2 text-left truncate flex-1 min-w-[9rem]" data-testid={`masters-item-open-${item.id}`} title={`View purchase / issue / wastage history for ${item.name}`}>
             {item.name}
           </button>
         )}
@@ -599,11 +599,11 @@ export default function MealMastersTab({ liveSig }) {
     if (!window.confirm(`Re-sort items inside every category ${label}? Category order stays as you set it.`)) return;
     try {
       const r = await api.post("/meals/items/sort-within-categories", null,
-                               { params: { by: mode, days: 30 } });
+                               { params: { by: mode, days: 90 } });
       toast.success(
         mode === "alpha"
           ? `Sorted ${r.items_renumbered} items A→Z across ${r.categories_touched} categor${r.categories_touched === 1 ? "y" : "ies"}`
-          : `Sorted ${r.items_renumbered} items by 30-day purchase across ${r.categories_touched} categor${r.categories_touched === 1 ? "y" : "ies"}`
+          : `Sorted ${r.items_renumbered} items by 90-day purchase across ${r.categories_touched} categor${r.categories_touched === 1 ? "y" : "ies"}`
       );
       await load();
     } catch (err) {

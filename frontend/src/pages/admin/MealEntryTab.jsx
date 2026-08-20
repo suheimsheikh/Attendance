@@ -227,17 +227,28 @@ export default function MealEntryTab({ liveSig }) {
     const next = current === "consumption" ? "alpha" : "consumption";
     setCatSortMode((m) => ({ ...m, [cat.key]: next }));
     try {
-      await api.post("/meals/items/sort-within-categories", null, {
-        params: { by: next, days: 30, category_key: cat.key },
+      const r = await api.post("/meals/items/sort-within-categories", null, {
+        params: { by: next, days: 90, category_key: cat.key },
       });
+      if (r?.no_data) {
+        // No purchases in the window — rollback the toggle so the pill
+        // doesn't lie about the current state, and TELL the chef why
+        // nothing moved. Prevents the "toggle doesn't work" perception
+        // reported 20 Feb 2026 when a category has no recent buys.
+        setCatSortMode((m) => ({ ...m, [cat.key]: current }));
+        toast.message(
+          `No purchases logged for ${cat.label} in the last 90 days — nothing to rank yet. Add some purchases first.`,
+          { duration: 6000 }
+        );
+        return;
+      }
       await loadMasters();
       toast.success(
         next === "alpha"
           ? `${cat.label}: sorted A → Z`
-          : `${cat.label}: sorted by 30-day purchase (busiest first)`
+          : `${cat.label}: sorted by 90-day purchase (busiest first)`
       );
     } catch (err) {
-      // Roll the toggle back if the server refused.
       setCatSortMode((m) => ({ ...m, [cat.key]: current }));
       showApiError(err, "Couldn't sort this category");
     }

@@ -1292,7 +1292,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     @router.post("/meals/items/sort-within-categories")
     async def sort_items_within_categories(
         by: str = Query("consumption", pattern="^(consumption|alpha)$"),
-        days: int = Query(30, ge=1, le=365),
+        days: int = Query(90, ge=1, le=3650),
         category_key: Optional[str] = Query(
             None, description="Only sort items inside this ONE category — leave blank for every category"),
         user: dict = Depends(require_chef_or_admin),
@@ -1303,34 +1303,40 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         their walk-through order (Fruits, Grocery, …) preserved.
 
         Modes:
-          • `by=consumption` (default) — 30-day sum of PURCHASE qty per
-            item, descending. Zero-purchase items fall to the bottom in
-            alpha order so the result is deterministic.
+          • `by=consumption` (default) — sum of PURCHASE qty per item
+            over the window, descending. Ties keep their CURRENT
+            `sort_order` (not alpha) so the toggle doesn't secretly
+            rebrand itself as an A→Z sort when a category has no
+            recent purchases.
           • `by=alpha` — A → Z within each category.
 
         Pass `category_key=<key>` to sort just ONE category — powers the
-        per-row "▶ busiest" button on the Daily Entry category header.
+        per-row toggle on the Daily Entry category header.
 
-        Only touches `sort_order` on `meal_items`; nothing else moves.
+        When `by=consumption` and NOT A SINGLE item in the target
+        category has any purchase in the window, we skip writes and
+        return `no_data=True` so the client can toast a helpful reason
+        instead of leaving the chef staring at an unchanged list.
         """
         item_q: dict = {}
         if category_key:
             item_q["category_key"] = category_key
         items = await db.meal_items.find(
-            item_q, {"_id": 0, "id": 1, "category_key": 1, "name": 1}
+            item_q, {"_id": 0, "id": 1, "category_key": 1, "name": 1, "sort_order": 1}
         ).to_list(2000)
         if not items:
             return {"by": by, "days": days if by == "consumption" else None,
                     "items_renumbered": 0, "categories_touched": 0,
-                    "category_key": category_key}
+                    "category_key": category_key, "no_data": False}
 
         per_item: dict = {}
         if by == "consumption":
             today = local_date_str(None)
             start = (date.fromisoformat(today) - timedelta(days=days - 1)).isoformat()
-            # "How busy" = 30-day PURCHASE qty per item. Chefs asked for
-            # purchase-based ranking (not issued) so newly-added stock
-            # items surface at the top the same day they're bought.
+            # "How busy" = PURCHASE qty per item over the window (default
+            # 90 days). Chefs asked for purchase-based ranking (not
+            # issued) so newly-added stock items surface at the top the
+            # same day they're bought.
             async for doc in db.meal_purchases.find(
                 {"date": {"$gte": start, "$lte": today}},
                 {"_id": 0, "lines": 1},
@@ -1345,13 +1351,27 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         for it in items:
             by_cat.setdefault(it.get("category_key"), []).append(it)
 
+        # If a SPECIFIC single category was requested AND consumption
+        # mode AND no items in that category have purchases in the
+        # window → don't touch anything, tell the client.
+        if (by == "consumption" and category_key
+                and not any(per_item.get(it["id"]) for it in items)):
+            return {
+                "by": by, "days": days, "items_renumbered": 0,
+                "categories_touched": 0, "category_key": category_key,
+                "no_data": True,
+            }
+
         item_updates = 0
         for _ck, arr in by_cat.items():
             if by == "alpha":
                 arr.sort(key=lambda i: (i.get("name") or "").lower())
-            else:   # consumption
-                arr.sort(key=lambda i: (-(per_item.get(i["id"]) or 0.0),
-                                        (i.get("name") or "").lower()))
+            else:   # consumption — tie-break with CURRENT sort_order
+                arr.sort(key=lambda i: (
+                    -(per_item.get(i["id"]) or 0.0),
+                    int(i.get("sort_order") or 0),
+                    (i.get("name") or "").lower(),
+                ))
             for idx, it in enumerate(arr):
                 await db.meal_items.update_one(
                     {"id": it["id"]}, {"$set": {"sort_order": idx * 10}}
@@ -1364,6 +1384,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "items_renumbered": item_updates,
             "categories_touched": len(by_cat),
             "category_key": category_key,
+            "no_data": False,
         }
 
     @router.get("/meals/purchases")
