@@ -1230,6 +1230,124 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         await _signal_meals("categories")
         return {"categories": out}
 
+    @router.put("/meals/purchase-categories/reorder")
+    async def reorder_purchase_categories(
+        body: dict,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Reorder purchase categories by supplying the new key sequence.
+
+        Body: `{"keys": ["dairy_products", "fruits", "cleaning_items", …]}`
+
+        Missing keys keep their old position at the tail; unknown keys are
+        rejected so a stale client can't wipe a category out of existence.
+        """
+        keys_in = list(body.get("keys") or [])
+        if not keys_in:
+            raise HTTPException(status_code=400, detail="keys list required")
+        existing = await _purchase_categories()
+        by_key = {c["key"]: c for c in existing}
+        # Reject any key that isn't a current category — prevents accidental
+        # data loss from a stale UI.
+        for k in keys_in:
+            if k not in by_key:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unknown category key '{k}'")
+        # Preserve the passed-in ordering, then append any categories the
+        # client forgot about at the bottom so nothing disappears.
+        ordered = [by_key[k] for k in keys_in if k in by_key]
+        seen = set(keys_in)
+        ordered.extend(c for c in existing if c["key"] not in seen)
+        await db.config.update_one(
+            {"id": PURCHASE_CFG_ID},
+            {"$set": {"categories": ordered,
+                      "updated_at": now_utc().isoformat(),
+                      "updated_by": user.get("id")}},
+            upsert=True,
+        )
+        await _signal_meals("categories")
+        return {"categories": ordered}
+
+    @router.post("/meals/purchase-categories/sort-by-consumption")
+    async def sort_purchase_categories_by_consumption(
+        days: int = Query(30, ge=1, le=365),
+        also_items: bool = Query(True, description="Also renumber items within each category by their own consumption"),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """One-tap "put the busy stuff at the top" (Feb 2026 user request).
+
+        Reorders categories descending by ISSUE quantity in the last N days.
+        Categories with zero issues fall to the bottom in alpha order — so
+        a first-time deployment doesn't get random order. When
+        `also_items=true` (default) each category's items are re-numbered
+        the same way against `meal_issues`.
+        """
+        today = local_date_str(None)
+        start = (date.fromisoformat(today) - timedelta(days=days - 1)).isoformat()
+
+        # Fetch items so we can attribute issue lines back to a category_key.
+        items = await db.meal_items.find(
+            {}, {"_id": 0, "id": 1, "category_key": 1, "name": 1}
+        ).to_list(2000)
+        item_cat = {i["id"]: i.get("category_key") for i in items}
+        # Aggregate ISSUE qty per item and per category over the window.
+        per_item: dict = {}
+        per_cat: dict = {}
+        async for doc in db.meal_issues.find(
+            {"date": {"$gte": start, "$lte": today}},
+            {"_id": 0, "lines": 1},
+        ):
+            for ln in (doc.get("lines") or []):
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                if not iid or q <= 0:
+                    continue
+                per_item[iid] = per_item.get(iid, 0.0) + q
+                ck = item_cat.get(iid)
+                if ck:
+                    per_cat[ck] = per_cat.get(ck, 0.0) + q
+
+        existing = await _purchase_categories()
+        # Sort: consumption desc, then alpha fallback for zero-consumption
+        # so the UI is deterministic across empty-window deployments.
+        def _cat_key(c):
+            return (-(per_cat.get(c["key"]) or 0.0), (c.get("label") or c["key"]).lower())
+        ordered = sorted(existing, key=_cat_key)
+        await db.config.update_one(
+            {"id": PURCHASE_CFG_ID},
+            {"$set": {"categories": ordered,
+                      "updated_at": now_utc().isoformat(),
+                      "updated_by": user.get("id")}},
+            upsert=True,
+        )
+        await _signal_meals("categories")
+
+        item_updates = 0
+        if also_items:
+            # Renumber items within each category by their own consumption.
+            # `sort_order` is the same field the drag-drop reorder writes,
+            # so both mechanisms stay compatible.
+            by_cat: dict = {}
+            for it in items:
+                by_cat.setdefault(it.get("category_key"), []).append(it)
+            for ck, arr in by_cat.items():
+                arr.sort(key=lambda i: (-(per_item.get(i["id"]) or 0.0),
+                                        (i.get("name") or "").lower()))
+                for idx, it in enumerate(arr):
+                    await db.meal_items.update_one(
+                        {"id": it["id"]}, {"$set": {"sort_order": idx * 10}}
+                    )
+                    item_updates += 1
+            await _signal_meals("items")
+        return {
+            "categories": ordered,
+            "days": days,
+            "categories_reordered": len(ordered),
+            "items_renumbered": item_updates,
+            "start": start, "end": today,
+        }
+
     @router.get("/meals/purchases")
     async def list_purchases(
         start: str, end: str, user: dict = Depends(require_chef_or_admin)

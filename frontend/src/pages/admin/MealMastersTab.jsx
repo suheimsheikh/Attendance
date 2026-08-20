@@ -10,6 +10,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Loader2, Folder, FolderOpen, ChevronRight, ChevronDown, Plus, Pencil,
   Check, X, GripVertical, Power, Trash2, CornerDownRight, EyeOff, AlertTriangle,
+  ArrowUp, ArrowDown, TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
@@ -244,7 +245,7 @@ function AddItemForm({ catKey, units, onDone, onCancel }) {
 // Unit(w-14) Opening(w-24) Min(w-20) Norm(w-20) Purch(w-32) Issue(w-32) Close(w-32).
 const COL_GRID = "grid grid-cols-[3.5rem_6rem_5rem_5rem_8rem_8rem_8rem] gap-x-4 shrink-0";
 
-function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd }) {
+function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMoveUp, onMoveDown, canMoveUp, canMoveDown, dnd }) {
   const [renaming, setRenaming] = useState(false);
   const inactive = item.active === false;
   const showStock = !inactive && stock;
@@ -277,6 +278,20 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, dnd })
         {isAdmin && <GripVertical size={13} className="text-slate-300 group-hover:text-slate-400 cursor-grab shrink-0"/>}
         {isAdmin && (
           <span className="flex items-center gap-0.5 shrink-0" data-testid={`masters-item-ops-${item.id}`}>
+            <button
+              onClick={onMoveUp}
+              disabled={!canMoveUp}
+              className="p-1 rounded hover:bg-white text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Move up within this category"
+              data-testid={`masters-item-up-${item.id}`}
+            ><ArrowUp size={12}/></button>
+            <button
+              onClick={onMoveDown}
+              disabled={!canMoveDown}
+              className="p-1 rounded hover:bg-white text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Move down within this category"
+              data-testid={`masters-item-down-${item.id}`}
+            ><ArrowDown size={12}/></button>
             <select
               value=""
               onChange={(e) => e.target.value && onPatch(item.id, { category_key: e.target.value })}
@@ -556,6 +571,42 @@ export default function MealMastersTab({ liveSig }) {
   const toggleCategory = (key, active) =>
     saveCats(cats.map((c) => (c.key === key ? { ...c, active } : c)),
              active ? "Category reactivated" : "Category deactivated");
+  // ---- category reorder (up/down + auto by consumption) ------------
+  const moveCategory = async (key, dir) => {
+    const idx = cats.findIndex((c) => c.key === key);
+    if (idx < 0) return;
+    const swap = idx + (dir === "up" ? -1 : 1);
+    if (swap < 0 || swap >= cats.length) return;
+    // Optimistic swap so the row visibly hops even before the round-trip.
+    const nextCats = cats.slice();
+    [nextCats[idx], nextCats[swap]] = [nextCats[swap], nextCats[idx]];
+    setCats(nextCats);
+    try {
+      const r = await api.put("/meals/purchase-categories/reorder",
+                              { keys: nextCats.map((c) => c.key) });
+      setCats(r.categories || nextCats);
+    } catch (err) {
+      // Roll back and yell — reorder is a UI-only mistake, no data loss.
+      setCats(cats);
+      showApiError(err, "Couldn't reorder categories");
+    }
+  };
+  const sortByConsumption = async () => {
+    if (!window.confirm(
+      "Re-sort ALL categories and items by the last 30 days of issues (busiest first). This overwrites the manual order — continue?"
+    )) return;
+    try {
+      const r = await api.post("/meals/purchase-categories/sort-by-consumption",
+                               null, { params: { days: 30, also_items: true } });
+      setCats(r.categories || cats);
+      toast.success(
+        `Re-sorted ${r.categories_reordered} categories + ${r.items_renumbered} items by 30-day consumption`
+      );
+      await load();
+    } catch (err) {
+      showApiError(err, "Couldn't sort by consumption");
+    }
+  };
 
   // ---- item ops ----
   const patchItem = async (id, patch) => {
@@ -609,6 +660,34 @@ export default function MealMastersTab({ liveSig }) {
     }
   };
 
+  // ---- move ONE item up or down within its category (button-driven) ----
+  const moveItem = async (item, dir) => {
+    const list = items.filter((i) => i.category_key === item.category_key).map((i) => i.id);
+    const idx = list.indexOf(item.id);
+    if (idx < 0) return;
+    const swap = idx + (dir === "up" ? -1 : 1);
+    if (swap < 0 || swap >= list.length) return;
+    [list[idx], list[swap]] = [list[swap], list[idx]];
+    // Optimistic
+    setItems((prev) => {
+      const ord = new Map(list.map((id, i) => [id, i]));
+      return prev.slice().sort((a, b) => {
+        if (a.category_key !== item.category_key || b.category_key !== item.category_key) return 0;
+        return (ord.get(a.id) ?? 999) - (ord.get(b.id) ?? 999);
+      });
+    });
+    try {
+      await api.put("/meals/items/reorder", { category_key: item.category_key, item_ids: list });
+    } catch (err) {
+      if (err?.status === 404 || err?.status === 400) {
+        toast.message("Some items have moved — list refreshed");
+      } else {
+        showApiError(err, "Couldn't move item");
+      }
+      await load();
+    }
+  };
+
   // ---- drag-and-drop reorder within a category ----
   const dropOn = async (catKey, targetId) => {
     if (!drag || drag.catKey !== catKey || drag.itemId === targetId) { setDrag(null); return; }
@@ -658,7 +737,7 @@ export default function MealMastersTab({ liveSig }) {
           <div className="flex items-center gap-3 pl-3 pr-5 py-2 flex-wrap border-b border-slate-100">
             <p className="text-xs text-slate-500">
               {isAdmin
-                ? "Manage categories and items in one tree. Drag items to reorder."
+                ? "Manage categories and items in one tree. Use ↑ ↓ buttons or drag to reorder."
                 : "Read-only view of the pantry masters."}
             </p>
             <label className="ml-auto inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer" title="Show stock on hand as it stood on a past date">
@@ -683,6 +762,16 @@ export default function MealMastersTab({ liveSig }) {
               <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} data-testid="masters-show-inactive"/>
               <EyeOff size={12}/> Show inactive
             </label>
+            {isAdmin && (
+              <button
+                onClick={sortByConsumption}
+                className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-xs font-bold bg-sky-100 text-sky-800 hover:bg-sky-200 border border-sky-200 transition"
+                title="Reorder categories and items by 30-day issue quantity — busiest first"
+                data-testid="masters-sort-by-consumption"
+              >
+                <TrendingUp size={12}/> Sort by consumption
+              </button>
+            )}
           </div>
           {/* Row 2 — column labels */}
           <div className="flex items-center gap-2 pl-3 pr-5 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-gradient-to-b from-slate-100 to-slate-50">
@@ -722,7 +811,7 @@ export default function MealMastersTab({ liveSig }) {
         </div>
 
         <div className="p-3 space-y-1">
-        {visibleCats.map((cat) => {
+        {visibleCats.map((cat, catIdx) => {
           const catItems = itemsByCat.get(cat.key) || [];
           if (lowOnly && catItems.length === 0) return null;
           const open = isExpanded(cat.key);
@@ -740,6 +829,20 @@ export default function MealMastersTab({ liveSig }) {
                 </button>
                 {isAdmin && (
                   <span className="flex items-center gap-0.5 shrink-0" data-testid={`masters-cat-ops-${cat.key}`}>
+                    <button
+                      onClick={() => moveCategory(cat.key, "up")}
+                      disabled={catIdx === 0}
+                      className="p-1 rounded hover:bg-white text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move category up"
+                      data-testid={`masters-cat-up-${cat.key}`}
+                    ><ArrowUp size={13}/></button>
+                    <button
+                      onClick={() => moveCategory(cat.key, "down")}
+                      disabled={catIdx === visibleCats.length - 1}
+                      className="p-1 rounded hover:bg-white text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move category down"
+                      data-testid={`masters-cat-down-${cat.key}`}
+                    ><ArrowDown size={13}/></button>
                     <button onClick={() => { setAddingItemCat(cat.key); if (!open) toggleExpand(cat.key); }} className="p-1 rounded hover:bg-emerald-100 text-emerald-600" title="Add item" data-testid={`masters-cat-add-item-${cat.key}`}><Plus size={13}/></button>
                     <button onClick={() => setRenamingCat(cat.key)} className="p-1 rounded hover:bg-white text-slate-500" title="Rename" data-testid={`masters-cat-rename-btn-${cat.key}`}><Pencil size={13}/></button>
                     <button
@@ -787,7 +890,7 @@ export default function MealMastersTab({ liveSig }) {
                   {catItems.length === 0 && addingItemCat !== cat.key && (
                     <p className="ml-8 py-1 text-xs text-slate-400 italic">No items yet.</p>
                   )}
-                  {catItems.map((it) => (
+                  {catItems.map((it, itIdx) => (
                     <ItemRow
                       key={it.id}
                       item={it}
@@ -797,6 +900,10 @@ export default function MealMastersTab({ liveSig }) {
                       onPatch={patchItem}
                       onDelete={deleteItem}
                       onOpen={(id) => setDetail({ type: "item", id })}
+                      onMoveUp={() => moveItem(it, "up")}
+                      onMoveDown={() => moveItem(it, "down")}
+                      canMoveUp={itIdx > 0}
+                      canMoveDown={itIdx < catItems.length - 1}
                       dnd={{
                         over: drag?.overId === it.id && drag?.catKey === cat.key && drag?.itemId !== it.id,
                         onDragStart: () => setDrag({ catKey: cat.key, itemId: it.id }),
