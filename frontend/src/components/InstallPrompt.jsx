@@ -55,7 +55,7 @@ export default function InstallPrompt() {
   return (
     <div
       data-testid="install-prompt"
-      className="fixed left-1/2 -translate-x-1/2 bottom-3 z-40 w-[92%] max-w-md rounded-2xl bg-slate-900 text-white shadow-xl p-3 flex items-center gap-3"
+      className="fixed right-3 top-3 z-30 w-[92%] max-w-sm rounded-2xl bg-slate-900 text-white shadow-xl p-3 flex items-center gap-3"
     >
       <div className="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-300 flex items-center justify-center shrink-0">
         <Download size={18} />
@@ -80,10 +80,10 @@ export default function InstallPrompt() {
       <button
         onClick={dismiss}
         data-testid="install-prompt-dismiss"
-        className="p-1 text-slate-400 hover:text-white"
-        aria-label="Dismiss"
+        className="ml-1 w-9 h-9 rounded-full bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center shrink-0 shadow-sm"
+        aria-label="Dismiss install prompt"
       >
-        <X size={14} />
+        <X size={18} strokeWidth={2.5} />
       </button>
     </div>
   );
