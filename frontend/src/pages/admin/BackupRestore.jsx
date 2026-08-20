@@ -67,8 +67,19 @@ export default function BackupRestore() {
         headers: { Authorization: `Bearer ${token}` },
         body: fd,
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
+      // Read the body as text first, then try JSON — so a 500 that
+      // returns HTML "Internal Server Error" (or a proxy timeout page)
+      // shows a readable message instead of crashing with "Unexpected
+      // token 'I', Internal S... is not valid JSON".
+      const raw = await res.text();
+      let json;
+      try { json = raw ? JSON.parse(raw) : {}; }
+      catch { json = null; }
+      if (!res.ok) {
+        const detail = json?.detail || (raw && raw.slice(0, 200)) || `HTTP ${res.status}`;
+        throw new Error(detail);
+      }
+      if (!json) throw new Error("Server returned an unreadable response.");
       setReport(json);
       const total = Object.values(json.inserted || {}).reduce((s, n) => s + n, 0);
       toast.success(`Restored ${total} document${total === 1 ? "" : "s"} (${mode} mode)`);

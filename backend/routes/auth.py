@@ -374,16 +374,28 @@ def make_router(
             if body.category:
                 meta["proposed_category"] = body.category
         if device is None:
-            device = {
-                "id": str(uuid.uuid4()),
-                "device_id": body.device_id,
-                "status": "pending",
-                "user_id": matched["id"] if matched else None,
-                "created_at": now,
-                "approved_by": None,
-                **meta,
-            }
-            await db.devices.insert_one(device)
+            # Atomic upsert so two concurrent /auth/phone calls with the
+            # same device_id don't both try to insert and blow up with a
+            # DuplicateKeyError (E11000). $setOnInsert fires ONLY when
+            # we're the winning writer; the loser's request quietly falls
+            # through to the update branch below on the next fetch.
+            # Root-caused after user reported "Failed to execute 'json'
+            # on Response" (500 → HTML "Internal Server Error") when
+            # restoring into preview.
+            await db.devices.update_one(
+                {"device_id": body.device_id},
+                {"$setOnInsert": {
+                    "id": str(uuid.uuid4()),
+                    "device_id": body.device_id,
+                    "status": "pending",
+                    "user_id": matched["id"] if matched else None,
+                    "created_at": now,
+                    "approved_by": None,
+                    **meta,
+                 }},
+                upsert=True,
+            )
+            device = await db.devices.find_one({"device_id": body.device_id}, {"_id": 0})
         else:
             upd = dict(meta)
             if matched and not device.get("user_id"):

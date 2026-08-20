@@ -253,9 +253,18 @@ def make_router(db, require_admin) -> APIRouter:
             # Force status=approved so the current browser tab stays logged
             # in even if the backup happened to hold a revoked/pending copy
             # of the same device_id.
-            payload = {**dev, "status": "approved"}
+            payload = {**dev, "status": "approved", "user_id": admin["id"]}
+            # Filter by device_id ALONE (the unique index key). Filtering
+            # by {device_id, user_id} was blowing up with DuplicateKeyError
+            # when the restored backup held the same device_id under a
+            # different user_id — upsert then tried to INSERT a second row
+            # for a unique key. Rebinding the device to the CURRENT admin
+            # is intentional here: they're the one holding this browser.
+            # Reported by user 20/02/2026 as "Failed to execute 'json' on
+            # 'Response': Unexpected token 'I', Internal S..." because the
+            # 500 body was plain HTML, not JSON.
             await db.devices.update_one(
-                {"device_id": dev_id, "user_id": admin["id"]},
+                {"device_id": dev_id},
                 {"$set": payload},
                 upsert=True,
             )
