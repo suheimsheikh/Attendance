@@ -243,7 +243,7 @@ function AddItemForm({ catKey, units, onDone, onCancel }) {
 // Shared column widths so the sticky header, category rows and item rows
 // all line up in a single grid — 7 numeric columns on the right.
 // Unit(w-14) Opening(w-24) Min(w-20) Norm(w-20) Purch(w-32) Issue(w-32) Close(w-32).
-const COL_GRID = "grid grid-cols-[3.5rem_6rem_5rem_5rem_8rem_8rem_8rem] gap-x-4 shrink-0";
+const COL_GRID = "grid grid-cols-[2.75rem_5rem_3.5rem_3.5rem_7rem_7rem_7rem] gap-x-3 shrink-0";
 
 function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMoveUp, onMoveDown, canMoveUp, canMoveDown, dnd }) {
   const [renaming, setRenaming] = useState(false);
@@ -263,7 +263,7 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMove
           the item row occupies the SAME width as category / grand-total
           rows — otherwise the right-aligned stat grid ended 24px shy of
           the category grid, breaking column alignment (Feb 2026 fix). */}
-      <div className="flex items-center gap-2 pl-8 pr-2 py-1.5 hover:bg-slate-200/70 rounded-lg group">
+      <div className="flex items-center gap-1.5 pl-8 pr-2 py-1.5 hover:bg-slate-200/70 rounded-lg group">
         {/* Extreme-left LOW pill — moved here from beside the item name so
             it's the first thing you scan and can spot restock candidates
             at a glance without reading the row. Fixed-width slot keeps the
@@ -736,7 +736,7 @@ export default function MealMastersTab({ liveSig }) {
     <div data-testid="meal-masters-tab">
       <ShoppingListPanel data={shop}/>
 
-      <div className="iu-card p-0" data-testid="masters-tree">
+      <div className="iu-card p-0 overflow-x-auto" data-testid="masters-tree">
         {/* Sticky header — everything the user needs above the list stays
             latched to the top while scrolling: page-scoped filter toolbar
             (Stock as of / Only low / Show inactive), column labels, and

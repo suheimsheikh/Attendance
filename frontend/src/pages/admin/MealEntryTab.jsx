@@ -194,64 +194,20 @@ export default function MealEntryTab({ liveSig }) {
   useEffect(() => { loadMasters(); }, []);
 
   const [catSortMode, setCatSortMode] = useState({}); // { [catKey]: 'consumption' | 'alpha' }
-  // Derive the ACTUAL current sort state for each category from the
-  // items array — the pill button should always tell the truth about
-  // what order the user is looking at, even after a page reload or a
-  // peer's edit through SSE. If items in a category are in strict
-  // alphabetical order (name asc), we consider it "alpha"; anything
-  // else falls back to "consumption" so the button offers the flip.
-  const detectedCatSortMode = useMemo(() => {
-    const out = {};
-    const byCat = new Map();
-    items.forEach((it) => {
-      const arr = byCat.get(it.category_key) || [];
-      arr.push(it);
-      byCat.set(it.category_key, arr);
-    });
-    byCat.forEach((arr, key) => {
-      if (arr.length < 2) return;
-      const names = arr.map((i) => (i.name || "").toLowerCase());
-      const sorted = names.slice().sort();
-      out[key] = names.every((n, i) => n === sorted[i]) ? "alpha" : "consumption";
-    });
-    return out;
-  }, [items]);
-  const effectiveCatSortMode = (key) =>
-    catSortMode[key] ?? detectedCatSortMode[key] ?? "consumption";
-
-  // Toggle a category between "busiest first" (30-day purchase qty) and
-  // "A → Z". Persists via the same /sort-within-categories endpoint the
-  // Stock Master uses, so both views agree on the order.
-  const toggleCategorySort = async (cat) => {
-    const current = effectiveCatSortMode(cat.key);
+  // Toggle is now purely LOCAL — reorders items ON SCREEN based on what
+  // the chef has entered for THIS DATE (20 Feb 2026 clarification: the
+  // toggle should reflect Daily Entry data, not the Masters sort order).
+  // Nothing is written to the server; nothing else changes ordering
+  // globally. Clicking flips the mode for that category only.
+  const toggleCategorySort = (cat) => {
+    const current = catSortMode[cat.key] || "consumption";
     const next = current === "consumption" ? "alpha" : "consumption";
     setCatSortMode((m) => ({ ...m, [cat.key]: next }));
-    try {
-      const r = await api.post("/meals/items/sort-within-categories", null, {
-        params: { by: next, days: 90, category_key: cat.key },
-      });
-      if (r?.no_data) {
-        // No purchases in the window — rollback the toggle so the pill
-        // doesn't lie about the current state, and TELL the chef why
-        // nothing moved. Prevents the "toggle doesn't work" perception
-        // reported 20 Feb 2026 when a category has no recent buys.
-        setCatSortMode((m) => ({ ...m, [cat.key]: current }));
-        toast.message(
-          `No purchases logged for ${cat.label} in the last 90 days — nothing to rank yet. Add some purchases first.`,
-          { duration: 6000 }
-        );
-        return;
-      }
-      await loadMasters();
-      toast.success(
-        next === "alpha"
-          ? `${cat.label}: sorted A → Z`
-          : `${cat.label}: sorted by 90-day purchase (busiest first)`
-      );
-    } catch (err) {
-      setCatSortMode((m) => ({ ...m, [cat.key]: current }));
-      showApiError(err, "Couldn't sort this category");
-    }
+    toast.success(
+      next === "alpha"
+        ? `${cat.label}: A → Z`
+        : `${cat.label}: busiest first (today's purchases + issues)`
+    );
   };
 
   // Re-fetch vendors on demand (e.g. after inline "Add vendor" flow).
@@ -669,9 +625,31 @@ export default function MealEntryTab({ liveSig }) {
         iAmt += num(issues[it.id]) * rate;
         wAmt += num(wastage[it.id]?.qty) * rate;
       }
-      return { cat, rows, purchAmt: pAmt, issueAmt: iAmt, wastageAmt: wAmt };
+      // Feb 2026: apply the toggle's LOCAL sort mode. "consumption" =
+      // busiest first based on TODAY's entered data (purch qty + issue
+      // qty + wastage qty). Items with no activity today keep their
+      // master order at the bottom. "alpha" = A → Z. Nothing is
+      // persisted — pure view-level reorder so the chef can flip the
+      // list to whichever grouping helps them for THIS day.
+      const mode = catSortMode[cat.key] || "consumption";
+      const sortedRows = rows.slice();
+      if (mode === "alpha") {
+        sortedRows.sort((a, b) =>
+          (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase()));
+      } else if (mode === "consumption") {
+        const busy = (it) =>
+          num(purch[it.id]?.qty) + num(issues[it.id]) + num(wastage[it.id]?.qty);
+        sortedRows.sort((a, b) => {
+          const bb = busy(b), ba = busy(a);
+          if (bb !== ba) return bb - ba;
+          // Tie-break by master sort_order (preserves the walk-through
+          // sequence you set up in Stock Master).
+          return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+        });
+      }
+      return { cat, rows: sortedRows, purchAmt: pAmt, issueAmt: iAmt, wastageAmt: wAmt };
     });
-  }, [grouped, nonZeroOnly, purch, issues, wastage, avgRate, search]);
+  }, [grouped, nonZeroOnly, purch, issues, wastage, avgRate, search, catSortMode]);
 
   // Flat list of currently-VISIBLE item ids in the exact order they
   // appear in the grid (respects category collapse + filters). Used by
@@ -1016,7 +994,7 @@ export default function MealEntryTab({ liveSig }) {
                     <td colSpan={3} className="px-2 py-1.5 text-right">
                       {!isCollapsed && rows.length > 1 && (
                         (() => {
-                          const mode = effectiveCatSortMode(cat.key);
+                          const mode = catSortMode[cat.key] || "consumption";
                           const isAlpha = mode === "alpha";
                           return (
                             <button
@@ -1024,8 +1002,8 @@ export default function MealEntryTab({ liveSig }) {
                               onClick={(ev) => { ev.stopPropagation(); toggleCategorySort(cat); }}
                               className="inline-flex items-center gap-1 px-2 h-6 rounded-md text-[10px] font-bold uppercase tracking-wider text-amber-900 bg-amber-200/70 hover:bg-amber-300 border border-amber-400/60 transition"
                               title={isAlpha
-                                ? "Currently A → Z. Click to switch to 30-day purchase order (busiest first)."
-                                : "Currently sorted busiest-first (30-day purchases). Click to switch to A → Z."}
+                                ? "Currently A → Z. Click to switch to busiest-first (by today's purchase / issue / wastage qty)."
+                                : "Currently busiest-first based on TODAY'S entered qty. Click to switch to A → Z. This is a view-only sort — the Master order is not changed."}
                               data-testid={`entry-cat-sort-toggle-${cat.key}`}
                             >
                               {isAlpha
