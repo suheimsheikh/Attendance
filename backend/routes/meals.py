@@ -800,6 +800,17 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                     q["category"] = {"$in": []}  # empty → no rows
             else:
                 q["category"] = {"$in": list(eligible_cats)}
+        # 20 Feb 2026: per-member `meal_eligible` override wins over the
+        # category flag either way — bring users with an explicit True
+        # back INTO the roster even if their category is off, and
+        # exclude users with an explicit False from a category that is
+        # on. Implemented as an $or across two branches so both cases
+        # co-exist in a single query.
+        base_q = dict(q)
+        q = {"$or": [
+            {**base_q, "meal_eligible": {"$ne": False}},   # category-eligible AND not explicitly excluded
+            {"meal_eligible": True, "role": {"$ne": "admin"}},  # per-member opt-in even if category is off
+        ]}
         users = await db.users.find(
             q,
             # Explicit fields — dropped full `photo` (25KB) in favor
@@ -869,7 +880,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         subjects = await db.users.find(
             {"id": {"$in": body.user_ids}},
             {"_id": 0, "id": 1, "full_name": 1, "category": 1,
-             "institution": 1, "leaving_date": 1, "role": 1},
+             "institution": 1, "leaving_date": 1, "role": 1,
+             "meal_eligible": 1},
         ).to_list(len(body.user_ids))
         by_id = {u["id"]: u for u in subjects}
 
@@ -885,16 +897,22 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             # Eligibility gates (mirror the roster's read-path filters):
             #   • not an admin-only account (they don't eat mess)
             #   • not an ex-member as of the meal date
-            #   • category is in the meal_eligible set
-            # Failures are counted as skipped so a batch with ONE
-            # ineligible member still marks the rest.
+            #   • per-member `meal_eligible` override wins: explicit
+            #     False → skip regardless of category; explicit True →
+            #     allow even if category is off. Only when the user
+            #     hasn't set the field do we fall back to the category
+            #     master (Feb 2026 fine-grained control).
             if u.get("role") == "admin":
                 skipped += 1
                 continue
             if is_ex_member(u, today_iso=d):
                 skipped += 1
                 continue
-            if u.get("category") not in eligible_cats:
+            override = u.get("meal_eligible")
+            if override is False:
+                skipped += 1
+                continue
+            if override is None and u.get("category") not in eligible_cats:
                 skipped += 1
                 continue
             doc = {

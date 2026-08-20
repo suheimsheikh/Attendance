@@ -291,6 +291,13 @@ class MemberCreate(BaseModel):
     # → the pre-existing category-based rule applies (staff/coach/
     # executive accrue, athletes never do).
     ot_eligible: Optional[bool] = None
+    # 20 Feb 2026 chef request: allow per-member override of the
+    # category-level `meal_eligible` flag so edge cases (e.g. a driver
+    # who never eats mess) don't require creating a whole new category.
+    # `None` (default) means "inherit from category"; explicit `True`
+    # or `False` overrides. Roster and mark-bulk both consult this
+    # field before falling back to the category master.
+    meal_eligible: Optional[bool] = None
 
 
 class MemberUpdate(BaseModel):
@@ -318,6 +325,8 @@ class MemberUpdate(BaseModel):
     joining_date: Optional[str] = None
     leaving_date: Optional[str] = None
     ot_eligible: Optional[bool] = None
+    # Per-member override — see the note on MemberIn.meal_eligible.
+    meal_eligible: Optional[bool] = None
 
 
 class LeaveBalanceBulkRow(BaseModel):

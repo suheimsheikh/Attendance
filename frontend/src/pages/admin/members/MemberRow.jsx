@@ -288,15 +288,49 @@ export default React.memo(function MemberRow({
       {/* Overtime eligibility — click the pill to flip. Undefined counts as
           eligible (matches the backend's opt-out semantics used elsewhere). */}
       <td className="iu-table-td text-center">
-        <InlineCell
-          kind="checkbox"
-          value={m.ot_eligible !== false}
-          testId={`inline-ot_eligible-${m.id}`}
-          onSave={(v) => onPatchField(m.id, "ot_eligible", v)}
-          renderDisplay={(v) => v
-            ? <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">OT ✓</span>
-            : <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">OT ✗</span>}
-        />
+        <div className="flex flex-col items-center gap-1">
+          <InlineCell
+            kind="checkbox"
+            value={m.ot_eligible !== false}
+            testId={`inline-ot_eligible-${m.id}`}
+            onSave={(v) => onPatchField(m.id, "ot_eligible", v)}
+            renderDisplay={(v) => v
+              ? <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">OT ✓</span>
+              : <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">OT ✗</span>}
+          />
+          {/* Per-member meal eligibility override (Feb 2026). Cycles:
+              inherit (null, category rules) → explicit ON → explicit OFF → inherit.
+              A member with an explicit False is skipped from every meal roster
+              even if their category is meal_eligible; a member with explicit
+              True appears on the roster even if their category is off. */}
+          <button
+            type="button"
+            onClick={() => {
+              const cur = m.meal_eligible;
+              const next = cur == null ? true : cur === true ? false : null;
+              onPatchField(m.id, "meal_eligible", next);
+            }}
+            title={
+              m.meal_eligible === false
+                ? "Meal OFF (excluded from every roster). Click to reset to auto."
+                : m.meal_eligible === true
+                ? "Meal ON (always on the roster, even if the category is off). Click to force OFF."
+                : "Meal auto — follows the category's meal_eligible flag. Click to override ON."
+            }
+            className={
+              m.meal_eligible === false
+                ? "inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"
+                : m.meal_eligible === true
+                ? "inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                : "inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100"
+            }
+            data-testid={`inline-meal_eligible-${m.id}`}
+          >
+            {m.meal_eligible === false ? "🍴 OFF"
+              : m.meal_eligible === true ? "🍴 ON"
+              : "🍴 auto"}
+          </button>
+        </div>
       </td>
       {/* Inline editable parent names + mobile numbers. Names are edited via
           a small text InlineCell in place of the old static badge label. */}
