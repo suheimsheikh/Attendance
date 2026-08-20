@@ -122,26 +122,70 @@ export default function Members() {
   useEffect(() => { load(); }, [load]);
 
   const counts = useMemo(() => {
-    // Compute counts against the SAME ex-member filter the table uses.
-    // Before this fix the pills counted ALL members (incl. ex) while
-    // the table applied `filterEx(members, showEx)` — resulting in
-    // stale/inflated pill numbers whenever ex-members existed.
-    // Reported 20 Feb 2026: "filter pills are inconsistent and often
-    // showing wrong counts."
-    const base = filterEx(members, showEx);
+    // Faceted counts — every pill shows how many rows would appear if
+    // it were the active bucket, factoring in every OTHER filter that
+    // is currently on (ex-members, search, institution, admin/chef).
+    // Before this rewrite the pills showed absolute totals, which lied
+    // when combined with Institution / search filters — e.g. "Coaches
+    // 11" but clicking it showed only 3 rows because the Institution
+    // filter was on. 20 Feb 2026 chef report: "grossly dysfunctional."
+    const q = search.trim().toLowerCase();
+    const passesOtherThanBucket = (m) => {
+      if (onlyAdmins || onlyChefs) {
+        const okAdmin = onlyAdmins && m.role === "admin";
+        const okChef = onlyChefs && m.role === "chef";
+        if (!(okAdmin || okChef)) return false;
+      }
+      if (instFilter && m.institution !== instFilter) return false;
+      if (q) {
+        const hay = [
+          (m.full_name || "").toLowerCase(),
+          (m.email || "").toLowerCase(),
+          (m.rank || "").toLowerCase(),
+          m.mobile || "",
+          (m.institution || "").toLowerCase(),
+        ];
+        if (!hay.some((s) => s.includes(q))) return false;
+      }
+      return true;
+    };
+    const base = filterEx(members, showEx).filter(passesOtherThanBucket);
     const c = { all: base.length, coach: 0, staff: 0, executive: 0, athlete: 0, elite: 0 };
+    // Admin / Chef role pills are computed IGNORING the current admin /
+    // chef toggle (they're a self-referential filter). Uses the same
+    // search / institution / bucket filters otherwise so the number
+    // reflects what a fresh click would produce.
+    const roleBaseSource = filterEx(members, showEx);
+    const passesRoleContext = (m) => {
+      if (bucket !== "all" && bucketOf(m) !== bucket) return false;
+      if (instFilter && m.institution !== instFilter) return false;
+      if (q) {
+        const hay = [
+          (m.full_name || "").toLowerCase(),
+          (m.email || "").toLowerCase(),
+          (m.rank || "").toLowerCase(),
+          m.mobile || "",
+          (m.institution || "").toLowerCase(),
+        ];
+        if (!hay.some((s) => s.includes(q))) return false;
+      }
+      return true;
+    };
     let adminCount = 0;
     let chefCount = 0;
     for (const m of base) {
       const b = bucketOf(m);
       if (c[b] !== undefined) c[b] += 1;
+    }
+    for (const m of roleBaseSource) {
+      if (!passesRoleContext(m)) continue;
       if (m.role === "admin") adminCount += 1;
       if (m.role === "chef") chefCount += 1;
     }
-    c.admin = adminCount;  // orthogonal — sums across categories, not exclusive
+    c.admin = adminCount;
     c.chef = chefCount;
     return c;
-  }, [members, showEx]);
+  }, [members, showEx, search, bucket, onlyAdmins, onlyChefs, instFilter]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -167,6 +211,17 @@ export default function Members() {
   }, [members, showEx, search, bucket, onlyAdmins, onlyChefs, instFilter]);
 
   const exCount = useMemo(() => members.filter((m) => isExMember(m)).length, [members]);
+
+  // Any filter beyond the defaults?  Search box + admin/chef/institution
+  // toggles + bucket. Used to show/hide the "Clear filters" reset button.
+  const anyFilterOn = bucket !== "all" || onlyAdmins || onlyChefs || !!instFilter || !!search.trim();
+  const clearFilters = () => {
+    setBucket("all");
+    setOnlyAdmins(false);
+    setOnlyChefs(false);
+    setInstFilter("");
+    setSearch("");
+  };
 
   // ── Column sort ───────────────────────────────────────────────────────────
   // Click a sortable header to cycle: unsorted → asc → desc → unsorted.
