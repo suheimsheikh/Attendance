@@ -194,6 +194,12 @@ export default function MealEntryTab({ liveSig }) {
   useEffect(() => { loadMasters(); }, []);
 
   const [catSortMode, setCatSortMode] = useState({}); // { [catKey]: 'consumption' | 'alpha' }
+  // Snapshot of the "busiest" order at the moment the toggle was
+  // clicked (per category). Rendering uses this frozen order so a row
+  // the chef is typing into DOESN'T hop up or down on every keystroke.
+  // Cleared whenever the toggle is flipped or the selected date changes.
+  const [catSortSnapshot, setCatSortSnapshot] = useState({}); // { [catKey]: [id, id, …] }
+  useEffect(() => { setCatSortSnapshot({}); }, [dateStr]);
   // Toggle is now purely LOCAL — reorders items ON SCREEN based on what
   // the chef has entered for THIS DATE (20 Feb 2026 clarification: the
   // toggle should reflect Daily Entry data, not the Masters sort order).
@@ -203,6 +209,23 @@ export default function MealEntryTab({ liveSig }) {
     const current = catSortMode[cat.key] || "consumption";
     const next = current === "consumption" ? "alpha" : "consumption";
     setCatSortMode((m) => ({ ...m, [cat.key]: next }));
+    // Compute the fresh busiest snapshot NOW so subsequent keystrokes
+    // don't shuffle rows underneath the chef. Only meaningful for
+    // consumption mode — alpha ordering is stable regardless.
+    if (next === "consumption") {
+      const busy = (id) =>
+        num(purch[id]?.qty) + num(issues[id]) + num(wastage[id]?.qty);
+      const catItems = items
+        .filter((it) => it.category_key === cat.key)
+        .sort((a, b) => {
+          const d = busy(b.id) - busy(a.id);
+          return d !== 0 ? d : (a.sort_order ?? 0) - (b.sort_order ?? 0);
+        })
+        .map((it) => it.id);
+      setCatSortSnapshot((s) => ({ ...s, [cat.key]: catItems }));
+    } else {
+      setCatSortSnapshot((s) => { const { [cat.key]: _drop, ...rest } = s; return rest; });
+    }
     toast.success(
       next === "alpha"
         ? `${cat.label}: A → Z`
@@ -637,19 +660,29 @@ export default function MealEntryTab({ liveSig }) {
         sortedRows.sort((a, b) =>
           (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase()));
       } else if (mode === "consumption") {
-        const busy = (it) =>
-          num(purch[it.id]?.qty) + num(issues[it.id]) + num(wastage[it.id]?.qty);
-        sortedRows.sort((a, b) => {
-          const bb = busy(b), ba = busy(a);
-          if (bb !== ba) return bb - ba;
-          // Tie-break by master sort_order (preserves the walk-through
-          // sequence you set up in Stock Master).
-          return (a.sort_order ?? 0) - (b.sort_order ?? 0);
-        });
+        const snap = catSortSnapshot[cat.key];
+        if (snap && snap.length) {
+          // FROZEN order — captured when toggle was clicked. Rows the
+          // chef is typing into stay put; new items (added after the
+          // snapshot) fall to the end so nothing disappears.
+          const idx = new Map(snap.map((id, i) => [id, i]));
+          sortedRows.sort(
+            (a, b) => (idx.get(a.id) ?? 1e9) - (idx.get(b.id) ?? 1e9)
+          );
+        } else {
+          const busy = (it) =>
+            num(purch[it.id]?.qty) + num(issues[it.id]) + num(wastage[it.id]?.qty);
+          sortedRows.sort((a, b) => {
+            const d = busy(b) - busy(a);
+            // Tie-break by master sort_order (preserves the walk-through
+            // sequence you set up in Stock Master).
+            return d !== 0 ? d : (a.sort_order ?? 0) - (b.sort_order ?? 0);
+          });
+        }
       }
       return { cat, rows: sortedRows, purchAmt: pAmt, issueAmt: iAmt, wastageAmt: wAmt };
     });
-  }, [grouped, nonZeroOnly, purch, issues, wastage, avgRate, search, catSortMode]);
+  }, [grouped, nonZeroOnly, purch, issues, wastage, avgRate, search, catSortMode, catSortSnapshot]);
 
   // Flat list of currently-VISIBLE item ids in the exact order they
   // appear in the grid (respects category collapse + filters). Used by

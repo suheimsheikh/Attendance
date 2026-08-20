@@ -50,7 +50,11 @@ const unwrap = async (p) => {
 
 export const api = {
   get: (path, params) => unwrap(client.get(path, { params })),
-  post: (path, body) => unwrap(client.post(path, body)),
+  // `post` accepts an optional 3rd `config` (matches axios / api.get)
+  // so callers can pass query params without hand-building a URL. The
+  // absence of this signature was silently swallowing `by=alpha` on
+  // /meals/items/sort-within-categories (found in code review Feb 2026).
+  post: (path, body, config) => unwrap(client.post(path, body, config)),
   patch: (path, body) => unwrap(client.patch(path, body)),
   put: (path, body) => unwrap(client.put(path, body)),
   del: (path) => unwrap(client.delete(path)),

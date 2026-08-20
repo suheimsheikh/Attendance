@@ -85,9 +85,8 @@ export default function Login() {
         setPending(false);
         toast.error("This device was revoked. Contact your admin.");
       }
-    } catch (err) {
+    } catch {
       // Polling: swallow transient errors so we don't spam toasts every 4 seconds.
-      console.debug("phone status poll failed:", err?.message);
     }
   };
 

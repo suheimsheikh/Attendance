@@ -776,7 +776,7 @@ export default function MealMastersTab({ liveSig }) {
                 <button
                   onClick={() => sortItems("consumption")}
                   className="inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-bold bg-sky-100 text-sky-800 hover:bg-sky-200 transition"
-                  title="Reorder items INSIDE each category by 30-day purchase quantity — busiest first. Categories stay in your manual order."
+                  title="Reorder items INSIDE each category by 90-day purchase quantity — busiest first. Categories stay in your manual order."
                   data-testid="masters-sort-items-consumption"
                 >
                   <TrendingUp size={12}/> Sort items · busiest
