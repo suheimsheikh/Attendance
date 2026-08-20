@@ -88,10 +88,10 @@ function DailyTrendChart({ data, colorAmt, colorLines, testid }) {
   );
 }
 
-function TopItemsChart({ items, dataKey, colorFn, label, testid }) {
+function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit }) {
   const rows = (items || []).slice(0, 10).map((it, i) => ({
     ...it,
-    display: it.name,
+    display: showUnit && it.unit ? `${it.name} (${it.unit})` : it.name,
     _idx: i,
   }));
   if (!rows.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
@@ -219,6 +219,11 @@ function Section({ title, subtitle, accent, data, testKind }) {
         <StatPill icon={Boxes} label="Distinct Items" value={data?.item_count || 0} tint="bg-sky-50" />
         <StatPill icon={ShoppingCart} label="Line Entries" value={data?.total_lines || 0} tint="bg-amber-50" />
       </div>
+      {accent === "purchases" && (data?.unitemised_amount || 0) > 0 && (
+        <div className="mb-3 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900" data-testid={`kitchen-${testKind}-unitemised-note`}>
+          <b>₹{inr(data.unitemised_amount)}</b> of this window&apos;s purchase spend came from bulk-uploaded / legacy days that only carry category totals (no per-item detail). Those rupees appear in <b>Category share</b> but not in <b>Top items</b> or the item-wise table.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
         <div className="iu-card p-3">
@@ -234,8 +239,8 @@ function Section({ title, subtitle, accent, data, testKind }) {
           <TopItemsChart items={data?.top_by_amount} dataKey="amount" colorFn={(i) => CHART_COLORS[i % CHART_COLORS.length]} label="Amount" testid={`kitchen-${testKind}-top-amt`} />
         </div>
         <div className="iu-card p-3">
-          <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-slate-500" /><div className="font-bold text-sm">Top items by qty</div></div>
-          <TopItemsChart items={data?.top_by_qty} dataKey="qty" colorFn={(i) => CHART_COLORS[(i + 3) % CHART_COLORS.length]} label="Qty" testid={`kitchen-${testKind}-top-qty`} />
+          <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-slate-500" /><div className="font-bold text-sm">Top items by qty</div><span className="text-[10px] text-slate-400">(units vary)</span></div>
+          <TopItemsChart items={data?.top_by_qty} dataKey="qty" colorFn={(i) => CHART_COLORS[(i + 3) % CHART_COLORS.length]} label="Qty" testid={`kitchen-${testKind}-top-qty`} showUnit />
         </div>
       </div>
 
@@ -260,11 +265,13 @@ export default function KitchenAnalyticsTab({ liveSig }) {
 
   useEffect(() => {
     if (!from || !to || from > to) return;
+    let ignore = false;
     setLoading(true);
     api.get(`/meals/kitchen-analytics?start=${from}&end=${to}`)
-      .then(setData)
-      .catch((err) => showApiError(err, "Couldn't load kitchen analytics"))
-      .finally(() => setLoading(false));
+      .then((res) => { if (!ignore) setData(res); })
+      .catch((err) => { if (!ignore) showApiError(err, "Couldn't load kitchen analytics"); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
   }, [from, to, liveSig]);
 
   return (

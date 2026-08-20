@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
@@ -440,6 +440,22 @@ function SectionHeader({ label, open, onToggle, tone = "cyan", icon: Icon }) {
 }
 
 function NavItem({ to, label, icon: Icon, end, onClick, onHoverPrefetch, disabled, disabledReason, highlight, badge, hint }) {
+  // For links whose `to` carries a `?tab=` query, use a query-aware
+  // active check so e.g. "Pantry Stock" (/admin/meals-report) and
+  // "Kitchen Analytics" (/admin/meals-report?tab=analytics) don't
+  // both light up at the same time. Falls through to the default
+  // pathname-based `isActive` when no query is present.
+  const loc = useLocation();
+  const [rawPath, rawQuery] = String(to).split("?");
+  const linkTab = rawQuery ? new URLSearchParams(rawQuery).get("tab") : null;
+  const curTab = new URLSearchParams(loc.search).get("tab");
+  const samePath = loc.pathname === rawPath;
+  const queryActive = samePath && (linkTab
+    ? curTab === linkTab
+    // Base-link (no query): active only when no tab OR unrelated tab.
+    // Concretely: "Pantry Stock" stays active on masters (default) but
+    // dims when the user is on ?tab=analytics.
+    : !curTab || (curTab === "masters"));
   if (disabled) {
     return (
       <div
@@ -462,23 +478,24 @@ function NavItem({ to, label, icon: Icon, end, onClick, onHoverPrefetch, disable
       onFocus={onHoverPrefetch}
       title={hint}
       data-testid={`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
-      className={({ isActive }) =>
-        // Two variants, mutually exclusive:
-        //  • `highlight` — amber (Approvals): persistent nag for pending work.
-        //  • neutral    — the default slate treatment.
-        `flex items-center gap-3 px-3 h-9 rounded-lg text-[13px] font-medium transition mb-px ${
+      className={({ isActive }) => {
+        // Base isActive from react-router is pathname-only. Refine it
+        // for links that share a pathname but differ in ?tab= (see
+        // comment above the component).
+        const active = isActive && queryActive;
+        return `flex items-center gap-3 px-3 h-9 rounded-lg text-[13px] font-medium transition mb-px ${
           highlight
-            ? isActive
+            ? active
               ? "bg-amber-500/25 text-amber-100 ring-1 ring-amber-400/60"
               : "bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 ring-1 ring-amber-400/25"
-            : isActive
+            : active
               // Light-blue "you-are-here" pill on the dark sidebar
               // (user request 24 Feb 2026). Sky ring + tinted fill
               // makes the current page unmistakable.
               ? "bg-sky-400/25 text-sky-100 ring-1 ring-sky-400/60 font-semibold"
               : "text-slate-300 hover:bg-white/5 hover:text-white"
-        }`
-      }
+        }`;
+      }}
     >
       <Icon size={16} />
       <span className="flex-1">{label}</span>

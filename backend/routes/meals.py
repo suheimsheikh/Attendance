@@ -3121,6 +3121,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         item_issues = _mk_item_rows(i_qty, i_amt, i_lines)
         item_purchases_total = round(sum(r["amount"] for r in item_purchases), 2)
         item_issues_total = round(sum(r["amount"] for r in item_issues), 2)
+        # Bulk-uploaded / legacy purchases carry only category `amounts`,
+        # not per-item `lines`. Surface the gap so the itemised total and
+        # the report's grand total can be reconciled by the accountant.
+        unitemised_purchases_amount = round(max(0.0, total_expenses - item_purchases_total), 2)
 
         return {
             "start": s, "end": e,
@@ -3132,6 +3136,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "item_issues": item_issues,
             "item_purchases_total": item_purchases_total,
             "item_issues_total": item_issues_total,
+            "unitemised_purchases_amount": unitemised_purchases_amount,
             "totals": {
                 "athletes": {**tot_grp["athletes"], "total": tot_a},
                 "staff":    {**tot_grp["staff"],    "total": tot_s},
@@ -3177,9 +3182,12 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         cat_label = {c["key"]: c.get("label") or c["key"] for c in cats}
 
         # ---- Pull purchase + issue docs for the window ----
+        # `amounts` is included so we can reconcile bulk-uploaded /
+        # legacy purchase docs (which carry category totals but no
+        # per-item `lines`) into the daily trend + category share.
         purch_docs = await db.meal_purchases.find(
             {"date": {"$gte": s, "$lte": e}},
-            {"_id": 0, "date": 1, "lines": 1},
+            {"_id": 0, "date": 1, "lines": 1, "amounts": 1},
         ).to_list(5000)
         iss_docs = await db.meal_issues.find(
             {"date": {"$gte": s, "$lte": e}},
@@ -3211,7 +3219,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
         # ---- Roll-ups ----
         def _blank_day():
-            return {"amount": 0.0, "qty": 0.0, "lines": 0}
+            return {"amount": 0.0, "qty": 0.0, "lines": 0,
+                    "itemised_amount": 0.0, "unitemised_amount": 0.0}
 
         def _blank_item():
             return {"qty": 0.0, "amount": 0.0, "lines": 0}
@@ -3231,10 +3240,18 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         iss_items: dict[str, dict] = {}
         purch_cat: dict[str, float] = {}
         iss_cat: dict[str, float] = {}
+        unitemised_total = 0.0
 
         for doc in purch_docs:
             d = doc["date"]
             slot = purch_daily.setdefault(d, _blank_day())
+            # Truth for the day's spend = sum of `amounts` if present
+            # (line-based edits recompute `amounts` from lines, so this
+            # covers BOTH modern per-item entry AND legacy bulk-upload
+            # docs — see upsert_purchase / patch_purchase_lines).
+            amounts_map = doc.get("amounts") or {}
+            day_total = sum(float(v or 0) for v in amounts_map.values())
+            itemised_from_lines = 0.0
             for ln in (doc.get("lines") or []):
                 iid = ln.get("item_id")
                 q = float(ln.get("qty") or 0)
@@ -3242,16 +3259,23 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 if not iid or q <= 0:
                     continue
                 amt = q * r
-                slot["amount"] += amt
+                itemised_from_lines += amt
                 slot["qty"] += q
                 slot["lines"] += 1
                 it = purch_items.setdefault(iid, _blank_item())
                 it["qty"] += q
                 it["amount"] += amt
                 it["lines"] += 1
-                info = by_id.get(iid) or {}
-                ckey = info.get("category_key") or "uncategorised"
-                purch_cat[ckey] = purch_cat.get(ckey, 0.0) + amt
+            # Category share is drawn from `amounts` so bulk-uploaded
+            # days still contribute to the pie.
+            for ckey, v in amounts_map.items():
+                purch_cat[ckey] = purch_cat.get(ckey, 0.0) + float(v or 0)
+            # If no `amounts` (very early docs), fall back to lines.
+            eff_day_total = day_total if amounts_map else itemised_from_lines
+            slot["amount"] += eff_day_total
+            slot["itemised_amount"] += itemised_from_lines
+            slot["unitemised_amount"] += max(0.0, eff_day_total - itemised_from_lines)
+            unitemised_total += max(0.0, eff_day_total - itemised_from_lines)
 
         for doc in iss_docs:
             d = doc["date"]
@@ -3317,9 +3341,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         purch_item_rows = _item_rows(purch_items)
         iss_item_rows = _item_rows(iss_items)
 
-        def _pack(daily, items_rows, cat_rows) -> dict:
+        def _pack(daily, items_rows, cat_rows, unitemised=0.0) -> dict:
             total_amount = round(sum(d["amount"] for d in daily), 2)
             total_qty_lines = sum(d["lines"] for d in daily)
+            itemised_amount = round(sum(r["amount"] for r in items_rows), 2)
             return {
                 "daily": daily,
                 "top_by_amount": items_rows[:12],
@@ -3327,13 +3352,15 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "category_totals": cat_rows,
                 "items": items_rows,
                 "total_amount": total_amount,
+                "itemised_amount": itemised_amount,
+                "unitemised_amount": round(max(0.0, total_amount - itemised_amount), 2),
                 "total_lines": total_qty_lines,
                 "item_count": len(items_rows),
             }
 
         return {
             "start": s, "end": e,
-            "purchases": _pack(_daily_series(purch_daily), purch_item_rows, _cat_pct(purch_cat)),
+            "purchases": _pack(_daily_series(purch_daily), purch_item_rows, _cat_pct(purch_cat), unitemised_total),
             "issues":    _pack(_daily_series(iss_daily),   iss_item_rows,   _cat_pct(iss_cat)),
         }
 

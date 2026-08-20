@@ -28,6 +28,7 @@ function monthRange(month) {
 const inr = (n) =>
   n == null ? "" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const ddmy = (iso) => {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
   const [y, m, d] = iso.split("-");
   const dow = new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short" });
   return `${dow} ${Number(d)}/${Number(m)}/${y}`;
@@ -124,7 +125,7 @@ function ReportTable({ data, printable }) {
   );
 }
 
-function ItemBreakdownTable({ rows, title, testid }) {
+function ItemBreakdownTable({ rows, title, testid, footNote }) {
   if (!rows || rows.length === 0) return null;
   const total = rows.reduce((s, r) => s + (r.amount || 0), 0);
   const totalQty = rows.reduce((s, r) => s + (r.qty || 0), 0);
@@ -134,6 +135,9 @@ function ItemBreakdownTable({ rows, title, testid }) {
         <div className="font-bold text-sm">{title}</div>
         <div className="text-xs text-slate-500">{rows.length} items · ₹{inr(total)}</div>
       </div>
+      {footNote && (
+        <div className="px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-900" data-testid={`${testid}-foot-note`}>{footNote}</div>
+      )}
       <div className="overflow-auto max-h-[420px]">
         <table className="w-full text-xs">
           <thead className="bg-slate-50 sticky top-0">
@@ -200,11 +204,12 @@ export default function MealExpensesTab({ liveSig }) {
 
   const exportCSV = () => {
     if (!trimmed) return;
+    const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const cats = trimmed.categories || [];
     const head = ["Date",
       ...MEAL_ORDER.map((k) => `Athletes ${MEAL_HDR[k]}`), "Athletes Total",
       ...MEAL_ORDER.map((k) => `Staff ${MEAL_HDR[k]}`), "Staff Total",
-      "Daily Meal Count", ...cats.map((c) => c.label), "Day Expense"];
+      "Daily Meal Count", ...cats.map((c) => q(c.label)), "Day Expense"];
     const lines = [head.join(",")];
     trimmed.days.forEach((d) => {
       lines.push([
@@ -234,15 +239,18 @@ export default function MealExpensesTab({ liveSig }) {
       lines.push("ITEM-WISE PURCHASES");
       lines.push(["Item", "Unit", "Qty", "Amount", "Lines"].join(","));
       trimmed.item_purchases.forEach((r) => {
-        lines.push([`"${(r.name || "").replace(/"/g, '""')}"`, r.unit || "", r.qty, r.amount, r.lines].join(","));
+        lines.push([q(r.name), q(r.unit), r.qty, r.amount, r.lines].join(","));
       });
+      if ((trimmed.unitemised_purchases_amount || 0) > 0) {
+        lines.push([q("(bulk-uploaded / no item detail)"), "", "", trimmed.unitemised_purchases_amount, ""].join(","));
+      }
     }
     if ((trimmed.item_issues || []).length) {
       lines.push("");
       lines.push("ITEM-WISE ISSUES (valued at wtd-avg rate)");
       lines.push(["Item", "Unit", "Qty", "Amount", "Lines"].join(","));
       trimmed.item_issues.forEach((r) => {
-        lines.push([`"${(r.name || "").replace(/"/g, '""')}"`, r.unit || "", r.qty, r.amount, r.lines].join(","));
+        lines.push([q(r.name), q(r.unit), r.qty, r.amount, r.lines].join(","));
       });
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
@@ -321,6 +329,11 @@ export default function MealExpensesTab({ liveSig }) {
               rows={trimmed.item_purchases}
               title="Item-wise Purchases"
               testid="meal-expense-item-purchases"
+              footNote={
+                (trimmed.unitemised_purchases_amount || 0) > 0
+                  ? `+ ₹${inr(trimmed.unitemised_purchases_amount)} of bulk-uploaded / legacy spend (no per-item detail)`
+                  : null
+              }
             />
             <ItemBreakdownTable
               rows={trimmed.item_issues}
