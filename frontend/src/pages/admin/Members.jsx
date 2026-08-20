@@ -135,10 +135,17 @@ export default function Members() {
   useEffect(() => { load(); }, [load]);
 
   const counts = useMemo(() => {
-    const c = { all: members.length, coach: 0, staff: 0, executive: 0, athlete: 0, elite: 0 };
+    // Compute counts against the SAME ex-member filter the table uses.
+    // Before this fix the pills counted ALL members (incl. ex) while
+    // the table applied `filterEx(members, showEx)` — resulting in
+    // stale/inflated pill numbers whenever ex-members existed.
+    // Reported 20 Feb 2026: "filter pills are inconsistent and often
+    // showing wrong counts."
+    const base = filterEx(members, showEx);
+    const c = { all: base.length, coach: 0, staff: 0, executive: 0, athlete: 0, elite: 0 };
     let adminCount = 0;
     let chefCount = 0;
-    for (const m of members) {
+    for (const m of base) {
       const b = bucketOf(m);
       if (c[b] !== undefined) c[b] += 1;
       if (m.role === "admin") adminCount += 1;
@@ -147,7 +154,7 @@ export default function Members() {
     c.admin = adminCount;  // orthogonal — sums across categories, not exclusive
     c.chef = chefCount;
     return c;
-  }, [members]);
+  }, [members, showEx]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -379,7 +386,11 @@ export default function Members() {
       <header className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Members</h1>
-          <p className="text-slate-500 text-sm mt-1">{members.length} total · click any cell to edit · double-click a row for the full form</p>
+          <p className="text-slate-500 text-sm mt-1">
+            <b>{filtered.length}</b> shown
+            <span className="text-slate-400"> / {members.length} total</span>
+            <span> · click any cell to edit · double-click a row for the full form</span>
+          </p>
         </div>
         <div className="flex gap-2">
           <Link
