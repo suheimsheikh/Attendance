@@ -193,18 +193,29 @@ export default function MealEntryTab({ liveSig }) {
   };
   useEffect(() => { loadMasters(); }, []);
 
-  // Per-category "sort busiest" — reorders items INSIDE this one
-  // category by 30-day purchase quantity. Wired to the ▶ button on
-  // each category header (Feb 2026 chef request: "This busiest order
-  // has to come on the category row in Daily entry for each category").
-  const sortCategoryByBusiest = async (cat) => {
+  const [catSortMode, setCatSortMode] = useState({}); // { [catKey]: 'consumption' | 'alpha' }
+  // Toggle a category between "busiest first" (30-day purchase qty) and
+  // "A → Z". Persists via the same /sort-within-categories endpoint the
+  // Stock Master uses, so both views agree on the order.
+  const toggleCategorySort = async (cat) => {
+    const current = catSortMode[cat.key] || "consumption";
+    const next = current === "consumption" ? "alpha" : "consumption";
+    setCatSortMode((m) => ({ ...m, [cat.key]: next }));
     try {
       await api.post("/meals/items/sort-within-categories", null, {
-        params: { by: "consumption", days: 30, category_key: cat.key },
+        params: { by: next, days: 30, category_key: cat.key },
       });
       await loadMasters();
-      toast.success(`${cat.label}: sorted by 30-day purchase (busiest first)`);
-    } catch (err) { showApiError(err, "Couldn't sort this category"); }
+      toast.success(
+        next === "alpha"
+          ? `${cat.label}: sorted A → Z`
+          : `${cat.label}: sorted by 30-day purchase (busiest first)`
+      );
+    } catch (err) {
+      // Roll the toggle back if the server refused.
+      setCatSortMode((m) => ({ ...m, [cat.key]: current }));
+      showApiError(err, "Couldn't sort this category");
+    }
   };
 
   // Re-fetch vendors on demand (e.g. after inline "Add vendor" flow).
@@ -968,15 +979,25 @@ export default function MealEntryTab({ liveSig }) {
                     </td>
                     <td colSpan={3} className="px-2 py-1.5 text-right">
                       {!isCollapsed && rows.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={(ev) => { ev.stopPropagation(); sortCategoryByBusiest(cat); }}
-                          className="inline-flex items-center gap-1 px-2 h-6 rounded-md text-[10px] font-bold uppercase tracking-wider text-amber-900 bg-amber-200/70 hover:bg-amber-300 border border-amber-400/60 transition"
-                          title="Reorder items in this category by 30-day purchase quantity (busiest first)"
-                          data-testid={`entry-cat-sort-busiest-${cat.key}`}
-                        >
-                          <TrendingUp size={11}/> Busiest first
-                        </button>
+                        (() => {
+                          const mode = catSortMode[cat.key] || "consumption";
+                          const isAlpha = mode === "alpha";
+                          return (
+                            <button
+                              type="button"
+                              onClick={(ev) => { ev.stopPropagation(); toggleCategorySort(cat); }}
+                              className="inline-flex items-center gap-1 px-2 h-6 rounded-md text-[10px] font-bold uppercase tracking-wider text-amber-900 bg-amber-200/70 hover:bg-amber-300 border border-amber-400/60 transition"
+                              title={isAlpha
+                                ? "Currently A → Z. Click to switch to 30-day purchase order (busiest first)."
+                                : "Currently sorted busiest-first (30-day purchases). Click to switch to A → Z."}
+                              data-testid={`entry-cat-sort-toggle-${cat.key}`}
+                            >
+                              {isAlpha
+                                ? <><span className="font-black">A→Z</span></>
+                                : <><TrendingUp size={11}/> Busiest first</>}
+                            </button>
+                          );
+                        })()
                       )}
                     </td>
                     {/* Purch subtotal — same typography as the item-row
