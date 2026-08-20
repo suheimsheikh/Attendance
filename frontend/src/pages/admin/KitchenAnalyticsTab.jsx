@@ -12,7 +12,7 @@
  * All numbers come from GET /api/meals/kitchen-analytics.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, TrendingUp, BarChart3, PieChart as PieIcon, ListOrdered, IndianRupee, ShoppingCart, Boxes } from "lucide-react";
+import { Loader2, TrendingUp, BarChart3, PieChart as PieIcon, ListOrdered, IndianRupee, ShoppingCart, Boxes, Flame, Beef, Wheat, Droplet } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell,
@@ -245,7 +245,133 @@ function Section({ title, subtitle, accent, data, testKind }) {
       </div>
 
       <ItemsTable items={data?.items} kind={title.toLowerCase()} testid={`kitchen-${testKind}-items`} />
+
+      {data?.nutrition && <NutritionBlock nutrition={data.nutrition} testKind={testKind} accent={accent} />}
     </section>
+  );
+}
+
+const MACRO_COLORS = {
+  protein: "#DC2626",
+  carbs:   "#F59E0B",
+  fat:     "#8B5CF6",
+  fibre:   "#10B981",
+};
+const KG_G = (g) => (g == null ? "—" : g >= 1000 ? `${(g / 1000).toFixed(1)} kg` : `${Math.round(g)} g`);
+
+function NutritionBlock({ nutrition, testKind, accent }) {
+  const cov = nutrition.coverage || {};
+  const macros = nutrition.macro_grams || [];
+  const kcalPie = nutrition.kcal_pie || [];
+  const dailyKcal = (nutrition.daily_kcal || []).map((d) => ({
+    ...d,
+    label: formatDate(d.date),
+  }));
+  const kcalColor = accent === "purchases" ? "#DC2626" : "#EA580C";
+  const missing = cov.qty_pct != null ? Math.max(0, 100 - cov.qty_pct) : 0;
+  return (
+    <div className="mt-5" data-testid={`kitchen-${testKind}-nutrition`}>
+      <div className="flex items-center gap-2 mb-2">
+        <Flame size={16} className="text-rose-600" />
+        <div className="font-extrabold text-sm">Nutrition</div>
+        {missing > 0 && (
+          <span
+            className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200"
+            title={`${cov.items_covered}/${cov.items_total} items have nutrition data`}
+            data-testid={`kitchen-${testKind}-nutrition-coverage`}
+          >
+            {missing.toFixed(0)}% of qty has no nutrition data — chart is based on {cov.qty_pct}%
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
+        <StatPill icon={Flame}   label="Total kcal"  value={inr(nutrition.kcal_total || 0)} tint="bg-rose-50" />
+        <StatPill icon={Beef}    label="Protein"     value={KG_G(nutrition.totals?.protein_g)} tint="bg-red-50" />
+        <StatPill icon={Wheat}   label="Carbs"       value={KG_G(nutrition.totals?.carbs_g)} tint="bg-amber-50" />
+        <StatPill icon={Droplet} label="Fat"         value={KG_G(nutrition.totals?.fat_g)} tint="bg-violet-50" />
+        <StatPill icon={Boxes}   label="Fibre"       value={KG_G(nutrition.totals?.fibre_g)} tint="bg-emerald-50" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+        <div className="iu-card p-3">
+          <div className="flex items-center gap-2 mb-1"><TrendingUp size={14} className="text-slate-500" /><div className="font-bold text-sm">Daily calories</div></div>
+          {(dailyKcal.length === 0)
+            ? <div className="text-center text-slate-400 text-sm py-8">No data</div>
+            : (
+              <div style={{ width: "100%", height: 220 }} data-testid={`kitchen-${testKind}-nutrition-daily`}>
+                <ResponsiveContainer>
+                  <LineChart data={dailyKcal} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" minTickGap={20} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)} />
+                    <Tooltip formatter={(v) => `${inr(v)} kcal`} contentStyle={{ fontSize: 12 }} />
+                    <Line type="monotone" dataKey="kcal" name="kcal" stroke={kcalColor} strokeWidth={2} dot={{ r: 2 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+        </div>
+        <div className="iu-card p-3">
+          <div className="flex items-center gap-2 mb-1"><PieIcon size={14} className="text-slate-500" /><div className="font-bold text-sm">Macros (grams)</div></div>
+          {(macros.every((m) => (m.grams || 0) === 0))
+            ? <div className="text-center text-slate-400 text-sm py-8">No data</div>
+            : (
+              <div style={{ width: "100%", height: 220 }} data-testid={`kitchen-${testKind}-nutrition-macros`}>
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie data={macros} dataKey="grams" nameKey="label" outerRadius={80} innerRadius={40}
+                         label={(e) => `${e.pct}%`} labelLine={false}>
+                      {macros.map((m) => <Cell key={m.key} fill={MACRO_COLORS[m.key]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v, n) => [KG_G(v), n]} contentStyle={{ fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+        </div>
+        <div className="iu-card p-3">
+          <div className="flex items-center gap-2 mb-1"><PieIcon size={14} className="text-slate-500" /><div className="font-bold text-sm">Calorie source</div><span className="text-[10px] text-slate-400">(kcal from macro)</span></div>
+          {(kcalPie.every((m) => (m.kcal || 0) === 0))
+            ? <div className="text-center text-slate-400 text-sm py-8">No data</div>
+            : (
+              <div style={{ width: "100%", height: 220 }} data-testid={`kitchen-${testKind}-nutrition-kcalpie`}>
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie data={kcalPie} dataKey="kcal" nameKey="label" outerRadius={80} innerRadius={40}
+                         label={(e) => `${e.pct}%`} labelLine={false}>
+                      {kcalPie.map((m) => <Cell key={m.key} fill={MACRO_COLORS[m.key]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v, n) => [`${inr(v)} kcal`, n]} contentStyle={{ fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+        </div>
+        <div className="iu-card p-3">
+          <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-slate-500" /><div className="font-bold text-sm">Top items by calories</div></div>
+          {((nutrition.top_by_kcal || []).length === 0)
+            ? <div className="text-center text-slate-400 text-sm py-8">No data</div>
+            : (
+              <div style={{ width: "100%", height: Math.max(220, (nutrition.top_by_kcal.slice(0, 10).length * 26)) }} data-testid={`kitchen-${testKind}-nutrition-top-kcal`}>
+                <ResponsiveContainer>
+                  <BarChart data={(nutrition.top_by_kcal || []).slice(0, 10)} layout="vertical" margin={{ top: 4, right: 20, left: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)} />
+                    <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v) => `${inr(v)} kcal`} contentStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="kcal" name="kcal" radius={[0, 3, 3, 0]}>
+                      {(nutrition.top_by_kcal || []).slice(0, 10).map((r, i) => <Cell key={r.item_id} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+        </div>
+      </div>
+    </div>
   );
 }
 

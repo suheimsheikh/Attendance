@@ -39,6 +39,7 @@ from services.time_utils import local_date_str, local_now, now_utc, office_tz
 from services.photo import member_photo_url
 from services.permissions import is_ex_member
 from services.scope import scoped_user_query as _scoped_user_query_shared
+from services.nutrition_seed import lookup as _nutri_lookup, qty_to_grams as _qty_to_grams
 from config import MAX_USERS
 
 logger = logging.getLogger(__name__)
@@ -161,6 +162,11 @@ class ItemIn(BaseModel):
     min_stock: float = 0.0                      # low-stock alert level; 0 = off
     norm_per_serving: float = 0.0               # expected qty per meal serving; 0 = untracked
     sort_order: int = 100
+    # Optional per-item nutrition override (per 100 g):
+    #   {kcal, protein_g, carbs_g, fat_g, fibre_g, grams_per_unit}
+    # Any/all keys may be omitted. Falls back to the built-in
+    # nutrition_seed lookup when None.
+    nutrition: Optional[dict] = None
 
 
 class ItemPatch(BaseModel):
@@ -174,6 +180,7 @@ class ItemPatch(BaseModel):
     norm_per_serving: Optional[float] = None
     sort_order: Optional[int] = None
     active: Optional[bool] = None
+    nutrition: Optional[dict] = None
 
 
 class ItemsReorderIn(BaseModel):
@@ -3175,7 +3182,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
         # ---- Item + category master (for names / labels) ----
         items = await db.meal_items.find(
-            {}, {"_id": 0, "id": 1, "name": 1, "unit": 1, "category_key": 1},
+            {}, {"_id": 0, "id": 1, "name": 1, "unit": 1, "category_key": 1, "nutrition": 1},
         ).to_list(2000)
         by_id = {i["id"]: i for i in items}
         cats = await _purchase_categories()
@@ -3241,6 +3248,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         purch_cat: dict[str, float] = {}
         iss_cat: dict[str, float] = {}
         unitemised_total = 0.0
+        # Per-date list of (item_id, qty) tuples — used to plot the
+        # daily kcal trend by re-scoring each line through the same
+        # nutrition resolver.
+        purch_daily_lines: dict[str, list] = {}
+        iss_daily_lines: dict[str, list] = {}
 
         for doc in purch_docs:
             d = doc["date"]
@@ -3266,6 +3278,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 it["qty"] += q
                 it["amount"] += amt
                 it["lines"] += 1
+                purch_daily_lines.setdefault(d, []).append((iid, q))
             # Category share is drawn from `amounts` so bulk-uploaded
             # days still contribute to the pie.
             for ckey, v in amounts_map.items():
@@ -3297,6 +3310,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 info = by_id.get(iid) or {}
                 ckey = info.get("category_key") or "uncategorised"
                 iss_cat[ckey] = iss_cat.get(ckey, 0.0) + amt
+                iss_daily_lines.setdefault(d, []).append((iid, q))
 
         def _daily_series(daily: dict) -> list:
             return [
@@ -3341,7 +3355,130 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         purch_item_rows = _item_rows(purch_items)
         iss_item_rows = _item_rows(iss_items)
 
-        def _pack(daily, items_rows, cat_rows, unitemised=0.0) -> dict:
+        # ---- Nutrition rollup (Feb 2026 request) --------------------
+        # Per-item macro totals for the window. Uses the item's stored
+        # `nutrition` override first, else falls back to the built-in
+        # `nutrition_seed` lookup by name.
+        MACRO_KEYS = ("kcal", "protein_g", "carbs_g", "fat_g", "fibre_g")
+
+        def _resolve_nutrition(info: dict) -> dict | None:
+            n = info.get("nutrition") or None
+            if n and isinstance(n, dict) and (n.get("kcal") is not None
+                                              or n.get("protein_g") is not None):
+                return n
+            return _nutri_lookup(info.get("name") or "")
+
+        def _line_macros(info: dict, qty: float) -> dict | None:
+            nut = _resolve_nutrition(info)
+            if not nut:
+                return None
+            gpu = None
+            if isinstance(info.get("nutrition"), dict):
+                gpu = info["nutrition"].get("grams_per_unit")
+            if gpu is None:
+                gpu = nut.get("grams_per_unit")
+            grams = _qty_to_grams(qty, info.get("unit"), gpu)
+            if grams is None:
+                return None   # unit not weight/volume and no override
+            factor = grams / 100.0
+            return {k: float(nut.get(k) or 0) * factor for k in MACRO_KEYS}
+
+        def _nutrition_rollup(items_agg: dict, daily_lines: dict) -> dict:
+            """items_agg: {iid: {qty, amount, lines}}. daily_lines: {date:
+            [(iid, qty), ...]}. Returns per-item macros, macro totals,
+            daily kcal series and coverage stats."""
+            per_item: list = []
+            totals = {k: 0.0 for k in MACRO_KEYS}
+            covered_qty = 0.0
+            total_qty = 0.0
+            covered_amt = 0.0
+            total_amt = 0.0
+            for iid, v in items_agg.items():
+                info = by_id.get(iid) or {}
+                macros = _line_macros(info, v["qty"])
+                total_qty += v["qty"]
+                total_amt += v["amount"]
+                if not macros:
+                    continue
+                covered_qty += v["qty"]
+                covered_amt += v["amount"]
+                for k in MACRO_KEYS:
+                    totals[k] += macros[k]
+                per_item.append({
+                    "item_id": iid,
+                    "name": info.get("name") or "(deleted item)",
+                    "unit": info.get("unit"),
+                    "category_key": info.get("category_key"),
+                    "qty": round(v["qty"], 3),
+                    **{k: round(macros[k], 1) for k in MACRO_KEYS},
+                })
+            per_item.sort(key=lambda r: r["kcal"], reverse=True)
+
+            # Macro grams pie (protein + carbs + fat + fibre) with % of grams.
+            macro_grams = [
+                {"key": "protein", "label": "Protein", "grams": round(totals["protein_g"], 1)},
+                {"key": "carbs",   "label": "Carbs",   "grams": round(totals["carbs_g"], 1)},
+                {"key": "fat",     "label": "Fat",     "grams": round(totals["fat_g"], 1)},
+                {"key": "fibre",   "label": "Fibre",   "grams": round(totals["fibre_g"], 1)},
+            ]
+            tg = sum(m["grams"] for m in macro_grams) or 1.0
+            for m in macro_grams:
+                m["pct"] = round(m["grams"] * 100.0 / tg, 1)
+
+            # Kcal contribution pie (4/4/9/2 kcal per gram).
+            kcal_from = {
+                "protein": totals["protein_g"] * 4,
+                "carbs":   totals["carbs_g"] * 4,
+                "fat":     totals["fat_g"] * 9,
+                "fibre":   totals["fibre_g"] * 2,
+            }
+            tk = sum(kcal_from.values()) or 1.0
+            kcal_pie = [
+                {"key": k, "label": lbl, "kcal": round(v, 0),
+                 "pct": round(v * 100.0 / tk, 1)}
+                for k, lbl, v in [
+                    ("protein", "Protein", kcal_from["protein"]),
+                    ("carbs",   "Carbs",   kcal_from["carbs"]),
+                    ("fat",     "Fat",     kcal_from["fat"]),
+                    ("fibre",   "Fibre",   kcal_from["fibre"]),
+                ]
+            ]
+
+            # Daily kcal trend — cheap: iterate the collected per-day
+            # (item_id, qty) tuples and reuse the same _line_macros.
+            daily_kcal = []
+            for d in sorted(daily_lines.keys()):
+                kcal_sum = 0.0
+                for iid, qty in daily_lines[d]:
+                    m = _line_macros(by_id.get(iid) or {}, qty)
+                    if m:
+                        kcal_sum += m["kcal"]
+                daily_kcal.append({"date": d, "kcal": round(kcal_sum, 0)})
+
+            return {
+                "totals": {k: round(v, 1) for k, v in totals.items()},
+                "kcal_total": round(totals["kcal"], 0),
+                "top_by_kcal": per_item[:12],
+                "items": per_item,
+                "macro_grams": macro_grams,
+                "kcal_pie": kcal_pie,
+                "daily_kcal": daily_kcal,
+                "coverage": {
+                    "items_covered": len(per_item),
+                    "items_total": len(items_agg),
+                    "qty_covered": round(covered_qty, 3),
+                    "qty_total": round(total_qty, 3),
+                    "amount_covered": round(covered_amt, 2),
+                    "amount_total": round(total_amt, 2),
+                    "qty_pct": round(covered_qty * 100.0 / total_qty, 1) if total_qty else 0,
+                    "amount_pct": round(covered_amt * 100.0 / total_amt, 1) if total_amt else 0,
+                },
+            }
+
+        purch_nut = _nutrition_rollup(purch_items, purch_daily_lines)
+        iss_nut = _nutrition_rollup(iss_items, iss_daily_lines)
+
+        def _pack(daily, items_rows, cat_rows, nutrition, unitemised=0.0) -> dict:
             total_amount = round(sum(d["amount"] for d in daily), 2)
             total_qty_lines = sum(d["lines"] for d in daily)
             itemised_amount = round(sum(r["amount"] for r in items_rows), 2)
@@ -3356,12 +3493,13 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "unitemised_amount": round(max(0.0, total_amount - itemised_amount), 2),
                 "total_lines": total_qty_lines,
                 "item_count": len(items_rows),
+                "nutrition": nutrition,
             }
 
         return {
             "start": s, "end": e,
-            "purchases": _pack(_daily_series(purch_daily), purch_item_rows, _cat_pct(purch_cat), unitemised_total),
-            "issues":    _pack(_daily_series(iss_daily),   iss_item_rows,   _cat_pct(iss_cat)),
+            "purchases": _pack(_daily_series(purch_daily), purch_item_rows, _cat_pct(purch_cat), purch_nut, unitemised_total),
+            "issues":    _pack(_daily_series(iss_daily),   iss_item_rows,   _cat_pct(iss_cat),    iss_nut),
         }
 
     return router

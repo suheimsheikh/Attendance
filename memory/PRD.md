@@ -14,6 +14,26 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 26 Feb 2026 — Kitchen Nutrition Analytics
+- **Nutrition roll-up** on the Kitchen Analytics tab for both Purchases and
+  Issues sections. Built-in seed of ~60 common Indian pantry items (per-100g
+  kcal / protein / carbs / fat / fibre; grams-per-unit for count items).
+  Each item can also carry an admin-set `nutrition` override that beats the
+  seed lookup.
+    • Backend: `services/nutrition_seed.py`; roll-up baked into
+      `GET /api/meals/kitchen-analytics` under `purchases.nutrition` and
+      `issues.nutrition`.
+    • Charts: **Total-kcal KPI strip** (kcal + 4 macro grams), **Daily
+      calories** line, **Macros (grams) pie**, **Calorie source pie**
+      (kcal from each macro), **Top items by calories** bar.
+    • Coverage badge — "27% of qty has no nutrition data — chart is based
+      on 73%" — shown whenever items are missing macros.
+- **Per-item Nutrition editor** — small 🔥 icon on every Masters row opens
+  a compact modal to override any of the 5 macros + `grams_per_unit`. Leave
+  a field blank to fall back to the seed lookup.
+- Item schema: `meal_items.nutrition` optional dict; `ItemIn`/`ItemPatch`
+  accept the new field.
+
 ### 26 Feb 2026 — Kitchen Analytics Panel + Item-wise Expense Breakdown + DOW dates
 - **Kitchen Analytics tab** (Pantry Stock → Analytics) plus a **sidebar shortcut**
   ("Kitchen Analytics" under the KITCHEN group). Renders two mirrored sections
