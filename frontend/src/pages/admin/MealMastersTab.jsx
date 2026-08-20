@@ -736,7 +736,7 @@ export default function MealMastersTab({ liveSig }) {
     <div data-testid="meal-masters-tab">
       <ShoppingListPanel data={shop}/>
 
-      <div className="iu-card p-0 overflow-x-auto" data-testid="masters-tree">
+      <div className="iu-card p-0" data-testid="masters-tree">
         {/* Sticky header — everything the user needs above the list stays
             latched to the top while scrolling: page-scoped filter toolbar
             (Stock as of / Only low / Show inactive), column labels, and
