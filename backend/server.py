@@ -4054,7 +4054,15 @@ app.include_router(_dashboard_router(db, require_admin))
 
 # Chef's View (GET /api/admin/meals-today) + Categories master read.
 from routes.meals import make_router as _meals_router  # noqa: E402
-app.include_router(_meals_router(db, require_admin, get_current_user, require_chef_or_admin))
+_meals = _meals_router(db, require_admin, get_current_user, require_chef_or_admin)
+app.include_router(_meals)
+
+# Presence + row-focus (Feb 2026). Reuses the meals SSE channel so
+# peer tabs learn about focus changes on the same channel they already
+# subscribe to.
+from routes.presence import make_router as _presence_router  # noqa: E402
+_signal_meals_fn = getattr(_meals, "_signal_meals_ref", [None])[0] or (lambda *a, **k: None)
+app.include_router(_presence_router(require_chef_or_admin, _signal_meals_fn))
 
 from routes.roles import make_router as _roles_router  # noqa: E402
 app.include_router(_roles_router(db, require_admin, get_current_user))

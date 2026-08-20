@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search, StickyNote } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
+import { useRowFocus } from "../../hooks/useRowFocus";
 
 function todayISO() {
   const d = new Date();
@@ -112,6 +113,10 @@ export default function MealEntryTab({ liveSig }) {
       return new Set(raw ? JSON.parse(raw) : []);
     } catch { return new Set(); }
   });
+  // Row-focus tracking — shows a small "🟠 Priya is editing" chip on
+  // any row a peer chef is currently in. Zero DB writes, ~100 B per
+  // focus/blur.
+  const { focusMap, notifyFocus, notifyBlur } = useRowFocus(dateStr, liveSig);
   // Sticky "last-used supplier" (Feb 2026 request). Whichever supplier
   // the chef picked most recently auto-fills the vendor of any BLANK
   // row they touch next — including the first row of the next day.
@@ -959,10 +964,29 @@ export default function MealEntryTab({ liveSig }) {
                     const wasteAmt = num(w.qty) * rate;
                     // Overshoot on issues + wastage combined (both deplete stock).
                     const over = oh != null && (num(issueQty) + num(w.qty)) > oh + 1e-6;
+                    // Peer-editing chip — if another chef is focused on
+                    // ANY editable cell of this row right now, show a
+                    // small badge with their name.
+                    const peer =
+                      focusMap.get(`purch:${it.id}`) ||
+                      focusMap.get(`issue:${it.id}`) ||
+                      focusMap.get(`wastage:${it.id}`) ||
+                      null;
                     return (
-                      <tr key={it.id} className={`border-t border-slate-100 hover:bg-slate-50/70 ${over ? "bg-rose-50/60" : ""}`} data-testid={`entry-row-${it.id}`}>
+                      <tr key={it.id} className={`border-t border-slate-100 hover:bg-slate-50/70 ${over ? "bg-rose-50/60" : peer ? "bg-sky-50/40" : ""}`} data-testid={`entry-row-${it.id}`}>
                         <td className="p-2">
-                          <div className="font-semibold text-slate-900">{it.name}</div>
+                          <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                            <span>{it.name}</span>
+                            {peer && (
+                              <span
+                                className="text-[9px] font-bold uppercase tracking-wider text-sky-700 bg-sky-100 border border-sky-200 rounded px-1 py-0.5"
+                                title={`${peer.name} is editing this row now — the value may change under you`}
+                                data-testid={`entry-row-peer-${it.id}`}
+                              >
+                                ✎ {peer.name.split(" ")[0]}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-1 py-2 text-slate-500 text-xs">{it.unit}</td>
                         <td className="px-1 py-2 text-right tabular-nums text-slate-600" data-testid={`entry-onhand-${it.id}`}>
@@ -998,7 +1022,8 @@ export default function MealEntryTab({ liveSig }) {
                             type="number" min="0" step="0.01"
                             value={e.qty ?? ""}
                             onChange={(ev) => setPurchField(it.id, "qty", ev.target.value)}
-                            onBlur={queuePurch}
+                            onFocus={() => notifyFocus("purch", it.id)}
+                            onBlur={() => { notifyBlur("purch", it.id); queuePurch(); }}
                             onKeyDown={onGridKeyDown("purch-qty", it.id)}
                             className="iu-input !h-8 !px-2 text-sm w-full text-right tabular-nums"
                             placeholder="0"
@@ -1010,6 +1035,7 @@ export default function MealEntryTab({ liveSig }) {
                             type="number" min="0" step="0.01"
                             value={e.rate ?? ""}
                             onChange={(ev) => setPurchField(it.id, "rate", ev.target.value)}
+                            onFocus={() => notifyFocus("purch", it.id)}
                             onBlur={() => {
                               // Snap the typed rate to a fixed 2-decimal
                               // string on blur so the column reads as
@@ -1020,6 +1046,7 @@ export default function MealEntryTab({ liveSig }) {
                                 const fixed = Number(raw).toFixed(2);
                                 if (fixed !== String(raw)) setPurchField(it.id, "rate", fixed);
                               }
+                              notifyBlur("purch", it.id);
                               queuePurch();
                             }}
                             onKeyDown={onGridKeyDown("purch-rate", it.id)}
@@ -1036,7 +1063,8 @@ export default function MealEntryTab({ liveSig }) {
                             type="number" min="0" step="0.01"
                             value={issueQty ?? ""}
                             onChange={(ev) => { dirtyIssues.current.add(it.id); setIssues({ ...issues, [it.id]: ev.target.value }); }}
-                            onBlur={queueIssues}
+                            onFocus={() => notifyFocus("issue", it.id)}
+                            onBlur={() => { notifyBlur("issue", it.id); queueIssues(); }}
                             onKeyDown={onGridKeyDown("issue-qty", it.id)}
                             className={`iu-input !h-8 !px-2 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`}
                             placeholder="0"
@@ -1059,7 +1087,8 @@ export default function MealEntryTab({ liveSig }) {
                             type="number" min="0" step="0.01"
                             value={w.qty ?? ""}
                             onChange={(ev) => setWastageField(it.id, "qty", ev.target.value)}
-                            onBlur={queueWastage}
+                            onFocus={() => notifyFocus("wastage", it.id)}
+                            onBlur={() => { notifyBlur("wastage", it.id); queueWastage(); }}
                             onKeyDown={onGridKeyDown("wastage-qty", it.id)}
                             className={`iu-input !h-8 !px-2 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`}
                             placeholder="0"

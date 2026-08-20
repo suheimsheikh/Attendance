@@ -15,6 +15,7 @@ import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, I
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import { useMealsEvents } from "../../hooks/useMealsEvents";
+import PresenceChip from "../../components/PresenceChip";
 import MealExpensesTab from "./MealExpensesTab";
 import MealPurchasesTab from "./MealPurchasesTab";
 import MealIssuesTab from "./MealIssuesTab";
@@ -497,11 +498,14 @@ export default function MealsReport() {
           scrolling a long pantry list. Height ≈ 132px on desktop; child
           sticky regions inside each tab must offset by this amount. */}
       <div className="sticky top-0 z-40 bg-slate-50 -mx-4 md:-mx-8 px-4 md:px-8 pt-1 pb-0" data-testid="meals-report-sticky-top">
-        <header className="pb-3">
-          <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">Pantry Stock</h1>
-          <p className="text-slate-500 text-xs mt-0.5">
-            Portion planning, month-long audit, purchase entry and the expense report.
-          </p>
+        <header className="pb-3 flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">Pantry Stock</h1>
+            <p className="text-slate-500 text-xs mt-0.5">
+              Portion planning, month-long audit, purchase entry and the expense report.
+            </p>
+          </div>
+          <PresenceChip where="Pantry" />
         </header>
 
         <div className="flex gap-2 border-b border-slate-200 overflow-x-auto" data-testid="meals-report-tabs">
@@ -536,7 +540,7 @@ export default function MealsReport() {
       {/* Legacy: keep old tabs reachable via deep-link only, in case a
           user has a purchases/issues URL bookmarked from before the
           Feb-2026 merge. */}
-      {tab === "purchases" && <MealPurchasesTab onGoMasters={() => setTab("masters")} />}
+      {tab === "purchases" && <MealPurchasesTab onGoMasters={() => setTab("masters")} liveSig={liveSig} />}
       {tab === "issues" && <MealIssuesTab />}
       {tab === "wastage" && <MealWastageTab liveSig={liveSig} />}
       {tab === "crosscheck" && <MealCrossCheckTab onGoMasters={() => setTab("masters")} liveSig={liveSig} />}

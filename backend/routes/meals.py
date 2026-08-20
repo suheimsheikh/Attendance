@@ -288,6 +288,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     if require_chef_or_admin is None:
         require_chef_or_admin = require_admin
 
+    # Exposed so the presence router (Feb 2026) can broadcast row-focus
+    # events on the same SSE channel without depending on meals.py's
+    # module-private closures.
+    router._signal_meals_ref = [None]  # noqa: SLF001
+
     # ------------------------------------------------------------------
     # Live update signal (Jun 2026 — user asked for pushed updates instead
     # of client polling). Every pantry mutation bumps a monotonic `seq` on
@@ -309,6 +314,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             )
         except Exception:
             logging.getLogger(__name__).warning("meals signal bump failed", exc_info=True)
+    router._signal_meals_ref[0] = _signal_meals  # noqa: SLF001
 
     @router.get("/meals/events")
     async def meals_events(token: str):
@@ -385,7 +391,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         return rows
 
     @router.post("/masters/categories")
-    async def create_category(body: CategoryIn, admin: dict = Depends(require_admin)):
+    async def create_category(body: CategoryIn, user: dict = Depends(require_chef_or_admin)):
         key = body.key.strip().lower()
         if not key.replace("_", "").isalnum():
             raise HTTPException(status_code=400,
@@ -405,7 +411,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "sort_order": int(body.sort_order),
             "active": True,
             "created_at": now_utc().isoformat(),
-            "created_by": admin.get("id"),
+            "created_by": user.get("id"),
         }
         await db.categories.insert_one(doc)
         doc.pop("_id", None)
@@ -413,7 +419,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
     @router.patch("/masters/categories/{cat_id}")
     async def update_category(
-        cat_id: str, body: CategoryPatch, admin: dict = Depends(require_admin)
+        cat_id: str, body: CategoryPatch, user: dict = Depends(require_chef_or_admin)
     ):
         row = await db.categories.find_one({"id": cat_id}, {"_id": 0})
         if not row:
@@ -1199,7 +1205,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
     @router.put("/meals/purchase-categories")
     async def put_purchase_categories(
-        body: PurchaseCategoriesIn, admin: dict = Depends(require_admin)
+        body: PurchaseCategoriesIn, user: dict = Depends(require_chef_or_admin)
     ):
         if not body.categories:
             raise HTTPException(status_code=400, detail="At least one category is required")
@@ -1218,7 +1224,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             {"id": PURCHASE_CFG_ID},
             {"$set": {"categories": out,
                       "updated_at": now_utc().isoformat(),
-                      "updated_by": admin.get("id")}},
+                      "updated_by": user.get("id")}},
             upsert=True,
         )
         await _signal_meals("categories")
@@ -1407,7 +1413,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         return {"months": buckets, "vendors": out}
 
     @router.post("/meals/vendors")
-    async def create_vendor(body: VendorIn, admin: dict = Depends(require_admin)):
+    async def create_vendor(body: VendorIn, user: dict = Depends(require_chef_or_admin)):
         name = body.name.strip()
         norm = _norm_vendor_name(name)
         if not norm:
@@ -1425,7 +1431,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "phone": _norm_phone(body.phone),
             "active": True,
             "created_at": now_utc().isoformat(),
-            "created_by": admin["id"],
+            "created_by": user["id"],
         }
         await db.meal_vendors.insert_one(doc)
         doc.pop("_id", None)
@@ -1435,7 +1441,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     @router.patch("/meals/vendors/{vendor_id}")
     async def update_vendor(
         vendor_id: str, body: VendorPatch,
-        admin: dict = Depends(require_admin),
+        user: dict = Depends(require_chef_or_admin),
     ):
         vendor = await db.meal_vendors.find_one({"id": vendor_id}, {"_id": 0})
         if not vendor:
@@ -1511,7 +1517,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         return {"items": rows, "units": list(VALID_UNITS)}
 
     @router.post("/meals/items")
-    async def create_item(body: ItemIn, admin: dict = Depends(require_admin)):
+    async def create_item(body: ItemIn, user: dict = Depends(require_chef_or_admin)):
         _valid_unit(body.unit)
         cats = await _purchase_categories()
         if body.category_key not in {c["key"] for c in cats}:
@@ -1554,8 +1560,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "sort_order": int(body.sort_order),
             "active": True,
             "created_at": now_utc().isoformat(),
-            "created_by": admin.get("id"),
-            "created_by_name": admin.get("full_name") or admin.get("email"),
+            "created_by": user.get("id"),
+            "created_by_name": user.get("full_name") or user.get("email"),
         }
         await db.meal_items.insert_one(doc)
         doc.pop("_id", None)
@@ -1564,7 +1570,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
     @router.patch("/meals/items/{item_id}")
     async def update_item(
-        item_id: str, body: ItemPatch, admin: dict = Depends(require_admin),
+        item_id: str, body: ItemPatch, user: dict = Depends(require_chef_or_admin),
     ):
         row = await db.meal_items.find_one({"id": item_id}, {"_id": 0})
         if not row:
@@ -1615,8 +1621,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             update["active"] = bool(body.active)
         if update:
             update["updated_at"] = now_utc().isoformat()
-            update["updated_by"] = admin.get("id")
-            update["updated_by_name"] = admin.get("full_name") or admin.get("email")
+            update["updated_by"] = user.get("id")
+            update["updated_by_name"] = user.get("full_name") or user.get("email")
             await db.meal_items.update_one({"id": item_id}, {"$set": update})
             row.update(update)
             await _signal_meals("items")
@@ -1647,7 +1653,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         return {"ok": True, "soft_deleted": False}
 
     @router.put("/meals/items/reorder")
-    async def reorder_items(body: ItemsReorderIn, admin: dict = Depends(require_admin)):
+    async def reorder_items(body: ItemsReorderIn, user: dict = Depends(require_chef_or_admin)):
         rows = await db.meal_items.find(
             {"category_key": body.category_key}, {"_id": 0, "id": 1},
         ).to_list(500)

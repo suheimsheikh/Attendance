@@ -26,7 +26,7 @@ const num = (v) => (v === "" || v == null ? 0 : Number(v) || 0);
 // ---------------------------------------------------------------------------
 // Purchases tab
 // ---------------------------------------------------------------------------
-export default function MealPurchasesTab({ onGoMasters }) {
+export default function MealPurchasesTab({ onGoMasters, liveSig }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [cats, setCats] = useState([]);
@@ -52,6 +52,13 @@ export default function MealPurchasesTab({ onGoMasters }) {
     }
   };
   useEffect(() => { loadMasters(); }, []);
+  // Live-refresh on SSE (Feb 2026): another chef added/edited a vendor,
+  // item or category — reload the master lookup lists so this tab sees
+  // the change within ~1 second instead of on the next tab-switch.
+  useEffect(() => {
+    if (!liveSig) return;
+    if (["vendors", "items", "categories"].includes(liveSig.scope)) loadMasters();
+  }, [liveSig]);
 
   const loadRecent = () => {
     const end = todayISO();

@@ -13,6 +13,7 @@ import MusterBreakdownBar from "./muster/MusterBreakdownBar";
 import AbsentShareBanner from "./muster/AbsentShareBanner";
 import DailyRosterShareButton from "./muster/DailyRosterShareButton";
 import PresentShareButton from "./muster/PresentShareButton";
+import PresenceChip from "../components/PresenceChip";
 import { shareToWhatsApp } from "../utils/shareWhatsApp";
 import { buildPhotoMosaicBlob } from "../utils/mosaicShare";
 import ExMemberToggle, { useExMemberToggle } from "../components/ExMemberToggle";
@@ -366,7 +367,10 @@ export default function Muster() {
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto pb-32" data-testid="muster-page">
       <header className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Muster Roll</h1>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Muster Roll</h1>
+          <PresenceChip where="Muster" />
+        </div>
         <p className="text-slate-500 text-sm mt-1">
           {isAdmin
             ? "Tick the members who are physically present. Attendance is logged with your name as the verifier. Your GPS is captured on submit and stamped on each check-in."
