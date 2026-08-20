@@ -16,10 +16,12 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search, StickyNote } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search, StickyNote, Store } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import { useRowFocus } from "../../hooks/useRowFocus";
+import VendorScorecardDrawer from "../../components/VendorScorecardDrawer";
+import ItemPriceTrendDrawer from "../../components/ItemPriceTrendDrawer";
 
 function todayISO() {
   const d = new Date();
@@ -51,34 +53,48 @@ const fmtQty = (n) =>
  *     default that auto-fills the vendor of any BLANK row the chef
  *     touches next (existing rows are left alone).
  */
-function RowVendorPicker({ rowVendorId, vendors, onChange, onAddNew, onArrowRight, onArrowUp, onArrowDown, testid }) {
+function RowVendorPicker({ rowVendorId, vendors, onChange, onAddNew, onArrowRight, onArrowUp, onArrowDown, onOpenScorecard, testid }) {
+  const selected = vendors.find((v) => v.id === rowVendorId);
   return (
-    <select
-      value={rowVendorId || ""}
-      onChange={(ev) => {
-        const v = ev.target.value;
-        if (v === "__add__") { onAddNew(); return; }
-        onChange(v);
-      }}
-      onKeyDown={(ev) => {
-        // Arrow keys navigate BETWEEN cells rather than cycling
-        // options — matches the spreadsheet muscle memory the chefs
-        // already have from the numeric cells. Space, click and
-        // first-letter type still open the dropdown for picking.
-        if (ev.key === "ArrowRight") { ev.preventDefault(); onArrowRight?.(); }
-        else if (ev.key === "ArrowUp") { ev.preventDefault(); onArrowUp?.(); }
-        else if (ev.key === "ArrowDown") { ev.preventDefault(); onArrowDown?.(); }
-      }}
-      className={`iu-input !h-8 !px-2 text-xs w-full text-slate-700 ${rowVendorId ? "font-semibold" : "text-slate-400"}`}
-      data-testid={testid}
-      title="Supplier for this item on this day. Click or press Space to pick; arrow keys move between cells."
-    >
-      <option value="">— pick supplier —</option>
-      {vendors.map((v) => (
-        <option key={v.id} value={v.id}>{v.name}</option>
-      ))}
-      <option value="__add__">＋ Add new vendor…</option>
-    </select>
+    <div className="flex items-center gap-1">
+      <select
+        value={rowVendorId || ""}
+        onChange={(ev) => {
+          const v = ev.target.value;
+          if (v === "__add__") { onAddNew(); return; }
+          onChange(v);
+        }}
+        onKeyDown={(ev) => {
+          // Arrow keys navigate BETWEEN cells rather than cycling
+          // options — matches the spreadsheet muscle memory the chefs
+          // already have from the numeric cells. Space, click and
+          // first-letter type still open the dropdown for picking.
+          if (ev.key === "ArrowRight") { ev.preventDefault(); onArrowRight?.(); }
+          else if (ev.key === "ArrowUp") { ev.preventDefault(); onArrowUp?.(); }
+          else if (ev.key === "ArrowDown") { ev.preventDefault(); onArrowDown?.(); }
+        }}
+        className={`iu-input !h-8 !px-2 text-xs flex-1 min-w-0 text-slate-700 ${rowVendorId ? "font-semibold" : "text-slate-400"}`}
+        data-testid={testid}
+        title="Supplier for this item on this day. Click or press Space to pick; arrow keys move between cells."
+      >
+        <option value="">— pick supplier —</option>
+        {vendors.map((v) => (
+          <option key={v.id} value={v.id}>{v.name}</option>
+        ))}
+        <option value="__add__">＋ Add new vendor…</option>
+      </select>
+      {selected && (
+        <button
+          type="button"
+          onClick={(ev) => { ev.stopPropagation(); onOpenScorecard(selected); }}
+          title={`Vendor scorecard · ${selected.name}`}
+          className="shrink-0 p-1 rounded text-emerald-600 hover:bg-emerald-100 transition"
+          data-testid={`${testid}-scorecard-btn`}
+        >
+          <Store size={13}/>
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -154,6 +170,10 @@ export default function MealEntryTab({ liveSig }) {
   // Purchases or the Issues day-total card. `historyKind` picks which
   // column is emphasised in the modal ('purchase' | 'issue').
   const [historyKind, setHistoryKind] = useState(null);
+  // Vendor Scorecard + Item Price Trend drawers (Feb 2026). Cheap
+  // read-only views wired to the same masters the grid already loads.
+  const [scorecardVendorId, setScorecardVendorId] = useState(null);
+  const [trendItem, setTrendItem] = useState(null);  // {id, name} or null
 
   // ---------------------------------------------------------------------
   // Load masters once. Item / category list stays stable across day nav
@@ -974,8 +994,13 @@ export default function MealEntryTab({ liveSig }) {
                       null;
                     return (
                       <tr key={it.id} className={`border-t border-slate-100 hover:bg-slate-50/70 ${over ? "bg-rose-50/60" : peer ? "bg-sky-50/40" : ""}`} data-testid={`entry-row-${it.id}`}>
-                        <td className="p-2">
-                          <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                        <td
+                          className="p-2 cursor-pointer select-none"
+                          onDoubleClick={() => setTrendItem({ id: it.id, name: it.name })}
+                          title="Double-click to see full price history for this item"
+                          data-testid={`entry-item-name-${it.id}`}
+                        >
+                          <div className="font-semibold text-slate-900 flex items-center gap-1.5 hover:text-sky-700">
                             <span>{it.name}</span>
                             {peer && (
                               <span
@@ -1003,6 +1028,7 @@ export default function MealEntryTab({ liveSig }) {
                             vendors={vendors}
                             onChange={(v) => setRowVendor(it.id, v)}
                             onAddNew={() => setShowAddVendor({ catKey: cat.key, itemId: it.id })}
+                            onOpenScorecard={(v) => setScorecardVendorId(v.id)}
                             onArrowRight={() => focusCell("purch-qty", it.id)}
                             onArrowUp={() => {
                               const idx = flatVisibleItemIds.indexOf(it.id);
@@ -1187,6 +1213,23 @@ export default function MealEntryTab({ liveSig }) {
             setShowAddVendor(null);
             refreshVendors();
           }}
+        />
+      )}
+      {scorecardVendorId && (
+        <VendorScorecardDrawer
+          vendorId={scorecardVendorId}
+          onClose={() => setScorecardVendorId(null)}
+          onOpenItem={(itemId, name) => {
+            setScorecardVendorId(null);
+            setTrendItem({ id: itemId, name });
+          }}
+        />
+      )}
+      {trendItem && (
+        <ItemPriceTrendDrawer
+          itemId={trendItem.id}
+          itemName={trendItem.name}
+          onClose={() => setTrendItem(null)}
         />
       )}
     </div>

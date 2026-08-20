@@ -7,7 +7,9 @@ import { api, setToken } from "../api";
 import { getDeviceId, getDeviceInfo } from "../utils";
 import Avatar from "../components/Avatar";
 import FormErrorBanner from "../components/FormErrorBanner";
+import LoginPresenceStrip from "../components/LoginPresenceStrip";
 import { useFormError } from "../hooks/useFormError";
+import { usePublicPresenceToast } from "../hooks/usePublicPresenceToast";
 
 export default function Login() {
   const nav = useNavigate();
@@ -21,6 +23,9 @@ export default function Login() {
   const pollRef = useRef(null);
   const deviceIdRef = useRef("");
   const formErr = useFormError();
+  // Chef "backup arriving" notifications on the login page — polls the
+  // public presence endpoint (no auth needed) and toasts NEW arrivals.
+  usePublicPresenceToast({ enabled: true });
 
   useEffect(() => { if (user) nav(user.is_escort ? "/escort-checkin" : "/", { replace: true }); }, [user, nav]);
   useEffect(() => {
@@ -236,6 +241,8 @@ export default function Login() {
         </button>
 
         {showAdmin && <AdminEmailForm onLogin={login} onDone={() => nav("/", { replace: true })} />}
+
+        <LoginPresenceStrip />
       </div>
     </Shell>
   );

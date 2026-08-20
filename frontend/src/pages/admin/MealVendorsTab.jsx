@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, Save, X, Store, Phone, TrendingUp } from "lucide-react";
 import { api, showApiError } from "../../api";
+import VendorScorecardDrawer from "../../components/VendorScorecardDrawer";
+import ItemPriceTrendDrawer from "../../components/ItemPriceTrendDrawer";
 
 const inr = (n) =>
   n == null ? "0.00" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -72,6 +74,11 @@ export default function MealVendorsTab({ liveSig }) {
   const [draft, setDraft] = useState({ name: "", phone: "" });
   const [editingId, setEditingId] = useState(null);
   const [edit, setEdit] = useState({ name: "", phone: "" });
+  // Scorecard + item-trend drawers (Feb 2026). Click a vendor name to
+  // pop a 30-day scorecard; from there, click an item row to drill
+  // into that item's full price history.
+  const [scorecardVendorId, setScorecardVendorId] = useState(null);
+  const [trendItem, setTrendItem] = useState(null);
 
   const refresh = () => {
     setLoading(true);
@@ -223,7 +230,17 @@ export default function MealVendorsTab({ liveSig }) {
                           className="iu-input !h-8 text-sm w-full"
                           data-testid={`vendor-edit-name-${v.id}`}
                         />
-                      ) : v.name}
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setScorecardVendorId(v.id)}
+                          title="Click to see 30-day scorecard"
+                          className="text-left hover:text-emerald-700 hover:underline decoration-dotted underline-offset-2"
+                          data-testid={`vendor-name-btn-${v.id}`}
+                        >
+                          {v.name}
+                        </button>
+                      )}
                     </td>
                     <td className="p-2.5 text-slate-600 hidden sm:table-cell">
                       {isEditing ? (
@@ -273,6 +290,23 @@ export default function MealVendorsTab({ liveSig }) {
             </tbody>
           </table>
         </div>
+      )}
+      {scorecardVendorId && (
+        <VendorScorecardDrawer
+          vendorId={scorecardVendorId}
+          onClose={() => setScorecardVendorId(null)}
+          onOpenItem={(itemId, name) => {
+            setScorecardVendorId(null);
+            setTrendItem({ id: itemId, name });
+          }}
+        />
+      )}
+      {trendItem && (
+        <ItemPriceTrendDrawer
+          itemId={trendItem.id}
+          itemName={trendItem.name}
+          onClose={() => setTrendItem(null)}
+        />
       )}
     </div>
   );

@@ -14,6 +14,30 @@ detailed reports, camps/regattas, Escorts module, Meals (muster + chef view + re
 - Super-admin phone login: 9849002111. Admin: admin@attendance.app / Admin@12345.
 
 ## Implemented (highlights, most recent first)
+### 20 Feb 2026 — Vendor Scorecard + Item Price Trend + Login Presence Toast
+- **Vendor Scorecard drawer** — click any vendor name (Vendors master OR the vendor
+  icon in Daily Entry) to see a 30-day scorecard: total spend, line items, per-item
+  qty/spend, vendor's avg/latest rate, and a variance-% badge vs the market average
+  across all suppliers (green ▼ = cheaper, red ▲ = pricier). Click any item row to
+  drill into full price history.
+  - Backend: `GET /api/meals/vendors/{vendor_id}/scorecard?days=30`
+  - Frontend: `components/VendorScorecardDrawer.jsx`
+- **Item Price Trend drawer** — double-click any item name in Daily Entry (or open
+  from the Vendor Scorecard) to see a composed line+bar chart (Recharts): line = rate
+  ₹/unit, bars = qty; plus KPI cards (latest/avg/min/max rate) and a full purchase
+  history table (date, vendor, qty, ₹/unit, amount) since the first purchase.
+  - Backend: `GET /api/meals/items/{item_id}/price-trend`
+  - Frontend: `components/ItemPriceTrendDrawer.jsx`
+- **Login Presence toast + strip** — the login page polls a new public endpoint every
+  20s and (a) shows an "On shift now" pill listing first names of chefs/admins online
+  in the last 15 min, (b) toasts "Priya (chef) just came online" 👋 when someone new
+  appears. Public endpoint returns first-name + role only, no PII.
+  - Backend: `GET /api/presence/public` (unauthenticated)
+  - Frontend: `components/LoginPresenceStrip.jsx`, `hooks/usePublicPresenceToast.js`
+- **Bug fixed en-route**: `hooks/usePresence.js` was importing `useAuth` from a
+  non-existent `../AuthContext` — corrected to `../auth`. This was breaking the
+  login page compile whenever the presence widgets were loaded.
+
 ### 19 Jun 2026 fork — Multi-machine data-wipe fix + SSE hardening (iterations 47-48, all P0 pass)
 - **ROOT CAUSE of "data for 19th vanished / random data" (production)**: auto-save PUT
   the ENTIRE day's lines — a second machine holding a stale view wiped everyone else's

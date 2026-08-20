@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "../api";
-import { useAuth } from "../AuthContext";
+import { useAuth } from "../auth";
 
 /**
  * usePresence — heartbeats every 25 s from chef/admin sessions to the

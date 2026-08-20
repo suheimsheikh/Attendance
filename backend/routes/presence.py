@@ -90,6 +90,35 @@ def make_router(require_chef_or_admin, signal_meals):
         rows = sorted(_presence.values(), key=lambda r: (r.get("name") or "").lower())
         return {"users": rows}
 
+    @router.get("/presence/public")
+    async def presence_public():
+        """Public, unauthenticated "who's on shift" widget for the login
+        page (Feb 2026 request — "show 'Priya just came online' so chefs
+        know they've got backup arriving").
+
+        Returns only first-name + role + how long ago they pinged, and
+        only for users seen in the last 15 minutes. No IDs, no photos,
+        no phone numbers — safe to render before the visitor authenticates.
+        """
+        _prune()
+        now = time.time()
+        rows = []
+        for rec in _presence.values():
+            last = rec.get("last_seen") or 0
+            age = int(now - last)
+            if age > 15 * 60:   # stale — window is intentionally short
+                continue
+            name = (rec.get("name") or "").split(" ")[0] or "Someone"
+            rows.append({
+                "first_name": name,
+                "role": rec.get("role"),
+                "age_seconds": age,
+                "since_seconds": max(age, 0),
+            })
+        # Freshest first so the login page can highlight the newest.
+        rows.sort(key=lambda r: r["age_seconds"])
+        return {"count": len(rows), "users": rows[:20]}
+
     @router.post("/meals/focus")
     async def set_focus(body: RowFocusIn, user: dict = Depends(require_chef_or_admin)):
         """Mark (or clear) the row this user is currently editing on

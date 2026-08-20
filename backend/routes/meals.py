@@ -1412,6 +1412,212 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             })
         return {"months": buckets, "vendors": out}
 
+    @router.get("/meals/vendors/{vendor_id}/scorecard")
+    async def vendor_scorecard(
+        vendor_id: str,
+        days: int = Query(30, ge=1, le=365),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Per-vendor 30-day scorecard (Feb 2026 user request).
+
+        Returns headline stats + a per-item breakdown so the chef can
+        spot suppliers who are quietly getting expensive:
+
+          • total spend, purchase-line count, item variety in the window
+          • per item: qty, spend, vendor's own avg rate, min/max rate,
+            vendor's LATEST rate, market avg (across ALL vendors in the
+            window), and a price-variance % vs the market avg.
+        """
+        vendor = await db.meal_vendors.find_one({"id": vendor_id}, {"_id": 0})
+        if not vendor:
+            raise HTTPException(status_code=404, detail="Vendor not found")
+
+        today = local_date_str(None)
+        start = (date.fromisoformat(today) - timedelta(days=days - 1)).isoformat()
+
+        # All purchase docs in the window — we need EVERYONE's rates to
+        # compute the market average per item (vendor comparison), not
+        # just this vendor's.
+        docs = await db.meal_purchases.find(
+            {"date": {"$gte": start, "$lte": today}},
+            {"_id": 0, "date": 1, "lines": 1},
+        ).sort("date", 1).to_list(1000)
+
+        # Per-item aggregates keyed by item_id.
+        # this_vendor: {qty, spend, rates:[(date,rate)]}
+        # market:      {qty, spend}    ← used for market-avg comparison
+        this_vendor: dict = {}
+        market: dict = {}
+        for doc in docs:
+            d = doc["date"]
+            for ln in (doc.get("lines") or []):
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                r = float(ln.get("rate") or 0)
+                if not iid or q <= 0:
+                    continue
+                # market rollup (every vendor, including this one)
+                m = market.setdefault(iid, {"qty": 0.0, "spend": 0.0})
+                m["qty"] += q
+                m["spend"] += q * r
+                # vendor-specific rollup
+                if ln.get("vendor_id") == vendor_id:
+                    v = this_vendor.setdefault(iid, {
+                        "qty": 0.0, "spend": 0.0, "rates": [], "last_date": None,
+                    })
+                    v["qty"] += q
+                    v["spend"] += q * r
+                    v["rates"].append((d, r))
+                    if v["last_date"] is None or d >= v["last_date"]:
+                        v["last_date"] = d
+
+        if not this_vendor:
+            return {
+                "vendor": vendor, "days": days, "start": start, "end": today,
+                "total_spend": 0.0, "total_lines": 0, "item_count": 0,
+                "items": [],
+            }
+
+        # Hydrate item master for names/units.
+        item_ids = list(this_vendor.keys())
+        items = await db.meal_items.find(
+            {"id": {"$in": item_ids}},
+            {"_id": 0, "id": 1, "name": 1, "unit": 1, "category_key": 1},
+        ).to_list(len(item_ids))
+        by_id = {i["id"]: i for i in items}
+
+        rows = []
+        total_spend = 0.0
+        total_lines = 0
+        for iid, v in this_vendor.items():
+            info = by_id.get(iid)
+            if not info:
+                continue
+            qty = v["qty"]
+            spend = v["spend"]
+            rates = sorted(v["rates"])   # (date, rate)
+            latest_rate = rates[-1][1] if rates else 0.0
+            all_rates = [r for _, r in rates]
+            min_rate = min(all_rates) if all_rates else 0.0
+            max_rate = max(all_rates) if all_rates else 0.0
+            avg_rate = spend / qty if qty else 0.0
+            m = market.get(iid) or {"qty": 0.0, "spend": 0.0}
+            market_avg = (m["spend"] / m["qty"]) if m["qty"] else 0.0
+            # % above/below the market avg. + = more expensive than market.
+            variance_pct = None
+            if market_avg > 0:
+                variance_pct = round((avg_rate - market_avg) / market_avg * 100.0, 1)
+            rows.append({
+                "item_id": iid,
+                "name": info.get("name"),
+                "unit": info.get("unit"),
+                "category_key": info.get("category_key"),
+                "qty": round(qty, 4),
+                "spend": round(spend, 2),
+                "avg_rate": round(avg_rate, 2),
+                "latest_rate": round(latest_rate, 2),
+                "min_rate": round(min_rate, 2),
+                "max_rate": round(max_rate, 2),
+                "market_avg": round(market_avg, 2),
+                "variance_pct": variance_pct,
+                "line_count": len(rates),
+                "last_purchase_date": v["last_date"],
+            })
+            total_spend += spend
+            total_lines += len(rates)
+
+        rows.sort(key=lambda r: r["spend"], reverse=True)
+        return {
+            "vendor": vendor,
+            "days": days, "start": start, "end": today,
+            "total_spend": round(total_spend, 2),
+            "total_lines": total_lines,
+            "item_count": len(rows),
+            "items": rows,
+        }
+
+    @router.get("/meals/items/{item_id}/price-trend")
+    async def item_price_trend(
+        item_id: str,
+        days: Optional[int] = Query(None, ge=1, le=3650),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Full purchase-price history for one item (Feb 2026 request).
+
+        Returns every purchase line chronologically with date, qty, rate,
+        amount and vendor name — so the client can render a price+qty
+        graph "from the beginning". Pass `?days=90` to cap the window;
+        omitted → since the item's first purchase.
+        """
+        item = await db.meal_items.find_one({"id": item_id}, {"_id": 0})
+        if not item:
+            raise HTTPException(status_code=404, detail="Item not found")
+
+        today = local_date_str(None)
+        q: dict = {"lines.item_id": item_id}
+        if days:
+            start = (date.fromisoformat(today) - timedelta(days=days - 1)).isoformat()
+            q["date"] = {"$gte": start, "$lte": today}
+
+        docs = await db.meal_purchases.find(
+            q, {"_id": 0, "date": 1, "lines": 1},
+        ).sort("date", 1).to_list(2000)
+
+        # Hydrate vendor names (batch).
+        vendors = await db.meal_vendors.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
+        vname = {v["id"]: v["name"] for v in vendors}
+
+        points: list = []
+        for doc in docs:
+            d = doc["date"]
+            for ln in (doc.get("lines") or []):
+                if ln.get("item_id") != item_id:
+                    continue
+                qty = float(ln.get("qty") or 0)
+                rate = float(ln.get("rate") or 0)
+                if qty <= 0:
+                    continue
+                vid = ln.get("vendor_id")
+                points.append({
+                    "date": d,
+                    "qty": round(qty, 4),
+                    "rate": round(rate, 2),
+                    "amount": round(qty * rate, 2),
+                    "vendor_id": vid,
+                    "vendor_name": vname.get(vid) if vid else None,
+                })
+
+        # Summary stats.
+        if points:
+            rates = [p["rate"] for p in points]
+            qtys = [p["qty"] for p in points]
+            total_qty = sum(qtys)
+            total_spend = sum(p["amount"] for p in points)
+            summary = {
+                "first_date": points[0]["date"],
+                "last_date": points[-1]["date"],
+                "point_count": len(points),
+                "min_rate": min(rates),
+                "max_rate": max(rates),
+                "latest_rate": rates[-1],
+                "avg_rate": round(total_spend / total_qty, 2) if total_qty else 0.0,
+                "total_qty": round(total_qty, 4),
+                "total_spend": round(total_spend, 2),
+            }
+        else:
+            summary = {
+                "first_date": None, "last_date": None, "point_count": 0,
+                "min_rate": 0.0, "max_rate": 0.0, "latest_rate": 0.0,
+                "avg_rate": 0.0, "total_qty": 0.0, "total_spend": 0.0,
+            }
+
+        return {
+            "item": {"id": item["id"], "name": item.get("name"),
+                     "unit": item.get("unit"),
+                     "category_key": item.get("category_key")},
+            "days": days, "points": points, "summary": summary,
+        }
+
     @router.post("/meals/vendors")
     async def create_vendor(body: VendorIn, user: dict = Depends(require_chef_or_admin)):
         name = body.name.strip()
