@@ -163,6 +163,9 @@ export default function MealsAnalyticsPanel({ days, events }) {
   }
   // Trend chart body factored out so we can render it inside the card
   // AND fullscreen without duplicating the ~30-line JSX block.
+  // Renders four series: BF / L / D (thin, per-slot colours) + Total
+  // (thick emerald) + 7-day MA (dashed slate). BF/L/D can be toggled
+  // off via the Legend if the admin wants a clean Total view.
   const renderTrend = (heightPx) => (
     <div style={{ width: "100%", height: heightPx }} data-testid={heightPx > 400 ? "ma-daily-trend-fs" : "ma-daily-trend"}>
       <ResponsiveContainer>
@@ -172,8 +175,11 @@ export default function MealsAnalyticsPanel({ days, events }) {
           <YAxis tick={{ fontSize: heightPx > 400 ? 12 : 10 }} />
           <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v) => `${inr(v)} meals`} />
           <Legend wrapperStyle={{ fontSize: heightPx > 400 ? 13 : 11 }} />
-          <Line type="monotone" dataKey="total" name="Meals"       stroke="#10B981" strokeWidth={2} dot={{ r: heightPx > 400 ? 3 : 2 }} />
-          <Line type="monotone" dataKey="ma7"   name="7-day avg"  stroke="#0F172A" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
+          <Line type="monotone" dataKey="Breakfast" stroke={SLOT_COLORS.Breakfast} strokeWidth={1.25} dot={false} />
+          <Line type="monotone" dataKey="Lunch"     stroke={SLOT_COLORS.Lunch}     strokeWidth={1.25} dot={false} />
+          <Line type="monotone" dataKey="Dinner"    stroke={SLOT_COLORS.Dinner}    strokeWidth={1.25} dot={false} />
+          <Line type="monotone" dataKey="total"     name="Total" stroke="#10B981" strokeWidth={2.25} dot={{ r: heightPx > 400 ? 3 : 2 }} />
+          <Line type="monotone" dataKey="ma7"       name="7-day avg" stroke="#0F172A" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
