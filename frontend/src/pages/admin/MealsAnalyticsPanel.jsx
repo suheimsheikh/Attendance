@@ -14,7 +14,7 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, PieChart, Pie, Cell, BarChart, Bar, ReferenceArea,
 } from "recharts";
-import { TrendingUp, PieChart as PieIcon, Calendar as CalIcon, BarChart3, Flame, Trophy } from "lucide-react";
+import { TrendingUp, PieChart as PieIcon, Calendar as CalIcon, BarChart3, Flame, Trophy, Maximize2, X as CloseIcon } from "lucide-react";
 
 const SLOT_COLORS = { Breakfast: "#F59E0B", Lunch: "#F97316", Dinner: "#6366F1" };
 const EVENT_COLORS = {
@@ -132,6 +132,13 @@ function StatPill({ icon: Icon, label, value, tint }) {
 
 export default function MealsAnalyticsPanel({ days, events }) {
   const m = useMetrics(days);
+  const [fullscreen, setFullscreen] = React.useState(false);
+  React.useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e) => { if (e.key === "Escape") setFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen]);
   // Map events → bands drawn on the trend chart. Only regattas/camps/
   // breaks that actually intersect a populated day contribute (else
   // Recharts complains about unknown X-axis keys).
@@ -165,6 +172,46 @@ export default function MealsAnalyticsPanel({ days, events }) {
       </div>
     );
   }
+  // Trend chart body factored out so we can render it inside the card
+  // AND fullscreen without duplicating the ~30-line JSX block.
+  const renderTrend = (heightPx) => (
+    <div style={{ width: "100%", height: heightPx }} data-testid={heightPx > 400 ? "ma-daily-trend-fs" : "ma-daily-trend"}>
+      <ResponsiveContainer>
+        <LineChart data={m.rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          {bands.map((b, i) => (
+            <ReferenceArea
+              key={`${b.kind}-${b.name}-${i}`}
+              x1={b.x1} x2={b.x2}
+              strokeOpacity={0}
+              fill={EVENT_COLORS[b.kind].fill}
+              fillOpacity={0.14}
+              ifOverflow="hidden"
+              label={b.count > 2 ? { value: b.name.slice(0, 22), position: "insideTop", fontSize: heightPx > 400 ? 11 : 9, fill: EVENT_COLORS[b.kind].fill } : undefined}
+            />
+          ))}
+          <XAxis dataKey="label" tick={{ fontSize: heightPx > 400 ? 12 : 10 }} interval="preserveStartEnd" minTickGap={20} />
+          <YAxis tick={{ fontSize: heightPx > 400 ? 12 : 10 }} />
+          <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v) => `${inr(v)} meals`} />
+          <Legend wrapperStyle={{ fontSize: heightPx > 400 ? 13 : 11 }} />
+          <Line type="monotone" dataKey="total" name="Meals"       stroke="#10B981" strokeWidth={2} dot={{ r: heightPx > 400 ? 3 : 2 }} />
+          <Line type="monotone" dataKey="ma7"   name="7-day avg"  stroke="#0F172A" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+
+  const eventLegend = bands.length > 0 && (
+    <div className="flex items-center gap-2 text-[10px]">
+      {["regatta", "camp", "break"].map((k) => bands.some((b) => b.kind === k) && (
+        <span key={k} className="inline-flex items-center gap-1">
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: EVENT_COLORS[k].fill, opacity: 0.32 }} />
+          <span className="text-slate-500">{EVENT_COLORS[k].label}</span>
+        </span>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-3" data-testid="meals-analytics-panel">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -183,41 +230,18 @@ export default function MealsAnalyticsPanel({ days, events }) {
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={14} className="text-slate-500"/>
             <div className="font-bold text-sm">Daily total & 7-day trend</div>
-            {bands.length > 0 && (
-              <div className="ml-auto flex items-center gap-2 text-[10px]">
-                {["regatta", "camp", "break"].map((k) => bands.some((b) => b.kind === k) && (
-                  <span key={k} className="inline-flex items-center gap-1">
-                    <span className="inline-block w-3 h-3 rounded-sm" style={{ background: EVENT_COLORS[k].fill, opacity: 0.32 }} />
-                    <span className="text-slate-500">{EVENT_COLORS[k].label}</span>
-                  </span>
-                ))}
-              </div>
-            )}
+            {bands.length > 0 && <div className="ml-auto">{eventLegend}</div>}
+            <button
+              type="button"
+              onClick={() => setFullscreen(true)}
+              className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100"
+              title="Expand to full screen"
+              data-testid="ma-daily-trend-fullscreen"
+            >
+              <Maximize2 size={14}/>
+            </button>
           </div>
-          <div style={{ width: "100%", height: 260 }} data-testid="ma-daily-trend">
-            <ResponsiveContainer>
-              <LineChart data={m.rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                {bands.map((b, i) => (
-                  <ReferenceArea
-                    key={`${b.kind}-${b.name}-${i}`}
-                    x1={b.x1} x2={b.x2}
-                    strokeOpacity={0}
-                    fill={EVENT_COLORS[b.kind].fill}
-                    fillOpacity={0.14}
-                    ifOverflow="hidden"
-                    label={b.count > 2 ? { value: b.name.slice(0, 22), position: "insideTop", fontSize: 9, fill: EVENT_COLORS[b.kind].fill } : undefined}
-                  />
-                ))}
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" minTickGap={20} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v) => `${inr(v)} meals`} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="total" name="Meals"       stroke="#10B981" strokeWidth={2} dot={{ r: 2 }} />
-                <Line type="monotone" dataKey="ma7"   name="7-day avg"  stroke="#0F172A" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          {renderTrend(260)}
         </div>
 
         <div className="iu-card p-3">
@@ -282,6 +306,34 @@ export default function MealsAnalyticsPanel({ days, events }) {
           </div>
         </div>
       </div>
+
+      {fullscreen && (
+        <div
+          className="fixed inset-0 z-50 bg-white p-4 sm:p-6 flex flex-col"
+          role="dialog"
+          onClick={(e) => { if (e.target === e.currentTarget) setFullscreen(false); }}
+          data-testid="ma-daily-trend-fs-modal"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp size={18} className="text-emerald-600"/>
+            <h2 className="font-black text-xl">Daily total & 7-day trend</h2>
+            {bands.length > 0 && <div className="ml-4">{eventLegend}</div>}
+            <div className="flex-1" />
+            <button
+              type="button"
+              onClick={() => setFullscreen(false)}
+              className="p-2 rounded-md text-slate-500 hover:bg-slate-100 !min-h-[44px] !min-w-[44px]"
+              title="Close (Esc)"
+              data-testid="ma-fullscreen-close"
+            >
+              <CloseIcon size={18}/>
+            </button>
+          </div>
+          <div className="flex-1 min-h-0">
+            {renderTrend(Math.max(320, window.innerHeight - 120))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
