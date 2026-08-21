@@ -3684,4 +3684,117 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
+    @router.post("/meals/meal-calendar/import")
+    async def meal_calendar_import(
+        file: UploadFile = File(...),
+        overwrite: bool = False,
+        user: dict = Depends(require_admin),
+    ):
+        """Bulk-import daily meal counts from a monthly spreadsheet.
+
+        Accepts the standard chef layout (one sheet per month, columns:
+        DATE · Sailors B/L/D/T · Staff B/L/D/T · Grand total). Reads
+        every sheet, sums Sailors + Staff per meal-slot, and upserts
+        one `meal_daily_counts` row per date.
+
+        Duplicate handling:
+          • `overwrite=false` (default) — dates already present are
+            **skipped** and reported back in the response so the admin
+            can review; this makes the import safe to run repeatedly.
+          • `overwrite=true` — spreadsheet wins and existing rows are
+            replaced. Use when the chef has a corrected file to reload.
+
+        Response is a dry-run-style summary: inserted / updated /
+        skipped / errors, so the caller can preview before deciding to
+        rerun with `overwrite=true`.
+        """
+        import pandas as pd
+        from io import BytesIO
+
+        raw = await file.read()
+        if not raw:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        try:
+            xl = pd.ExcelFile(BytesIO(raw))
+        except Exception as ex:
+            raise HTTPException(status_code=400, detail=f"Not a valid .xlsx file: {ex}")
+
+        parsed: list[dict] = []
+        errors: list[dict] = []
+        for sheet in xl.sheet_names:
+            try:
+                df = pd.read_excel(xl, sheet_name=sheet, header=None, skiprows=2)
+            except Exception as ex:
+                errors.append({"sheet": sheet, "error": f"read failed: {ex}"})
+                continue
+            for idx, r in df.iterrows():
+                d = r.iloc[0] if len(r) > 0 else None
+                if pd.isna(d):
+                    continue
+                try:
+                    iso = pd.to_datetime(d).date().isoformat()
+                except Exception:
+                    continue
+                def _n(i: int) -> int:
+                    if i >= len(r):
+                        return 0
+                    v = r.iloc[i]
+                    return int(v) if pd.notna(v) and str(v).strip() != "" else 0
+                # cols 1..3 = Sailors B/L/D ; cols 5..7 = Staff B/L/D
+                bf = _n(1) + _n(5)
+                l = _n(2) + _n(6)
+                dn = _n(3) + _n(7)
+                tot = bf + l + dn
+                if tot == 0:
+                    continue
+                parsed.append({
+                    "date": iso, "breakfast": bf, "lunch": l, "dinner": dn,
+                    "total": tot,
+                })
+
+        # Group into three buckets against the existing DB rows.
+        existing = {
+            d["date"] async for d in db.meal_daily_counts.find({}, {"_id": 0, "date": 1})
+        }
+        to_insert = [r for r in parsed if r["date"] not in existing]
+        overlap   = [r for r in parsed if r["date"] in existing]
+
+        inserted = 0
+        updated = 0
+        skipped = 0
+        for r in to_insert:
+            r_doc = {**r, "source": f"upload:{file.filename}",
+                     "updated_at": now_utc().isoformat(),
+                     "updated_by": user.get("id"),
+                     "updated_by_name": user.get("name")}
+            await db.meal_daily_counts.update_one(
+                {"date": r["date"]},
+                {"$set": r_doc, "$setOnInsert": {"id": str(uuid.uuid4())}},
+                upsert=True,
+            )
+            inserted += 1
+        for r in overlap:
+            if overwrite:
+                await db.meal_daily_counts.update_one(
+                    {"date": r["date"]},
+                    {"$set": {**r, "source": f"upload:{file.filename}",
+                              "updated_at": now_utc().isoformat(),
+                              "updated_by": user.get("id"),
+                              "updated_by_name": user.get("name")}},
+                )
+                updated += 1
+            else:
+                skipped += 1
+
+        return {
+            "filename": file.filename,
+            "sheets": xl.sheet_names,
+            "parsed": len(parsed),
+            "inserted": inserted,
+            "updated": updated,
+            "skipped": skipped,
+            "skipped_dates": [r["date"] for r in overlap][:60] if not overwrite else [],
+            "errors": errors,
+        }
+
     return router

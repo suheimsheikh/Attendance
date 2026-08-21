@@ -6,7 +6,7 @@
  * can also type new days here — a single PUT upserts the row.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, IndianRupee, Pencil, Check, X as CloseIcon, Download } from "lucide-react";
+import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, IndianRupee, Pencil, Check, X as CloseIcon, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob, showApiError } from "../../api";
 import { formatDate, dayOfWeek } from "../../utils";
@@ -98,6 +98,112 @@ function EditRow({ date, initial, onSave, onCancel }) {
   );
 }
 
+function ImportCalendarButton({ onDone }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const inputRef = React.useRef(null);
+  const pickFile = () => inputRef.current?.click();
+  const onPick = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const res = await api.post("/meals/meal-calendar/import", fd);
+      setResult(res);
+      if (res.inserted || res.updated) onDone?.();
+      if (res.skipped > 0 && !res.inserted && !res.updated) {
+        toast.info(`${res.skipped} dates already present — none re-imported.`, { duration: 4000 });
+      } else if (res.inserted) {
+        toast.success(`Imported ${res.inserted} new days.`);
+      }
+    } catch (err) {
+      showApiError(err, "Import failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const overwrite = async () => {
+    if (!result?.skipped_dates?.length) return;
+    // Re-upload with overwrite=true — cheapest path via the same picker
+    const f = inputRef.current?.files?.[0];
+    if (!f) { toast.error("Please re-pick the same file to overwrite."); return; }
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const res = await api.post("/meals/meal-calendar/import?overwrite=true", fd);
+      setResult(res);
+      if (res.updated || res.inserted) {
+        toast.success(`Overwrote ${res.updated}, inserted ${res.inserted}.`);
+        onDone?.();
+      }
+    } catch (err) {
+      showApiError(err, "Overwrite failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <input ref={inputRef} type="file" accept=".xlsx" className="hidden"
+             onChange={onPick} data-testid="mc-import-input" />
+      <button
+        type="button" onClick={pickFile} disabled={busy}
+        className="iu-btn-secondary !h-9 inline-flex items-center gap-1.5 text-sm"
+        data-testid="mc-import-btn"
+        title="Import daily meal counts from a monthly spreadsheet (Sailors + Staff B/L/D)"
+      >
+        {busy ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14}/>}
+        Import (.xlsx)
+      </button>
+      {result && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+             onClick={() => setResult(null)}
+             data-testid="mc-import-result-modal">
+          <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-2xl"
+               onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-2">
+              <Upload size={18} className="text-emerald-600"/>
+              <h3 className="font-extrabold text-lg">Import result</h3>
+            </div>
+            <ul className="text-sm space-y-1 mt-3 mb-4">
+              <li><b>Sheets read:</b> {result.sheets?.join(", ")}</li>
+              <li><b>Rows parsed:</b> {result.parsed}</li>
+              <li className="text-emerald-700"><b>Inserted:</b> {result.inserted}</li>
+              <li className="text-sky-700"><b>Updated:</b> {result.updated}</li>
+              <li className="text-amber-700"><b>Skipped (already present):</b> {result.skipped}</li>
+              {result.errors?.length > 0 && (
+                <li className="text-rose-700"><b>Errors:</b> {result.errors.length}</li>
+              )}
+            </ul>
+            {result.skipped_dates?.length > 0 && (
+              <div className="text-xs bg-amber-50 border border-amber-200 rounded p-2 mb-3">
+                <div className="font-semibold text-amber-900 mb-1">Skipped dates ({result.skipped_dates.length}):</div>
+                <div className="text-amber-800 max-h-24 overflow-auto">
+                  {result.skipped_dates.slice(0, 20).join(", ")}
+                  {result.skipped_dates.length > 20 ? ` … +${result.skipped_dates.length - 20} more` : ""}
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              {result.skipped > 0 && (
+                <button onClick={overwrite}
+                        className="iu-btn-secondary !h-9 !text-rose-700 !border-rose-300 hover:!bg-rose-50"
+                        data-testid="mc-import-overwrite">Overwrite existing</button>
+              )}
+              <button onClick={() => setResult(null)}
+                      className="iu-btn-primary !h-9" data-testid="mc-import-close">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function MealsCalendar() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.is_super_admin;
@@ -165,6 +271,9 @@ export default function MealsCalendar() {
         >
           <Download size={14} /> Menu Master (.xlsx)
         </a>
+        {canEdit && (
+          <ImportCalendarButton onDone={load} />
+        )}
       </div>
       <p className="text-sm text-slate-500 mb-5">
         Daily meal counts (Sailors + Staff combined). Data before Aug 2026 was imported from the historical
