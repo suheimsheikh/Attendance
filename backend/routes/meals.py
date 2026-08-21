@@ -1213,7 +1213,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         counts = {"breakfast": 0, "lunch": 0, "dinner": 0}
         for r in rows:
             uid = r.get("user_id") or ""
-            meal = (r.get("meal") or "").lower()
+            # Defensive: a legacy prod row could have `meal` as
+            # something other than a lowercase str. Coerce first.
+            meal_raw = r.get("meal")
+            meal = str(meal_raw).lower() if meal_raw is not None else ""
             if meal in counts:
                 counts[meal] += 1
             if not uid:
@@ -1228,11 +1231,24 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             if meal and meal not in u["meals"]:
                 u["meals"].append(meal)
         members = list(by_user.values())
-        members.sort(key=lambda x: (
-            (x.get("category") or "zz").lower(),
-            (x.get("institution") or "").lower(),
-            (x.get("user_name") or "").lower(),
-        ))
+
+        def _sortkey(x: dict) -> tuple:
+            """Defensive stringify-then-lower so a stray non-str value in
+            any of the three fields (legacy prod row with a list-typed
+            category etc.) never 500s the endpoint. Missing/None values
+            still bucket to the end of their sort tier."""
+            def _s(v, fallback: str = "") -> str:
+                if v is None:
+                    return fallback
+                try:
+                    return str(v).lower()
+                except Exception:
+                    return fallback
+            return (_s(x.get("category"), "zz"),
+                    _s(x.get("institution")),
+                    _s(x.get("user_name")))
+
+        members.sort(key=_sortkey)
         return {
             "date": d,
             "counts": counts,
