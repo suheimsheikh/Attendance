@@ -23,11 +23,8 @@ const EVENT_COLORS = {
 };
 const inr = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN"));
 
-/** Custom tooltip that (a) renders the default label + payload rows
- * Recharts already renders, and (b) writes the currently-hovered ISO
- * date into a parent ref so a subsequent click on the chart wrapper
- * can open the "who ate today" popup without needing Recharts' own
- * onClick to fire (which is unreliable on Line charts with tiny dots). */
+/** Custom tooltip that renders label + payload rows plus a
+ * "click to see roster" hint. */
 function TrendTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
@@ -43,6 +40,28 @@ function TrendTooltip({ active, payload, label }) {
       <div className="text-[10px] text-slate-400 mt-1">Click to see roster</div>
     </div>
   );
+}
+
+/** Returns a Recharts <Line dot> renderer that draws a bolder filled
+ * emerald circle on days with per-person meal_records (source ===
+ * "muster") and a smaller hollow dot otherwise — signposts where a
+ * click will surface the "who ate today" roster. */
+function renderTotalDot(heightPx) {
+  return function TotalDot(props) {
+    const { cx, cy, payload, index } = props;
+    if (cx == null || cy == null) return null;
+    const roster = !!payload?.hasRoster;
+    const r = roster ? (heightPx > 400 ? 5 : 4) : (heightPx > 400 ? 2.5 : 2);
+    return (
+      <circle
+        key={`total-dot-${index}`}
+        cx={cx} cy={cy} r={r}
+        fill={roster ? "#10B981" : "#ffffff"}
+        stroke="#10B981"
+        strokeWidth={roster ? 2 : 1.25}
+      />
+    );
+  };
 }
 
 
@@ -69,6 +88,13 @@ function useMetrics(days) {
       Dinner: d.dinner,
       total: d.total,
       dow: new Date(d.date + "T00:00:00").getDay(),
+      // `source: "muster"` means per-person meal_records exist for
+      // this day, so the "who ate today" popup will have content.
+      // Other sources (spreadsheet imports, manual chef entries) only
+      // give us aggregate BF/L/D counts. Used to render a bolder dot
+      // on the Total line so admins can see at-a-glance where a click
+      // will surface a roster.
+      hasRoster: d.source === "muster",
     }));
 
     // ── Meal-slot totals ──────────────────────────────────────────
@@ -266,7 +292,11 @@ export default function MealsAnalyticsPanel({ days, events }) {
           <Line type="monotone" dataKey="Breakfast" stroke={SLOT_COLORS.Breakfast} strokeWidth={1.25} dot={false} />
           <Line type="monotone" dataKey="Lunch"     stroke={SLOT_COLORS.Lunch}     strokeWidth={1.25} dot={false} />
           <Line type="monotone" dataKey="Dinner"    stroke={SLOT_COLORS.Dinner}    strokeWidth={1.25} dot={false} />
-          <Line type="monotone" dataKey="total"     name="Total" stroke="#10B981" strokeWidth={2.25} dot={{ r: heightPx > 400 ? 3 : 2 }} />
+          <Line
+            type="monotone" dataKey="total" name="Total"
+            stroke="#10B981" strokeWidth={2.25}
+            dot={renderTotalDot(heightPx)}
+          />
         </LineChart>
       </ResponsiveContainer>
     </div>
