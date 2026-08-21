@@ -6,9 +6,9 @@
  * can also type new days here — a single PUT upserts the row.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, IndianRupee, Pencil, Check, X as CloseIcon, Download, Upload, BarChart3, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
+import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, IndianRupee, Pencil, Check, X as CloseIcon, Upload, BarChart3, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import { api, downloadBlob, showApiError } from "../../api";
+import { api, showApiError } from "../../api";
 import { formatDate, dayOfWeek } from "../../utils";
 import { useAuth } from "../../auth";
 import MealsAnalyticsPanel from "./MealsAnalyticsPanel";
@@ -154,7 +154,7 @@ function ImportCalendarButton({ onDone }) {
         title="Import daily meal counts from a monthly spreadsheet (Sailors + Staff B/L/D)"
       >
         {busy ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14}/>}
-        Import (.xlsx)
+        Import Daily Meals (.xlsx)
       </button>
       {result && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
@@ -319,22 +319,6 @@ export default function MealsCalendar() {
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Meals Calendar</h1>
         <div className="flex-1 min-w-[16px]" />
         <div className="flex items-center gap-2 flex-wrap">
-        <a
-          href="#"
-          onClick={async (e) => {
-            e.preventDefault();
-            try {
-              await downloadBlob("/meals/menu-master-download", "menu_master_combined.xlsx");
-            } catch (err) {
-              showApiError(err, "Couldn't download menu master");
-            }
-          }}
-          className="iu-btn-secondary !h-9 inline-flex items-center gap-1.5 text-sm"
-          data-testid="mc-download-menu-master"
-          title="Download the combined menu-calculations + recipes workbook"
-        >
-          <Download size={14} /> Menu Master (.xlsx)
-        </a>
         {canEdit && (
           <ImportCalendarButton onDone={load} />
         )}
