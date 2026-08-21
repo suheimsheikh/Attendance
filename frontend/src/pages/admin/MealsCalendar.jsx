@@ -6,11 +6,12 @@
  * can also type new days here — a single PUT upserts the row.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, IndianRupee, Pencil, Check, X as CloseIcon, Download, Upload } from "lucide-react";
+import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, IndianRupee, Pencil, Check, X as CloseIcon, Download, Upload, BarChart3, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob, showApiError } from "../../api";
 import { formatDate, dayOfWeek } from "../../utils";
 import { useAuth } from "../../auth";
+import MealsAnalyticsPanel from "./MealsAnalyticsPanel";
 
 const p2 = (n) => String(n).padStart(2, "0");
 function isoToday() {
@@ -214,6 +215,7 @@ export default function MealsCalendar() {
   const [loading, setLoading] = useState(false);
   const [editingDate, setEditingDate] = useState(null);
   const [showEmpty, setShowEmpty] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(true);
 
   const load = () => {
     if (!from || !to || from > to) return;
@@ -304,6 +306,22 @@ export default function MealsCalendar() {
         <KpiCard icon={Moon}     label="Dinner total"    value={data?.totals?.dinner || 0}    tint="bg-indigo-50" />
         <KpiCard icon={Utensils} label="Grand total"     value={data?.totals?.total || 0}     tint="bg-emerald-50" />
       </div>
+
+      {data?.days && (
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => setShowAnalytics((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-700 hover:text-slate-900 mb-2"
+            data-testid="mc-toggle-analytics"
+          >
+            <BarChart3 size={16} className="text-emerald-600"/>
+            Analytics
+            {showAnalytics ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+          </button>
+          {showAnalytics && <MealsAnalyticsPanel days={data.days} />}
+        </div>
+      )}
 
       <div className="iu-card overflow-auto" data-testid="meals-calendar-table-wrap">
         <table className="w-full text-sm">
