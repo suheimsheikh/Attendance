@@ -1,0 +1,34 @@
+{
+  "summary": "Iter 49 — Frontend-only regression check after backend complexity refactor (23 helper extractions across meals/holidays/daily_content/data_quality/dashboard/reports/meals routes). Exercised all 6 affected admin screens via mcp_browser_automation with admin credentials. RESULT: all six screens render + interact correctly. No console/page errors observed. No JS crashes. No broken data-shape symptoms (empty widgets, undefined-key labels, missing counts, or '(deleted item)' fallbacks) were detected — backend response shapes appear preserved.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/screens_regression_iter49_dash.png",
+    "/app/test_reports/screens_regression_iter49_dq.png",
+    "/app/test_reports/screens_regression_iter49_meals_cal.png",
+    "/app/test_reports/screens_regression_iter49_meals_cal_bottom.png",
+    "/app/test_reports/screens_regression_iter49_meal_roster.png",
+    "/app/test_reports/screens_regression_iter49_meal_event.png",
+    "/app/test_reports/screens_regression_iter49_kitchen.png",
+    "/app/test_reports/screens_regression_iter49_kitchen_bot.png",
+    "/app/test_reports/screens_regression_iter49_chefs.png",
+    "/app/test_reports/screens_regression_iter49_att_tab.png",
+    "/app/test_reports/screens_regression_iter49_timeline_modal.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Regression scope well-contained: backend helper extraction did not perturb any of the 6 verified response contracts. No further action required from main agent."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped (per E1 instructions — backend already 100/100)", "frontend": "100% (6/6 target screens)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (Admin sign in with email toggle on /login)",
+  "seed_data_creation": "None — used existing data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Verified screens & specific evidence:\n(1) /admin/meals-calendar: Daily meals BF·L·D·Total line chart renders across Mon 01 Jun → Fri 21 Aug 2026; bolder emerald dots visible near right edge (per-person muster days 08-20 Aug); Average-meals-by-day-of-week bar chart renders (Sat hover tooltip = BF 35 / D 20 / L 29 avg confirming weekend Agape spike); Regatta/Camp/Break bands render — clicking 'YAI Monsoo…' opens Event Details popup with name, dates 'Mon 01 Jun → Sun 07 Jun · 7 DAYS', Level=National, Location=Hussain Sagar Lake Hyderabad; roster popup opens on dot click with BF/L/D + Member table and closes on Esc. Note: I did not explicitly click the Agape Sat/Sun weekend band to inspect weekday chips (SAT/SUN highlighted) — the popup schema for the YAI Regatta showed no weekday chip row, which is expected for a contiguous multi-day event. If weekday chips are required for weekly-recurring bands (Agape), retest explicitly by clicking the small weekend Camp/Break slivers on the timeline strip.\n(2) /admin/pantry-stock → Analytics (Kitchen Analytics): loads; ₹76,233 total; 67 distinct items; 168 line entries; Daily trend line chart + amount/lines dual axis renders; Category share donut renders with Grocery 42.5%, Protein 23.7%, Vegetables 20.9%, Dairy Products 8.1%, Fruits 4.8%; Top items by ₹ has Oil at top (₹7,470); Top items by qty has Cucumber at top; item-wise table lists 67 items with real category names — ZERO '(deleted item)' fallbacks. Backend _weighted_rate_lookup / _kitchen_daily_series / _kitchen_item_rows / _kitchen_cat_pct all producing correct shape.\n(3) /admin/chefs-view for date 2026-08-20: Breakfast 36 (Athletes 13, Elite 13, Coaches 6, Staff 4), Lunch 13, Dinner 19 — matches E1 expected numbers. Members render with photo + name + institution + check-in time badges. _earliest_check_in_before / _covering_session_check_in eligibility rules intact.\n(4) /admin/reports?tab=attendance: double-click on days-present cell (AINUL HAQUE) opens 'Attendance ledger — AINUL HAQUE · 01/08/26 to 21/08/26 · 21 days · weekly off: monday' modal listing 21 daily rows with coloured Status pills: Present (4), Late (1), Leave (2), Tour (13), Weekly off (1). Bucket summary chips render correctly. Not observed for this specific member (no relevant bucket in the window): Absent, Break/Holiday, In-progress-today, Late-coming-approved — these did not surface only because AINUL HAQUE has none of those in Aug 1-21; not a regression. _classify_timeline_day appears fine.\n(5) /admin/dashboard: 'This week' rail renders TOP 5 LATE-COMERS (Nandu Kumar 6d, VISHAL S 4d, MOHD REHMAN 3d, ESWA SURAGANI 3d, AKHIL T 3d) with member photo + name + category badge (S/E/A) + late_days; TOP 5 OT THIS WEEK (SHIVA SANTOSH 8h31m, MAHESH KUMAR 8h20m, Vijay 7h25m, Subbarao 7h13m, ARUNA 4h10m) sorted desc; Camps & Regattas section shows YAI Junior Sailing Championship 2026 (Aug 26 → Aug 30) and Eurasia Inclusive Championship 2026 and J/80… (Aug 26 → Aug 30) with trophy 'kind' badge. Note: E1's request said label is 'Events this week' — actual UI label is 'CAMPS & REGATTAS' (unchanged from pre-refactor). Not a regression, just a naming discrepancy in the review request. _hydrate_top_users / _pack_events OK.\n(6) /admin/data-quality: TOTAL FINDINGS = 171 (exactly matches E1 target); HIGH 29 / MEDIUM 26 / LOW 65 / INFO 51. DUPLICATES (4) section renders member names + severity badges — mobile-ending-5148 (ASHARAF S & VISHAL S), mobile-ending-8717 (Gadham Mallesh ×2), full-name 'ANINDITA BARMAN' dupe, full-name 'GADHAM MALLESH' dupe. _find_duplicates in data_quality.py produces correct output shape.\nRun playbook if retesting: (a) login via toggle-admin-login + login-submit-button, (b) navigate the six URLs above, (c) The Grid is at /admin/reports?tab=grid|attendance|dailyleave (not /admin/the-grid).",
+  "rca_of_the_issue": "N/A — no regressions found. Backend helper extraction preserved all six response contracts end-to-end."
+}
