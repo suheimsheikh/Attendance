@@ -34,16 +34,12 @@ function lastOfMonth(iso) {
 }
 const inr = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN"));
 
-function KpiCard({ icon: Icon, label, value, tint }) {
+function KpiPill({ icon: Icon, label, value, tint }) {
   return (
-    <div className={`iu-card p-3 flex items-center gap-3 ${tint || ""}`}>
-      <div className="w-10 h-10 rounded-lg bg-white/70 flex items-center justify-center shrink-0">
-        <Icon size={18} />
-      </div>
-      <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500">{label}</div>
-        <div className="text-2xl font-black tabular-nums truncate">{inr(value)}</div>
-      </div>
+    <div className={`iu-card !py-1.5 !px-2.5 flex items-center gap-2 ${tint || ""}`}>
+      <Icon size={14} className="shrink-0 opacity-70" />
+      <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500 whitespace-nowrap">{label}</div>
+      <div className="ml-auto text-sm font-black tabular-nums">{inr(value)}</div>
     </div>
   );
 }
@@ -209,8 +205,12 @@ export default function MealsCalendar() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.is_super_admin;
   const today = isoToday();
-  const [from, setFrom] = useState(firstOfMonth(today));
-  const [to, setTo] = useState(lastOfMonth(today));
+  // Default the window to the ENTIRE available history so admins
+  // see the whole dataset in one shot. `from` starts null and is
+  // filled from /meals/meal-calendar/bounds on mount (falls back to
+  // ~90 days ago if the endpoint hasn't returned yet or has no data).
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState(today);
   const [data, setData] = useState(null);
   const [events, setEvents] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -225,6 +225,18 @@ export default function MealsCalendar() {
     if (nxt.has(key)) nxt.delete(key); else nxt.add(key);
     return nxt;
   });
+
+  // On mount, ask the backend for the earliest date we have any data
+  // for and use that as the default `from`. Runs once — subsequent
+  // manual date-picker changes are respected.
+  useEffect(() => {
+    api.get("/meals/meal-calendar/bounds")
+      .then((b) => {
+        if (b?.min_date) setFrom(b.min_date);
+        else setFrom(firstOfMonth(today));
+      })
+      .catch(() => setFrom(firstOfMonth(today)));
+  }, []);
 
   const load = () => {
     if (!from || !to || from > to) return;
@@ -352,10 +364,10 @@ export default function MealsCalendar() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-        <KpiCard icon={Coffee}   label="Breakfast total" value={data?.totals?.breakfast || 0} tint="bg-amber-50" />
-        <KpiCard icon={Sun}      label="Lunch total"     value={data?.totals?.lunch || 0}     tint="bg-orange-50" />
-        <KpiCard icon={Moon}     label="Dinner total"    value={data?.totals?.dinner || 0}    tint="bg-indigo-50" />
-        <KpiCard icon={Utensils} label="Grand total"     value={data?.totals?.total || 0}     tint="bg-emerald-50" />
+        <KpiPill icon={Coffee}   label="Breakfast" value={data?.totals?.breakfast || 0} tint="bg-amber-50" />
+        <KpiPill icon={Sun}      label="Lunch"     value={data?.totals?.lunch || 0}     tint="bg-orange-50" />
+        <KpiPill icon={Moon}     label="Dinner"    value={data?.totals?.dinner || 0}    tint="bg-indigo-50" />
+        <KpiPill icon={Utensils} label="Total"     value={data?.totals?.total || 0}     tint="bg-emerald-50" />
       </div>
 
       {data?.days && (

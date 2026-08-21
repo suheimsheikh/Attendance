@@ -1,20 +1,18 @@
 /**
- * MealsAnalyticsPanel — four charts derived entirely client-side from
+ * MealsAnalyticsPanel — two charts derived entirely client-side from
  * the `days` array the Meals Calendar already fetches. Purposefully no
- * extra API call: at ~90 days per view the compute is trivial and the
- * charts stay in sync with any inline edit the admin makes.
+ * extra API call: the compute is trivial and the charts stay in sync
+ * with any inline edit the admin makes.
  *
- *   • Daily meals + 7-day moving-average (line chart)
- *   • Meal-slot split — BF / L / D (donut)
- *   • Day-of-week average (bar)
- *   • Monthly totals grouped BF / L / D (grouped bar)
+ *   • Daily meals + 7-day moving-average (line chart, fullscreen-able)
+ *   • Day-of-week average — BF / L / D (grouped bar)
  */
 import React, { useMemo } from "react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, PieChart, Pie, Cell, BarChart, Bar, ReferenceArea,
+  Tooltip, Legend, BarChart, Bar,
 } from "recharts";
-import { TrendingUp, PieChart as PieIcon, Calendar as CalIcon, BarChart3, Flame, Trophy, Maximize2, X as CloseIcon } from "lucide-react";
+import { TrendingUp, Calendar as CalIcon, BarChart3, Flame, Trophy, Maximize2, X as CloseIcon, PieChart as PieIcon } from "lucide-react";
 
 const SLOT_COLORS = { Breakfast: "#F59E0B", Lunch: "#F97316", Dinner: "#6366F1" };
 const EVENT_COLORS = {
@@ -118,14 +116,10 @@ function useMetrics(days) {
 
 function StatPill({ icon: Icon, label, value, tint }) {
   return (
-    <div className={`iu-card p-3 flex items-center gap-3 ${tint || ""}`}>
-      <div className="w-9 h-9 rounded-lg bg-white/70 flex items-center justify-center shrink-0">
-        <Icon size={16} />
-      </div>
-      <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500">{label}</div>
-        <div className="text-lg font-extrabold tabular-nums truncate">{value}</div>
-      </div>
+    <div className={`iu-card !py-1.5 !px-2.5 flex items-center gap-2 ${tint || ""}`}>
+      <Icon size={13} className="shrink-0 opacity-70" />
+      <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500 whitespace-nowrap">{label}</div>
+      <div className="ml-auto text-xs font-black tabular-nums truncate">{value}</div>
     </div>
   );
 }
@@ -144,25 +138,20 @@ export default function MealsAnalyticsPanel({ days, events }) {
   // Recharts complains about unknown X-axis keys).
   const bands = useMemo(() => {
     if (!m || !events) return [];
-    const knownDates = new Set(m.rows.map((r) => r.date));
     const kinds = ["regatta", "camp", "break"];
     const out = [];
     kinds.forEach((k) => {
       (events[k + "s"] || []).forEach((ev) => {
-        // Clamp to the days actually rendered on the X-axis
-        const start = ev.start_date;
-        const end = ev.end_date;
-        const inRange = m.rows.filter((r) => r.date >= start && r.date <= end);
-        if (!inRange.length) return;
-        out.push({
-          kind: k, name: ev.name,
-          x1: inRange[0].label, x2: inRange[inRange.length - 1].label,
-          count: inRange.length,
-        });
+        // Clamp to the visible window so the strip never overshoots
+        // the chart edges.
+        const winStart = m.rows[0].date;
+        const winEnd = m.rows[m.rows.length - 1].date;
+        const s = ev.start_date < winStart ? winStart : ev.start_date;
+        const e = ev.end_date > winEnd ? winEnd : ev.end_date;
+        if (s > e) return;
+        out.push({ kind: k, name: ev.name, start_date: s, end_date: e });
       });
     });
-    // De-dupe overlapping bands of the same kind so we don't stack
-    // multiple identical shades on top of each other.
     return out;
   }, [m, events]);
   if (!m) {
@@ -179,17 +168,6 @@ export default function MealsAnalyticsPanel({ days, events }) {
       <ResponsiveContainer>
         <LineChart data={m.rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          {bands.map((b, i) => (
-            <ReferenceArea
-              key={`${b.kind}-${b.name}-${i}`}
-              x1={b.x1} x2={b.x2}
-              strokeOpacity={0}
-              fill={EVENT_COLORS[b.kind].fill}
-              fillOpacity={0.14}
-              ifOverflow="hidden"
-              label={b.count > 2 ? { value: b.name.slice(0, 22), position: "insideTop", fontSize: heightPx > 400 ? 11 : 9, fill: EVENT_COLORS[b.kind].fill } : undefined}
-            />
-          ))}
           <XAxis dataKey="label" tick={{ fontSize: heightPx > 400 ? 12 : 10 }} interval="preserveStartEnd" minTickGap={20} />
           <YAxis tick={{ fontSize: heightPx > 400 ? 12 : 10 }} />
           <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v) => `${inr(v)} meals`} />
@@ -201,11 +179,62 @@ export default function MealsAnalyticsPanel({ days, events }) {
     </div>
   );
 
+  // Thin horizontal Gantt-like strip drawn UNDER the chart. Each event
+  // type gets its own row (Regatta / Camp / Break) so overlapping
+  // regattas + camps + breaks don't obscure one another. Positions are
+  // computed as a % of the visible date-window so the strip aligns to
+  // the chart's X-axis without any Recharts coupling.
+  const renderEventStrip = (compact = true) => {
+    if (!bands.length) return null;
+    const startD = new Date(m.rows[0].date + "T00:00:00");
+    const endD = new Date(m.rows[m.rows.length - 1].date + "T00:00:00");
+    const totalDays = Math.max(1, (endD - startD) / 86400000 + 1);
+    const pct = (iso) => {
+      const d = new Date(iso + "T00:00:00");
+      const daysFromStart = (d - startD) / 86400000;
+      return Math.max(0, Math.min(100, (daysFromStart / totalDays) * 100));
+    };
+    const rowFor = (k) => bands.filter((b) => b.kind === k);
+    const kinds = ["regatta", "camp", "break"].filter((k) => rowFor(k).length);
+    const barH = compact ? "h-3" : "h-4";
+    const rowH = compact ? "h-4" : "h-5";
+    const gutterCls = compact ? "text-[10px]" : "text-[11px]";
+    return (
+      <div className={`mt-2 space-y-1 ${gutterCls}`} data-testid="ma-event-strip">
+        {kinds.map((k) => (
+          <div key={k} className={`flex items-center gap-2`}>
+            <div className="w-14 shrink-0 font-bold uppercase tracking-wider text-[9px]" style={{ color: EVENT_COLORS[k].fill }}>
+              {EVENT_COLORS[k].label}
+            </div>
+            <div className={`relative flex-1 ${rowH} bg-slate-50 rounded`}>
+              {rowFor(k).map((ev, i) => {
+                const l = pct(ev.start_date);
+                const r = pct(ev.end_date);
+                const w = Math.max(0.7, r - l);
+                return (
+                  <div
+                    key={`${ev.name}-${ev.start_date}-${i}`}
+                    className={`absolute top-0.5 ${barH} rounded flex items-center px-1 font-semibold text-white overflow-hidden whitespace-nowrap`}
+                    style={{ left: `${l}%`, width: `${w}%`, background: EVENT_COLORS[k].fill }}
+                    title={`${ev.name} · ${ev.start_date} → ${ev.end_date}`}
+                    data-testid={`ma-event-bar-${k}-${i}`}
+                  >
+                    <span className="truncate">{ev.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const eventLegend = bands.length > 0 && (
     <div className="flex items-center gap-2 text-[10px]">
       {["regatta", "camp", "break"].map((k) => bands.some((b) => b.kind === k) && (
         <span key={k} className="inline-flex items-center gap-1">
-          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: EVENT_COLORS[k].fill, opacity: 0.32 }} />
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: EVENT_COLORS[k].fill }} />
           <span className="text-slate-500">{EVENT_COLORS[k].label}</span>
         </span>
       ))}
@@ -225,7 +254,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
                   tint="bg-violet-50" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={14} className="text-slate-500"/>
@@ -241,26 +270,8 @@ export default function MealsAnalyticsPanel({ days, events }) {
               <Maximize2 size={14}/>
             </button>
           </div>
-          {renderTrend(260)}
-        </div>
-
-        <div className="iu-card p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <PieIcon size={14} className="text-slate-500"/>
-            <div className="font-bold text-sm">Meal-slot share (all days)</div>
-          </div>
-          <div style={{ width: "100%", height: 260 }} data-testid="ma-slot-pie">
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={m.slots} dataKey="value" nameKey="key" outerRadius={95} innerRadius={45}
-                     label={(e) => `${e.pct}%`} labelLine={false}>
-                  {m.slots.map((s) => <Cell key={s.key} fill={SLOT_COLORS[s.key]} />)}
-                </Pie>
-                <Tooltip formatter={(v, n) => [`${inr(v)} meals`, n]} contentStyle={{ fontSize: 12 }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          {renderTrend(320)}
+          {renderEventStrip(true)}
         </div>
 
         <div className="iu-card p-3">
@@ -269,7 +280,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
             <div className="font-bold text-sm">Average meals by day of week</div>
             <span className="text-[10px] text-slate-400">(BF · L · D split)</span>
           </div>
-          <div style={{ width: "100%", height: 260 }} data-testid="ma-dow-bar">
+          <div style={{ width: "100%", height: 320 }} data-testid="ma-dow-bar">
             <ResponsiveContainer>
               <BarChart data={m.dowRows} margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -280,27 +291,6 @@ export default function MealsAnalyticsPanel({ days, events }) {
                 <Bar dataKey="Breakfast" fill={SLOT_COLORS.Breakfast} radius={[3, 3, 0, 0]} />
                 <Bar dataKey="Lunch"     fill={SLOT_COLORS.Lunch}     radius={[3, 3, 0, 0]} />
                 <Bar dataKey="Dinner"    fill={SLOT_COLORS.Dinner}    radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="iu-card p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <BarChart3 size={14} className="text-slate-500"/>
-            <div className="font-bold text-sm">Monthly totals · BF · L · D</div>
-          </div>
-          <div style={{ width: "100%", height: 260 }} data-testid="ma-monthly">
-            <ResponsiveContainer>
-              <BarChart data={m.months} margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v, n) => [`${inr(v)} meals`, n]} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="Breakfast" stackId="a" fill={SLOT_COLORS.Breakfast} />
-                <Bar dataKey="Lunch"     stackId="a" fill={SLOT_COLORS.Lunch} />
-                <Bar dataKey="Dinner"    stackId="a" fill={SLOT_COLORS.Dinner} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -329,8 +319,21 @@ export default function MealsAnalyticsPanel({ days, events }) {
               <CloseIcon size={18}/>
             </button>
           </div>
-          <div className="flex-1 min-h-0">
-            {renderTrend(Math.max(320, window.innerHeight - 120))}
+          {/* Compact stat strip inside the fullscreen view so the admin
+              can read peaks / totals without having to close the modal. */}
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-3" data-testid="ma-fs-stats">
+            <StatPill icon={Flame}   label="Avg / day"     value={inr(m.totals.avgPerDay)} tint="bg-emerald-50" />
+            <StatPill icon={Trophy}  label="Highest"       value={`${inr(m.highest.total)} · ${fmt(m.highest.date)}`} tint="bg-amber-50" />
+            <StatPill icon={CalIcon} label="Lowest"        value={`${inr(m.lowest.total)} · ${fmt(m.lowest.date)}`} tint="bg-rose-50" />
+            <StatPill icon={CalIcon} label="Days"          value={m.totals.days} tint="bg-sky-50" />
+            <StatPill icon={PieIcon} label="Grand total"   value={inr(m.totals.grand)} tint="bg-slate-50" />
+            <StatPill icon={PieIcon} label="BF : L : D"    value={`${m.slots[0].pct}·${m.slots[1].pct}·${m.slots[2].pct}%`} tint="bg-violet-50" />
+          </div>
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex-1 min-h-0">
+              {renderTrend(Math.max(320, window.innerHeight - 280))}
+            </div>
+            {renderEventStrip(false)}
           </div>
         </div>
       )}

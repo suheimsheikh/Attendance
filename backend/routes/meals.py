@@ -3684,6 +3684,25 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
+    @router.get("/meals/meal-calendar/bounds")
+    async def meal_calendar_bounds(user: dict = Depends(require_chef_or_admin)):
+        """Return the earliest and latest dates for which any meal data
+        exists — either an imported/manual row in `meal_daily_counts`
+        or a live-muster mark in `meal_records`. The Meals Calendar UI
+        uses `min_date` to default the "from" filter so admins see the
+        entire history in one shot instead of just the current month."""
+        dates: list[str] = []
+        # Earliest & latest across both source collections.
+        for coll in ("meal_daily_counts", "meal_records"):
+            lo = await db[coll].find({}, {"_id": 0, "date": 1}).sort("date", 1).limit(1).to_list(1)
+            hi = await db[coll].find({}, {"_id": 0, "date": 1}).sort("date", -1).limit(1).to_list(1)
+            if lo: dates.append(lo[0]["date"])
+            if hi: dates.append(hi[0]["date"])
+        if not dates:
+            today = local_date_str()
+            return {"min_date": today, "max_date": today, "has_data": False}
+        return {"min_date": min(dates), "max_date": max(dates), "has_data": True}
+
     @router.get("/meals/meal-calendar/events")
     async def meal_calendar_events(
         start: str, end: str,
