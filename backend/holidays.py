@@ -12,7 +12,7 @@ manually by the admin bumping the member's `leave_balance_opening`.
 from __future__ import annotations
 
 from datetime import date
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from services.attendance_calc import ATHLETE_CATEGORIES
 from services.time_utils import local_date_str
@@ -93,6 +93,18 @@ def _tally_approved_leave(agg: dict, L: dict, n: int, today: str) -> None:
         agg["leave_full_count"] += 1
 
 
+def _split_comp_off_sources(co: dict) -> tuple[int, int, int]:
+    """Return `(from_attendance, from_tours, from_opening)` from a
+    comp-off breakdown so the summary card can show
+    `"X (Y from tours, Z opening)"` without re-walking the list."""
+    breakdown = co.get("breakdown") or []
+    from_tours = sum(1 for b in breakdown if b.get("kind") == "tour_weekly_off")
+    from_opening = sum(int(b.get("count") or 0) for b in breakdown
+                       if b.get("kind") == "opening")
+    from_attendance = int(co["accrued"]) - from_tours - from_opening
+    return from_attendance, from_tours, from_opening
+
+
 async def compute_balance_summary(db, user: dict, year: Optional[str] = None) -> dict:
     """One-shot summary of every balance an apply-leave form needs.
 
@@ -133,10 +145,7 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
     # Split the comp-off accrual into its three sources so the member-side
     # "My Leave & Tour" stats card can show "X (Y from tours, Z opening)"
     # without re-walking the breakdown on the frontend. Added 28 Jun 2026.
-    from_tours = sum(1 for b in co.get("breakdown") or [] if b.get("kind") == "tour_weekly_off")
-    from_opening = sum(int(b.get("count") or 0) for b in co.get("breakdown") or []
-                       if b.get("kind") == "opening")
-    from_attendance = int(co["accrued"]) - from_tours - from_opening
+    from_attendance, from_tours, from_opening = _split_comp_off_sources(co)
 
     return {
         "comp_off": {
@@ -169,6 +178,31 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
     }
 
 
+def _expand_ranges_to_isos(
+    rows: list, *, clip_lo: date, clip_hi: date,
+    keep: Optional[Callable[[dict], bool]] = None,
+) -> set:
+    """Explode a list of `{start_date, end_date, …}` rows into the set of
+    ISO date strings each row covers, clipped to `[clip_lo, clip_hi]`.
+    Optional `keep(row) -> bool` filter runs before the expansion so
+    e.g. break-scope rules can be applied without a second loop."""
+    out: set = set()
+    for row in rows:
+        if keep and not keep(row):
+            continue
+        try:
+            sd = date.fromisoformat(row["start_date"])
+            ed = date.fromisoformat(row["end_date"])
+        except Exception:
+            continue
+        d = max(sd, clip_lo)
+        stop = min(ed, clip_hi)
+        while d <= stop:
+            out.add(d.isoformat())
+            d = date.fromordinal(d.toordinal() + 1)
+    return out
+
+
 async def _absent_days_ytd(db, user: dict, weekly_off: str) -> int:
     """Cheap-ish approximation of "absent days YTD" for the member dashboard.
 
@@ -182,54 +216,45 @@ async def _absent_days_ytd(db, user: dict, weekly_off: str) -> int:
         dashboard signal — the source of truth remains the daily report.
       - Breaks are checked via the same model the Presence Board uses
         (scope = "all" | "category" | "institution" | "selected").
+
+    Refactored Feb 2026 — the three near-identical date-range expansion
+    loops were pulled into `_expand_ranges_to_isos`. Main body is now
+    a straight-line pipeline: fetch → build 3 sets → walk YTD → count.
     """
     today_d = date.fromisoformat(local_date_str(None))
     yr_start = date(today_d.year, 1, 1)
     if today_d < yr_start:
         return 0
-    # Pull the small data sets once.
+
+    # ── Attendance ISOs (already a set of iso strings from Mongo). ──
     atts = await db.attendance.find(
         {"user_id": user["id"],
          "date": {"$gte": yr_start.isoformat(), "$lte": today_d.isoformat()}},
         {"_id": 0, "date": 1},
     ).to_list(500)
     att_set = {a["date"] for a in atts}
+
+    # ── Approved leave/tour ranges → covered ISOs. ──
     leaves_approved = await db.leaves.find({
         "user_id": user["id"], "status": "approved",
         "type": {"$in": ["leave", "tour"]},
         "start_date": {"$lte": today_d.isoformat()},
         "end_date":   {"$gte": yr_start.isoformat()},
     }, {"_id": 0, "start_date": 1, "end_date": 1}).to_list(500)
-    leave_set: set = set()
-    for L in leaves_approved:
-        try:
-            sd = date.fromisoformat(L["start_date"])
-            ed = date.fromisoformat(L["end_date"])
-        except Exception:
-            continue
-        d = max(sd, yr_start)
-        while d <= min(ed, today_d):
-            leave_set.add(d.isoformat())
-            d = d.fromordinal(d.toordinal() + 1)
-    # Breaks — fetched matching the member's scope.
+    leave_set = _expand_ranges_to_isos(leaves_approved, clip_lo=yr_start, clip_hi=today_d)
+
+    # ── Breaks matching the member's scope. ──
     breaks = await db.breaks.find({
         "start_date": {"$lte": today_d.isoformat()},
         "end_date":   {"$gte": yr_start.isoformat()},
     }, {"_id": 0, "scope": 1, "start_date": 1, "end_date": 1, "institution": 1,
         "fleet": 1, "category": 1, "member_ids": 1}).to_list(500)
-    break_set: set = set()
-    for B in breaks:
-        if not _break_covers_user(B, user):
-            continue
-        try:
-            sd = date.fromisoformat(B["start_date"])
-            ed = date.fromisoformat(B["end_date"])
-        except Exception:
-            continue
-        d = max(sd, yr_start)
-        while d <= min(ed, today_d):
-            break_set.add(d.isoformat())
-            d = d.fromordinal(d.toordinal() + 1)
+    break_set = _expand_ranges_to_isos(
+        breaks, clip_lo=yr_start, clip_hi=today_d,
+        keep=lambda B: _break_covers_user(B, user),
+    )
+
+    # ── Walk YTD counting weekdays with no coverage. ──
     wo = (weekly_off or "sunday").lower()
     absent = 0
     d = yr_start
@@ -238,7 +263,7 @@ async def _absent_days_ytd(db, user: dict, weekly_off: str) -> int:
             iso = d.isoformat()
             if iso not in att_set and iso not in leave_set and iso not in break_set:
                 absent += 1
-        d = d.fromordinal(d.toordinal() + 1)
+        d = date.fromordinal(d.toordinal() + 1)
     return absent
 
 
