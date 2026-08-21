@@ -266,15 +266,17 @@ export default function MealsAnalyticsPanel({ days, events }) {
       style={{ width: "100%", height: heightPx, cursor: "pointer" }}
       data-testid={heightPx > 400 ? "ma-daily-trend-fs" : "ma-daily-trend"}
       onClick={(e) => {
-        // Frac-of-wrapper-width click math — accurate enough for a
-        // single-axis chart (the only padding is ~4px margin), and
-        // has been verified working since the popup shipped. Do NOT
-        // "improve" this without a full E2E re-test — the dual-axis
-        // Kitchen Analytics chart uses activeIdxRef instead because
-        // its Y-axis labels add ~60px of drift.
-        const rect = e.currentTarget.getBoundingClientRect();
-        const relX = e.clientX - rect.left;
-        const frac = Math.max(0, Math.min(1, relX / rect.width));
+        // Map click X-position to a data index using the ACTUAL
+        // plot-area rectangle (not the wrapper's) so we don't drift
+        // by the left Y-axis label width. Recharts renders the plot
+        // exactly at `.recharts-cartesian-grid`; reading its
+        // bounding box gives us the correct-by-construction bounds.
+        const grid = e.currentTarget.querySelector(".recharts-cartesian-grid");
+        const rect = grid?.getBoundingClientRect
+          ? grid.getBoundingClientRect()
+          : e.currentTarget.getBoundingClientRect();
+        if (!rect.width) return;
+        const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         const idx = Math.round(frac * (m.rows.length - 1));
         const day = m.rows[idx]?.date;
         if (day) setSelectedDay(day);
