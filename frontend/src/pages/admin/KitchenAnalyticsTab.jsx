@@ -76,6 +76,23 @@ function BannerStat({ icon: Icon, label, value }) {
   );
 }
 
+function makeDotRenderer(seriesKey, color, fullscreen) {
+  // Skip rendering a dot for zero-value points so weeks of empty
+  // days don't turn the X-axis into a solid line of clutter. Named
+  // (not anonymous) so React can key it stably across renders.
+  const r = fullscreen ? 3 : 2;
+  return function ZeroSkipDot({ cx, cy, payload, index }) {
+    if (cx == null || cy == null) return null;
+    if (!payload || !payload[seriesKey]) return null;
+    return (
+      <circle
+        key={`${seriesKey}-dot-${index}`}
+        cx={cx} cy={cy} r={r} fill={color} stroke="none"
+      />
+    );
+  };
+}
+
 function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, fullscreen = false, focusSeries, from, to }) {
   // When focusSeries is supplied we render one Line per selected item
   // (all dates from window filled with 0) instead of the single
@@ -116,7 +133,8 @@ function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, ful
                 type="monotone" dataKey={it.item_id}
                 name={it.name}
                 stroke={FOCUS_COLORS[i % FOCUS_COLORS.length]}
-                strokeWidth={2} dot={{ r: fullscreen ? 3 : 2 }}
+                strokeWidth={2}
+                dot={makeDotRenderer(it.item_id, FOCUS_COLORS[i % FOCUS_COLORS.length], fullscreen)}
                 activeDot={{ r: onDayClick ? 6 : 5, style: { cursor: onDayClick ? "pointer" : "default" } }}
               />
             ))
@@ -124,7 +142,7 @@ function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, ful
             <Line
               type="monotone" dataKey="Amount"
               stroke={colorAmt} strokeWidth={2}
-              dot={{ r: fullscreen ? 3 : 2 }}
+              dot={makeDotRenderer("Amount", colorAmt, fullscreen)}
               activeDot={{ r: onDayClick ? 6 : 5, style: { cursor: onDayClick ? "pointer" : "default" } }}
             />
           )}
