@@ -20,11 +20,25 @@ import {
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 
+// Same palette + a deterministic (item_id → colour) mapping so the
+// same item paints in the same colour across ALL charts on this
+// screen (Top items by ₹, Top items by qty, focused Daily-trend).
 const CHART_COLORS = [
   "#2563EB", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6",
   "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#84CC16",
   "#0EA5E9", "#DB2777",
 ];
+
+// Deterministic (item_id → colour) mapping. Uses a tiny string hash
+// so "Rice" is always the same colour across every chart on the
+// screen without needing a shared React context. Same UUID → same
+// palette index → same colour, session after session.
+function colorForItem(id) {
+  if (!id) return CHART_COLORS[0];
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = ((h * 31) + id.charCodeAt(i)) >>> 0;
+  return CHART_COLORS[h % CHART_COLORS.length];
+}
 
 const inr = (n) =>
   n == null ? "—" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -124,17 +138,23 @@ function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, ful
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="label" tick={{ fontSize }} interval="preserveStartEnd" minTickGap={20} />
           <YAxis tick={{ fontSize }} tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
-          <Tooltip formatter={(v) => `₹${inr2(v)}`} contentStyle={{ fontSize: 12 }} />
+          <Tooltip
+            content={useFocus
+              ? <FocusDailyTooltip itemUnitById={focusUnitMap(focusSeries)} />
+              : undefined}
+            formatter={useFocus ? undefined : ((v) => `₹${inr2(v)}`)}
+            contentStyle={{ fontSize: 12 }}
+          />
           {useFocus && <Legend wrapperStyle={{ fontSize: fullscreen ? 13 : 11 }} />}
           {useFocus ? (
-            focusSeries.items.map((it, i) => (
+            focusSeries.items.map((it) => (
               <Line
                 key={it.item_id}
                 type="monotone" dataKey={it.item_id}
                 name={it.name}
-                stroke={FOCUS_COLORS[i % FOCUS_COLORS.length]}
+                stroke={colorForItem(it.item_id)}
                 strokeWidth={2}
-                dot={makeDotRenderer(it.item_id, FOCUS_COLORS[i % FOCUS_COLORS.length], fullscreen)}
+                dot={makeDotRenderer(it.item_id, colorForItem(it.item_id), fullscreen)}
                 activeDot={{ r: onDayClick ? 6 : 5, style: { cursor: onDayClick ? "pointer" : "default" } }}
               />
             ))
@@ -157,28 +177,101 @@ function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, ful
 // clash with the bars they came from.
 const FOCUS_COLORS = ["#2563EB", "#F97316", "#059669", "#DC2626", "#7C3AED", "#0891B2", "#B45309", "#DB2777"];
 
+function focusUnitMap(focusSeries) {
+  // Small helper so the FocusDailyTooltip can look up unit for the
+  // hovered series in O(1). Recomputed each render is fine — a
+  // focused list is 1-8 items.
+  const out = {};
+  (focusSeries?.items || []).forEach((it) => { out[it.item_id] = it.unit || ""; });
+  return out;
+}
+
 function buildFocusRows(items, from, to) {
-  // Walk every day in [from, to] and pick amount from each item's
-  // sparse daily list. Missing days become 0 so the lines are
-  // visually continuous.
+  // Walk every day in [from, to] and pick amount + qty from each
+  // item's sparse daily list. Missing days become 0 so the lines
+  // are visually continuous. Qty is stored as `${item_id}__qty` so
+  // the custom tooltip can surface it alongside the ₹ series.
   const start = new Date(from + "T00:00:00");
   const end = new Date(to + "T00:00:00");
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
   const perItem = items.map((it) => {
-    const m = new Map();
-    (it.daily || []).forEach((r) => m.set(r.date, r.amount));
-    return { id: it.item_id, m };
+    const amt = new Map();
+    const qty = new Map();
+    (it.daily || []).forEach((r) => {
+      amt.set(r.date, r.amount);
+      qty.set(r.date, r.qty);
+    });
+    return { id: it.item_id, amt, qty };
   });
   const out = [];
   const d = new Date(start);
   while (d <= end) {
     const iso = d.toISOString().slice(0, 10);
     const row = { date: iso, label: formatDate(iso) };
-    perItem.forEach((p) => { row[p.id] = p.m.get(iso) || 0; });
+    perItem.forEach((p) => {
+      row[p.id] = p.amt.get(iso) || 0;
+      row[`${p.id}__qty`] = p.qty.get(iso) || 0;
+    });
     out.push(row);
     d.setDate(d.getDate() + 1);
   }
   return out;
+}
+
+function TopItemsTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const r = payload[0]?.payload;
+  if (!r) return null;
+  return (
+    <div className="bg-white border border-slate-200 rounded-md shadow px-2.5 py-2 text-xs min-w-[180px]">
+      <div className="font-bold text-slate-800">{r.name}{r.unit ? <span className="text-slate-400 font-normal ml-1">({r.unit})</span> : null}</div>
+      <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5">
+        <span className="text-slate-500">Amount</span>
+        <span className="tabular-nums text-slate-800 text-right font-semibold">₹{inr2(r.amount)}</span>
+        <span className="text-slate-500">Qty</span>
+        <span className="tabular-nums text-slate-800 text-right font-semibold">{fmtQty(r.qty)}{r.unit ? <span className="text-slate-400 font-normal ml-0.5">{r.unit}</span> : null}</span>
+        <span className="text-slate-500">Lines</span>
+        <span className="tabular-nums text-slate-800 text-right">{r.lines}</span>
+      </div>
+      {r.top_vendors && r.top_vendors.length > 0 && (
+        <div className="mt-1.5 pt-1.5 border-t border-slate-100">
+          <div className="text-[9px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">Top vendors</div>
+          {r.top_vendors.map((v, i) => (
+            <div key={i} className="flex items-baseline gap-2">
+              <span className="text-slate-700 truncate">{v.name}</span>
+              <span className="ml-auto tabular-nums text-slate-500">₹{inr(v.amount)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FocusDailyTooltip({ active, payload, label, itemUnitById }) {
+  if (!active || !payload?.length) return null;
+  const nonZero = payload.filter((p) => (p.value || 0) > 0);
+  if (!nonZero.length) return null;
+  const row = payload[0]?.payload || {};
+  return (
+    <div className="bg-white border border-slate-200 rounded-md shadow px-2.5 py-2 text-xs min-w-[220px]">
+      <div className="font-bold text-slate-800">{label}</div>
+      <div className="mt-1 space-y-0.5">
+        {nonZero.map((p) => {
+          const qty = row[`${p.dataKey}__qty`];
+          const unit = itemUnitById?.[p.dataKey];
+          return (
+            <div key={p.dataKey} className="flex items-baseline gap-2">
+              <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: p.color }} />
+              <span className="text-slate-700">{p.name}</span>
+              <span className="ml-auto tabular-nums text-slate-800 font-semibold">₹{inr2(p.value)}</span>
+              {qty > 0 && <span className="tabular-nums text-slate-400 text-[10px]">{fmtQty(qty)}{unit ? unit : ""}</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit, onToggleItem, focusedIds }) {
@@ -201,8 +294,7 @@ function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit, onTog
           <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => (dataKey === "amount" ? `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}` : v)} />
           <YAxis dataKey="display" type="category" width={110} tick={{ fontSize: 10 }} />
           <Tooltip
-            formatter={(v) => (dataKey === "amount" ? `₹${inr2(v)}` : fmtQty(v))}
-            contentStyle={{ fontSize: 12 }}
+            content={<TopItemsTooltip />}
             cursor={onToggleItem ? { fill: "rgba(148,163,184,0.15)" } : false}
           />
           <Bar
@@ -218,7 +310,7 @@ function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit, onTog
             {rows.map((r) => (
               <Cell
                 key={r.item_id}
-                fill={colorFn(r._idx)}
+                fill={colorForItem(r.item_id)}
                 fillOpacity={focusedIds && focusedIds.size > 0 && !r._focused ? 0.35 : 1}
                 stroke={r._focused ? "#0F172A" : "none"}
                 strokeWidth={r._focused ? 2 : 0}
@@ -393,11 +485,11 @@ function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
           {focusedIds.size > 0 ? (
             <>
               <span className="text-[10px] text-slate-400 ml-1">· focused on:</span>
-              {(focusSeries?.items || []).map((it, i) => (
+              {(focusSeries?.items || []).map((it) => (
                 <span
                   key={it.item_id}
                   className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white rounded px-1.5 py-0.5"
-                  style={{ background: FOCUS_COLORS[i % FOCUS_COLORS.length] }}
+                  style={{ background: colorForItem(it.item_id) }}
                 >
                   {it.name}
                   <button type="button" onClick={() => toggleItem(it.item_id)} className="opacity-80 hover:opacity-100" title="Remove">

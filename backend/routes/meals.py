@@ -3552,7 +3552,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                     "itemised_amount": 0.0, "unitemised_amount": 0.0}
 
         def _blank_item():
-            return {"qty": 0.0, "amount": 0.0, "lines": 0}
+            # `vendors`: {vendor_id: rupee_amount} for purchases.
+            # Populated only during purchase aggregation — issues
+            # don't carry a vendor.
+            return {"qty": 0.0, "amount": 0.0, "lines": 0, "vendors": {}}
 
         # Seed every day in the window with a zero row so charts show
         # gaps as flat points instead of skipping the label.
@@ -3578,11 +3581,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
         for doc in purch_docs:
             d = doc["date"]
+            vendor_id = doc.get("vendor_id")
             slot = purch_daily.setdefault(d, _blank_day())
-            # Truth for the day's spend = sum of `amounts` if present
-            # (line-based edits recompute `amounts` from lines, so this
-            # covers BOTH modern per-item entry AND legacy bulk-upload
-            # docs — see upsert_purchase / patch_purchase_lines).
             amounts_map = doc.get("amounts") or {}
             day_total = sum(float(v or 0) for v in amounts_map.values())
             itemised_from_lines = 0.0
@@ -3600,6 +3600,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 it["qty"] += q
                 it["amount"] += amt
                 it["lines"] += 1
+                if vendor_id:
+                    it["vendors"][vendor_id] = it["vendors"].get(vendor_id, 0.0) + amt
                 purch_daily_lines.setdefault(d, []).append((iid, q))
             # Category share is drawn from `amounts` so bulk-uploaded
             # days still contribute to the pie.
@@ -3644,6 +3646,24 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             return _kitchen_cat_pct(cat_agg, cat_label)
 
         purch_item_rows = _item_rows(purch_items)
+        # Hydrate top-3 vendor names into each purchase item row so the
+        # bar-chart tooltip can show "top vendor: X (₹Y) · Z more" —
+        # requested by user 21 Aug 2026 alongside the qty tooltip.
+        vendor_ids_seen = {vid for r in purch_items.values() for vid in r["vendors"].keys()}
+        if vendor_ids_seen:
+            v_rows = await db.meal_vendors.find(
+                {"id": {"$in": list(vendor_ids_seen)}},
+                {"_id": 0, "id": 1, "name": 1},
+            ).to_list(len(vendor_ids_seen))
+            vendor_by_id = {v["id"]: v.get("name") for v in v_rows}
+            for row in purch_item_rows:
+                vmap = purch_items.get(row["item_id"], {}).get("vendors") or {}
+                top = sorted(vmap.items(), key=lambda x: -x[1])[:3]
+                row["top_vendors"] = [
+                    {"name": vendor_by_id.get(vid) or "—",
+                     "amount": round(amt, 2)}
+                    for vid, amt in top
+                ]
         iss_item_rows = _item_rows(iss_items)
 
         # ---- Nutrition rollup (Feb 2026 request) --------------------
