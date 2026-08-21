@@ -3647,6 +3647,14 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         while cur <= e_d:
             iso = cur.isoformat()
             r = by_date.get(iso)
+            # `has_muster` is independent of `source`: even when a
+            # spreadsheet row wins the priority contest, we still want
+            # to flag days that have per-person meal_records so the
+            # UI can highlight them as "click to see roster".
+            has_muster = iso in muster_by_date and any(
+                (muster_by_date[iso].get(k) or 0) > 0
+                for k in ("breakfast", "lunch", "dinner")
+            )
             if r:
                 out.append({
                     "date": iso,
@@ -3659,14 +3667,17 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                     "source":    r.get("source") or "manual",
                     "updated_at": r.get("updated_at"),
                     "has_data": True,
+                    "has_muster": has_muster,
                 })
             else:
                 mr = _muster_row(iso)
                 if mr:
+                    mr["has_muster"] = True
                     out.append(mr)
                 else:
                     out.append({"date": iso, "breakfast": 0, "lunch": 0, "dinner": 0,
-                                "total": 0, "source": None, "has_data": False})
+                                "total": 0, "source": None, "has_data": False,
+                                "has_muster": False})
             cur += timedelta(days=1)
         # Totals for the KPI strip
         totals = {"breakfast": 0, "lunch": 0, "dinner": 0, "total": 0}

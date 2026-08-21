@@ -51,15 +51,22 @@ function renderTotalDot(heightPx) {
     const { cx, cy, payload, index } = props;
     if (cx == null || cy == null) return null;
     const roster = !!payload?.hasRoster;
-    const r = roster ? (heightPx > 400 ? 5 : 4) : (heightPx > 400 ? 2.5 : 2);
+    // Aggregate-only days: no dot at all — keeps the line clean and
+    // makes the roster days stand out even more.
+    if (!roster) return null;
+    const r = heightPx > 400 ? 6 : 4.5;
     return (
-      <circle
-        key={`total-dot-${index}`}
-        cx={cx} cy={cy} r={r}
-        fill={roster ? "#10B981" : "#ffffff"}
-        stroke="#10B981"
-        strokeWidth={roster ? 2 : 1.25}
-      />
+      <g key={`total-dot-${index}`}>
+        {/* Soft halo so the marker reads even against the coloured
+            BF/L/D lines beneath it. */}
+        <circle cx={cx} cy={cy} r={r + 2.5} fill="#10B981" opacity={0.18} />
+        <circle
+          cx={cx} cy={cy} r={r}
+          fill="#10B981"
+          stroke="#ffffff"
+          strokeWidth={1.75}
+        />
+      </g>
     );
   };
 }
@@ -88,13 +95,12 @@ function useMetrics(days) {
       Dinner: d.dinner,
       total: d.total,
       dow: new Date(d.date + "T00:00:00").getDay(),
-      // `source: "muster"` means per-person meal_records exist for
-      // this day, so the "who ate today" popup will have content.
-      // Other sources (spreadsheet imports, manual chef entries) only
-      // give us aggregate BF/L/D counts. Used to render a bolder dot
-      // on the Total line so admins can see at-a-glance where a click
-      // will surface a roster.
-      hasRoster: d.source === "muster",
+      // `has_muster` is set by the backend when per-person
+      // meal_records exist for the date. Used to render a bolder
+      // dot on the Total line so admins can see at-a-glance where a
+      // click will surface a roster (even if the day's counts came
+      // from a spreadsheet import that shadows the muster totals).
+      hasRoster: !!d.has_muster,
     }));
 
     // ── Meal-slot totals ──────────────────────────────────────────
