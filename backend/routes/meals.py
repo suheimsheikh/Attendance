@@ -1116,6 +1116,55 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "members": rows,
         }
 
+    @router.get("/meals/day-attendees")
+    async def meal_day_attendees(
+        date: str,  # noqa: A002 — API contract
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """One row per member who marked ANY meal on `date`, with the
+        set of meals they took. Powers the "who ate today" popup on
+        the Meals Calendar trend chart (click any day → see the
+        roster). Groups the three separate meal_records docs into a
+        single per-member row so the popup can render three ticks
+        side-by-side instead of listing the same person three times."""
+        d = _valid_date(date)
+        rows = await db.meal_records.find(
+            {"date": d},
+            {"_id": 0, "user_id": 1, "user_name": 1, "meal": 1,
+             "category": 1, "institution": 1, "marked_at": 1},
+        ).to_list(MAX_USERS * 3)
+        by_user: dict[str, dict] = {}
+        counts = {"breakfast": 0, "lunch": 0, "dinner": 0}
+        for r in rows:
+            uid = r.get("user_id") or ""
+            meal = (r.get("meal") or "").lower()
+            if meal in counts:
+                counts[meal] += 1
+            if not uid:
+                continue
+            u = by_user.setdefault(uid, {
+                "user_id": uid,
+                "user_name": r.get("user_name") or "—",
+                "category": r.get("category"),
+                "institution": r.get("institution"),
+                "meals": [],
+            })
+            if meal and meal not in u["meals"]:
+                u["meals"].append(meal)
+        members = list(by_user.values())
+        members.sort(key=lambda x: (
+            (x.get("category") or "zz").lower(),
+            (x.get("institution") or "").lower(),
+            (x.get("user_name") or "").lower(),
+        ))
+        return {
+            "date": d,
+            "counts": counts,
+            "total_marks": counts["breakfast"] + counts["lunch"] + counts["dinner"],
+            "unique_members": len(members),
+            "members": members,
+        }
+
     @router.get("/meals/monthly-grid")
     async def meal_monthly_grid(
         month: str,          # YYYY-MM

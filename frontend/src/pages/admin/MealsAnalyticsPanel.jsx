@@ -12,7 +12,8 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, BarChart, Bar,
 } from "recharts";
-import { TrendingUp, Calendar as CalIcon, BarChart3, Flame, Trophy, Maximize2, X as CloseIcon, PieChart as PieIcon } from "lucide-react";
+import { TrendingUp, Calendar as CalIcon, BarChart3, Flame, Trophy, Maximize2, X as CloseIcon, PieChart as PieIcon, Coffee, Sun as SunIcon, Moon as MoonIcon, Loader2, Users } from "lucide-react";
+import { api, showApiError } from "../../api";
 
 const SLOT_COLORS = { Breakfast: "#F59E0B", Lunch: "#F97316", Dinner: "#6366F1" };
 const EVENT_COLORS = {
@@ -21,6 +22,29 @@ const EVENT_COLORS = {
   break:   { fill: "#94A3B8", label: "Break" },
 };
 const inr = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN"));
+
+/** Custom tooltip that (a) renders the default label + payload rows
+ * Recharts already renders, and (b) writes the currently-hovered ISO
+ * date into a parent ref so a subsequent click on the chart wrapper
+ * can open the "who ate today" popup without needing Recharts' own
+ * onClick to fire (which is unreliable on Line charts with tiny dots). */
+function TrendTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-slate-200 rounded-md shadow px-2 py-1.5 text-xs">
+      <div className="font-bold text-slate-800 mb-0.5">{label}</div>
+      {payload.map((p) => (
+        <div key={p.dataKey} className="flex items-center gap-2">
+          <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: p.color }} />
+          <span className="text-slate-500">{p.name}</span>
+          <span className="tabular-nums font-semibold text-slate-800 ml-auto">{inr(p.value)}</span>
+        </div>
+      ))}
+      <div className="text-[10px] text-slate-400 mt-1">Click to see roster</div>
+    </div>
+  );
+}
+
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -123,16 +147,18 @@ export default function MealsAnalyticsPanel({ days, events }) {
   const m = useMetrics(days);
   const [fullscreen, setFullscreen] = React.useState(false);
   const [selectedEvent, setSelectedEvent] = React.useState(null);
+  const [selectedDay, setSelectedDay] = React.useState(null);
   React.useEffect(() => {
-    if (!fullscreen && !selectedEvent) return;
+    if (!fullscreen && !selectedEvent && !selectedDay) return;
     const onKey = (e) => {
       if (e.key !== "Escape") return;
-      if (selectedEvent) setSelectedEvent(null);
+      if (selectedDay) setSelectedDay(null);
+      else if (selectedEvent) setSelectedEvent(null);
       else if (fullscreen) setFullscreen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [fullscreen, selectedEvent]);
+  }, [fullscreen, selectedEvent, selectedDay]);
   // Map events → bands drawn on the trend chart. Only regattas/camps/
   // breaks that actually intersect a populated day contribute (else
   // Recharts complains about unknown X-axis keys). Camps that only
@@ -199,14 +225,43 @@ export default function MealsAnalyticsPanel({ days, events }) {
   // Renders four series: BF / L / D (thin, per-slot colours) + Total
   // (thick emerald) + 7-day MA (dashed slate). BF/L/D can be toggled
   // off via the Legend if the admin wants a clean Total view.
+  // Track the last-hovered X-axis point so a click anywhere on the
+  // chart wrapper opens the roster for THAT day.
   const renderTrend = (heightPx) => (
-    <div style={{ width: "100%", height: heightPx }} data-testid={heightPx > 400 ? "ma-daily-trend-fs" : "ma-daily-trend"}>
+    <div
+      style={{ width: "100%", height: heightPx, cursor: "pointer" }}
+      data-testid={heightPx > 400 ? "ma-daily-trend-fs" : "ma-daily-trend"}
+      onClick={(e) => {
+        // Recharts' internal hover-state is fickle when driven from
+        // a custom Tooltip content, so instead derive the clicked
+        // date from the click X-position vs the wrapper's own
+        // bounding box. Recharts uses matching X-axis math when
+        // interval="preserveStartEnd", so the mapping is exact for
+        // any dot the user could visually target.
+        const rect = e.currentTarget.getBoundingClientRect();
+        // The plot area (ignoring recharts internal margins ~4/12 px)
+        // lines up with the wrapper width closely enough for a
+        // roster popup — off-by-one at the extreme edges is fine.
+        const relX = e.clientX - rect.left;
+        const frac = Math.max(0, Math.min(1, relX / rect.width));
+        const idx = Math.round(frac * (m.rows.length - 1));
+        const day = m.rows[idx]?.date;
+        if (day) setSelectedDay(day);
+      }}
+    >
       <ResponsiveContainer>
-        <LineChart data={m.rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+        <LineChart
+          data={m.rows}
+          margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="label" tick={{ fontSize: heightPx > 400 ? 12 : 10 }} interval="preserveStartEnd" minTickGap={20} />
           <YAxis tick={{ fontSize: heightPx > 400 ? 12 : 10 }} />
-          <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v) => `${inr(v)} meals`} />
+          <Tooltip
+            contentStyle={{ fontSize: 12 }}
+            formatter={(v) => `${inr(v)} meals`}
+            content={<TrendTooltip />}
+          />
           <Legend wrapperStyle={{ fontSize: heightPx > 400 ? 13 : 11 }} />
           <Line type="monotone" dataKey="Breakfast" stroke={SLOT_COLORS.Breakfast} strokeWidth={1.25} dot={false} />
           <Line type="monotone" dataKey="Lunch"     stroke={SLOT_COLORS.Lunch}     strokeWidth={1.25} dot={false} />
@@ -302,6 +357,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={14} className="text-slate-500"/>
             <div className="font-bold text-sm">Daily meals · BF · L · D · Total</div>
+            <span className="hidden sm:inline text-[10px] text-slate-400 ml-1">· tap a day to see the roster</span>
             {bands.length > 0 && <div className="ml-auto">{eventLegend}</div>}
             <button
               type="button"
@@ -388,6 +444,142 @@ export default function MealsAnalyticsPanel({ days, events }) {
           onClose={() => setSelectedEvent(null)}
         />
       )}
+      {selectedDay && (
+        <DayAttendeesModal
+          date={selectedDay}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function DayAttendeesModal({ date, onClose }) {
+  // Fetches /meals/day-attendees once, lists every member who marked
+  // any meal on `date`, with a BF/L/D badge trio per row so the admin
+  // can spot who took what without a second click.
+  const [data, setData] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  React.useEffect(() => {
+    setLoading(true);
+    api.get(`/meals/day-attendees?date=${date}`)
+      .then(setData)
+      .catch((err) => showApiError(err, "Couldn't load attendees"))
+      .finally(() => setLoading(false));
+  }, [date]);
+  const dateLabel = fmt(date);
+  // Group members by category to make the modal skimmable.
+  const grouped = React.useMemo(() => {
+    if (!data?.members) return [];
+    const g = new Map();
+    data.members.forEach((r) => {
+      const k = (r.category || "other").toString();
+      if (!g.has(k)) g.set(k, []);
+      g.get(k).push(r);
+    });
+    return [...g.entries()].map(([cat, rows]) => ({ cat, rows }));
+  }, [data]);
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4"
+      role="dialog"
+      onClick={onClose}
+      data-testid="ma-day-attendees-modal"
+    >
+      <div
+        className="bg-white rounded-xl max-w-2xl w-full max-h-[85vh] shadow-2xl flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-3 bg-slate-900 text-white flex items-center gap-2 shrink-0">
+          <Users size={18}/>
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-widest text-slate-400">Meals roster</div>
+            <div className="font-black text-lg truncate">{dateLabel}</div>
+          </div>
+          <div className="ml-auto" />
+          <button
+            type="button" onClick={onClose}
+            className="p-1.5 rounded-md hover:bg-white/10"
+            title="Close (Esc)"
+            data-testid="ma-day-attendees-close"
+          >
+            <CloseIcon size={18}/>
+          </button>
+        </div>
+        {loading ? (
+          <div className="p-10 text-center text-slate-400">
+            <Loader2 className="animate-spin inline mr-2"/> Loading…
+          </div>
+        ) : !data || data.unique_members === 0 ? (
+          <div className="p-10 text-center text-slate-400 text-sm">
+            No one marked any meal on this day.
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-4 gap-2 px-5 py-3 bg-slate-50 border-b border-slate-200 shrink-0" data-testid="ma-day-attendees-counts">
+              <StatChip icon={Coffee}  label="Breakfast" value={data.counts.breakfast} tint="text-amber-700"  />
+              <StatChip icon={SunIcon} label="Lunch"     value={data.counts.lunch}     tint="text-orange-700" />
+              <StatChip icon={MoonIcon} label="Dinner"   value={data.counts.dinner}    tint="text-indigo-700" />
+              <StatChip icon={Users}   label="Members"   value={data.unique_members}   tint="text-emerald-700" />
+            </div>
+            <div className="overflow-auto flex-1">
+              <table className="w-full text-sm">
+                <thead className="bg-white sticky top-0 shadow-[0_1px_0_0_#e2e8f0] z-10">
+                  <tr className="text-[10px] uppercase tracking-wider text-slate-500">
+                    <th className="text-left px-4 py-2">Member</th>
+                    <th className="text-left px-2 py-2">Institution</th>
+                    <th className="text-center px-2 py-2 w-[52px]" title="Breakfast">BF</th>
+                    <th className="text-center px-2 py-2 w-[52px]" title="Lunch">L</th>
+                    <th className="text-center px-2 py-2 w-[52px]" title="Dinner">D</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {grouped.map((g) => (
+                    <React.Fragment key={g.cat}>
+                      <tr className="bg-slate-100">
+                        <td colSpan={5} className="px-4 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600">
+                          {g.cat} · {g.rows.length}
+                        </td>
+                      </tr>
+                      {g.rows.map((r) => (
+                        <tr key={r.user_id} className="border-t border-slate-100 hover:bg-slate-50">
+                          <td className="px-4 py-1.5 font-semibold text-slate-800">{r.user_name}</td>
+                          <td className="px-2 py-1.5 text-slate-500 text-xs">{r.institution || "—"}</td>
+                          <td className="px-2 py-1.5 text-center">{r.meals.includes("breakfast") ? <MealTick color={SLOT_COLORS.Breakfast}/> : <Dash/>}</td>
+                          <td className="px-2 py-1.5 text-center">{r.meals.includes("lunch")     ? <MealTick color={SLOT_COLORS.Lunch}/>     : <Dash/>}</td>
+                          <td className="px-2 py-1.5 text-center">{r.meals.includes("dinner")    ? <MealTick color={SLOT_COLORS.Dinner}/>    : <Dash/>}</td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MealTick({ color }) {
+  return (
+    <span
+      className="inline-block w-4 h-4 rounded-full"
+      style={{ background: color }}
+      aria-label="taken"
+    />
+  );
+}
+function Dash() {
+  return <span className="text-slate-300">—</span>;
+}
+function StatChip({ icon: Icon, label, value, tint }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Icon size={14} className={tint} />
+      <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{label}</span>
+      <span className={`text-sm font-black tabular-nums ${tint}`}>{value}</span>
     </div>
   );
 }
