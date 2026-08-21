@@ -213,6 +213,77 @@ def _parse_json(text: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _is_valid_generated(generated: Any) -> bool:
+    """Shape guard for the LLM output. Requires a dict with non-empty
+    `en` and `te` string keys — everything else is optional per-kind."""
+    return (
+        isinstance(generated, dict)
+        and isinstance(generated.get("en"), str)
+        and isinstance(generated.get("te"), str)
+        and bool(generated["en"].strip())
+        and bool(generated["te"].strip())
+    )
+
+
+async def _generate_or_fallback(today_date: date, today_iso: str, kind: str) -> tuple[Dict[str, Any], str]:
+    """Call Gemini for today's content, validate the shape, and fall back
+    to the curated static pool on failure. Returns `(payload, source)`
+    where source is either `"llm"` or `"fallback"`."""
+    generated: Optional[Dict[str, Any]] = None
+    try:
+        generated = (
+            await _generate_word_with_llm(today_iso) if kind == "word"
+            else await _generate_quote_with_llm(today_iso)
+        )
+    except Exception as exc:  # defensive: should be caught inside helpers
+        logger.exception("daily-content LLM dispatch failed: %s", exc)
+
+    if _is_valid_generated(generated):
+        return generated, "llm"  # type: ignore[return-value]
+
+    # Deterministic-per-day fallback so users don't see two different
+    # items if they refresh on the same day.
+    pool = FALLBACK_WORDS if kind == "word" else FALLBACK_QUOTES
+    return dict(pool[today_date.toordinal() % len(pool)]), "fallback"
+
+
+def _build_doc(today_iso: str, kind: str, generated: Dict[str, Any], source: str) -> Dict[str, Any]:
+    """Assemble the persisted document from the generated payload. Copies
+    the shared `en`/`te` pair plus the kind-specific optional fields
+    (example_* for words, author for quotes)."""
+    doc: Dict[str, Any] = {
+        "date": today_iso,
+        "kind": kind,
+        "en": generated["en"].strip(),
+        "te": generated["te"].strip(),
+        "source": source,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if kind == "word":
+        for k in ("example_en", "example_te"):
+            v = generated.get(k)
+            if isinstance(v, str) and v.strip():
+                doc[k] = v.strip()
+    else:
+        author = generated.get("author")
+        if isinstance(author, str) and author.strip():
+            doc["author"] = author.strip()
+    return doc
+
+
+async def _cache_daily_content(db, doc: Dict[str, Any]) -> None:
+    """Best-effort cache write. A failure here (e.g. Mongo hiccup)
+    must NOT fail the request — the client already has the payload."""
+    try:
+        await db.daily_content.update_one(
+            {"date": doc["date"], "kind": doc["kind"]},
+            {"$set": doc},
+            upsert=True,
+        )
+    except Exception as exc:
+        logger.warning("daily_content cache write failed: %s", exc)
+
+
 # ---------------------------------------------------------------------------
 # Public route
 # ---------------------------------------------------------------------------
@@ -227,63 +298,15 @@ def make_router(db) -> APIRouter:
         today_date = _office_today(office)
         today = today_date.isoformat()
         kind = _kind_for(today_date)
+
         cached = await db.daily_content.find_one({"date": today, "kind": kind}, {"_id": 0})
         if cached:
             return cached
 
-        # Cache miss → call Gemini.
-        generated: Optional[Dict[str, Any]] = None
-        source = "llm"
-        try:
-            generated = (
-                await _generate_word_with_llm(today) if kind == "word"
-                else await _generate_quote_with_llm(today)
-            )
-        except Exception as exc:  # defensive: should be caught inside helpers
-            logger.exception("daily-content LLM dispatch failed: %s", exc)
-
-        # Validate shape — fall back if malformed.
-        if not (
-            isinstance(generated, dict)
-            and isinstance(generated.get("en"), str)
-            and isinstance(generated.get("te"), str)
-            and generated["en"].strip() and generated["te"].strip()
-        ):
-            generated = None
-
-        if not generated:
-            source = "fallback"
-            pool = FALLBACK_WORDS if kind == "word" else FALLBACK_QUOTES
-            # Deterministic-per-day fallback so users don't see two different
-            # fallback items if they refresh.
-            generated = dict(pool[today_date.toordinal() % len(pool)])
-
-        doc = {
-            "date": today,
-            "kind": kind,
-            "en": generated["en"].strip(),
-            "te": generated["te"].strip(),
-            "source": source,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        if kind == "word":
-            for k in ("example_en", "example_te"):
-                if isinstance(generated.get(k), str) and generated[k].strip():
-                    doc[k] = generated[k].strip()
-        else:
-            if isinstance(generated.get("author"), str) and generated["author"].strip():
-                doc["author"] = generated["author"].strip()
-
-        try:
-            await db.daily_content.update_one(
-                {"date": today, "kind": kind},
-                {"$set": doc},
-                upsert=True,
-            )
-        except Exception as exc:
-            # Don't fail the request just because cache write blew up.
-            logger.warning("daily_content cache write failed: %s", exc)
-
+        generated, source = await _generate_or_fallback(today_date, today, kind)
+        doc = _build_doc(today, kind, generated, source)
+        await _cache_daily_content(db, doc)
         return doc
 
     return router
+
