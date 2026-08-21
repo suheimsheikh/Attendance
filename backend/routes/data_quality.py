@@ -139,6 +139,52 @@ def _looks_like_mobile(s: Optional[str]) -> bool:
     return len(_norm_mobile(s)) == 10
 
 
+def _find_duplicates(
+    rows: list,
+    *,
+    key_fn,                 # (row) -> str  ("" ⇒ skip this row)
+    code: str,
+    severity: str,
+    build_message,          # (key, group) -> str
+    entity_type: str = "member",
+    name_field: str = "full_name",
+    name_fn=None,           # optional (row) -> str; overrides name_field
+    category: str = "Duplicates",
+) -> list[dict]:
+    """Bucket `rows` by `key_fn(row)` and emit a Data-Quality finding
+    for every bucket with >1 rows. Replaces the three near-identical
+    email / mobile / full-name loops in the main sweep. Rows whose
+    key is falsy are skipped entirely.
+
+    `name_fn` takes precedence over `name_field` for callers that need
+    a fallback ("(unnamed)" for empty escort rows).
+
+    Every emitted finding carries the same shape the frontend expects:
+    { category, code, severity, message, entity_type, entity_ids,
+      entity_names }.
+    """
+    buckets: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        k = key_fn(r)
+        if k:
+            buckets[k].append(r)
+    out: list[dict] = []
+    resolve_name = name_fn or (lambda r: r.get(name_field))
+    for k, group in buckets.items():
+        if len(group) < 2:
+            continue
+        out.append({
+            "category": category,
+            "code": code,
+            "severity": severity,
+            "message": build_message(k, group),
+            "entity_type": entity_type,
+            "entity_ids": [r["id"] for r in group],
+            "entity_names": [resolve_name(r) for r in group],
+        })
+    return out
+
+
 def make_router(db, require_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
 
@@ -153,59 +199,29 @@ def make_router(db, require_admin) -> APIRouter:
         # ── Members ───────────────────────────────────────────────
         users = await db.users.find({}, {"_id": 0}).to_list(5000)
 
-        # 1. Duplicate emails (case-insensitive)
-        by_email: dict[str, list[dict]] = defaultdict(list)
-        for u in users:
-            e = (u.get("email") or "").strip().lower()
-            if e:
-                by_email[e].append(u)
-        for e, group in by_email.items():
-            if len(group) > 1:
-                findings.append({
-                    "category": "Duplicates",
-                    "code": "member.duplicate_email",
-                    "severity": "high",
-                    "message": f"Email '{e}' used by {len(group)} members",
-                    "entity_type": "member",
-                    "entity_ids": [u["id"] for u in group],
-                    "entity_names": [u.get("full_name") for u in group],
-                })
-
-        # 2. Duplicate mobiles (last 10 digits)
-        by_mobile: dict[str, list[dict]] = defaultdict(list)
-        for u in users:
-            k = _norm_mobile(u.get("mobile"))
-            if k:
-                by_mobile[k].append(u)
-        for k, group in by_mobile.items():
-            if len(group) > 1:
-                findings.append({
-                    "category": "Duplicates",
-                    "code": "member.duplicate_mobile",
-                    "severity": "high",
-                    "message": f"Mobile ending {k[-4:]} used by {len(group)} members",
-                    "entity_type": "member",
-                    "entity_ids": [u["id"] for u in group],
-                    "entity_names": [u.get("full_name") for u in group],
-                })
-
-        # 3. Duplicate full names (weaker signal → medium severity)
-        by_name: dict[str, list[dict]] = defaultdict(list)
-        for u in users:
-            n = (u.get("full_name") or "").strip().upper()
-            if n:
-                by_name[n].append(u)
-        for n, group in by_name.items():
-            if len(group) > 1:
-                findings.append({
-                    "category": "Duplicates",
-                    "code": "member.duplicate_name",
-                    "severity": "medium",
-                    "message": f"Full name '{n}' used by {len(group)} members — possible dupes",
-                    "entity_type": "member",
-                    "entity_ids": [u["id"] for u in group],
-                    "entity_names": [u.get("full_name") for u in group],
-                })
+        # 1-3. Duplicate emails / mobiles / full-names — one helper,
+        # one shape, one place to update if we ever change the fields.
+        findings.extend(_find_duplicates(
+            users,
+            key_fn=lambda u: (u.get("email") or "").strip().lower(),
+            code="member.duplicate_email",
+            severity="high",
+            build_message=lambda k, g: f"Email '{k}' used by {len(g)} members",
+        ))
+        findings.extend(_find_duplicates(
+            users,
+            key_fn=lambda u: _norm_mobile(u.get("mobile")),
+            code="member.duplicate_mobile",
+            severity="high",
+            build_message=lambda k, g: f"Mobile ending {k[-4:]} used by {len(g)} members",
+        ))
+        findings.extend(_find_duplicates(
+            users,
+            key_fn=lambda u: (u.get("full_name") or "").strip().upper(),
+            code="member.duplicate_name",
+            severity="medium",
+            build_message=lambda k, g: f"Full name '{k}' used by {len(g)} members — possible dupes",
+        ))
 
         # 4. Missing critical fields
         for u in users:
@@ -683,22 +699,17 @@ def make_router(db, require_admin) -> APIRouter:
                     "entity_names": [e.get("name") or "(unnamed)"],
                 })
 
-        # --- Escorts: duplicate phone numbers ---
-        esc_by_phone: dict[str, list[dict]] = defaultdict(list)
-        for e in escorts:
-            k = (e.get("mobile_last10") or "").strip()
-            if k:
-                esc_by_phone[k].append(e)
-        for k, group in esc_by_phone.items():
-            if len(group) > 1:
-                findings.append({
-                    "category": "Escorts",
-                    "code": "escort.duplicate_phone", "severity": "medium",
-                    "message": f"Phone {k} shared by {len(group)} escort rows",
-                    "entity_type": "escort",
-                    "entity_ids": [e["id"] for e in group],
-                    "entity_names": [e.get("name") or "(unnamed)" for e in group],
-                })
+        # --- Escorts: duplicate phone numbers (via shared helper) ---
+        findings.extend(_find_duplicates(
+            escorts,
+            key_fn=lambda e: (e.get("mobile_last10") or "").strip(),
+            code="escort.duplicate_phone",
+            severity="medium",
+            build_message=lambda k, g: f"Phone {k} shared by {len(g)} escort rows",
+            entity_type="escort",
+            name_fn=lambda e: e.get("name") or "(unnamed)",
+            category="Escorts",
+        ))
 
         # --- Escorts: malformed phone (not clean 10 digits) ---
         for e in escorts:
