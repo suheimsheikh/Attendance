@@ -60,13 +60,6 @@ function StatPill({ icon: Icon, label, value, tint }) {
 }
 
 function DailyTrendChart({ data, colorAmt, colorLines, testid, onDayClick, height = 260, fullscreen = false }) {
-  // Track the last-hovered X-axis point so a click anywhere on the
-  // wrapper opens the roster for THAT day. Recharts' own hover state
-  // is the source of truth so we correctly handle the plot-area
-  // being inset by the Y-axis labels on BOTH sides of a dual-axis
-  // chart — a plain frac-of-wrapper-width calc would land on the
-  // wrong date once the axes take their ~60px each.
-  const activeIdxRef = React.useRef(null);
   const rows = (data || []).map((d) => ({
     date: d.date,
     label: formatDate(d.date),
@@ -74,10 +67,23 @@ function DailyTrendChart({ data, colorAmt, colorLines, testid, onDayClick, heigh
     Lines: d.lines,
   }));
   if (!rows.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
-  const handleDivClick = () => {
+  const handleDivClick = (e) => {
     if (!onDayClick) return;
-    const idx = activeIdxRef.current;
-    if (idx == null) return;
+    // Read the actual plot-area rectangle from Recharts' rendered SVG
+    // so we don't drift by the Y-axis label width (up to ~60px on a
+    // dual-axis chart). The `.recharts-cartesian-grid` group is
+    // positioned exactly at the plot bounds. Fall back to the wrapper
+    // rect if the SVG hasn't rendered yet (empty state).
+    const grid = e.currentTarget.querySelector(".recharts-cartesian-grid");
+    let rect;
+    if (grid?.getBoundingClientRect) {
+      rect = grid.getBoundingClientRect();
+    } else {
+      rect = e.currentTarget.getBoundingClientRect();
+    }
+    if (!rect.width) return;
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const idx = Math.round(frac * (rows.length - 1));
     const day = rows[idx]?.date;
     if (day) onDayClick(day);
   };
@@ -85,14 +91,7 @@ function DailyTrendChart({ data, colorAmt, colorLines, testid, onDayClick, heigh
   return (
     <div data-testid={testid} style={{ width: "100%", height, cursor: onDayClick ? "pointer" : "default" }} onClick={handleDivClick}>
       <ResponsiveContainer>
-        <LineChart
-          data={rows}
-          margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
-          onMouseMove={(state) => {
-            const i = state?.activeTooltipIndex;
-            if (typeof i === "number") activeIdxRef.current = i;
-          }}
-        >
+        <LineChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="label" tick={{ fontSize }} interval="preserveStartEnd" minTickGap={20} />
           <YAxis yAxisId="left"  tick={{ fontSize }} tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
@@ -106,20 +105,7 @@ function DailyTrendChart({ data, colorAmt, colorLines, testid, onDayClick, heigh
             yAxisId="left"  type="monotone" dataKey="Amount"
             stroke={colorAmt} strokeWidth={2}
             dot={{ r: fullscreen ? 3 : 2 }}
-            activeDot={onDayClick ? {
-              r: 6,
-              onClick: (dotProps, event) => {
-                // activeDot's first arg carries `payload` — the exact
-                // data row for the hovered point — so we can drive
-                // the popup off THIS row without depending on any
-                // ref/state race. Stop bubbling so the wrapper div's
-                // onClick doesn't also fire.
-                event?.stopPropagation?.();
-                const day = dotProps?.payload?.date;
-                if (day) onDayClick(day);
-              },
-              style: { cursor: "pointer" },
-            } : { r: 5 }}
+            activeDot={{ r: onDayClick ? 6 : 5, style: { cursor: onDayClick ? "pointer" : "default" } }}
           />
           <Line yAxisId="right" type="monotone" dataKey="Lines"  stroke={colorLines} strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
         </LineChart>

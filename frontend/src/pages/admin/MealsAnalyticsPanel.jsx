@@ -263,8 +263,22 @@ export default function MealsAnalyticsPanel({ days, events }) {
   // Y-axis label padding).
   const renderTrend = (heightPx) => (
     <div
-      style={{ width: "100%", height: heightPx }}
+      style={{ width: "100%", height: heightPx, cursor: "pointer" }}
       data-testid={heightPx > 400 ? "ma-daily-trend-fs" : "ma-daily-trend"}
+      onClick={(e) => {
+        // Frac-of-wrapper-width click math — accurate enough for a
+        // single-axis chart (the only padding is ~4px margin), and
+        // has been verified working since the popup shipped. Do NOT
+        // "improve" this without a full E2E re-test — the dual-axis
+        // Kitchen Analytics chart uses activeIdxRef instead because
+        // its Y-axis labels add ~60px of drift.
+        const rect = e.currentTarget.getBoundingClientRect();
+        const relX = e.clientX - rect.left;
+        const frac = Math.max(0, Math.min(1, relX / rect.width));
+        const idx = Math.round(frac * (m.rows.length - 1));
+        const day = m.rows[idx]?.date;
+        if (day) setSelectedDay(day);
+      }}
     >
       <ResponsiveContainer>
         <LineChart
@@ -287,17 +301,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
             type="monotone" dataKey="total" name="Total"
             stroke="#10B981" strokeWidth={2.25}
             dot={renderTotalDot(heightPx)}
-            activeDot={{
-              r: 7, style: { cursor: "pointer" },
-              onClick: (dotProps, event) => {
-                // Recharts hands us `payload` (the exact row) here,
-                // which is the correct-by-construction date the user
-                // visually clicked — no plot-area math needed.
-                event?.stopPropagation?.();
-                const day = dotProps?.payload?.date;
-                if (day) setSelectedDay(day);
-              },
-            }}
+            activeDot={{ r: 7 }}
           />
         </LineChart>
       </ResponsiveContainer>
