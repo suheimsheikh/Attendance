@@ -15,6 +15,7 @@ import DailyRosterShareButton from "./muster/DailyRosterShareButton";
 import PresentShareButton from "./muster/PresentShareButton";
 import PresenceChip from "../components/PresenceChip";
 import { shareToWhatsApp } from "../utils/shareWhatsApp";
+import useWhatsappGroups, { buildWhatsappHeader } from "../hooks/useWhatsappGroups";
 import { buildPhotoMosaicBlob } from "../utils/mosaicShare";
 import ExMemberToggle, { useExMemberToggle } from "../components/ExMemberToggle";
 import { isExMember } from "../utils/exMember";
@@ -35,6 +36,7 @@ const CATEGORY_CHIP_STYLE = {
 export default function Muster() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const whatsappGroups = useWhatsappGroups();
   const [mode, setMode] = useState("checkin");
   // Admins get scope filter (default "all"); coaches/escorts always get athletes.
   const [scope, setScope] = useState(isAdmin ? "all" : "athletes");
@@ -153,12 +155,18 @@ export default function Muster() {
           const dayStr = now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
           const title = `✅ Checked in · ${timeStr}`;
           const subtitle = `${justCheckedIn.length} athlete${justCheckedIn.length > 1 ? "s" : ""} · ${dayStr}${office?.name ? " · " + office.name : ""}`;
-          const namesList = justCheckedIn.slice(0, 40).map((m) => `• ${m.full_name}`);
+          const namesList = justCheckedIn.slice(0, 40).map((m, i) => `${i + 1}. ${m.full_name}`);
           if (justCheckedIn.length > 40) namesList.push(`…and ${justCheckedIn.length - 40} more`);
+          // Muster shares always target the parents/athletes group.
+          const header = buildWhatsappHeader({
+            audience: "athletes",
+            groups: whatsappGroups,
+            dateIso: new Date().toISOString().slice(0, 10),
+          });
           try {
             const imageBlob = await buildPhotoMosaicBlob(justCheckedIn, title, subtitle);
             shareToWhatsApp({
-              text: `${title}\n${subtitle}\n\n${namesList.join("\n")}`,
+              text: `${header}\n${title}\n${subtitle}\n\n${namesList.join("\n")}`,
               imageBlob,
               filename: `checkin_${dayStr.replace(/\s+/g, "_")}_${timeStr.replace(":", "")}.jpg`,
             });

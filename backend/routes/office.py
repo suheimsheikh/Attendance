@@ -24,7 +24,7 @@ import pathlib
 import subprocess
 import time
 from functools import lru_cache
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 
 @lru_cache(maxsize=1)
@@ -123,5 +123,43 @@ def make_router(db, require_admin, get_current_user, send_checkout_reminders, Of
         cheap even under aggressive polling.
         """
         return {"version": _cached_version()}
+
+    # ── WhatsApp group names (Feb 2026 chef request) ─────────────────
+    # Two named groups used across every WhatsApp share (`shareToWhatsApp`)
+    # so recipients know which group / event the message belongs to.
+    # Values live on `db.config` under id="whatsapp_groups"; defaults are
+    # the two production groups at YCH so a fresh install works out of
+    # the box.
+    _WHATSAPP_DEFAULTS = {
+        "staff_group_name":    "YCH Attendance",
+        "athletes_group_name": "YCH Parents & Guardians Group",
+    }
+
+    @router.get("/config/whatsapp-groups")
+    async def get_whatsapp_groups(user: dict = Depends(get_current_user)):
+        doc = await db.config.find_one({"id": "whatsapp_groups"}, {"_id": 0}) or {}
+        return {
+            "staff_group_name":    (doc.get("staff_group_name") or _WHATSAPP_DEFAULTS["staff_group_name"]).strip(),
+            "athletes_group_name": (doc.get("athletes_group_name") or _WHATSAPP_DEFAULTS["athletes_group_name"]).strip(),
+        }
+
+    @router.put("/config/whatsapp-groups")
+    async def update_whatsapp_groups(body: dict, admin: dict = Depends(require_admin)):
+        # Silently clamp long strings — WhatsApp itself truncates group
+        # names at 25 chars but we allow a little more so admins can
+        # store descriptive labels like "YCH Camp Aug'26 Athletes".
+        clean = {}
+        for k in ("staff_group_name", "athletes_group_name"):
+            v = str(body.get(k) or "").strip()[:60]
+            if v:
+                clean[k] = v
+        if not clean:
+            raise HTTPException(status_code=400, detail="At least one group name is required.")
+        await db.config.update_one(
+            {"id": "whatsapp_groups"},
+            {"$set": {"id": "whatsapp_groups", **clean}},
+            upsert=True,
+        )
+        return await get_whatsapp_groups(admin)
 
     return router

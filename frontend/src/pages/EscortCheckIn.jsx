@@ -8,6 +8,7 @@ import SelfieCapture from "../components/SelfieCapture";
 import { fileToResizedDataUrl } from "../utils";
 import { useEscape } from "../hooks/useEscape";
 import { shareToWhatsApp, formatCheckinCaption, dataUrlToBlob } from "../utils/shareWhatsApp";
+import useWhatsappGroups, { buildWhatsappHeader } from "../hooks/useWhatsappGroups";
 
 /**
  * EscortCheckIn — kiosk-style page used by both escorts themselves
@@ -322,6 +323,7 @@ function OnCampusActions({ escort, att, athletes, openExcursion, localInSelfie, 
   const [showCheckOut, setShowCheckOut] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const whatsappGroups = useWhatsappGroups();
 
   const doReturn = async () => {
     setBusy(true);
@@ -351,12 +353,16 @@ function OnCampusActions({ escort, att, athletes, openExcursion, localInSelfie, 
         } catch { /* text-only fallback below */ }
       }
       await shareToWhatsApp({
-        text: formatCheckinCaption({
+        text: `${buildWhatsappHeader({
+          audience: "athletes",
+          groups: whatsappGroups,
+          dateIso: (att.check_in_at ? new Date(att.check_in_at) : new Date()).toISOString().slice(0, 10),
+        })}\n${formatCheckinCaption({
           action: "checkin",
           name: escort.name,
           siteName: escort.institution || "",
           when: att.check_in_at ? new Date(att.check_in_at) : new Date(),
-        }),
+        })}`,
         imageBlob: blob,
         filename: `checkin-${escort.name.replace(/\s+/g, "-")}.jpg`,
       });
