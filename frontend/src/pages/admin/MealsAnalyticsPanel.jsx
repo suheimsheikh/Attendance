@@ -130,21 +130,54 @@ export default function MealsAnalyticsPanel({ days, events }) {
   }, [fullscreen]);
   // Map events → bands drawn on the trend chart. Only regattas/camps/
   // breaks that actually intersect a populated day contribute (else
-  // Recharts complains about unknown X-axis keys).
+  // Recharts complains about unknown X-axis keys). Camps that only
+  // run on certain weekdays (e.g. Agape Sat/Sun) get exploded into
+  // one segment per matching weekday so the strip visually matches
+  // reality — a continuous rectangle would suggest a 5-week camp
+  // when it was actually just 10 weekend days.
   const bands = useMemo(() => {
     if (!m || !events) return [];
     const kinds = ["regatta", "camp", "break"];
+    const winStart = m.rows[0].date;
+    const winEnd = m.rows[m.rows.length - 1].date;
+    const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
     const out = [];
     kinds.forEach((k) => {
       (events[k + "s"] || []).forEach((ev) => {
-        // Clamp to the visible window so the strip never overshoots
+        // Clamp to the visible window so slivers never overshoot
         // the chart edges.
-        const winStart = m.rows[0].date;
-        const winEnd = m.rows[m.rows.length - 1].date;
         const s = ev.start_date < winStart ? winStart : ev.start_date;
         const e = ev.end_date > winEnd ? winEnd : ev.end_date;
         if (s > e) return;
-        out.push({ kind: k, name: ev.name, start_date: s, end_date: e });
+        const dows = Array.isArray(ev.days_of_week) ? ev.days_of_week : [];
+        // No weekday filter, or single-day event → keep as one segment.
+        if (!dows.length || s === e) {
+          out.push({ kind: k, name: ev.name, start_date: s, end_date: e, segment: 0 });
+          return;
+        }
+        // Walk the date range and open a new segment for each run of
+        // consecutive matching weekdays. A weekend-only camp thus
+        // becomes ~2-day slivers separated by 5-day gaps.
+        let segStart = null;
+        let idx = 0;
+        const cur = new Date(s + "T00:00:00");
+        const endD = new Date(e + "T00:00:00");
+        while (cur <= endD) {
+          const iso = cur.toISOString().slice(0, 10);
+          const key = DOW_KEYS[cur.getDay()];
+          if (dows.includes(key)) {
+            if (!segStart) segStart = iso;
+          } else if (segStart) {
+            const prev = new Date(cur); prev.setDate(prev.getDate() - 1);
+            out.push({ kind: k, name: ev.name, start_date: segStart,
+                       end_date: prev.toISOString().slice(0, 10), segment: idx++ });
+            segStart = null;
+          }
+          cur.setDate(cur.getDate() + 1);
+        }
+        if (segStart) {
+          out.push({ kind: k, name: ev.name, start_date: segStart, end_date: e, segment: idx });
+        }
       });
     });
     return out;
@@ -210,7 +243,10 @@ export default function MealsAnalyticsPanel({ days, events }) {
               {rowFor(k).map((ev, i) => {
                 const l = pct(ev.start_date);
                 const r = pct(ev.end_date);
-                const w = Math.max(0.7, r - l);
+                // Guarantee a visible sliver even for a single Sat/Sun
+                // (which is <2% of a 3-month window).
+                const w = Math.max(0.5, r - l);
+                const isFirst = ev.segment === 0 || ev.segment === undefined;
                 return (
                   <div
                     key={`${ev.name}-${ev.start_date}-${i}`}
@@ -219,7 +255,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
                     title={`${ev.name} · ${ev.start_date} → ${ev.end_date}`}
                     data-testid={`ma-event-bar-${k}-${i}`}
                   >
-                    <span className="truncate">{ev.name}</span>
+                    {isFirst && <span className="truncate">{ev.name}</span>}
                   </div>
                 );
               })}

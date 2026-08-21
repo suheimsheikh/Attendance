@@ -3719,7 +3719,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             return [{"kind": kind, "name": r.get("name"),
                      "start_date": r.get("start_date"), "end_date": r.get("end_date"),
                      "level": r.get("level"), "location": r.get("location"),
-                     "institution": r.get("institution")}
+                     "institution": r.get("institution"),
+                     "days_of_week": r.get("days_of_week") or []}
                     for r in rows]
         reg   = await db.regattas.find(overlap, {"_id": 0}).to_list(200)
         cmp_  = await db.camps.find(overlap,    {"_id": 0}).to_list(200)
