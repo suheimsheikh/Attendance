@@ -287,6 +287,101 @@ def _parse_hm(cutoff: str) -> tuple[int, int]:
     return int(h), int(m)
 
 
+def _earliest_check_in_before(sessions: list[dict], cutoff_utc: str) -> Optional[str]:
+    """Breakfast eligibility: return the member's earliest check_in_at
+    on the day IF it lands at-or-before the breakfast cut-off. `None`
+    means they arrived too late (skip). Extracted from meals_today so
+    the rule is unit-testable in isolation."""
+    cis = sorted([s["check_in_at"] for s in sessions if s.get("check_in_at")])
+    if cis and cis[0] <= cutoff_utc:
+        return cis[0]
+    return None
+
+
+def _covering_session_check_in(sessions: list[dict], anchor_utc: str) -> Optional[str]:
+    """Lunch / Dinner eligibility: return the check_in_at of the FIRST
+    session that "covers" the anchor time — i.e. checked in ≤ anchor
+    and either has no checkout yet or checked out AFTER the anchor.
+    `None` means the member was off-campus at the anchor moment.
+
+    Ordering: iterates in list order. Callers pass `by_user[uid]` which
+    Mongo returns in insertion order (chronological on this collection).
+    """
+    for s in sessions:
+        ci = s.get("check_in_at")
+        co = s.get("check_out_at")
+        if not ci or ci > anchor_utc:
+            continue
+        if co is None or co > anchor_utc:
+            return ci
+    return None
+
+
+# ── Kitchen analytics helpers (extracted from `kitchen_analytics` in
+#    the Feb 2026 complexity pass — pure functions, testable in
+#    isolation, no DB access). ─────────────────────────────────────────
+def _weighted_rate_lookup(purch_qty: dict, purch_amt: dict, snap_rate: dict):
+    """Return a `rate_for(item_id) -> float` closure that yields the
+    weighted-average purchase rate for `item_id` in the current window,
+    falling back to the stock snapshot avg_rate when the item wasn't
+    purchased. Used to value issues at comparable rupees vs purchases."""
+    def rate_for(iid: str) -> float:
+        if purch_qty.get(iid, 0) > 0:
+            return purch_amt[iid] / purch_qty[iid]
+        return snap_rate.get(iid, 0.0)
+    return rate_for
+
+
+def _kitchen_daily_series(daily: dict) -> list:
+    """Format a `{date: {amount, qty, lines, …}}` roll-up as a
+    sorted-by-date list of chart-ready rows."""
+    return [
+        {"date": d,
+         "amount": round(v["amount"], 2),
+         "qty":    round(v["qty"], 3),
+         "lines":  v["lines"]}
+        for d, v in sorted(daily.items())
+    ]
+
+
+def _kitchen_item_rows(items_agg: dict, by_id: dict, cat_label: dict) -> list:
+    """Format a `{item_id: {qty, amount, lines}}` roll-up as a list
+    of table rows, hydrated with the item's name / unit / category
+    labels from the master maps, and sorted by amount desc."""
+    rows = []
+    for iid, v in items_agg.items():
+        info = by_id.get(iid) or {}
+        ckey = info.get("category_key")
+        rows.append({
+            "item_id": iid,
+            "name":    info.get("name") or "(deleted item)",
+            "unit":    info.get("unit"),
+            "category_key":   ckey,
+            "category_label": cat_label.get(ckey, (ckey or "").replace("_", " ").title()),
+            "qty":    round(v["qty"], 3),
+            "amount": round(v["amount"], 2),
+            "lines":  v["lines"],
+        })
+    rows.sort(key=lambda r: r["amount"], reverse=True)
+    return rows
+
+
+def _kitchen_cat_pct(cat_agg: dict, cat_label: dict) -> list:
+    """Format a `{category_key: rupee_amount}` roll-up as the % pie
+    the frontend expects. Uses 1.0 as the total-denominator floor so
+    an empty window returns 0% rows instead of dividing by zero."""
+    total = sum(cat_agg.values()) or 1.0
+    rows = [
+        {"key":    k,
+         "label":  cat_label.get(k, k.replace("_", " ").title()),
+         "amount": round(v, 2),
+         "pct":    round(v * 100.0 / total, 1)}
+        for k, v in cat_agg.items()
+    ]
+    rows.sort(key=lambda r: r["amount"], reverse=True)
+    return rows
+
+
 def make_router(db, require_admin, get_current_user, require_chef_or_admin=None) -> APIRouter:
     router = APIRouter(prefix="/api")
     # Fallback so tests that don't pass the chef dep still work — treat
@@ -595,25 +690,6 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             if uid:
                 by_user.setdefault(uid, []).append(row)
 
-        # Meal-window membership functions.
-        def _breakfast_eligible(sessions: list[dict]) -> Optional[str]:
-            """Earliest check_in_at if it's ≤ breakfast cut-off."""
-            cis = sorted([s["check_in_at"] for s in sessions if s.get("check_in_at")])
-            if cis and cis[0] <= bf_utc:
-                return cis[0]
-            return None
-
-        def _still_on_campus_at(sessions: list[dict], anchor_utc: str) -> Optional[str]:
-            """Return the check_in_at of the covering session, or None."""
-            for s in sessions:
-                ci = s.get("check_in_at")
-                co = s.get("check_out_at")
-                if not ci or ci > anchor_utc:
-                    continue
-                if co is None or co > anchor_utc:
-                    return ci
-            return None
-
         # Fetch users + categories master (one shot, shared across
         # all three buckets).
         user_ids = list(by_user.keys())
@@ -661,9 +737,9 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                                          (x["full_name"] or "").lower()))
             return {"counts": counts, "total": sum(counts.values()), "members": members}
 
-        breakfast = _bucket(_breakfast_eligible)
-        lunch     = _bucket(lambda s: _still_on_campus_at(s, lu_utc))
-        dinner    = _bucket(lambda s: _still_on_campus_at(s, di_utc))
+        breakfast = _bucket(lambda s: _earliest_check_in_before(s, bf_utc))
+        lunch     = _bucket(lambda s: _covering_session_check_in(s, lu_utc))
+        dinner    = _bucket(lambda s: _covering_session_check_in(s, di_utc))
         # Stamp lock state + zero-out unlocked buckets so the kitchen
         # never sees a premature estimate. Past dates always locked.
         for bucket_dict, (h, m) in (
@@ -3267,11 +3343,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
         snap_rows, _snap_cats = await _stock_snapshot(e)
         snap_rate = {r["item_id"]: float(r.get("avg_rate") or 0) for r in snap_rows}
-
-        def _rate_for(iid: str) -> float:
-            if purch_qty.get(iid, 0) > 0:
-                return purch_amt[iid] / purch_qty[iid]
-            return snap_rate.get(iid, 0.0)
+        _rate_for = _weighted_rate_lookup(purch_qty, purch_amt, snap_rate)
 
         # ---- Roll-ups ----
         def _blank_day():
@@ -3362,44 +3434,13 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 iss_daily_lines.setdefault(d, []).append((iid, q))
 
         def _daily_series(daily: dict) -> list:
-            return [
-                {"date": d,
-                 "amount": round(v["amount"], 2),
-                 "qty": round(v["qty"], 3),
-                 "lines": v["lines"]}
-                for d, v in sorted(daily.items())
-            ]
+            return _kitchen_daily_series(daily)
 
         def _item_rows(items_agg: dict) -> list:
-            rows = []
-            for iid, v in items_agg.items():
-                info = by_id.get(iid) or {}
-                rows.append({
-                    "item_id": iid,
-                    "name": info.get("name") or "(deleted item)",
-                    "unit": info.get("unit"),
-                    "category_key": info.get("category_key"),
-                    "category_label": cat_label.get(info.get("category_key"),
-                                                   (info.get("category_key") or "").replace("_", " ").title()),
-                    "qty": round(v["qty"], 3),
-                    "amount": round(v["amount"], 2),
-                    "lines": v["lines"],
-                })
-            rows.sort(key=lambda r: r["amount"], reverse=True)
-            return rows
+            return _kitchen_item_rows(items_agg, by_id, cat_label)
 
         def _cat_pct(cat_agg: dict) -> list:
-            total = sum(cat_agg.values()) or 1.0
-            rows = []
-            for k, v in cat_agg.items():
-                rows.append({
-                    "key": k,
-                    "label": cat_label.get(k, k.replace("_", " ").title()),
-                    "amount": round(v, 2),
-                    "pct": round(v * 100.0 / total, 1),
-                })
-            rows.sort(key=lambda r: r["amount"], reverse=True)
-            return rows
+            return _kitchen_cat_pct(cat_agg, cat_label)
 
         purch_item_rows = _item_rows(purch_items)
         iss_item_rows = _item_rows(iss_items)
