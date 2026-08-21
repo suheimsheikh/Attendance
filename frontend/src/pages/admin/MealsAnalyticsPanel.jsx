@@ -253,33 +253,18 @@ export default function MealsAnalyticsPanel({ days, events }) {
     );
   }
   // Trend chart body factored out so we can render it inside the card
-  // AND fullscreen without duplicating the ~30-line JSX block.
-  // Renders four series: BF / L / D (thin, per-slot colours) + Total
-  // (thick emerald) + 7-day MA (dashed slate). BF/L/D can be toggled
-  // off via the Legend if the admin wants a clean Total view.
-  // Track the last-hovered X-axis point so a click anywhere on the
-  // chart wrapper opens the roster for THAT day.
+  // AND fullscreen without duplicating the JSX block. Renders four
+  // series: BF / L / D (thin, per-slot colours) + Total (thick
+  // emerald with bolder dots on muster days). Click any dot to open
+  // the "who ate today" roster — the click path uses Recharts'
+  // activeDot onClick which carries the exact hovered payload, so
+  // the popup always shows the date the user visually clicked (a
+  // plain frac-of-wrapper-width calc would drift by the X-axis and
+  // Y-axis label padding).
   const renderTrend = (heightPx) => (
     <div
-      style={{ width: "100%", height: heightPx, cursor: "pointer" }}
+      style={{ width: "100%", height: heightPx }}
       data-testid={heightPx > 400 ? "ma-daily-trend-fs" : "ma-daily-trend"}
-      onClick={(e) => {
-        // Recharts' internal hover-state is fickle when driven from
-        // a custom Tooltip content, so instead derive the clicked
-        // date from the click X-position vs the wrapper's own
-        // bounding box. Recharts uses matching X-axis math when
-        // interval="preserveStartEnd", so the mapping is exact for
-        // any dot the user could visually target.
-        const rect = e.currentTarget.getBoundingClientRect();
-        // The plot area (ignoring recharts internal margins ~4/12 px)
-        // lines up with the wrapper width closely enough for a
-        // roster popup — off-by-one at the extreme edges is fine.
-        const relX = e.clientX - rect.left;
-        const frac = Math.max(0, Math.min(1, relX / rect.width));
-        const idx = Math.round(frac * (m.rows.length - 1));
-        const day = m.rows[idx]?.date;
-        if (day) setSelectedDay(day);
-      }}
     >
       <ResponsiveContainer>
         <LineChart
@@ -302,6 +287,17 @@ export default function MealsAnalyticsPanel({ days, events }) {
             type="monotone" dataKey="total" name="Total"
             stroke="#10B981" strokeWidth={2.25}
             dot={renderTotalDot(heightPx)}
+            activeDot={{
+              r: 7, style: { cursor: "pointer" },
+              onClick: (dotProps, event) => {
+                // Recharts hands us `payload` (the exact row) here,
+                // which is the correct-by-construction date the user
+                // visually clicked — no plot-area math needed.
+                event?.stopPropagation?.();
+                const day = dotProps?.payload?.date;
+                if (day) setSelectedDay(day);
+              },
+            }}
           />
         </LineChart>
       </ResponsiveContainer>

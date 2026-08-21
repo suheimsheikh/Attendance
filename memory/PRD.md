@@ -21,7 +21,7 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
-### Feb 2026 (this session) — Meals Calendar polish + backend complexity pass
+### Feb 2026 (this session) — Meals Calendar polish + backend complexity pass + Kitchen Analytics UX + prod hotfixes
 
 #### UI polish (Meals Calendar / Analytics Panel)
 - Default date window = earliest available data → today (was current-month only). Backed by new `GET /api/meals/meal-calendar/bounds`.
@@ -58,6 +58,16 @@ Test file locations:
 - `/app/backend/tests/test_timeline_classifier.py`
 - `/app/backend/tests/test_meals_today_pickers.py`
 - `/app/backend/tests/test_kitchen_analytics_helpers.py`
+- `/app/backend/tests/test_day_attendees_hardening.py`   ← prod hotfix
+
+#### Kitchen Analytics UX upgrade (matches Meals Calendar)
+- **Default "All" preset**: window now spans earliest pantry activity → today. Backed by new `GET /api/meals/kitchen-analytics/bounds`.
+- **Click a day on the Daily-trend chart** → detail popup listing every purchase / issue line for that day (item, category, vendor, qty, rate, amount + bulk-uploaded rows separately). Backed by new `GET /api/meals/pantry-day-detail?date=&kind=`.
+- **Fullscreen expand** on Daily-trend cards (Purchases + Consumption) — Maximize icon opens the chart in a full-viewport modal.
+
+#### Prod hotfixes (require redeploy)
+- **`meal_day_attendees` 500** — sort key was calling `.lower()` directly on category/institution/user_name; a legacy prod row with a non-string value crashed. Hardened with `str(v).lower()` + try/except + per-field fallback. 6 pytests in `test_day_attendees_hardening.py`.
+- **Chart-click wrong-date** — the Kitchen Analytics purchases-trend and Meals Calendar total-line click paths used `clickX / wrapperWidth` to compute the data index, which drifts by the Y-axis label width (up to ~60px each side on the dual-axis Kitchen chart). Rewritten to use Recharts' `activeDot.onClick` which carries the exact hovered `payload.date` — always shows the date the user visually clicked.
 
 Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3_fork` iter 49: 100% pass, no console errors, all 6 screens render + interact correctly.
 

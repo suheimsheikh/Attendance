@@ -60,6 +60,13 @@ function StatPill({ icon: Icon, label, value, tint }) {
 }
 
 function DailyTrendChart({ data, colorAmt, colorLines, testid, onDayClick, height = 260, fullscreen = false }) {
+  // Track the last-hovered X-axis point so a click anywhere on the
+  // wrapper opens the roster for THAT day. Recharts' own hover state
+  // is the source of truth so we correctly handle the plot-area
+  // being inset by the Y-axis labels on BOTH sides of a dual-axis
+  // chart — a plain frac-of-wrapper-width calc would land on the
+  // wrong date once the axes take their ~60px each.
+  const activeIdxRef = React.useRef(null);
   const rows = (data || []).map((d) => ({
     date: d.date,
     label: formatDate(d.date),
@@ -67,22 +74,25 @@ function DailyTrendChart({ data, colorAmt, colorLines, testid, onDayClick, heigh
     Lines: d.lines,
   }));
   if (!rows.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
-  // Click handling: we translate the wrapper's click X-position into the
-  // nearest data-point index — the same technique the Meals Calendar
-  // trend chart uses. Recharts' onClick is unreliable at low dot radii.
-  const handleClick = (e) => {
+  const handleDivClick = () => {
     if (!onDayClick) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const idx = Math.round(frac * (rows.length - 1));
+    const idx = activeIdxRef.current;
+    if (idx == null) return;
     const day = rows[idx]?.date;
     if (day) onDayClick(day);
   };
   const fontSize = fullscreen ? 12 : 10;
   return (
-    <div data-testid={testid} style={{ width: "100%", height, cursor: onDayClick ? "pointer" : "default" }} onClick={handleClick}>
+    <div data-testid={testid} style={{ width: "100%", height, cursor: onDayClick ? "pointer" : "default" }} onClick={handleDivClick}>
       <ResponsiveContainer>
-        <LineChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+        <LineChart
+          data={rows}
+          margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
+          onMouseMove={(state) => {
+            const i = state?.activeTooltipIndex;
+            if (typeof i === "number") activeIdxRef.current = i;
+          }}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="label" tick={{ fontSize }} interval="preserveStartEnd" minTickGap={20} />
           <YAxis yAxisId="left"  tick={{ fontSize }} tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
@@ -92,7 +102,25 @@ function DailyTrendChart({ data, colorAmt, colorLines, testid, onDayClick, heigh
             contentStyle={{ fontSize: 12 }}
           />
           <Legend wrapperStyle={{ fontSize: fullscreen ? 13 : 11 }} />
-          <Line yAxisId="left"  type="monotone" dataKey="Amount" stroke={colorAmt} strokeWidth={2} dot={{ r: fullscreen ? 3 : 2 }} activeDot={{ r: 5 }} />
+          <Line
+            yAxisId="left"  type="monotone" dataKey="Amount"
+            stroke={colorAmt} strokeWidth={2}
+            dot={{ r: fullscreen ? 3 : 2 }}
+            activeDot={onDayClick ? {
+              r: 6,
+              onClick: (dotProps, event) => {
+                // activeDot's first arg carries `payload` — the exact
+                // data row for the hovered point — so we can drive
+                // the popup off THIS row without depending on any
+                // ref/state race. Stop bubbling so the wrapper div's
+                // onClick doesn't also fire.
+                event?.stopPropagation?.();
+                const day = dotProps?.payload?.date;
+                if (day) onDayClick(day);
+              },
+              style: { cursor: "pointer" },
+            } : { r: 5 }}
+          />
           <Line yAxisId="right" type="monotone" dataKey="Lines"  stroke={colorLines} strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
         </LineChart>
       </ResponsiveContainer>
