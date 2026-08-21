@@ -27,6 +27,64 @@ from services.permissions import is_super_admin
 import breaks as _breaks_module
 
 
+# ── member_timeline constants (module-scope so we don't rebuild them
+#    on every request). ───────────────────────────────────────────────
+_WEEKDAY_NAME = ["monday", "tuesday", "wednesday", "thursday",
+                 "friday", "saturday", "sunday"]
+_WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+# Human labels shown by the drill-down modal.
+_TIMELINE_LABELS = {
+    "present": "Present",
+    "leave": "Leave",
+    "tour": "Tour",
+    "posting": "Posting",
+    "comp_off": "Comp-off",
+    "late_coming": "Late-coming approved",
+    "break": "Break / Holiday",
+    "escort": "Escort duty",
+    "off_weekly": "Weekly off",
+    "off_in_progress": "In progress (today)",
+    "absent": "Absent",
+}
+
+# Precedence order for the "primary" bucket when a day is tagged with
+# more than one marker (e.g. present + escort). Earliest wins.
+_TIMELINE_PRIORITY = ["present", "leave", "tour", "posting", "comp_off",
+                      "late_coming", "break", "escort"]
+
+# Buckets that count as "accounted" (the member is NOT absent).
+# Mirrors the aggregation in server.compute_hours_report.
+_TIMELINE_ACCOUNTED = {"present", "leave", "tour", "posting", "comp_off",
+                       "late_coming", "break"}
+
+
+def _classify_timeline_day(
+    buckets: list, *, iso: str, today_iso: str, is_weekly_off: bool,
+) -> str:
+    """Return the single "primary" bucket string a timeline row is
+    displayed under. Extracted from member_timeline so the branching
+    logic is testable in isolation.
+
+    Rules (in order):
+      1. If any marker in ACCOUNTED is present → pick the highest-
+         priority marker (present > leave > tour > … > escort).
+      2. Otherwise:
+         a. weekly-off day       → "off_weekly"
+         b. today (still running) → "off_in_progress"
+         c. everything else       → "absent"
+    """
+    has_accounted = any(b in _TIMELINE_ACCOUNTED for b in buckets)
+    if has_accounted:
+        return next((b for b in _TIMELINE_PRIORITY if b in buckets),
+                    buckets[0])
+    if is_weekly_off:
+        return "off_weekly"
+    if iso == today_iso:
+        return "off_in_progress"
+    return "absent"
+
+
 def _pdf_from_table(
     title: str,
     headers,
@@ -563,10 +621,6 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         session times, leave reasons, half-day flags, late-coming
         expected-arrivals, overtime status, etc.
         """
-        WEEKDAY_NAME = ["monday", "tuesday", "wednesday", "thursday",
-                        "friday", "saturday", "sunday"]
-        WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-
         user = await db.users.find_one({"id": member_id}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=404, detail="Member not found")
@@ -638,29 +692,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         today_iso = local_date_str(office)
 
         wo_name = (user.get("weekly_off") or "monday").lower()
-        wo_idx = WEEKDAY_NAME.index(wo_name) if wo_name in WEEKDAY_NAME else 0
-
-        # Bucket labels — the primary bucket the row is classified under.
-        LABELS = {
-            "present": "Present",
-            "leave": "Leave",
-            "tour": "Tour",
-            "posting": "Posting",
-            "comp_off": "Comp-off",
-            "late_coming": "Late-coming approved",
-            "break": "Break / Holiday",
-            "escort": "Escort duty",
-            "off_weekly": "Weekly off",
-            "off_in_progress": "In progress (today)",
-            "absent": "Absent",
-        }
-        # Priority order when a day has multiple markers — earliest wins.
-        PRIORITY = ["present", "leave", "tour", "posting", "comp_off",
-                    "late_coming", "break", "escort"]
-        # Buckets that count as "accounted" (member is NOT absent on
-        # that date). Mirrors the aggregation in server.compute_hours_report.
-        ACCOUNTED = {"present", "leave", "tour", "posting", "comp_off",
-                     "late_coming", "break"}
+        wo_idx = _WEEKDAY_NAME.index(wo_name) if wo_name in _WEEKDAY_NAME else 0
 
         days_out = []
         cur = sd
@@ -725,24 +757,16 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 buckets.append("escort")
                 details.append({"type": "escort"})
 
-            has_accounted = any(b in ACCOUNTED for b in buckets)
             is_wo = weekday_idx == wo_idx
-
-            if not has_accounted:
-                if is_wo:
-                    primary = "off_weekly"
-                elif iso == today_iso:
-                    primary = "off_in_progress"
-                else:
-                    primary = "absent"
-            else:
-                primary = next((b for b in PRIORITY if b in buckets), buckets[0])
+            primary = _classify_timeline_day(
+                buckets, iso=iso, today_iso=today_iso, is_weekly_off=is_wo,
+            )
 
             days_out.append({
                 "date": iso,
-                "weekday": WEEKDAY_SHORT[weekday_idx],
+                "weekday": _WEEKDAY_SHORT[weekday_idx],
                 "bucket": primary,
-                "label": LABELS.get(primary, primary.title()),
+                "label": _TIMELINE_LABELS.get(primary, primary.title()),
                 "buckets": list(dict.fromkeys(buckets)),  # unique, insertion order
                 "details": details,
                 "is_weekly_off": is_wo,
