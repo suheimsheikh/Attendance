@@ -3279,6 +3279,127 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             },
         }
 
+    @router.get("/meals/kitchen-analytics/bounds")
+    async def kitchen_analytics_bounds(user: dict = Depends(require_chef_or_admin)):
+        """Earliest and latest dates for which any pantry activity exists
+        (purchases OR issues). Used by the Kitchen Analytics tab to
+        default the "All" preset window to full history — same UX as
+        the Meals Calendar page."""
+        dates: list[str] = []
+        for coll in ("meal_purchases", "meal_issues"):
+            lo = await db[coll].find({}, {"_id": 0, "date": 1}).sort("date", 1).limit(1).to_list(1)
+            hi = await db[coll].find({}, {"_id": 0, "date": 1}).sort("date", -1).limit(1).to_list(1)
+            if lo: dates.append(lo[0]["date"])
+            if hi: dates.append(hi[0]["date"])
+        if not dates:
+            today = local_date_str()
+            return {"min_date": today, "max_date": today, "has_data": False}
+        return {"min_date": min(dates), "max_date": max(dates), "has_data": True}
+
+
+    @router.get("/meals/pantry-day-detail")
+    async def pantry_day_detail(
+        date: str,  # noqa: A002
+        kind: str = Query("purchases", pattern="^(purchases|issues)$"),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Line-level detail for a single day — powers the "click a day
+        on the chart" popup on the Kitchen Analytics tab. Returns one
+        row per (vendor, item) purchase / per (item) issue with
+        hydrated item name + unit + category label.
+
+        For purchases, `unitemised` rows are also surfaced so admins
+        can see when a bulk-uploaded day contributed rupees to the
+        chart without per-item breakdown.
+        """
+        d = _valid_date(date)
+        coll = "meal_purchases" if kind == "purchases" else "meal_issues"
+        docs = await db[coll].find(
+            {"date": d}, {"_id": 0},
+        ).to_list(500)
+
+        # Hydrate item + category master once.
+        items = await db.meal_items.find(
+            {}, {"_id": 0, "id": 1, "name": 1, "unit": 1, "category_key": 1},
+        ).to_list(2000)
+        by_id = {i["id"]: i for i in items}
+        cats = await _purchase_categories()
+        cat_label = {c["key"]: c.get("label") or c["key"] for c in cats}
+
+        # Vendor lookup (purchases only).
+        vendor_by_id: dict = {}
+        if kind == "purchases":
+            vendor_ids = list({d.get("vendor_id") for d in docs if d.get("vendor_id")})
+            if vendor_ids:
+                vendors = await db.meal_vendors.find(
+                    {"id": {"$in": vendor_ids}}, {"_id": 0, "id": 1, "name": 1},
+                ).to_list(200)
+                vendor_by_id = {v["id"]: v.get("name") for v in vendors}
+
+        lines: list[dict] = []
+        unitemised_by_cat: dict[str, float] = {}
+        totals = {"amount": 0.0, "qty": 0.0, "lines": 0}
+        for doc in docs:
+            vendor_name = vendor_by_id.get(doc.get("vendor_id")) if kind == "purchases" else None
+            itemised_amount = 0.0
+            for ln in (doc.get("lines") or []):
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                r = float(ln.get("rate") or 0)
+                amt = q * r
+                info = by_id.get(iid) or {}
+                lines.append({
+                    "item_id": iid,
+                    "name":    info.get("name") or "(deleted item)",
+                    "unit":    info.get("unit"),
+                    "category_key":   info.get("category_key"),
+                    "category_label": cat_label.get(info.get("category_key"),
+                                                   (info.get("category_key") or "").replace("_", " ").title()),
+                    "qty":     round(q, 3),
+                    "rate":    round(r, 2),
+                    "amount":  round(amt, 2),
+                    "vendor":  vendor_name,
+                })
+                itemised_amount += amt
+                totals["qty"] += q
+                totals["lines"] += 1
+            # Reconcile category-level bulk totals against the itemised
+            # part so admins can see how much of the day was uploaded
+            # without per-item detail.
+            if kind == "purchases":
+                amounts_map = doc.get("amounts") or {}
+                day_total = sum(float(v or 0) for v in amounts_map.values())
+                totals["amount"] += day_total if amounts_map else itemised_amount
+                if amounts_map:
+                    gap = max(0.0, day_total - itemised_amount)
+                    if gap > 0:
+                        # Attribute to the largest category so the pie
+                        # accounting stays honest.
+                        top_cat = max(amounts_map.items(),
+                                      key=lambda x: float(x[1] or 0), default=(None, 0))
+                        if top_cat[0]:
+                            unitemised_by_cat[top_cat[0]] = unitemised_by_cat.get(top_cat[0], 0.0) + gap
+            else:
+                totals["amount"] += itemised_amount
+
+        lines.sort(key=lambda r: -r["amount"])
+        unitemised_rows = [
+            {"category_key": k,
+             "category_label": cat_label.get(k, k.replace("_", " ").title()),
+             "amount": round(v, 2)}
+            for k, v in sorted(unitemised_by_cat.items(), key=lambda x: -x[1])
+        ]
+        return {
+            "date": d,
+            "kind": kind,
+            "totals": {"amount": round(totals["amount"], 2),
+                       "qty": round(totals["qty"], 3),
+                       "lines": totals["lines"]},
+            "lines": lines,
+            "unitemised": unitemised_rows,
+        }
+
+
     @router.get("/meals/kitchen-analytics")
     async def kitchen_analytics(
         start: str, end: str,

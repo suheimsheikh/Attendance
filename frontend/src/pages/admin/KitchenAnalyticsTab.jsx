@@ -12,7 +12,7 @@
  * All numbers come from GET /api/meals/kitchen-analytics.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, TrendingUp, BarChart3, PieChart as PieIcon, ListOrdered, IndianRupee, ShoppingCart, Boxes, Flame, Beef, Wheat, Droplet } from "lucide-react";
+import { Loader2, TrendingUp, BarChart3, PieChart as PieIcon, ListOrdered, IndianRupee, ShoppingCart, Boxes, Flame, Beef, Wheat, Droplet, Maximize2, X as CloseIcon, ChevronDown, ChevronUp } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell,
@@ -59,7 +59,7 @@ function StatPill({ icon: Icon, label, value, tint }) {
   );
 }
 
-function DailyTrendChart({ data, colorAmt, colorLines, testid }) {
+function DailyTrendChart({ data, colorAmt, colorLines, testid, onDayClick, height = 260, fullscreen = false }) {
   const rows = (data || []).map((d) => ({
     date: d.date,
     label: formatDate(d.date),
@@ -67,21 +67,33 @@ function DailyTrendChart({ data, colorAmt, colorLines, testid }) {
     Lines: d.lines,
   }));
   if (!rows.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
+  // Click handling: we translate the wrapper's click X-position into the
+  // nearest data-point index — the same technique the Meals Calendar
+  // trend chart uses. Recharts' onClick is unreliable at low dot radii.
+  const handleClick = (e) => {
+    if (!onDayClick) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const idx = Math.round(frac * (rows.length - 1));
+    const day = rows[idx]?.date;
+    if (day) onDayClick(day);
+  };
+  const fontSize = fullscreen ? 12 : 10;
   return (
-    <div data-testid={testid} style={{ width: "100%", height: 260 }}>
+    <div data-testid={testid} style={{ width: "100%", height, cursor: onDayClick ? "pointer" : "default" }} onClick={handleClick}>
       <ResponsiveContainer>
         <LineChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" minTickGap={20} />
-          <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
-          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
+          <XAxis dataKey="label" tick={{ fontSize }} interval="preserveStartEnd" minTickGap={20} />
+          <YAxis yAxisId="left"  tick={{ fontSize }} tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
+          <YAxis yAxisId="right" orientation="right" tick={{ fontSize }} />
           <Tooltip
             formatter={(v, name) => (name === "Amount" ? `₹${inr2(v)}` : v)}
             contentStyle={{ fontSize: 12 }}
           />
-          <Legend wrapperStyle={{ fontSize: 11 }} />
-          <Line yAxisId="left"  type="monotone" dataKey="Amount" stroke={colorAmt} strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
-          <Line yAxisId="right" type="monotone" dataKey="Lines" stroke={colorLines} strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
+          <Legend wrapperStyle={{ fontSize: fullscreen ? 13 : 11 }} />
+          <Line yAxisId="left"  type="monotone" dataKey="Amount" stroke={colorAmt} strokeWidth={2} dot={{ r: fullscreen ? 3 : 2 }} activeDot={{ r: 5 }} />
+          <Line yAxisId="right" type="monotone" dataKey="Lines"  stroke={colorLines} strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -203,6 +215,20 @@ function Section({ title, subtitle, accent, data, testKind, first }) {
   const colorLines = accent === "purchases" ? "#94A3B8" : "#94A3B8";
   const bandBg = accent === "purchases" ? "bg-blue-600" : "bg-orange-600";
   const bandFg = "text-white";
+  const kind = accent === "purchases" ? "purchases" : "issues";
+  const [fullscreen, setFullscreen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(null);
+  useEffect(() => {
+    if (!fullscreen && !selectedDay) return;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (selectedDay) setSelectedDay(null);
+      else if (fullscreen) setFullscreen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen, selectedDay]);
+  const openDay = (d) => setSelectedDay(d);
   return (
     <section className={`mb-10 ${first ? "" : "pt-8 mt-8 border-t-[6px] border-slate-900/80"}`} data-testid={`kitchen-analytics-${testKind}`}>
       <div className={`rounded-xl px-6 py-5 flex items-center justify-between shadow-lg ${bandBg} ${bandFg} mb-4`} data-testid={`kitchen-${testKind}-band`}>
@@ -229,8 +255,21 @@ function Section({ title, subtitle, accent, data, testKind, first }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
         <div className="iu-card p-3">
-          <div className="flex items-center gap-2 mb-1"><TrendingUp size={14} className="text-slate-500" /><div className="font-bold text-sm">Daily trend</div></div>
-          <DailyTrendChart data={data?.daily} colorAmt={colorAmt} colorLines={colorLines} testid={`kitchen-${testKind}-daily`} />
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp size={14} className="text-slate-500" />
+            <div className="font-bold text-sm">Daily trend</div>
+            <span className="hidden sm:inline text-[10px] text-slate-400 ml-1">· tap a day for detail</span>
+            <button
+              type="button"
+              onClick={() => setFullscreen(true)}
+              className="ml-auto p-1.5 rounded-md text-slate-500 hover:bg-slate-100"
+              title="Expand to full screen"
+              data-testid={`kitchen-${testKind}-daily-fullscreen`}
+            >
+              <Maximize2 size={14} />
+            </button>
+          </div>
+          <DailyTrendChart data={data?.daily} colorAmt={colorAmt} colorLines={colorLines} testid={`kitchen-${testKind}-daily`} onDayClick={openDay} />
         </div>
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1"><PieIcon size={14} className="text-slate-500" /><div className="font-bold text-sm">Category share</div></div>
@@ -249,6 +288,51 @@ function Section({ title, subtitle, accent, data, testKind, first }) {
       <ItemsTable items={data?.items} kind={title.toLowerCase()} testid={`kitchen-${testKind}-items`} />
 
       {data?.nutrition && <NutritionBlock nutrition={data.nutrition} testKind={testKind} accent={accent} />}
+
+      {fullscreen && (
+        <div
+          className="fixed inset-0 z-50 bg-white p-4 sm:p-6 flex flex-col"
+          role="dialog"
+          onClick={(e) => { if (e.target === e.currentTarget) setFullscreen(false); }}
+          data-testid={`kitchen-${testKind}-daily-fs-modal`}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp size={18} className={accent === "purchases" ? "text-blue-600" : "text-orange-600"} />
+            <h2 className="font-black text-xl">{title} · Daily trend</h2>
+            <span className="text-xs text-slate-400 ml-2">Tap any day to see the line-level detail</span>
+            <div className="flex-1" />
+            <button
+              type="button"
+              onClick={() => setFullscreen(false)}
+              className="p-2 rounded-md text-slate-500 hover:bg-slate-100 !min-h-[44px] !min-w-[44px]"
+              title="Close (Esc)"
+              data-testid={`kitchen-${testKind}-daily-fs-close`}
+            >
+              <CloseIcon size={18} />
+            </button>
+          </div>
+          <div className="flex-1 min-h-0">
+            <DailyTrendChart
+              data={data?.daily}
+              colorAmt={colorAmt}
+              colorLines={colorLines}
+              testid={`kitchen-${testKind}-daily-fs`}
+              onDayClick={openDay}
+              height={Math.max(320, window.innerHeight - 160)}
+              fullscreen
+            />
+          </div>
+        </div>
+      )}
+
+      {selectedDay && (
+        <PantryDayModal
+          date={selectedDay}
+          kind={kind}
+          accent={accent}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
     </section>
   );
 }
@@ -377,19 +461,140 @@ function NutritionBlock({ nutrition, testKind, accent }) {
   );
 }
 
+function PantryDayModal({ date, kind, accent, onClose }) {
+  // Fetches /meals/pantry-day-detail once for the clicked day and
+  // renders a compact table: item + qty + rate + amount (+ vendor
+  // for purchases). Bulk-uploaded category totals surface as
+  // separate "unitemised" rows so the ₹ math ties out to the chart.
+  const [state, setState] = useState({ loading: true, data: null });
+  useEffect(() => {
+    setState({ loading: true, data: null });
+    api.get(`/meals/pantry-day-detail?date=${date}&kind=${kind}`)
+      .then((r) => setState({ loading: false, data: r }))
+      .catch((err) => {
+        showApiError(err, "Couldn't load day detail");
+        setState({ loading: false, data: null });
+      });
+  }, [date, kind]);
+  const headerBg = accent === "purchases" ? "bg-blue-700" : "bg-orange-600";
+  const dateLabel = formatDate(date);
+  const { loading, data } = state;
+  const isPurchase = kind === "purchases";
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4"
+      role="dialog"
+      onClick={onClose}
+      data-testid={`kitchen-${kind}-day-modal`}
+    >
+      <div
+        className="bg-white rounded-xl max-w-3xl w-full max-h-[85vh] shadow-2xl flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={`px-5 py-3 flex items-center gap-2 shrink-0 text-white ${headerBg}`}>
+          <ListOrdered size={18} />
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-widest opacity-80">{isPurchase ? "Purchases" : "Consumption"}</div>
+            <div className="font-black text-lg truncate">{dateLabel}</div>
+          </div>
+          <div className="ml-auto" />
+          <button
+            type="button" onClick={onClose}
+            className="p-1.5 rounded-md hover:bg-white/10"
+            title="Close (Esc)"
+            data-testid={`kitchen-${kind}-day-modal-close`}
+          >
+            <CloseIcon size={18} />
+          </button>
+        </div>
+        {loading ? (
+          <div className="p-10 text-center text-slate-400"><Loader2 className="animate-spin inline mr-2" /> Loading…</div>
+        ) : !data ? (
+          <div className="p-10 text-center text-slate-400 text-sm">Couldn&apos;t load this day.</div>
+        ) : (data.lines.length === 0 && data.unitemised.length === 0) ? (
+          <div className="p-10 text-center text-slate-400 text-sm">No {isPurchase ? "purchases" : "issues"} recorded on this day.</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-2 px-5 py-3 bg-slate-50 border-b border-slate-200 shrink-0 text-sm">
+              <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mr-2">Amount</span><b className="tabular-nums">₹{inr(data.totals.amount)}</b></div>
+              <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mr-2">Qty</span><b className="tabular-nums">{fmtQty(data.totals.qty)}</b></div>
+              <div><span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mr-2">Lines</span><b className="tabular-nums">{data.totals.lines}</b></div>
+            </div>
+            <div className="overflow-auto flex-1">
+              <table className="w-full text-sm">
+                <thead className="bg-white sticky top-0 shadow-[0_1px_0_0_#e2e8f0] z-10">
+                  <tr className="text-[10px] uppercase tracking-wider text-slate-500">
+                    <th className="text-left px-4 py-2">Item</th>
+                    <th className="text-left px-2 py-2">Category</th>
+                    {isPurchase && <th className="text-left px-2 py-2">Vendor</th>}
+                    <th className="text-right px-2 py-2">Qty</th>
+                    <th className="text-right px-2 py-2">Rate</th>
+                    <th className="text-right px-2 py-2">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.lines.map((r, i) => (
+                    <tr key={`${r.item_id}-${i}`} className="border-t border-slate-100 hover:bg-slate-50">
+                      <td className="px-4 py-1.5 font-semibold text-slate-800">{r.name}{r.unit && <span className="text-slate-400 text-xs ml-1">({r.unit})</span>}</td>
+                      <td className="px-2 py-1.5 text-slate-500 text-xs">{r.category_label || "—"}</td>
+                      {isPurchase && <td className="px-2 py-1.5 text-slate-500 text-xs">{r.vendor || "—"}</td>}
+                      <td className="px-2 py-1.5 text-right tabular-nums">{fmtQty(r.qty)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{r.rate ? `₹${inr2(r.rate)}` : "—"}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold">₹{inr2(r.amount)}</td>
+                    </tr>
+                  ))}
+                  {data.unitemised.map((u, i) => (
+                    <tr key={`u-${i}`} className="border-t border-slate-100 bg-amber-50/60">
+                      <td className="px-4 py-1.5 italic text-amber-900" colSpan={isPurchase ? 5 : 4}>
+                        Bulk-uploaded (no per-item detail) · <b>{u.category_label}</b>
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-amber-900">₹{inr2(u.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function KitchenAnalyticsTab({ liveSig }) {
-  const [preset, setPreset] = useState("30");
-  const [from, setFrom] = useState(isoDaysAgo(30));
+  const [preset, setPreset] = useState("all");
+  const [from, setFrom] = useState("");
   const [to, setTo] = useState(todayIso());
+  const [minDate, setMinDate] = useState("");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // On mount, ask the backend for the earliest pantry-activity date
+  // and use that as the "All" preset's lower bound — same UX as the
+  // Meals Calendar page. Falls back to 30 days ago if the endpoint
+  // hasn't returned yet or there's no data.
   useEffect(() => {
-    if (preset === "custom") return;
+    api.get("/meals/kitchen-analytics/bounds")
+      .then((b) => {
+        setMinDate(b?.min_date || "");
+        if (b?.min_date) setFrom(b.min_date);
+        else setFrom(isoDaysAgo(30));
+      })
+      .catch(() => setFrom(isoDaysAgo(30)));
+  }, []);
+
+  useEffect(() => {
+    if (preset === "custom" || preset === "all") return;
     const days = parseInt(preset, 10);
     setFrom(isoDaysAgo(days));
     setTo(todayIso());
   }, [preset]);
+
+  useEffect(() => {
+    if (preset !== "all") return;
+    if (minDate) setFrom(minDate);
+    setTo(todayIso());
+  }, [preset, minDate]);
 
   useEffect(() => {
     if (!from || !to || from > to) return;
@@ -406,7 +611,7 @@ export default function KitchenAnalyticsTab({ liveSig }) {
     <div data-testid="kitchen-analytics-tab">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
-          {[["7", "7d"], ["30", "30d"], ["90", "90d"], ["custom", "Custom"]].map(([v, l]) => (
+          {[["all", "All"], ["7", "7d"], ["30", "30d"], ["90", "90d"], ["custom", "Custom"]].map(([v, l]) => (
             <button
               key={v}
               onClick={() => setPreset(v)}
