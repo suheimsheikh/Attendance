@@ -3684,6 +3684,31 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
+    @router.get("/meals/meal-calendar/events")
+    async def meal_calendar_events(
+        start: str, end: str,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Return regattas / camps / breaks overlapping [start, end] so
+        the Meals Calendar analytics can render them as coloured bands
+        on the daily-trend chart. Only date-range fields are returned
+        — no member lists — to keep payloads tiny."""
+        s = _valid_date(start); e = _valid_date(end)
+        # Overlap test: event.start_date <= end  AND  event.end_date >= start
+        overlap = {"start_date": {"$lte": e}, "end_date": {"$gte": s}}
+        def _pack(rows: list, kind: str) -> list:
+            return [{"kind": kind, "name": r.get("name"),
+                     "start_date": r.get("start_date"), "end_date": r.get("end_date"),
+                     "level": r.get("level"), "location": r.get("location"),
+                     "institution": r.get("institution")}
+                    for r in rows]
+        reg   = await db.regattas.find(overlap, {"_id": 0}).to_list(200)
+        cmp_  = await db.camps.find(overlap,    {"_id": 0}).to_list(200)
+        brk   = await db.breaks.find(overlap,   {"_id": 0}).to_list(200)
+        return {"regattas": _pack(reg, "regatta"),
+                "camps":    _pack(cmp_, "camp"),
+                "breaks":   _pack(brk, "break")}
+
     @router.post("/meals/meal-calendar/import")
     async def meal_calendar_import(
         file: UploadFile = File(...),

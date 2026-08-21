@@ -12,11 +12,16 @@
 import React, { useMemo } from "react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, PieChart, Pie, Cell, BarChart, Bar,
+  Tooltip, Legend, PieChart, Pie, Cell, BarChart, Bar, ReferenceArea,
 } from "recharts";
 import { TrendingUp, PieChart as PieIcon, Calendar as CalIcon, BarChart3, Flame, Trophy } from "lucide-react";
 
 const SLOT_COLORS = { Breakfast: "#F59E0B", Lunch: "#F97316", Dinner: "#6366F1" };
+const EVENT_COLORS = {
+  regatta: { fill: "#DC2626", label: "Regatta" },
+  camp:    { fill: "#0EA5E9", label: "Camp" },
+  break:   { fill: "#94A3B8", label: "Break" },
+};
 const inr = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN"));
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -60,15 +65,29 @@ function useMetrics(days) {
       { key: "Dinner",    value: dn, pct: grand ? Math.round(dn * 100 / grand) : 0 },
     ];
 
-    // ── Day-of-week averages ──────────────────────────────────────
-    const dowAgg = Array(7).fill(0).map(() => ({ total: 0, days: 0 }));
-    rows.forEach((r) => { dowAgg[r.dow].total += r.total; dowAgg[r.dow].days += 1; });
-    // Present as Mon-first order
-    const dowRows = [1, 2, 3, 4, 5, 6, 0].map((i) => ({
-      dow: DOW[i],
-      avg: dowAgg[i].days ? Math.round(dowAgg[i].total / dowAgg[i].days) : 0,
-      days: dowAgg[i].days,
+    // ── Day-of-week averages (per meal-slot separately) ──────────
+    const dowAgg = Array(7).fill(0).map(() => ({
+      Breakfast: 0, Lunch: 0, Dinner: 0, days: 0,
     }));
+    rows.forEach((r) => {
+      dowAgg[r.dow].Breakfast += r.Breakfast;
+      dowAgg[r.dow].Lunch     += r.Lunch;
+      dowAgg[r.dow].Dinner    += r.Dinner;
+      dowAgg[r.dow].days += 1;
+    });
+    // Present as Mon-first order with each meal averaged over the
+    // count of days-of-that-weekday actually present in the window.
+    const dowRows = [1, 2, 3, 4, 5, 6, 0].map((i) => {
+      const n = dowAgg[i].days || 1;
+      return {
+        dow: DOW[i],
+        Breakfast: Math.round(dowAgg[i].Breakfast / n),
+        Lunch:     Math.round(dowAgg[i].Lunch / n),
+        Dinner:    Math.round(dowAgg[i].Dinner / n),
+        days:      dowAgg[i].days,
+        avg:       Math.round((dowAgg[i].Breakfast + dowAgg[i].Lunch + dowAgg[i].Dinner) / n),
+      };
+    });
 
     // ── Monthly totals ────────────────────────────────────────────
     const monthMap = new Map();
@@ -111,8 +130,34 @@ function StatPill({ icon: Icon, label, value, tint }) {
   );
 }
 
-export default function MealsAnalyticsPanel({ days }) {
+export default function MealsAnalyticsPanel({ days, events }) {
   const m = useMetrics(days);
+  // Map events → bands drawn on the trend chart. Only regattas/camps/
+  // breaks that actually intersect a populated day contribute (else
+  // Recharts complains about unknown X-axis keys).
+  const bands = useMemo(() => {
+    if (!m || !events) return [];
+    const knownDates = new Set(m.rows.map((r) => r.date));
+    const kinds = ["regatta", "camp", "break"];
+    const out = [];
+    kinds.forEach((k) => {
+      (events[k + "s"] || []).forEach((ev) => {
+        // Clamp to the days actually rendered on the X-axis
+        const start = ev.start_date;
+        const end = ev.end_date;
+        const inRange = m.rows.filter((r) => r.date >= start && r.date <= end);
+        if (!inRange.length) return;
+        out.push({
+          kind: k, name: ev.name,
+          x1: inRange[0].label, x2: inRange[inRange.length - 1].label,
+          count: inRange.length,
+        });
+      });
+    });
+    // De-dupe overlapping bands of the same kind so we don't stack
+    // multiple identical shades on top of each other.
+    return out;
+  }, [m, events]);
   if (!m) {
     return (
       <div className="iu-card p-6 text-center text-slate-400 text-sm" data-testid="meals-analytics-empty">
@@ -138,11 +183,32 @@ export default function MealsAnalyticsPanel({ days }) {
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={14} className="text-slate-500"/>
             <div className="font-bold text-sm">Daily total & 7-day trend</div>
+            {bands.length > 0 && (
+              <div className="ml-auto flex items-center gap-2 text-[10px]">
+                {["regatta", "camp", "break"].map((k) => bands.some((b) => b.kind === k) && (
+                  <span key={k} className="inline-flex items-center gap-1">
+                    <span className="inline-block w-3 h-3 rounded-sm" style={{ background: EVENT_COLORS[k].fill, opacity: 0.32 }} />
+                    <span className="text-slate-500">{EVENT_COLORS[k].label}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div style={{ width: "100%", height: 260 }} data-testid="ma-daily-trend">
             <ResponsiveContainer>
               <LineChart data={m.rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                {bands.map((b, i) => (
+                  <ReferenceArea
+                    key={`${b.kind}-${b.name}-${i}`}
+                    x1={b.x1} x2={b.x2}
+                    strokeOpacity={0}
+                    fill={EVENT_COLORS[b.kind].fill}
+                    fillOpacity={0.14}
+                    ifOverflow="hidden"
+                    label={b.count > 2 ? { value: b.name.slice(0, 22), position: "insideTop", fontSize: 9, fill: EVENT_COLORS[b.kind].fill } : undefined}
+                  />
+                ))}
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" minTickGap={20} />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v) => `${inr(v)} meals`} />
@@ -177,20 +243,19 @@ export default function MealsAnalyticsPanel({ days }) {
           <div className="flex items-center gap-2 mb-1">
             <BarChart3 size={14} className="text-slate-500"/>
             <div className="font-bold text-sm">Average meals by day of week</div>
-            <span className="text-[10px] text-slate-400">(spotting Sunday-off etc.)</span>
+            <span className="text-[10px] text-slate-400">(BF · L · D split)</span>
           </div>
-          <div style={{ width: "100%", height: 240 }} data-testid="ma-dow-bar">
+          <div style={{ width: "100%", height: 260 }} data-testid="ma-dow-bar">
             <ResponsiveContainer>
               <BarChart data={m.dowRows} margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="dow" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v) => `${inr(v)} meals`} />
-                <Bar dataKey="avg" name="Avg meals" radius={[4, 4, 0, 0]}>
-                  {m.dowRows.map((r) => (
-                    <Cell key={r.dow} fill={r.dow === "Sun" ? "#DC2626" : "#10B981"} />
-                  ))}
-                </Bar>
+                <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v, n) => [`${inr(v)} avg`, n]} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="Breakfast" fill={SLOT_COLORS.Breakfast} radius={[3, 3, 0, 0]} />
+                <Bar dataKey="Lunch"     fill={SLOT_COLORS.Lunch}     radius={[3, 3, 0, 0]} />
+                <Bar dataKey="Dinner"    fill={SLOT_COLORS.Dinner}    radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

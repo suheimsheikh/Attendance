@@ -6,7 +6,7 @@
  * can also type new days here — a single PUT upserts the row.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, IndianRupee, Pencil, Check, X as CloseIcon, Download, Upload, BarChart3, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, IndianRupee, Pencil, Check, X as CloseIcon, Download, Upload, BarChart3, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob, showApiError } from "../../api";
 import { formatDate, dayOfWeek } from "../../utils";
@@ -212,16 +212,26 @@ export default function MealsCalendar() {
   const [from, setFrom] = useState(firstOfMonth(today));
   const [to, setTo] = useState(lastOfMonth(today));
   const [data, setData] = useState(null);
+  const [events, setEvents] = useState(null);
   const [loading, setLoading] = useState(false);
   const [editingDate, setEditingDate] = useState(null);
   const [showEmpty, setShowEmpty] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(true);
+  const [collapsedMonths, setCollapsedMonths] = useState(new Set());
+  const toggleMonth = (key) => setCollapsedMonths((prev) => {
+    const nxt = new Set(prev);
+    if (nxt.has(key)) nxt.delete(key); else nxt.add(key);
+    return nxt;
+  });
 
   const load = () => {
     if (!from || !to || from > to) return;
     setLoading(true);
-    api.get(`/meals/meal-calendar?start=${from}&end=${to}`)
-      .then(setData)
+    Promise.all([
+      api.get(`/meals/meal-calendar?start=${from}&end=${to}`),
+      api.get(`/meals/meal-calendar/events?start=${from}&end=${to}`).catch(() => null),
+    ])
+      .then(([cal, evs]) => { setData(cal); setEvents(evs); })
       .catch((err) => showApiError(err, "Couldn't load meals calendar"))
       .finally(() => setLoading(false));
   };
@@ -231,6 +241,32 @@ export default function MealsCalendar() {
     if (!data?.days) return [];
     return showEmpty ? data.days : data.days.filter((d) => d.has_data || d.date === today);
   }, [data, showEmpty, today]);
+
+  // ── Group rows into month buckets (with populated-only totals) ──
+  const months = useMemo(() => {
+    const map = new Map();
+    (rows || []).forEach((d) => {
+      const key = d.date.slice(0, 7);   // "YYYY-MM"
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          label: new Date(d.date + "T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
+          rows: [],
+          totals: { breakfast: 0, lunch: 0, dinner: 0, total: 0, days: 0 },
+        });
+      }
+      const g = map.get(key);
+      g.rows.push(d);
+      if (d.has_data) {
+        g.totals.breakfast += d.breakfast;
+        g.totals.lunch += d.lunch;
+        g.totals.dinner += d.dinner;
+        g.totals.total += d.total;
+        g.totals.days += 1;
+      }
+    });
+    return [...map.values()];
+  }, [rows]);
 
   const shift = (months) => {
     const [y, m] = from.split("-").map(Number);
@@ -253,10 +289,11 @@ export default function MealsCalendar() {
 
   return (
     <div className="p-4 sm:p-6 max-w-[1200px] mx-auto" data-testid="meals-calendar-page">
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex flex-wrap items-center gap-2 mb-4 pr-4 lg:pr-56">
         <CalendarDays size={22} className="text-emerald-600" />
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Meals Calendar</h1>
-        <div className="flex-1" />
+        <div className="flex-1 min-w-[16px]" />
+        <div className="flex items-center gap-2 flex-wrap">
         <a
           href="#"
           onClick={async (e) => {
@@ -276,6 +313,7 @@ export default function MealsCalendar() {
         {canEdit && (
           <ImportCalendarButton onDone={load} />
         )}
+        </div>
       </div>
       <p className="text-sm text-slate-500 mb-5">
         Daily meal counts (Sailors + Staff combined). Data before Aug 2026 was imported from the historical
@@ -319,7 +357,7 @@ export default function MealsCalendar() {
             Analytics
             {showAnalytics ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
           </button>
-          {showAnalytics && <MealsAnalyticsPanel days={data.days} />}
+          {showAnalytics && <MealsAnalyticsPanel days={data.days} events={events} />}
         </div>
       )}
 
@@ -340,53 +378,81 @@ export default function MealsCalendar() {
               <tr><td colSpan={canEdit ? 6 : 5} className="text-center py-10"><Loader2 className="animate-spin inline text-slate-400"/></td></tr>
             ) : rows.length === 0 ? (
               <tr><td colSpan={canEdit ? 6 : 5} className="text-center py-10 text-slate-400">No data in this window.</td></tr>
-            ) : rows.map((d) => {
-              const isEdit = editingDate === d.date;
-              const isSun = dayOfWeek(d.date) === "Sun";
+            ) : months.map((month) => {
+              const collapsed = collapsedMonths.has(month.key);
               return (
-                <tr key={d.date}
-                    className={`border-t border-slate-100 ${isSun ? "bg-rose-50/40" : "hover:bg-slate-50"} ${isEdit ? "bg-emerald-50/40" : ""}`}
-                    data-testid={`mc-row-${d.date}`}>
-                  <td className="p-2 font-semibold text-slate-800 whitespace-nowrap" data-testid={`mc-date-${d.date}`}>
-                    {formatDate(d.date)}
-                    {d.source === "spreadsheet-jul2026" && (
-                      <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded" title="Imported from the July 2026 spreadsheet">Imported</span>
-                    )}
-                    {d.source === "muster" && (
-                      <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded" title="Auto-derived from per-person Meals Muster marks">From Muster</span>
-                    )}
-                    {d.source === "manual" && (
-                      <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded" title="Typed in by an admin">Manual</span>
-                    )}
-                  </td>
-                  {isEdit ? (
-                    <EditRow
-                      date={d.date}
-                      initial={d}
-                      onSave={saveRow}
-                      onCancel={() => setEditingDate(null)}
-                    />
-                  ) : (
-                    <>
-                      <td className="p-2 text-right tabular-nums" data-testid={`mc-bf-${d.date}`}>{d.has_data ? d.breakfast : <span className="text-slate-300">—</span>}</td>
-                      <td className="p-2 text-right tabular-nums" data-testid={`mc-l-${d.date}`}>{d.has_data ? d.lunch : <span className="text-slate-300">—</span>}</td>
-                      <td className="p-2 text-right tabular-nums" data-testid={`mc-d-${d.date}`}>{d.has_data ? d.dinner : <span className="text-slate-300">—</span>}</td>
-                      <td className={`p-2 text-right tabular-nums font-bold ${d.has_data ? "text-emerald-700" : "text-slate-300"}`} data-testid={`mc-total-${d.date}`}>
-                        {d.has_data ? d.total : "—"}
-                      </td>
-                      {canEdit && (
-                        <td className="p-2 text-right">
-                          <button
-                            onClick={() => setEditingDate(d.date)}
-                            className="p-1.5 rounded-md text-slate-500 hover:bg-slate-200"
-                            title="Edit this day"
-                            data-testid={`mc-edit-btn-${d.date}`}
-                          ><Pencil size={12}/></button>
+                <React.Fragment key={month.key}>
+                  <tr
+                    className="bg-slate-100 hover:bg-slate-200 cursor-pointer border-t-2 border-slate-300 sticky"
+                    onClick={() => toggleMonth(month.key)}
+                    data-testid={`mc-month-header-${month.key}`}
+                  >
+                    <td className="p-2.5 font-black text-slate-900 whitespace-nowrap">
+                      {collapsed ? <ChevronRight size={14} className="inline mr-1 -mt-0.5"/> : <ChevronDown size={14} className="inline mr-1 -mt-0.5"/>}
+                      {month.label}
+                      <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        {month.totals.days} day{month.totals.days !== 1 ? "s" : ""}
+                      </span>
+                    </td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-slate-800">{inr(month.totals.breakfast)}</td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-slate-800">{inr(month.totals.lunch)}</td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-slate-800">{inr(month.totals.dinner)}</td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-emerald-700 bg-emerald-50">{inr(month.totals.total)}</td>
+                    {canEdit && <td className="p-2.5"/>}
+                  </tr>
+                  {!collapsed && month.rows.map((d) => {
+                    const isEdit = editingDate === d.date;
+                    const isSun = dayOfWeek(d.date) === "Sun";
+                    return (
+                      <tr key={d.date}
+                          className={`border-t border-slate-100 ${isSun ? "bg-rose-50/40" : "hover:bg-slate-50"} ${isEdit ? "bg-emerald-50/40" : ""}`}
+                          data-testid={`mc-row-${d.date}`}>
+                        <td className="p-2 pl-8 font-semibold text-slate-800 whitespace-nowrap" data-testid={`mc-date-${d.date}`}>
+                          {formatDate(d.date)}
+                          {d.source === "spreadsheet-jul2026" && (
+                            <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded" title="Imported from the July 2026 spreadsheet">Imported</span>
+                          )}
+                          {d.source === "muster" && (
+                            <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded" title="Auto-derived from per-person Meals Muster marks">From Muster</span>
+                          )}
+                          {d.source === "manual" && (
+                            <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded" title="Typed in by an admin">Manual</span>
+                          )}
+                          {d.source?.startsWith?.("upload:") && (
+                            <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded" title={`Imported from ${d.source.slice(7)}`}>Imported</span>
+                          )}
                         </td>
-                      )}
-                    </>
-                  )}
-                </tr>
+                        {isEdit ? (
+                          <EditRow
+                            date={d.date}
+                            initial={d}
+                            onSave={saveRow}
+                            onCancel={() => setEditingDate(null)}
+                          />
+                        ) : (
+                          <>
+                            <td className="p-2 text-right tabular-nums" data-testid={`mc-bf-${d.date}`}>{d.has_data ? d.breakfast : <span className="text-slate-300">—</span>}</td>
+                            <td className="p-2 text-right tabular-nums" data-testid={`mc-l-${d.date}`}>{d.has_data ? d.lunch : <span className="text-slate-300">—</span>}</td>
+                            <td className="p-2 text-right tabular-nums" data-testid={`mc-d-${d.date}`}>{d.has_data ? d.dinner : <span className="text-slate-300">—</span>}</td>
+                            <td className={`p-2 text-right tabular-nums font-bold ${d.has_data ? "text-emerald-700" : "text-slate-300"}`} data-testid={`mc-total-${d.date}`}>
+                              {d.has_data ? d.total : "—"}
+                            </td>
+                            {canEdit && (
+                              <td className="p-2 text-right">
+                                <button
+                                  onClick={() => setEditingDate(d.date)}
+                                  className="p-1.5 rounded-md text-slate-500 hover:bg-slate-200"
+                                  title="Edit this day"
+                                  data-testid={`mc-edit-btn-${d.date}`}
+                                ><Pencil size={12}/></button>
+                              </td>
+                            )}
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
               );
             })}
           </tbody>
