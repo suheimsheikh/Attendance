@@ -36,7 +36,7 @@ function useMetrics(days) {
     const populated = (days || []).filter((d) => d.has_data);
     if (populated.length === 0) return null;
 
-    // ── Daily series with 7-day moving average ────────────────────
+    // ── Daily series ─────────────────────────────────────────────
     const rows = populated.map((d) => ({
       date: d.date,
       label: fmt(d.date),
@@ -46,11 +46,6 @@ function useMetrics(days) {
       total: d.total,
       dow: new Date(d.date + "T00:00:00").getDay(),
     }));
-    // Simple trailing 7-day moving average of `total`
-    rows.forEach((r, i) => {
-      const slice = rows.slice(Math.max(0, i - 6), i + 1);
-      r.ma7 = Math.round(slice.reduce((s, x) => s + x.total, 0) / slice.length);
-    });
 
     // ── Meal-slot totals ──────────────────────────────────────────
     const bf = rows.reduce((s, r) => s + r.Breakfast, 0);
@@ -179,7 +174,6 @@ export default function MealsAnalyticsPanel({ days, events }) {
           <Line type="monotone" dataKey="Lunch"     stroke={SLOT_COLORS.Lunch}     strokeWidth={1.25} dot={false} />
           <Line type="monotone" dataKey="Dinner"    stroke={SLOT_COLORS.Dinner}    strokeWidth={1.25} dot={false} />
           <Line type="monotone" dataKey="total"     name="Total" stroke="#10B981" strokeWidth={2.25} dot={{ r: heightPx > 400 ? 3 : 2 }} />
-          <Line type="monotone" dataKey="ma7"       name="7-day avg" stroke="#0F172A" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -264,7 +258,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={14} className="text-slate-500"/>
-            <div className="font-bold text-sm">Daily total & 7-day trend</div>
+            <div className="font-bold text-sm">Daily meals · BF · L · D · Total</div>
             {bands.length > 0 && <div className="ml-auto">{eventLegend}</div>}
             <button
               type="button"
@@ -312,7 +306,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
         >
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp size={18} className="text-emerald-600"/>
-            <h2 className="font-black text-xl">Daily total & 7-day trend</h2>
+            <h2 className="font-black text-xl">Daily meals · BF · L · D · Total</h2>
             {bands.length > 0 && <div className="ml-4">{eventLegend}</div>}
             <div className="flex-1" />
             <button
