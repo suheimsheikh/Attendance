@@ -122,12 +122,17 @@ function StatPill({ icon: Icon, label, value, tint }) {
 export default function MealsAnalyticsPanel({ days, events }) {
   const m = useMetrics(days);
   const [fullscreen, setFullscreen] = React.useState(false);
+  const [selectedEvent, setSelectedEvent] = React.useState(null);
   React.useEffect(() => {
-    if (!fullscreen) return;
-    const onKey = (e) => { if (e.key === "Escape") setFullscreen(false); };
+    if (!fullscreen && !selectedEvent) return;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (selectedEvent) setSelectedEvent(null);
+      else if (fullscreen) setFullscreen(false);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [fullscreen]);
+  }, [fullscreen, selectedEvent]);
   // Map events → bands drawn on the trend chart. Only regattas/camps/
   // breaks that actually intersect a populated day contribute (else
   // Recharts complains about unknown X-axis keys). Camps that only
@@ -152,7 +157,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
         const dows = Array.isArray(ev.days_of_week) ? ev.days_of_week : [];
         // No weekday filter, or single-day event → keep as one segment.
         if (!dows.length || s === e) {
-          out.push({ kind: k, name: ev.name, start_date: s, end_date: e, segment: 0 });
+          out.push({ kind: k, name: ev.name, start_date: s, end_date: e, segment: 0, ev_full: ev });
           return;
         }
         // Walk the date range and open a new segment for each run of
@@ -170,13 +175,13 @@ export default function MealsAnalyticsPanel({ days, events }) {
           } else if (segStart) {
             const prev = new Date(cur); prev.setDate(prev.getDate() - 1);
             out.push({ kind: k, name: ev.name, start_date: segStart,
-                       end_date: prev.toISOString().slice(0, 10), segment: idx++ });
+                       end_date: prev.toISOString().slice(0, 10), segment: idx++, ev_full: ev });
             segStart = null;
           }
           cur.setDate(cur.getDate() + 1);
         }
         if (segStart) {
-          out.push({ kind: k, name: ev.name, start_date: segStart, end_date: e, segment: idx });
+          out.push({ kind: k, name: ev.name, start_date: segStart, end_date: e, segment: idx, ev_full: ev });
         }
       });
     });
@@ -248,15 +253,17 @@ export default function MealsAnalyticsPanel({ days, events }) {
                 const w = Math.max(0.5, r - l);
                 const isFirst = ev.segment === 0 || ev.segment === undefined;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={`${ev.name}-${ev.start_date}-${i}`}
-                    className={`absolute top-0.5 ${barH} rounded flex items-center px-1 font-semibold text-white overflow-hidden whitespace-nowrap`}
+                    onClick={() => setSelectedEvent({ kind: k, ev: ev.ev_full })}
+                    className={`absolute top-0.5 ${barH} rounded flex items-center px-1 font-semibold text-white overflow-hidden whitespace-nowrap cursor-pointer hover:brightness-110 hover:ring-2 hover:ring-white/60`}
                     style={{ left: `${l}%`, width: `${w}%`, background: EVENT_COLORS[k].fill }}
-                    title={`${ev.name} · ${ev.start_date} → ${ev.end_date}`}
+                    title={`${ev.name} · ${ev.start_date} → ${ev.end_date} · Click for details`}
                     data-testid={`ma-event-bar-${k}-${i}`}
                   >
                     {isFirst && <span className="truncate">{ev.name}</span>}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -373,6 +380,105 @@ export default function MealsAnalyticsPanel({ days, events }) {
           </div>
         </div>
       )}
+
+      {selectedEvent && (
+        <EventDetailsModal
+          kind={selectedEvent.kind}
+          ev={selectedEvent.ev}
+          onClose={() => setSelectedEvent(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function EventDetailsModal({ kind, ev, onClose }) {
+  // Lightweight read-only popup shown when an admin taps a coloured
+  // sliver in the timeline strip. Surfaces every field we packed from
+  // the /meal-calendar/events endpoint. Runs one meal-calendar day
+  // lookup to give a live-total peek without leaving the page.
+  const c = EVENT_COLORS[kind];
+  const DOW_LABEL = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu",
+                       fri: "Fri", sat: "Sat", sun: "Sun" };
+  const dows = Array.isArray(ev.days_of_week) ? ev.days_of_week : [];
+  const spanDays = (() => {
+    if (!ev.start_date || !ev.end_date) return null;
+    const s = new Date(ev.start_date + "T00:00:00");
+    const e = new Date(ev.end_date + "T00:00:00");
+    return Math.round((e - s) / 86400000) + 1;
+  })();
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4"
+      role="dialog"
+      onClick={onClose}
+      data-testid="ma-event-details-modal"
+    >
+      <div
+        className="bg-white rounded-xl max-w-md w-full shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-3 flex items-center gap-2" style={{ background: c.fill, color: "white" }}>
+          <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 rounded px-2 py-0.5">
+            {c.label}
+          </span>
+          <h3 className="font-black text-lg truncate flex-1" title={ev.name}>{ev.name}</h3>
+          <button
+            type="button" onClick={onClose}
+            className="p-1.5 rounded-md hover:bg-white/20"
+            title="Close (Esc)"
+            data-testid="ma-event-details-close"
+          >
+            <CloseIcon size={18}/>
+          </button>
+        </div>
+        <dl className="p-5 text-sm space-y-2">
+          <Row label="Dates">
+            <span className="font-semibold">{fmt(ev.start_date)}</span>
+            {ev.end_date !== ev.start_date && (
+              <>
+                <span className="text-slate-400"> → </span>
+                <span className="font-semibold">{fmt(ev.end_date)}</span>
+              </>
+            )}
+            {spanDays != null && (
+              <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                {spanDays} day{spanDays !== 1 ? "s" : ""}
+              </span>
+            )}
+          </Row>
+          {dows.length > 0 && (
+            <Row label="Runs on">
+              <div className="flex items-center gap-1 flex-wrap">
+                {["mon","tue","wed","thu","fri","sat","sun"].map((k) => {
+                  const on = dows.includes(k);
+                  return (
+                    <span
+                      key={k}
+                      className={`text-[10px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 ${on ? "text-white" : "bg-slate-100 text-slate-400"}`}
+                      style={on ? { background: c.fill } : undefined}
+                    >
+                      {DOW_LABEL[k]}
+                    </span>
+                  );
+                })}
+              </div>
+            </Row>
+          )}
+          {ev.level && <Row label="Level"><span className="capitalize">{ev.level}</span></Row>}
+          {ev.location && <Row label="Location">{ev.location}</Row>}
+          {ev.institution && <Row label="Institution">{ev.institution}</Row>}
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, children }) {
+  return (
+    <div className="grid grid-cols-[110px_1fr] gap-2 items-baseline">
+      <dt className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{label}</dt>
+      <dd className="text-slate-800">{children}</dd>
     </div>
   );
 }
