@@ -3295,6 +3295,70 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             },
         }
 
+    @router.get("/meals/kitchen-analytics/item-daily")
+    async def kitchen_analytics_item_daily(
+        start: str, end: str,
+        item_ids: str = Query(..., description="Comma-separated item IDs"),
+        kind: str = Query("purchases", pattern="^(purchases|issues)$"),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Per-item, per-day amount + qty across the [start, end] window
+        for the given item IDs. Powers the "toggle a bar in Top items
+        → focus the daily-trend chart on that item" flow on Kitchen
+        Analytics. Sparse output: only dates with activity for that
+        item are returned; the frontend fills the zero-days on render."""
+        s = _valid_date(start)
+        e = _valid_date(end)
+        ids = [x.strip() for x in (item_ids or "").split(",") if x.strip()]
+        if not ids:
+            return {"items": []}
+
+        # Item master lookup (one shot).
+        item_rows = await db.meal_items.find(
+            {"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1, "unit": 1},
+        ).to_list(len(ids))
+        info_by_id = {i["id"]: i for i in item_rows}
+
+        coll = "meal_purchases" if kind == "purchases" else "meal_issues"
+        docs = await db[coll].find(
+            {"date": {"$gte": s, "$lte": e},
+             "lines.item_id": {"$in": ids}},
+            {"_id": 0, "date": 1, "lines": 1},
+        ).to_list(5000)
+
+        # Bucket: {item_id: {date: {"amount": .., "qty": ..}}}
+        bucket: dict[str, dict[str, dict[str, float]]] = {i: {} for i in ids}
+        for d in docs:
+            date_iso = d.get("date")
+            for ln in (d.get("lines") or []):
+                iid = ln.get("item_id")
+                if iid not in bucket:
+                    continue
+                q = float(ln.get("qty") or 0)
+                r = float(ln.get("rate") or 0)
+                amt = q * r
+                cell = bucket[iid].setdefault(date_iso, {"amount": 0.0, "qty": 0.0})
+                cell["amount"] += amt
+                cell["qty"] += q
+
+        items = []
+        for iid in ids:
+            info = info_by_id.get(iid) or {}
+            daily = [
+                {"date": dd,
+                 "amount": round(v["amount"], 2),
+                 "qty":    round(v["qty"], 3)}
+                for dd, v in sorted(bucket[iid].items())
+            ]
+            items.append({
+                "item_id": iid,
+                "name":    info.get("name") or "(deleted item)",
+                "unit":    info.get("unit"),
+                "daily":   daily,
+            })
+        return {"items": items, "kind": kind, "start": s, "end": e}
+
+
     @router.get("/meals/kitchen-analytics/bounds")
     async def kitchen_analytics_bounds(user: dict = Depends(require_chef_or_admin)):
         """Earliest and latest dates for which any pantry activity exists

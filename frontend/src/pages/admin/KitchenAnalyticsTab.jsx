@@ -76,18 +76,19 @@ function BannerStat({ icon: Icon, label, value }) {
   );
 }
 
-function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, fullscreen = false }) {
-  const rows = (data || []).map((d) => ({
-    date: d.date,
-    label: formatDate(d.date),
-    Amount: d.amount,
-  }));
+function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, fullscreen = false, focusSeries, from, to }) {
+  // When focusSeries is supplied we render one Line per selected item
+  // (all dates from window filled with 0) instead of the single
+  // aggregate "Amount" line. The click flow still works — it opens
+  // the day-detail popup for the clicked date regardless of which
+  // series was clicked.
+  const useFocus = !!(focusSeries && focusSeries.items && focusSeries.items.length && from && to);
+  const rows = useFocus
+    ? buildFocusRows(focusSeries.items, from, to)
+    : (data || []).map((d) => ({ date: d.date, label: formatDate(d.date), Amount: d.amount }));
   if (!rows.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
   const handleDivClick = (e) => {
     if (!onDayClick) return;
-    // Map click X to the plot-area rectangle (not the wrapper's) so
-    // we don't drift by the Y-axis label width. See git history for
-    // the original off-by-one bug this replaces.
     const grid = e.currentTarget.querySelector(".recharts-cartesian-grid");
     const rect = grid?.getBoundingClientRect
       ? grid.getBoundingClientRect()
@@ -106,42 +107,105 @@ function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, ful
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="label" tick={{ fontSize }} interval="preserveStartEnd" minTickGap={20} />
           <YAxis tick={{ fontSize }} tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
-          <Tooltip
-            formatter={(v) => `₹${inr2(v)}`}
-            contentStyle={{ fontSize: 12 }}
-          />
-          <Line
-            type="monotone" dataKey="Amount"
-            stroke={colorAmt} strokeWidth={2}
-            dot={{ r: fullscreen ? 3 : 2 }}
-            activeDot={{ r: onDayClick ? 6 : 5, style: { cursor: onDayClick ? "pointer" : "default" } }}
-          />
+          <Tooltip formatter={(v) => `₹${inr2(v)}`} contentStyle={{ fontSize: 12 }} />
+          {useFocus && <Legend wrapperStyle={{ fontSize: fullscreen ? 13 : 11 }} />}
+          {useFocus ? (
+            focusSeries.items.map((it, i) => (
+              <Line
+                key={it.item_id}
+                type="monotone" dataKey={it.item_id}
+                name={it.name}
+                stroke={FOCUS_COLORS[i % FOCUS_COLORS.length]}
+                strokeWidth={2} dot={{ r: fullscreen ? 3 : 2 }}
+                activeDot={{ r: onDayClick ? 6 : 5, style: { cursor: onDayClick ? "pointer" : "default" } }}
+              />
+            ))
+          ) : (
+            <Line
+              type="monotone" dataKey="Amount"
+              stroke={colorAmt} strokeWidth={2}
+              dot={{ r: fullscreen ? 3 : 2 }}
+              activeDot={{ r: onDayClick ? 6 : 5, style: { cursor: onDayClick ? "pointer" : "default" } }}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit }) {
+// Distinct colours for the focus-series lines. Deliberately not the
+// same palette as CHART_COLORS so the daily-trend series doesn't
+// clash with the bars they came from.
+const FOCUS_COLORS = ["#2563EB", "#F97316", "#059669", "#DC2626", "#7C3AED", "#0891B2", "#B45309", "#DB2777"];
+
+function buildFocusRows(items, from, to) {
+  // Walk every day in [from, to] and pick amount from each item's
+  // sparse daily list. Missing days become 0 so the lines are
+  // visually continuous.
+  const start = new Date(from + "T00:00:00");
+  const end = new Date(to + "T00:00:00");
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
+  const perItem = items.map((it) => {
+    const m = new Map();
+    (it.daily || []).forEach((r) => m.set(r.date, r.amount));
+    return { id: it.item_id, m };
+  });
+  const out = [];
+  const d = new Date(start);
+  while (d <= end) {
+    const iso = d.toISOString().slice(0, 10);
+    const row = { date: iso, label: formatDate(iso) };
+    perItem.forEach((p) => { row[p.id] = p.m.get(iso) || 0; });
+    out.push(row);
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit, onToggleItem, focusedIds }) {
   const rows = (items || []).slice(0, 10).map((it, i) => ({
     ...it,
     display: showUnit && it.unit ? `${it.name} (${it.unit})` : it.name,
     _idx: i,
+    _focused: focusedIds ? focusedIds.has(it.item_id) : false,
   }));
   if (!rows.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
   return (
     <div data-testid={testid} style={{ width: "100%", height: Math.max(220, rows.length * 26) }}>
       <ResponsiveContainer>
-        <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 20, left: 4, bottom: 4 }}>
+        <BarChart
+          data={rows}
+          layout="vertical"
+          margin={{ top: 4, right: 20, left: 4, bottom: 4 }}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => (dataKey === "amount" ? `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}` : v)} />
           <YAxis dataKey="display" type="category" width={110} tick={{ fontSize: 10 }} />
           <Tooltip
             formatter={(v) => (dataKey === "amount" ? `₹${inr2(v)}` : fmtQty(v))}
             contentStyle={{ fontSize: 12 }}
+            cursor={onToggleItem ? { fill: "rgba(148,163,184,0.15)" } : false}
           />
-          <Bar dataKey={dataKey} name={label} radius={[0, 3, 3, 0]}>
-            {rows.map((r) => <Cell key={r.item_id} fill={colorFn(r._idx)} />)}
+          <Bar
+            dataKey={dataKey} name={label} radius={[0, 3, 3, 0]}
+            onClick={onToggleItem ? (payload) => {
+              // Recharts <Bar onClick> passes the row data as payload.
+              // The item_id is the identity — flip its focus state.
+              const iid = payload?.item_id;
+              if (iid) onToggleItem(iid);
+            } : undefined}
+            style={onToggleItem ? { cursor: "pointer" } : undefined}
+          >
+            {rows.map((r) => (
+              <Cell
+                key={r.item_id}
+                fill={colorFn(r._idx)}
+                fillOpacity={focusedIds && focusedIds.size > 0 && !r._focused ? 0.35 : 1}
+                stroke={r._focused ? "#0F172A" : "none"}
+                strokeWidth={r._focused ? 2 : 0}
+              />
+            ))}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -232,13 +296,16 @@ function ItemsTable({ items, kind, testid }) {
   );
 }
 
-function Section({ title, subtitle, accent, data, testKind, first }) {
+function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
   const colorAmt = accent === "purchases" ? "#2563EB" : "#F97316";
   const bandBg = accent === "purchases" ? "bg-blue-600" : "bg-orange-600";
   const bandFg = "text-white";
   const kind = accent === "purchases" ? "purchases" : "issues";
   const [fullscreen, setFullscreen] = useState(false);
   const [selectedDay, setSelectedDay] = useState(null);
+  const [focusedIds, setFocusedIds] = useState(() => new Set());
+  const [focusSeries, setFocusSeries] = useState(null);
+  const [focusLoading, setFocusLoading] = useState(false);
   useEffect(() => {
     if (!fullscreen && !selectedDay) return;
     const onKey = (e) => {
@@ -249,7 +316,26 @@ function Section({ title, subtitle, accent, data, testKind, first }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [fullscreen, selectedDay]);
+  // Whenever the focused set changes, refetch per-item daily data.
+  // Empty set → no fetch; the daily chart falls back to aggregate.
+  useEffect(() => {
+    if (focusedIds.size === 0 || !from || !to) { setFocusSeries(null); return; }
+    let ignore = false;
+    setFocusLoading(true);
+    const ids = Array.from(focusedIds).join(",");
+    api.get(`/meals/kitchen-analytics/item-daily?start=${from}&end=${to}&item_ids=${ids}&kind=${kind}`)
+      .then((r) => { if (!ignore) setFocusSeries(r); })
+      .catch((err) => { if (!ignore) showApiError(err, "Couldn't load item series"); })
+      .finally(() => { if (!ignore) setFocusLoading(false); });
+    return () => { ignore = true; };
+  }, [focusedIds, from, to, kind]);
   const openDay = (d) => setSelectedDay(d);
+  const toggleItem = (iid) => setFocusedIds((prev) => {
+    const nxt = new Set(prev);
+    if (nxt.has(iid)) nxt.delete(iid); else nxt.add(iid);
+    return nxt;
+  });
+  const clearFocus = () => setFocusedIds(new Set());
   return (
     <section className={`mb-10 ${first ? "" : "pt-8 mt-8 border-t-[6px] border-slate-900/80"}`} data-testid={`kitchen-analytics-${testKind}`}>
       {/* Banner: title + three inline stat chips + rupee total.  The
@@ -283,10 +369,34 @@ function Section({ title, subtitle, accent, data, testKind, first }) {
           at a glance. The three narrower charts live in the row
           below at 3-across. */}
       <div className="iu-card p-3 mb-3">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <TrendingUp size={14} className="text-slate-500" />
           <div className="font-bold text-sm">Daily trend</div>
-          <span className="hidden sm:inline text-[10px] text-slate-400 ml-1">· tap a day for detail</span>
+          {focusedIds.size > 0 ? (
+            <>
+              <span className="text-[10px] text-slate-400 ml-1">· focused on:</span>
+              {(focusSeries?.items || []).map((it, i) => (
+                <span
+                  key={it.item_id}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white rounded px-1.5 py-0.5"
+                  style={{ background: FOCUS_COLORS[i % FOCUS_COLORS.length] }}
+                >
+                  {it.name}
+                  <button type="button" onClick={() => toggleItem(it.item_id)} className="opacity-80 hover:opacity-100" title="Remove">
+                    <CloseIcon size={10} />
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button" onClick={clearFocus}
+                className="text-[10px] font-bold text-slate-500 hover:text-slate-800 underline"
+                data-testid={`kitchen-${testKind}-focus-clear`}
+              >Clear</button>
+              {focusLoading && <Loader2 size={12} className="animate-spin text-slate-400" />}
+            </>
+          ) : (
+            <span className="hidden sm:inline text-[10px] text-slate-400 ml-1">· tap a day for detail · tap a bar below to focus one item</span>
+          )}
           <button
             type="button"
             onClick={() => setFullscreen(true)}
@@ -297,7 +407,12 @@ function Section({ title, subtitle, accent, data, testKind, first }) {
             <Maximize2 size={14} />
           </button>
         </div>
-        <DailyTrendChart data={data?.daily} colorAmt={colorAmt} testid={`kitchen-${testKind}-daily`} onDayClick={openDay} height={280} />
+        <DailyTrendChart
+          data={data?.daily} colorAmt={colorAmt}
+          testid={`kitchen-${testKind}-daily`}
+          onDayClick={openDay} height={280}
+          focusSeries={focusSeries} from={from} to={to}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
@@ -306,12 +421,12 @@ function Section({ title, subtitle, accent, data, testKind, first }) {
           <CategoryPie rows={data?.category_totals} testid={`kitchen-${testKind}-pie`} />
         </div>
         <div className="iu-card p-3">
-          <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-slate-500" /><div className="font-bold text-sm">Top items by ₹</div></div>
-          <TopItemsChart items={data?.top_by_amount} dataKey="amount" colorFn={(i) => CHART_COLORS[i % CHART_COLORS.length]} label="Amount" testid={`kitchen-${testKind}-top-amt`} />
+          <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-slate-500" /><div className="font-bold text-sm">Top items by ₹</div><span className="text-[10px] text-slate-400">· tap to focus</span></div>
+          <TopItemsChart items={data?.top_by_amount} dataKey="amount" colorFn={(i) => CHART_COLORS[i % CHART_COLORS.length]} label="Amount" testid={`kitchen-${testKind}-top-amt`} onToggleItem={toggleItem} focusedIds={focusedIds} />
         </div>
         <div className="iu-card p-3">
-          <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-slate-500" /><div className="font-bold text-sm">Top items by qty</div><span className="text-[10px] text-slate-400">(kg items only)</span></div>
-          <TopItemsChart items={data?.top_by_qty} dataKey="qty" colorFn={(i) => CHART_COLORS[(i + 3) % CHART_COLORS.length]} label="Qty (kg)" testid={`kitchen-${testKind}-top-qty`} />
+          <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-slate-500" /><div className="font-bold text-sm">Top items by qty</div><span className="text-[10px] text-slate-400">(kg items only · tap to focus)</span></div>
+          <TopItemsChart items={data?.top_by_qty} dataKey="qty" colorFn={(i) => CHART_COLORS[(i + 3) % CHART_COLORS.length]} label="Qty (kg)" testid={`kitchen-${testKind}-top-qty`} onToggleItem={toggleItem} focusedIds={focusedIds} />
         </div>
       </div>
 
@@ -349,6 +464,7 @@ function Section({ title, subtitle, accent, data, testKind, first }) {
               onDayClick={openDay}
               height={Math.max(320, window.innerHeight - 160)}
               fullscreen
+              focusSeries={focusSeries} from={from} to={to}
             />
           </div>
         </div>
@@ -675,6 +791,7 @@ export default function KitchenAnalyticsTab({ liveSig }) {
             accent="purchases"
             data={data.purchases}
             testKind="purchases"
+            from={from} to={to}
             first
           />
           <Section
@@ -682,6 +799,7 @@ export default function KitchenAnalyticsTab({ liveSig }) {
             subtitle="What was issued to the kitchen (valued at weighted-avg purchase rate)"
             accent="issues"
             data={data.issues}
+            from={from} to={to}
             testKind="issues"
           />
         </>
