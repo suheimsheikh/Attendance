@@ -28,6 +28,44 @@ def _has_valid_parent_mobile(u: dict) -> bool:
     return False
 
 
+def _hydrate_top_users(
+    ranked: list, users_by_id: dict, *, value_key: str, limit: int = 5,
+) -> list[dict]:
+    """Turn a `[(user_id, value), …]` ranked list into the shape the
+    dashboard's "This week" rails expect:
+
+        {member_id, name, category, photo, <value_key>: value}
+
+    Users no longer in `users_by_id` (soft-deleted mid-week) are
+    silently skipped so a stale foreign-key doesn't break the widget.
+    """
+    out: list[dict] = []
+    for uid, value in ranked[:limit]:
+        u = users_by_id.get(uid)
+        if not u:
+            continue
+        out.append({
+            "member_id": uid,
+            "name": u.get("full_name"),
+            "category": u.get("category"),
+            "photo": u.get("photo_thumb"),
+            value_key: value,
+        })
+    return out
+
+
+def _pack_events(rows: list, kind: str) -> list[dict]:
+    """Uniform event dict for the Dashboard's "Camps + Regattas this
+    week" card — kind identifies which collection the row came from."""
+    return [{
+        "kind": kind,
+        "id": r.get("id"),
+        "name": r.get("name"),
+        "start_date": r.get("start_date"),
+        "end_date": r.get("end_date"),
+    } for r in rows]
+
+
 def make_router(db, require_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
 
@@ -172,19 +210,8 @@ def make_router(db, require_admin) -> APIRouter:
         late_ranked = sorted(
             ((uid, len(days)) for uid, days in late_counts.items()),
             key=lambda x: -x[1],
-        )[:5]
-        top_late = []
-        for uid, cnt in late_ranked:
-            u = users_by_id.get(uid)
-            if not u:
-                continue
-            top_late.append({
-                "member_id": uid,
-                "name": u.get("full_name"),
-                "category": u.get("category"),
-                "photo": u.get("photo_thumb"),
-                "late_days": cnt,
-            })
+        )
+        top_late = _hydrate_top_users(late_ranked, users_by_id, value_key="late_days")
 
         # Top 5 by OT minutes accumulated this week — surfaces payroll
         # pressure points + potential burnout / data-entry errors at a
@@ -198,19 +225,8 @@ def make_router(db, require_admin) -> APIRouter:
             if mins > 0:
                 uid = r["user_id"]
                 ot_by_user[uid] = ot_by_user.get(uid, 0) + mins
-        ot_ranked = sorted(ot_by_user.items(), key=lambda x: -x[1])[:5]
-        top_ot = []
-        for uid, mins in ot_ranked:
-            u = users_by_id.get(uid)
-            if not u:
-                continue
-            top_ot.append({
-                "member_id": uid,
-                "name": u.get("full_name"),
-                "category": u.get("category"),
-                "photo": u.get("photo_thumb"),
-                "ot_minutes": mins,
-            })
+        ot_ranked = sorted(ot_by_user.items(), key=lambda x: -x[1])
+        top_ot = _hydrate_top_users(ot_ranked, users_by_id, value_key="ot_minutes")
 
         # Birthdays this week (MM-DD match against date_of_birth).
         birthdays = []
@@ -239,23 +255,7 @@ def make_router(db, require_admin) -> APIRouter:
             {"start_date": {"$lte": week_end}, "end_date": {"$gte": today_iso}},
             {"_id": 0, "id": 1, "name": 1, "start_date": 1, "end_date": 1},
         ).to_list(50)
-        events = []
-        for c in camps:
-            events.append({
-                "kind": "camp",
-                "id": c.get("id"),
-                "name": c.get("name"),
-                "start_date": c.get("start_date"),
-                "end_date": c.get("end_date"),
-            })
-        for r in regattas:
-            events.append({
-                "kind": "regatta",
-                "id": r.get("id"),
-                "name": r.get("name"),
-                "start_date": r.get("start_date"),
-                "end_date": r.get("end_date"),
-            })
+        events = _pack_events(camps, "camp") + _pack_events(regattas, "regatta")
         events.sort(key=lambda e: e.get("start_date") or "")
 
         # ================== THIS MONTH ====================================
