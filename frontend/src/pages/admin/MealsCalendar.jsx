@@ -217,8 +217,10 @@ export default function MealsCalendar() {
   const [editingDate, setEditingDate] = useState(null);
   const [showEmpty, setShowEmpty] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(true);
-  const [collapsedMonths, setCollapsedMonths] = useState(new Set());
-  const toggleMonth = (key) => setCollapsedMonths((prev) => {
+  // Track which months are currently EXPANDED. Empty set = all collapsed
+  // (the default state each time the window changes).
+  const [openMonths, setOpenMonths] = useState(new Set());
+  const toggleMonth = (key) => setOpenMonths((prev) => {
     const nxt = new Set(prev);
     if (nxt.has(key)) nxt.delete(key); else nxt.add(key);
     return nxt;
@@ -243,6 +245,9 @@ export default function MealsCalendar() {
   }, [data, showEmpty, today]);
 
   // ── Group rows into month buckets (with populated-only totals) ──
+  // Sorted newest month first so the current month sits at the top;
+  // all months start collapsed so admins see the year-at-a-glance and
+  // expand only the month they care about.
   const months = useMemo(() => {
     const map = new Map();
     (rows || []).forEach((d) => {
@@ -265,8 +270,16 @@ export default function MealsCalendar() {
         g.totals.days += 1;
       }
     });
-    return [...map.values()];
+    // Newest first (Aug, Jul, Jun, …)
+    return [...map.values()].sort((a, b) => b.key.localeCompare(a.key));
   }, [rows]);
+
+  // Default: every month collapsed. Whenever the fetched range changes,
+  // reset the expansion so the user always starts at the year-at-a-glance
+  // view (a preserved-open month from a different range would be confusing).
+  useEffect(() => {
+    setOpenMonths(new Set());
+  }, [data?.start, data?.end]);
 
   const shift = (months) => {
     const [y, m] = from.split("-").map(Number);
@@ -379,7 +392,7 @@ export default function MealsCalendar() {
             ) : rows.length === 0 ? (
               <tr><td colSpan={canEdit ? 6 : 5} className="text-center py-10 text-slate-400">No data in this window.</td></tr>
             ) : months.map((month) => {
-              const collapsed = collapsedMonths.has(month.key);
+              const collapsed = !openMonths.has(month.key);
               return (
                 <React.Fragment key={month.key}>
                   <tr
