@@ -76,28 +76,22 @@ function BannerStat({ icon: Icon, label, value }) {
   );
 }
 
-function DailyTrendChart({ data, colorAmt, colorLines, testid, onDayClick, height = 260, fullscreen = false }) {
+function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, fullscreen = false }) {
   const rows = (data || []).map((d) => ({
     date: d.date,
     label: formatDate(d.date),
     Amount: d.amount,
-    Lines: d.lines,
   }));
   if (!rows.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
   const handleDivClick = (e) => {
     if (!onDayClick) return;
-    // Read the actual plot-area rectangle from Recharts' rendered SVG
-    // so we don't drift by the Y-axis label width (up to ~60px on a
-    // dual-axis chart). The `.recharts-cartesian-grid` group is
-    // positioned exactly at the plot bounds. Fall back to the wrapper
-    // rect if the SVG hasn't rendered yet (empty state).
+    // Map click X to the plot-area rectangle (not the wrapper's) so
+    // we don't drift by the Y-axis label width. See git history for
+    // the original off-by-one bug this replaces.
     const grid = e.currentTarget.querySelector(".recharts-cartesian-grid");
-    let rect;
-    if (grid?.getBoundingClientRect) {
-      rect = grid.getBoundingClientRect();
-    } else {
-      rect = e.currentTarget.getBoundingClientRect();
-    }
+    const rect = grid?.getBoundingClientRect
+      ? grid.getBoundingClientRect()
+      : e.currentTarget.getBoundingClientRect();
     if (!rect.width) return;
     const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const idx = Math.round(frac * (rows.length - 1));
@@ -111,20 +105,17 @@ function DailyTrendChart({ data, colorAmt, colorLines, testid, onDayClick, heigh
         <LineChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="label" tick={{ fontSize }} interval="preserveStartEnd" minTickGap={20} />
-          <YAxis yAxisId="left"  tick={{ fontSize }} tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
-          <YAxis yAxisId="right" orientation="right" tick={{ fontSize }} />
+          <YAxis tick={{ fontSize }} tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
           <Tooltip
-            formatter={(v, name) => (name === "Amount" ? `₹${inr2(v)}` : v)}
+            formatter={(v) => `₹${inr2(v)}`}
             contentStyle={{ fontSize: 12 }}
           />
-          <Legend wrapperStyle={{ fontSize: fullscreen ? 13 : 11 }} />
           <Line
-            yAxisId="left"  type="monotone" dataKey="Amount"
+            type="monotone" dataKey="Amount"
             stroke={colorAmt} strokeWidth={2}
             dot={{ r: fullscreen ? 3 : 2 }}
             activeDot={{ r: onDayClick ? 6 : 5, style: { cursor: onDayClick ? "pointer" : "default" } }}
           />
-          <Line yAxisId="right" type="monotone" dataKey="Lines"  stroke={colorLines} strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -243,7 +234,6 @@ function ItemsTable({ items, kind, testid }) {
 
 function Section({ title, subtitle, accent, data, testKind, first }) {
   const colorAmt = accent === "purchases" ? "#2563EB" : "#F97316";
-  const colorLines = accent === "purchases" ? "#94A3B8" : "#94A3B8";
   const bandBg = accent === "purchases" ? "bg-blue-600" : "bg-orange-600";
   const bandFg = "text-white";
   const kind = accent === "purchases" ? "purchases" : "issues";
@@ -307,7 +297,7 @@ function Section({ title, subtitle, accent, data, testKind, first }) {
             <Maximize2 size={14} />
           </button>
         </div>
-        <DailyTrendChart data={data?.daily} colorAmt={colorAmt} colorLines={colorLines} testid={`kitchen-${testKind}-daily`} onDayClick={openDay} height={280} />
+        <DailyTrendChart data={data?.daily} colorAmt={colorAmt} testid={`kitchen-${testKind}-daily`} onDayClick={openDay} height={280} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
@@ -355,7 +345,6 @@ function Section({ title, subtitle, accent, data, testKind, first }) {
             <DailyTrendChart
               data={data?.daily}
               colorAmt={colorAmt}
-              colorLines={colorLines}
               testid={`kitchen-${testKind}-daily-fs`}
               onDayClick={openDay}
               height={Math.max(320, window.innerHeight - 160)}
