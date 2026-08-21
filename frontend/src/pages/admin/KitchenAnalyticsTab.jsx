@@ -59,6 +59,23 @@ function StatPill({ icon: Icon, label, value, tint }) {
   );
 }
 
+function BannerStat({ icon: Icon, label, value }) {
+  // Chip variant of StatPill rendered INSIDE the coloured banner.
+  // Uses translucent white for readable contrast on both the blue
+  // (Purchases) and orange (Consumption) bands.
+  return (
+    <div className="rounded-lg bg-white/15 backdrop-blur-sm px-3 py-2 flex items-center gap-2.5 min-w-0">
+      <div className="w-8 h-8 rounded-md bg-white/25 flex items-center justify-center shrink-0">
+        <Icon size={14} />
+      </div>
+      <div className="min-w-0">
+        <div className="text-[10px] uppercase tracking-wider font-bold opacity-80">{label}</div>
+        <div className="text-base sm:text-lg font-black tabular-nums truncate">{value}</div>
+      </div>
+    </div>
+  );
+}
+
 function DailyTrendChart({ data, colorAmt, colorLines, testid, onDayClick, height = 260, fullscreen = false }) {
   const rows = (data || []).map((d) => ({
     date: d.date,
@@ -245,21 +262,26 @@ function Section({ title, subtitle, accent, data, testKind, first }) {
   const openDay = (d) => setSelectedDay(d);
   return (
     <section className={`mb-10 ${first ? "" : "pt-8 mt-8 border-t-[6px] border-slate-900/80"}`} data-testid={`kitchen-analytics-${testKind}`}>
-      <div className={`rounded-xl px-6 py-5 flex items-center justify-between shadow-lg ${bandBg} ${bandFg} mb-4`} data-testid={`kitchen-${testKind}-band`}>
-        <div>
-          <div className="text-4xl sm:text-5xl font-black uppercase tracking-widest leading-none" data-testid={`kitchen-${testKind}-title`}>{title}</div>
-          <div className="text-sm opacity-90 mt-2">{subtitle}</div>
+      {/* Banner: title + three inline stat chips + rupee total.  The
+          three chips (Total / Items / Lines) used to sit below the
+          banner as separate cards; folding them in reclaims a full
+          strip of vertical space above the charts. */}
+      <div className={`rounded-xl px-6 py-4 shadow-lg ${bandBg} ${bandFg} mb-4`} data-testid={`kitchen-${testKind}-band`}>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="text-4xl sm:text-5xl font-black uppercase tracking-widest leading-none" data-testid={`kitchen-${testKind}-title`}>{title}</div>
+            <div className="text-sm opacity-90 mt-2">{subtitle}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs uppercase tracking-wider font-bold opacity-80">Total</div>
+            <div className="text-3xl sm:text-4xl font-black tabular-nums">₹{inr(data?.total_amount || 0)}</div>
+          </div>
         </div>
-        <div className="text-right">
-          <div className="text-xs uppercase tracking-wider font-bold opacity-80">Total</div>
-          <div className="text-3xl sm:text-4xl font-black tabular-nums">₹{inr(data?.total_amount || 0)}</div>
+        <div className="grid grid-cols-3 gap-3 mt-4">
+          <BannerStat icon={IndianRupee} label={`${title} Total`} value={`₹${inr(data?.total_amount || 0)}`} />
+          <BannerStat icon={Boxes} label="Distinct Items" value={data?.item_count || 0} />
+          <BannerStat icon={ShoppingCart} label="Line Entries" value={data?.total_lines || 0} />
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 mb-3">
-        <StatPill icon={IndianRupee} label={`${title} Total`} value={`₹${inr(data?.total_amount || 0)}`} tint="bg-emerald-50" />
-        <StatPill icon={Boxes} label="Distinct Items" value={data?.item_count || 0} tint="bg-sky-50" />
-        <StatPill icon={ShoppingCart} label="Line Entries" value={data?.total_lines || 0} tint="bg-amber-50" />
       </div>
       {accent === "purchases" && (data?.unitemised_amount || 0) > 0 && (
         <div className="mb-3 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900" data-testid={`kitchen-${testKind}-unitemised-note`}>
@@ -267,24 +289,28 @@ function Section({ title, subtitle, accent, data, testKind, first }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-        <div className="iu-card p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingUp size={14} className="text-slate-500" />
-            <div className="font-bold text-sm">Daily trend</div>
-            <span className="hidden sm:inline text-[10px] text-slate-400 ml-1">· tap a day for detail</span>
-            <button
-              type="button"
-              onClick={() => setFullscreen(true)}
-              className="ml-auto p-1.5 rounded-md text-slate-500 hover:bg-slate-100"
-              title="Expand to full screen"
-              data-testid={`kitchen-${testKind}-daily-fullscreen`}
-            >
-              <Maximize2 size={14} />
-            </button>
-          </div>
-          <DailyTrendChart data={data?.daily} colorAmt={colorAmt} colorLines={colorLines} testid={`kitchen-${testKind}-daily`} onDayClick={openDay} />
+      {/* Full-width Daily trend so the whole time series is visible
+          at a glance. The three narrower charts live in the row
+          below at 3-across. */}
+      <div className="iu-card p-3 mb-3">
+        <div className="flex items-center gap-2 mb-1">
+          <TrendingUp size={14} className="text-slate-500" />
+          <div className="font-bold text-sm">Daily trend</div>
+          <span className="hidden sm:inline text-[10px] text-slate-400 ml-1">· tap a day for detail</span>
+          <button
+            type="button"
+            onClick={() => setFullscreen(true)}
+            className="ml-auto p-1.5 rounded-md text-slate-500 hover:bg-slate-100"
+            title="Expand to full screen"
+            data-testid={`kitchen-${testKind}-daily-fullscreen`}
+          >
+            <Maximize2 size={14} />
+          </button>
         </div>
+        <DailyTrendChart data={data?.daily} colorAmt={colorAmt} colorLines={colorLines} testid={`kitchen-${testKind}-daily`} onDayClick={openDay} height={280} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1"><PieIcon size={14} className="text-slate-500" /><div className="font-bold text-sm">Category share</div></div>
           <CategoryPie rows={data?.category_totals} testid={`kitchen-${testKind}-pie`} />
