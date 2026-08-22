@@ -275,15 +275,24 @@ function FocusDailyTooltip({ active, payload, label, itemUnitById }) {
 }
 
 function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit, onToggleItem, focusedIds }) {
-  const rows = (items || []).slice(0, 10).map((it, i) => ({
+  // Show ALL items sorted desc by the current metric (previously
+  // capped at 10). Card body scrolls internally so the strip stays
+  // compact next to Category share, but power-users can scroll to
+  // find any of the ~100 pantry items.
+  const rows = (items || []).map((it, i) => ({
     ...it,
     display: showUnit && it.unit ? `${it.name} (${it.unit})` : it.name,
     _idx: i,
     _focused: focusedIds ? focusedIds.has(it.item_id) : false,
   }));
   if (!rows.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
+  // A 22px row keeps labels readable; container height fixed at 260px
+  // so a category-share pie next to it stays visually anchored.
+  const rowH = 22;
+  const innerH = Math.max(220, rows.length * rowH);
   return (
-    <div data-testid={testid} style={{ width: "100%", height: Math.max(220, rows.length * 26) }}>
+    <div className="max-h-[260px] overflow-y-auto pr-1" data-testid={testid}>
+      <div style={{ width: "100%", height: innerH }}>
       <ResponsiveContainer>
         <BarChart
           data={rows}
@@ -319,6 +328,7 @@ function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit, onTog
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }

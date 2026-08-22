@@ -3799,8 +3799,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             kg_rows = [r for r in items_rows if (r.get("unit") or "").strip().lower() == "kg"]
             return {
                 "daily": daily,
-                "top_by_amount": items_rows[:12],
-                "top_by_qty": sorted(kg_rows, key=lambda r: r["qty"], reverse=True)[:12],
+                "top_by_amount": items_rows,
+                "top_by_qty": sorted(kg_rows, key=lambda r: r["qty"], reverse=True),
                 "category_totals": cat_rows,
                 "items": items_rows,
                 "total_amount": total_amount,
