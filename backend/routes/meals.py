@@ -3573,6 +3573,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         purch_cat: dict[str, float] = {}
         iss_cat: dict[str, float] = {}
         unitemised_total = 0.0
+        # Vendor roll-up (Feb 2026 user request): per-vendor total spend
+        # across all purchases in the window, so we can render a
+        # "Top vendors by ₹" chart in Kitchen Analytics.
+        # Shape: {vendor_id: {"amount": rupees, "purchases": int}}
+        vendor_totals: dict[str, dict] = {}
         # Per-date list of (item_id, qty) tuples — used to plot the
         # daily kcal trend by re-scoring each line through the same
         # nutrition resolver.
@@ -3581,11 +3586,17 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
         for doc in purch_docs:
             d = doc["date"]
-            vendor_id = doc.get("vendor_id")
+            doc_vendor_id = doc.get("vendor_id")
             slot = purch_daily.setdefault(d, _blank_day())
             amounts_map = doc.get("amounts") or {}
             day_total = sum(float(v or 0) for v in amounts_map.values())
             itemised_from_lines = 0.0
+            # Per-doc vendor totals — accumulated from line-level
+            # vendor_id (the real source of truth, since the same
+            # purchase doc can mix vendors — vegetables from Vendor A,
+            # spices from Vendor B). Falls back to doc-level vendor_id
+            # if the line doesn't carry one.
+            doc_vendors: dict[str, float] = {}
             for ln in (doc.get("lines") or []):
                 iid = ln.get("item_id")
                 q = float(ln.get("qty") or 0)
@@ -3600,8 +3611,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 it["qty"] += q
                 it["amount"] += amt
                 it["lines"] += 1
-                if vendor_id:
-                    it["vendors"][vendor_id] = it["vendors"].get(vendor_id, 0.0) + amt
+                ln_vendor = ln.get("vendor_id") or doc_vendor_id
+                if ln_vendor:
+                    it["vendors"][ln_vendor] = it["vendors"].get(ln_vendor, 0.0) + amt
+                    doc_vendors[ln_vendor] = doc_vendors.get(ln_vendor, 0.0) + amt
                 purch_daily_lines.setdefault(d, []).append((iid, q))
             # Category share is drawn from `amounts` so bulk-uploaded
             # days still contribute to the pie.
@@ -3613,6 +3626,22 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             slot["itemised_amount"] += itemised_from_lines
             slot["unitemised_amount"] += max(0.0, eff_day_total - itemised_from_lines)
             unitemised_total += max(0.0, eff_day_total - itemised_from_lines)
+            # Vendor rollup: distribute this doc's spend across the
+            # vendors that showed up on its lines. Line-level vendors
+            # give per-vendor accuracy for docs that span multiple
+            # suppliers. If no line-level vendors are found, credit the
+            # whole doc-total to the doc-level vendor (or "__unknown__"
+            # sentinel so bulk imports still show up in the chart).
+            if doc_vendors:
+                for vid, amt in doc_vendors.items():
+                    v_agg = vendor_totals.setdefault(vid, {"amount": 0.0, "purchases": 0})
+                    v_agg["amount"] += amt
+                    v_agg["purchases"] += 1
+            else:
+                v_key = doc_vendor_id or "__unknown__"
+                v_agg = vendor_totals.setdefault(v_key, {"amount": 0.0, "purchases": 0})
+                v_agg["amount"] += eff_day_total
+                v_agg["purchases"] += 1
 
         for doc in iss_docs:
             d = doc["date"]
@@ -3649,7 +3678,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         # Hydrate top-3 vendor names into each purchase item row so the
         # bar-chart tooltip can show "top vendor: X (₹Y) · Z more" —
         # requested by user 21 Aug 2026 alongside the qty tooltip.
+        # Combined lookup: item-level vendors PLUS doc-level vendor_totals
+        # so we can build the top-vendors-by-spend chart with one query.
         vendor_ids_seen = {vid for r in purch_items.values() for vid in r["vendors"].keys()}
+        vendor_ids_seen.update(vid for vid in vendor_totals.keys() if vid != "__unknown__")
+        vendor_by_id: dict[str, str] = {}
         if vendor_ids_seen:
             v_rows = await db.meal_vendors.find(
                 {"id": {"$in": list(vendor_ids_seen)}},
@@ -3664,6 +3697,24 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                      "amount": round(amt, 2)}
                     for vid, amt in top
                 ]
+
+        # Top-vendors-by-spend list (Feb 2026 user request). Every
+        # vendor with at least one purchase in the window, sorted by
+        # rupee spend descending. Purchases without a vendor_id land
+        # under a "Unknown / not set" row so bulk-imports still get
+        # counted somewhere.
+        v_total_amount = sum(v["amount"] for v in vendor_totals.values()) or 1.0
+        top_vendors_rows = []
+        for vid, agg in vendor_totals.items():
+            top_vendors_rows.append({
+                "vendor_id": vid if vid != "__unknown__" else None,
+                "name": (vendor_by_id.get(vid) if vid != "__unknown__" else None) or "Unknown / not set",
+                "amount": round(agg["amount"], 2),
+                "purchases": agg["purchases"],
+                "pct": round(agg["amount"] * 100.0 / v_total_amount, 2),
+            })
+        top_vendors_rows.sort(key=lambda r: r["amount"], reverse=True)
+
         iss_item_rows = _item_rows(iss_items)
 
         # ---- Nutrition rollup (Feb 2026 request) --------------------
@@ -3813,7 +3864,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
         return {
             "start": s, "end": e,
-            "purchases": _pack(_daily_series(purch_daily), purch_item_rows, _cat_pct(purch_cat), purch_nut, unitemised_total),
+            "purchases": {
+                **_pack(_daily_series(purch_daily), purch_item_rows, _cat_pct(purch_cat), purch_nut, unitemised_total),
+                "top_vendors": top_vendors_rows,
+            },
             "issues":    _pack(_daily_series(iss_daily),   iss_item_rows,   _cat_pct(iss_cat),    iss_nut),
         }
 

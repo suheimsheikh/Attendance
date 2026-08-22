@@ -519,7 +519,7 @@ export default function MealsReport() {
       <div className="sticky top-0 z-40 bg-slate-50 -mx-4 md:-mx-8 px-4 md:px-8 pt-1 pb-0" data-testid="meals-report-sticky-top">
         <header className="pb-3 flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">Pantry Stock</h1>
+            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">Stock/Purchases</h1>
             <p className="text-slate-500 text-xs mt-0.5">
               Portion planning, month-long audit, purchase entry and the expense report.
             </p>

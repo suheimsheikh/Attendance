@@ -359,6 +359,59 @@ function CategoryPie({ rows, testid }) {
   );
 }
 
+function TopVendorsTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null;
+  const r = payload[0].payload;
+  return (
+    <div className="rounded-md bg-white shadow-md border border-slate-200 px-3 py-2 text-xs" style={{ minWidth: 180 }}>
+      <div className="font-bold text-slate-900">{r.name}</div>
+      <div className="text-slate-600 mt-0.5">₹{inr(r.amount)} · <span className="font-semibold">{r.pct}%</span> of spend</div>
+      <div className="text-slate-500 mt-0.5">{r.purchases} purchase{r.purchases === 1 ? "" : "s"}</div>
+    </div>
+  );
+}
+
+function TopVendorsChart({ vendors, testid }) {
+  // Horizontal bar chart of vendors sorted by spend (₹), so admins can
+  // see at a glance who they lean on most in the selected window.
+  // Follows the same pattern as `TopItemsChart` — scrollable wrapper,
+  // fixed row height, consistent palette-hashed colours. Added Feb 2026
+  // in response to user request for a vendor-share view.
+  const rows = (vendors || []).filter((v) => v.amount > 0);
+  if (!rows.length) {
+    return <div className="text-center text-slate-400 text-sm py-8">No vendor data in this window</div>;
+  }
+  const rowH = 28;
+  const innerH = Math.max(240, rows.length * rowH);
+  // Hash colours off the vendor_id (or name for "Unknown / not set")
+  // so the same vendor always paints the same shade across sessions.
+  const colorFor = (r) => {
+    const key = r.vendor_id || r.name;
+    let h = 0;
+    for (let i = 0; i < key.length; i++) h = ((h * 31) + key.charCodeAt(i)) >>> 0;
+    return CHART_COLORS[h % CHART_COLORS.length];
+  };
+  return (
+    <div className="max-h-[260px] overflow-y-auto pr-1" data-testid={testid}>
+      <div style={{ width: "100%", height: innerH }}>
+        <ResponsiveContainer>
+          <BarChart data={rows} layout="vertical" margin={{ top: 12, right: 20, left: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
+            <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 10 }} />
+            <Tooltip content={<TopVendorsTooltip />} cursor={{ fill: "rgba(148,163,184,0.15)" }} />
+            <Bar dataKey="amount" name="Spend" radius={[0, 3, 3, 0]}>
+              {rows.map((r) => (
+                <Cell key={r.vendor_id || r.name} fill={colorFor(r)} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 function ItemsTable({ items, kind, testid }) {
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
@@ -549,6 +602,17 @@ function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
           <TopItemsChart items={data?.top_by_qty} dataKey="qty" colorFn={(i) => CHART_COLORS[(i + 3) % CHART_COLORS.length]} label="Qty (kg)" testid={`kitchen-${testKind}-top-qty`} onToggleItem={toggleItem} focusedIds={focusedIds} />
         </div>
       </div>
+
+      {accent === "purchases" && (
+        <div className="iu-card p-3 mb-3" data-testid={`kitchen-${testKind}-top-vendors-card`}>
+          <div className="flex items-center gap-2 mb-1">
+            <BarChart3 size={14} className="text-slate-500" />
+            <div className="font-bold text-sm">Top vendors by ₹</div>
+            <span className="text-[10px] text-slate-400">· who you lean on most in this window</span>
+          </div>
+          <TopVendorsChart vendors={data?.top_vendors} testid={`kitchen-${testKind}-top-vendors`} />
+        </div>
+      )}
 
       <ItemsTable items={data?.items} kind={title.toLowerCase()} testid={`kitchen-${testKind}-items`} />
 

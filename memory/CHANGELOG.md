@@ -4097,3 +4097,16 @@ green**. Mongo unique index confirmed via index_information().
   System groups for both admin and coach roles.
 - Also reset the affected admin's `ui_prefs.sidebar_collapsed` on the
   server so their next login shows all sections expanded.
+
+## 22 Feb 2026 — Vendor Share Chart + rename
+- New backend field `purchases.top_vendors` on `/api/meals/kitchen-analytics`
+  — sums line-level vendor spend across the window, sorted by rupees desc,
+  with `{vendor_id, name, amount, purchases, pct}`. Unknown/legacy docs
+  land under a "Unknown / not set" bucket so bulk imports still show up.
+- New frontend card **Top vendors by ₹** in Kitchen Analytics (Purchases
+  section only). Horizontal bar chart with per-vendor tooltip showing
+  amount, % share of window spend, and purchase count. Consistent
+  vendor→colour hashing so the same supplier paints the same shade
+  every session.
+- Renamed sidebar item "Pantry Stock" → **Stock/Purchases** (and the
+  matching page header on `/admin/meals-report`).
