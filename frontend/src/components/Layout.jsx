@@ -241,6 +241,7 @@ export default function Layout() {
                 below (with masters). */}
             {(!isChef && NAV_COACH_ATTENDANCE.length > 0) && (
               <SystemGroup label="Attendance" tone="cyan" icon={ClipboardCheck}
+                           count={NAV_COACH_ATTENDANCE.length}
                            open={isOpen("attendance")} onToggle={() => toggleSection("attendance")}>
                 {NAV_COACH_ATTENDANCE.map((item) => (
                   <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
@@ -248,6 +249,7 @@ export default function Layout() {
               </SystemGroup>
             )}
             <SystemGroup label="Kitchen" tone="amber" icon={ChefHat}
+                         count={NAV_COACH_KITCHEN.length}
                          open={isOpen("kitchen")} onToggle={() => toggleSection("kitchen")}>
               {NAV_COACH_KITCHEN.map((item) => (
                 <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
@@ -258,6 +260,7 @@ export default function Layout() {
         {!isEscort && isAdmin && (
           <>
             <SystemGroup label="Attendance" tone="cyan" icon={ClipboardCheck}
+                         count={NAV_ATTENDANCE_LIVE.length + NAV_ATTENDANCE_MASTERS.length}
                          open={isOpen("attendance")} onToggle={() => toggleSection("attendance")}>
               {NAV_ATTENDANCE_LIVE.map((item) => {
                 // Synthetic key `approvals_page` sums only the queues that the
@@ -295,6 +298,7 @@ export default function Layout() {
             </SystemGroup>
 
             <SystemGroup label="Kitchen" tone="amber" icon={ChefHat}
+                         count={NAV_KITCHEN.length}
                          open={isOpen("kitchen")} onToggle={() => toggleSection("kitchen")}>
               {NAV_KITCHEN.map((item) => (
                 <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
@@ -302,6 +306,7 @@ export default function Layout() {
             </SystemGroup>
 
             <SystemGroup label="System" tone="slate" icon={Settings}
+                         count={NAV_SYSTEM.length}
                          open={isOpen("system")} onToggle={() => toggleSection("system")}>
               {NAV_SYSTEM.map((item) => (
                 <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
@@ -395,11 +400,16 @@ export default function Layout() {
   );
 }
 
-function SystemGroup({ label, tone = "cyan", icon: Icon, open, onToggle, children }) {
+function SystemGroup({ label, tone = "cyan", icon: Icon, open, onToggle, count, children }) {
   // "System group" — top-level colour-coded container that houses one
   // whole subsystem (Attendance / Kitchen / System). A thin left border
   // in the accent colour visually ties every item inside the group
   // back to its section header. Aug 2026 sidebar reorg.
+  //
+  // `count` is rendered as a small pill next to the label ONLY when
+  // the section is collapsed — a cue added after an admin accidentally
+  // collapsed Attendance and thought Manage Members / Dashboard etc.
+  // had vanished (Feb 2026 support ticket).
   const rail =
     tone === "amber" ? "border-amber-400/60"
     : tone === "slate" ? "border-slate-500/50"
@@ -411,13 +421,14 @@ function SystemGroup({ label, tone = "cyan", icon: Icon, open, onToggle, childre
   return (
     <div className={`mt-3 rounded-md border-l-2 ${rail} ${bgTint} pl-1.5 pr-0.5 py-1`}
          data-testid={`sysgroup-${label.toLowerCase()}`}>
-      <SectionHeader label={label} open={open} onToggle={onToggle} tone={tone} icon={Icon} />
+      <SectionHeader label={label} open={open} onToggle={onToggle} tone={tone} icon={Icon}
+                     hiddenCount={!open && typeof count === "number" ? count : null} />
       {open && <div className="pl-1 pt-1">{children}</div>}
     </div>
   );
 }
 
-function SectionHeader({ label, open, onToggle, tone = "cyan", icon: Icon }) {
+function SectionHeader({ label, open, onToggle, tone = "cyan", icon: Icon, hiddenCount }) {
   // Collapsible section divider. Chevron indicates state, glow tint
   // matches the sidebar accent — cyan (attendance / member), amber
   // (kitchen), slate (system). Chevron rotation avoids re-rendering
@@ -426,17 +437,30 @@ function SectionHeader({ label, open, onToggle, tone = "cyan", icon: Icon }) {
     tone === "amber" ? "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.45)]"
     : tone === "slate" ? "text-slate-300"
     : "text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.45)]";
+  const pillTint =
+    tone === "amber" ? "bg-amber-400/20 text-amber-100 ring-amber-300/40"
+    : tone === "slate" ? "bg-slate-400/20 text-slate-100 ring-slate-300/40"
+    : "bg-cyan-400/20 text-cyan-100 ring-cyan-300/40";
   return (
     <button
       type="button"
       onClick={onToggle}
       data-testid={`section-${label.toLowerCase()}-toggle`}
       aria-expanded={open}
+      title={hiddenCount ? `${hiddenCount} items hidden — click to expand` : undefined}
       className={`w-full flex items-center gap-1.5 text-[13px] font-black uppercase tracking-widest px-3 py-1.5 hover:bg-white/5 rounded-md transition ${glow}`}
     >
       {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
       {Icon && <Icon size={13} />}
       <span>{label}</span>
+      {hiddenCount ? (
+        <span
+          data-testid={`section-${label.toLowerCase()}-hidden-count`}
+          className={`ml-auto min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold flex items-center justify-center tabular-nums ring-1 ${pillTint}`}
+        >
+          {hiddenCount}
+        </span>
+      ) : null}
     </button>
   );
 }

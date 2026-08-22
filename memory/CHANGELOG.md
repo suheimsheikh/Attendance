@@ -4084,3 +4084,16 @@ call with `_confirmed: true` bypasses the guard.
 **Verified:** testing_agent iteration_37 — 8 new mark-bulk tests +
 11 roster tests + 18 muster regression + 8 legacy meals = **45/45
 green**. Mongo unique index confirmed via index_information().
+
+## 22 Feb 2026 — Sidebar collapse-state UX fix
+- Bug: Admin accidentally collapsed the "Attendance" sidebar section (which
+  syncs across devices via ui_prefs). All 13 admin items (Manage Members,
+  Dashboard, Approvals, The Grid, Leave Balances, Fleets, Categories,
+  Roles, etc.) silently vanished behind a single ▶ arrow — admin thought
+  they'd lost admin access.
+- Fix (`frontend/src/components/Layout.jsx`): every collapsed section now
+  shows an item-count pill (e.g. "ATTENDANCE (13)") and a tooltip
+  "N items hidden — click to expand". Applied to Attendance, Kitchen,
+  System groups for both admin and coach roles.
+- Also reset the affected admin's `ui_prefs.sidebar_collapsed` on the
+  server so their next login shows all sections expanded.
