@@ -15,7 +15,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, TrendingUp, BarChart3, PieChart as PieIcon, ListOrdered, IndianRupee, ShoppingCart, Boxes, Flame, Beef, Wheat, Droplet, Maximize2, X as CloseIcon, ChevronDown, ChevronUp } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell,
+  CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList,
 } from "recharts";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
@@ -274,6 +274,38 @@ function FocusDailyTooltip({ active, payload, label, itemUnitById }) {
   );
 }
 
+// Adaptive value label for the horizontal bar charts (Top items and
+// Top vendors). If the bar is wide enough we paint the value INSIDE
+// the bar in white; otherwise we drop it just to the right in the
+// slate ink so tiny bars still get their number. Added Feb 2026 after
+// user asked to always see amounts on the bars.
+function makeBarValueLabel(formatter, { minInsidePx = 46, offset = 4 } = {}) {
+  return function BarValueLabel(props) {
+    const { x, y, width, height, value } = props;
+    if (value == null) return null;
+    const text = formatter(value);
+    const inside = width >= minInsidePx;
+    const cx = inside ? x + width - offset : x + width + offset;
+    const anchor = inside ? "end" : "start";
+    const fill = inside ? "#ffffff" : "#334155";
+    const fontWeight = inside ? 700 : 600;
+    return (
+      <text
+        x={cx}
+        y={y + height / 2}
+        dy={3}
+        textAnchor={anchor}
+        fill={fill}
+        fontSize={10}
+        fontWeight={fontWeight}
+        style={{ pointerEvents: "none" }}
+      >
+        {text}
+      </text>
+    );
+  };
+}
+
 function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit, onToggleItem, focusedIds }) {
   // Show ALL items sorted desc by the current metric (previously
   // capped at 10). Card body scrolls internally so the strip stays
@@ -297,7 +329,7 @@ function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit, onTog
         <BarChart
           data={rows}
           layout="vertical"
-          margin={{ top: 4, right: 20, left: 4, bottom: 4 }}
+          margin={{ top: 4, right: 56, left: 4, bottom: 4 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => (dataKey === "amount" ? `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}` : v)} />
@@ -325,6 +357,14 @@ function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit, onTog
                 strokeWidth={r._focused ? 2 : 0}
               />
             ))}
+            <LabelList
+              dataKey={dataKey}
+              content={makeBarValueLabel(
+                dataKey === "amount"
+                  ? (v) => `₹${inr(v)}`
+                  : (v) => fmtQty(v),
+              )}
+            />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -395,7 +435,7 @@ function TopVendorsChart({ vendors, testid }) {
     <div className="max-h-[260px] overflow-y-auto pr-1" data-testid={testid}>
       <div style={{ width: "100%", height: innerH }}>
         <ResponsiveContainer>
-          <BarChart data={rows} layout="vertical" margin={{ top: 12, right: 20, left: 4, bottom: 4 }}>
+          <BarChart data={rows} layout="vertical" margin={{ top: 12, right: 68, left: 4, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
             <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 10 }} />
@@ -404,6 +444,10 @@ function TopVendorsChart({ vendors, testid }) {
               {rows.map((r) => (
                 <Cell key={r.vendor_id || r.name} fill={colorFor(r)} />
               ))}
+              <LabelList
+                dataKey="amount"
+                content={makeBarValueLabel((v) => `₹${inr(v)}`)}
+              />
             </Bar>
           </BarChart>
         </ResponsiveContainer>

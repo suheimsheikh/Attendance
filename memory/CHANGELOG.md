@@ -4110,3 +4110,12 @@ green**. Mongo unique index confirmed via index_information().
   every session.
 - Renamed sidebar item "Pantry Stock" → **Stock/Purchases** (and the
   matching page header on `/admin/meals-report`).
+
+## 22 Feb 2026 — Bar value labels
+- Every bar in the "Top items by ₹", "Top items by qty" and "Top vendors
+  by ₹" horizontal bar charts now carries its value. Adaptive placement:
+  wide bars get the value painted INSIDE in white bold; thin bars get
+  it painted just to the right in slate ink so tiny bars are still
+  legible without hovering.
+- Reserved extra right-margin (56–68px) so overflow labels fit inside
+  the chart area.
