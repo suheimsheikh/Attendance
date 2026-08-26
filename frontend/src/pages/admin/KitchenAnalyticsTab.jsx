@@ -867,7 +867,7 @@ function PantryDayModal({ date, kind, accent, onClose }) {
         <div className={`px-5 py-3 flex items-center gap-2 shrink-0 text-white ${headerBg}`}>
           <ListOrdered size={18} />
           <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-widest opacity-80">{isPurchase ? "Purchases" : "Consumption"}</div>
+            <div className="text-[10px] uppercase tracking-widest opacity-80">{isPurchase ? "Purchases" : "Issues"}</div>
             <div className="font-black text-lg truncate">{dateLabel}</div>
           </div>
           <div className="ml-auto" />
@@ -1023,7 +1023,7 @@ export default function KitchenAnalyticsTab({ liveSig }) {
             first
           />
           <Section
-            title="Consumption"
+            title="Issues"
             subtitle="What was issued to the kitchen (valued at weighted-avg purchase rate)"
             accent="issues"
             data={data.issues}
