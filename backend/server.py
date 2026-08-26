@@ -4196,6 +4196,12 @@ from sms import make_router as _sms_router  # noqa: E402
 app.include_router(_sms_router(db, require_admin))
 
 
+# External (server-to-server) read-only API for the Inventory app.
+# Guarded by X-API-Key header — see routes/external.py. Feb 2026.
+from routes.external import make_router as _external_router  # noqa: E402
+app.include_router(_external_router(db))
+
+
 # Lightweight keep-alive endpoint — no auth, no DB hit. Plug an UptimeRobot
 # (or similar) ping into https://i-showed-up.ychyderabad.com/api/health every
 # 5-10 minutes to prevent any idle-container cold-starts during morning peak.

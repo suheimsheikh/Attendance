@@ -4119,3 +4119,13 @@ green**. Mongo unique index confirmed via index_information().
   legible without hovering.
 - Reserved extra right-margin (56–68px) so overflow labels fit inside
   the chart area.
+
+## 22 Feb 2026 — External read-only API for Inventory app
+- New `routes/external.py` with API-key gated endpoints:
+  - GET `/api/external/health`
+  - GET `/api/external/events`  (all regattas, whitelisted fields)
+  - GET `/api/external/camps`   (all camps, member_ids → member_count)
+- Gated by `X-API-Key` header matching `INVENTORY_API_KEY` env var. If
+  the env var is unset, the whole surface 503s (safe-by-default).
+- Read-only. Member UUIDs never cross the boundary. Rotate the key any
+  time by regenerating INVENTORY_API_KEY and restarting the backend.
