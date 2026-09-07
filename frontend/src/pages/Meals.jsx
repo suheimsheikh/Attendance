@@ -228,8 +228,11 @@ export default function Meals() {
         </p>
       </header>
 
-      {/* Meal switcher */}
-      <div className="grid grid-cols-4 gap-2 mb-3" data-testid="meals-meal-switcher">
+      {/* Meal switcher — 5 slots. Mobile: 3-col grid (Breakfast/Mid/Lunch
+          on row 1, Afternoon/Dinner on row 2) with short labels so
+          "Midmorning Snack" doesn't overflow narrow phones. Desktop:
+          single row of 5 with the full label. */}
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3" data-testid="meals-meal-switcher">
         {meals.map((m) => {
           const active = m.key === meal;
           return (
@@ -238,10 +241,12 @@ export default function Meals() {
               data-testid={`meals-meal-${m.key}`}
               onClick={() => setMeal(m.key)}
               title={`Mark who is having ${m.label?.toLowerCase?.() || m.key} today`}
-              className={`iu-btn ${active ? "iu-btn-primary" : "iu-btn-secondary"} text-xs md:text-sm`}
+              className={`iu-btn ${active ? "iu-btn-primary" : "iu-btn-secondary"} !px-2 !text-xs sm:!text-sm !min-w-0 truncate justify-center`}
               style={active ? { background: MEAL_COLOR[m.key] } : undefined}
             >
-              <Utensils size={14} /> {m.label}
+              <Utensils size={13} className="shrink-0" />
+              <span className="sm:hidden truncate">{m.short || (m.label || "").split(" ")[0]}</span>
+              <span className="hidden sm:inline truncate">{m.label}</span>
             </button>
           );
         })}
