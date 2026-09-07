@@ -32,21 +32,21 @@ export default function GridRowTotals({
     <>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[262px] ${base} border-l-2 border-slate-300 text-emerald-700 ${rowBg} w-[42px] min-w-[42px] max-w-[42px]`}
+        className={`sticky right-[210px] ${base} border-l-2 border-slate-300 text-emerald-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-p-${memberId}`}
         title={`Present · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
       >{t.present || ""}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[220px] ${base} text-red-600 ${rowBg} w-[42px] min-w-[42px] max-w-[42px]`}
+        className={`sticky right-[176px] ${base} text-red-600 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-ab-${memberId}`}
         title={`Absent · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
       >{t.absent || ""}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[178px] ${base} text-amber-700 ${rowBg} w-[42px] min-w-[42px] max-w-[42px] relative`}
+        className={`sticky right-[142px] ${base} text-amber-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px] relative`}
         data-testid={`cal-total-lv-${memberId}`}
         title={t.lop ? `Leave (${t.lop} LOP) · ${attnTitle}` : `Leave · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
@@ -67,28 +67,28 @@ export default function GridRowTotals({
       </td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[136px] ${base} text-orange-700 ${rowBg} w-[42px] min-w-[42px] max-w-[42px]`}
+        className={`sticky right-[108px] ${base} text-orange-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-tr-${memberId}`}
         title={`Tour · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
       >{t.tour || ""}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[84px] ${base} text-violet-800 ${rowBg} w-[52px] min-w-[52px] max-w-[52px]`}
+        className={`sticky right-[68px] ${base} text-violet-800 ${rowBg} w-[40px] min-w-[40px] max-w-[40px]`}
         data-testid={`cal-total-ot-${memberId}`}
         title={`OT hours · ${otTitle}`}
         onDoubleClick={onOpenOt}
       >{fmtOt(t.ot_minutes)}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[42px] ${base} text-rose-700 ${rowBg} w-[42px] min-w-[42px] max-w-[42px]`}
+        className={`sticky right-[34px] ${base} text-rose-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-eo-${memberId}`}
         title={`Early-out days · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
       >{t.early_out || ""}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-0 ${base} text-orange-700 ${rowBg} w-[42px] min-w-[42px] max-w-[42px]`}
+        className={`sticky right-0 ${base} text-orange-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-lt-${memberId}`}
         title={`Late days · ${attnTitle}`}
         onDoubleClick={onOpenAttn}

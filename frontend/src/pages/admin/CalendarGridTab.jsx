@@ -234,8 +234,8 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
           <table className="text-xs border-collapse" data-testid="calendar-grid-table">
             <thead className="sticky top-0 z-30 bg-slate-50">
               <tr>
-                <th className="py-1.5 px-2 text-center sticky left-0 z-40 bg-slate-50 w-10 min-w-[40px] max-w-[40px] border-b border-slate-200 font-semibold text-slate-500 text-[10px] uppercase tracking-wider">#</th>
-                <th className="py-1.5 px-2 text-left sticky left-10 z-40 bg-slate-50 w-[180px] min-w-[180px] max-w-[180px] border-b border-slate-200 font-semibold text-slate-700">Member</th>
+                <th className="py-1.5 px-1 text-center sticky left-0 z-40 bg-slate-50 w-7 min-w-[28px] max-w-[28px] border-b border-slate-200 font-semibold text-slate-500 text-[10px] uppercase tracking-wider">#</th>
+                <th className="py-1.5 px-2 text-left sticky left-[28px] z-40 bg-slate-50 w-[160px] min-w-[160px] max-w-[160px] border-b border-slate-200 font-semibold text-slate-700">Member</th>
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso}
@@ -248,18 +248,18 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 ))}
                 {/* Sticky-right totals headers. Layout (rightmost-first):
                     LT (Late) → EO (Early Out) → OT (mins) → TR → LV → AB → P.
-                    Offsets: LT=0, EO=42, OT=84, TR=136, LV=178, AB=220, P=262. */}
-                <th className="sticky right-[262px] z-40 bg-emerald-100 text-emerald-800 h-6 min-w-[42px] text-center border-b border-l-2 border-slate-300 text-[10px] font-bold" title="Present days (incl. HD + Late)">P</th>
-                <th className="sticky right-[220px] z-40 bg-red-100 text-red-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Absent days">AB</th>
-                <th className="sticky right-[178px] z-40 bg-amber-100 text-amber-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Leave + Comp-off days">LV</th>
-                <th className="sticky right-[136px] z-40 bg-orange-200 text-orange-800 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Tour days">TR</th>
-                <th className="sticky right-[84px] z-40 bg-violet-100 text-violet-800 h-6 min-w-[52px] text-center border-b border-slate-200 text-[10px] font-bold" title="Overtime hours accumulated (early arrival + late departure)">OT h</th>
-                <th className="sticky right-[42px] z-40 bg-rose-100 text-rose-700 h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Early-out days this month (checked out ≥15m before end time)">EO</th>
-                <th className="sticky right-0 z-40 bg-orange-500/90 text-white h-6 min-w-[42px] text-center border-b border-slate-200 text-[10px] font-bold" title="Late days this month (subset of Present)">LT</th>
+                    Offsets: LT=0, EO=34, OT=68, TR=108, LV=142, AB=176, P=210. */}
+                <th className="sticky right-[210px] z-40 bg-emerald-100 text-emerald-800 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l-2 border-slate-300 text-[10px] font-bold" title="Present days (incl. HD + Late)">P</th>
+                <th className="sticky right-[176px] z-40 bg-red-100 text-red-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-slate-200 text-[10px] font-bold" title="Absent days">AB</th>
+                <th className="sticky right-[142px] z-40 bg-amber-100 text-amber-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-slate-200 text-[10px] font-bold" title="Leave + Comp-off days">LV</th>
+                <th className="sticky right-[108px] z-40 bg-orange-200 text-orange-800 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-slate-200 text-[10px] font-bold" title="Tour days">TR</th>
+                <th className="sticky right-[68px] z-40 bg-violet-100 text-violet-800 h-6 w-[40px] min-w-[40px] max-w-[40px] text-center border-b border-slate-200 text-[10px] font-bold" title="Overtime hours accumulated (early arrival + late departure)">OT h</th>
+                <th className="sticky right-[34px] z-40 bg-rose-100 text-rose-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-slate-200 text-[10px] font-bold" title="Early-out days this month (checked out ≥15m before end time)">EO</th>
+                <th className="sticky right-0 z-40 bg-orange-500/90 text-white h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-slate-200 text-[10px] font-bold" title="Late days this month (subset of Present)">LT</th>
               </tr>
               <tr>
-                <th className="py-0.5 sticky left-0 z-40 bg-slate-50 w-10 min-w-[40px] max-w-[40px] border-b border-slate-200"></th>
-                <th className="py-0.5 px-2 sticky left-10 z-40 bg-slate-50 w-[180px] min-w-[180px] max-w-[180px] text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">Name / Rank</th>
+                <th className="py-0.5 sticky left-0 z-40 bg-slate-50 w-7 min-w-[28px] max-w-[28px] border-b border-slate-200"></th>
+                <th className="py-0.5 px-2 sticky left-[28px] z-40 bg-slate-50 w-[160px] min-w-[160px] max-w-[160px] text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">Name / Rank</th>
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso + "-dow"}
@@ -269,12 +269,12 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                   </th>
                 ))}
                 {/* Sticky-right total sub-labels */}
-                <th className="sticky right-[262px] z-40 bg-emerald-50 h-4 text-[8px] uppercase font-semibold text-emerald-700 border-b border-l-2 border-slate-300 text-center">Total</th>
-                <th className="sticky right-[220px] z-40 bg-red-50 h-4 text-[8px] uppercase font-semibold text-red-600 border-b border-slate-200 text-center">Total</th>
-                <th className="sticky right-[178px] z-40 bg-amber-50 h-4 text-[8px] uppercase font-semibold text-amber-700 border-b border-slate-200 text-center">Total</th>
-                <th className="sticky right-[136px] z-40 bg-orange-100 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-slate-200 text-center">Total</th>
-                <th className="sticky right-[84px] z-40 bg-violet-50 h-4 text-[8px] uppercase font-semibold text-violet-700 border-b border-slate-200 text-center">Sum</th>
-                <th className="sticky right-[42px] z-40 bg-rose-50 h-4 text-[8px] uppercase font-semibold text-rose-700 border-b border-slate-200 text-center">Days</th>
+                <th className="sticky right-[210px] z-40 bg-emerald-50 h-4 text-[8px] uppercase font-semibold text-emerald-700 border-b border-l-2 border-slate-300 text-center">Total</th>
+                <th className="sticky right-[176px] z-40 bg-red-50 h-4 text-[8px] uppercase font-semibold text-red-600 border-b border-slate-200 text-center">Total</th>
+                <th className="sticky right-[142px] z-40 bg-amber-50 h-4 text-[8px] uppercase font-semibold text-amber-700 border-b border-slate-200 text-center">Total</th>
+                <th className="sticky right-[108px] z-40 bg-orange-100 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-slate-200 text-center">Total</th>
+                <th className="sticky right-[68px] z-40 bg-violet-50 h-4 text-[8px] uppercase font-semibold text-violet-700 border-b border-slate-200 text-center">Sum</th>
+                <th className="sticky right-[34px] z-40 bg-rose-50 h-4 text-[8px] uppercase font-semibold text-rose-700 border-b border-slate-200 text-center">Days</th>
                 <th className="sticky right-0 z-40 bg-orange-100 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-slate-200 text-center">Days</th>
               </tr>
             </thead>
@@ -361,12 +361,12 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                     <tr className={`${rowBg} hover:bg-sky-50 group transition-colors`} data-testid={`calendar-row-${r.member_id}`}>
                       <td
                         rowSpan={isDouble ? 2 : 1}
-                        className={`py-1 px-2 text-center text-[11px] text-slate-500 tabular-nums sticky left-0 z-20 w-10 min-w-[40px] max-w-[40px] ${rowBg} group-hover:bg-sky-50 border-b border-slate-100`}
+                        className={`py-1 px-1 text-center text-[11px] text-slate-500 tabular-nums sticky left-0 z-20 w-7 min-w-[28px] max-w-[28px] ${rowBg} group-hover:bg-sky-50 border-b border-slate-100`}
                         data-testid={`calendar-serial-${r.member_id}`}
                       >{i + 1}</td>
                       <td
                         rowSpan={isDouble ? 2 : 1}
-                        className={`py-1 px-2 font-semibold text-slate-800 sticky left-10 z-20 w-[180px] min-w-[180px] max-w-[180px] ${rowBg} group-hover:bg-sky-50 border-b border-slate-100 cursor-pointer select-none`}
+                        className={`py-1 px-2 font-semibold text-slate-800 sticky left-[28px] z-20 w-[160px] min-w-[160px] max-w-[160px] ${rowBg} group-hover:bg-sky-50 border-b border-slate-100 cursor-pointer select-none`}
                         onDoubleClick={() => setEditingMemberId(r.member_id)}
                         title="Double-click to edit member"
                         data-testid={`calendar-name-${r.member_id}`}

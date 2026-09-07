@@ -4129,3 +4129,16 @@ green**. Mongo unique index confirmed via index_information().
   the env var is unset, the whole surface 503s (safe-by-default).
 - Read-only. Member UUIDs never cross the boundary. Rotate the key any
   time by regenerating INVENTORY_API_KEY and restarting the backend.
+
+## 30 Jun 2026 — Calendar Grid: reveal days 30/31 (resize)
+- User report: days 30 & 31 rendered half-cut at the right edge of the
+  monthly Calendar Grid (Reports → Calendar Grid).
+- Fix (CSS only, no backend): freed ~72px of horizontal room for the
+  day columns by shrinking the sticky-left serial (# ) column
+  40px → 28px and the sticky-right totals strip 304px → 244px
+  (each total 42px → 34px, OT 52px → 40px). Member name column
+  180px → 160px.
+- Kept sticky offsets in sync across all three points: header row,
+  sub-header (weekday/label) row, and body totals (GridRowTotals.jsx).
+  New right offsets: LT=0, EO=34, OT=68, TR=108, LV=142, AB=176, P=210.
+- Files: `CalendarGridTab.jsx`, `calendar-grid/GridRowTotals.jsx`.
