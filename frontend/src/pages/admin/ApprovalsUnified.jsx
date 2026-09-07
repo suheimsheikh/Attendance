@@ -982,7 +982,86 @@ const STATUS_TONE = {
   rejected: "bg-slate-200 text-slate-700",
 };
 
+function computeHistoryStats(rows) {
+  let approved = 0, rejected = 0, lop = 0, tSum = 0, tN = 0;
+  for (const l of rows) {
+    if (l.status === "approved") approved++;
+    else if (l.status === "rejected") rejected++;
+    if (typeof l.lop_days === "number") lop += l.lop_days;
+    if (l.created_at && l.decided_at) {
+      const ms = new Date(l.decided_at).getTime() - new Date(l.created_at).getTime();
+      if (Number.isFinite(ms) && ms >= 0) { tSum += ms; tN++; }
+    }
+  }
+  const avgMs = tN ? tSum / tN : 0;
+  const avgH = avgMs / 3600000;
+  return {
+    total: rows.length,
+    approved, rejected, lop: round1(lop),
+    avgTurnaround: avgH >= 24 ? `${(avgH / 24).toFixed(1)}d` : (avgH >= 1 ? `${avgH.toFixed(1)}h` : `${Math.round(avgMs / 60000)}m`),
+  };
+}
+
+function csvEscape(v) {
+  if (v == null) return "";
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function downloadDecisionHistoryCsv(rows) {
+  const header = ["Member","Category","Type","Half day","Start","End","Days","Applied on",
+    "Reason for applying","Status","Decided by","Decided on","Turnaround",
+    "Denial reason","LOP override","Balance @ decision","Applied YTD","Denied YTD","LOP days"];
+  const lines = [header.map(csvEscape).join(",")];
+  for (const l of rows) {
+    const days = l.half_day ? 0.5 : (daysBetween(l.start_date, l.end_date) ?? "");
+    const bal = l.balance_at_decision;
+    const balTotal = bal ? round1((bal.paid_leave_available || 0) + (bal.comp_off_available || 0)) : "";
+    lines.push([
+      l.member_name || "", l.member_category || "",
+      (l.type || "").toUpperCase(), l.half_day || "",
+      l.start_date || "", l.end_date || "", days,
+      l.created_at ? l.created_at.slice(0, 10) : "",
+      l.reason || "", l.status || "",
+      l.decided_by || "",
+      l.decided_at ? l.decided_at.slice(0, 10) : "",
+      fmtTurnaround(l.created_at, l.decided_at),
+      l.denial_reason || "", l.approval_override_reason || "",
+      balTotal,
+      typeof l.ytd_applied_days === "number" ? l.ytd_applied_days : "",
+      typeof l.ytd_denied_days === "number" ? l.ytd_denied_days : "",
+      typeof l.lop_days === "number" ? l.lop_days : "",
+    ].map(csvEscape).join(","));
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `leave-decisions-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function StatPill({ label, value, tone = "slate", testid }) {
+  const toneMap = {
+    slate: "bg-white text-slate-900 border-slate-200",
+    emerald: "bg-emerald-50 text-emerald-900 border-emerald-200",
+    rose: "bg-rose-50 text-rose-900 border-rose-200",
+    amber: "bg-amber-50 text-amber-900 border-amber-200",
+    violet: "bg-violet-50 text-violet-900 border-violet-200",
+  };
+  return (
+    <div className={`px-3 py-1.5 rounded-md border ${toneMap[tone]}`} data-testid={testid}>
+      <div className="text-[10px] uppercase tracking-wider font-bold opacity-70">{label}</div>
+      <div className="text-lg font-extrabold tabular-nums leading-none mt-0.5">{value}</div>
+    </div>
+  );
+}
+
 function DecisionHistoryLeaves({ rows, onReopen }) {
+  const stats = computeHistoryStats(rows);
   if (!rows || rows.length === 0) {
     return (
       <div className="mt-6" data-testid="decision-history-empty">
@@ -998,128 +1077,153 @@ function DecisionHistoryLeaves({ rows, onReopen }) {
   }
   return (
     <div className="mt-6" data-testid="decision-history">
-      <div className="flex items-center gap-2 mb-2 text-slate-500">
+      <div className="flex items-center gap-2 mb-2 text-slate-500 flex-wrap">
         <History size={14} />
         <h2 className="text-sm font-extrabold uppercase tracking-wider">Decision history — Leaves</h2>
         <span className="text-[11px] normal-case tracking-normal text-slate-400">
-          (latest on top — {rows.length} decision{rows.length === 1 ? "" : "s"})
+          (latest on top)
         </span>
-      </div>
-      <div className="iu-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[1400px]" data-testid="decision-history-table">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider">
-              <tr>
-                <th className="py-2 px-3 text-left">Member</th>
-                <th className="py-2 px-3 text-left">Type</th>
-                <th className="py-2 px-3 text-left whitespace-nowrap">From → To</th>
-                <th className="py-2 px-3 text-right w-14">Days</th>
-                <th className="py-2 px-3 text-left w-24 whitespace-nowrap">Applied on</th>
-                <th className="py-2 px-3 text-left">Reason for applying</th>
-                <th className="py-2 px-3 text-left w-24">Status</th>
-                <th className="py-2 px-3 text-left">Decided by</th>
-                <th className="py-2 px-3 text-left w-24 whitespace-nowrap">Decided on</th>
-                <th className="py-2 px-3 text-left w-20" title="Time between application and decision">Turnaround</th>
-                <th className="py-2 px-3 text-left">Denial reason</th>
-                <th className="py-2 px-3 text-right w-24" title="Applicant's paid-leave + comp-off pool at decision time">Bal @ decision</th>
-                <th className="py-2 px-3 text-right w-20" title="Total days applied this cycle">Applied (YTD)</th>
-                <th className="py-2 px-3 text-right w-20" title="Total days denied this cycle">Denied (YTD)</th>
-                <th className="py-2 px-3 text-right w-20">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((l) => {
-                const days = daysBetween(l.start_date, l.end_date);
-                const bal = l.balance_at_decision;
-                const balTotal = bal
-                  ? round1((bal.paid_leave_available || 0) + (bal.comp_off_available || 0))
-                  : null;
-                const statusTone = STATUS_TONE[l.status] || "bg-slate-100 text-slate-700";
-                return (
-                  <tr
-                    key={l.id}
-                    data-testid={`history-row-${l.id}`}
-                    className="border-b border-slate-100 hover:bg-sky-50/40"
-                  >
-                    <td className="py-2 px-3">
-                      <div className="font-semibold text-slate-800">{l.member_name}</div>
-                      <div className="text-xs text-slate-500">
-                        {l.member_rank ? `${l.member_rank} · ` : ""}{l.member_category}
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="inline-flex items-center px-2 h-5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-800">
-                        {(l.type || "leave").toUpperCase()}
-                      </span>
-                      {l.half_day && (
-                        <div className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 text-[9px] font-extrabold uppercase tracking-wide">
-                          Half · {l.half_day}
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-2 px-3 whitespace-nowrap text-slate-700 font-mono text-xs">
-                      {shortDate(l.start_date)} → {shortDate(l.end_date)}
-                      {l.location && <div className="text-[11px] text-slate-500 font-sans">{l.location}</div>}
-                    </td>
-                    <td className="py-2 px-3 text-right font-mono font-semibold">
-                      {l.half_day ? "0.5" : (days ?? "—")}
-                    </td>
-                    <td className="py-2 px-3 text-xs text-slate-600 whitespace-nowrap">{shortDate(l.created_at)}</td>
-                    <td className="py-2 px-3 text-slate-700 text-xs max-w-[220px]">
-                      <div className="line-clamp-2" title={l.reason}>
-                        {l.reason || <span className="text-slate-300">—</span>}
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className={`inline-flex items-center px-2 h-5 rounded-full text-[11px] font-bold ${statusTone}`}>
-                        {l.status === "approved" ? "Approved" : "Rejected"}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-xs font-semibold text-slate-700">
-                      {l.decided_by || <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="py-2 px-3 text-xs text-slate-600 whitespace-nowrap">
-                      {l.decided_at ? shortDate(l.decided_at) : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="py-2 px-3 text-[11px] font-mono text-slate-600">
-                      {fmtTurnaround(l.created_at, l.decided_at)}
-                    </td>
-                    <td className="py-2 px-3 text-xs text-slate-700 max-w-[240px]">
-                      {l.status === "rejected"
-                        ? (l.denial_reason
-                            ? <div className="line-clamp-2 text-rose-700" title={l.denial_reason}>{l.denial_reason}</div>
-                            : <span className="text-slate-300">—</span>)
-                        : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="py-2 px-3 text-right text-xs font-mono">
-                      {balTotal != null ? (
-                        <span title={`${bal.comp_off_available ?? 0} comp-off + ${bal.paid_leave_available ?? 0} paid leave`}>
-                          {balTotal}
-                        </span>
-                      ) : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="py-2 px-3 text-right text-xs font-mono">
-                      {typeof l.ytd_applied_days === "number" ? l.ytd_applied_days : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="py-2 px-3 text-right text-xs font-mono">
-                      {typeof l.ytd_denied_days === "number" ? l.ytd_denied_days : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="py-2 px-3 text-right">
-                      <button
-                        data-testid={`history-reopen-${l.id}`}
-                        onClick={() => onReopen(l.id)}
-                        title="Move this decided request back to pending for a fresh decision"
-                        className="text-[11px] text-slate-500 hover:text-slate-800 hover:underline"
-                      >
-                        Re-open
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="ml-auto">
+          <button
+            type="button"
+            data-testid="history-export-csv"
+            onClick={() => downloadDecisionHistoryCsv(rows)}
+            className="iu-btn-secondary !h-8 !px-3 !text-xs"
+            title="Download all decisions in this view as CSV"
+          >
+            Download CSV
+          </button>
         </div>
+      </div>
+
+      {/* Violet-tinted "history box" so admins can tell at a glance
+          they're looking at decided rows, not the pending queue above. */}
+      <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3" data-testid="history-box">
+        {/* Stats strip at the top of the history box. */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3" data-testid="history-stats">
+          <StatPill testid="stat-total"     label="Total"       value={stats.total}         tone="violet" />
+          <StatPill testid="stat-approved"  label="Approved"    value={stats.approved}      tone="emerald" />
+          <StatPill testid="stat-rejected"  label="Rejected"    value={stats.rejected}      tone="rose" />
+          <StatPill testid="stat-lop"       label="LOP days"    value={stats.lop || 0}      tone="amber" />
+          <StatPill testid="stat-avg"       label="Avg turnaround" value={stats.avgTurnaround} tone="slate" />
+        </div>
+
+        <div className="rounded-md bg-white border border-violet-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px] table-fixed" data-testid="decision-history-table">
+              <colgroup>
+                <col style={{ width: "13%" }} />{/* Member */}
+                <col style={{ width: "6%"  }} />{/* Type */}
+                <col style={{ width: "12%" }} />{/* Dates */}
+                <col style={{ width: "4%"  }} />{/* Days */}
+                <col style={{ width: "14%" }} />{/* Reason applied */}
+                <col style={{ width: "6%"  }} />{/* Status */}
+                <col style={{ width: "12%" }} />{/* Decided (by/on) */}
+                <col style={{ width: "6%"  }} />{/* Turnaround */}
+                <col style={{ width: "15%" }} />{/* Denial / Override */}
+                <col style={{ width: "4%"  }} />{/* Bal */}
+                <col style={{ width: "4%"  }} />{/* YTD app */}
+                <col style={{ width: "4%"  }} />{/* YTD den */}
+              </colgroup>
+              <thead className="bg-violet-100/60 border-b border-violet-200 text-violet-900 text-[10px] uppercase tracking-wider">
+                <tr>
+                  <th className="py-1.5 px-2 text-left">Member</th>
+                  <th className="py-1.5 px-2 text-left">Type</th>
+                  <th className="py-1.5 px-2 text-left">Dates</th>
+                  <th className="py-1.5 px-2 text-right">Days</th>
+                  <th className="py-1.5 px-2 text-left">Reason</th>
+                  <th className="py-1.5 px-2 text-left">Status</th>
+                  <th className="py-1.5 px-2 text-left" title="Decided by · Decided on">Decided</th>
+                  <th className="py-1.5 px-2 text-left" title="Applied → Decided">T/A</th>
+                  <th className="py-1.5 px-2 text-left" title="Denial reason or LOP override note">Note</th>
+                  <th className="py-1.5 px-2 text-right" title="Balance at decision (paid + comp)">Bal</th>
+                  <th className="py-1.5 px-2 text-right" title="YTD days applied">A</th>
+                  <th className="py-1.5 px-2 text-right" title="YTD days denied">D</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((l) => {
+                  const days = daysBetween(l.start_date, l.end_date);
+                  const bal = l.balance_at_decision;
+                  const balTotal = bal
+                    ? round1((bal.paid_leave_available || 0) + (bal.comp_off_available || 0))
+                    : null;
+                  const statusTone = STATUS_TONE[l.status] || "bg-slate-100 text-slate-700";
+                  const note = l.status === "rejected"
+                    ? l.denial_reason
+                    : l.approval_override_reason;
+                  const noteTone = l.status === "rejected" ? "text-rose-700" : "text-amber-700";
+                  return (
+                    <tr
+                      key={l.id}
+                      data-testid={`history-row-${l.id}`}
+                      className="border-b border-violet-100/60 hover:bg-violet-50/50"
+                      onDoubleClick={() => onReopen(l.id)}
+                      title="Double-click to re-open"
+                    >
+                      <td className="py-1.5 px-2 truncate">
+                        <div className="font-semibold text-slate-800 truncate">{l.member_name}</div>
+                        <div className="text-[10px] text-slate-500 truncate">{l.member_category || ""}</div>
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <span className="inline-block px-1.5 h-4 leading-4 rounded text-[9px] font-bold uppercase bg-amber-100 text-amber-800">
+                          {(l.type || "leave").slice(0, 4).toUpperCase()}
+                        </span>
+                        {l.half_day && (
+                          <div className="mt-0.5 text-[9px] font-bold text-sky-700">½ · {l.half_day}</div>
+                        )}
+                      </td>
+                      <td className="py-1.5 px-2 whitespace-nowrap font-mono text-[10px] text-slate-700">
+                        {shortDate(l.start_date)}
+                        {l.end_date && l.end_date !== l.start_date && <> → {shortDate(l.end_date)}</>}
+                        <div className="text-[9px] text-slate-400">app {shortDate(l.created_at)}</div>
+                      </td>
+                      <td className="py-1.5 px-2 text-right font-mono font-semibold tabular-nums">
+                        {l.half_day ? "0.5" : (days ?? "—")}
+                      </td>
+                      <td className="py-1.5 px-2 text-[11px] text-slate-700">
+                        <div className="line-clamp-2" title={l.reason}>
+                          {l.reason || <span className="text-slate-300">—</span>}
+                        </div>
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <span className={`inline-block px-1.5 h-4 leading-4 rounded-full text-[10px] font-bold ${statusTone}`}>
+                          {l.status === "approved" ? "OK" : "REJ"}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-2 text-[11px] text-slate-700">
+                        <div className="truncate" title={l.decided_by || ""}>{l.decided_by || <span className="text-slate-300">—</span>}</div>
+                        <div className="text-[10px] text-slate-500 whitespace-nowrap">{l.decided_at ? shortDate(l.decided_at) : ""}</div>
+                      </td>
+                      <td className="py-1.5 px-2 text-[10px] font-mono text-slate-600 whitespace-nowrap">
+                        {fmtTurnaround(l.created_at, l.decided_at)}
+                      </td>
+                      <td className="py-1.5 px-2 text-[11px]">
+                        {note
+                          ? <div className={`line-clamp-2 ${noteTone}`} title={note}>{note}</div>
+                          : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="py-1.5 px-2 text-right text-[11px] font-mono tabular-nums">
+                        {balTotal != null
+                          ? <span title={`${bal.comp_off_available ?? 0} comp + ${bal.paid_leave_available ?? 0} paid`}>{balTotal}</span>
+                          : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="py-1.5 px-2 text-right text-[11px] font-mono tabular-nums">
+                        {typeof l.ytd_applied_days === "number" ? l.ytd_applied_days : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="py-1.5 px-2 text-right text-[11px] font-mono tabular-nums">
+                        {typeof l.ytd_denied_days === "number" ? l.ytd_denied_days : <span className="text-slate-300">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <p className="mt-2 text-[10px] text-violet-800/70">
+          Double-click any row to re-open it. Hover cells for full text — long values are truncated to fit.
+        </p>
       </div>
     </div>
   );
