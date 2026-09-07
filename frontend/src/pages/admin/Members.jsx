@@ -150,7 +150,11 @@ export default function Members() {
       return true;
     };
     const base = filterEx(members, showEx).filter(passesOtherThanBucket);
-    const c = { all: base.length, coach: 0, staff: 0, executive: 0, athlete: 0, elite: 0 };
+    // `all` should stay a stable anchor — the TOTAL count of active
+    // (non-ex) members, unchanged by any pill. Otherwise clicking
+    // "Admin role" made "All" flip from 121 → 9, which looked like
+    // the whole roster had shrunk (user report, Feb 2026).
+    const c = { all: filterEx(members, showEx).length, coach: 0, staff: 0, executive: 0, athlete: 0, elite: 0 };
     // Admin / Chef role pills are computed IGNORING the current admin /
     // chef toggle (they're a self-referential filter). Uses the same
     // search / institution / bucket filters otherwise so the number
