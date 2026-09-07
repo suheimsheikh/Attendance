@@ -122,74 +122,34 @@ export default function Members() {
   useEffect(() => { load(); }, [load]);
 
   const counts = useMemo(() => {
-    // Faceted counts — every pill shows how many rows would appear if
-    // it were the active bucket, factoring in every OTHER filter that
-    // is currently on (ex-members, search, institution, admin/chef).
-    // Before this rewrite the pills showed absolute totals, which lied
-    // when combined with Institution / search filters — e.g. "Coaches
-    // 11" but clicking it showed only 3 rows because the Institution
-    // filter was on. 20 Feb 2026 chef report: "grossly dysfunctional."
-    const q = search.trim().toLowerCase();
-    const passesOtherThanBucket = (m) => {
-      if (onlyAdmins || onlyChefs) {
-        const okAdmin = onlyAdmins && m.role === "admin";
-        const okChef = onlyChefs && m.role === "chef";
-        if (!(okAdmin || okChef)) return false;
-      }
-      if (instFilter && m.institution !== instFilter) return false;
-      if (q) {
-        const hay = [
-          (m.full_name || "").toLowerCase(),
-          (m.email || "").toLowerCase(),
-          (m.rank || "").toLowerCase(),
-          m.mobile || "",
-          (m.institution || "").toLowerCase(),
-        ];
-        if (!hay.some((s) => s.includes(q))) return false;
-      }
-      return true;
-    };
-    const base = filterEx(members, showEx).filter(passesOtherThanBucket);
-    // `all` should stay a stable anchor — the TOTAL count of active
-    // (non-ex) members, unchanged by any pill. Otherwise clicking
-    // "Admin role" made "All" flip from 121 → 9, which looked like
-    // the whole roster had shrunk (user report, Feb 2026).
-    const c = { all: filterEx(members, showEx).length, coach: 0, staff: 0, executive: 0, athlete: 0, elite: 0 };
-    // Admin / Chef role pills are computed IGNORING the current admin /
-    // chef toggle (they're a self-referential filter). Uses the same
-    // search / institution / bucket filters otherwise so the number
-    // reflects what a fresh click would produce.
-    const roleBaseSource = filterEx(members, showEx);
-    const passesRoleContext = (m) => {
-      if (bucket !== "all" && bucketOf(m) !== bucket) return false;
-      if (instFilter && m.institution !== instFilter) return false;
-      if (q) {
-        const hay = [
-          (m.full_name || "").toLowerCase(),
-          (m.email || "").toLowerCase(),
-          (m.rank || "").toLowerCase(),
-          m.mobile || "",
-          (m.institution || "").toLowerCase(),
-        ];
-        if (!hay.some((s) => s.includes(q))) return false;
-      }
-      return true;
-    };
+    // Pill counts are STABLE — each shows the total for that bucket
+    // or role across the (non-ex) roster, independent of every other
+    // filter. Users read the counts as "table of contents": always
+    // there, never shrinking. Only the row list narrows on click.
+    // (Previous "faceted counts" iteration confused admins into
+    // thinking the roster itself had shrunk — Feb 2026 rewrite.)
+    // Feb 2026 · UX rework — every pill count is now STABLE: it
+    // reflects the total in that bucket / role across the roster,
+    // ignoring the currently-active pills. Users found the earlier
+    // "faceted counts" (Coach shows how many coaches remain if you
+    // click Chef) confusing — they read the pill numbers as the
+    // roster shrinking. Stable counts make the pills act like a
+    // table of contents: always visible, always the same, and only
+    // the row list narrows on click.
+    const active = filterEx(members, showEx);
+    const c = { all: active.length, coach: 0, staff: 0, executive: 0, athlete: 0, elite: 0 };
     let adminCount = 0;
     let chefCount = 0;
-    for (const m of base) {
+    for (const m of active) {
       const b = bucketOf(m);
       if (c[b] !== undefined) c[b] += 1;
-    }
-    for (const m of roleBaseSource) {
-      if (!passesRoleContext(m)) continue;
       if (m.role === "admin") adminCount += 1;
       if (m.role === "chef") chefCount += 1;
     }
     c.admin = adminCount;
     c.chef = chefCount;
     return c;
-  }, [members, showEx, search, bucket, onlyAdmins, onlyChefs, instFilter]);
+  }, [members, showEx]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -409,7 +369,20 @@ export default function Members() {
 
       <MemberBucketFilters
         bucket={bucket}
-        onBucketChange={setBucket}
+        // Feb 2026 · UX fix — clicking ALL now clears the orthogonal
+        // Admin/Chef/Institution filters in addition to the bucket, so
+        // "All" actually means "show me every active member" (matching
+        // the count on the pill). Choosing any other bucket keeps the
+        // role toggles because those are legitimate intersections
+        // (e.g. Coaches AND admins).
+        onBucketChange={(next) => {
+          setBucket(next);
+          if (next === "all") {
+            setOnlyAdmins(false);
+            setOnlyChefs(false);
+            setInstFilter("");
+          }
+        }}
         counts={counts}
         onlyAdmins={onlyAdmins}
         onAdminToggle={() => setOnlyAdmins((v) => !v)}
