@@ -26,6 +26,7 @@ import MealMastersTab from "./MealMastersTab";
 import MealCrossCheckTab from "./MealCrossCheckTab";
 import MealVendorsTab from "./MealVendorsTab";
 import KitchenAnalyticsTab from "./KitchenAnalyticsTab";
+import ProcurementPlanTab from "./ProcurementPlanTab";
 import { useEscape } from "../../hooks/useEscape";
 
 const MEAL_ORDER = ["breakfast", "lunch", "snacks", "dinner"];
@@ -508,6 +509,7 @@ export default function MealsReport() {
     { key: "monthly",   label: "Monthly grid",  Icon: CalendarDays, hint: "Month-long meal count audit grid" },
     { key: "expenses",  label: "Expense report", Icon: IndianRupee, hint: "Category-wise purchase spend for the accountant" },
     { key: "analytics", label: "Analytics",      Icon: PieChart, hint: "Kitchen graphics panel — purchase/consumption trends, top items, category share" },
+    { key: "procurement", label: "Procurement plan", Icon: ClipboardList, hint: "Suggested monthly buy list per item based on historical average consumption × horizon − current stock + buffer" },
     { key: "vendors",   label: "Vendors",       Icon: Store, hint: "Suppliers you can attribute purchase lines to — name and phone" },
   ];
   return (
@@ -566,6 +568,7 @@ export default function MealsReport() {
       {tab === "masters" && <MealMastersTab liveSig={liveSig} />}
       {tab === "vendors" && <MealVendorsTab liveSig={liveSig} />}
       {tab === "analytics" && <KitchenAnalyticsTab liveSig={liveSig} />}
+      {tab === "procurement" && <ProcurementPlanTab liveSig={liveSig} />}
       </div>
     </div>
   );

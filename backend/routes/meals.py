@@ -2576,6 +2576,176 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "low_count": sum(1 for r in rows if r["low"]),
                 "categories": cats, "units": list(VALID_UNITS)}
 
+    @router.get("/meals/procurement-plan")
+    async def procurement_plan(
+        horizon_days: int = Query(30, ge=1, le=180),
+        history_days: int = Query(90, ge=7, le=365),
+        buffer_pct: float = Query(20.0, ge=0.0, le=100.0),
+        averaging: str = Query("median", pattern="^(mean|median)$"),
+        as_of: Optional[str] = Query(None),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Suggested monthly-purchase plan per item.
+
+        Formula
+        -------
+            avg_per_day  = <method>(daily issue qty across last `history_days`)
+            est_use      = avg_per_day × horizon_days
+            buffer       = est_use × (buffer_pct / 100)
+            to_buy       = max(0, est_use + buffer − on_hand)
+            est_amount   = to_buy × weighted_avg_rate (from stock report)
+
+        `to_buy` never goes negative — if you already hold more than
+        (est_use + buffer) we just report to_buy = 0 for that item. The
+        UI paints the row anyway so you can see it's over-stocked.
+
+        We also surface each item's "last used vendor" (heaviest supplier
+        across the last `history_days` of purchases) so the frontend can
+        group the plan by vendor and generate one order per supplier.
+        """
+        from datetime import timedelta, date as _date_cls
+
+        as_of_iso = _valid_date(as_of) if as_of else local_date_str(None)
+        as_of_date = _date_cls.fromisoformat(as_of_iso)
+        window_start = (as_of_date - timedelta(days=history_days - 1)).isoformat()
+
+        # 1) Reuse the stock snapshot for on-hand, avg_rate, unit, name.
+        stock_rows, _cats = await _stock_snapshot(as_of_iso)
+        stock_by_id = {r["item_id"]: r for r in stock_rows}
+
+        # 2) Pull daily issue quantities per item across the window so we
+        #    can compute mean / median day-of-consumption. Wastage is
+        #    explicitly EXCLUDED — a spoilage event shouldn't inflate
+        #    procurement. Purchases are also excluded — we only care
+        #    about actual usage.
+        iss_docs = await db.meal_issues.find(
+            {"date": {"$gte": window_start, "$lte": as_of_iso}},
+            {"_id": 0, "date": 1, "lines": 1},
+        ).to_list(5000)
+        # daily[item_id][date_iso] = qty issued that day
+        daily: dict[str, dict[str, float]] = {}
+        for doc in iss_docs:
+            d = doc.get("date")
+            for line in (doc.get("lines") or []):
+                iid = line.get("item_id")
+                q = float(line.get("qty") or 0)
+                if not iid or q <= 0 or not d:
+                    continue
+                by_day = daily.setdefault(iid, {})
+                by_day[d] = by_day.get(d, 0.0) + q
+
+        # Zero-fill missing days so median doesn't get skewed by
+        # only-picking-up-consumption-days. This is the difference
+        # between "avg per usage day" and "avg per calendar day".
+        # Consumers naturally want per-calendar-day so procurement
+        # covers the FULL horizon, not just usage-days.
+        n_days = history_days
+        window_dates: list[str] = []
+        cur = as_of_date - timedelta(days=history_days - 1)
+        while cur <= as_of_date:
+            window_dates.append(cur.isoformat())
+            cur += timedelta(days=1)
+
+        def _avg(series: list[float]) -> float:
+            if not series:
+                return 0.0
+            if averaging == "mean":
+                return sum(series) / len(series)
+            s = sorted(series)
+            mid = len(s) // 2
+            return s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2
+
+        # 3) Top vendor per item over the same window (heaviest spend).
+        purch_docs = await db.meal_purchases.find(
+            {"date": {"$gte": window_start, "$lte": as_of_iso}},
+            {"_id": 0, "lines": 1, "vendor_id": 1},
+        ).to_list(5000)
+        vendor_spend: dict[str, dict[str, float]] = {}  # item_id -> {vendor_id: amount}
+        for doc in purch_docs:
+            doc_vendor = doc.get("vendor_id")
+            for line in (doc.get("lines") or []):
+                iid = line.get("item_id")
+                if not iid:
+                    continue
+                amt = float(line.get("qty") or 0) * float(line.get("rate") or 0)
+                vid = line.get("vendor_id") or doc_vendor
+                if not vid:
+                    continue
+                vendor_spend.setdefault(iid, {})[vid] = vendor_spend.get(iid, {}).get(vid, 0.0) + amt
+        # Resolve vendor names in one query
+        vendor_ids_all = {vid for vmap in vendor_spend.values() for vid in vmap.keys()}
+        vendor_name = {}
+        if vendor_ids_all:
+            v_rows = await db.meal_vendors.find(
+                {"id": {"$in": list(vendor_ids_all)}},
+                {"_id": 0, "id": 1, "name": 1},
+            ).to_list(len(vendor_ids_all))
+            vendor_name = {v["id"]: v.get("name") for v in v_rows}
+
+        # 4) Compose the plan.
+        plan_rows = []
+        for iid, s in stock_by_id.items():
+            series = [daily.get(iid, {}).get(d, 0.0) for d in window_dates]
+            avg = _avg(series)
+            est_use = avg * horizon_days
+            buf = est_use * (buffer_pct / 100.0)
+            on_hand = float(s.get("on_hand") or 0)
+            to_buy = max(0.0, est_use + buf - on_hand)
+            rate = float(s.get("avg_rate") or 0)
+            est_amount = to_buy * rate
+
+            # Top vendor by spend for this item in the window
+            top_vendor_id = None
+            top_vendor_name = None
+            vmap = vendor_spend.get(iid) or {}
+            if vmap:
+                top_vendor_id = max(vmap.items(), key=lambda kv: kv[1])[0]
+                top_vendor_name = vendor_name.get(top_vendor_id) or "—"
+
+            # Days-of-cover — helps the UI colour-code urgency without
+            # doing this math on the client.
+            days_cover = (on_hand / avg) if avg > 1e-9 else (float("inf") if on_hand > 0 else 0.0)
+
+            plan_rows.append({
+                "item_id": iid,
+                "name": s.get("name"),
+                "unit": s.get("unit"),
+                "category_key": s.get("category_key"),
+                "category_label": s.get("category_label"),
+                "on_hand": round(on_hand, 3),
+                "avg_per_day": round(avg, 3),
+                "est_use": round(est_use, 3),
+                "buffer": round(buf, 3),
+                "to_buy": round(to_buy, 3),
+                "avg_rate": round(rate, 2),
+                "est_amount": round(est_amount, 2),
+                "days_cover": None if days_cover == float("inf") else round(days_cover, 1),
+                "top_vendor_id": top_vendor_id,
+                "top_vendor_name": top_vendor_name,
+            })
+
+        # Sort with most-urgent first so admins see negative / zero
+        # stock at the top. Break ties by est_amount descending so
+        # biggest-spend items sit above the smaller ones.
+        def _urgency(r):
+            oh = r["on_hand"]
+            if oh < 0: return (0, -r["est_amount"])
+            if oh == 0 and r["est_use"] > 0: return (1, -r["est_amount"])
+            if r["days_cover"] is not None and r["days_cover"] < 10 and r["est_use"] > 0: return (2, -r["est_amount"])
+            return (3, -r["est_amount"])
+        plan_rows.sort(key=_urgency)
+
+        total_estimate = round(sum(r["est_amount"] for r in plan_rows), 2)
+        return {
+            "as_of": as_of_iso,
+            "horizon_days": horizon_days,
+            "history_days": history_days,
+            "buffer_pct": buffer_pct,
+            "averaging": averaging,
+            "total_estimate": total_estimate,
+            "rows": plan_rows,
+        }
+
     def _range_or_default(start: Optional[str], end: Optional[str]) -> tuple[str, str]:
         e = _valid_date(end) if end else local_date_str(None)
         s = _valid_date(start) if start else \
