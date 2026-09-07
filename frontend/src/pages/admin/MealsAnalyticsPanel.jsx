@@ -15,7 +15,9 @@ import {
 import { TrendingUp, Calendar as CalIcon, BarChart3, Flame, Trophy, Maximize2, X as CloseIcon, PieChart as PieIcon, Coffee, Sun as SunIcon, Moon as MoonIcon, Loader2, Users } from "lucide-react";
 import { api, showApiError } from "../../api";
 
-const SLOT_COLORS = { Breakfast: "#F59E0B", Lunch: "#F97316", Dinner: "#6366F1" };
+const SLOT_KEYS = ["Breakfast", "Midmorning", "Lunch", "Snacks", "Dinner"];
+const SLOT_COLORS = { Breakfast: "#F59E0B", Midmorning: "#EAB308", Lunch: "#F97316", Snacks: "#8B5CF6", Dinner: "#6366F1" };
+const slotMix = (slots) => slots.map((s) => s.pct).join("·") + "%";
 const EVENT_COLORS = {
   regatta: { fill: "#DC2626", label: "Regatta" },
   camp:    { fill: "#0EA5E9", label: "Camp" },
@@ -90,9 +92,11 @@ function useMetrics(days) {
     const rows = populated.map((d) => ({
       date: d.date,
       label: fmt(d.date),
-      Breakfast: d.breakfast,
-      Lunch: d.lunch,
-      Dinner: d.dinner,
+      Breakfast: d.breakfast || 0,
+      Midmorning: d.midmorning || 0,
+      Lunch: d.lunch || 0,
+      Snacks: d.snacks || 0,
+      Dinner: d.dinner || 0,
       total: d.total,
       dow: new Date(d.date + "T00:00:00").getDay(),
       // `has_muster` is set by the backend when per-person
@@ -104,38 +108,28 @@ function useMetrics(days) {
     }));
 
     // ── Meal-slot totals ──────────────────────────────────────────
-    const bf = rows.reduce((s, r) => s + r.Breakfast, 0);
-    const l  = rows.reduce((s, r) => s + r.Lunch, 0);
-    const dn = rows.reduce((s, r) => s + r.Dinner, 0);
-    const grand = bf + l + dn;
-    const slots = [
-      { key: "Breakfast", value: bf, pct: grand ? Math.round(bf * 100 / grand) : 0 },
-      { key: "Lunch",     value: l,  pct: grand ? Math.round(l  * 100 / grand) : 0 },
-      { key: "Dinner",    value: dn, pct: grand ? Math.round(dn * 100 / grand) : 0 },
-    ];
+    const sums = Object.fromEntries(SLOT_KEYS.map((k) => [k, rows.reduce((s, r) => s + r[k], 0)]));
+    const grand = SLOT_KEYS.reduce((s, k) => s + sums[k], 0);
+    const slots = SLOT_KEYS.map((k) => ({
+      key: k, value: sums[k], pct: grand ? Math.round(sums[k] * 100 / grand) : 0,
+    }));
 
     // ── Day-of-week averages (per meal-slot separately) ──────────
-    const dowAgg = Array(7).fill(0).map(() => ({
-      Breakfast: 0, Lunch: 0, Dinner: 0, days: 0,
-    }));
+    const emptySlots = () => Object.fromEntries(SLOT_KEYS.map((k) => [k, 0]));
+    const dowAgg = Array(7).fill(0).map(() => ({ ...emptySlots(), days: 0 }));
     rows.forEach((r) => {
-      dowAgg[r.dow].Breakfast += r.Breakfast;
-      dowAgg[r.dow].Lunch     += r.Lunch;
-      dowAgg[r.dow].Dinner    += r.Dinner;
+      SLOT_KEYS.forEach((k) => { dowAgg[r.dow][k] += r[k]; });
       dowAgg[r.dow].days += 1;
     });
     // Present as Mon-first order with each meal averaged over the
     // count of days-of-that-weekday actually present in the window.
     const dowRows = [1, 2, 3, 4, 5, 6, 0].map((i) => {
       const n = dowAgg[i].days || 1;
-      return {
-        dow: DOW[i],
-        Breakfast: Math.round(dowAgg[i].Breakfast / n),
-        Lunch:     Math.round(dowAgg[i].Lunch / n),
-        Dinner:    Math.round(dowAgg[i].Dinner / n),
-        days:      dowAgg[i].days,
-        avg:       Math.round((dowAgg[i].Breakfast + dowAgg[i].Lunch + dowAgg[i].Dinner) / n),
-      };
+      const row = { dow: DOW[i], days: dowAgg[i].days };
+      let daySum = 0;
+      SLOT_KEYS.forEach((k) => { row[k] = Math.round(dowAgg[i][k] / n); daySum += dowAgg[i][k]; });
+      row.avg = Math.round(daySum / n);
+      return row;
     });
 
     // ── Monthly totals ────────────────────────────────────────────
@@ -143,10 +137,8 @@ function useMetrics(days) {
     rows.forEach((r) => {
       const [y, m] = r.date.split("-");
       const key = `${MONTH_LABELS[+m - 1]} ${y.slice(-2)}`;
-      const rec = monthMap.get(key) || { month: key, Breakfast: 0, Lunch: 0, Dinner: 0, days: 0 };
-      rec.Breakfast += r.Breakfast;
-      rec.Lunch     += r.Lunch;
-      rec.Dinner    += r.Dinner;
+      const rec = monthMap.get(key) || { month: key, ...emptySlots(), days: 0 };
+      SLOT_KEYS.forEach((k) => { rec[k] += r[k]; });
       rec.days += 1;
       monthMap.set(key, rec);
     });
@@ -159,7 +151,7 @@ function useMetrics(days) {
 
     return {
       rows, slots, dowRows, months, highest, lowest,
-      totals: { Breakfast: bf, Lunch: l, Dinner: dn, grand, days: rows.length,
+      totals: { ...sums, grand, days: rows.length,
                 avgPerDay: rows.length ? Math.round(grand / rows.length) : 0 },
     };
   }, [days]);
@@ -296,9 +288,9 @@ export default function MealsAnalyticsPanel({ days, events }) {
             content={<TrendTooltip />}
           />
           <Legend wrapperStyle={{ fontSize: heightPx > 400 ? 13 : 11 }} />
-          <Line type="monotone" dataKey="Breakfast" stroke={SLOT_COLORS.Breakfast} strokeWidth={1.25} dot={false} />
-          <Line type="monotone" dataKey="Lunch"     stroke={SLOT_COLORS.Lunch}     strokeWidth={1.25} dot={false} />
-          <Line type="monotone" dataKey="Dinner"    stroke={SLOT_COLORS.Dinner}    strokeWidth={1.25} dot={false} />
+          {SLOT_KEYS.map((k) => (
+            <Line key={k} type="monotone" dataKey={k} stroke={SLOT_COLORS[k]} strokeWidth={1.25} dot={false} />
+          ))}
           <Line
             type="monotone" dataKey="total" name="Total"
             stroke="#10B981" strokeWidth={2.25}
@@ -385,8 +377,8 @@ export default function MealsAnalyticsPanel({ days, events }) {
                   value={`${inr(m.highest.total)} · ${fmt(m.highest.date)}`}
                   tint="bg-amber-50" />
         <StatPill icon={CalIcon} label="Days populated" value={m.totals.days} tint="bg-sky-50" />
-        <StatPill icon={PieIcon} label="BF : L : D"
-                  value={`${m.slots[0].pct}·${m.slots[1].pct}·${m.slots[2].pct}%`}
+        <StatPill icon={PieIcon} label="BF : MM : L : AS : D"
+                  value={slotMix(m.slots)}
                   tint="bg-violet-50" />
       </div>
 
@@ -394,7 +386,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={14} className="text-slate-500"/>
-            <div className="font-bold text-sm">Daily meals · BF · L · D · Total</div>
+            <div className="font-bold text-sm">Daily meals · per slot · Total</div>
             <span className="hidden sm:inline text-[10px] text-slate-400 ml-1">· tap a day to see the roster</span>
             {bands.length > 0 && <div className="ml-auto">{eventLegend}</div>}
             <button
@@ -415,7 +407,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
           <div className="flex items-center gap-2 mb-1">
             <BarChart3 size={14} className="text-slate-500"/>
             <div className="font-bold text-sm">Average meals by day of week</div>
-            <span className="text-[10px] text-slate-400">(BF · L · D split)</span>
+            <span className="text-[10px] text-slate-400">(per-slot split)</span>
           </div>
           <div style={{ width: "100%", height: 320 }} data-testid="ma-dow-bar">
             <ResponsiveContainer>
@@ -425,9 +417,9 @@ export default function MealsAnalyticsPanel({ days, events }) {
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v, n) => [`${inr(v)} avg`, n]} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="Breakfast" fill={SLOT_COLORS.Breakfast} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="Lunch"     fill={SLOT_COLORS.Lunch}     radius={[3, 3, 0, 0]} />
-                <Bar dataKey="Dinner"    fill={SLOT_COLORS.Dinner}    radius={[3, 3, 0, 0]} />
+                {SLOT_KEYS.map((k) => (
+                  <Bar key={k} dataKey={k} fill={SLOT_COLORS[k]} radius={[3, 3, 0, 0]} />
+                ))}
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -443,7 +435,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
         >
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp size={18} className="text-emerald-600"/>
-            <h2 className="font-black text-xl">Daily meals · BF · L · D · Total</h2>
+            <h2 className="font-black text-xl">Daily meals · per slot · Total</h2>
             {bands.length > 0 && <div className="ml-4">{eventLegend}</div>}
             <div className="flex-1" />
             <button
@@ -464,7 +456,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
             <StatPill icon={CalIcon} label="Lowest"        value={`${inr(m.lowest.total)} · ${fmt(m.lowest.date)}`} tint="bg-rose-50" />
             <StatPill icon={CalIcon} label="Days"          value={m.totals.days} tint="bg-sky-50" />
             <StatPill icon={PieIcon} label="Grand total"   value={inr(m.totals.grand)} tint="bg-slate-50" />
-            <StatPill icon={PieIcon} label="BF : L : D"    value={`${m.slots[0].pct}·${m.slots[1].pct}·${m.slots[2].pct}%`} tint="bg-violet-50" />
+            <StatPill icon={PieIcon} label="BF : MM : L : AS : D" value={slotMix(m.slots)} tint="bg-violet-50" />
           </div>
           <div className="flex-1 min-h-0 flex flex-col">
             <div className="flex-1 min-h-0">
@@ -554,10 +546,12 @@ function DayAttendeesModal({ date, onClose }) {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-4 gap-2 px-5 py-3 bg-slate-50 border-b border-slate-200 shrink-0" data-testid="ma-day-attendees-counts">
-              <StatChip icon={Coffee}  label="Breakfast" value={data.counts.breakfast} tint="text-amber-700"  />
-              <StatChip icon={SunIcon} label="Lunch"     value={data.counts.lunch}     tint="text-orange-700" />
-              <StatChip icon={MoonIcon} label="Dinner"   value={data.counts.dinner}    tint="text-indigo-700" />
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 px-5 py-3 bg-slate-50 border-b border-slate-200 shrink-0" data-testid="ma-day-attendees-counts">
+              <StatChip icon={Coffee}  label="Breakfast" value={data.counts.breakfast}       tint="text-amber-700"  />
+              <StatChip icon={Coffee}  label="Midmorn."  value={data.counts.midmorning || 0} tint="text-yellow-700" />
+              <StatChip icon={SunIcon} label="Lunch"     value={data.counts.lunch}           tint="text-orange-700" />
+              <StatChip icon={SunIcon} label="Aft. Snack" value={data.counts.snacks || 0}    tint="text-violet-700" />
+              <StatChip icon={MoonIcon} label="Dinner"   value={data.counts.dinner}          tint="text-indigo-700" />
               <StatChip icon={Users}   label="Members"   value={data.unique_members}   tint="text-emerald-700" />
             </div>
             <div className="overflow-auto flex-1">
@@ -566,16 +560,18 @@ function DayAttendeesModal({ date, onClose }) {
                   <tr className="text-[10px] uppercase tracking-wider text-slate-500">
                     <th className="text-left px-4 py-2">Member</th>
                     <th className="text-left px-2 py-2">Institution</th>
-                    <th className="text-center px-2 py-2 w-[52px]" title="Breakfast">BF</th>
-                    <th className="text-center px-2 py-2 w-[52px]" title="Lunch">L</th>
-                    <th className="text-center px-2 py-2 w-[52px]" title="Dinner">D</th>
+                    <th className="text-center px-2 py-2 w-[44px]" title="Breakfast">BF</th>
+                    <th className="text-center px-2 py-2 w-[44px]" title="Midmorning Snack">MM</th>
+                    <th className="text-center px-2 py-2 w-[44px]" title="Lunch">L</th>
+                    <th className="text-center px-2 py-2 w-[44px]" title="Afternoon Snack">AS</th>
+                    <th className="text-center px-2 py-2 w-[44px]" title="Dinner">D</th>
                   </tr>
                 </thead>
                 <tbody>
                   {grouped.map((g) => (
                     <React.Fragment key={g.cat}>
                       <tr className="bg-slate-100">
-                        <td colSpan={5} className="px-4 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600">
+                        <td colSpan={7} className="px-4 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600">
                           {g.cat} · {g.rows.length}
                         </td>
                       </tr>
@@ -583,9 +579,9 @@ function DayAttendeesModal({ date, onClose }) {
                         <tr key={r.user_id} className="border-t border-slate-100 hover:bg-slate-50">
                           <td className="px-4 py-1.5 font-semibold text-slate-800">{r.user_name}</td>
                           <td className="px-2 py-1.5 text-slate-500 text-xs">{r.institution || "—"}</td>
-                          <td className="px-2 py-1.5 text-center">{r.meals.includes("breakfast") ? <MealTick color={SLOT_COLORS.Breakfast}/> : <Dash/>}</td>
-                          <td className="px-2 py-1.5 text-center">{r.meals.includes("lunch")     ? <MealTick color={SLOT_COLORS.Lunch}/>     : <Dash/>}</td>
-                          <td className="px-2 py-1.5 text-center">{r.meals.includes("dinner")    ? <MealTick color={SLOT_COLORS.Dinner}/>    : <Dash/>}</td>
+                          {[["breakfast", "Breakfast"], ["midmorning", "Midmorning"], ["lunch", "Lunch"], ["snacks", "Snacks"], ["dinner", "Dinner"]].map(([mk, sk]) => (
+                            <td key={mk} className="px-2 py-1.5 text-center">{r.meals.includes(mk) ? <MealTick color={SLOT_COLORS[sk]}/> : <Dash/>}</td>
+                          ))}
                         </tr>
                       ))}
                     </React.Fragment>

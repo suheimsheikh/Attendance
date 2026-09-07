@@ -71,6 +71,11 @@ Test file locations:
 
 Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3_fork` iter 49: 100% pass, no console errors, all 6 screens render + interact correctly.
 
+### Sep 2026 — Code review fixes (5-meal rollout follow-through)
+- `MealsAnalyticsPanel.jsx`: metrics memo, trend lines, DOW bars, slot-mix pills and day-roster popup now cover all 5 slots (was summing BF/L/D only → understated grand total vs Consumption KPI).
+- `Meals.jsx`: added `midmorning` colour. `MealsCalendar.jsx`: 6-pill KPI grid responsive, Total pill de-duplicated colour.
+- `meals.py` xlsx import: legacy 3-column sheets now write `midmorning=0, snacks=0` so stored `total` stays a true 5-slot sum on overwrite.
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked

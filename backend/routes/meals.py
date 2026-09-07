@@ -4359,9 +4359,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 tot = bf + l + dn
                 if tot == 0:
                     continue
+                # Legacy 3-meal sheet: midmorning/snacks are reset so the
+                # stored total stays a true 5-slot sum on overwrite.
                 parsed.append({
-                    "date": iso, "breakfast": bf, "lunch": l, "dinner": dn,
-                    "total": tot,
+                    "date": iso, "breakfast": bf, "midmorning": 0, "lunch": l,
+                    "snacks": 0, "dinner": dn, "total": tot,
                 })
 
         # Group into three buckets against the existing DB rows.

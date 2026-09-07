@@ -359,13 +359,13 @@ export default function MealsCalendar() {
         </label>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
         <KpiPill icon={Coffee}   label="Breakfast"        value={data?.totals?.breakfast || 0}  tint="bg-amber-50" />
         <KpiPill icon={Coffee}   label="Midmorning"       value={data?.totals?.midmorning || 0} tint="bg-orange-50" />
         <KpiPill icon={Sun}      label="Lunch"            value={data?.totals?.lunch || 0}      tint="bg-emerald-50" />
         <KpiPill icon={Sun}      label="Afternoon Snack"  value={data?.totals?.snacks || 0}     tint="bg-violet-50" />
         <KpiPill icon={Moon}     label="Dinner"           value={data?.totals?.dinner || 0}     tint="bg-indigo-50" />
-        <KpiPill icon={Utensils} label="Total"     value={data?.totals?.total || 0}     tint="bg-emerald-50" />
+        <KpiPill icon={Utensils} label="Total"     value={data?.totals?.total || 0}     tint="bg-slate-100" />
       </div>
 
       {data?.days && (

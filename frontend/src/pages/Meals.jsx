@@ -33,8 +33,9 @@ const CATEGORY_CHIP_STYLE = {
 // Tint per meal — matches the Muster mode-button aesthetic so the
 // switcher feels the same as check-in / check-out toggle.
 const MEAL_COLOR = {
-  breakfast: "#F59E0B",  // amber
-  lunch:     "#10B981",  // emerald
+  breakfast:  "#F59E0B",  // amber
+  midmorning: "#EAB308",  // yellow
+  lunch:      "#10B981",  // emerald
   snacks:    "#8B5CF6",  // violet
   dinner:    "#2563EB",  // blue
 };
