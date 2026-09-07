@@ -782,6 +782,33 @@ function BalanceChip({ data, requestedDays, testid }) {
 // check their own leave list. Kept inline (no separate file) because the
 // modal lifecycle is tightly coupled to the parent's decide() flow.
 // ---------------------------------------------------------------------------
+// Common denial reasons — a small dropdown pre-fills the textarea so
+// admins can reject in one click while still capturing an audit trail.
+// Admin can still type a fresh reason on top of, or in place of, the
+// suggestion. Per-kind lists so a check-in reject doesn't show
+// leave-specific suggestions.
+const REJECT_SUGGESTIONS = {
+  leave: [
+    "Camp overlap — please re-plan",
+    "Regatta duty during this window",
+    "Insufficient balance — apply comp-off first",
+    "Advance notice too short",
+    "Peak workload — no cover available",
+  ],
+  checkin: [
+    "Off-geofence without valid reason",
+    "Wrong location",
+    "Late arrival — no supporting evidence",
+    "Selfie / method inconsistent with muster",
+  ],
+  correction: [
+    "Wrong entity — please re-file against the correct row",
+    "Incorrect date",
+    "Duplicate request — already actioned",
+    "Insufficient supporting details",
+  ],
+};
+
 function RejectReasonModal({ row, reason, onReasonChange, busy, onCancel, onSubmit }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" data-testid="reject-modal">
@@ -796,6 +823,36 @@ function RejectReasonModal({ row, reason, onReasonChange, busy, onCancel, onSubm
           <label className="text-xs font-bold text-slate-600 uppercase tracking-wider" htmlFor="reject-reason">
             Reason for rejection *
           </label>
+          {(REJECT_SUGGESTIONS[row.kind] || []).length > 0 && (
+            <div className="flex flex-wrap gap-1.5" data-testid="reject-suggestions">
+              {REJECT_SUGGESTIONS[row.kind].map((s) => {
+                const active = reason.trim() === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    data-testid={`reject-suggestion-${s.slice(0, 20).replace(/[^a-z0-9]/gi, "-").toLowerCase()}`}
+                    onClick={() => onReasonChange(s)}
+                    className={`text-[11px] px-2 py-1 rounded-full border transition ${
+                      active
+                        ? "bg-rose-600 text-white border-rose-600"
+                        : "bg-white text-slate-700 border-slate-300 hover:bg-rose-50 hover:border-rose-300"
+                    }`}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                data-testid="reject-suggestion-clear"
+                onClick={() => onReasonChange("")}
+                className="text-[11px] px-2 py-1 rounded-full border border-transparent text-slate-500 hover:text-slate-800 hover:underline"
+              >
+                Clear
+              </button>
+            </div>
+          )}
           <textarea
             id="reject-reason"
             data-testid="reject-reason-input"
@@ -804,10 +861,10 @@ function RejectReasonModal({ row, reason, onReasonChange, busy, onCancel, onSubm
             rows={3}
             autoFocus
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
-            placeholder="e.g. Camp starts on 12 Aug and you are on the coach roster"
+            placeholder="Tap a common reason above, or write a fresh one here"
           />
           <p className="text-[11px] text-slate-500">
-            The applicant will see this on their own leave list — please be specific.
+            The applicant will see this on their own list — please be specific.
           </p>
         </div>
         <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
