@@ -19,7 +19,6 @@ const Meals = lazy(() => import("./pages/Meals"));
 const MealsReport = lazy(() => import("./pages/admin/MealsReport"));
 const MealsCalendar = lazy(() => import("./pages/admin/MealsCalendar"));
 const Members = lazy(() => import("./pages/admin/Members"));
-const AdminLeaves = lazy(() => import("./pages/admin/Leaves"));
 const Devices = lazy(() => import("./pages/admin/Devices"));
 const OfficeSettings = lazy(() => import("./pages/admin/Office"));
 const Reports = lazy(() => import("./pages/admin/Reports"));
@@ -147,7 +146,10 @@ function App() {
             <Route path="admin/overtime" element={<Navigate to="/admin/reports?tab=grid" replace />} />
             <Route path="admin/overtime-page" element={<Navigate to="/admin/reports?tab=grid" replace />} />
             {/* Internal pages still mounted at their old paths for fallback / tests. */}
-            <Route path="admin/leaves-page" element={<RequireAdmin><AdminLeaves /></RequireAdmin>} />
+            {/* /admin/leaves-page retired Feb 2026 — funnels into the unified Approvals
+                page (Slice 2 override-reason flow lives only there). Deep-links stay
+                alive via this redirect. */}
+            <Route path="admin/leaves-page" element={<Navigate to="/admin/approvals?tab=leaves" replace />} />
             <Route path="admin/devices" element={<RequireAdmin><Devices /></RequireAdmin>} />
             <Route path="admin/office" element={<RequireAdmin><OfficeSettings /></RequireAdmin>} />
             <Route path="admin/sms-log" element={<RequireAdmin><SmsLog /></RequireAdmin>} />

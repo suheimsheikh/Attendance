@@ -191,6 +191,18 @@ function buildFocusRows(items, from, to) {
   // item's sparse daily list. Missing days become 0 so the lines
   // are visually continuous. Qty is stored as `${item_id}__qty` so
   // the custom tooltip can surface it alongside the ₹ series.
+  //
+  // NB (Feb 2026 code review): must derive ISO from LOCAL parts —
+  // `Date#toISOString()` converts to UTC, which shifts back by a day
+  // in any +offset zone (IST is +05:30), so a local-midnight Date
+  // maps to the previous calendar day and every `p.amt.get(iso)`
+  // lookup misses. Confirmed by the review as a MEDIUM defect.
+  const localIso = (dt) => {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const dd = String(dt.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  };
   const start = new Date(from + "T00:00:00");
   const end = new Date(to + "T00:00:00");
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
@@ -206,7 +218,7 @@ function buildFocusRows(items, from, to) {
   const out = [];
   const d = new Date(start);
   while (d <= end) {
-    const iso = d.toISOString().slice(0, 10);
+    const iso = localIso(d);
     const row = { date: iso, label: formatDate(iso) };
     perItem.forEach((p) => {
       row[p.id] = p.amt.get(iso) || 0;

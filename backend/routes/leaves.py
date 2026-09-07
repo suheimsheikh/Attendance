@@ -472,10 +472,16 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
            reviewing the decision history to see whether the decision
            was made when balance was healthy or thin.
         2. `ytd_applied_days` — cumulative days the member has APPLIED
-           for in the current leave cycle across all statuses. Includes
-           this request.
+           for in the current leave cycle across all statuses. Snapshot
+           reflects the state PRE-write, so the row currently being
+           decided is already in the count (it was written at
+           application time), but a status flip has not yet reshuffled
+           the denied bucket.
         3. `ytd_denied_days` — cumulative days denied in the same
-           cycle. Includes this request if it's being rejected.
+           cycle. Snapshot is captured PRE-decision-write, so a leave
+           currently being rejected is NOT yet in this count — the
+           number reflects the member's denial history leading up to
+           this call.
 
         The cycle window matches whatever holidays.compute_balance_summary
         uses internally; we pass the member's leave-cycle start/end so

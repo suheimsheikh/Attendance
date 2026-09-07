@@ -13,6 +13,7 @@ by design — no writes, no auth-token issuance, no personal data.
 """
 from __future__ import annotations
 
+import hmac
 import os
 from typing import Any, Optional
 
@@ -22,7 +23,12 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 def _require_external_key(x_api_key: Optional[str] = Header(default=None)) -> None:
     """Header-based API-key gate. Returns 401 on mismatch, 503 if the
     server has no key configured — a mis-configured server should NOT
-    behave like an open endpoint."""
+    behave like an open endpoint.
+
+    Uses `hmac.compare_digest` so the check is constant-time and cannot
+    be timing-side-channelled by a probing attacker (Feb 2026 code
+    review — LOW).
+    """
     expected = os.environ.get("EXTERNAL_API_KEY", "").strip()
     if not expected:
         raise HTTPException(
@@ -30,7 +36,7 @@ def _require_external_key(x_api_key: Optional[str] = Header(default=None)) -> No
             detail="External API disabled: EXTERNAL_API_KEY not configured on server",
         )
     supplied = (x_api_key or "").strip()
-    if not supplied or supplied != expected:
+    if not supplied or not hmac.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 

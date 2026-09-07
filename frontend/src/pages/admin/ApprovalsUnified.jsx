@@ -610,7 +610,9 @@ export default function ApprovalsUnified() {
                           {isLeave && r.raw?.type === "leave" && (
                             <BalanceChip
                               data={balanceMap[r.context.user_id]}
-                              requestedDays={daysBetween(r.context.start_date, r.context.end_date) || 1}
+                              requestedDays={r.raw?.half_day
+                                ? 0.5
+                                : (daysBetween(r.context.start_date, r.context.end_date) || 1)}
                               testid={`balance-chip-${r.id}`}
                             />
                           )}
