@@ -1,5 +1,5 @@
 import React from "react";
-import { Edit3, LogIn, LogOut as LogOutIcon, Loader2, Trash2, ShieldCheck, PencilRuler } from "lucide-react";
+import { Edit3, LogIn, LogOut as LogOutIcon, Loader2, Trash2, ShieldCheck, PencilRuler, ChefHat } from "lucide-react";
 import InlinePhotoAvatar from "../../../components/InlinePhotoAvatar";
 import ParentContact from "../../../components/ParentContact";
 import StatusBadge from "../../../components/StatusBadge";
@@ -199,8 +199,20 @@ export default React.memo(function MemberRow({
               >
                 <ShieldCheck size={11} /> Admin
               </span>
+            ) : v === "chef" ? (
+              // Feb 2026 · bug fix — pre-fix the Role column collapsed
+              // every non-admin role (including chef) to "Member",
+              // which made the Chef filter look broken ("filtered
+              // chefs still show up as Members").
+              <span
+                data-testid={`chef-badge-${m.id}`}
+                className="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[11px] font-bold border bg-amber-50 text-amber-800 border-amber-200"
+                title="Kitchen role — logs meal purchases and issues"
+              >
+                <ChefHat size={11} /> Chef
+              </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[10px] font-semibold border bg-slate-50 text-slate-400 border-dashed border-slate-300" title="Click to grant admin">
+              <span className="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[10px] font-semibold border bg-slate-50 text-slate-400 border-dashed border-slate-300" title="Click to change role">
                 <ShieldCheck size={10} /> Member
               </span>
             )
