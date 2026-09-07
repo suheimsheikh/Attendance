@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Loader2, Check, X, AlertTriangle, Plus, Coffee, ChevronDown, ChevronUp, Users, RefreshCw, Bed } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Loader2, Check, X, AlertTriangle, Plus, Coffee, ChevronDown, ChevronUp, Users, RefreshCw, Bed, History } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { shortDate } from "../../utils";
@@ -78,6 +78,47 @@ export default function AdminLeaves({ embedded = false }) {
       return (b.created_at || "").localeCompare(a.created_at || "");
     });
 
+  // Slice the list once so the Pending grid and the Decision-history
+  // grid can render off the same fetch. History = anything with a
+  // `decided_at` (i.e. approved or rejected), sorted by decision-time
+  // DESC — freshly decided rows show at the top of the history panel
+  // right after the admin makes the decision, and the grid below the
+  // Pending table matches the "latest first" spec from Feb 2026.
+  const pendingRows = visible.filter((l) => l.status === "pending");
+  const decidedRows = (items || [])
+    .filter((l) => l.status === "approved" || l.status === "rejected")
+    .filter((l) => {
+      // Respect the same top-level chip so the two grids stay in step.
+      if (filter === "all" || filter === "late") return true;
+      return l.status === filter;
+    })
+    .sort((a, b) => (b.decided_at || "").localeCompare(a.decided_at || ""));
+
+  // Batch-fetch each pending applicant's live leave-summary so we can
+  // show a small "X days available" chip inline on their row (before
+  // the admin has expanded the detail row). One fetch per unique
+  // user_id — cached on `balanceMap`.
+  useEffect(() => {
+    const uniqueIds = Array.from(new Set(pendingRows.map((l) => l.user_id).filter(Boolean)));
+    const missing = uniqueIds.filter((uid) => !balanceMap[uid]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      await Promise.all(
+        missing.map(async (uid) => {
+          try {
+            const r = await api.get(`/members/${uid}/leave-summary`);
+            if (!cancelled) setBalanceMap((m) => ({ ...m, [uid]: r }));
+          } catch (err) {
+            if (!cancelled) setBalanceMap((m) => ({ ...m, [uid]: { error: true } }));
+          }
+        }),
+      );
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
+
   // Lazy-load members + institutions only when admin opens the Apply Break
   // modal — keeps the leaves list snappy on every page entry.
   const openBreakModal = async () => {
@@ -107,12 +148,39 @@ export default function AdminLeaves({ embedded = false }) {
   const [confirmGate, setConfirmGate] = useState(null); // { leave, conflicts }
   const [confirmBusy, setConfirmBusy] = useState(false);
 
-  const decide = async (id, status) => {
+  const decide = async (id, status, extra = {}) => {
     try {
-      await api.patch(`/leaves/${id}`, { status });
+      await api.patch(`/leaves/${id}`, { status, ...extra });
       toast.success(`Request ${status}`);
       load();
     } catch (err) { toast.error(err?.message || "Failed"); }
+  };
+
+  // Rejection flow: mandatory denial reason captured in a small modal
+  // so the applicant always has an audit trail of WHY it was turned
+  // down (Feb 2026 spec). We keep the pending decide() path for
+  // approvals (which doesn't need a reason) unchanged.
+  const [rejectTarget, setRejectTarget] = useState(null); // leave row
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectBusy, setRejectBusy] = useState(false);
+  const startReject = (leave) => {
+    setRejectTarget(leave);
+    setRejectReason("");
+  };
+  const submitReject = async () => {
+    const reason = rejectReason.trim();
+    if (!reason) {
+      toast.error("Please write a short reason so the applicant knows why");
+      return;
+    }
+    setRejectBusy(true);
+    try {
+      await decide(rejectTarget.id, "rejected", { denial_reason: reason });
+      setRejectTarget(null);
+      setRejectReason("");
+    } finally {
+      setRejectBusy(false);
+    }
   };
 
   const startApprove = async (leave) => {
@@ -218,9 +286,14 @@ export default function AdminLeaves({ embedded = false }) {
 
       {loading ? (
         <div className="text-center py-10"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
-      ) : visible.length === 0 ? (
-        <div className="iu-card p-10 text-center text-slate-500">No {filter === "all" ? "" : filter} requests.</div>
       ) : (
+        <>
+          {/* --- PENDING approvals grid --- */}
+          {pendingRows.length === 0 ? (
+            <div className="iu-card p-8 text-center text-slate-500" data-testid="admin-leaves-empty-pending">
+              No pending requests.
+            </div>
+          ) : (
         <div
           data-testid="admin-leaves-list"
           className="iu-card !p-0 overflow-auto rounded-lg"
@@ -246,7 +319,7 @@ export default function AdminLeaves({ embedded = false }) {
               </tr>
             </thead>
             <tbody>
-              {visible.map((l) => {
+              {pendingRows.map((l) => {
                 const typeMeta = TYPE_META[l.type] || { label: l.type, cls: "bg-slate-100 text-slate-700" };
                 const statusMeta = STATUS_META[l.status] || { label: l.status, cls: "bg-slate-100 text-slate-700" };
                 const days = l.half_day ? 0.5 : daysInclusive(l.start_date, l.end_date);
@@ -264,7 +337,6 @@ export default function AdminLeaves({ embedded = false }) {
                           type="button"
                           onClick={() => toggleExpand(l)}
                           data-testid={`expand-${l.id}`}
-                          title="Show attendance context and leave balance for this request"
                           aria-expanded={isExpanded}
                           title={isExpanded ? "Hide details" : "Show overlap & balance"}
                           className="p-1 rounded hover:bg-slate-200 text-slate-500"
@@ -276,6 +348,14 @@ export default function AdminLeaves({ embedded = false }) {
                     <td className="iu-table-td">
                       <div className="font-semibold text-slate-800">{l.member_name}</div>
                       <div className="text-xs text-slate-500">{l.member_rank ? `${l.member_rank} · ` : ""}{l.member_category}</div>
+                      {l.status === "pending" && (
+                        <BalanceChip
+                          data={balanceMap[l.user_id]}
+                          requestedDays={days}
+                          leaveType={l.type}
+                          testid={`balance-chip-${l.id}`}
+                        />
+                      )}
                     </td>
                     <td className="iu-table-td">
                       <span className={`inline-flex items-center px-2 h-5 rounded text-[10px] font-bold uppercase ${typeMeta.cls}`}>
@@ -332,13 +412,12 @@ export default function AdminLeaves({ embedded = false }) {
                             >
                               <Check size={12}/> Approve
                             </button>
-                            <button data-testid={`reject-${l.id}`} onClick={() => decide(l.id, "rejected")} title="Turn down this request — the member is notified" className="iu-btn-secondary !h-8 !px-2.5 !text-xs"><X size={12}/> Reject</button>
+                            <button data-testid={`reject-${l.id}`} onClick={() => startReject(l)} title="Turn down this request — the member is notified" className="iu-btn-secondary !h-8 !px-2.5 !text-xs"><X size={12}/> Reject</button>
                           </>
                         ) : (
                           <button
                             data-testid={`reopen-${l.id}`}
                             onClick={() => decide(l.id, "pending")}
-                            title="Move this decided request back to pending for a fresh decision"
                             className="text-[11px] text-slate-500 hover:text-slate-800 hover:underline"
                             title="Re-open: move back to Pending for re-decision"
                           >
@@ -389,6 +468,25 @@ export default function AdminLeaves({ embedded = false }) {
             </tbody>
           </table>
         </div>
+          )}
+
+          {/* --- DECISION HISTORY grid — newest at top --- */}
+          <DecisionHistory
+            rows={decidedRows}
+            onReopen={(id) => decide(id, "pending")}
+          />
+        </>
+      )}
+
+      {rejectTarget && (
+        <RejectReasonModal
+          leave={rejectTarget}
+          reason={rejectReason}
+          onReasonChange={setRejectReason}
+          busy={rejectBusy}
+          onCancel={() => { setRejectTarget(null); setRejectReason(""); }}
+          onSubmit={submitReject}
+        />
       )}
 
       {showOnBehalf && (
@@ -521,3 +619,226 @@ function BalanceSummaryCard({ data, memberName, requestedDays, leaveType }) {
   );
 }
 
+
+/* ------------------------------------------------------------------ */
+/*  BalanceChip — inline "X days available" pill on the pending row.  */
+/*  Colour flips to rose when the requested days would exceed the      */
+/*  applicant's available paid-leave + comp-off pool. Lets an admin    */
+/*  spot LOP-triggering approvals at a glance without expanding.       */
+/* ------------------------------------------------------------------ */
+function BalanceChip({ data, requestedDays, leaveType, testid }) {
+  if (leaveType !== "leave") return null;  // Tours / postings don't consume.
+  if (!data) {
+    return (
+      <div className="mt-1 inline-flex items-center gap-1 text-[10px] text-slate-400" data-testid={testid}>
+        <Loader2 size={9} className="animate-spin" /> balance…
+      </div>
+    );
+  }
+  if (data.error) return null;
+  const co = data.comp_off?.available || 0;
+  const pl = data.paid_leave?.available || 0;
+  const total = round1(co + pl);
+  const shortfall = requestedDays > total;
+  return (
+    <div
+      className={`mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
+        shortfall ? "bg-rose-100 text-rose-700" : "bg-emerald-50 text-emerald-700"
+      }`}
+      data-testid={testid}
+      title={shortfall
+        ? `Only ${total} day(s) available for ${requestedDays} requested — approving will trigger LOP`
+        : `${total} day(s) available (${co} comp-off + ${round1(pl)} paid leave)`}
+    >
+      {shortfall ? <AlertTriangle size={9} /> : <Check size={9} />}
+      {total} avail
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  RejectReasonModal — mandatory denial reason. Sent as body.        */
+/*  denial_reason on the PATCH so the applicant sees "why" when they   */
+/*  check their own list.                                              */
+/* ------------------------------------------------------------------ */
+function RejectReasonModal({ leave, reason, onReasonChange, busy, onCancel, onSubmit }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" data-testid="reject-modal">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h3 className="text-lg font-extrabold text-slate-900">Reject request</h3>
+          <p className="text-xs text-slate-500 mt-1">
+            {leave.member_name}&apos;s {leave.type} · {shortDate(leave.start_date)} → {shortDate(leave.end_date)}
+          </p>
+        </div>
+        <div className="px-5 py-4 space-y-2">
+          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider" htmlFor="reject-reason">
+            Reason for rejection *
+          </label>
+          <textarea
+            id="reject-reason"
+            data-testid="reject-reason-input"
+            value={reason}
+            onChange={(e) => onReasonChange(e.target.value)}
+            rows={3}
+            autoFocus
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
+            placeholder="e.g. Camp starts on 12 Aug and you are on the coach roster"
+          />
+          <p className="text-[11px] text-slate-500">The applicant will see this on their own leave list — please be specific.</p>
+        </div>
+        <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
+          <button type="button" data-testid="reject-modal-cancel" onClick={onCancel} disabled={busy} className="iu-btn-secondary !h-9 !px-3 !text-sm">Cancel</button>
+          <button type="button" data-testid="reject-modal-confirm" onClick={onSubmit} disabled={busy || !reason.trim()} className="iu-btn-primary !h-9 !px-3 !text-sm !bg-rose-600 hover:!bg-rose-700">
+            {busy ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+            Reject request
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  DecisionHistory — audit-trail table shown below the pending grid   */
+/*  after every decision. Reverse chronological (latest at top).       */
+/*  Carries all pending columns PLUS: turnaround (applied → decided),  */
+/*  denial reason, balance-at-decision snapshot, YTD applied / denied. */
+/* ------------------------------------------------------------------ */
+function fmtTurnaround(fromIso, toIso) {
+  if (!fromIso || !toIso) return "—";
+  try {
+    const ms = new Date(toIso).getTime() - new Date(fromIso).getTime();
+    if (!Number.isFinite(ms) || ms < 0) return "—";
+    const mins = Math.floor(ms / 60000);
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ${mins % 60}m`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ${hrs % 24}h`;
+  } catch { return "—"; }
+}
+
+function DecisionHistory({ rows, onReopen }) {
+  if (!rows || rows.length === 0) {
+    return (
+      <div className="mt-6" data-testid="decision-history-empty">
+        <div className="flex items-center gap-2 mb-2 text-slate-500">
+          <History size={14} />
+          <h2 className="text-sm font-extrabold uppercase tracking-wider">Decision history</h2>
+        </div>
+        <div className="iu-card p-6 text-center text-slate-400 text-sm">No approved or rejected requests yet.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-6" data-testid="decision-history">
+      <div className="flex items-center gap-2 mb-2 text-slate-500">
+        <History size={14} />
+        <h2 className="text-sm font-extrabold uppercase tracking-wider">Decision history</h2>
+        <span className="text-[11px] normal-case tracking-normal text-slate-400">
+          (latest on top — {rows.length} decision{rows.length === 1 ? "" : "s"})
+        </span>
+      </div>
+      <div className="iu-card !p-0 overflow-auto rounded-lg" style={{ maxHeight: "calc(100vh - 260px)" }}>
+        <table className="w-full text-sm min-w-[1400px] border-separate border-spacing-0">
+          <thead>
+            <tr className="bg-slate-50 text-slate-500 text-xs sticky top-0 z-10 shadow-[0_1px_0_0_rgb(226,232,240)]">
+              <th className="iu-table-th !text-left bg-slate-50">Member</th>
+              <th className="iu-table-th !text-left bg-slate-50">Type</th>
+              <th className="iu-table-th !text-left bg-slate-50">From → To</th>
+              <th className="iu-table-th !text-right w-14 bg-slate-50">Days</th>
+              <th className="iu-table-th !text-left w-24 bg-slate-50">Applied on</th>
+              <th className="iu-table-th !text-left bg-slate-50">Reason for applying</th>
+              <th className="iu-table-th !text-left w-24 bg-slate-50">Status</th>
+              <th className="iu-table-th !text-left bg-slate-50">Decided by</th>
+              <th className="iu-table-th !text-left w-24 bg-slate-50">Decided on</th>
+              <th className="iu-table-th !text-left w-20 bg-slate-50" title="Time between application and decision">Turnaround</th>
+              <th className="iu-table-th !text-left bg-slate-50">Denial reason</th>
+              <th className="iu-table-th !text-right w-24 bg-slate-50" title="Applicant's paid-leave + comp-off pool at decision time">Balance @ decision</th>
+              <th className="iu-table-th !text-right w-20 bg-slate-50" title="Total days applied this cycle">Applied (YTD)</th>
+              <th className="iu-table-th !text-right w-20 bg-slate-50" title="Total days denied this cycle">Denied (YTD)</th>
+              <th className="iu-table-th !text-right w-20 bg-slate-50">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((l) => {
+              const tm = TYPE_META[l.type] || { label: l.type, cls: "bg-slate-100 text-slate-700" };
+              const sm = STATUS_META[l.status] || { label: l.status, cls: "bg-slate-100 text-slate-700" };
+              const days = l.half_day ? 0.5 : daysInclusive(l.start_date, l.end_date);
+              const bal = l.balance_at_decision;
+              const balTotal = bal
+                ? round1((bal.paid_leave_available || 0) + (bal.comp_off_available || 0))
+                : null;
+              return (
+                <tr key={l.id} data-testid={`history-row-${l.id}`} className="border-t border-slate-100 hover:bg-sky-50/40">
+                  <td className="iu-table-td">
+                    <div className="font-semibold text-slate-800">{l.member_name}</div>
+                    <div className="text-xs text-slate-500">{l.member_rank ? `${l.member_rank} · ` : ""}{l.member_category}</div>
+                  </td>
+                  <td className="iu-table-td">
+                    <span className={`inline-flex items-center px-2 h-5 rounded text-[10px] font-bold uppercase ${tm.cls}`}>{tm.label}</span>
+                    {l.half_day && (
+                      <div className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 text-[9px] font-extrabold uppercase tracking-wide">
+                        Half · {l.half_day}
+                      </div>
+                    )}
+                  </td>
+                  <td className="iu-table-td whitespace-nowrap text-slate-700">
+                    <div className="font-mono text-xs">{shortDate(l.start_date)} → {shortDate(l.end_date)}</div>
+                    {l.location && <div className="text-[11px] text-slate-500">{l.location}</div>}
+                  </td>
+                  <td className="iu-table-td text-right font-mono font-semibold">{days}</td>
+                  <td className="iu-table-td text-xs text-slate-600 whitespace-nowrap">{shortDate(l.created_at)}</td>
+                  <td className="iu-table-td text-slate-700 text-xs max-w-[220px]">
+                    <div className="line-clamp-2" title={l.reason}>{l.reason || <span className="text-slate-300">—</span>}</div>
+                  </td>
+                  <td className="iu-table-td">
+                    <span className={`inline-flex items-center px-2 h-5 rounded-full text-[11px] font-bold ${sm.cls}`}>
+                      {sm.label}
+                    </span>
+                  </td>
+                  <td className="iu-table-td text-xs font-semibold text-slate-700">{l.decided_by || <span className="text-slate-300">—</span>}</td>
+                  <td className="iu-table-td text-xs text-slate-600 whitespace-nowrap">
+                    {l.decided_at ? shortDate(l.decided_at) : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="iu-table-td text-[11px] font-mono text-slate-600">{fmtTurnaround(l.created_at, l.decided_at)}</td>
+                  <td className="iu-table-td text-xs text-slate-700 max-w-[240px]">
+                    {l.status === "rejected"
+                      ? (l.denial_reason
+                          ? <div className="line-clamp-2 text-rose-700" title={l.denial_reason}>{l.denial_reason}</div>
+                          : <span className="text-slate-300">—</span>)
+                      : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="iu-table-td text-right text-xs font-mono">
+                    {balTotal != null ? (
+                      <span title={`${bal.comp_off_available ?? 0} comp-off + ${bal.paid_leave_available ?? 0} paid leave`}>
+                        {balTotal}
+                      </span>
+                    ) : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="iu-table-td text-right text-xs font-mono">
+                    {typeof l.ytd_applied_days === "number" ? l.ytd_applied_days : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="iu-table-td text-right text-xs font-mono">
+                    {typeof l.ytd_denied_days === "number" ? l.ytd_denied_days : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="iu-table-td text-right">
+                    <button
+                      data-testid={`history-reopen-${l.id}`}
+                      onClick={() => onReopen(l.id)}
+                      title="Move this decided request back to pending for a fresh decision"
+                      className="text-[11px] text-slate-500 hover:text-slate-800 hover:underline"
+                    >
+                      Re-open
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

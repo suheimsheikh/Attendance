@@ -14,14 +14,15 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCw, Check, X, Plane, LogIn, PencilRuler, Plus, Coffee, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2, RefreshCw, Check, X, Plane, LogIn, PencilRuler, Plus, Coffee, ChevronDown, ChevronRight, History, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
-import { formatDate, formatTime, dayOfWeek } from "../../utils";
+import { formatDate, formatTime, dayOfWeek, shortDate } from "../../utils";
 import { ApplyForm } from "../MyLeaves";
 import { BreakForm } from "./Calendar";
 import LeaveContextPanel from "./LeaveContextPanel";
 import LeaveApprovalConfirmModal from "./LeaveApprovalConfirmModal";
+import { round1 } from "../leaves/utils";
 
 const KIND_META = {
   leave:      { label: "Leave/Tour",  Icon: Plane,          tone: "bg-amber-100 text-amber-700" },
@@ -76,8 +77,15 @@ function normLeave(row) {
       start_date: row.start_date,
       end_date: row.end_date || row.start_date,
     },
-    apply: async (decision) => {
-      await api.patch(`/leaves/${row.id}`, { status: decision === "approve" ? "approved" : "rejected" });
+    // Feb 2026: expose the full leave doc so the pending row can show
+    // an inline "X days available" chip (checks balanceMap[user_id])
+    // and the Decision-history table can render turnaround +
+    // denial_reason + balance/YTD snapshot fields returned by the
+    // /leaves API.
+    raw: row,
+    apply: async (decision, extra = {}) => {
+      const body = { status: decision === "approve" ? "approved" : "rejected", ...extra };
+      await api.patch(`/leaves/${row.id}`, body);
     },
   };
 }
@@ -160,6 +168,20 @@ export default function ApprovalsUnified() {
   // path where a stray click could grant an absence during a
   // scheduled regatta / camp.
   const [pendingConfirm, setPendingConfirm] = useState(null);
+
+  // Rejection-with-reason modal (Feb 2026 spec) — backend now REQUIRES
+  // `denial_reason` on any leave rejection so the applicant can see
+  // *why* on their own list. Modal is scoped to leaves; check-in and
+  // correction rejects stay one-click (their backends don't require
+  // a reason yet).
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectBusy, setRejectBusy] = useState(false);
+
+  // Per-applicant leave-summary cache. Keyed by user_id. Populated
+  // lazily as the leave rows render, so the inline "X days available"
+  // chip appears without blocking the initial pending fetch.
+  const [balanceMap, setBalanceMap] = useState({});
 
   const openBreakModal = useCallback(async () => {
     setShowBreak(true);
@@ -260,9 +282,20 @@ export default function ApprovalsUnified() {
       setPendingConfirm(row);
       return;
     }
+    // Leave rejection requires a denial reason (backend 400s otherwise
+    // — Feb 2026). Divert into the reason modal so the applicant has
+    // an audit trail.
+    if (decision === "reject" && row.kind === "leave" && !row._rejectReason) {
+      setRejectTarget(row);
+      setRejectReason("");
+      return;
+    }
     setBusyId(`${row.kind}-${row.id}-${decision}`);
     try {
-      await row.apply(decision);
+      const extra = decision === "reject" && row._rejectReason
+        ? { denial_reason: row._rejectReason }
+        : {};
+      await row.apply(decision, extra);
       toast.success(`${decision === "approve" ? "Approved" : "Rejected"}: ${row.member_name}`);
       // Optimistic: yank the row out of its per-queue cache so admins
       // don't wait on the refetch to see it disappear. Then trigger a
@@ -272,7 +305,11 @@ export default function ApprovalsUnified() {
         return arr.filter((x) => (x.id ?? x._id) !== row.id);
       };
       if (row.kind === "leave") {
-        queryClient.setQueryData(["/leaves", null], dropRow);
+        // For leaves we invalidate rather than drop, because the
+        // Decision-history table below the pending grid needs to pick
+        // up the freshly-decided row (with its new denial_reason /
+        // snapshot fields) at the top.
+        queryClient.invalidateQueries({ queryKey: ["/leaves"] });
       } else if (row.kind === "checkin") {
         queryClient.setQueryData(
           ["/admin/checkin-approvals", { status: "pending" }],
@@ -299,6 +336,63 @@ export default function ApprovalsUnified() {
       else if (row.kind === "correction") queryClient.invalidateQueries({ queryKey: ["/admin/corrections"] });
     } finally { setBusyId(null); }
   };
+
+  const submitReject = useCallback(async () => {
+    const reason = rejectReason.trim();
+    if (!reason || !rejectTarget) {
+      toast.error("Please write a short reason so the applicant knows why");
+      return;
+    }
+    setRejectBusy(true);
+    try {
+      // Re-enter decide() with the reason attached so it goes straight
+      // through the API and the same optimistic-cache / toast path
+      // fires (keeps behaviour identical to check-in / correction
+      // rejects modulo the reason).
+      await decide({ ...rejectTarget, _rejectReason: reason }, "reject");
+      setRejectTarget(null);
+      setRejectReason("");
+    } finally {
+      setRejectBusy(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rejectReason, rejectTarget]);
+
+  // Batch-fetch each pending leave applicant's live leave-summary so
+  // the balance chip on the row can flag shortfall approvals at a
+  // glance. One fetch per unique user_id — cached in balanceMap.
+  useEffect(() => {
+    const pendingLeaves = (leavesQ.data || []).filter((l) => l.status === "pending" && l.user_id);
+    const uniqueIds = Array.from(new Set(pendingLeaves.map((l) => l.user_id)));
+    const missing = uniqueIds.filter((uid) => !balanceMap[uid]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      await Promise.all(
+        missing.map(async (uid) => {
+          try {
+            const r = await api.get(`/members/${uid}/leave-summary`);
+            if (!cancelled) setBalanceMap((m) => ({ ...m, [uid]: r }));
+          } catch {
+            if (!cancelled) setBalanceMap((m) => ({ ...m, [uid]: { error: true } }));
+          }
+        }),
+      );
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leavesQ.data]);
+
+  // Decision history — decided leaves only, latest first. Wraps the
+  // raw /leaves rows since they already carry the snapshot fields we
+  // need to render (balance_at_decision, ytd_applied_days,
+  // ytd_denied_days, denial_reason, decided_by, decided_at). Sliced
+  // out here so the rendering below stays declarative.
+  const decidedLeaves = useMemo(() => {
+    return (leavesQ.data || [])
+      .filter((l) => l.status === "approved" || l.status === "rejected")
+      .sort((a, b) => (b.decided_at || "").localeCompare(a.decided_at || ""));
+  }, [leavesQ.data]);
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto" data-testid="approvals-unified">
@@ -360,8 +454,7 @@ export default function ApprovalsUnified() {
       </div>
 
       <div className="iu-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm" data-testid="approvals-table">
+        <div className="overflow-x-auto">          <table className="w-full text-sm" data-testid="approvals-table">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider">
               <tr>
                 <th className="py-2 px-3 text-left">Member</th>
@@ -411,7 +504,16 @@ export default function ApprovalsUnified() {
                         ) : (
                           <span className="w-[18px] shrink-0" />
                         )}
-                        <span className="truncate">{r.member_name}</span>
+                        <div className="min-w-0">
+                          <div className="truncate">{r.member_name}</div>
+                          {isLeave && r.raw?.type === "leave" && (
+                            <BalanceChip
+                              data={balanceMap[r.context.user_id]}
+                              requestedDays={daysBetween(r.context.start_date, r.context.end_date) || 1}
+                              testid={`balance-chip-${r.id}`}
+                            />
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="py-2 px-3">
@@ -460,6 +562,21 @@ export default function ApprovalsUnified() {
         </div>
       </div>
 
+      {/* --- Decision history (leaves only for now — Feb 2026) --- */}
+      <DecisionHistoryLeaves
+        rows={decidedLeaves}
+        onReopen={async (leaveId) => {
+          try {
+            await api.patch(`/leaves/${leaveId}`, { status: "pending" });
+            toast.success("Moved back to pending");
+            queryClient.invalidateQueries({ queryKey: ["/leaves"] });
+            queryClient.invalidateQueries({ queryKey: ["/admin/approvals-summary"] });
+          } catch (err) {
+            showApiError(err, "Could not re-open");
+          }
+        }}
+      />
+
       {showOnBehalf && (
         <ApplyForm
           asAdmin
@@ -497,6 +614,283 @@ export default function ApprovalsUnified() {
           }}
         />
       )}
+      {rejectTarget && (
+        <RejectReasonModal
+          row={rejectTarget}
+          reason={rejectReason}
+          onReasonChange={setRejectReason}
+          busy={rejectBusy}
+          onCancel={() => { setRejectTarget(null); setRejectReason(""); }}
+          onSubmit={submitReject}
+        />
+      )}
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// BalanceChip — inline "X days available" pill under the member name on
+// pending LEAVE rows. Colour flips to rose when the requested days would
+// exceed the paid-leave + comp-off pool, so admins can spot LOP-triggering
+// approvals at a glance without expanding the context panel.
+// ---------------------------------------------------------------------------
+function BalanceChip({ data, requestedDays, testid }) {
+  if (!data) {
+    return (
+      <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-slate-400" data-testid={testid}>
+        <Loader2 size={9} className="animate-spin" /> balance…
+      </div>
+    );
+  }
+  if (data.error) return null;
+  const co = data.comp_off?.available || 0;
+  const pl = data.paid_leave?.available || 0;
+  const total = round1(co + pl);
+  const shortfall = requestedDays > total;
+  return (
+    <div
+      className={`mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
+        shortfall ? "bg-rose-100 text-rose-700" : "bg-emerald-50 text-emerald-700"
+      }`}
+      data-testid={testid}
+      title={shortfall
+        ? `Only ${total} day(s) available for ${requestedDays} requested — approving will trigger LOP`
+        : `${total} day(s) available (${co} comp-off + ${round1(pl)} paid leave)`}
+    >
+      {shortfall ? <AlertTriangle size={9} /> : <Check size={9} />}
+      {total} avail
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// RejectReasonModal — mandatory denial reason on a leave rejection. Sent
+// as `denial_reason` on the PATCH so the applicant sees "why" when they
+// check their own leave list. Kept inline (no separate file) because the
+// modal lifecycle is tightly coupled to the parent's decide() flow.
+// ---------------------------------------------------------------------------
+function RejectReasonModal({ row, reason, onReasonChange, busy, onCancel, onSubmit }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" data-testid="reject-modal">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h3 className="text-lg font-extrabold text-slate-900">Reject request</h3>
+          <p className="text-xs text-slate-500 mt-1">
+            {row.member_name} · {row.when}
+          </p>
+        </div>
+        <div className="px-5 py-4 space-y-2">
+          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider" htmlFor="reject-reason">
+            Reason for rejection *
+          </label>
+          <textarea
+            id="reject-reason"
+            data-testid="reject-reason-input"
+            value={reason}
+            onChange={(e) => onReasonChange(e.target.value)}
+            rows={3}
+            autoFocus
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
+            placeholder="e.g. Camp starts on 12 Aug and you are on the coach roster"
+          />
+          <p className="text-[11px] text-slate-500">
+            The applicant will see this on their own leave list — please be specific.
+          </p>
+        </div>
+        <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
+          <button
+            type="button"
+            data-testid="reject-modal-cancel"
+            onClick={onCancel}
+            disabled={busy}
+            className="iu-btn-secondary !h-9 !px-3 !text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            data-testid="reject-modal-confirm"
+            onClick={onSubmit}
+            disabled={busy || !reason.trim()}
+            className="iu-btn-primary !h-9 !px-3 !text-sm !bg-rose-600 hover:!bg-rose-700"
+          >
+            {busy ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+            Reject request
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Decision history table — reverse chronological (latest at top). For each
+// decided leave we surface every field from the pending grid PLUS the
+// four new audit fields snapshotted on PATCH:
+//   • turnaround (applied → decided) — computed client-side from the two ISO stamps
+//   • denial_reason                 — set only for rejects
+//   • balance_at_decision           — { paid_leave_available, comp_off_available }
+//   • ytd_applied_days / ytd_denied_days
+// ---------------------------------------------------------------------------
+function fmtTurnaround(fromIso, toIso) {
+  if (!fromIso || !toIso) return "—";
+  try {
+    const ms = new Date(toIso).getTime() - new Date(fromIso).getTime();
+    if (!Number.isFinite(ms) || ms < 0) return "—";
+    const mins = Math.floor(ms / 60000);
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ${mins % 60}m`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ${hrs % 24}h`;
+  } catch { return "—"; }
+}
+
+const STATUS_TONE = {
+  approved: "bg-emerald-100 text-emerald-800",
+  rejected: "bg-slate-200 text-slate-700",
+};
+
+function DecisionHistoryLeaves({ rows, onReopen }) {
+  if (!rows || rows.length === 0) {
+    return (
+      <div className="mt-6" data-testid="decision-history-empty">
+        <div className="flex items-center gap-2 mb-2 text-slate-500">
+          <History size={14} />
+          <h2 className="text-sm font-extrabold uppercase tracking-wider">Decision history — Leaves</h2>
+        </div>
+        <div className="iu-card p-6 text-center text-slate-400 text-sm">
+          No approved or rejected leave requests yet.
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-6" data-testid="decision-history">
+      <div className="flex items-center gap-2 mb-2 text-slate-500">
+        <History size={14} />
+        <h2 className="text-sm font-extrabold uppercase tracking-wider">Decision history — Leaves</h2>
+        <span className="text-[11px] normal-case tracking-normal text-slate-400">
+          (latest on top — {rows.length} decision{rows.length === 1 ? "" : "s"})
+        </span>
+      </div>
+      <div className="iu-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[1400px]" data-testid="decision-history-table">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider">
+              <tr>
+                <th className="py-2 px-3 text-left">Member</th>
+                <th className="py-2 px-3 text-left">Type</th>
+                <th className="py-2 px-3 text-left whitespace-nowrap">From → To</th>
+                <th className="py-2 px-3 text-right w-14">Days</th>
+                <th className="py-2 px-3 text-left w-24 whitespace-nowrap">Applied on</th>
+                <th className="py-2 px-3 text-left">Reason for applying</th>
+                <th className="py-2 px-3 text-left w-24">Status</th>
+                <th className="py-2 px-3 text-left">Decided by</th>
+                <th className="py-2 px-3 text-left w-24 whitespace-nowrap">Decided on</th>
+                <th className="py-2 px-3 text-left w-20" title="Time between application and decision">Turnaround</th>
+                <th className="py-2 px-3 text-left">Denial reason</th>
+                <th className="py-2 px-3 text-right w-24" title="Applicant's paid-leave + comp-off pool at decision time">Bal @ decision</th>
+                <th className="py-2 px-3 text-right w-20" title="Total days applied this cycle">Applied (YTD)</th>
+                <th className="py-2 px-3 text-right w-20" title="Total days denied this cycle">Denied (YTD)</th>
+                <th className="py-2 px-3 text-right w-20">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((l) => {
+                const days = daysBetween(l.start_date, l.end_date);
+                const bal = l.balance_at_decision;
+                const balTotal = bal
+                  ? round1((bal.paid_leave_available || 0) + (bal.comp_off_available || 0))
+                  : null;
+                const statusTone = STATUS_TONE[l.status] || "bg-slate-100 text-slate-700";
+                return (
+                  <tr
+                    key={l.id}
+                    data-testid={`history-row-${l.id}`}
+                    className="border-b border-slate-100 hover:bg-sky-50/40"
+                  >
+                    <td className="py-2 px-3">
+                      <div className="font-semibold text-slate-800">{l.member_name}</div>
+                      <div className="text-xs text-slate-500">
+                        {l.member_rank ? `${l.member_rank} · ` : ""}{l.member_category}
+                      </div>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="inline-flex items-center px-2 h-5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-800">
+                        {(l.type || "leave").toUpperCase()}
+                      </span>
+                      {l.half_day && (
+                        <div className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 text-[9px] font-extrabold uppercase tracking-wide">
+                          Half · {l.half_day}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 whitespace-nowrap text-slate-700 font-mono text-xs">
+                      {shortDate(l.start_date)} → {shortDate(l.end_date)}
+                      {l.location && <div className="text-[11px] text-slate-500 font-sans">{l.location}</div>}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold">
+                      {l.half_day ? "0.5" : (days ?? "—")}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-600 whitespace-nowrap">{shortDate(l.created_at)}</td>
+                    <td className="py-2 px-3 text-slate-700 text-xs max-w-[220px]">
+                      <div className="line-clamp-2" title={l.reason}>
+                        {l.reason || <span className="text-slate-300">—</span>}
+                      </div>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className={`inline-flex items-center px-2 h-5 rounded-full text-[11px] font-bold ${statusTone}`}>
+                        {l.status === "approved" ? "Approved" : "Rejected"}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-xs font-semibold text-slate-700">
+                      {l.decided_by || <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-600 whitespace-nowrap">
+                      {l.decided_at ? shortDate(l.decided_at) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-[11px] font-mono text-slate-600">
+                      {fmtTurnaround(l.created_at, l.decided_at)}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-700 max-w-[240px]">
+                      {l.status === "rejected"
+                        ? (l.denial_reason
+                            ? <div className="line-clamp-2 text-rose-700" title={l.denial_reason}>{l.denial_reason}</div>
+                            : <span className="text-slate-300">—</span>)
+                        : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-right text-xs font-mono">
+                      {balTotal != null ? (
+                        <span title={`${bal.comp_off_available ?? 0} comp-off + ${bal.paid_leave_available ?? 0} paid leave`}>
+                          {balTotal}
+                        </span>
+                      ) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-right text-xs font-mono">
+                      {typeof l.ytd_applied_days === "number" ? l.ytd_applied_days : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-right text-xs font-mono">
+                      {typeof l.ytd_denied_days === "number" ? l.ytd_denied_days : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      <button
+                        data-testid={`history-reopen-${l.id}`}
+                        onClick={() => onReopen(l.id)}
+                        title="Move this decided request back to pending for a fresh decision"
+                        className="text-[11px] text-slate-500 hover:text-slate-800 hover:underline"
+                      >
+                        Re-open
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+

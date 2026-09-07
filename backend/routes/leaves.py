@@ -52,6 +52,11 @@ class GroupLeaveIn(BaseModel):
 
 class LeaveDecision(BaseModel):
     status: str  # approved | rejected | pending
+    # Feb 2026 — mandatory when status=rejected, otherwise ignored.
+    # Captured on the leave doc as `denial_reason` and rendered in the
+    # admin Approvals "Decision history" panel and on the member's own
+    # leave list so they know WHY the request was turned down.
+    denial_reason: Optional[str] = None
 
 
 def make_router(db, require_admin, get_current_user, compute_comp_off_balance=None, compute_balance_summary=None, split_leave_days=None) -> APIRouter:
@@ -397,25 +402,105 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
         leaves = await db.leaves.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
         return await enrich_leaves(leaves)
 
+    async def _decision_snapshot(user_id: str, cycle_start: str, cycle_end: str) -> dict:
+        """Build the audit-trail snapshot recorded when a leave is
+        approved or rejected. Captures three things "as-of decision":
+
+        1. `balance_at_decision` — the member's paid-leave + comp-off
+           balance summary at the moment (post-decision). Used by admins
+           reviewing the decision history to see whether the decision
+           was made when balance was healthy or thin.
+        2. `ytd_applied_days` — cumulative days the member has APPLIED
+           for in the current leave cycle across all statuses. Includes
+           this request.
+        3. `ytd_denied_days` — cumulative days denied in the same
+           cycle. Includes this request if it's being rejected.
+
+        The cycle window matches whatever holidays.compute_balance_summary
+        uses internally; we pass the member's leave-cycle start/end so
+        the caller can control it (e.g. Apr–Mar for staff, Jan–Dec for
+        others). If we can't compute the balance summary the field is
+        left null — never fail the decision because of a snapshot.
+        """
+        snapshot: dict = {}
+        if compute_balance_summary is not None:
+            try:
+                u = await db.users.find_one({"id": user_id}, {"_id": 0})
+                if u:
+                    summary = await compute_balance_summary(db, u)
+                    snapshot["balance_at_decision"] = {
+                        "paid_leave_available": summary.get("paid_leave", {}).get("available"),
+                        "comp_off_available":   summary.get("comp_off", {}).get("available"),
+                    }
+            except Exception as exc:  # pragma: no cover — defensive
+                logger.debug("balance snapshot failed for %s: %s", user_id, exc)
+        # YTD counts — one aggregate per member in the requested window.
+        # We include the leave being decided by using the pre-update
+        # status where relevant (caller adds `include_current` days).
+        try:
+            match = {
+                "user_id": user_id,
+                "start_date": {"$lte": cycle_end},
+                "end_date":   {"$gte": cycle_start},
+                "type": {"$in": ["leave", "tour", "posting", "comp_off"]},
+            }
+            rows = await db.leaves.find(match, {"_id": 0, "start_date": 1, "end_date": 1, "status": 1, "half_day": 1}).to_list(2000)
+            applied_days = 0.0
+            denied_days = 0.0
+            for r in rows:
+                d = 0.5 if r.get("half_day") else _days_inclusive(r["start_date"], r["end_date"])
+                applied_days += d
+                if r.get("status") == "rejected":
+                    denied_days += d
+            snapshot["ytd_applied_days"] = round(applied_days, 2)
+            snapshot["ytd_denied_days"]  = round(denied_days, 2)
+        except Exception as exc:  # pragma: no cover
+            logger.debug("ytd snapshot failed for %s: %s", user_id, exc)
+        return snapshot
+
     @router.patch("/leaves/{leave_id}")
     async def decide_leave(leave_id: str, body: LeaveDecision, admin: dict = Depends(require_admin)):
         # Stamp the decision audit fields so the admin Approvals table can
         # show "approved by Jane Doe on 25 Jun" alongside the status pill.
+        leave = await db.leaves.find_one({"id": leave_id}, {"_id": 0})
+        if not leave:
+            raise HTTPException(status_code=404, detail="Leave not found")
+        # Reject requires a reason so we always have something to show
+        # the applicant when they check back on their own list.
+        if body.status == "rejected":
+            reason = (body.denial_reason or "").strip()
+            if not reason:
+                raise HTTPException(status_code=400, detail="Denial reason is required when rejecting a request")
         update = {"status": body.status}
         if body.status in ("approved", "rejected"):
             update["decided_by"] = admin["full_name"]
             update["decided_by_id"] = admin["id"]
             update["decided_at"] = now_utc().isoformat()
+            # Applicant-facing notification flag — set here and cleared
+            # once the member has seen it via /me/notifications/ack.
+            update["decision_ack_at"] = None
+            if body.status == "rejected":
+                update["denial_reason"] = (body.denial_reason or "").strip()
+            else:
+                update["denial_reason"] = None
+            # Audit snapshot: balance & YTD numbers at the moment of decision.
+            # Window = the member's current leave cycle if we can figure
+            # it out (falls back to the calendar year).
+            today = _date_cls.today()
+            cycle_start = f"{today.year}-01-01"
+            cycle_end   = f"{today.year}-12-31"
+            snap = await _decision_snapshot(leave["user_id"], cycle_start, cycle_end)
+            update.update(snap)
         else:
             # Re-opening a request back to pending wipes the prior decision
             # stamp so the audit trail doesn't lie about a stale approver.
             update["decided_by"] = None
             update["decided_by_id"] = None
             update["decided_at"] = None
+            update["denial_reason"] = None
+            update["decision_ack_at"] = None
         await db.leaves.update_one({"id": leave_id}, {"$set": update})
         leave = await db.leaves.find_one({"id": leave_id}, {"_id": 0})
-        if not leave:
-            raise HTTPException(status_code=404, detail="Leave not found")
         return leave
 
     @router.post("/leaves/group")
