@@ -828,14 +828,12 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         out.sort(key=lambda r: (r["name"] or "").lower())
         return {"start": start, "end": end, "rows": out}
 
-    @router.get("/reports/calendar-grid")
-    async def calendar_grid(
+    async def _grid_impl(
         month: str,
         category: Optional[str] = None,
         fleet: Optional[str] = None,
         institution: Optional[str] = None,
         with_meta: bool = True,
-        admin: dict = Depends(require_admin),
     ):
         """Month-view calendar grid — one row per member, one cell per
         calendar day of the requested month.
@@ -1287,6 +1285,48 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         return {"month": month, "start": start_iso, "end": end_iso,
                 "today": today_iso, "days": days, "rows": rows}
 
+    @router.get("/reports/calendar-grid")
+    async def calendar_grid(
+        month: str,
+        category: Optional[str] = None,
+        fleet: Optional[str] = None,
+        institution: Optional[str] = None,
+        with_meta: bool = True,
+        admin: dict = Depends(require_admin),
+    ):
+        """Admin-facing month grid. Thin wrapper over `_grid_impl` so the
+        same computation backs both the UI and the external `/api/grid`
+        pull (added Jun 2026 for the PayCraft integration)."""
+        return await _grid_impl(month, category, fleet, institution, with_meta)
+
+    @router.get("/grid")
+    async def external_grid(
+        month: str,
+        key: str = "",
+        category: Optional[str] = None,
+        fleet: Optional[str] = None,
+        institution: Optional[str] = None,
+    ):
+        """Read-only month-grid pull for a trusted external consumer
+        (PayCraft payroll). Gated by a shared secret in the `key` query
+        param, compared constant-time against the `GRID_API_KEY` env var.
+        Returns the same JSON as the admin grid but with per-cell tooltip
+        metadata dropped (lighter payload for a scheduled pull).
+
+        If `GRID_API_KEY` is unset the endpoint 503s — a mis-configured
+        server must never behave like an open, PII-leaking endpoint.
+        `category` accepts the usual buckets (athlete / elite / rest /
+        payroll) so PayCraft can pull just the staff+coach population.
+        """
+        import hmac
+        import os
+        expected = os.environ.get("GRID_API_KEY", "").strip()
+        if not expected:
+            raise HTTPException(status_code=503, detail="Grid API disabled: GRID_API_KEY not configured on server")
+        if not key or not hmac.compare_digest(key.strip(), expected):
+            raise HTTPException(status_code=401, detail="Invalid key")
+        return await _grid_impl(month, category, fleet, institution, with_meta=False)
+
     @router.get("/reports/calendar-grid/export")
     async def export_calendar_grid(
         month: str, fmt: str = "csv",
@@ -1296,7 +1336,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         admin: dict = Depends(require_admin),
     ):
         """CSV / PDF export of the calendar-grid report."""
-        data = await calendar_grid(month, category, fleet, institution, with_meta=False, admin=admin)
+        data = await _grid_impl(month, category, fleet, institution, with_meta=False)
         rows = data["rows"]
         days = data["days"]
         day_headers = [d[8:10] for d in days]  # "01", "02", ..., "31"

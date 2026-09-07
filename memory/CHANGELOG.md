@@ -4142,3 +4142,16 @@ green**. Mongo unique index confirmed via index_information().
   sub-header (weekday/label) row, and body totals (GridRowTotals.jsx).
   New right offsets: LT=0, EO=34, OT=68, TR=108, LV=142, AB=176, P=210.
 - Files: `CalendarGridTab.jsx`, `calendar-grid/GridRowTotals.jsx`.
+
+## 30 Jun 2026 — Read-only /api/grid pull for PayCraft (external payroll)
+- New endpoint GET /api/grid?month=YYYY-MM&key=<secret> in routes/reports.py.
+- Refactored the calendar-grid handler into an inner _grid_impl() reused
+  by 3 callers: admin route /api/reports/calendar-grid, the CSV/PDF
+  export, and the new external /api/grid.
+- Gated by shared secret GRID_API_KEY (new backend/.env var), matched
+  constant-time via hmac.compare_digest; 503 if unset, 401 on mismatch.
+- Returns same month-grid JSON (rows + per-member totals) with cell_meta
+  dropped for a lean payload. Optional category (athlete|elite|rest|
+  payroll), fleet, institution passthrough.
+- Verified: valid key 200 (112 rows), wrong/no key 401, admin route still
+  token-gated, payroll bucket = staff+coach (41), CSV export intact.
