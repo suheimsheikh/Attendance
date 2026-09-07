@@ -1092,6 +1092,69 @@ async def list_members(user: dict = Depends(get_current_user)):
         out.append(UserPublic(**{k: u_swapped.get(k) for k in UserPublic.model_fields}))
     return out
 
+@api_router.get("/staff-roster/export")
+async def export_staff_roster(admin: dict = Depends(require_admin)):
+    """Excel (.xlsx) roster of the non-athlete workforce — Staff,
+    Executives and Coaches — for payroll seeding. One row per person
+    with an empty 'Monthly Salary' column ready to be filled in and fed
+    to the payroll workflow. Admin-only.
+    """
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    wanted = ["staff", "executive", "coach"]
+    labels = {"staff": "Staff", "executive": "Executive", "coach": "Coach"}
+
+    users = await db.users.find(
+        {"category": {"$in": wanted}},
+        {"_id": 0, "full_name": 1, "rank": 1, "category": 1, "mobile": 1, "email": 1},
+    ).to_list(5000)
+    order = {"staff": 0, "executive": 1, "coach": 2}
+    users.sort(key=lambda u: (order.get(u.get("category"), 9), (u.get("full_name") or "").lower()))
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Staff Roster"
+    headers = ["S.No", "Name", "Designation", "Category", "Mobile", "Monthly Salary"]
+    ws.append(headers)
+    head_fill = PatternFill("solid", fgColor="1E293B")
+    head_font = Font(bold=True, color="FFFFFF")
+    for col, _ in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col)
+        cell.fill = head_fill
+        cell.font = head_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for i, u in enumerate(users, start=1):
+        ws.append([
+            i,
+            u.get("full_name") or "",
+            u.get("rank") or "",
+            labels.get(u.get("category"), u.get("category") or ""),
+            u.get("mobile") or "",
+            "",
+        ])
+
+    widths = [7, 32, 24, 14, 16, 16]
+    for col, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(col)].width = w
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    from fastapi.responses import Response
+    today = date.today().isoformat()
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="staff_roster_{today}.xlsx"'},
+    )
+
+
+
 
 def member_photo_url(u: dict) -> Optional[str]:
     """Compat shim — the canonical implementation lives in

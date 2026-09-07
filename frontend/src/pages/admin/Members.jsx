@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState, useMemo } from "react";
-import { Loader2, Plus, Search, FileSpreadsheet } from "lucide-react";
+import { Loader2, Plus, Search, FileSpreadsheet, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, showApiError } from "../../api";
+import { api, showApiError, downloadBlob } from "../../api";
 import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 import MemberForm from "./MemberForm";
 import MemberBucketFilters from "./members/MemberBucketFilters";
@@ -344,6 +344,21 @@ export default function Members() {
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            data-testid="export-staff-roster"
+            onClick={async () => {
+              try {
+                await downloadBlob("/staff-roster/export", `staff_roster_${new Date().toISOString().slice(0,10)}.xlsx`);
+                toast.success("Staff roster downloaded");
+              } catch (err) {
+                showApiError(err, "Couldn't export staff roster");
+              }
+            }}
+            className="iu-btn-secondary"
+            title="Download an Excel of all Staff, Executives and Coaches (names + designation), with a blank Monthly Salary column for payroll."
+          >
+            <Download size={16}/> Staff roster (Excel)
+          </button>
           <Link
             to="/admin/import"
             data-testid="members-import-parents"
