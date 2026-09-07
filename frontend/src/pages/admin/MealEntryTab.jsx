@@ -1109,7 +1109,17 @@ export default function MealEntryTab({ liveSig }) {
                         </td>
                         <td className="px-1 py-2 text-slate-500 text-xs">{it.unit}</td>
                         <td className="px-1 py-2 text-right tabular-nums text-slate-600" data-testid={`entry-onhand-${it.id}`}>
-                          {oh != null ? fmtQty(oh) : "—"}
+                          {oh != null ? (
+                            oh < 0
+                              ? <span
+                                  className="font-extrabold text-rose-700"
+                                  title={`Stock is negative (${fmtQty(oh)}) — likely from over-issuing on a past day. Reconcile before fresh issues.`}
+                                  data-testid={`entry-onhand-negative-${it.id}`}
+                                >{fmtQty(oh)}</span>
+                              : oh === 0
+                                ? <span className="font-semibold text-rose-500" title="Zero stock — nothing to issue">{fmtQty(oh)}</span>
+                                : fmtQty(oh)
+                          ) : "—"}
                         </td>
                         <td className="p-2 border-l-2 border-emerald-100">
                           {/* Per-row Supplier column — visible dropdown so
@@ -1184,7 +1194,26 @@ export default function MealEntryTab({ liveSig }) {
                             value={issueQty ?? ""}
                             onChange={(ev) => { dirtyIssues.current.add(it.id); setIssues({ ...issues, [it.id]: ev.target.value }); }}
                             onFocus={() => notifyFocus("issue", it.id)}
-                            onBlur={() => { notifyBlur("issue", it.id); queueIssues(); }}
+                            onBlur={() => {
+                              notifyBlur("issue", it.id);
+                              // Hard toast warning at commit time — cheap
+                              // fat-finger guard: if the entered issue by
+                              // itself already exceeds on-hand stock, tell
+                              // the chef before the queued save fires so
+                              // they can back out. Kept as a toast (not a
+                              // block) because a rare emergency issue on
+                              // negative stock is still legal — the entry
+                              // just needs a same-day purchase to
+                              // reconcile.
+                              const q = num(issueQty);
+                              if (oh != null && q > oh + 1e-6) {
+                                toast.warning(
+                                  `Issuing ${fmtQty(q)} ${it.unit} of ${it.name} — only ${fmtQty(oh)} on hand. Stock will drop to ${fmtQty(oh - q)}.`,
+                                  { duration: 6000 },
+                                );
+                              }
+                              queueIssues();
+                            }}
                             onKeyDown={onGridKeyDown("issue-qty", it.id)}
                             className={`iu-input !h-8 !px-2 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`}
                             placeholder="0"
