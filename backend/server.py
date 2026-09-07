@@ -516,6 +516,16 @@ async def _seed_database() -> None:
     await db.leaves.create_index([("status", 1), ("start_date", 1), ("end_date", 1)])
     await db.leaves.create_index([("user_id", 1), ("status", 1)])
     await db.leaves.create_index("status")
+    # Feb 2026 · Slice 1 — the Decision-history table in Approvals
+    # sorts decided leaves by `decided_at DESC`. Without an index Mongo
+    # falls back to an in-memory sort that scales linearly with the
+    # collection; this covers the pattern with an O(log n) walk.
+    await db.leaves.create_index([("decided_at", -1)], sparse=True)
+    # Slice 2 — the applicant-side login banner does
+    # find({user_id, status in [approved,rejected], decision_ack_at:null})
+    # on every page mount. Compound index covers all three predicates
+    # and reduces the scan to only the small unacked set.
+    await db.leaves.create_index([("user_id", 1), ("decision_ack_at", 1)], sparse=True)
     await db.devices.create_index("status", sparse=True)
     # Escort module hot-paths (added 06/2026 alongside the Escorts launch):
     # `escorts.id` is used by every escort-token request via get_current_user,
@@ -533,6 +543,11 @@ async def _seed_database() -> None:
     # writes so keeping them indexed is a no-brainer.
     await db.corrections.create_index([("status", 1), ("created_at", -1)])
     await db.corrections.create_index("requester_id")
+    # Feb 2026 · Slice 3 — decision-history section on Approvals queries
+    # corrections by (status in [approved,rejected]) then sorts by
+    # `decided_at DESC`. Sparse because only decided rows populate the
+    # field.
+    await db.corrections.create_index([("decided_at", -1)], sparse=True)
     await db.breaks.create_index([("start_date", 1), ("end_date", 1)])
     await db.holidays.create_index("date")
     # Covering-compound so /reports/calendar-grid + /reports/attendance can
