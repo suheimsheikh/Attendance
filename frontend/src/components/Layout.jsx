@@ -13,6 +13,7 @@ import InstallPrompt from "./InstallPrompt";
 import OfflineBanner from "./OfflineBanner";
 import HelpChat from "./HelpChat";
 import UserCredsChip from "./UserCredsChip";
+import LeaveDecisionBanner from "./LeaveDecisionBanner";
 import { api } from "../api";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { useApiQuery } from "../hooks/useApiQuery";
@@ -388,6 +389,7 @@ export default function Layout() {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto">
+          <LeaveDecisionBanner />
           <Outlet />
         </main>
       </div>

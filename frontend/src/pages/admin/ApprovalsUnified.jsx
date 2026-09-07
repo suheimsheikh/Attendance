@@ -105,10 +105,15 @@ function normCheckin(row) {
       row.geofence_status || (row.distance_m ? `${Math.round(row.distance_m)}m from site` : null),
       row.reason,
     ].filter(Boolean).join(" · "),
-    apply: async (decision) => {
+    raw: row,
+    apply: async (decision, extra = {}) => {
+      // Backend requires `note` (>= 3 chars) on rejection — Slice 3
+      // makes the frontend surface the same modal used for leaves so
+      // the requester always has an audit trail.
+      const note = extra.denial_reason || "";
       await api.post(`/admin/checkin-approvals/${row.id}/decide`, {
         decision: decision === "approve" ? "approved" : "rejected",
-        note: "",
+        note,
       });
     },
   };
@@ -126,10 +131,15 @@ function normCorrection(row) {
       row.filed_by_admin_name ? `filed by ${row.filed_by_admin_name}` : null,
       row.reason,
     ].filter(Boolean).join(" · "),
-    apply: async (decision) => {
-      await api.post(`/admin/corrections/${row.id}/decide`, {
-        status: decision === "approve" ? "approved" : "rejected",
-      });
+    raw: row,
+    apply: async (decision, extra = {}) => {
+      const body = { status: decision === "approve" ? "approved" : "rejected" };
+      // Slice 3: rejection reason lives on `admin_note` for
+      // corrections (see corrections.py CorrectionDecision model).
+      if (decision === "reject" && extra.denial_reason) {
+        body.admin_note = extra.denial_reason;
+      }
+      await api.post(`/admin/corrections/${row.id}/decide`, body);
     },
   };
 }
@@ -178,6 +188,15 @@ export default function ApprovalsUnified() {
   const [rejectReason, setRejectReason] = useState("");
   const [rejectBusy, setRejectBusy] = useState(false);
 
+  // Balance-override modal (Feb 2026 · Slice 2) — when approving a
+  // LEAVE whose requested days exceed the applicant's live pool the
+  // backend now returns 400 unless `override_reason` is on the body.
+  // We do a client-side pre-check on `balanceMap` and surface this
+  // modal so admins can approve LOP-triggering leaves knowingly.
+  const [overrideTarget, setOverrideTarget] = useState(null);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideBusy, setOverrideBusy] = useState(false);
+
   // Per-applicant leave-summary cache. Keyed by user_id. Populated
   // lazily as the leave rows render, so the inline "X days available"
   // chip appears without blocking the initial pending fetch.
@@ -211,9 +230,29 @@ export default function ApprovalsUnified() {
         queryFn: () => api.get("/admin/checkin-approvals", { status: "pending" }) },
       { queryKey: ["/admin/corrections", { status: "pending" }],
         queryFn: () => api.get("/admin/corrections", { status: "pending" }) },
+      // Slice 3 (Feb 2026) — decided rows for each queue so we can
+      // render Decision-history tables under each pending grid. Keep
+      // as separate queries (rather than one giant fetch) so the
+      // pending queue stays snappy on page entry.
+      { queryKey: ["/admin/checkin-approvals", { status: "decided" }],
+        queryFn: async () => {
+          const [a, r] = await Promise.all([
+            api.get("/admin/checkin-approvals", { status: "approved" }).catch(() => []),
+            api.get("/admin/checkin-approvals", { status: "rejected" }).catch(() => []),
+          ]);
+          return [...(a || []), ...(r || [])];
+        } },
+      { queryKey: ["/admin/corrections", { status: "decided" }],
+        queryFn: async () => {
+          const [a, r] = await Promise.all([
+            api.get("/admin/corrections", { status: "approved" }).catch(() => []),
+            api.get("/admin/corrections", { status: "rejected" }).catch(() => []),
+          ]);
+          return [...(a || []), ...(r || [])];
+        } },
     ],
   });
-  const [leavesQ, checkinsQ, correctionsQ] = queries;
+  const [leavesQ, checkinsQ, correctionsQ, checkinsDecidedQ, correctionsDecidedQ] = queries;
   const loading = queries.some((q) => q.isFetching);
 
   // Surface any queue-level failures via toast, keyed by label so a stale
@@ -282,10 +321,31 @@ export default function ApprovalsUnified() {
       setPendingConfirm(row);
       return;
     }
-    // Leave rejection requires a denial reason (backend 400s otherwise
-    // — Feb 2026). Divert into the reason modal so the applicant has
-    // an audit trail.
-    if (decision === "reject" && row.kind === "leave" && !row._rejectReason) {
+    // Balance-override intercept (Slice 2). Backend 400s if requested >
+    // available on a `type=leave`. Client-side pre-check keeps the UX
+    // smooth — we ask the admin here rather than showing a raw 400
+    // toast.
+    if (decision === "approve"
+        && row.kind === "leave"
+        && row.raw?.type === "leave"
+        && !row._overrideReason) {
+      const bal = balanceMap[row.context?.user_id];
+      if (bal && !bal.error) {
+        const avail = round1((bal.comp_off?.available || 0) + (bal.paid_leave?.available || 0));
+        const req = daysBetween(row.context.start_date, row.context.end_date) || 1;
+        const requested = row.raw?.half_day ? 0.5 : req;
+        if (requested > avail + 1e-9) {
+          setOverrideTarget({ ...row, _requested: requested, _available: avail });
+          setOverrideReason("");
+          return;
+        }
+      }
+    }
+    // Rejection requires a reason for ALL kinds (leaves / check-ins /
+    // corrections) — Slice 3 unifies the flow so the requester always
+    // has an audit trail. Divert into the reason modal on any first
+    // reject click.
+    if (decision === "reject" && !row._rejectReason) {
       setRejectTarget(row);
       setRejectReason("");
       return;
@@ -294,7 +354,9 @@ export default function ApprovalsUnified() {
     try {
       const extra = decision === "reject" && row._rejectReason
         ? { denial_reason: row._rejectReason }
-        : {};
+        : (decision === "approve" && row._overrideReason
+            ? { override_reason: row._overrideReason }
+            : {});
       await row.apply(decision, extra);
       toast.success(`${decision === "approve" ? "Approved" : "Rejected"}: ${row.member_name}`);
       // Optimistic: yank the row out of its per-queue cache so admins
@@ -358,6 +420,26 @@ export default function ApprovalsUnified() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rejectReason, rejectTarget]);
 
+  const submitOverride = useCallback(async () => {
+    const reason = overrideReason.trim();
+    if (!reason || !overrideTarget) {
+      toast.error("Please write a short justification for the LOP override");
+      return;
+    }
+    setOverrideBusy(true);
+    try {
+      await decide(
+        { ...overrideTarget, _overrideReason: reason, _confirmed: true },
+        "approve",
+      );
+      setOverrideTarget(null);
+      setOverrideReason("");
+    } finally {
+      setOverrideBusy(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overrideReason, overrideTarget]);
+
   // Batch-fetch each pending leave applicant's live leave-summary so
   // the balance chip on the row can flag shortfall approvals at a
   // glance. One fetch per unique user_id — cached in balanceMap.
@@ -393,6 +475,25 @@ export default function ApprovalsUnified() {
       .filter((l) => l.status === "approved" || l.status === "rejected")
       .sort((a, b) => (b.decided_at || "").localeCompare(a.decided_at || ""));
   }, [leavesQ.data]);
+
+  // Slice 3: decided lists for check-ins & corrections. Both endpoints
+  // return the concatenated approved + rejected arrays via the
+  // pre-defined queries; we just sort newest-first here.
+  const decidedCheckins = useMemo(() => {
+    const arr = Array.isArray(checkinsDecidedQ.data) ? checkinsDecidedQ.data : [];
+    return [...arr].sort((a, b) =>
+      (b.approval_decided_at || b.decided_at || b.approval_at || "").localeCompare(
+        a.approval_decided_at || a.decided_at || a.approval_at || "",
+      ),
+    );
+  }, [checkinsDecidedQ.data]);
+
+  const decidedCorrections = useMemo(() => {
+    const arr = Array.isArray(correctionsDecidedQ.data) ? correctionsDecidedQ.data : [];
+    return [...arr].sort((a, b) =>
+      (b.decided_at || "").localeCompare(a.decided_at || ""),
+    );
+  }, [correctionsDecidedQ.data]);
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto" data-testid="approvals-unified">
@@ -562,7 +663,7 @@ export default function ApprovalsUnified() {
         </div>
       </div>
 
-      {/* --- Decision history (leaves only for now — Feb 2026) --- */}
+      {/* --- Decision history (leaves + checkins + corrections) --- */}
       <DecisionHistoryLeaves
         rows={decidedLeaves}
         onReopen={async (leaveId) => {
@@ -576,6 +677,8 @@ export default function ApprovalsUnified() {
           }
         }}
       />
+      <DecisionHistoryCheckins rows={decidedCheckins} />
+      <DecisionHistoryCorrections rows={decidedCorrections} />
 
       {showOnBehalf && (
         <ApplyForm
@@ -622,6 +725,16 @@ export default function ApprovalsUnified() {
           busy={rejectBusy}
           onCancel={() => { setRejectTarget(null); setRejectReason(""); }}
           onSubmit={submitReject}
+        />
+      )}
+      {overrideTarget && (
+        <OverrideReasonModal
+          row={overrideTarget}
+          reason={overrideReason}
+          onReasonChange={setOverrideReason}
+          busy={overrideBusy}
+          onCancel={() => { setOverrideTarget(null); setOverrideReason(""); }}
+          onSubmit={submitOverride}
         />
       )}
     </div>
@@ -724,7 +837,66 @@ function RejectReasonModal({ row, reason, onReasonChange, busy, onCancel, onSubm
 }
 
 // ---------------------------------------------------------------------------
-// Decision history table — reverse chronological (latest at top). For each
+// OverrideReasonModal — mandatory LOP override reason on Approve when the
+// applicant's balance falls short of the requested days. Copies the visual
+// pattern of RejectReasonModal but frames the action positively (Approve
+// with LOP) and hard-shows the shortfall so admins can't miss it.
+// ---------------------------------------------------------------------------
+function OverrideReasonModal({ row, reason, onReasonChange, busy, onCancel, onSubmit }) {
+  const requested = row._requested;
+  const available = row._available;
+  const shortfall = round1(Math.max(0, requested - available));
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" data-testid="override-modal">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+        <div className="px-5 py-4 border-b border-slate-100 bg-amber-50/70">
+          <h3 className="text-lg font-extrabold text-amber-900 inline-flex items-center gap-2">
+            <AlertTriangle size={18} /> Balance shortfall — approve with LOP?
+          </h3>
+          <p className="text-xs text-amber-800 mt-1">
+            {row.member_name} · {row.when}
+          </p>
+          <p className="text-[11px] text-amber-800 mt-2">
+            Requesting <strong>{requested}</strong> day(s) but only <strong>{available}</strong> available.
+            Approving will LOP <strong className="uppercase">{shortfall} day{shortfall === 1 ? "" : "s"}</strong>.
+          </p>
+        </div>
+        <div className="px-5 py-4 space-y-2">
+          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider" htmlFor="override-reason">
+            Justification for the override *
+          </label>
+          <textarea
+            id="override-reason"
+            data-testid="override-reason-input"
+            value={reason}
+            onChange={(e) => onReasonChange(e.target.value)}
+            rows={3}
+            autoFocus
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            placeholder="e.g. Bereavement — approving as LOP with the member's consent"
+          />
+          <p className="text-[11px] text-slate-500">
+            Recorded on the leave audit trail as `approval_override_reason` for future reference.
+          </p>
+        </div>
+        <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
+          <button type="button" data-testid="override-modal-cancel" onClick={onCancel} disabled={busy} className="iu-btn-secondary !h-9 !px-3 !text-sm">Cancel</button>
+          <button
+            type="button"
+            data-testid="override-modal-confirm"
+            onClick={onSubmit}
+            disabled={busy || !reason.trim()}
+            className="iu-btn-primary !h-9 !px-3 !text-sm !bg-amber-600 hover:!bg-amber-700"
+          >
+            {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+            Approve with LOP
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // decided leave we surface every field from the pending grid PLUS the
 // four new audit fields snapshotted on PATCH:
 //   • turnaround (applied → decided) — computed client-side from the two ISO stamps
@@ -882,6 +1054,184 @@ function DecisionHistoryLeaves({ rows, onReopen }) {
                       >
                         Re-open
                       </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// Decision history — Check-ins. Simpler than leaves: no balance / YTD
+// fields, no re-open (check-ins aren't reversible), but the columns
+// still mirror the pending grid + audit fields.
+// ---------------------------------------------------------------------------
+function DecisionHistoryCheckins({ rows }) {
+  if (!rows || rows.length === 0) {
+    return (
+      <div className="mt-6" data-testid="decision-history-checkins-empty">
+        <div className="flex items-center gap-2 mb-2 text-slate-500">
+          <History size={14} />
+          <h2 className="text-sm font-extrabold uppercase tracking-wider">Decision history — Check-ins</h2>
+        </div>
+        <div className="iu-card p-6 text-center text-slate-400 text-sm">No decided check-in requests yet.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-6" data-testid="decision-history-checkins">
+      <div className="flex items-center gap-2 mb-2 text-slate-500">
+        <History size={14} />
+        <h2 className="text-sm font-extrabold uppercase tracking-wider">Decision history — Check-ins</h2>
+        <span className="text-[11px] normal-case tracking-normal text-slate-400">
+          (latest on top — {rows.length} decision{rows.length === 1 ? "" : "s"})
+        </span>
+      </div>
+      <div className="iu-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[1100px]" data-testid="decision-history-checkins-table">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider">
+              <tr>
+                <th className="py-2 px-3 text-left">Member</th>
+                <th className="py-2 px-3 text-left">Date · Time</th>
+                <th className="py-2 px-3 text-left">Method · Geofence</th>
+                <th className="py-2 px-3 text-left">Reason for applying</th>
+                <th className="py-2 px-3 text-left w-24">Status</th>
+                <th className="py-2 px-3 text-left">Decided by</th>
+                <th className="py-2 px-3 text-left w-24">Decided on</th>
+                <th className="py-2 px-3 text-left w-20">Turnaround</th>
+                <th className="py-2 px-3 text-left">Denial note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const decidedAt = r.approval_decided_at || r.decided_at || r.approval_at;
+                const submittedAt = r.requested_at || r.check_in_at;
+                const status = r.approval_status || r.status;
+                const tone = status === "approved" ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700";
+                return (
+                  <tr key={r.id} data-testid={`history-checkin-row-${r.id}`} className="border-b border-slate-100 hover:bg-sky-50/40">
+                    <td className="py-2 px-3 font-semibold text-slate-800">{r.user_name || r.member_name || "—"}</td>
+                    <td className="py-2 px-3 whitespace-nowrap text-slate-700 text-xs">
+                      {r.date && dayOfWeek(r.date)} {r.date && formatDate(r.date)} · {r.check_in_at && formatTime(r.check_in_at)}
+                    </td>
+                    <td className="py-2 px-3 text-slate-600 text-xs">
+                      {[r.method?.toUpperCase(), r.geofence_status || (r.distance_m ? `${Math.round(r.distance_m)}m from site` : null)]
+                        .filter(Boolean).join(" · ") || "—"}
+                    </td>
+                    <td className="py-2 px-3 text-slate-700 text-xs max-w-[240px]">
+                      <div className="line-clamp-2" title={r.reason}>{r.reason || <span className="text-slate-300">—</span>}</div>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className={`inline-flex items-center px-2 h-5 rounded-full text-[11px] font-bold ${tone}`}>
+                        {status === "approved" ? "Approved" : "Rejected"}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-xs font-semibold text-slate-700">
+                      {r.approval_by_name || r.decided_by || <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-600 whitespace-nowrap">
+                      {decidedAt ? shortDate(decidedAt) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-[11px] font-mono text-slate-600">
+                      {fmtTurnaround(submittedAt, decidedAt)}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-700 max-w-[240px]">
+                      {status === "rejected" && r.approval_note
+                        ? <div className="line-clamp-2 text-rose-700" title={r.approval_note}>{r.approval_note}</div>
+                        : <span className="text-slate-300">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Decision history — Corrections. Column set mirrors leaves minus the
+// balance / YTD snapshot (corrections don't touch the leave pool).
+// ---------------------------------------------------------------------------
+function DecisionHistoryCorrections({ rows }) {
+  if (!rows || rows.length === 0) {
+    return (
+      <div className="mt-6" data-testid="decision-history-corrections-empty">
+        <div className="flex items-center gap-2 mb-2 text-slate-500">
+          <History size={14} />
+          <h2 className="text-sm font-extrabold uppercase tracking-wider">Decision history — Corrections</h2>
+        </div>
+        <div className="iu-card p-6 text-center text-slate-400 text-sm">No decided correction requests yet.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-6" data-testid="decision-history-corrections">
+      <div className="flex items-center gap-2 mb-2 text-slate-500">
+        <History size={14} />
+        <h2 className="text-sm font-extrabold uppercase tracking-wider">Decision history — Corrections</h2>
+        <span className="text-[11px] normal-case tracking-normal text-slate-400">
+          (latest on top — {rows.length} decision{rows.length === 1 ? "" : "s"})
+        </span>
+      </div>
+      <div className="iu-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[1100px]" data-testid="decision-history-corrections-table">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider">
+              <tr>
+                <th className="py-2 px-3 text-left">Requester</th>
+                <th className="py-2 px-3 text-left">Kind</th>
+                <th className="py-2 px-3 text-left">Target date</th>
+                <th className="py-2 px-3 text-left">Reason for applying</th>
+                <th className="py-2 px-3 text-left w-24">Status</th>
+                <th className="py-2 px-3 text-left">Decided by</th>
+                <th className="py-2 px-3 text-left w-24">Decided on</th>
+                <th className="py-2 px-3 text-left w-20">Turnaround</th>
+                <th className="py-2 px-3 text-left">Denial note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const tone = r.status === "approved" ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700";
+                return (
+                  <tr key={r.id} data-testid={`history-correction-row-${r.id}`} className="border-b border-slate-100 hover:bg-sky-50/40">
+                    <td className="py-2 px-3 font-semibold text-slate-800">{r.requester_name || "—"}</td>
+                    <td className="py-2 px-3 text-xs text-slate-600 capitalize">
+                      {(r.kind || "").replace(/_/g, " ")}
+                    </td>
+                    <td className="py-2 px-3 whitespace-nowrap text-slate-700 text-xs">
+                      {r.target_date && `${dayOfWeek(r.target_date)} ${formatDate(r.target_date)}`}
+                    </td>
+                    <td className="py-2 px-3 text-slate-700 text-xs max-w-[240px]">
+                      <div className="line-clamp-2" title={r.reason}>{r.reason || <span className="text-slate-300">—</span>}</div>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className={`inline-flex items-center px-2 h-5 rounded-full text-[11px] font-bold ${tone}`}>
+                        {r.status === "approved" ? "Approved" : "Rejected"}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-xs font-semibold text-slate-700">
+                      {r.decided_by_name || <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-600 whitespace-nowrap">
+                      {r.decided_at ? shortDate(r.decided_at) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-[11px] font-mono text-slate-600">
+                      {fmtTurnaround(r.requested_at, r.decided_at)}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-700 max-w-[240px]">
+                      {r.status === "rejected" && r.admin_note
+                        ? <div className="line-clamp-2 text-rose-700" title={r.admin_note}>{r.admin_note}</div>
+                        : <span className="text-slate-300">—</span>}
                     </td>
                   </tr>
                 );

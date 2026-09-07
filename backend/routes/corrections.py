@@ -584,6 +584,16 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
 
     @router.post("/admin/corrections/{cid}/decide")
     async def decide_correction(cid: str, body: CorrectionDecision, admin: dict = Depends(require_admin)):
+        # Slice 3 (Feb 2026): parity with leave & check-in rejects — a
+        # correction rejection must carry an admin_note so the requester
+        # sees WHY. Approvals can still be one-click.
+        if body.status == "rejected":
+            note = (body.admin_note or "").strip()
+            if not note or len(note) < 3:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A rejection note (>= 3 characters) is required so the requester knows why",
+                )
         c = await _load_correction(cid)
         applied = await _decide_one(c, body.status, body.admin_note, admin)
         return {"ok": True, "id": cid, "decision": body.status, "applied": applied}

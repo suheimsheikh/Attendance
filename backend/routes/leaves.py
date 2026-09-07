@@ -57,6 +57,12 @@ class LeaveDecision(BaseModel):
     # admin Approvals "Decision history" panel and on the member's own
     # leave list so they know WHY the request was turned down.
     denial_reason: Optional[str] = None
+    # Feb 2026 (Slice 2) — mandatory ONLY when approving a `leave` type
+    # request whose requested days exceed the applicant's live paid-leave
+    # + comp-off pool. Stored as `approval_override_reason` on the leave
+    # doc so the audit trail explains why an admin knowingly LOPed the
+    # member. Ignored for all other decision paths.
+    override_reason: Optional[str] = None
 
 
 def make_router(db, require_admin, get_current_user, compute_comp_off_balance=None, compute_balance_summary=None, split_leave_days=None) -> APIRouter:
@@ -127,6 +133,61 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
 
     # Expose for the reports router (no longer lives in server.py).
     router.enrich_leaves = enrich_leaves  # type: ignore[attr-defined]
+
+    @router.get("/me/leave-notifications")
+    async def my_leave_notifications(user: dict = Depends(get_current_user)) -> List[dict]:
+        """Return the logged-in user's freshly-decided leaves that they
+        haven't acknowledged yet. Populates the login-time banner
+        ("Your leave for 12 Aug was approved") so applicants don't have
+        to hunt for the outcome. A leave becomes an unread notification
+        the moment an admin PATCHes it — `decision_ack_at` is set to
+        None on that write. The applicant POSTs to /me/leave-notifications/{id}/ack
+        to clear it once they've seen it.
+        """
+        cursor = db.leaves.find(
+            {
+                "user_id": user["id"],
+                "status": {"$in": ["approved", "rejected"]},
+                # Never-acked OR explicitly cleared to null. Both cases
+                # mean the applicant hasn't seen this decision yet.
+                "$or": [{"decision_ack_at": None}, {"decision_ack_at": {"$exists": False}}],
+                "decided_at": {"$exists": True, "$ne": None},
+            },
+            {"_id": 0},
+        ).sort("decided_at", -1)
+        rows = await cursor.to_list(20)
+        # Whitelist the fields the banner needs — no need to leak the
+        # snapshot audit stamps to the applicant.
+        return [
+            {
+                "id": r.get("id"),
+                "type": r.get("type"),
+                "status": r.get("status"),
+                "start_date": r.get("start_date"),
+                "end_date": r.get("end_date"),
+                "reason": r.get("reason"),
+                "decided_by": r.get("decided_by"),
+                "decided_at": r.get("decided_at"),
+                "denial_reason": r.get("denial_reason"),
+                "approval_override_reason": r.get("approval_override_reason"),
+                "half_day": r.get("half_day"),
+            }
+            for r in rows
+        ]
+
+    @router.post("/me/leave-notifications/{leave_id}/ack")
+    async def ack_leave_notification(leave_id: str, user: dict = Depends(get_current_user)) -> dict:
+        """Mark a decided-leave notification as seen. Idempotent — a
+        double-tap simply re-stamps `decision_ack_at`. Scoped to the
+        caller's own leaves so a member can't clear another user's
+        banner."""
+        res = await db.leaves.update_one(
+            {"id": leave_id, "user_id": user["id"]},
+            {"$set": {"decision_ack_at": now_utc().isoformat()}},
+        )
+        if res.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Leave not found for this user")
+        return {"ok": True}
 
     @router.post("/leaves")
     async def create_leave(body: LeaveCreate, target_user_id: Optional[str] = None,
@@ -471,6 +532,40 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
             reason = (body.denial_reason or "").strip()
             if not reason:
                 raise HTTPException(status_code=400, detail="Denial reason is required when rejecting a request")
+        # Approving a `type=leave` request whose requested days exceed
+        # the applicant's live pool needs an override justification —
+        # the admin is knowingly authorising LOP (loss-of-pay).
+        # `type=tour|posting|comp_off` don't draw from the paid pool
+        # so they're never gated. Note: we intentionally rely on the
+        # backend to compute available balance rather than trusting a
+        # client-supplied `available` field.
+        approval_override = None
+        if body.status == "approved" and leave.get("type") == "leave" and compute_balance_summary is not None:
+            try:
+                u = await db.users.find_one({"id": leave["user_id"]}, {"_id": 0})
+                summary = await compute_balance_summary(db, u) if u else None
+                if summary:
+                    co_avail = summary.get("comp_off", {}).get("available", 0) or 0
+                    pl_avail = summary.get("paid_leave", {}).get("available", 0) or 0
+                    available = float(co_avail) + float(pl_avail)
+                    requested = (
+                        0.5 if leave.get("half_day") else _days_inclusive(leave["start_date"], leave["end_date"])
+                    )
+                    if requested > available + 1e-9:
+                        override = (body.override_reason or "").strip()
+                        if not override:
+                            raise HTTPException(
+                                status_code=400,
+                                detail=(
+                                    f"Requested {requested} day(s) exceeds available {available} day(s). "
+                                    "An override_reason is required to approve this — the applicant will be LOPed for the shortfall."
+                                ),
+                            )
+                        approval_override = override
+            except HTTPException:
+                raise
+            except Exception as exc:  # pragma: no cover — defensive
+                logger.debug("balance-override check failed for %s: %s", leave_id, exc)
         update = {"status": body.status}
         if body.status in ("approved", "rejected"):
             update["decided_by"] = admin["full_name"]
@@ -483,6 +578,11 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
                 update["denial_reason"] = (body.denial_reason or "").strip()
             else:
                 update["denial_reason"] = None
+            # If we captured an approval-time LOP override above, stamp
+            # it now so the decision-history table shows *why* an admin
+            # approved a shortfall request. Nulled out when approving
+            # without LOP (or on the re-open branch).
+            update["approval_override_reason"] = approval_override
             # Audit snapshot: balance & YTD numbers at the moment of decision.
             # Window = the member's current leave cycle if we can figure
             # it out (falls back to the calendar year).
@@ -499,6 +599,7 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
             update["decided_at"] = None
             update["denial_reason"] = None
             update["decision_ack_at"] = None
+            update["approval_override_reason"] = None
         await db.leaves.update_one({"id": leave_id}, {"$set": update})
         leave = await db.leaves.find_one({"id": leave_id}, {"_id": 0})
         return leave
