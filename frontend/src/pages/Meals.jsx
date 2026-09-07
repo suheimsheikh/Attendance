@@ -68,10 +68,11 @@ export default function Meals() {
     api.getCached("/meals/config")
       .then((r) => setMeals(r?.meals || []))
       .catch(() => setMeals([
-        { key: "breakfast", label: "Breakfast", short: "BF" },
-        { key: "lunch",     label: "Lunch",     short: "L" },
-        { key: "snacks",    label: "Snacks / Tea", short: "S" },
-        { key: "dinner",    label: "Dinner",    short: "D" },
+        { key: "breakfast",  label: "Breakfast",         short: "BF" },
+        { key: "midmorning", label: "Midmorning Snack",  short: "MM" },
+        { key: "lunch",      label: "Lunch",             short: "L" },
+        { key: "snacks",     label: "Afternoon Snack",   short: "AS" },
+        { key: "dinner",     label: "Dinner",            short: "D" },
       ]));
   }, []);
 

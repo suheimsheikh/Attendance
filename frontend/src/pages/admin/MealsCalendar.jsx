@@ -316,7 +316,7 @@ export default function MealsCalendar() {
     <div className="p-4 sm:p-6 max-w-[1200px] mx-auto" data-testid="meals-calendar-page">
       <div className="flex flex-wrap items-center gap-2 mb-4 pr-4 lg:pr-56">
         <CalendarDays size={22} className="text-emerald-600" />
-        <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Meals Calendar</h1>
+        <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Consumption</h1>
         <div className="flex-1 min-w-[16px]" />
         <div className="flex items-center gap-2 flex-wrap">
         {canEdit && (

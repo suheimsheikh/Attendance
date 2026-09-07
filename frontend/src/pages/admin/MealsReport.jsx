@@ -29,19 +29,21 @@ import KitchenAnalyticsTab from "./KitchenAnalyticsTab";
 import ProcurementPlanTab from "./ProcurementPlanTab";
 import { useEscape } from "../../hooks/useEscape";
 
-const MEAL_ORDER = ["breakfast", "lunch", "snacks", "dinner"];
+const MEAL_ORDER = ["breakfast", "midmorning", "lunch", "snacks", "dinner"];
 const MEAL_LABELS = {
-  breakfast: "Breakfast",
-  lunch:     "Lunch",
-  snacks:    "Snacks / Tea",
-  dinner:    "Dinner",
+  breakfast:  "Breakfast",
+  midmorning: "Midmorning Snack",
+  lunch:      "Lunch",
+  snacks:     "Afternoon Snack",
+  dinner:     "Dinner",
 };
-const MEAL_SHORT = { breakfast: "BF", lunch: "L", snacks: "S", dinner: "D" };
+const MEAL_SHORT = { breakfast: "BF", midmorning: "MM", lunch: "L", snacks: "AS", dinner: "D" };
 const MEAL_COLOR = {
-  breakfast: "#F59E0B",
-  lunch:     "#10B981",
-  snacks:    "#8B5CF6",
-  dinner:    "#2563EB",
+  breakfast:  "#F59E0B",
+  midmorning: "#EA580C",
+  lunch:      "#10B981",
+  snacks:     "#8B5CF6",
+  dinner:     "#2563EB",
 };
 
 function todayISO() {
@@ -521,7 +523,7 @@ export default function MealsReport() {
       <div className="sticky top-0 z-40 bg-slate-50 -mx-4 md:-mx-8 px-4 md:px-8 pt-1 pb-0" data-testid="meals-report-sticky-top">
         <header className="pb-3 flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">Stock/Purchases</h1>
+            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">Purchases &amp; Issues</h1>
             <p className="text-slate-500 text-xs mt-0.5">
               Portion planning, month-long audit, purchase entry and the expense report.
             </p>

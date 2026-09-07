@@ -16,7 +16,7 @@ import os
 import requests
 from datetime import date
 
-MEAL_KEYS = {"breakfast", "lunch", "snacks", "dinner"}
+MEAL_KEYS = {"breakfast", "midmorning", "lunch", "snacks", "dinner"}
 # Fixed test date well in the past to avoid clashing with real usage.
 TEST_DATE = "2025-01-15"
 TEST_MONTH = "2025-01"

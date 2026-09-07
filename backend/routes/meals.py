@@ -59,18 +59,20 @@ VALID_COLORS = {"sky", "rose", "emerald", "amber", "violet", "slate"}
 # actually ate, ticked off by admins/chefs/coaches from a Muster-style
 # roster. Stored one row per (member, date, meal) in `meal_records` with a
 # compound unique index so a double-tap can't create duplicates.
-MEAL_KEYS: tuple[str, ...] = ("breakfast", "lunch", "snacks", "dinner")
+MEAL_KEYS: tuple[str, ...] = ("breakfast", "midmorning", "lunch", "snacks", "dinner")
 MEAL_LABELS: dict[str, str] = {
-    "breakfast": "Breakfast",
-    "lunch":     "Lunch",
-    "snacks":    "Snacks / Tea",
-    "dinner":    "Dinner",
+    "breakfast":  "Breakfast",
+    "midmorning": "Midmorning Snack",
+    "lunch":      "Lunch",
+    "snacks":     "Afternoon Snack",
+    "dinner":     "Dinner",
 }
 MEAL_SHORT: dict[str, str] = {
-    "breakfast": "BF",
-    "lunch":     "L",
-    "snacks":    "S",
-    "dinner":    "D",
+    "breakfast":  "BF",
+    "midmorning": "MM",
+    "lunch":      "L",
+    "snacks":     "AS",
+    "dinner":     "D",
 }
 
 

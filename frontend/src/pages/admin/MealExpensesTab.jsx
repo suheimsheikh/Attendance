@@ -8,8 +8,8 @@ import { createPortal } from "react-dom";
 import { Loader2, Download, Printer, IndianRupee, Utensils, Divide } from "lucide-react";
 import { api, showApiError } from "../../api";
 
-const MEAL_ORDER = ["breakfast", "lunch", "snacks", "dinner"];
-const MEAL_HDR = { breakfast: "B/F", lunch: "L", snacks: "S", dinner: "D" };
+const MEAL_ORDER = ["breakfast", "midmorning", "lunch", "snacks", "dinner"];
+const MEAL_HDR = { breakfast: "B/F", midmorning: "MM", lunch: "L", snacks: "AS", dinner: "D" };
 
 function currentMonth() {
   const d = new Date();
