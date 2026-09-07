@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "./auth";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
+const EmbedGrid = lazy(() => import("./pages/EmbedGrid"));
 import SelfCheckIn from "./pages/SelfCheckIn";
 import VersionPoller from "./components/VersionPoller";
 import { Loader2 } from "lucide-react";
@@ -118,6 +119,7 @@ function App() {
         <Suspense fallback={<FullPageSpinner />}>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/embed/grid" element={<EmbedGrid />} />
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<RequireMember><SelfCheckIn /></RequireMember>} />
             <Route path="check-in" element={<RequireMember><SelfCheckIn /></RequireMember>} />

@@ -1309,21 +1309,26 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
     ):
         """Read-only month-grid pull for a trusted external consumer
         (PayCraft payroll). Gated by a shared secret in the `key` query
-        param, compared constant-time against the `GRID_API_KEY` env var.
+        param, compared constant-time against `GRID_API_KEY` (server-to-
+        server pulls) OR `EMBED_KEY` (the read-only /embed/grid iframe).
         Returns the same JSON as the admin grid but with per-cell tooltip
         metadata dropped (lighter payload for a scheduled pull).
 
-        If `GRID_API_KEY` is unset the endpoint 503s — a mis-configured
+        If neither key is configured the endpoint 503s — a mis-configured
         server must never behave like an open, PII-leaking endpoint.
         `category` accepts the usual buckets (athlete / elite / rest /
         payroll) so PayCraft can pull just the staff+coach population.
         """
         import hmac
         import os
-        expected = os.environ.get("GRID_API_KEY", "").strip()
-        if not expected:
-            raise HTTPException(status_code=503, detail="Grid API disabled: GRID_API_KEY not configured on server")
-        if not key or not hmac.compare_digest(key.strip(), expected):
+        valid = [k for k in (
+            os.environ.get("GRID_API_KEY", "").strip(),
+            os.environ.get("EMBED_KEY", "").strip(),
+        ) if k]
+        if not valid:
+            raise HTTPException(status_code=503, detail="Grid API disabled: no GRID_API_KEY / EMBED_KEY configured on server")
+        supplied = (key or "").strip()
+        if not supplied or not any(hmac.compare_digest(supplied, k) for k in valid):
             raise HTTPException(status_code=401, detail="Invalid key")
         return await _grid_impl(month, category, fleet, institution, with_meta=False)
 

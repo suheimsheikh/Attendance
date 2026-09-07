@@ -4155,3 +4155,17 @@ green**. Mongo unique index confirmed via index_information().
   payroll), fleet, institution passthrough.
 - Verified: valid key 200 (112 rows), wrong/no key 401, admin route still
   token-gated, payroll bucket = staff+coach (41), CSV export intact.
+
+## 30 Jun 2026 — Read-only /embed/grid page (PayCraft iframe)
+- New PUBLIC frontend route /embed/grid?month=YYYY-MM&key=<EMBED_KEY>&theme=
+  (App.js, outside RequireAuth/Layout). Renders ONLY the calendar grid —
+  no sidebar, no nav, never redirects to /login.
+- New page /app/frontend/src/pages/EmbedGrid.jsx (lazy). Read-only: reuses
+  gridHelpers CELL_STYLE/GridCell (no onClick) so day cells are not
+  editable. Optional theme=dark|light and category passthrough.
+- Auth: page passes key to GET /api/grid; backend now accepts GRID_API_KEY
+  OR EMBED_KEY (constant-time). Bad key -> clean 'Access denied' card
+  (data-testid embed-grid-error), never a login prompt. 503 if unset.
+- New backend/.env var EMBED_KEY. Access log confirms key is NOT logged
+  (query string stripped).
+- Verified by testing_agent iteration_50: all 5 scenarios pass.

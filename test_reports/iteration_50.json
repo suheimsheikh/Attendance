@@ -1,0 +1,25 @@
+{
+  "summary": "Frontend-only verification of the new public /embed/grid page for PayCraft embed. All 5 scenarios pass: valid key renders read-only attendance grid (112 rows for 2026-08), no sidebar/admin nav, no login redirect; day cells are non-interactive (no modal on click); dark theme still renders 112 rows and the visible shell background is dark (verified by screenshot); wrong key shows 'Access denied' via data-testid=embed-grid-error with no table and no login redirect; missing key shows 'Access key required' error with no table.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/embed/grid?theme=dark", "issues": ["document.body computed backgroundColor is rgb(246,248,251) (light) even in dark theme — dark styling appears to be applied on an inner wrapper element rather than <body>/<html>. Visually the shell IS dark (confirmed by screenshot), so this is a minor cleanliness note only — external iframes with a transparent background could see a light bleed if the wrapper isn't min-h-screen. Consider also toggling document.documentElement.className='dark' or setting body bg for theme=dark."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Consider applying dark theme at the <html>/<body> level (or ensuring wrapper has min-h-screen) so iframe hosts with transparent backgrounds don't show light bleed around edges.",
+    "Error card copy is concise and clear; consider adding an aria-live='polite' on the error region for embed accessibility."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (5/5 scenarios pass)"},
+  "test_credentials": "EMBED_KEY = emb_7Qr2Xnx9Vx4pLm8sTfWzKcD3aH6bJgN1uYe0oZi (valid). Wrong key 'wrongkey123' correctly rejected.",
+  "seed_data_creation": "None. Used existing August 2026 attendance data (112 members).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "EmbedGrid public route is fully functional. Observed values: header 'Attendance Grid · 2026-08', subtitle '112 members · read-only', 112 rows with data-testid embed-row-*, 4256 day cells, no dialog opens on cell click. Wrong-key error text: 'Access deniedThe embed key is invalid.' Missing-key error text: 'Access key requiredAdd ?key=… to embed this grid.' Dark theme visually dark (screenshot) though body computed bg is light — implementation likely wraps content in a dark div.",
+  "rca of the issue": "N/A — no issues to RCA. Feature works as specified."
+}
