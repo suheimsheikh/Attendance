@@ -1212,7 +1212,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
              "category": 1, "institution": 1, "marked_at": 1},
         ).to_list(MAX_USERS * 3)
         by_user: dict[str, dict] = {}
-        counts = {"breakfast": 0, "lunch": 0, "dinner": 0}
+        counts = {k: 0 for k in MEAL_KEYS}
         for r in rows:
             uid = r.get("user_id") or ""
             # Defensive: a legacy prod row could have `meal` as
@@ -1254,7 +1254,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         return {
             "date": d,
             "counts": counts,
-            "total_marks": counts["breakfast"] + counts["lunch"] + counts["dinner"],
+            "total_marks": sum(counts.values()),
             "unique_members": len(members),
             "members": members,
         }
@@ -4051,7 +4051,9 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     class DailyCountsIn(BaseModel):
         date: str
         breakfast: int = 0
+        midmorning: int = 0
         lunch: int = 0
+        snacks: int = 0
         dinner: int = 0
 
     def _valid_int(v) -> int:
@@ -4116,18 +4118,22 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             if not m:
                 return None
             bf = int(m.get("breakfast") or 0)
-            l = int(m.get("lunch") or 0)
+            mm = int(m.get("midmorning") or 0)
+            l  = int(m.get("lunch") or 0)
+            sn = int(m.get("snacks") or 0)
             dn = int(m.get("dinner") or 0)
-            if bf == 0 and l == 0 and dn == 0:
+            if bf == 0 and mm == 0 and l == 0 and sn == 0 and dn == 0:
                 return None
             return {
                 "date": iso,
-                "breakfast": bf,
-                "lunch":     l,
-                "dinner":    dn,
-                "total":     bf + l + dn,
-                "source":    "muster",
-                "has_data":  True,
+                "breakfast":  bf,
+                "midmorning": mm,
+                "lunch":      l,
+                "snacks":     sn,
+                "dinner":     dn,
+                "total":      bf + mm + l + sn + dn,
+                "source":     "muster",
+                "has_data":   True,
             }
 
         out = []
@@ -4141,20 +4147,25 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             # UI can highlight them as "click to see roster".
             has_muster = iso in muster_by_date and any(
                 (muster_by_date[iso].get(k) or 0) > 0
-                for k in ("breakfast", "lunch", "dinner")
+                for k in MEAL_KEYS
             )
             if r:
+                bf = int(r.get("breakfast") or 0)
+                mm = int(r.get("midmorning") or 0)
+                l  = int(r.get("lunch") or 0)
+                sn = int(r.get("snacks") or 0)
+                dn = int(r.get("dinner") or 0)
                 out.append({
                     "date": iso,
-                    "breakfast": int(r.get("breakfast") or 0),
-                    "lunch":     int(r.get("lunch") or 0),
-                    "dinner":    int(r.get("dinner") or 0),
-                    "total":     int((r.get("breakfast") or 0)
-                                     + (r.get("lunch") or 0)
-                                     + (r.get("dinner") or 0)),
-                    "source":    r.get("source") or "manual",
+                    "breakfast":  bf,
+                    "midmorning": mm,
+                    "lunch":      l,
+                    "snacks":     sn,
+                    "dinner":     dn,
+                    "total":      bf + mm + l + sn + dn,
+                    "source":     r.get("source") or "manual",
                     "updated_at": r.get("updated_at"),
-                    "has_data": True,
+                    "has_data":   True,
                     "has_muster": has_muster,
                 })
             else:
@@ -4163,19 +4174,21 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                     mr["has_muster"] = True
                     out.append(mr)
                 else:
-                    out.append({"date": iso, "breakfast": 0, "lunch": 0, "dinner": 0,
+                    out.append({"date": iso, "breakfast": 0, "midmorning": 0, "lunch": 0,
+                                "snacks": 0, "dinner": 0,
                                 "total": 0, "source": None, "has_data": False,
                                 "has_muster": False})
             cur += timedelta(days=1)
-        # Totals for the KPI strip
-        totals = {"breakfast": 0, "lunch": 0, "dinner": 0, "total": 0}
+        # Totals for the KPI strip — now 5 meals. Read defensively via
+        # .get() so legacy rows without midmorning/snacks still tally
+        # into the 3 slots they DO have.
+        totals = {"breakfast": 0, "midmorning": 0, "lunch": 0, "snacks": 0, "dinner": 0, "total": 0}
         populated = 0
         for r in out:
             if r["has_data"]:
                 populated += 1
-                totals["breakfast"] += r["breakfast"]
-                totals["lunch"] += r["lunch"]
-                totals["dinner"] += r["dinner"]
+                for k in ("breakfast", "midmorning", "lunch", "snacks", "dinner"):
+                    totals[k] += r.get(k, 0) or 0
                 totals["total"] += r["total"]
         return {
             "start": s, "end": e,
@@ -4190,13 +4203,19 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         body: DailyCountsIn, user: dict = Depends(require_admin),
     ):
         d = _valid_date(body.date)
-        bf, l, dn = _valid_int(body.breakfast), _valid_int(body.lunch), _valid_int(body.dinner)
+        bf = _valid_int(body.breakfast)
+        mm = _valid_int(body.midmorning)
+        l  = _valid_int(body.lunch)
+        sn = _valid_int(body.snacks)
+        dn = _valid_int(body.dinner)
         doc = {
             "date": d,
             "breakfast": bf,
+            "midmorning": mm,
             "lunch": l,
+            "snacks": sn,
             "dinner": dn,
-            "total": bf + l + dn,
+            "total": bf + mm + l + sn + dn,
             "source": "manual",
             "updated_at": now_utc().isoformat(),
             "updated_by": user.get("id"),

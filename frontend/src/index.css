@@ -106,7 +106,11 @@ body {
   .iu-btn-danger { @apply iu-btn bg-red-600 text-white hover:bg-red-700; }
   .iu-btn-ghost { @apply iu-btn bg-transparent text-slate-700 hover:bg-slate-100; }
   .iu-chip {
-    @apply inline-flex items-center gap-1.5 px-3 h-8 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200;
+    /* Mobile-friendly by default: tighter padding on phones, roomier
+       on desktop. `max-w-full` + `truncate` prevent long labels from
+       breaking chip rows onto weird lines. Applies globally — every
+       filter/tab chip in Reports, Muster, Approvals etc. inherits. */
+    @apply inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 h-7 sm:h-8 rounded-full text-[11px] sm:text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 max-w-full truncate;
   }
   .iu-chip-active {
     @apply bg-slate-900 text-white border-slate-900;

@@ -46,35 +46,45 @@ function KpiPill({ icon: Icon, label, value, tint }) {
 
 function EditRow({ date, initial, onSave, onCancel }) {
   const [d, setD] = useState({
-    breakfast: initial?.breakfast ?? 0,
-    lunch:     initial?.lunch ?? 0,
-    dinner:    initial?.dinner ?? 0,
+    breakfast:  initial?.breakfast ?? 0,
+    midmorning: initial?.midmorning ?? 0,
+    lunch:      initial?.lunch ?? 0,
+    snacks:     initial?.snacks ?? 0,
+    dinner:     initial?.dinner ?? 0,
   });
   const [saving, setSaving] = useState(false);
   const num = (v) => Math.max(0, parseInt(v, 10) || 0);
   const submit = async () => {
     setSaving(true);
-    try {
-      await onSave({ date, ...d });
-    } finally { setSaving(false); }
+    try { await onSave({ date, ...d }); } finally { setSaving(false); }
   };
-  const total = d.breakfast + d.lunch + d.dinner;
+  const total = d.breakfast + d.midmorning + d.lunch + d.snacks + d.dinner;
   return (
     <>
       <td className="p-2 text-right">
         <input type="number" min="0" value={d.breakfast}
                onChange={(e) => setD({ ...d, breakfast: num(e.target.value) })}
-               className="iu-input !h-8 !w-20 text-right tabular-nums" data-testid={`mc-edit-bf-${date}`} />
+               className="iu-input !h-8 !w-16 text-right tabular-nums" data-testid={`mc-edit-bf-${date}`} />
+      </td>
+      <td className="p-2 text-right">
+        <input type="number" min="0" value={d.midmorning}
+               onChange={(e) => setD({ ...d, midmorning: num(e.target.value) })}
+               className="iu-input !h-8 !w-16 text-right tabular-nums" data-testid={`mc-edit-mm-${date}`} />
       </td>
       <td className="p-2 text-right">
         <input type="number" min="0" value={d.lunch}
                onChange={(e) => setD({ ...d, lunch: num(e.target.value) })}
-               className="iu-input !h-8 !w-20 text-right tabular-nums" data-testid={`mc-edit-l-${date}`} />
+               className="iu-input !h-8 !w-16 text-right tabular-nums" data-testid={`mc-edit-l-${date}`} />
+      </td>
+      <td className="p-2 text-right">
+        <input type="number" min="0" value={d.snacks}
+               onChange={(e) => setD({ ...d, snacks: num(e.target.value) })}
+               className="iu-input !h-8 !w-16 text-right tabular-nums" data-testid={`mc-edit-as-${date}`} />
       </td>
       <td className="p-2 text-right">
         <input type="number" min="0" value={d.dinner}
                onChange={(e) => setD({ ...d, dinner: num(e.target.value) })}
-               className="iu-input !h-8 !w-20 text-right tabular-nums" data-testid={`mc-edit-d-${date}`} />
+               className="iu-input !h-8 !w-16 text-right tabular-nums" data-testid={`mc-edit-d-${date}`} />
       </td>
       <td className="p-2 text-right font-bold tabular-nums text-slate-700">{total}</td>
       <td className="p-2 text-right">
@@ -269,15 +279,17 @@ export default function MealsCalendar() {
           key,
           label: new Date(d.date + "T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
           rows: [],
-          totals: { breakfast: 0, lunch: 0, dinner: 0, total: 0, days: 0 },
+          totals: { breakfast: 0, midmorning: 0, lunch: 0, snacks: 0, dinner: 0, total: 0, days: 0 },
         });
       }
       const g = map.get(key);
       g.rows.push(d);
       if (d.has_data) {
-        g.totals.breakfast += d.breakfast;
-        g.totals.lunch += d.lunch;
-        g.totals.dinner += d.dinner;
+        g.totals.breakfast += d.breakfast || 0;
+        g.totals.midmorning += d.midmorning || 0;
+        g.totals.lunch += d.lunch || 0;
+        g.totals.snacks += d.snacks || 0;
+        g.totals.dinner += d.dinner || 0;
         g.totals.total += d.total;
         g.totals.days += 1;
       }
@@ -348,9 +360,11 @@ export default function MealsCalendar() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-        <KpiPill icon={Coffee}   label="Breakfast" value={data?.totals?.breakfast || 0} tint="bg-amber-50" />
-        <KpiPill icon={Sun}      label="Lunch"     value={data?.totals?.lunch || 0}     tint="bg-orange-50" />
-        <KpiPill icon={Moon}     label="Dinner"    value={data?.totals?.dinner || 0}    tint="bg-indigo-50" />
+        <KpiPill icon={Coffee}   label="Breakfast"        value={data?.totals?.breakfast || 0}  tint="bg-amber-50" />
+        <KpiPill icon={Coffee}   label="Midmorning"       value={data?.totals?.midmorning || 0} tint="bg-orange-50" />
+        <KpiPill icon={Sun}      label="Lunch"            value={data?.totals?.lunch || 0}      tint="bg-emerald-50" />
+        <KpiPill icon={Sun}      label="Afternoon Snack"  value={data?.totals?.snacks || 0}     tint="bg-violet-50" />
+        <KpiPill icon={Moon}     label="Dinner"           value={data?.totals?.dinner || 0}     tint="bg-indigo-50" />
         <KpiPill icon={Utensils} label="Total"     value={data?.totals?.total || 0}     tint="bg-emerald-50" />
       </div>
 
@@ -375,18 +389,20 @@ export default function MealsCalendar() {
           <thead className="bg-slate-900 text-white">
             <tr className="text-[11px] uppercase tracking-wider">
               <th className="text-left p-2.5">Date</th>
-              <th className="text-right p-2.5"><Coffee size={12} className="inline mr-1" />Breakfast</th>
-              <th className="text-right p-2.5"><Sun size={12} className="inline mr-1" />Lunch</th>
-              <th className="text-right p-2.5"><Moon size={12} className="inline mr-1" />Dinner</th>
+              <th className="text-right p-2.5"><Coffee size={12} className="inline mr-1" />BF</th>
+              <th className="text-right p-2.5" title="Midmorning Snack">MM</th>
+              <th className="text-right p-2.5"><Sun size={12} className="inline mr-1" />L</th>
+              <th className="text-right p-2.5" title="Afternoon Snack">AS</th>
+              <th className="text-right p-2.5"><Moon size={12} className="inline mr-1" />D</th>
               <th className="text-right p-2.5 bg-emerald-700">Total</th>
               {canEdit && <th className="text-right p-2.5 w-16"> </th>}
             </tr>
           </thead>
           <tbody data-testid="meals-calendar-tbody">
             {loading ? (
-              <tr><td colSpan={canEdit ? 6 : 5} className="text-center py-10"><Loader2 className="animate-spin inline text-slate-400"/></td></tr>
+              <tr><td colSpan={canEdit ? 8 : 7} className="text-center py-10"><Loader2 className="animate-spin inline text-slate-400"/></td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={canEdit ? 6 : 5} className="text-center py-10 text-slate-400">No data in this window.</td></tr>
+              <tr><td colSpan={canEdit ? 8 : 7} className="text-center py-10 text-slate-400">No data in this window.</td></tr>
             ) : months.map((month) => {
               const collapsed = !openMonths.has(month.key);
               return (
@@ -404,7 +420,9 @@ export default function MealsCalendar() {
                       </span>
                     </td>
                     <td className="p-2.5 text-right font-black tabular-nums text-slate-800">{inr(month.totals.breakfast)}</td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-slate-800">{inr(month.totals.midmorning)}</td>
                     <td className="p-2.5 text-right font-black tabular-nums text-slate-800">{inr(month.totals.lunch)}</td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-slate-800">{inr(month.totals.snacks)}</td>
                     <td className="p-2.5 text-right font-black tabular-nums text-slate-800">{inr(month.totals.dinner)}</td>
                     <td className="p-2.5 text-right font-black tabular-nums text-emerald-700 bg-emerald-50">{inr(month.totals.total)}</td>
                     {canEdit && <td className="p-2.5"/>}
@@ -441,7 +459,9 @@ export default function MealsCalendar() {
                         ) : (
                           <>
                             <td className="p-2 text-right tabular-nums" data-testid={`mc-bf-${d.date}`}>{d.has_data ? d.breakfast : <span className="text-slate-300">—</span>}</td>
+                            <td className="p-2 text-right tabular-nums" data-testid={`mc-mm-${d.date}`}>{d.has_data ? (d.midmorning ?? 0) : <span className="text-slate-300">—</span>}</td>
                             <td className="p-2 text-right tabular-nums" data-testid={`mc-l-${d.date}`}>{d.has_data ? d.lunch : <span className="text-slate-300">—</span>}</td>
+                            <td className="p-2 text-right tabular-nums" data-testid={`mc-as-${d.date}`}>{d.has_data ? (d.snacks ?? 0) : <span className="text-slate-300">—</span>}</td>
                             <td className="p-2 text-right tabular-nums" data-testid={`mc-d-${d.date}`}>{d.has_data ? d.dinner : <span className="text-slate-300">—</span>}</td>
                             <td className={`p-2 text-right tabular-nums font-bold ${d.has_data ? "text-emerald-700" : "text-slate-300"}`} data-testid={`mc-total-${d.date}`}>
                               {d.has_data ? d.total : "—"}

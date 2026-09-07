@@ -240,7 +240,13 @@ export default function Meals() {
               key={m.key}
               data-testid={`meals-meal-${m.key}`}
               onClick={() => setMeal(m.key)}
-              title={`Mark who is having ${m.label?.toLowerCase?.() || m.key} today`}
+              // `title` shows on desktop hover AND on many mobile
+              // browsers when a user long-presses the button, so
+              // first-time users can figure out what "MM" or "AS"
+              // stands for without a separate hint UI.
+              // aria-label picks up the same text for screen readers.
+              title={m.label}
+              aria-label={m.label}
               className={`iu-btn ${active ? "iu-btn-primary" : "iu-btn-secondary"} !px-2 !text-xs sm:!text-sm !min-w-0 truncate justify-center`}
               style={active ? { background: MEAL_COLOR[m.key] } : undefined}
             >
