@@ -4169,3 +4169,24 @@ green**. Mongo unique index confirmed via index_information().
 - New backend/.env var EMBED_KEY. Access log confirms key is NOT logged
   (query string stripped).
 - Verified by testing_agent iteration_50: all 5 scenarios pass.
+
+## 30 Jun 2026 — PayCraft server-to-server API (Group B read + Group C write)
+- All in routes/reports.py, key-gated by GRID_API_KEY (constant-time),
+  no user login. 401 wrong key, 503 if key unset.
+- Group B (read): GET /api/grid/leave-balances, /api/leave-requests,
+  /api/corrections, /api/grid/status, /api/grid/members.
+  NOTE: /api/leave-balances and /api/members were already taken by the
+  app's authenticated endpoints, so the PayCraft variants are namespaced
+  as /api/grid/leave-balances and /api/grid/members.
+- Group C (write): POST /api/grid/cell (manual per-day override),
+  /api/corrections/decision (approve/reject, applies via APPLIERS),
+  /api/grid/lock. Writes refuse 409 when the month is locked (except
+  lock itself); every write logged via write_audit (actor 'PayCraft (API)').
+- New collections: grid_overrides {user_id,date,code,...} and
+  grid_locks {month,locked,locked_by,...}. _grid_impl now applies
+  overrides at the top of _classify so they win over computed codes
+  (and flow into totals).
+- Verified via curl: all endpoints 200 w/ right key, 401 wrong key;
+  grid/cell 400 on bad code/date, 409 when locked, 200 after unlock;
+  corrections/decision 200 reject + 409 re-decide; override reflected in
+  /api/grid then cleaned up.

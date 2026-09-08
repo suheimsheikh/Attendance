@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import io
+import uuid
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 
@@ -22,7 +23,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 
-from services.time_utils import local_date_str, local_hm, local_now
+from services.time_utils import local_date_str, local_hm, local_now, now_utc
 from services.permissions import is_super_admin
 import breaks as _breaks_module
 
@@ -984,6 +985,16 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         leaves_by_user: dict = {}
         for L in leave_docs:
             leaves_by_user.setdefault(L["user_id"], []).append(L)
+        # Manual grid overrides (PayCraft / admin cell edits via
+        # POST /api/grid/cell). A single explicit code per (user, date)
+        # that trumps the computed classification below.
+        override_docs = await db.grid_overrides.find(
+            {"date": {"$gte": start_iso, "$lte": end_iso}}, {"_id": 0},
+        ).to_list(50000)
+        overrides_by_user: dict = {}
+        for o in override_docs:
+            if o.get("user_id") and o.get("date") and o.get("code"):
+                overrides_by_user.setdefault(o["user_id"], {})[o["date"]] = o["code"]
         # Break lookup per user: iso date → the break doc that applies.
         # Reuses breaks.break_applies_to() so audience filtering
         # (category / individual list) stays authoritative. Storing the
@@ -1034,6 +1045,11 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         def _classify(uid: str, iso: str, dow_idx: int, weekly_off: str,
                       work_start: str, joining_date: Optional[str] = None,
                       leaving_date: Optional[str] = None) -> str:
+            # Manual grid override (PayCraft / admin cell edit) wins over
+            # every computed rule — an explicit code set via /api/grid/cell.
+            _ov = overrides_by_user.get(uid)
+            if _ov and iso in _ov:
+                return _ov[iso]
             # Pre-joining / post-leaving days render as NJ / LF so the
             # Grid stays honest for members who joined mid-year or have
             # left. Both codes are excluded from every totals bucket
@@ -1331,6 +1347,283 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         if not supplied or not any(hmac.compare_digest(supplied, k) for k in valid):
             raise HTTPException(status_code=401, detail="Invalid key")
         return await _grid_impl(month, category, fleet, institution, with_meta=False)
+
+    # ── PayCraft server-to-server API (GROUP B read + GROUP C write) ─────
+    # Same gate as /api/grid: shared secret `key` query param matched
+    # constant-time against GRID_API_KEY. No user login. Writes refuse
+    # (409) when the month grid is locked and audit every change.
+    def _require_grid_key(key: str) -> None:
+        import hmac
+        import os
+        expected = os.environ.get("GRID_API_KEY", "").strip()
+        if not expected:
+            raise HTTPException(status_code=503, detail="Grid API disabled: GRID_API_KEY not configured on server")
+        if not key or not hmac.compare_digest((key or "").strip(), expected):
+            raise HTTPException(status_code=401, detail="Invalid key")
+
+    _API_ACTOR = {"id": "paycraft-api", "full_name": "PayCraft (API)", "role": "service"}
+    _CELL_CODES = {"P", "LT", "AB", "LV", "LP", "TR", "CO", "WO", "HO", "NJ", "LF"}
+
+    def _bucket(rows: list, category: Optional[str], athlete_like: set) -> list:
+        if category == "athlete":
+            return [r for r in rows if r.get("category") in athlete_like]
+        if category == "rest":
+            return [r for r in rows if r.get("category") not in athlete_like]
+        if category == "payroll":
+            return [r for r in rows if r.get("category") in {"staff", "coach"}]
+        return rows
+
+    async def _month_lock(month: str) -> dict:
+        return await db.grid_locks.find_one({"month": month}, {"_id": 0}) or {}
+
+    async def _assert_unlocked(month: str) -> None:
+        lk = await _month_lock(month)
+        if lk.get("locked"):
+            who = lk.get("locked_by_name") or lk.get("locked_by") or "an admin"
+            raise HTTPException(status_code=409, detail=f"Month {month} is locked for edits (by {who}). Unlock it first.")
+
+    # ---- GROUP B: read-only ------------------------------------------------
+    @router.get("/grid/leave-balances")
+    async def api_leave_balances(month: str, key: str = "", category: Optional[str] = None):
+        """Per-member leave + comp-off available balances.
+        NOTE: spec path /api/leave-balances is already taken by the app's
+        authenticated endpoint, so the PayCraft (key-gated) variant lives
+        here at /api/grid/leave-balances."""
+        _require_grid_key(key)
+        from holidays import compute_balance_summary
+        year = (month or "").split("-")[0] or None
+        athlete_like = await _athlete_like_keys(db)
+        users = await db.users.find({}, {"_id": 0}).to_list(5000)
+        users = _bucket(users, category, athlete_like)
+        rows = []
+        for u in users:
+            s = await compute_balance_summary(db, u, year=year)
+            rows.append({
+                "member_id": u.get("id"),
+                "member_name": u.get("full_name"),
+                "category": u.get("category"),
+                "balances": {
+                    "leave": s["paid_leave"]["available"],
+                    "comp_off": s["comp_off"]["available"],
+                },
+            })
+        rows.sort(key=lambda r: (r["member_name"] or "").lower())
+        return {"rows": rows}
+
+    @router.get("/leave-requests")
+    async def api_leave_requests(month: str, key: str = "", status: str = "all"):
+        """Leave/tour/comp-off/posting requests overlapping the month."""
+        _require_grid_key(key)
+        from holidays import _days_inclusive
+        start_iso, end_iso, _ = _ledger_window(None, month)
+        q: dict = {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}}
+        if status and status != "all":
+            if status not in ("pending", "approved", "rejected", "cancelled"):
+                raise HTTPException(status_code=400, detail="status must be pending | approved | all")
+            q["status"] = status
+        docs = await db.leaves.find(q, {"_id": 0}).to_list(20000)
+        docs = await enrich_leaves(docs)
+        rows = []
+        for L in docs:
+            if L.get("half_day"):
+                days = 0.5
+            else:
+                try:
+                    days = _days_inclusive(L.get("start_date"), L.get("end_date"))
+                except Exception:
+                    days = None
+            rows.append({
+                "id": L.get("id"),
+                "member_id": L.get("user_id"),
+                "member_name": L.get("member_name"),
+                "from": L.get("start_date"),
+                "to": L.get("end_date"),
+                "days": days,
+                "type": L.get("type"),
+                "status": L.get("status"),
+                "reason": L.get("reason"),
+            })
+        rows.sort(key=lambda r: (r.get("from") or ""))
+        return {"rows": rows}
+
+    @router.get("/corrections")
+    async def api_corrections(month: str, key: str = "", status: str = "pending"):
+        """Attendance/leave correction requests with a target_date in the month."""
+        _require_grid_key(key)
+        start_iso, end_iso, _ = _ledger_window(None, month)
+        q: dict = {"target_date": {"$gte": start_iso, "$lte": end_iso}}
+        if status and status != "all":
+            q["status"] = status
+        docs = await db.corrections.find(q, {"_id": 0}).sort("requested_at", -1).to_list(5000)
+        rows = []
+        for c in docs:
+            p = c.get("payload") or {}
+            rows.append({
+                "id": c.get("id"),
+                "member_id": c.get("requester_id"),
+                "member_name": c.get("requester_name"),
+                "date": c.get("target_date"),
+                "from_code": p.get("from_code"),
+                "to_code": p.get("to_code") or p.get("code"),
+                "reason": c.get("reason"),
+                "status": c.get("status"),
+                "requested_by": c.get("filed_by_admin_name") or c.get("requester_name"),
+            })
+        return {"rows": rows}
+
+    @router.get("/grid/status")
+    async def api_grid_status(month: str, key: str = ""):
+        """Lock status of a month's grid."""
+        _require_grid_key(key)
+        lk = await _month_lock(month)
+        return {
+            "month": month,
+            "locked": bool(lk.get("locked")),
+            "locked_by": lk.get("locked_by_name") or lk.get("locked_by"),
+            "locked_on": lk.get("locked_on"),
+        }
+
+    @router.get("/grid/members")
+    async def api_members(key: str = "", category: Optional[str] = None):
+        """Member roster for payroll.
+        NOTE: spec path /api/members is already taken by the app's
+        authenticated endpoint, so the PayCraft (key-gated) variant lives
+        here at /api/grid/members."""
+        _require_grid_key(key)
+        office = await db.config.find_one({"id": "office"}, {"_id": 0, "default_work_start": 1, "default_work_end": 1}) or {}
+        athlete_like = await _athlete_like_keys(db)
+        users = await db.users.find({}, {"_id": 0}).to_list(5000)
+        users = _bucket(users, category, athlete_like)
+        rows = []
+        for u in users:
+            rows.append({
+                "member_id": u.get("id"),
+                "member_name": u.get("full_name"),
+                "rank": u.get("rank"),
+                "category": u.get("category"),
+                "fleet": u.get("fleet"),
+                "institution": u.get("institution"),
+                "work_start": u.get("work_start") or office.get("default_work_start") or "09:00",
+                "work_end": u.get("work_end") or office.get("default_work_end") or "17:00",
+                "active": (u.get("leaving_date") is None) and (u.get("active", True) is not False),
+            })
+        rows.sort(key=lambda r: (r["member_name"] or "").lower())
+        return {"rows": rows}
+
+    # ---- GROUP C: writes (refuse 409 when month locked; audited) -----------
+    @router.post("/grid/cell")
+    async def api_grid_cell(body: dict, key: str = ""):
+        """Set/override a single member-day cell code."""
+        _require_grid_key(key)
+        member_id = (body or {}).get("member_id")
+        d = (body or {}).get("date")
+        code = (body or {}).get("code")
+        if not member_id or not d or not code:
+            raise HTTPException(status_code=400, detail="member_id, date and code are required")
+        if code not in _CELL_CODES:
+            raise HTTPException(status_code=400, detail=f"code must be one of {sorted(_CELL_CODES)}")
+        try:
+            date.fromisoformat(d)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+        member = await db.users.find_one({"id": member_id}, {"_id": 0, "id": 1, "full_name": 1})
+        if not member:
+            raise HTTPException(status_code=400, detail="Unknown member_id")
+        month = d[:7]
+        await _assert_unlocked(month)
+        prev = await db.grid_overrides.find_one({"user_id": member_id, "date": d}, {"_id": 0, "code": 1})
+        now = now_utc().isoformat()
+        await db.grid_overrides.update_one(
+            {"user_id": member_id, "date": d},
+            {"$set": {"code": code, "set_by": _API_ACTOR["id"], "set_by_name": _API_ACTOR["full_name"], "set_at": now},
+             "$setOnInsert": {"id": str(uuid.uuid4())}},
+            upsert=True,
+        )
+        from routes.admin_audit import write_audit
+        await write_audit(
+            db, actor=_API_ACTOR, action="grid_cell_override",
+            entity_type="attendance", entity_id=f"{member_id}:{d}",
+            entity_name=f"{member.get('full_name')} · {d}",
+            before={"code": (prev or {}).get("code")}, after={"code": code},
+            reason="PayCraft grid cell edit",
+        )
+        return {"ok": True}
+
+    @router.post("/corrections/decision")
+    async def api_corrections_decision(body: dict, key: str = ""):
+        """Approve/reject a pending correction (applies the change on approve)."""
+        _require_grid_key(key)
+        cid = (body or {}).get("id")
+        action = (body or {}).get("action")
+        note = ((body or {}).get("note") or "").strip() or None
+        if not cid or action not in ("approve", "reject"):
+            raise HTTPException(status_code=400, detail="id and action ('approve'|'reject') are required")
+        c = await db.corrections.find_one({"id": cid}, {"_id": 0})
+        if not c:
+            raise HTTPException(status_code=404, detail="Correction not found")
+        if c.get("status") != "pending":
+            raise HTTPException(status_code=409, detail=f"Correction already {c.get('status')}")
+        if c.get("target_date"):
+            await _assert_unlocked(c["target_date"][:7])
+        decision = "approved" if action == "approve" else "rejected"
+        from routes.admin_audit import write_audit
+        from routes.corrections import APPLIERS
+        applied = None
+        if decision == "approved":
+            applier = APPLIERS.get((c.get("entity_type"), c.get("kind")))
+            if not applier:
+                raise HTTPException(status_code=500, detail=f"No applier for {c.get('entity_type')}/{c.get('kind')}")
+            applied = await applier(db, c, _API_ACTOR)
+        now = now_utc().isoformat()
+        await db.corrections.update_one({"id": cid}, {"$set": {
+            "status": decision,
+            "decided_by_id": _API_ACTOR["id"],
+            "decided_by_name": _API_ACTOR["full_name"],
+            "decided_at": now,
+            "admin_note": note,
+            "applied": applied,
+        }})
+        await write_audit(
+            db, actor=_API_ACTOR, action=f"correction_{decision}",
+            entity_type="correction", entity_id=cid,
+            entity_name=f"{c.get('entity_type')}/{c.get('kind')} · {c.get('requester_name')} · {c.get('target_date')}",
+            before={"status": "pending"}, after={"status": decision, "applied": applied, "admin_note": note},
+            reason=note or f"{decision} via PayCraft",
+        )
+        return {"ok": True, "id": cid, "decision": decision, "applied": applied}
+
+    @router.post("/grid/lock")
+    async def api_grid_lock(body: dict, key: str = ""):
+        """Lock/unlock a month's grid. Locked months refuse all other writes."""
+        _require_grid_key(key)
+        month = (body or {}).get("month")
+        locked = (body or {}).get("locked")
+        if not month or not isinstance(locked, bool):
+            raise HTTPException(status_code=400, detail="month (YYYY-MM) and locked (bool) are required")
+        try:
+            _ledger_window(None, month)  # validates YYYY-MM
+        except HTTPException:
+            raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+        prev = await _month_lock(month)
+        now = now_utc().isoformat()
+        await db.grid_locks.update_one(
+            {"month": month},
+            {"$set": {
+                "locked": locked,
+                "locked_by": _API_ACTOR["id"] if locked else None,
+                "locked_by_name": _API_ACTOR["full_name"] if locked else None,
+                "locked_on": now if locked else None,
+            }, "$setOnInsert": {"id": str(uuid.uuid4()), "month": month}},
+            upsert=True,
+        )
+        from routes.admin_audit import write_audit
+        await write_audit(
+            db, actor=_API_ACTOR, action="grid_lock" if locked else "grid_unlock",
+            entity_type="grid_lock", entity_id=month, entity_name=f"Grid {month}",
+            before={"locked": bool(prev.get("locked"))}, after={"locked": locked},
+            reason="PayCraft grid lock toggle",
+        )
+        return {"ok": True, "month": month, "locked": locked, "locked_on": now if locked else None}
 
     @router.get("/reports/calendar-grid/export")
     async def export_calendar_grid(
