@@ -52,7 +52,8 @@ export default function MealCrossCheckTab({ onGoMasters, liveSig }) {
 
   return (
     <div data-testid="meal-crosscheck-tab">
-      <div className="flex items-center gap-3 flex-wrap mb-4">
+      <div className="sticky top-[104px] z-30 bg-slate-50 pb-3 -mx-4 md:-mx-8 px-4 md:px-8" data-testid="crosscheck-sticky-top">
+      <div className="flex items-center gap-3 flex-wrap pt-1">
         <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="crosscheck-start" title="Start of the range to check"/>
         <span className="text-xs text-slate-400">to</span>
         <input type="date" value={end} min={start} max={todayISO()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="crosscheck-end" title="End of the range to check"/>
@@ -64,6 +65,7 @@ export default function MealCrossCheckTab({ onGoMasters, liveSig }) {
           <input type="checkbox" checked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.target.checked)} data-testid="crosscheck-flagged-only"/>
           <AlertTriangle size={12}/> Only flagged
         </label>
+      </div>
       </div>
 
       {loading ? (
@@ -96,9 +98,9 @@ export default function MealCrossCheckTab({ onGoMasters, liveSig }) {
               {flaggedOnly ? "Nothing flagged — kitchen usage matched the norms." : "No meal counts or issues found in this range."}
             </div>
           ) : (
-            <div className="iu-card overflow-hidden">
+            <div className="iu-card">
               <table className="w-full text-sm" data-testid="crosscheck-table">
-                <thead className="text-[11px] uppercase text-slate-500 bg-slate-50">
+                <thead className="text-[11px] uppercase text-slate-500 bg-slate-50 sticky top-[156px] z-20 shadow-sm">
                   <tr>
                     <th className="text-left p-2">Item</th>
                     <th className="text-right p-2" title="Meal servings marked that day">Servings</th>

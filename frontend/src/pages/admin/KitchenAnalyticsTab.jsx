@@ -12,7 +12,7 @@
  * All numbers come from GET /api/meals/kitchen-analytics.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, TrendingUp, BarChart3, PieChart as PieIcon, ListOrdered, IndianRupee, ShoppingCart, Boxes, Flame, Beef, Wheat, Droplet, Maximize2, X as CloseIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, TrendingUp, BarChart3, PieChart as PieIcon, ListOrdered, IndianRupee, ShoppingCart, Boxes, Flame, Beef, Wheat, Droplet, Maximize2, X as CloseIcon } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList,
@@ -171,11 +171,6 @@ function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, ful
     </div>
   );
 }
-
-// Distinct colours for the focus-series lines. Deliberately not the
-// same palette as CHART_COLORS so the daily-trend series doesn't
-// clash with the bars they came from.
-const FOCUS_COLORS = ["#2563EB", "#F97316", "#059669", "#DC2626", "#7C3AED", "#0891B2", "#B45309", "#DB2777"];
 
 function focusUnitMap(focusSeries) {
   // Small helper so the FocusDailyTooltip can look up unit for the

@@ -1085,7 +1085,7 @@ async def list_members(key: str = "", category: Optional[str] = None,
             raise HTTPException(status_code=401, detail="Invalid key")
         office = await db.config.find_one(
             {"id": "office"}, {"_id": 0, "default_work_start": 1, "default_work_end": 1}) or {}
-        roster = await db.users.find({}, {"_id": 0}).to_list(5000)
+        roster = await db.users.find({"status": {"$ne": "left"}}, {"_id": 0}).to_list(5000)
         roster = _payroll_bucket(roster, category)
         rows = [{
             "member_id": u.get("id"),

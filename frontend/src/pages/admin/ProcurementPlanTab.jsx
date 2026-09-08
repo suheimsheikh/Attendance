@@ -21,7 +21,7 @@
  * Feb 2026 · Slice 1 of the monthly procurement flow.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { ClipboardList, Loader2, Download, RefreshCw, Users, TrendingDown, AlertTriangle } from "lucide-react";
+import { ClipboardList, Loader2, Download, RefreshCw, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 
@@ -93,7 +93,8 @@ export default function ProcurementPlanTab({ liveSig }) {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [liveSig]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [liveSig]);
 
   const rows = useMemo(() => {
     const all = data?.rows || [];

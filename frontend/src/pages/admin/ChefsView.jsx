@@ -10,7 +10,7 @@
  * Backend: GET /api/admin/meals-today?date=YYYY-MM-DD&cutoff=HH:MM
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCw, Printer, Search, ChefHat, CalendarDays, Clock } from "lucide-react";
+import { Loader2, RefreshCw, Printer, Search, ChefHat, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import Avatar from "../../components/Avatar";

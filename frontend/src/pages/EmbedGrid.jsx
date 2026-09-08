@@ -11,10 +11,9 @@ import Reports from "./admin/Reports";
  * Daily Leave-Tour tabs, filters, CSV/PDF, double-click-to-edit,
  * corrections, month-lock) with no sidebar/nav and no login prompt.
  *
- * Auth: the page exchanges the shared secret (?key=) for a short-lived
- * portal admin session via GET /api/embed/auth, stores it like a normal
- * login (loginWithToken), then mounts <Reports/>. Every underlying
- * endpoint the Grid uses then works unchanged.
+ * Auth: the page reads the embed secret (?key=) once, scrubs it from the
+ * URL, then exchanges it via the `X-Embed-Key` header on GET
+ * /api/embed/auth for a short-lived portal admin session
  *
  * Confirmed 30 Jun 2026 with the owner: full-admin scope, shown only to
  * trusted internal PayCraft admins.
@@ -29,7 +28,9 @@ export default function EmbedGrid() {
     if (!key) return;
     const base = process.env.REACT_APP_BACKEND_URL;
     let alive = true;
-    fetch(`${base}/api/embed/auth?key=${encodeURIComponent(key)}`)
+    // Scrub the secret from the address bar / history as soon as it's read.
+    window.history.replaceState(null, "", window.location.pathname);
+    fetch(`${base}/api/embed/auth`, { headers: { "X-Embed-Key": key } })
       .then(async (r) => {
         if (!alive) return;
         if (r.status === 401) return setStatus("denied");

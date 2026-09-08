@@ -16,7 +16,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search, StickyNote, Store, TrendingUp } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search, StickyNote, Store, TrendingUp } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import { useRowFocus } from "../../hooks/useRowFocus";

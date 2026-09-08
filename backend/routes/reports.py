@@ -14,7 +14,7 @@ import uuid
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
@@ -1374,25 +1374,22 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         return await _grid_impl(month, category, fleet, institution, with_meta=False)
 
     @router.get("/embed/auth")
-    async def embed_auth(key: str = ""):
-        """Exchange the shared embed/grid secret for a short-lived portal
-        session token, so the chrome-less /embed/grid page can render the
-        FULL admin Grid UI (edit, corrections, lock, CSV/PDF) inside an
-        iframe. Accepts GRID_API_KEY or EMBED_KEY. Mints a normal admin
-        JWT for the seeded admin account — every existing endpoint then
-        works unchanged. Confirmed 30 Jun 2026: full-admin scope, embed
-        only shown to trusted internal PayCraft admins.
+    async def embed_auth(x_embed_key: str = Header(default="")):
+        """Exchange the embed secret for a short-lived portal session so the
+        chrome-less /embed/grid page can render the FULL admin Grid UI
+        inside an iframe. Hardened Jul 2026 after code review: the key is
+        accepted ONLY from the `X-Embed-Key` header (never the query string,
+        so it stays out of access logs / Referer), ONLY `EMBED_KEY` is
+        honoured (the server-to-server GRID_API_KEY can no longer mint an
+        admin session), and the token expires after EMBED_SESSION_MINUTES.
         """
         import hmac
         import os
-        valid = [k for k in (
-            os.environ.get("GRID_API_KEY", "").strip(),
-            os.environ.get("EMBED_KEY", "").strip(),
-        ) if k]
-        if not valid:
-            raise HTTPException(status_code=503, detail="Embed disabled: no GRID_API_KEY / EMBED_KEY configured")
-        supplied = (key or "").strip()
-        if not supplied or not any(hmac.compare_digest(supplied, k) for k in valid):
+        expected = os.environ.get("EMBED_KEY", "").strip()
+        if not expected:
+            raise HTTPException(status_code=503, detail="Embed disabled: EMBED_KEY not configured")
+        supplied = (x_embed_key or "").strip()
+        if not supplied or not hmac.compare_digest(supplied, expected):
             raise HTTPException(status_code=401, detail="Invalid key")
         admin = await db.users.find_one(
             {"email": os.environ.get("ADMIN_SEED_EMAIL")}, {"_id": 0, "hashed_password": 0})
@@ -1401,8 +1398,9 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         if not admin:
             raise HTTPException(status_code=500, detail="No admin account available for embed session")
         from services.auth_utils import create_token
-        token = create_token(admin["id"], admin.get("role", "admin"))
-        return {"access_token": token, "token_type": "bearer", "user": admin}
+        ttl = int(os.environ.get("EMBED_SESSION_MINUTES", "180"))
+        token = create_token(admin["id"], admin.get("role", "admin"), expires_minutes=ttl)
+        return {"access_token": token, "token_type": "bearer", "user": admin, "expires_in_minutes": ttl}
 
     # ── PayCraft server-to-server API (GROUP B read + GROUP C write) ─────
     # Same gate as /api/grid: shared secret `key` query param matched
@@ -1429,14 +1427,13 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             return [r for r in rows if r.get("category") in {"staff", "coach"}]
         return rows
 
+    from services.grid_lock import get_month_lock, assert_month_unlocked
+
     async def _month_lock(month: str) -> dict:
-        return await db.grid_locks.find_one({"month": month}, {"_id": 0}) or {}
+        return await get_month_lock(db, month)
 
     async def _assert_unlocked(month: str) -> None:
-        lk = await _month_lock(month)
-        if lk.get("locked"):
-            who = lk.get("locked_by_name") or lk.get("locked_by") or "an admin"
-            raise HTTPException(status_code=409, detail=f"Month {month} is locked for edits (by {who}). Unlock it first.")
+        await assert_month_unlocked(db, month)
 
     # ---- GROUP B: read-only ------------------------------------------------
     @router.get("/leave-requests")
@@ -1567,8 +1564,10 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             raise HTTPException(status_code=404, detail="Correction not found")
         if c.get("status") != "pending":
             raise HTTPException(status_code=409, detail=f"Correction already {c.get('status')}")
-        if c.get("target_date"):
-            await _assert_unlocked(c["target_date"][:7])
+        target = c.get("target_date") or (c.get("payload") or {}).get("start_date")
+        if not target:
+            raise HTTPException(status_code=409, detail="Correction has no target date; cannot verify month lock")
+        await _assert_unlocked(target[:7])
         decision = "approved" if action == "approve" else "rejected"
         from routes.admin_audit import write_audit
         from routes.corrections import APPLIERS

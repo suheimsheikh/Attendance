@@ -16,6 +16,8 @@ from datetime import date as _date_cls
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+
+from services.grid_lock import assert_dates_unlocked
 from pydantic import BaseModel
 
 from services.time_utils import now_utc, local_date_str
@@ -546,6 +548,9 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
         # backend to compute available balance rather than trusting a
         # client-supplied `available` field.
         approval_override = None
+        if body.status == "approved":
+            # Payroll month lock (PayCraft) — frozen months refuse approvals.
+            await assert_dates_unlocked(db, leave.get("start_date"), leave.get("end_date"))
         if body.status == "approved" and leave.get("type") == "leave" and compute_balance_summary is not None:
             try:
                 u = await db.users.find_one({"id": leave["user_id"]}, {"_id": 0})

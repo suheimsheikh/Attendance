@@ -29,6 +29,8 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
+
+from services.grid_lock import assert_dates_unlocked
 from pydantic import BaseModel, Field
 
 from services.time_utils import now_utc, local_date_str
@@ -414,6 +416,8 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
                 raise HTTPException(status_code=400, detail="target_date must be YYYY-MM-DD")
             if td > date.fromisoformat(local_date_str(None)):
                 raise HTTPException(status_code=400, detail="target_date cannot be in the future")
+        # Payroll month lock (PayCraft) — frozen months refuse new corrections.
+        await assert_dates_unlocked(db, body.target_date)
 
         doc = {
             "id": str(uuid4()),
@@ -556,6 +560,7 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             raise HTTPException(status_code=400, detail="status must be approved or rejected")
         applied: Optional[dict] = None
         if decision == "approved":
+            await assert_dates_unlocked(db, correction.get("target_date"))
             applier = APPLIERS.get((correction["entity_type"], correction["kind"]))
             if not applier:
                 raise HTTPException(status_code=500,
@@ -654,6 +659,7 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
                 status_code=400,
                 detail=f"No undo registered for {c['entity_type']}/{c['kind']}",
             )
+        await assert_dates_unlocked(db, c.get("target_date"))
         reversed_payload = await reverser(db, c)
         now_iso = now_utc().isoformat()
         await db.corrections.update_one({"id": cid}, {"$set": {

@@ -4272,3 +4272,24 @@ green**. Mongo unique index confirmed via index_information().
   BEFORE **or** AFTER it (was before-only). Employees only; multi-day
   blocks; month-boundary WO untouched. Verified curl 2026-08: 0 WO with
   AB either side remain.
+
+## 08 Sep 2026 — Across-the-board code review fixes (pre-deploy)
+- SECURITY (HIGH): /api/embed/auth now accepts the secret ONLY via the
+  `X-Embed-Key` header, honours ONLY `EMBED_KEY` (GRID_API_KEY can no
+  longer mint an admin session), and mints a short-lived token
+  (`EMBED_SESSION_MINUTES`, default 180). EmbedGrid.jsx scrubs `?key=`
+  from the URL via history.replaceState before calling auth.
+  PayCraft iframe contract unchanged: `/embed/grid?key=<EMBED_KEY>`.
+- LOCK ENFORCEMENT (MEDIUM): new `services/grid_lock.py`
+  (assert_month_unlocked / assert_dates_unlocked). Portal-native writes
+  now 409 on a PayCraft-locked month: create correction (admin or
+  member), approve correction (single + bulk), undo correction, approve
+  leave/tour/comp-off. PayCraft corrections/decision no longer bypasses
+  the lock when target_date is missing.
+- `/api/members?key=` excludes `status: left` members (parity with grid).
+- Calendar.jsx duplicate `title` prop (lint error) removed; 16 unused
+  imports/vars removed across 9 files (0 eslint errors, 17 warnings
+  remain — all react-hooks/exhaustive-deps, left intentionally).
+- Cross-check tab: sticky filter bar + sticky table header (parity with
+  Master / Daily Entry tabs).
+- deployment_agent: PASS, 0 blockers.

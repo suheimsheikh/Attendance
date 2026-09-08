@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, RefreshCw, Clock, Check, Briefcase } from "lucide-react";
+import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, Clock, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import LeaveBalanceNotice from "../components/LeaveBalanceNotice";
@@ -16,8 +16,6 @@ import MemberMultiPicker from "./leaves/MemberMultiPicker";
 import HalfDayPicker from "./leaves/HalfDayPicker";
 import StatsDashboard from "./leaves/StatsDashboard";
 import MyLeaveRow from "./leaves/MyLeaveRow";
-import { round1, TYPE_LABELS, STATUS_COLORS } from "./leaves/utils";
-
 
 export default function MyLeaves() {
   const [items, setItems] = useState([]);

@@ -155,7 +155,6 @@ export default function Calendar() {
             }}
             data-testid="yai-import"
             className="iu-btn-secondary"
-            title="Import / refresh the Yachting Association of India 2026 domestic calendar"
           >
             <Download size={16} /> Import from YAI
           </button>

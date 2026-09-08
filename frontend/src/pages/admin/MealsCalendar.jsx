@@ -6,7 +6,7 @@
  * can also type new days here — a single PUT upserts the row.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, IndianRupee, Pencil, Check, X as CloseIcon, Upload, BarChart3, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
+import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, Pencil, Check, X as CloseIcon, Upload, BarChart3, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
 import { formatDate, dayOfWeek } from "../../utils";

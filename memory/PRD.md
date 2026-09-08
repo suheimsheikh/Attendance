@@ -76,10 +76,14 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 - `Meals.jsx`: added `midmorning` colour. `MealsCalendar.jsx`: 6-pill KPI grid responsive, Total pill de-duplicated colour.
 - `meals.py` xlsx import: legacy 3-column sheets now write `midmorning=0, snacks=0` so stored `total` stays a true 5-slot sum on overwrite.
 
+### Sep 2026 — Code review + hardening (see CHANGELOG 08 Sep 2026)
+- Embed auth header-only (`X-Embed-Key`), EMBED_KEY-only, short TTL; key scrubbed from URL.
+- PayCraft month lock now enforced on portal-native correction/leave writes (`services/grid_lock.py`).
+- Cross-check tab sticky header done. Lint: 0 errors.
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked
-- **Cross-check tab sticky header polish** — apply the same `sticky top-[...]` treatment used in Master/Daily-Entry tabs to `MealCrossCheckTab.jsx`
 - **Pantry CSV export** — spreadsheet download alongside Print/PDF on Meals/Pantry Report
 - **Weekly Meal-Skip Pattern** — per-weekday overrides for members who skip specific weekdays (Sunday-off drivers)
 - **Payslip PDF + Payroll worksheet CSV** for staff

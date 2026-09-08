@@ -14,7 +14,7 @@
  * Every widget is a clickable link that deep-jumps into the existing
  * page for the detail view — zero new subsystems.
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Loader2, RefreshCw, Users, Cake, Sailboat, Trophy, UserCheck,
