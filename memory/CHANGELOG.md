@@ -4266,3 +4266,9 @@ green**. Mongo unique index confirmed via index_information().
   supported; month-start WO left untouched (prev day in unloaded month).
 - Verified curl (2026-08 payroll): 0 WO preceded by AB remain; 83 WO
   preceded by Present kept as WO; applies across Grid/CSV/PDF/api/embed.
+
+## 30 Jun 2026 — Weekly-off rule: trigger on either side
+- reports.py _grid_impl: WO (or block) becomes AB if absent immediately
+  BEFORE **or** AFTER it (was before-only). Employees only; multi-day
+  blocks; month-boundary WO untouched. Verified curl 2026-08: 0 WO with
+  AB either side remain.

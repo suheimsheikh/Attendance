@@ -1134,11 +1134,10 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             # Weekly-off "carry" rule (user-updated 30 Jun 2026): a
             # weekly-off day (or a run of consecutive WO days) is treated
             # as ABSENT when the member is absent (AB) on the working day
-            # IMMEDIATELY BEFORE it. The day after no longer matters.
-            # Only in-window neighbours are considered, so a WO on the
-            # very first day of the month is left untouched (its previous
-            # day lives in an unloaded adjacent month). Converted "AB"
-            # flows into totals automatically.
+            # immediately BEFORE it OR immediately AFTER it. Only in-window
+            # neighbours are considered, so a WO on the very first/last day
+            # of the month is left untouched (its neighbour lives in an
+            # unloaded adjacent month). Converted "AB" flows into totals.
             if u.get("category") not in sandwich_athlete_like:
                 n = len(cells)
                 i = 0
@@ -1147,7 +1146,9 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                         j = i
                         while j + 1 < n and cells[j + 1] == "WO":
                             j += 1
-                        if i - 1 >= 0 and cells[i - 1] == "AB":
+                        before_abs = i - 1 >= 0 and cells[i - 1] == "AB"
+                        after_abs = j + 1 < n and cells[j + 1] == "AB"
+                        if before_abs or after_abs:
                             for k in range(i, j + 1):
                                 cells[k] = "AB"
                         i = j + 1
