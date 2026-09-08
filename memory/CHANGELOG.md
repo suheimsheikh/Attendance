@@ -4190,3 +4190,16 @@ green**. Mongo unique index confirmed via index_information().
   grid/cell 400 on bad code/date, 409 when locked, 200 after unlock;
   corrections/decision 200 reject + 409 re-decide; override reflected in
   /api/grid then cleaned up.
+
+## 30 Jun 2026 — Dual-mode auth on /api/members & /api/leave-balances
+- Both endpoints now accept ?key=GRID_API_KEY for PayCraft server-to-server
+  (200 → {rows:[...]}, 401 wrong key) WHILE keeping the app's user-JWT path
+  unchanged (members → UserPublic list; leave-balances → {year,rows} admin
+  shape; no key + no token → 401 / 403 as before).
+- server.py: added oauth2_optional (auto_error=False), optional_user dep,
+  valid_grid_key(), _payroll_bucket(); removed response_model from /members
+  (function already returns UserPublic objects, so output shape unchanged).
+- Removed the earlier interim /api/grid/leave-balances and /api/grid/members
+  aliases from reports.py — the canonical spec paths now serve both modes.
+- Verified: /api/members key=200 wrong=401 noauth=401; /api/leave-balances
+  key=200 wrong=401 noauth=403; admin-token responses byte-identical to prior.

@@ -211,6 +211,43 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     return user
 
 
+# ── Dual-mode auth for endpoints shared between the app (user JWT) and
+# the PayCraft server-to-server integration (shared-secret ?key=). The
+# optional scheme never auto-401s, so an endpoint can fall through to a
+# GRID_API_KEY check when no bearer token is present.
+oauth2_optional = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+
+
+async def optional_user(token: Optional[str] = Depends(oauth2_optional)) -> Optional[dict]:
+    if not token:
+        return None
+    try:
+        return await get_current_user(token)
+    except HTTPException:
+        return None
+
+
+def valid_grid_key(key: str) -> bool:
+    """True when `key` matches GRID_API_KEY (constant-time). Same gate as
+    GET /api/grid — used by the PayCraft server-to-server endpoints."""
+    import hmac
+    import os
+    expected = os.environ.get("GRID_API_KEY", "").strip()
+    return bool(expected) and bool(key) and hmac.compare_digest((key or "").strip(), expected)
+
+
+def _payroll_bucket(rows: list, category: Optional[str]) -> list:
+    """Category filter matching /reports/payroll: athlete / rest / payroll."""
+    al = set(ATHLETE_CATEGORIES)
+    if category == "athlete":
+        return [r for r in rows if r.get("category") in al]
+    if category == "rest":
+        return [r for r in rows if r.get("category") not in al]
+    if category == "payroll":
+        return [r for r in rows if r.get("category") in {"staff", "coach"}]
+    return rows
+
+
 # Super-admin gating (04 Feb 2026). Moved to services/permissions.py so
 # routes/*.py can import it directly without a `from server import ...`
 # circular import. Re-exported here for backwards-compatibility with any
@@ -1024,8 +1061,9 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
     return UserPublic(**{k: doc.get(k) for k in UserPublic.model_fields})
 
 
-@api_router.get("/members", response_model=List[UserPublic])
-async def list_members(user: dict = Depends(get_current_user)):
+@api_router.get("/members")
+async def list_members(key: str = "", category: Optional[str] = None,
+                       user: Optional[dict] = Depends(optional_user)):
     """List all members. For bandwidth reasons we emit a small photo URL
     (`/api/members/{id}/photo?v=X`) in place of the base64 payload — this
     keeps the JSON tiny (~30 KB vs ~450 KB), lets the browser cache the
@@ -1040,6 +1078,30 @@ async def list_members(user: dict = Depends(get_current_user)):
       - `leave_balance_remaining`: opening − YTD-approved-leave-days.
     Two bulk aggregations keep this O(2) round trips regardless of roster size.
     """
+    # PayCraft server-to-server mode: ?key=GRID_API_KEY → payroll-shaped
+    # roster ({rows:[...]}), no user login required.
+    if key:
+        if not valid_grid_key(key):
+            raise HTTPException(status_code=401, detail="Invalid key")
+        office = await db.config.find_one(
+            {"id": "office"}, {"_id": 0, "default_work_start": 1, "default_work_end": 1}) or {}
+        roster = await db.users.find({}, {"_id": 0}).to_list(5000)
+        roster = _payroll_bucket(roster, category)
+        rows = [{
+            "member_id": u.get("id"),
+            "member_name": u.get("full_name"),
+            "rank": u.get("rank"),
+            "category": u.get("category"),
+            "fleet": u.get("fleet"),
+            "institution": u.get("institution"),
+            "work_start": u.get("work_start") or office.get("default_work_start") or "09:00",
+            "work_end": u.get("work_end") or office.get("default_work_end") or "17:00",
+            "active": (u.get("leaving_date") is None) and (u.get("active", True) is not False),
+        } for u in roster]
+        rows.sort(key=lambda r: (r["member_name"] or "").lower())
+        return {"rows": rows}
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     users = await db.users.find({}, {"_id": 0, "hashed_password": 0}).sort("full_name", 1).to_list(2000)
 
     # Bulk: latest check-in date per user. $sort+$first rides the existing
@@ -1392,7 +1454,8 @@ async def delete_member(member_id: str, admin: dict = Depends(require_admin)):
 
 
 @api_router.get("/leave-balances")
-async def list_leave_balances(admin: dict = Depends(require_admin)):
+async def list_leave_balances(key: str = "", category: Optional[str] = None,
+                              user: Optional[dict] = Depends(optional_user)):
     """Return every NON-ATHLETE member with their opening leave balance and
     current usage, used by the spreadsheet-style admin editor.
 
@@ -1406,6 +1469,31 @@ async def list_leave_balances(admin: dict = Depends(require_admin)):
     a Tour-days counter for the year (tours are independent of any pool
     — they don't consume balance — but admins still want visibility).
     """
+    # PayCraft server-to-server mode: ?key=GRID_API_KEY → simple
+    # {rows:[{member_id,member_name,category,balances:{leave,comp_off}}]}.
+    if key:
+        if not valid_grid_key(key):
+            raise HTTPException(status_code=401, detail="Invalid key")
+        from holidays import compute_balance_summary
+        yr = local_date_str(await db.config.find_one({"id": "office"}))[:4]
+        roster = await db.users.find({}, {"_id": 0}).to_list(5000)
+        roster = _payroll_bucket(roster, category or "rest")
+        out_rows = []
+        for u in roster:
+            s = await compute_balance_summary(db, u, year=yr)
+            out_rows.append({
+                "member_id": u.get("id"),
+                "member_name": u.get("full_name"),
+                "category": u.get("category"),
+                "balances": {
+                    "leave": s["paid_leave"]["available"],
+                    "comp_off": s["comp_off"]["available"],
+                },
+            })
+        out_rows.sort(key=lambda r: (r["member_name"] or "").lower())
+        return {"rows": out_rows}
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin privileges required")
     users = await db.users.find(
         {"category": {"$nin": list(ATHLETE_CATEGORIES)}},
         {"_id": 0, "id": 1, "full_name": 1, "category": 1,

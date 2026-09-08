@@ -1383,33 +1383,6 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             raise HTTPException(status_code=409, detail=f"Month {month} is locked for edits (by {who}). Unlock it first.")
 
     # ---- GROUP B: read-only ------------------------------------------------
-    @router.get("/grid/leave-balances")
-    async def api_leave_balances(month: str, key: str = "", category: Optional[str] = None):
-        """Per-member leave + comp-off available balances.
-        NOTE: spec path /api/leave-balances is already taken by the app's
-        authenticated endpoint, so the PayCraft (key-gated) variant lives
-        here at /api/grid/leave-balances."""
-        _require_grid_key(key)
-        from holidays import compute_balance_summary
-        year = (month or "").split("-")[0] or None
-        athlete_like = await _athlete_like_keys(db)
-        users = await db.users.find({}, {"_id": 0}).to_list(5000)
-        users = _bucket(users, category, athlete_like)
-        rows = []
-        for u in users:
-            s = await compute_balance_summary(db, u, year=year)
-            rows.append({
-                "member_id": u.get("id"),
-                "member_name": u.get("full_name"),
-                "category": u.get("category"),
-                "balances": {
-                    "leave": s["paid_leave"]["available"],
-                    "comp_off": s["comp_off"]["available"],
-                },
-            })
-        rows.sort(key=lambda r: (r["member_name"] or "").lower())
-        return {"rows": rows}
-
     @router.get("/leave-requests")
     async def api_leave_requests(month: str, key: str = "", status: str = "all"):
         """Leave/tour/comp-off/posting requests overlapping the month."""
@@ -1482,33 +1455,6 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             "locked_by": lk.get("locked_by_name") or lk.get("locked_by"),
             "locked_on": lk.get("locked_on"),
         }
-
-    @router.get("/grid/members")
-    async def api_members(key: str = "", category: Optional[str] = None):
-        """Member roster for payroll.
-        NOTE: spec path /api/members is already taken by the app's
-        authenticated endpoint, so the PayCraft (key-gated) variant lives
-        here at /api/grid/members."""
-        _require_grid_key(key)
-        office = await db.config.find_one({"id": "office"}, {"_id": 0, "default_work_start": 1, "default_work_end": 1}) or {}
-        athlete_like = await _athlete_like_keys(db)
-        users = await db.users.find({}, {"_id": 0}).to_list(5000)
-        users = _bucket(users, category, athlete_like)
-        rows = []
-        for u in users:
-            rows.append({
-                "member_id": u.get("id"),
-                "member_name": u.get("full_name"),
-                "rank": u.get("rank"),
-                "category": u.get("category"),
-                "fleet": u.get("fleet"),
-                "institution": u.get("institution"),
-                "work_start": u.get("work_start") or office.get("default_work_start") or "09:00",
-                "work_end": u.get("work_end") or office.get("default_work_end") or "17:00",
-                "active": (u.get("leaving_date") is None) and (u.get("active", True) is not False),
-            })
-        rows.sort(key=lambda r: (r["member_name"] or "").lower())
-        return {"rows": rows}
 
     # ---- GROUP C: writes (refuse 409 when month locked; audited) -----------
     @router.post("/grid/cell")
