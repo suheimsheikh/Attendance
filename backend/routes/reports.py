@@ -1131,15 +1131,14 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             cells = [_classify(uid, iso, dow_by_iso[iso], weekly_off, work_start,
                                u.get("joining_date"), u.get("leaving_date"))
                      for iso in days]
-            # Sandwich rule (user-confirmed 30 Jun 2026): a weekly-off day
-            # is treated as ABSENT when the member is absent on BOTH the
-            # working day immediately before AND after it. Handles multi-
-            # day WO blocks (e.g. a 2-day weekend counts if the member is
-            # absent the day before the block and the day after). Only
-            # in-window neighbours are considered, so a WO on the very
-            # first/last day of the month is left untouched (its neighbour
-            # lives in an adjacent month we didn't load). The converted
-            # "AB" then flows into totals automatically.
+            # Weekly-off "carry" rule (user-updated 30 Jun 2026): a
+            # weekly-off day (or a run of consecutive WO days) is treated
+            # as ABSENT when the member is absent (AB) on the working day
+            # IMMEDIATELY BEFORE it. The day after no longer matters.
+            # Only in-window neighbours are considered, so a WO on the
+            # very first day of the month is left untouched (its previous
+            # day lives in an unloaded adjacent month). Converted "AB"
+            # flows into totals automatically.
             if u.get("category") not in sandwich_athlete_like:
                 n = len(cells)
                 i = 0
@@ -1148,9 +1147,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                         j = i
                         while j + 1 < n and cells[j + 1] == "WO":
                             j += 1
-                        left_abs = i - 1 >= 0 and cells[i - 1] == "AB"
-                        right_abs = j + 1 < n and cells[j + 1] == "AB"
-                        if left_abs and right_abs:
+                        if i - 1 >= 0 and cells[i - 1] == "AB":
                             for k in range(i, j + 1):
                                 cells[k] = "AB"
                         i = j + 1

@@ -4258,3 +4258,11 @@ green**. Mongo unique index confirmed via index_information().
   JWT_SECRET_KEY via Secrets for production.
 - Endpoint paths, query params, response shapes, and attendance codes
   (P LT AB LV LP TR CO WO HO NJ LF) UNCHANGED.
+
+## 30 Jun 2026 — Weekly-off rule relaxed to "absent day-before only"
+- reports.py _grid_impl: a WO (or consecutive WO block) is now AB when the
+  member is absent on the working day IMMEDIATELY BEFORE it. Dropped the
+  earlier "AND day after" requirement. Employees only; multi-day blocks
+  supported; month-start WO left untouched (prev day in unloaded month).
+- Verified curl (2026-08 payroll): 0 WO preceded by AB remain; 83 WO
+  preceded by Present kept as WO; applies across Grid/CSV/PDF/api/embed.
