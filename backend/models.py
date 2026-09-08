@@ -53,6 +53,9 @@ class UserPublic(BaseModel):
     # OT eligibility (7 Jul 2026). Explicit False disables OT accrual;
     # None/True → category-based defaults apply.
     ot_eligible: Optional[bool] = None
+    # DAR exemption (Sep 2026). Staff/coach/executive must file a Daily
+    # Activity Report at check-out unless this is True.
+    dar_exempt: Optional[bool] = None
     # Weekly off (day of week, lowercase e.g. "monday"). Drives comp-off
     # accrual and the "day off" bucket in Reports. Was silently stripped
     # from /members responses until 04 Feb 2026 because it wasn't

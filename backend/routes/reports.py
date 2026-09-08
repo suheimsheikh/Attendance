@@ -1123,6 +1123,9 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         # absence — the weekly-off "sandwich" rule below is an EMPLOYEE
         # rule, so we skip it for them.
         sandwich_athlete_like = await _athlete_like_keys(db)
+        # DAR misses per employee (Sep 2026) — payroll deducts a day per miss.
+        from services.dar import compute_missed_by_user
+        dar_missed_by_user = await compute_missed_by_user(db, users, start_iso, end_iso, today_iso)
         rows = []
         for u in users:
             uid = u["id"]
@@ -1308,6 +1311,9 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 # Present; unrelated to Leaves). Sits next to LT in
                 # the totals strip.
                 "early_out":   early_out_days,
+                # Worked days with no Daily Activity Report (employees
+                # only, from the DAR policy effective date, excludes today).
+                "dar_missed":  len(dar_missed_by_user.get(uid, [])),
             }
             rows.append({
                 "member_id": uid,

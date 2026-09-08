@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api } from "../../api";
 import { getLocation } from "../../utils";
 import FormErrorBanner from "../../components/FormErrorBanner";
+import DarPolicyPanel from "./DarPolicyPanel";
 import { useFormError } from "../../hooks/useFormError";
 
 const TZS = ["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Australia/Sydney"];
@@ -445,6 +446,7 @@ export default function OfficeSettings() {
 
       <TwilioPanel />
       <WhatsappGroupsPanel />
+      <DarPolicyPanel />
     </div>
   );
 }

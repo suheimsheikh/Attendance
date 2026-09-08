@@ -43,6 +43,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     // Undefined on legacy members → treat as eligible (matches the
     // backend's opt-out semantics). Admin can uncheck to disable.
     ot_eligible: initial?.ot_eligible !== false,
+    dar_exempt: initial?.dar_exempt === true,
     // Per-member meal-eligibility override (Feb 2026). Three states,
     // stored as true / false / null:
     //   • null (default) → inherit from category.meal_eligible
@@ -353,6 +354,26 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               </span>
             </label>
           </div>
+          {["staff", "coach", "executive"].includes(form.category) && (
+            <div>
+              <label className="iu-label">Daily Activity Report</label>
+              <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
+                <input
+                  data-testid="mf-dar-exempt"
+                  type="checkbox"
+                  checked={!!form.dar_exempt}
+                  onChange={(e) => set("dar_exempt", e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800"
+                />
+                <span className="text-sm text-slate-700 leading-snug">
+                  DAR exempt — this member is not asked for a Daily Activity Report at check-out.
+                  <span className="block text-[11px] text-slate-500 mt-0.5">
+                    Leave unchecked for everyone who must file a DAR; missed DARs are reported to payroll.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
           <div>
             <label className="iu-label">Meal eligibility</label>
             <select

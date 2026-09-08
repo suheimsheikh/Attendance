@@ -285,6 +285,7 @@ async def require_chef_or_admin(user: dict = Depends(get_current_user)) -> dict:
 # Models
 # ----------------------------------------------------------------------------
 from models import UserPublic  # shared model (moved to backend/models.py 06/2026)
+from services.dar import dar_required_for, get_dar_policy, validate_dar_text
 
 
 class MemberCreate(BaseModel):
@@ -328,6 +329,7 @@ class MemberCreate(BaseModel):
     # → the pre-existing category-based rule applies (staff/coach/
     # executive accrue, athletes never do).
     ot_eligible: Optional[bool] = None
+    dar_exempt: Optional[bool] = None
     # 20 Feb 2026 chef request: allow per-member override of the
     # category-level `meal_eligible` flag so edge cases (e.g. a driver
     # who never eats mess) don't require creating a whole new category.
@@ -362,6 +364,7 @@ class MemberUpdate(BaseModel):
     joining_date: Optional[str] = None
     leaving_date: Optional[str] = None
     ot_eligible: Optional[bool] = None
+    dar_exempt: Optional[bool] = None
     # Per-member override — see the note on MemberIn.meal_eligible.
     meal_eligible: Optional[bool] = None
 
@@ -486,6 +489,7 @@ class GeoToggleIn(BaseModel):
     reason: Optional[str] = None
     overtime_reason: Optional[str] = None
     early_out_reason: Optional[str] = None
+    dar_text: Optional[str] = None
 
 
 class MarkMemberIn(BaseModel):
@@ -550,6 +554,8 @@ async def _seed_database() -> None:
     await db.attendance.create_index("status")
     await db.attendance.create_index("approval_status", sparse=True)
     await db.attendance.create_index("overtime_status", sparse=True)
+    await db.dars.create_index([("user_id", 1), ("date", 1)], unique=True)
+    await db.dars.create_index([("date", -1)])
     await db.leaves.create_index([("status", 1), ("start_date", 1), ("end_date", 1)])
     await db.leaves.create_index([("user_id", 1), ("status", 1)])
     await db.leaves.create_index("status")
@@ -1052,6 +1058,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "joining_date": body.joining_date,
         "leaving_date": body.leaving_date,
         "ot_eligible": body.ot_eligible,
+        "dar_exempt": body.dar_exempt,
         "photo": None,
         "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
         "hashed_password": hash_password(body.password),
@@ -2430,7 +2437,8 @@ def _compute_early_out_at_checkout(ts: datetime, target: dict, office: dict) -> 
 async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
                       reason: Optional[str], by: Optional[str],
                       overtime_reason: Optional[str] = None,
-                      early_out_reason: Optional[str] = None) -> dict:
+                      early_out_reason: Optional[str] = None,
+                      dar_text: Optional[str] = None) -> dict:
     """GPS-based check in/out (no QR). Distance from the office is recorded but
     NOT enforced — a check-in always succeeds. If the caller could not obtain
     a GPS fix they pass (0, 0) and we mark the row as `geo_unavailable`."""
@@ -2453,6 +2461,29 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
     sess = await open_session_for(target["id"])
     ts = now_utc()
     if sess:
+        # DAR gate (Sep 2026): payroll employees must file a Daily Activity
+        # Report before their self check-out completes. Proxy paths
+        # (admin console / muster / card) pass by=<admin id> and skip it.
+        dar_saved = None
+        if by is None and dar_required_for(target):
+            _today = local_date_str(office)
+            policy = await get_dar_policy(db, _today)
+            if policy.get("enabled", True) and _today >= policy["effective_from"]:
+                dar_date = sess.get("date") or _today
+                has_dar = await db.dars.find_one({"user_id": target["id"], "date": dar_date}, {"_id": 0, "id": 1})
+                if not has_dar:
+                    if not (dar_text or "").strip():
+                        raise HTTPException(status_code=400, detail="DAR_REQUIRED: Please enter your Daily Activity Report before checking out")
+                    clean = validate_dar_text(dar_text, policy["min_chars"])
+                    ts_iso = ts.isoformat()
+                    dar_saved = {
+                        "id": str(uuid.uuid4()), "user_id": target["id"],
+                        "user_name": target.get("full_name"), "category": target.get("category"),
+                        "rank": target.get("rank"), "date": dar_date, "text": clean,
+                        "submitted_at": ts_iso, "updated_at": ts_iso,
+                        "attendance_id": sess["id"], "check_in_at": sess["check_in_at"],
+                        "check_out_at": None, "filed_late": False, "source": "checkout",
+                    }
         cin = datetime.fromisoformat(sess["check_in_at"])
         excursions = sess.get("excursions") or []
         for e in excursions:
@@ -2534,9 +2565,16 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         }
         update_fields.update(ot_updates)
         await db.attendance.update_one({"id": sess["id"]}, {"$set": update_fields})
+        if dar_saved:
+            dar_saved["check_out_at"] = ts.isoformat()
+            await db.dars.insert_one(dict(dar_saved))
+        else:
+            await db.dars.update_one({"attendance_id": sess["id"]}, {"$set": {"check_out_at": ts.isoformat()}})
         return {"ok": True, "action": "checkout", "member": target["full_name"],
                 "hours": hours, "out_of_geofence": out, "distance_m": dist,
                 "site_id": site_id, "site_name": site_name,
+                "check_in_at": sess["check_in_at"], "check_out_at": ts.isoformat(),
+                "dar": {k: dar_saved[k] for k in ("id", "date", "text")} if dar_saved else None,
                 "overtime_minutes": ot_updates.get("overtime_total_min", 0)}
     if out:
         # Geofence is informational only — distance is recorded on the
@@ -2605,7 +2643,7 @@ async def geo_toggle(body: GeoToggleIn, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Office not configured")
     return await _geo_toggle(user, office, body.latitude, body.longitude,
                              body.reason, None, body.overtime_reason,
-                             body.early_out_reason)
+                             body.early_out_reason, body.dar_text)
 
 
 @api_router.post("/attendance/mark-member")
@@ -4256,6 +4294,9 @@ app.include_router(_audit_router(db, require_admin))
 # Check-in approvals queue + unified approvals summary (8 Jul 2026).
 from routes.checkin_approvals import make_router as _checkin_approvals_router  # noqa: E402
 app.include_router(_checkin_approvals_router(db, require_admin, write_audit))
+
+from routes.dar import make_router as _dar_router  # noqa: E402
+app.include_router(_dar_router(db, get_current_user, require_admin, valid_grid_key, write_audit))
 
 # Data-quality dashboard — read-only DB sweep for dupes, missing
 # fields, and structural inconsistencies.

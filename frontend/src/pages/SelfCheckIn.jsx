@@ -8,6 +8,8 @@ import { useGeoPermission } from "../hooks/useGeoPermission";
 import SelfieCapture from "../components/SelfieCapture";
 import DailyContent from "../components/DailyContent";
 import ReasonPrompt from "../components/ReasonPrompt";
+import { DarTextarea, DarShareButton } from "../components/Dar";
+import DarPendingCard from "../components/DarPendingCard";
 import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import OutOfGeofenceModal from "../components/OutOfGeofenceModal";
 import CorrectionRequestModal from "../components/CorrectionRequestModal";
@@ -54,22 +56,30 @@ export default function SelfCheckIn() {
   // the photo to the WhatsApp share when the member's stored profile
   // photo hasn't propagated yet. Cleared on next toggle.
   const [freshSelfie, setFreshSelfie] = useState(null);
+  // DAR (Sep 2026): payroll employees must file a Daily Activity Report
+  // before check-out. `darStatus` from /dar/status; `darText` is the
+  // inline textarea; `lastDar` is the DAR saved with the last check-out.
+  const [darStatus, setDarStatus] = useState(null);
+  const [darText, setDarText] = useState("");
+  const [lastDar, setLastDar] = useState(null);
   const geoPerm = useGeoPermission();
 
   const photoNeeded = photoStatus ? photoStatus.needs_photo : !user?.photo;
 
   const refresh = useCallback(async () => {
     try {
-      const [s, o, ps, si] = await Promise.all([
+      const [s, o, ps, si, ds] = await Promise.all([
         api.get("/attendance/status"),
         api.get("/office"),
         api.get("/me/photo-status").catch(() => null),
         api.get("/sites").catch(() => []),
+        api.get("/dar/status").catch(() => null),
       ]);
       setStatus(s);
       setOffice(o);
       if (ps) setPhotoStatus(ps);
       setSites(Array.isArray(si) ? si : []);
+      setDarStatus(ds);
     } finally {
       setLoading(false);
     }
@@ -80,6 +90,9 @@ export default function SelfCheckIn() {
   const onTempOut = !!status?.on_temp_exit;
   const currentExcursion = status?.current_excursion;
   const actionLabel = status?.checked_in ? "Leaving Campus" : "I showed up 😊";
+  const darMin = darStatus?.min_chars || 20;
+  const darNeededNow = !!(status?.checked_in && darStatus?.required && !darStatus?.done_today);
+  const darBlocked = darNeededNow && darText.trim().length < darMin;
 
   // Overtime detection (staff only).
   const otInfo = useMemo(() => {
@@ -127,8 +140,13 @@ export default function SelfCheckIn() {
   // Also invoked with an explicit `geoReason` after the off-geofence modal
   // is confirmed, so the reason lands on the attendance row.
   const performToggle = async (geoReason = null) => {
+    if (darBlocked) {
+      toast.error(`Please enter your Daily Activity Report (at least ${darMin} characters) before checking out`);
+      return;
+    }
     setWorking(true);
     setLastAction(null);
+    setLastDar(null);
     setLocating("Getting your location…");
     let lat = null, lng = null, acc = null;
     try {
@@ -166,6 +184,7 @@ export default function SelfCheckIn() {
       if (otInfo && overtimeReason.trim()) body.overtime_reason = overtimeReason.trim();
       if (earlyOutInfo && earlyOutReason.trim()) body.early_out_reason = earlyOutReason.trim();
       if (geoReason) body.reason = geoReason;
+      if (darNeededNow && darText.trim()) body.dar_text = darText.trim();
       const res = await api.post("/attendance/geo-toggle", body);
       const dist = res.distance_m;
       setLastDistance({ dist, acc, off: res.out_of_geofence });
@@ -201,6 +220,11 @@ export default function SelfCheckIn() {
       // late — handy reminder for the member at the device.
       if (res.action === "checkin" && res.late) {
         speakLateMessage(res.late_minutes, res.member);
+      }
+      if (res.action === "checkout" && res.dar) {
+        setLastDar({ ...res.dar, check_in_at: res.check_in_at, check_out_at: res.check_out_at });
+        setDarText("");
+        toast.success("DAR saved — share it to the DAR group", { duration: 6000 });
       }
       setOvertimeReason("");
       setEarlyOutReason("");
@@ -325,10 +349,18 @@ export default function SelfCheckIn() {
         <TempExitCard onCreated={refresh} />
       )}
 
+      {/* DAR pending / filed card — after check-out (or when checked out by a proxy) */}
+      {!status?.checked_in && !lastDar && (
+        <DarPendingCard status={darStatus} userName={user?.full_name} onSaved={refresh} />
+      )}
+
       {/* Big primary check-in/out button */}
       {!onTempOut && (
         <div className="iu-card p-8 text-center" data-testid="self-checkin-card">
           <Greeting user={user} checkedIn={!!status?.checked_in} />
+          {darNeededNow && (
+            <DarTextarea value={darText} onChange={setDarText} minChars={darMin} />
+          )}
           {otInfo && (
             <ReasonPrompt
               variant="amber"
@@ -355,8 +387,9 @@ export default function SelfCheckIn() {
           )}
           <button
             data-testid="self-checkin-button"
-            disabled={working}
+            disabled={working || darBlocked}
             onClick={handleToggle}
+            title={darBlocked ? `Enter your DAR (min ${darMin} characters) to check out` : undefined}
             className={`mx-auto inline-flex flex-col items-center justify-center gap-2 rounded-3xl shadow-xl transition active:scale-[0.97] disabled:opacity-60 w-44 h-44 ${
               status?.checked_in
                 ? "bg-gradient-to-br from-rose-500 to-rose-700 text-white"
@@ -428,6 +461,11 @@ export default function SelfCheckIn() {
               one-tap share into any WhatsApp chat. Uses the OS share
               sheet on mobile; falls back to a wa.me deep link on
               desktop. Cleared on the next toggle. */}
+          {lastDar && (
+            <div className="mt-4" data-testid="last-dar-share">
+              <DarShareButton dar={lastDar} name={user?.full_name} groupName={darStatus?.group_name} />
+            </div>
+          )}
           {lastAction && (
             <button
               type="button"

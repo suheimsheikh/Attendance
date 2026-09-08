@@ -81,6 +81,12 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 - PayCraft month lock now enforced on portal-native correction/leave writes (`services/grid_lock.py`).
 - Cross-check tab sticky header done. Lint: 0 errors.
 
+### Sep 2026 — DAR (Daily Activity Report) — see CHANGELOG 09 Sep 2026
+- Mandatory DAR at self check-out for staff/coach/executive (per-member `dar_exempt`), stored per person/day,
+  searchable admin viewer + CSV, Missed-DAR report, `dar_missed` in grid totals + `/api/dar/report` for PayCraft
+  (payroll deducts a day per miss), WhatsApp share to configurable DAR group.
+- WhatsApp check-in share caption includes geo distance.
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked

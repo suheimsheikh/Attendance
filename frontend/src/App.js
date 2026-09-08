@@ -23,6 +23,7 @@ const Members = lazy(() => import("./pages/admin/Members"));
 const Devices = lazy(() => import("./pages/admin/Devices"));
 const OfficeSettings = lazy(() => import("./pages/admin/Office"));
 const Reports = lazy(() => import("./pages/admin/Reports"));
+const DarReport = lazy(() => import("./pages/admin/DarReport"));
 // Overtime page removed 15 Feb 2026 — OT approval workflow deprecated;
 // OT hours are now surfaced via The Grid and the OT ledger.
 const Approvals = lazy(() => import("./pages/admin/ApprovalsUnified"));
@@ -156,6 +157,7 @@ function App() {
             <Route path="admin/office" element={<RequireAdmin><OfficeSettings /></RequireAdmin>} />
             <Route path="admin/sms-log" element={<RequireAdmin><SmsLog /></RequireAdmin>} />
             <Route path="admin/reports" element={<RequireAdmin><Reports /></RequireAdmin>} />
+            <Route path="admin/dar" element={<RequireAdmin><DarReport /></RequireAdmin>} />
             {/* Payroll merged into Reports as a tab (1 Feb 2026). Keep deep-links alive. */}
             <Route path="admin/payroll" element={<Navigate to="/admin/reports?tab=payroll" replace />} />
             <Route path="admin/sessions" element={<Navigate to="/presence" replace />} />

@@ -1,0 +1,24 @@
+{
+  "summary": "End-to-end test of the DAR feature (backend + frontend). Backend gating (checkout without DAR -> 400 DAR_REQUIRED; < 20 chars -> 400; >=20 -> 200 with dar), /api/dar/status, /api/admin/dar (with q keyword), /api/admin/dar/missed?month=2026-09, and /api/dar/report?key=<GRID_API_KEY> all pass. Frontend flow verified on /check-in (DAR textarea appears when checked-in, checkout button disabled while <20 chars, red 'min 20' counter, enabled at >=20, toast + saved DAR + share-dar-btn inside last-dar-share render after checkout, dar-done-card + share on reload). /profile My DARs section (dar-history-section) shows the DAR, keyword search highlights via <mark>, empty state shows dar-history-empty. Admin sidebar 'DAR Reports' -> /admin/dar renders dar-report-page; dar-list shows staff DAR; dar-search highlights; category filter (Coaches) hides the staff row; CSV export triggers download. Missed tab renders dar-missed-table + dar-missed-total. /profile?member=<id> as admin shows 'Daily Activity Reports' section. /admin/office DAR policy panel has all fields and save produces success toast. /admin/members edit form for DAR Test Staff renders data-testid=mf-dar-exempt checkbox.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SelfCheckIn 'One quick selfie' modal: the Skip button only closes the modal and does NOT auto-proceed with check-in (unlike the Capture path which calls performToggle in saveSelfie). If a member with no profile photo taps 'I showed up' then chooses Skip, the check-in silently fails (no toast, button state unchanged). Consider either (a) calling performToggle() after Skip, or (b) surfacing an info toast explaining that a photo is required to check in. Not blocking for DAR feature, but affects UX on headless/no-camera devices."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345; dar.test@example.com / Dar@12345",
+  "seed_data_creation": "Cleared today's attendance+dar for dar.test@example.com in mongo before test; test then produced one attendance session + one DAR row.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Staff member dar.test@example.com now has today's DAR filed (2026-09-09). The SelfCheckIn selfie modal blocks headless check-in — bypass by calling POST /api/attendance/geo-toggle with {latitude:0,longitude:0} via API before UI test. Category select label in /admin/dar is 'All employees' (not 'All') and 'Coaches' (plural)."
+}

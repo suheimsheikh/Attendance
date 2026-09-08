@@ -4301,3 +4301,24 @@ green**. Mongo unique index confirmed via index_information().
 - SelfCheckIn.jsx passes `res.distance_m` / `res.out_of_geofence` from
   /attendance/geo-toggle into the share (omitted when no GPS fix).
 - Escort check-in has no geolocation, so its share caption is unchanged.
+
+## 09 Sep 2026 — Daily Activity Report (DAR) at check-out
+- Backend: `services/dar.py` (policy, dar_required_for, compute_missed_by_user),
+  `routes/dar.py`: GET /api/dar/status, POST /api/dar, GET /api/dar/mine,
+  GET /api/admin/dar (+/export CSV, +/missed?month=), GET/PUT
+  /api/config/dar-policy, GET /api/dar/report?key=GRID_API_KEY&month= (PayCraft).
+  `_geo_toggle` self check-out refuses 400 DAR_REQUIRED for staff/coach/
+  executive (not `dar_exempt`) unless `dar_text` (>= min_chars) supplied;
+  DAR is saved atomically with the check-out. Proxy check-outs (admin/muster/
+  card) skip the gate; those days surface as "missed" if no DAR is filed.
+  Grid totals gain `dar_missed` (worked days w/o DAR, from policy effective
+  date, excludes today). `dars` collection unique (user_id, date).
+- User field `dar_exempt` (MemberIn/MemberUpdate/UserPublic; MemberForm checkbox).
+- Policy doc config.id="dar_policy": enabled, effective_from (set 2026-09-09),
+  min_chars 20, group_name "YCH DAR". Editable in Office Settings (DarPolicyPanel).
+- Frontend: SelfCheckIn inline DarTextarea + disabled check-out until valid;
+  post-checkout "Share DAR to WhatsApp" (text-only, header "👥 group / 📝 DAR —
+  Name / 📅 date · in–out"); DarPendingCard for late filing; Profile
+  DarHistorySection (self + admin view); /admin/dar DarReport page (filters,
+  keyword highlight, CSV, Missed tab); sidebar "DAR Reports".
+- Test member dar.test@example.com / Dar@12345 (staff). testing_agent iter 52: all pass.

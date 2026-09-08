@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { api, showApiError } from "../api";
 import { useAuth } from "../auth";
 import Avatar from "../components/Avatar";
+import DarHistorySection from "../components/DarHistorySection";
 import { formatTime, formatDate, categoryLabel } from "../utils";
 
 /** Turn "78 minutes" into "1h 18m" / "0m". */
@@ -131,6 +132,7 @@ export default function Profile() {
               self-view (18 Feb 2026). Admins viewing another member get
               a read-only profile per user pref (2a). */}
           {!viewingOther && <MyReasonsSection/>}
+          <DarHistorySection memberId={viewingOther ? targetId : null} memberName={displayUser?.full_name} />
         </>
       ) : null}
     </div>
