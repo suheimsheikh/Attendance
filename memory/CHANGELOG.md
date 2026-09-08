@@ -4293,3 +4293,11 @@ green**. Mongo unique index confirmed via index_information().
 - Cross-check tab: sticky filter bar + sticky table header (parity with
   Master / Daily Entry tabs).
 - deployment_agent: PASS, 0 blockers.
+
+## 08 Sep 2026 — WhatsApp check-in share now includes geo distance
+- shareWhatsApp.js `formatCheckinCaption` accepts `distanceM` / `offSite`;
+  new `formatDistance` (m / km). Caption: "✅ Name · Check-in 09:31 ·
+  Site · 📍 23 m from site" or "⚠️ 1.3 km from site (OFF-SITE)".
+- SelfCheckIn.jsx passes `res.distance_m` / `res.out_of_geofence` from
+  /attendance/geo-toggle into the share (omitted when no GPS fix).
+- Escort check-in has no geolocation, so its share caption is unchanged.

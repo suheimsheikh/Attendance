@@ -193,6 +193,8 @@ export default function SelfCheckIn() {
         action: res.action,
         name: res.member,
         siteName: res.site_name || "",
+        distanceM: lat != null && lng != null ? res.distance_m : null,
+        offSite: !!res.out_of_geofence,
         at: new Date(),
       });
       // Play a friendly Indian-female voice nudge when a check-in is marked
@@ -451,6 +453,8 @@ export default function SelfCheckIn() {
                     name: lastAction.name,
                     siteName: lastAction.siteName,
                     when: lastAction.at,
+                    distanceM: lastAction.distanceM,
+                    offSite: lastAction.offSite,
                   }),
                   imageBlob,
                   filename: `${(lastAction.name || "member").replace(/\s+/g, "_")}_${lastAction.action}.jpg`,

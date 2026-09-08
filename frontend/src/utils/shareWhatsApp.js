@@ -142,7 +142,13 @@ function isDesktop() {
 }
 
 /** Format the standard check-in caption used across self / escort / muster. */
-export function formatCheckinCaption({ action, name, siteName, when = new Date() }) {
+export function formatDistance(m) {
+  if (m == null || Number.isNaN(Number(m))) return "";
+  const n = Number(m);
+  return n >= 1000 ? `${(n / 1000).toFixed(1)} km` : `${Math.round(n)} m`;
+}
+
+export function formatCheckinCaption({ action, name, siteName, when = new Date(), distanceM = null, offSite = false }) {
   const hhmm = when.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
@@ -154,6 +160,8 @@ export function formatCheckinCaption({ action, name, siteName, when = new Date()
   const verb  = isOut ? "Check-out" : "Check-in";
   const bits = [`${emoji} ${name}`, `${verb} ${hhmm}`];
   if (siteName) bits.push(siteName);
+  const dist = formatDistance(distanceM);
+  if (dist) bits.push(offSite ? `⚠️ ${dist} from site (OFF-SITE)` : `📍 ${dist} from site`);
   return bits.join(" · ");
 }
 
