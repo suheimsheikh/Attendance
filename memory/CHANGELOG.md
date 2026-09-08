@@ -4240,3 +4240,21 @@ green**. Mongo unique index confirmed via index_information().
 - Applies everywhere via _grid_impl: portal Grid, CSV/PDF, /api/grid, embed.
 - Verified curl (2026-08): staff+coach remaining sandwiches=0; athlete
   sandwiches left intact (rule skipped); WO days otherwise preserved.
+
+## 30 Jun 2026 — Deployment-ready for PayCraft integration
+- All integration keys env-driven (no code changes needed): GRID_API_KEY
+  (the `key` query param on /api/grid, /api/members, /api/leave-balances,
+  /api/leave-requests, /api/corrections(+/decision), /api/grid[-/]status,
+  /api/grid[-/]lock, /api/grid[-/]cell) and EMBED_KEY (/embed/grid).
+- Added ALLOWED_EMBED_ORIGINS env (comma-separated). Wired into CORS
+  (unioned with CORS_ORIGINS) and a new _embed_frame_headers middleware
+  that emits Content-Security-Policy: frame-ancestors and strips
+  X-Frame-Options. Set to https://payroll-hub-21.preview.emergentagent.com.
+- Added hyphen path aliases (/api/grid-status, /api/grid-cell,
+  /api/grid-lock) alongside existing slash paths — non-breaking.
+- No hardcoded preview/localhost URLs in backend or frontend source
+  (frontend uses REACT_APP_BACKEND_URL; backend uses os.environ).
+- deployment_agent: PASS, 0 blockers. Recommendation: rotate
+  JWT_SECRET_KEY via Secrets for production.
+- Endpoint paths, query params, response shapes, and attendance codes
+  (P LT AB LV LP TR CO WO HO NJ LF) UNCHANGED.

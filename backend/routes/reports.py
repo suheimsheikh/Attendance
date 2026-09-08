@@ -1503,6 +1503,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         return {"rows": rows}
 
     @router.get("/grid/status")
+    @router.get("/grid-status")
     async def api_grid_status(month: str, key: str = ""):
         """Lock status of a month's grid."""
         _require_grid_key(key)
@@ -1516,6 +1517,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
 
     # ---- GROUP C: writes (refuse 409 when month locked; audited) -----------
     @router.post("/grid/cell")
+    @router.post("/grid-cell")
     async def api_grid_cell(body: dict, key: str = ""):
         """Set/override a single member-day cell code."""
         _require_grid_key(key)
@@ -1597,6 +1599,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         return {"ok": True, "id": cid, "decision": decision, "applied": applied}
 
     @router.post("/grid/lock")
+    @router.post("/grid-lock")
     async def api_grid_lock(body: dict, key: str = ""):
         """Lock/unlock a month's grid. Locked months refuse all other writes."""
         _require_grid_key(key)

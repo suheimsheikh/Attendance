@@ -4497,6 +4497,24 @@ async def _add_stable_cache_headers(request, call_next):  # noqa: ANN001
                 response.headers["Cache-Control"] = "private, max-age=120"
     return response
 
+# Trusted embed origins (PayCraft now, ychyderabad domain later) — read
+# from env so the SAME build works in preview and production. Used both
+# for CORS (below) and the Content-Security-Policy frame-ancestors header.
+_EMBED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_EMBED_ORIGINS", "").split(",") if o.strip()]
+_FRAME_ANCESTORS = "frame-ancestors 'self'" + ("" if not _EMBED_ORIGINS else " " + " ".join(_EMBED_ORIGINS))
+
+@app.middleware("http")
+async def _embed_frame_headers(request, call_next):  # noqa: ANN001
+    """Let trusted apps iframe the portal (e.g. the /embed/grid page and
+    its API calls). We publish a CSP `frame-ancestors` allow-list from
+    ALLOWED_EMBED_ORIGINS and strip the legacy X-Frame-Options header
+    (DENY/SAMEORIGIN) which would otherwise block cross-site framing."""
+    response = await call_next(request)
+    response.headers["Content-Security-Policy"] = _FRAME_ANCESTORS
+    for h in [k for k in response.headers.keys() if k.lower() == "x-frame-options"]:
+        del response.headers[h]
+    return response
+
 # GZip compression — cuts JSON payload sizes ~70% for typical text-heavy
 # responses like /api/members and /api/presence (which include lots of
 # repeated field names). `minimum_size=500` avoids compressing tiny
@@ -4508,9 +4526,12 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=False,
-    allow_origins=[
-        o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()
-    ] or ["*"],
+    allow_origins=(
+        ["*"] if "*" in [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()]
+        else (list(dict.fromkeys(
+            [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()] + _EMBED_ORIGINS
+        )) or ["*"])
+    ),
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-Request-ID"],
