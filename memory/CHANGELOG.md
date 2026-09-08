@@ -4216,3 +4216,14 @@ green**. Mongo unique index confirmed via index_information().
   switch, double-click MemberForm opens, wrong/missing key error cards, no /login).
 - Curl: /api/embed/auth 200 (embed+grid keys) / 401 wrong; token works on
   /api/reports/calendar-grid and /api/members.
+
+## 30 Jun 2026 — Grid: current day never shows AB (Option B)
+- reports.py _classify: the current day now renders BLANK (uncounted) for
+  any member without a check-in, regardless of time — the day is still in
+  progress so no premature "absent". Resolves to AB naturally tomorrow
+  (once it's a past day). Leave/WO/HO/Tour on today still show their codes.
+- Removed the old now_hm < work_start suppression (was AB after each
+  member's check-in time). Applies everywhere via _grid_impl: portal Grid,
+  CSV/PDF export, /api/grid pull, and the embed.
+- Verified curl (month 2026-09): today codes {TR,'',WO}, 0 AB today;
+  yesterday still shows AB/P/LT/WO/TR; totals.absent excludes today.

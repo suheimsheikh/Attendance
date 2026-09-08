@@ -871,10 +871,6 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
 
         office = await db.config.find_one({"id": "office"})
         today_iso = local_date_str(office)
-        # Live HH:MM in office tz — used below to suppress today's "AB"
-        # cell until after the check-in window opens. Before work_start
-        # the day hasn't earned an absent yet, so we render it blank.
-        now_hm = local_now(office).strftime("%H:%M")
         default_wo = ((office or {}).get("default_weekly_off") or "sunday").lower()
         default_work_start = (office or {}).get("default_work_start") or "09:00"
         from holidays import WEEKDAY_KEY
@@ -1111,10 +1107,12 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                 return "WO"
             if iso in holiday_dates:
                 return "HO"
-            # Suppress today's "AB" until the check-in window has
-            # actually opened — otherwise every 8 AM open of the app
-            # would mark the entire roster as absent for the day.
-            if iso == today_iso and now_hm < (work_start or default_work_start):
+            # The current day never shows "AB": the day is still in
+            # progress, so a member with no check-in yet is rendered
+            # blank (and excluded from every total) — they may still
+            # check in, or it resolves to AB tomorrow once the day is
+            # past. Option B, user-confirmed 30 Jun 2026.
+            if iso == today_iso:
                 return ""
             return "AB"
 
