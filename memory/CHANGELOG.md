@@ -4227,3 +4227,16 @@ green**. Mongo unique index confirmed via index_information().
   CSV/PDF export, /api/grid pull, and the embed.
 - Verified curl (month 2026-09): today codes {TR,'',WO}, 0 AB today;
   yesterday still shows AB/P/LT/WO/TR; totals.absent excludes today.
+
+## 30 Jun 2026 — Grid: weekly-off "sandwich" = absent
+- reports.py _grid_impl: after cells are classified, a weekly-off (WO) day
+  (or a run of consecutive WO days) is converted to AB when the member is
+  absent (AB) on BOTH the day immediately before AND after the WO block.
+  Converted AB flows into totals automatically.
+- Scoped to EMPLOYEES only — athletes/elite (athlete-like categories) are
+  skipped (they're tracked via Breaks, not payroll absence).
+- Month-boundary WO (first/last day of the window) left untouched (neighbour
+  is in an unloaded adjacent month).
+- Applies everywhere via _grid_impl: portal Grid, CSV/PDF, /api/grid, embed.
+- Verified curl (2026-08): staff+coach remaining sandwiches=0; athlete
+  sandwiches left intact (rule skipped); WO days otherwise preserved.

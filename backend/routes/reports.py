@@ -1119,6 +1119,10 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         # Precompute day-of-week per iso for the month.
         dow_by_iso = {iso: date.fromisoformat(iso).weekday() for iso in days}
 
+        # Athlete-like categories are tracked via Breaks, not payroll
+        # absence — the weekly-off "sandwich" rule below is an EMPLOYEE
+        # rule, so we skip it for them.
+        sandwich_athlete_like = await _athlete_like_keys(db)
         rows = []
         for u in users:
             uid = u["id"]
@@ -1127,6 +1131,31 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             cells = [_classify(uid, iso, dow_by_iso[iso], weekly_off, work_start,
                                u.get("joining_date"), u.get("leaving_date"))
                      for iso in days]
+            # Sandwich rule (user-confirmed 30 Jun 2026): a weekly-off day
+            # is treated as ABSENT when the member is absent on BOTH the
+            # working day immediately before AND after it. Handles multi-
+            # day WO blocks (e.g. a 2-day weekend counts if the member is
+            # absent the day before the block and the day after). Only
+            # in-window neighbours are considered, so a WO on the very
+            # first/last day of the month is left untouched (its neighbour
+            # lives in an adjacent month we didn't load). The converted
+            # "AB" then flows into totals automatically.
+            if u.get("category") not in sandwich_athlete_like:
+                n = len(cells)
+                i = 0
+                while i < n:
+                    if cells[i] == "WO":
+                        j = i
+                        while j + 1 < n and cells[j + 1] == "WO":
+                            j += 1
+                        left_abs = i - 1 >= 0 and cells[i - 1] == "AB"
+                        right_abs = j + 1 < n and cells[j + 1] == "AB"
+                        if left_abs and right_abs:
+                            for k in range(i, j + 1):
+                                cells[k] = "AB"
+                        i = j + 1
+                    else:
+                        i += 1
             # Per-cell metadata — used by the frontend tooltip layer.
             # Only populate entries where there IS extra context worth
             # surfacing (break name, leave reason, late minutes, half-day
