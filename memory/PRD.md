@@ -115,3 +115,4 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 - Meals data: 01 Jun 2026 → 21 Aug 2026 (spreadsheet imports Jun-Jul; live muster 08-20 Aug)
 - Data Quality: 171 findings (29 high, 26 medium, 65 low, 51 info); 4 duplicate categories flagged
 - Kitchen analytics window (Aug): ₹76,233 across 67 items in 168 line entries
+

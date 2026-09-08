@@ -4203,3 +4203,16 @@ green**. Mongo unique index confirmed via index_information().
   aliases from reports.py — the canonical spec paths now serve both modes.
 - Verified: /api/members key=200 wrong=401 noauth=401; /api/leave-balances
   key=200 wrong=401 noauth=403; admin-token responses byte-identical to prior.
+
+## 30 Jun 2026 — Full-functionality Grid embed for PayCraft (SSO key→session)
+- /embed/grid now renders the EXACT portal Reports UI (Calendar/Attendance/
+  Daily tabs, filters, CSV/PDF, double-click-to-edit, corrections, lock),
+  chrome-less, for iframing into PayCraft. Replaces the earlier read-only embed.
+- New GET /api/embed/auth?key= (reports.py): accepts GRID_API_KEY or EMBED_KEY,
+  mints a short-lived admin JWT (seeded admin via create_token) → {access_token,user}.
+  EmbedGrid.jsx exchanges the key, loginWithToken(), then mounts <Reports/>.
+  Scope = full admin (owner-confirmed; embed shown only to trusted PayCraft admins).
+- Verified via testing_agent iteration_51: all 5 scenarios pass (full UI, tab
+  switch, double-click MemberForm opens, wrong/missing key error cards, no /login).
+- Curl: /api/embed/auth 200 (embed+grid keys) / 401 wrong; token works on
+  /api/reports/calendar-grid and /api/members.

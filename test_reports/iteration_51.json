@@ -1,0 +1,20 @@
+{
+  "summary": "Frontend-only test of /embed/grid full-Reports embed. All 5 requested scenarios PASS: (1) valid key renders full Reports UI with embed-grid-full container, 'The Grid' heading, all 3 tabs, Run button, all 4 category chips (All/Athletes/Elite/Staff & Coaches), CSV+PDF export buttons, and no sidebar/nav — no /login redirect. (2) Grid rows render after Run; double-clicking a member name cell (title='Double-click to edit member') opens the MemberForm 'Edit member' modal populated with the member data (e.g. AINUL HAQUE) — full interactivity confirmed. (3) Switching to Attendance and Daily Leave/Tour tabs renders content without errors or login redirect (Daily Leave/Tour shows On leave + On tour cards with data). (4) Wrong key shows the 'Access denied' embed-grid-error card and does NOT render the grid or redirect. (5) Missing key shows 'Access key required' embed-grid-error card.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (5/5 scenarios)"},
+  "test_credentials": "EMBED_KEY = emb_7Qr2Xnx9Vx4pLm8sTfWzKcD3aH6bJgN1uYe0oZi (no login page used, embed self-authenticates)",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The /embed/grid route now correctly renders the full Reports page (Calendar Grid / Attendance / Daily Leave/Tour) inside a chrome-less shell via key exchange. Double-click on the sticky Name cell in the CalendarGridTab opens MemberForm — verified end-to-end. Access-denial cards use data-testid='embed-grid-error'. September 2026 default month has data. If retesting, use domcontentloaded + wait_for_selector('[data-testid=embed-grid-full]', timeout=25000); networkidle will time out due to CRA HMR socket.",
+  "rca of the issue": "N/A — no bugs found."
+}
