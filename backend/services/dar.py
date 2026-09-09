@@ -15,9 +15,13 @@ DAR_DEFAULTS = {"enabled": True, "min_chars": 20, "group_name": "YCH DAR"}
 
 
 def dar_required_for(user: dict) -> bool:
-    if not user or user.get("status") == "left":
+    if not user or user.get("status") == "left" or user.get("dar_exempt"):
         return False
-    return user.get("category") in DAR_CATEGORIES and not bool(user.get("dar_exempt"))
+    return user.get("category") in DAR_CATEGORIES or bool(user.get("dar_required"))
+
+
+DAR_USER_FILTER = {"status": {"$ne": "left"},
+                   "$or": [{"category": {"$in": sorted(DAR_CATEGORIES)}}, {"dar_required": True}]}
 
 
 async def get_dar_policy(db, today_iso: str) -> dict:

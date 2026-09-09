@@ -15,7 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from services.dar import (
-    DAR_CATEGORIES, compute_missed_by_user, dar_required_for, get_dar_policy, validate_dar_text,
+    DAR_CATEGORIES, DAR_USER_FILTER, compute_missed_by_user, dar_required_for, get_dar_policy, validate_dar_text,
 )
 from services.time_utils import local_date_str, now_utc
 
@@ -137,7 +137,7 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
             query["date"] = {k: v for k, v in (("$gte", from_), ("$lte", to)) if v}
         if member_id:
             query["user_id"] = member_id
-        if category and category in DAR_CATEGORIES:
+        if category and category in (DAR_CATEGORIES | {"elite", "athlete"}):
             query["category"] = category
         if q and q.strip():
             query["text"] = {"$regex": re.escape(q.strip()), "$options": "i"}
@@ -174,8 +174,8 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
         start, end = _month_window(month)
         today = await _today()
         users = await db.users.find(
-            {"status": {"$ne": "left"}, "category": {"$in": sorted(DAR_CATEGORIES)}},
-            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "dar_exempt": 1, "status": 1},
+            dict(DAR_USER_FILTER),
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "dar_exempt": 1, "dar_required": 1, "status": 1},
         ).to_list(2000)
         missed = await compute_missed_by_user(db, users, start, end, today)
         by_id = {u["id"]: u for u in users}
@@ -224,8 +224,8 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
         start, end = _month_window(month)
         today = await _today()
         users = await db.users.find(
-            {"status": {"$ne": "left"}, "category": {"$in": sorted(DAR_CATEGORIES)}},
-            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "dar_exempt": 1, "status": 1},
+            dict(DAR_USER_FILTER),
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "dar_exempt": 1, "dar_required": 1, "status": 1},
         ).to_list(2000)
         missed = await compute_missed_by_user(db, users, start, end, today)
         filed_counts: dict = {}

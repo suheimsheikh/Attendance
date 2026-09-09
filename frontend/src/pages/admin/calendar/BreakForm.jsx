@@ -2,7 +2,8 @@ import React, { useMemo, useState } from "react";
 import { Loader2, Coffee } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../../api";
-import { useEscape } from "../../../hooks/useEscape";
+import { useDirtyForm } from "../../../hooks/useDirtyForm";
+import TopSaveButton from "../../../components/TopSaveButton";
 import { useFormError } from "../../../hooks/useFormError";
 import FormErrorBanner from "../../../components/FormErrorBanner";
 import { SCOPES, ymd } from "./helpers";
@@ -18,7 +19,6 @@ import { SCOPES, ymd } from "./helpers";
  * through the Leaves flow).
  */
 export default function BreakForm({ initial, members, institutions, fleets, onClose, onSaved }) {
-  useEscape(onClose);
   const isEdit = !!initial?.id;
   const today = ymd(new Date());
   const [form, setForm] = useState({
@@ -37,6 +37,7 @@ export default function BreakForm({ initial, members, institutions, fleets, onCl
   // needing to switch to scope=fleet.
   const [memberFleetFilter, setMemberFleetFilter] = useState("");
   const [saving, setSaving] = useState(false);
+  const guard = useDirtyForm(form, onClose);
   const formErr = useFormError();
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const toggleMember = (id) => set("member_ids",
@@ -96,7 +97,7 @@ export default function BreakForm({ initial, members, institutions, fleets, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={guard.close}>
       <form
         onSubmit={submit}
         onClick={(e) => e.stopPropagation()}
@@ -107,7 +108,8 @@ export default function BreakForm({ initial, members, institutions, fleets, onCl
           <h2 className="text-xl font-extrabold flex items-center gap-2">
             <Coffee size={18} className="text-amber-600" /> {isEdit ? "Edit break" : "Apply break"}
           </h2>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
+          <TopSaveButton formId="break-form-el" dirty={guard.dirty} saving={saving} testId="bf-top-save" />
+          <button type="button" onClick={guard.close} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
         </header>
 
         <div>
@@ -293,7 +295,7 @@ export default function BreakForm({ initial, members, institutions, fleets, onCl
             testId="bf-save-error"
           />
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
+            <button type="button" onClick={guard.close} className="iu-btn-secondary">Cancel</button>
             <button type="submit" disabled={saving} data-testid="bf-save" className="iu-btn-primary !bg-amber-600 hover:!bg-amber-700">
               {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save changes" : "Apply break")}
             </button>

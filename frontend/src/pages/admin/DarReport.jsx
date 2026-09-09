@@ -9,7 +9,7 @@ import { DarShareButton } from "../../components/Dar";
 const todayISO = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 const monthOf = (iso) => iso.slice(0, 7);
 const firstOfMonth = (iso) => `${monthOf(iso)}-01`;
-const CATS = [["", "All employees"], ["staff", "Staff"], ["coach", "Coaches"], ["executive", "Executives"]];
+const CATS = [["", "All"], ["staff", "Staff"], ["coach", "Coaches"], ["executive", "Executives"], ["elite", "Elite athletes"]];
 
 export default function DarReport() {
   const [tab, setTab] = useState("reports");
@@ -26,7 +26,7 @@ export default function DarReport() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.get("/members").then((m) => setMembers((m || []).filter((u) => ["staff", "coach", "executive"].includes(u.category))
+    api.get("/members").then((m) => setMembers((m || []).filter((u) => ["staff", "coach", "executive"].includes(u.category) || u.dar_required)
       .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || "")))).catch(() => {});
     api.get("/config/dar-policy").then((p) => setGroupName(p?.group_name || "")).catch(() => {});
   }, []);

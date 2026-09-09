@@ -19,7 +19,8 @@ import React, { useEffect, useState } from "react";
 import { Loader2, Plus, Pencil, Trash2, X, Lock, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
-import { useEscape } from "../../hooks/useEscape";
+import { useDirtyForm } from "../../hooks/useDirtyForm";
+import TopSaveButton from "../../components/TopSaveButton";
 
 // Keys of the 3 seeded system roles — mirrors SEEDED_ROLE_KEYS in
 // backend/routes/roles.py. Cannot be renamed or deleted because the
@@ -36,8 +37,8 @@ function RoleForm({ initial, onClose, onSaved }) {
     sort_order: initial?.sort_order  ?? 50,
   });
   const [saving, setSaving] = useState(false);
+  const guard = useDirtyForm(form, onClose);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  useEscape(saving ? null : onClose);
 
   const save = async (e) => {
     e.preventDefault();
@@ -69,7 +70,7 @@ function RoleForm({ initial, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" data-testid="role-form-modal">
-      <form onSubmit={save} className="bg-white rounded-2xl w-full max-w-md p-5 space-y-4">
+      <form id="role-form-el" onSubmit={save} className="bg-white rounded-2xl w-full max-w-md p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <KeyRound size={18} className="text-sky-600" />
@@ -80,7 +81,8 @@ function RoleForm({ initial, onClose, onSaved }) {
               </span>
             )}
           </h2>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-800" data-testid="role-form-close">
+          <TopSaveButton formId="role-form-el" dirty={guard.dirty} saving={saving} testId="role-top-save" />
+          <button type="button" onClick={guard.close} className="text-slate-400 hover:text-slate-800" data-testid="role-form-close">
             <X size={20} />
           </button>
         </div>
@@ -142,7 +144,7 @@ function RoleForm({ initial, onClose, onSaved }) {
         )}
 
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="iu-btn-secondary" data-testid="role-form-cancel">Cancel</button>
+          <button type="button" onClick={guard.close} className="iu-btn-secondary" data-testid="role-form-cancel">Cancel</button>
           <button type="submit" disabled={saving} className="iu-btn-primary" data-testid="role-form-save">
             {saving && <Loader2 className="animate-spin" size={16} />}
             {isEdit ? "Save" : "Create"}

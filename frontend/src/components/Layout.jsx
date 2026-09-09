@@ -5,8 +5,9 @@ import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, Building2, IdCard, Sailboat,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, Utensils, PieChart, CalendarRange, FileText, ListTodo
+  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, Utensils, PieChart, CalendarRange, FileText, ListTodo, ScrollText
 } from "lucide-react";
+import RulesGate from "./RulesGate";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
 import InstallPrompt from "./InstallPrompt";
@@ -45,6 +46,7 @@ const NAV_MEMBER = [
   // help mark escorts in/out — escorts themselves land here after phone
   // login (auth.jsx forces the redirect when `is_escort=true`).
   { to: "/escort-checkin", label: "Escorts Check in/Out", icon: UserCheck, hint: "Mark escorts (parents/guardians) in and out of campus" },
+  { to: "/rules", label: "Attendance Rules", icon: ScrollText, hint: "The numbered attendance rules every employee signs up to" },
   { to: "/profile", label: "My Profile", icon: UserCog, hint: "Your photo, contact details and login settings" },
 ];
 
@@ -360,6 +362,7 @@ export default function Layout() {
 
   return (
     <div className="h-screen overflow-hidden flex bg-slate-50">
+      <RulesGate enabled={!!user && !isEscort} />
       {/* Desktop sidebar */}
       <div className="hidden md:block h-screen">{sidebar}</div>
 

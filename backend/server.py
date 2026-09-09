@@ -330,6 +330,7 @@ class MemberCreate(BaseModel):
     # executive accrue, athletes never do).
     ot_eligible: Optional[bool] = None
     dar_exempt: Optional[bool] = None
+    dar_required: Optional[bool] = None
     # 20 Feb 2026 chef request: allow per-member override of the
     # category-level `meal_eligible` flag so edge cases (e.g. a driver
     # who never eats mess) don't require creating a whole new category.
@@ -365,6 +366,7 @@ class MemberUpdate(BaseModel):
     leaving_date: Optional[str] = None
     ot_eligible: Optional[bool] = None
     dar_exempt: Optional[bool] = None
+    dar_required: Optional[bool] = None
     # Per-member override — see the note on MemberIn.meal_eligible.
     meal_eligible: Optional[bool] = None
 
@@ -1062,6 +1064,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "leaving_date": body.leaving_date,
         "ot_eligible": body.ot_eligible,
         "dar_exempt": body.dar_exempt,
+        "dar_required": body.dar_required,
         "photo": None,
         "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
         "hashed_password": hash_password(body.password),
@@ -4306,6 +4309,9 @@ app.include_router(_dar_router(db, get_current_user, require_admin, valid_grid_k
 
 from routes.tasks import make_router as _tasks_router  # noqa: E402
 app.include_router(_tasks_router(db, get_current_user, require_admin, write_audit))
+
+from routes.rules import make_router as _rules_router  # noqa: E402
+app.include_router(_rules_router(db, get_current_user, require_admin, write_audit))
 
 # Data-quality dashboard — read-only DB sweep for dupes, missing
 # fields, and structural inconsistencies.

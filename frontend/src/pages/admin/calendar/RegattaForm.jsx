@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../../api";
-import { useEscape } from "../../../hooks/useEscape";
+import { useDirtyForm } from "../../../hooks/useDirtyForm";
+import TopSaveButton from "../../../components/TopSaveButton";
 import { useFormError } from "../../../hooks/useFormError";
 import FormErrorBanner from "../../../components/FormErrorBanner";
 import { LEVEL_STYLE, LEVELS, ymd } from "./helpers";
@@ -12,7 +13,6 @@ import { LEVEL_STYLE, LEVELS, ymd } from "./helpers";
  * athletes apply for leave). Extracted from Calendar.jsx — all state local.
  */
 export default function RegattaForm({ initial, onClose, onSaved }) {
-  useEscape(onClose);
   const isEdit = !!initial?.id;
   const today = ymd(new Date());
   const [form, setForm] = useState({
@@ -26,6 +26,7 @@ export default function RegattaForm({ initial, onClose, onSaved }) {
     notes:       initial?.notes || "",
   });
   const [saving, setSaving] = useState(false);
+  const guard = useDirtyForm(form, onClose);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const formErr = useFormError();
 
@@ -48,7 +49,7 @@ export default function RegattaForm({ initial, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={guard.close}>
       <form
         onSubmit={submit}
         onClick={(e) => e.stopPropagation()}
@@ -56,6 +57,7 @@ export default function RegattaForm({ initial, onClose, onSaved }) {
         className="bg-white w-full md:max-w-lg rounded-t-2xl md:rounded-2xl p-6 space-y-4 max-h-[92vh] overflow-y-auto"
       >
         <h2 className="text-xl font-extrabold">{isEdit ? "Edit regatta" : "New regatta"}</h2>
+          <TopSaveButton formId="regatta-form-el" dirty={guard.dirty} saving={saving} testId="rf-top-save" />
         <div>
           <label className="iu-label">Name</label>
           <input data-testid="rf-name" value={form.name} onChange={(e) => set("name", e.target.value)} className="iu-input" placeholder="e.g. 49er World Championship 2026" />
@@ -100,7 +102,7 @@ export default function RegattaForm({ initial, onClose, onSaved }) {
             testId="rf-save-error"
           />
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
+            <button type="button" onClick={guard.close} className="iu-btn-secondary">Cancel</button>
             <button type="submit" disabled={saving} data-testid="rf-save" className="iu-btn-primary">
               {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save" : "Create")}
             </button>

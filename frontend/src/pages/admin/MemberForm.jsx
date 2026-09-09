@@ -2,14 +2,14 @@ import React, { useEffect, useState } from "react";
 import { X, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
-import { useEscape } from "../../hooks/useEscape";
+import { useDirtyForm } from "../../hooks/useDirtyForm";
+import TopSaveButton from "../../components/TopSaveButton";
 import { fileToResizedDataUrl } from "../../utils";
 import Avatar from "../../components/Avatar";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
 
 export default function MemberForm({ initial, onClose, onSaved }) {
-  useEscape(onClose);
   const isEdit = !!initial;
   const [form, setForm] = useState({
     full_name: initial?.full_name || "",
@@ -44,6 +44,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     // backend's opt-out semantics). Admin can uncheck to disable.
     ot_eligible: initial?.ot_eligible !== false,
     dar_exempt: initial?.dar_exempt === true,
+    dar_required: initial?.dar_required === true,
     // Per-member meal-eligibility override (Feb 2026). Three states,
     // stored as true / false / null:
     //   • null (default) → inherit from category.meal_eligible
@@ -56,6 +57,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
       : "auto",
   });
   const [busy, setBusy] = useState(false);
+  const guard = useDirtyForm(form, onClose);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [institutions, setInstitutions] = useState([]);
   const [fleets, setFleets] = useState([]);
@@ -148,13 +150,14 @@ export default function MemberForm({ initial, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={guard.close}>
       <div className="bg-white w-full md:max-w-lg rounded-t-2xl md:rounded-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="member-form">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-extrabold">{isEdit ? "Edit member" : "New member"}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
+          <TopSaveButton formId="member-form-el" dirty={guard.dirty} saving={busy} testId="mf-top-save" />
+          <button onClick={guard.close} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
         </div>
-        <form onSubmit={submit} className="space-y-3">
+        <form id="member-form-el" onSubmit={submit} className="space-y-3">
           <div className="flex items-center gap-4 pb-2">
             <Avatar name={form.full_name || "?"} photo={form.photo} size={64} />
             <div className="flex-1">
@@ -231,10 +234,10 @@ export default function MemberForm({ initial, onClose, onSaved }) {
             <select data-testid="mf-institution" value={form.institution} onChange={(e) => set("institution", e.target.value)} className="iu-input">
               <option value="">— Select institution —</option>
               {institutions.map((i) => (
-                <option key={i.id} value={i.name}>{i.name}{i.short_name ? ` (${i.short_name})` : ""}</option>
+                <option key={i.id} value={i.name}>{`${i.name}${i.short_name ? ` (${i.short_name})` : ""}`}</option>
               ))}
               {form.institution && !institutions.some((i) => i.name === form.institution) && (
-                <option value={form.institution}>{form.institution} (legacy)</option>
+                <option value={form.institution}>{`${form.institution} (legacy)`}</option>
               )}
             </select>
           </div>
@@ -354,6 +357,24 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               </span>
             </label>
           </div>
+          {["elite", "athlete"].includes(form.category) && (
+            <div>
+              <label className="iu-label">Daily Activity Report</label>
+              <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
+                <input
+                  data-testid="mf-dar-required"
+                  type="checkbox"
+                  checked={!!form.dar_required}
+                  onChange={(e) => set("dar_required", e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800"
+                />
+                <span className="text-sm text-slate-700 leading-snug">
+                  DAR required — this athlete must file a Daily Activity Report at check-out, like staff.
+                  <span className="block text-[11px] text-slate-500 mt-0.5">Missed DARs are listed in DAR Reports → Missed.</span>
+                </span>
+              </label>
+            </div>
+          )}
           {["staff", "coach", "executive"].includes(form.category) && (
             <div>
               <label className="iu-label">Daily Activity Report</label>

@@ -13,7 +13,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Loader2, Plus, Pencil, Trash2, X, ShieldCheck, Palette } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
-import { useEscape } from "../../hooks/useEscape";
+import { useDirtyForm } from "../../hooks/useDirtyForm";
+import TopSaveButton from "../../components/TopSaveButton";
 
 const COLORS = [
   { key: "sky",     tw: "bg-sky-500" },
@@ -42,8 +43,8 @@ function CategoryForm({ initial, onClose, onSaved }) {
     sort_order:      initial?.sort_order      ?? 100,
   });
   const [saving, setSaving] = useState(false);
+  const guard = useDirtyForm(form, onClose);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  useEscape(saving ? null : onClose);
 
   const save = async (e) => {
     e.preventDefault();
@@ -84,12 +85,13 @@ function CategoryForm({ initial, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
-         onClick={onClose} data-testid="category-form-modal">
+         onClick={guard.close} data-testid="category-form-modal">
       <form className="bg-white rounded-2xl w-full max-w-md shadow-2xl"
             onClick={(e) => e.stopPropagation()} onSubmit={save}>
         <div className="flex items-center justify-between p-4 border-b border-slate-100">
           <h2 className="text-lg font-bold">{isEdit ? "Edit category" : "New category"}</h2>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700">
+          <TopSaveButton formId="category-form-el" dirty={guard.dirty} saving={saving} testId="cat-top-save" />
+          <button type="button" onClick={guard.close} className="text-slate-400 hover:text-slate-700">
             <X size={18} />
           </button>
         </div>
@@ -166,7 +168,7 @@ function CategoryForm({ initial, onClose, onSaved }) {
           </div>
         </div>
         <div className="p-3 border-t border-slate-100 flex justify-end gap-2 bg-slate-50">
-          <button type="button" onClick={onClose} className="px-3 h-9 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-200">
+          <button type="button" onClick={guard.close} className="px-3 h-9 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-200">
             Cancel
           </button>
           <button type="submit" disabled={saving}

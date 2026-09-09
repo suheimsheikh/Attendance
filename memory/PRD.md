@@ -92,6 +92,9 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
   reminders after check-in, Share-my-day, ticks flow into DAR prefill; site name shown on check-in/out everywhere.
 - Backlog from this: extend Tasks to staff/coaches (user said "for now only executives"); SMS/WhatsApp scheduled reminders.
 
+### Sep 2026 — Elite DAR opt-in · modal dirty-guard · Task widget · Rules sign-off (CHANGELOG 09 Sep)
+- Note for prod deploy: every staff/coach/executive (incl. admin accounts with those categories) is redirected to /rules once to accept v2026-09.
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked

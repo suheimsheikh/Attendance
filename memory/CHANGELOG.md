@@ -4339,3 +4339,21 @@ green**. Mongo unique index confirmed via index_information().
   docs store site_name.
 - Test exec exec.test@example.com / Exec@12345. testing_agent iter 53: pass
   after 2 fixes (banner wording, <option> hydration warning).
+
+## 09 Sep 2026 — Elite DAR opt-in, modal save/dirty guard, task widget, Rules sign-off
+- `dar_required` per-member flag (elite/athletes opt-in; MemberForm checkbox
+  mf-dar-required). `dar_required_for` = category rule OR dar_required, minus
+  dar_exempt. Missed/PayCraft queries use `DAR_USER_FILTER`.
+- `hooks/useDirtyForm.js` + `components/TopSaveButton.jsx`: top-of-modal Save
+  (amber/pulse + "· unsaved" when dirty), Esc/X/backdrop confirm when dirty,
+  beforeunload guard. Applied to MemberForm, RegattaForm, BreakForm, Camps,
+  Categories, Roles (form ids *-form-el, testids *-top-save).
+- Dashboard `TaskProgressCard` (executive checklist progress + due pills) via
+  /api/admin/tasks/overview.
+- Rules sign-off: `routes/rules.py` — GET /api/rules, POST /api/rules/accept,
+  PUT /api/admin/rules, GET /api/admin/rules/acceptances. Policy config
+  id="rules_policy" (version 2026-09, 25 rules in 7 sections, required for
+  staff/coach/executive). `RulesGate` in Layout redirects un-accepted members
+  to /rules; sidebar "Attendance Rules". Acceptances audited.
+- testing_agent iter 54: 100% backend + frontend. Fixed <option> hydration
+  warning in MemberForm institution select.

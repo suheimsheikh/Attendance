@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 54: verified Attendance Rules sign-off gate, Elite dar_required checkbox, TopSaveButton dirty-guard pattern across all forms (member, camp, regatta, break, category, role), and Executive tasks-today admin card. Backend pytest 4/4 pass. Frontend flows for admin + staff pass. One pre-existing hydration warning (span/option nesting) still visible in console but non-blocking (already reported in iter53).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Members table (MemberForm rendered)", "issues": ["Console hydration warning 'In HTML, <option> cannot be a child of <span>' persists from MemberForm.jsx line 240 institution select. Reported in iter53 and still present."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter54.py",
+    "/app/test_reports/pytest/iter54.xml"
+  ],
+  "action_items": [
+    "(Non-blocking / carried over from iter53) Fix the <option>-inside-<span> hydration warning emitted for the mf-institution select in MemberForm."
+  ],
+  "critical_code_review_comments": [
+    "useEscape blurs focused inputs on first Esc, so when the user is still typing in a field the first Esc doesn't invoke the dirty-guard confirm — the second Esc does. Intentional per code comment ('first Esc blurs the field, second Esc closes the modal') but this makes the acceptance-criteria phrase 'Press Escape → confirm dialog appears' true only if the field is blurred first. Consider updating the spec/tests or wiring TopSaveButton to also blur on Esc.",
+    "useDirtyForm uses JSON.stringify(form) each render to compute `dirty`. For small forms this is fine; if a form grows to hundreds of fields this could become a hotspot. Not urgent.",
+    "TopSaveButton labels 'Save · unsaved' when dirty — good for a11y."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter54.py (new)",
+    "/app/test_reports/pytest/iter54.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% (all requested flows)"},
+  "test_credentials": "Admin admin@attendance.app / Admin@12345; Staff dar.test@example.com / Dar@12345 — via 'Admin sign in with email' toggle on /login.",
+  "seed_data_creation": "Cleared db.rules_acceptances before UI test so both admin and staff would hit the Rules gate on login. After test, both admin and staff have accepted version 2026-09. No other seed data added; elite dar_required was toggled on-then-off (restored) on the first elite member alphabetically.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend covered by /app/backend/tests/test_review_iter54.py (4 tests: rules shape+required, rules accept idempotent, admin acceptances counts, elite dar_required in missed). Frontend verified: (1) Rules gate: admin+staff redirected to /rules when acceptance missing, /rules-must-accept banner visible, nav to /admin/dashboard bounces back to /rules, tick+accept → toast, banner shows, rules-acceptances list visible for admin (accepted+pending counts sum equal to rows), reload /rules keeps banner, no accept-card. Sidebar 'Attendance Rules' link visible for staff. (2) Elite MemberForm: mf-dar-required present, mf-dar-exempt absent; toggle persists after save; untick restores. Staff MemberForm: mf-dar-exempt present, mf-dar-required absent. (3) Dirty guard on member form: initial data-dirty=false, label 'Save', grey bg rgb(241,245,249); after edit data-dirty=true, label 'Save · unsaved', amber bg rgb(245,158,11). Escape while focused on input first blurs; second Escape triggers window.confirm 'You have unsaved changes. Discard them?' — Cancel keeps modal open, OK closes without saving; mf-top-save click submits and closes. Camp/regatta/break/category/role top-save buttons present with correct testids (cf-top-save, rf-top-save, bf-top-save, cat-top-save, role-top-save); cf & bf dirty toggle confirmed after field edit. (4) Admin dashboard task-progress-card renders with per-executive task-progress-<id> rows and task-overdue-<id> pills (7 execs).",
+  "rca of the issue": "No new bugs. Behavioural note: useEscape prefers to blur focused inputs before closing (see /app/frontend/src/hooks/useEscape.js). This causes the first Escape after typing to appear to be a 'no-op' from the user's viewpoint. Tests must therefore either (a) click outside the input first, or (b) press Escape twice, before expecting the discard-confirm dialog."
+}

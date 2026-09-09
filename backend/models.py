@@ -56,6 +56,7 @@ class UserPublic(BaseModel):
     # DAR exemption (Sep 2026). Staff/coach/executive must file a Daily
     # Activity Report at check-out unless this is True.
     dar_exempt: Optional[bool] = None
+    dar_required: Optional[bool] = None
     # Weekly off (day of week, lowercase e.g. "monday"). Drives comp-off
     # accrual and the "day off" bucket in Reports. Was silently stripped
     # from /members responses until 04 Feb 2026 because it wasn't

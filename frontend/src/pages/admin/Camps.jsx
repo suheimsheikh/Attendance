@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, Trash2, Edit3, Tent, Calendar, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
-import { useEscape } from "../../hooks/useEscape";
+import { useDirtyForm } from "../../hooks/useDirtyForm";
+import TopSaveButton from "../../components/TopSaveButton";
 import { formatDate } from "../../utils";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
@@ -140,7 +141,6 @@ export default function Camps() {
 }
 
 export function CampForm({ initial, onClose, onSaved }) {
-  useEscape(onClose);
   const isEdit = !!initial?.id;
   const [form, setForm] = useState({
     name:            initial?.name || "",
@@ -158,6 +158,7 @@ export function CampForm({ initial, onClose, onSaved }) {
   const [institutions, setInstitutions] = useState([]);
   const [memberSearch, setMemberSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const guard = useDirtyForm(form, onClose);
   const formErr = useFormError();
   // Camp enrollment is open to every athlete-like category (athlete
   // + elite + any custom athlete-like key) — Elite squad members were
@@ -219,7 +220,7 @@ export function CampForm({ initial, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={guard.close}>
       <form
         onSubmit={submit}
         onClick={(e) => e.stopPropagation()}
@@ -228,7 +229,8 @@ export function CampForm({ initial, onClose, onSaved }) {
       >
         <header className="flex items-center justify-between">
           <h2 className="text-xl font-extrabold">{isEdit ? "Edit camp" : "New camp"}</h2>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
+          <TopSaveButton formId="camp-form-el" dirty={guard.dirty} saving={saving} testId="cf-top-save" />
+          <button type="button" onClick={guard.close} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
         </header>
 
         <div>
@@ -386,7 +388,7 @@ export function CampForm({ initial, onClose, onSaved }) {
             testId="cf-save-error"
           />
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
+            <button type="button" onClick={guard.close} className="iu-btn-secondary">Cancel</button>
             <button type="submit" disabled={saving} data-testid="cf-save" className="iu-btn-primary">
               {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save changes" : "Create camp")}
             </button>

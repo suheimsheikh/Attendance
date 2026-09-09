@@ -25,6 +25,7 @@ import { showApiError } from "../../api";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import Avatar from "../../components/Avatar";
 import MonthCorrectionsCard from "./dashboard/MonthCorrectionsCard";
+import TaskProgressCard from "./dashboard/TaskProgressCard";
 import {
   CATEGORY_COLOR, StatTile, CategoryChips, Sparkline,
   fmtShortDate, fmtRange, SectionCard, AttentionRow, ShortcutBtn,
@@ -448,6 +449,7 @@ export default function Dashboard() {
             </div>
           </SectionCard>
 
+          <TaskProgressCard />
           <MonthCorrectionsCard />
         </aside>
       </div>
