@@ -556,6 +556,9 @@ async def _seed_database() -> None:
     await db.attendance.create_index("overtime_status", sparse=True)
     await db.dars.create_index([("user_id", 1), ("date", 1)], unique=True)
     await db.dars.create_index([("date", -1)])
+    await db.todos.create_index([("owner_id", 1), ("status", 1), ("due_date", 1)])
+    await db.checklists.create_index("owner_id")
+    await db.checklist_ticks.create_index([("checklist_id", 1), ("date", 1)], unique=True)
     await db.leaves.create_index([("status", 1), ("start_date", 1), ("end_date", 1)])
     await db.leaves.create_index([("user_id", 1), ("status", 1)])
     await db.leaves.create_index("status")
@@ -2482,6 +2485,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
                         "rank": target.get("rank"), "date": dar_date, "text": clean,
                         "submitted_at": ts_iso, "updated_at": ts_iso,
                         "attendance_id": sess["id"], "check_in_at": sess["check_in_at"],
+                        "site_name": sess.get("site_name") or office.get("name"),
                         "check_out_at": None, "filed_late": False, "source": "checkout",
                     }
         cin = datetime.fromisoformat(sess["check_in_at"])
@@ -2573,6 +2577,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         return {"ok": True, "action": "checkout", "member": target["full_name"],
                 "hours": hours, "out_of_geofence": out, "distance_m": dist,
                 "site_id": site_id, "site_name": site_name,
+                "site_label": site_name or office.get("name") or "Office",
                 "check_in_at": sess["check_in_at"], "check_out_at": ts.isoformat(),
                 "dar": {k: dar_saved[k] for k in ("id", "date", "text")} if dar_saved else None,
                 "overtime_minutes": ot_updates.get("overtime_total_min", 0)}
@@ -2631,6 +2636,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
     return {"ok": True, "action": "checkin", "member": target["full_name"],
             "out_of_geofence": out, "distance_m": dist,
             "site_id": site_id, "site_name": site_name,
+            "site_label": site_name or office.get("name") or "Office",
             "late": late, "late_minutes": late_minutes,
             "overtime_minutes": early_min}
 
@@ -4297,6 +4303,9 @@ app.include_router(_checkin_approvals_router(db, require_admin, write_audit))
 
 from routes.dar import make_router as _dar_router  # noqa: E402
 app.include_router(_dar_router(db, get_current_user, require_admin, valid_grid_key, write_audit))
+
+from routes.tasks import make_router as _tasks_router  # noqa: E402
+app.include_router(_tasks_router(db, get_current_user, require_admin, write_audit))
 
 # Data-quality dashboard — read-only DB sweep for dupes, missing
 # fields, and structural inconsistencies.

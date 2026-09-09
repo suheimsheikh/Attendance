@@ -10,6 +10,8 @@ import DailyContent from "../components/DailyContent";
 import ReasonPrompt from "../components/ReasonPrompt";
 import { DarTextarea, DarShareButton } from "../components/Dar";
 import DarPendingCard from "../components/DarPendingCard";
+import TodayTasksCard from "../components/TodayTasksCard";
+import { formatDistance } from "../utils/shareWhatsApp";
 import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import OutOfGeofenceModal from "../components/OutOfGeofenceModal";
 import CorrectionRequestModal from "../components/CorrectionRequestModal";
@@ -93,6 +95,21 @@ export default function SelfCheckIn() {
   const darMin = darStatus?.min_chars || 20;
   const darNeededNow = !!(status?.checked_in && darStatus?.required && !darStatus?.done_today);
   const darBlocked = darNeededNow && darText.trim().length < darMin;
+  // Site label for the status banner: satellite site name, else the office
+  // name; off-site sessions show distance from the nearest geofence.
+  const sess = status?.session;
+  const siteLabel = sess?.site_name || office?.name?.trim() || "Office";
+  const siteLine = sess
+    ? (sess.out_of_geofence
+        ? `Off-site · ${formatDistance(sess.distance_m)} from ${siteLabel}`
+        : `at ${siteLabel}`)
+    : "";
+
+  // Pre-fill the DAR with today's checklist ticks / to-dos (executives).
+  useEffect(() => {
+    if (!darNeededNow || darText) return;
+    api.get("/tasks/dar-prefill").then((r) => { if (r?.text) setDarText((cur) => cur || r.text); }).catch(() => {});
+  }, [darNeededNow]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Overtime detection (staff only).
   const otInfo = useMemo(() => {
@@ -192,12 +209,14 @@ export default function SelfCheckIn() {
       // in so they can spot a mis-tagged check-in immediately. When the
       // check-in was accepted OUTSIDE the geofence, use the red error
       // toast so the member notices at a glance (Feb 2026 user request).
-      const locBit = res.site_name ? ` at ${res.site_name}` : "";
+      const locBit = ` at ${res.site_label || res.site_name || office?.name?.trim() || "office"}`;
       if (res.out_of_geofence && res.action === "checkin") {
         toast.error(
-          `Checked in OFF-SITE${locBit} — this will be flagged for review.`,
+          `Checked in OFF-SITE — ${formatDistance(res.distance_m)} from ${res.site_label || "the office"}. This will be flagged for review.`,
           { duration: 6000 }
         );
+      } else if (res.out_of_geofence) {
+        toast.success(`Checked out off-site — ${formatDistance(res.distance_m)} from ${res.site_label || "the office"} · ${res.member} (${res.hours}h)`);
       } else {
         toast.success(
           res.action === "checkin"
@@ -211,7 +230,7 @@ export default function SelfCheckIn() {
       setLastAction({
         action: res.action,
         name: res.member,
-        siteName: res.site_name || "",
+        siteName: res.site_label || res.site_name || "",
         distanceM: lat != null && lng != null ? res.distance_m : null,
         offSite: !!res.out_of_geofence,
         at: new Date(),
@@ -222,7 +241,7 @@ export default function SelfCheckIn() {
         speakLateMessage(res.late_minutes, res.member);
       }
       if (res.action === "checkout" && res.dar) {
-        setLastDar({ ...res.dar, check_in_at: res.check_in_at, check_out_at: res.check_out_at });
+        setLastDar({ ...res.dar, check_in_at: res.check_in_at, check_out_at: res.check_out_at, site_name: res.site_label });
         setDarText("");
         toast.success("DAR saved — share it to the DAR group", { duration: 6000 });
       }
@@ -310,7 +329,7 @@ export default function SelfCheckIn() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-xs uppercase tracking-wide font-semibold text-slate-500">
-            {onTempOut ? "Stepped out" : status?.checked_in ? "Currently on campus" : "Not on campus"}
+            {onTempOut ? "Stepped out" : status?.checked_in ? (sess?.out_of_geofence ? `Checked in ${siteLine}` : `Currently on campus ${siteLine}`) : "Not on campus"}
           </div>
           <div className="text-sm font-semibold text-slate-900 truncate">
             {onTempOut
@@ -346,7 +365,10 @@ export default function SelfCheckIn() {
 
       {/* Temp-exit card (only when checked in & not already out) */}
       {status?.checked_in && !onTempOut && (
-        <TempExitCard onCreated={refresh} />
+        <>
+          <TodayTasksCard userName={user?.full_name} />
+          <TempExitCard onCreated={refresh} />
+        </>
       )}
 
       {/* DAR pending / filed card — after check-out (or when checked out by a proxy) */}

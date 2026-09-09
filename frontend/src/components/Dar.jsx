@@ -10,9 +10,9 @@ const fmtDay = (iso) => iso
   ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "2-digit" })
   : "";
 
-export function formatDarCaption({ groupName, name, date, checkIn, checkOut, text }) {
+export function formatDarCaption({ groupName, name, date, checkIn, checkOut, text, siteName }) {
   const times = [fmtHM(checkIn), fmtHM(checkOut)].filter(Boolean).join("–");
-  const head = [`📝 *DAR — ${name}*`, `📅 ${fmtDay(date)}${times ? ` · ${times}` : ""}`];
+  const head = [`📝 *DAR — ${name}*`, `📅 ${fmtDay(date)}${times ? ` · ${times}` : ""}${siteName ? ` · 📍 ${siteName}` : ""}`];
   if (groupName) head.unshift(`👥 ${groupName}`);
   return `${head.join("\n")}\n\n${(text || "").trim()}`;
 }
@@ -47,7 +47,7 @@ export function DarShareButton({ dar, name, groupName, className = "" }) {
   if (!dar) return null;
   const onShare = () => shareToWhatsApp({
     text: formatDarCaption({
-      groupName, name, date: dar.date, checkIn: dar.check_in_at, checkOut: dar.check_out_at, text: dar.text,
+      groupName, name, date: dar.date, checkIn: dar.check_in_at, checkOut: dar.check_out_at, text: dar.text, siteName: dar.site_name,
     }),
   });
   return (

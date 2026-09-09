@@ -45,7 +45,7 @@ def _month_window(month: str):
 def _pack(d: dict) -> dict:
     return {k: d.get(k) for k in (
         "id", "user_id", "user_name", "category", "rank", "date", "text",
-        "submitted_at", "updated_at", "check_in_at", "check_out_at", "filed_late", "source",
+        "submitted_at", "updated_at", "check_in_at", "check_out_at", "filed_late", "source", "site_name",
     )}
 
 
@@ -75,6 +75,7 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
             "attendance_id": (att or {}).get("id"),
             "check_in_at": (att or {}).get("check_in_at"),
             "check_out_at": (att or {}).get("check_out_at"),
+            "site_name": (att or {}).get("site_name") or (await db.config.find_one({"id": "office"}, {"_id": 0, "name": 1}) or {}).get("name"),
             "source": source,
         }
         if existing:

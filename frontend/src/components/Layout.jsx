@@ -5,7 +5,7 @@ import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, Building2, IdCard, Sailboat,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, Utensils, PieChart, CalendarRange, FileText
+  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, Utensils, PieChart, CalendarRange, FileText, ListTodo
 } from "lucide-react";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
@@ -197,7 +197,14 @@ export default function Layout() {
         ...NAV_MEMBER.filter((n) => n.to === "/escort-checkin"),
         { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
       ]
-    : NAV_MEMBER;
+    : (isAdmin || user?.category === "executive")
+      ? [...NAV_MEMBER.slice(0, -1), { to: "/tasks", label: "Tasks", icon: ListTodo, badgeKey: "tasks_today", hint: "Executive to-dos with deadlines and your daily / weekly / monthly checklist" }, NAV_MEMBER[NAV_MEMBER.length - 1]]
+      : NAV_MEMBER;
+  const tasksTodayQuery = useApiQuery(
+    "/tasks/today", undefined,
+    { enabled: !isEscort && (isAdmin || user?.category === "executive"), staleTime: 30_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
+  );
+  const tasksPending = tasksTodayQuery.data?.enabled ? (tasksTodayQuery.data.pending || 0) : 0;
 
   // Lock body scroll while the mobile drawer is open so the page underneath
   // doesn't scroll behind the overlay (fixes a "scroll bleed" on iOS Safari).
@@ -231,7 +238,9 @@ export default function Layout() {
           // Member section's only badged item today is My Corrections.
           const badge = item.badgeKey === "my_corrections"
             ? (myPendingCorrections > 0 ? myPendingCorrections : undefined)
-            : undefined;
+            : item.badgeKey === "tasks_today"
+              ? (tasksPending > 0 ? tasksPending : undefined)
+              : undefined;
           return (
             <NavItem key={item.to} {...item} badge={badge} onClick={() => setOpen(false)} />
           );

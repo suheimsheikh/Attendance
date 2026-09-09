@@ -14,6 +14,7 @@ import { Loader2 } from "lucide-react";
 // (login + self check-in) trim. The chunks are fetched on first navigation.
 const Presence = lazy(() => import("./pages/Presence"));
 const Profile = lazy(() => import("./pages/Profile"));
+const Tasks = lazy(() => import("./pages/Tasks"));
 const MyLeaves = lazy(() => import("./pages/MyLeaves"));
 const Muster = lazy(() => import("./pages/Muster"));
 const Meals = lazy(() => import("./pages/Meals"));
@@ -134,6 +135,7 @@ function App() {
             <Route path="escort-checkin" element={<EscortCheckIn />} />
             <Route path="whats-new" element={<WhatsNew />} />
             <Route path="profile" element={<RequireMember><Profile /></RequireMember>} />
+            <Route path="tasks" element={<RequireMember><Tasks /></RequireMember>} />
             <Route path="admin" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="admin/dashboard" element={<RequireAdmin><Dashboard /></RequireAdmin>} />
             <Route path="admin/chefs-view" element={<RequireChefOrAdmin><ChefsView /></RequireChefOrAdmin>} />

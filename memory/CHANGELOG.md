@@ -4322,3 +4322,20 @@ green**. Mongo unique index confirmed via index_information().
   DarHistorySection (self + admin view); /admin/dar DarReport page (filters,
   keyword highlight, CSV, Missed tab); sidebar "DAR Reports".
 - Test member dar.test@example.com / Dar@12345 (staff). testing_agent iter 52: all pass.
+
+## 09 Sep 2026 — Executive Tasks (to-dos + checklists) & site everywhere
+- Backend `routes/tasks.py`: /api/tasks/today, /tasks/dar-prefill, /tasks/group,
+  /todos CRUD (group-visible; assign to any executive; tick = owner/admin only),
+  /checklists CRUD + /checklists/{id}/tick (daily | dow | monthly incl.
+  last_working), /admin/tasks/overview. Scope: category=executive (+admins).
+  Collections todos, checklists, checklist_ticks (unique checklist_id+date).
+- Frontend: /tasks (Today | To-dos | Checklists), TodayTasksCard on /check-in
+  after check-in (tick-offs, "Share my day" WhatsApp, "Enable reminders" browser
+  Notification), sidebar "Tasks" with pending badge (execs/admins only).
+  DAR textarea pre-fills "✅ Done: … / ⏳ Not done: …" from /tasks/dar-prefill.
+- Site everywhere: geo-toggle returns `site_label` (satellite site or office
+  name); banner "Currently on campus at <site>" / "Checked in Off-site · X km
+  from <site>"; toast, WhatsApp caption and DAR header (📍 site) use it. DAR
+  docs store site_name.
+- Test exec exec.test@example.com / Exec@12345. testing_agent iter 53: pass
+  after 2 fixes (banner wording, <option> hydration warning).

@@ -87,6 +87,11 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
   (payroll deducts a day per miss), WhatsApp share to configurable DAR group.
 - WhatsApp check-in share caption includes geo distance.
 
+### Sep 2026 — Executive Tasks — see CHANGELOG 09 Sep 2026
+- Group-visible to-dos with deadlines/assignment, personal recurring checklists (daily/DOW/monthly), Today card +
+  reminders after check-in, Share-my-day, ticks flow into DAR prefill; site name shown on check-in/out everywhere.
+- Backlog from this: extend Tasks to staff/coaches (user said "for now only executives"); SMS/WhatsApp scheduled reminders.
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked
