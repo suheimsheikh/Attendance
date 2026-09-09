@@ -104,6 +104,17 @@ function RequireMuster({ children }) {
   return children;
 }
 
+// Tasks (to-dos + checklists) are for admins, executives and coaches.
+// Everyone else is bounced home so members never see the Tasks shell.
+function RequireTasks({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <FullPageSpinner />;
+  if (!user) return <Navigate to="/login" replace />;
+  const allow = user.role === "admin" || user.category === "executive" || user.category === "coach";
+  if (!allow) return <Navigate to="/" replace />;
+  return children;
+}
+
 function FullPageSpinner() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50" data-testid="app-loading">
@@ -136,7 +147,7 @@ function App() {
             <Route path="escort-checkin" element={<EscortCheckIn />} />
             <Route path="whats-new" element={<WhatsNew />} />
             <Route path="profile" element={<RequireMember><Profile /></RequireMember>} />
-            <Route path="tasks" element={<RequireMember><Tasks /></RequireMember>} />
+            <Route path="tasks" element={<RequireTasks><Tasks /></RequireTasks>} />
             <Route path="rules" element={<RequireMember><Rules /></RequireMember>} />
             <Route path="admin" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="admin/dashboard" element={<RequireAdmin><Dashboard /></RequireAdmin>} />

@@ -3,7 +3,8 @@ import { Loader2, Check, X, Ban, Smartphone, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { categoryLabel, formatDate } from "../../utils";
-import { useEscape } from "../../hooks/useEscape";
+import { useDirtyForm } from "../../hooks/useDirtyForm";
+import TopSaveButton from "../../components/TopSaveButton";
 
 const ACTION_LABELS = {
   approved: "approved",
@@ -129,7 +130,6 @@ export default function Devices() {
 }
 
 function ApproveDialog({ device, onClose, onApproved }) {
-  useEscape(onClose);
   const matched = !!device.member_name;
   const [form, setForm] = useState({
     full_name: device.member_name || device.proposed_full_name || "",
@@ -138,6 +138,7 @@ function ApproveDialog({ device, onClose, onApproved }) {
     rank: device.member_rank || device.proposed_rank || "",
   });
   const [busy, setBusy] = useState(false);
+  const guard = useDirtyForm(form, onClose);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const submit = async (e) => {
@@ -153,9 +154,12 @@ function ApproveDialog({ device, onClose, onApproved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={guard.close}>
       <div className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl p-6" onClick={(e) => e.stopPropagation()} data-testid="approve-device-form">
-        <h2 className="text-xl font-extrabold mb-1">Approve device</h2>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-xl font-extrabold">Approve device</h2>
+          <TopSaveButton formId="approve-device-el" dirty={guard.dirty} saving={busy} label="Approve" testId="ad-top-save" />
+        </div>
         <p className="text-sm text-slate-500 mb-4">
           {matched
             ? `Approving for existing member: ${device.member_name}`
@@ -163,7 +167,7 @@ function ApproveDialog({ device, onClose, onApproved }) {
               ? `${device.proposed_full_name} introduced themselves at sign-up. Review and approve to create their member record.`
               : `Phone ${device.phone || "?"} doesn't match a member. We'll create one.`}
         </p>
-        <form onSubmit={submit} className="space-y-3">
+        <form id="approve-device-el" onSubmit={submit} className="space-y-3">
           {!matched && (
             <div>
               <label className="iu-label">Full name</label>
@@ -193,7 +197,7 @@ function ApproveDialog({ device, onClose, onApproved }) {
             <input data-testid="ad-rank" value={form.rank} onChange={(e) => set("rank", e.target.value)} className="iu-input" />
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} type="button" className="iu-btn-secondary flex-1">Cancel</button>
+            <button onClick={guard.close} type="button" className="iu-btn-secondary flex-1">Cancel</button>
             <button data-testid="ad-submit" type="submit" disabled={busy} className="iu-btn-primary flex-1">
               {busy ? <Loader2 className="animate-spin" size={16}/> : "Approve & Sign in user"}
             </button>

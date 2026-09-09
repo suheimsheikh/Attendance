@@ -5,6 +5,8 @@ import { api } from "../../api";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
 import { useEscape } from "../../hooks/useEscape";
+import { useDirtyForm } from "../../hooks/useDirtyForm";
+import TopSaveButton from "../../components/TopSaveButton";
 import { formatDate } from "../../utils";
 
 // Feature flag for the (currently hidden) per-institution Twilio "SMS/Voice
@@ -358,7 +360,6 @@ function formatVisitDate(iso) {
 }
 
 function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSaved }) {
-  useEscape(onClose);
   const isEdit = !!initial;
   const [name, setName] = useState(initial?.name || "");
   const [phone, setPhone] = useState(initial?.phone || "");
@@ -374,6 +375,7 @@ function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSave
   const [replacedBy, setReplacedBy] = useState(initial?.replaced_by || "");
   const [busy, setBusy] = useState(false);
   const formErr = useFormError();
+  const guard = useDirtyForm({ name, phone, startDate, validFrom, validUntil, status, replacedBy }, onClose);
 
   // Legacy rows that pre-date the dates feature carry a null valid_until.
   // When admin opens such a row, force them to pick an end date before
@@ -424,11 +426,14 @@ function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSave
   };
 
   return (
-    <div className="iu-modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <form onSubmit={submit} className="iu-modal-card max-w-md p-5 space-y-3" data-testid="escort-form">
+    <div className="iu-modal" onClick={(e) => e.target === e.currentTarget && guard.close()}>
+      <form id="escort-form-el" onSubmit={submit} className="iu-modal-card max-w-md p-5 space-y-3" data-testid="escort-form">
         <div className="flex items-center justify-between">
           <div className="text-lg font-extrabold">{isEdit ? "Edit escort" : "Add escort"}</div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+          <div className="flex items-center gap-2">
+            <TopSaveButton formId="escort-form-el" dirty={guard.dirty} saving={busy} testId="escort-top-save" />
+            <button type="button" onClick={guard.close} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+          </div>
         </div>
         <div>
           <label className="iu-label">Name</label>
@@ -493,7 +498,7 @@ function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSave
         )}
         <FormErrorBanner error={formErr.error} requestId={formErr.requestId} onDismiss={formErr.clear} testId="escort-form-error" />
         <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="iu-btn-secondary flex-1">Cancel</button>
+          <button type="button" onClick={guard.close} className="iu-btn-secondary flex-1">Cancel</button>
           <button type="submit" disabled={busy} data-testid="escort-form-save" className="iu-btn-primary flex-1">
             {busy ? <Loader2 className="animate-spin" size={14}/> : "Save"}
           </button>
@@ -512,6 +517,7 @@ function InstForm({ initial, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const isEdit = !!initial;
   const formErr = useFormError();
+  const guard = useDirtyForm({ name, shortName, active, smsFrom, voiceFrom }, onClose);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -538,9 +544,15 @@ function InstForm({ initial, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <form onSubmit={submit} className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
-        <h3 className="font-extrabold text-lg">{isEdit ? "Edit" : "Add"} institution</h3>
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && guard.close()}>
+      <form id="inst-form-el" onSubmit={submit} className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h3 className="font-extrabold text-lg">{isEdit ? "Edit" : "Add"} institution</h3>
+          <div className="flex items-center gap-2">
+            <TopSaveButton formId="inst-form-el" dirty={guard.dirty} saving={busy} testId="inst-top-save" />
+            <button type="button" onClick={guard.close} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+          </div>
+        </div>
         <div>
           <label className="iu-label">Name</label>
           <input data-testid="inst-name" autoFocus value={name} onChange={(e) => setName(e.target.value)} className="iu-input" />
@@ -595,7 +607,7 @@ function InstForm({ initial, onClose, onSaved }) {
           testId="inst-save-error"
         />
         <div className="flex gap-2 pt-2">
-          <button type="button" onClick={onClose} className="iu-btn-secondary flex-1">Cancel</button>
+          <button type="button" onClick={guard.close} className="iu-btn-secondary flex-1">Cancel</button>
           <button type="submit" disabled={busy} className="iu-btn-primary flex-1">{busy ? <Loader2 className="animate-spin" size={14}/> : "Save"}</button>
         </div>
       </form>

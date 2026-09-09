@@ -95,6 +95,13 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 ### Sep 2026 — Elite DAR opt-in · modal dirty-guard · Task widget · Rules sign-off (CHANGELOG 09 Sep)
 - Note for prod deploy: every staff/coach/executive (incl. admin accounts with those categories) is redirected to /rules once to accept v2026-09.
 
+### Sep 2026 — Editable rules · save-guard rollout · Tasks for coaches (this session)
+- **Edit Rules In-App**: admins get an "Edit rules" button on /rules → inline `RulesEditor` (edit section headings + rules one-per-line, add/remove sections, bump version). Version bump auto-forces re-sign (acceptances are version-keyed). Backend `PUT /api/admin/rules` already existed; this added the UI. Editor has its own discard-guard + validation (no empty/headed-only sections). Backend verified via curl: bump → accepted 0 / full roster pending; revert restores.
+- **Save Guard everywhere**: extended `TopSaveButton` + `useDirtyForm` (Esc/backdrop/X discard-confirm, amber dirty-glow) to FleetForm (Fleets), InstForm + EscortForm (Institutions), ApproveDialog (Devices), and ApplyForm (MyLeaves). MyLeaves submit now also re-checks `noticeBlocked` since the top button bypasses the disabled bottom button.
+- **Tasks for Coaches**: `TASK_CATEGORIES = {"executive","coach"}` — coaches join the SAME shared team board (execs + coaches see each other's to-dos). Layout nav + `/tasks/today` query enabled for admin|executive|coach. New `RequireTasks` route guard in App.js redirects everyone else home (staff no longer sees the /tasks shell). `TaskProgressCard` relabelled "Team tasks today". Verified: coach curl access to all task endpoints, testing_agent iter55 100% pass, staff regression (no nav, 403).
+- Coach test account added: `coach.test@example.com / Coach@12345`.
+- Deploy: `.gitignore` no longer ignores `.env` files (deploy system needs them present). deployment_agent → PASS.
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked

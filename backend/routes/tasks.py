@@ -1,9 +1,10 @@
-"""Executive To-dos + recurring Checklists (Sep 2026).
+"""Team To-dos + recurring Checklists (Sep 2026).
 
-Scope: members with category == "executive" (admins can view everything).
-Everyone in the group sees everyone's to-dos and can assign; only the owner
-or an admin can mark done. Checklists are personal (daily / days-of-week /
-monthly) and tick-offs flow into the member's DAR via /tasks/dar-prefill.
+Scope: members with category in TASK_CATEGORIES (executive + coach); admins
+can view everything. Everyone in the group sees everyone's to-dos and can
+assign; only the owner or an admin can mark done. Checklists are personal
+(daily / days-of-week / monthly) and tick-offs flow into the member's DAR
+via /tasks/dar-prefill.
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ from services.time_utils import local_date_str, now_utc
 
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 RECURRENCES = {"daily", "dow", "monthly"}
-TASK_CATEGORIES = {"executive"}
+TASK_CATEGORIES = {"executive", "coach"}
 
 
 class TodoIn(BaseModel):
@@ -96,7 +97,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
 
     def _require(u: dict) -> None:
         if not _is_member(u):
-            raise HTTPException(status_code=403, detail="Tasks are available to executives only")
+            raise HTTPException(status_code=403, detail="Tasks are available to executives and coaches only")
 
     async def _office() -> dict:
         return await db.config.find_one({"id": "office"}, {"_id": 0}) or {}
@@ -180,7 +181,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
             return user
         o = await db.users.find_one({"id": owner_id}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "role": 1})
         if not o or not _is_member(o):
-            raise HTTPException(status_code=400, detail="Assignee must be an executive")
+            raise HTTPException(status_code=400, detail="Assignee must be an executive or coach")
         return o
 
     @router.post("/todos")

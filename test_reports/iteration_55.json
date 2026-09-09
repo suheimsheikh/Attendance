@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 55: verified 3 features via Playwright — (1) Admin in-app Attendance Rules editor: rules-edit visible only to admin, version bump shows amber re-sign warning, revert clears it, editing body-0 (append TEST_MARKER, save with same version) reflects in read view, add-section then remove-section + version restore to 2026-09 works. (2) Save Guard everywhere: TopSaveButton data-dirty toggle + Esc discard-confirm behaviour confirmed on Fleets (ff-top-save), Institutions InstForm (inst-top-save) + EscortForm (escort-top-save), and MyLeaves ApplyForm (leave-top-save). Devices approve dialog not exercised because no pending devices existed (page loaded without error, per spec). (3) Coach access to Tasks: sidebar shows 'Tasks' link (/tasks), all 3 tabs render (today/todos/checklists), 'Everyone' scope on To-dos correctly shows both coach's own to-do (MY TO-DOS) and Exec Test User's assigned to-do — shared team board confirmed. Staff (dar.test) regression: no Tasks link in sidebar, /tasks API endpoints return 403 with toast 'Tasks are available to executives and coaches only'. All flows PASS. Rules version left at 2026-09 as required.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/tasks for staff (dar.test category=staff)",
+        "issues": [
+          "Frontend does not guard the /tasks route for non-exec/non-coach users — the Tasks page shell (tabs + inputs) renders and the API 403 fires afterwards with a toast. Sidebar link is correctly hidden, but a member who types /tasks directly briefly sees the tab shell. Minor: ideally the route should redirect to /disabled-feature (like other role-gated pages) instead of rendering the shell."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Non-blocking) Consider wrapping /tasks route in a role guard so members without executive/coach/admin get redirected to the disabled-feature page instead of seeing the tab shell before the API 403s.",
+    "(Non-blocking, carried from iter54) MemberForm still emits <option>-inside-<span> hydration warning."
+  ],
+  "critical_code_review_comments": [
+    "useDirtyForm.js snapshots the entire form via JSON.stringify on every render — fine for these small forms but a hot path if forms grow.",
+    "useEscape.js intentionally blurs focused input on first Esc; tests must blur first to trigger the discard-confirm on the same key press. This is documented behaviour but a subtle UX pitfall for users typing in a field.",
+    "Rules editor 'Save' button is at the bottom only — for consistency with the 'top-save' pattern applied elsewhere in this iteration, RulesEditor could also expose a top-save with dirty-glow. Currently it lacks the dirty indicator that all other modals now share.",
+    "TodosTab / ChecklistsTab render for staff (403 toast only) before the guard kicks in — a client-side role check on /tasks would avoid the wasted round-trip and flicker."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not tested per request)", "frontend": "100% of requested flows"},
+  "test_credentials": "Admin admin@attendance.app / Admin@12345; Exec exec.test@example.com / Exec@12345; Coach coach.test@example.com / Coach@12345; Staff dar.test@example.com / Dar@12345 — all via 'Admin sign in with email' toggle on /login.",
+  "seed_data_creation": "During tests, Exec Test User and Coach Test User accepted Attendance Rules v2026-09 (they were still pending at start). One TEST_COACH_TODO_QA55 to-do was left visible on the coach's My To-dos. Rules content: TEST_MARKER_QA_iter55 and TEST_SECTION_QA were added and then removed, and version was restored to 2026-09. No fleet/institution/escort left behind (TEST_FLEET_QA cleaned up).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Rules version is 2026-09 (verified). Coach Test User and Exec Test User have both now accepted 2026-09. Coach has a leftover to-do 'TEST_COACH_TODO_QA55' visible on their To-dos tab — safe to leave or delete. Devices /admin/devices has no pending requests (Approve dialog with ad-top-save couldn't be exercised end-to-end). For dirty-guard tests remember useEscape's 'first Esc blurs, second Esc closes' behaviour — always call activeElement.blur() before pressing Escape or press Escape twice.",
+  "rca of the issue": "N/A — no bugs. Only a minor UX note that /tasks route lacks a client-side role guard for staff members (relies on API 403 + toast)."
+}

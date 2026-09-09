@@ -199,12 +199,12 @@ export default function Layout() {
         ...NAV_MEMBER.filter((n) => n.to === "/escort-checkin"),
         { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
       ]
-    : (isAdmin || user?.category === "executive")
-      ? [...NAV_MEMBER.slice(0, -1), { to: "/tasks", label: "Tasks", icon: ListTodo, badgeKey: "tasks_today", hint: "Executive to-dos with deadlines and your daily / weekly / monthly checklist" }, NAV_MEMBER[NAV_MEMBER.length - 1]]
+    : (isAdmin || user?.category === "executive" || user?.category === "coach")
+      ? [...NAV_MEMBER.slice(0, -1), { to: "/tasks", label: "Tasks", icon: ListTodo, badgeKey: "tasks_today", hint: "Team to-dos with deadlines and your daily / weekly / monthly checklist" }, NAV_MEMBER[NAV_MEMBER.length - 1]]
       : NAV_MEMBER;
   const tasksTodayQuery = useApiQuery(
     "/tasks/today", undefined,
-    { enabled: !isEscort && (isAdmin || user?.category === "executive"), staleTime: 30_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
+    { enabled: !isEscort && (isAdmin || user?.category === "executive" || user?.category === "coach"), staleTime: 30_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
   );
   const tasksPending = tasksTodayQuery.data?.enabled ? (tasksTodayQuery.data.pending || 0) : 0;
 

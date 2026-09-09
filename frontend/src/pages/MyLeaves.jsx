@@ -11,7 +11,8 @@ import ReasonPicker from "../components/ReasonPicker";
 import FormErrorBanner from "../components/FormErrorBanner";
 import { useFormError } from "../hooks/useFormError";
 import { shortDate, todayIso, tomorrowIso } from "../utils";
-import { useEscape } from "../hooks/useEscape";
+import { useDirtyForm } from "../hooks/useDirtyForm";
+import TopSaveButton from "../components/TopSaveButton";
 import MemberMultiPicker from "./leaves/MemberMultiPicker";
 import HalfDayPicker from "./leaves/HalfDayPicker";
 import StatsDashboard from "./leaves/StatsDashboard";
@@ -103,7 +104,6 @@ export default function MyLeaves() {
 }
 
 export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
-  useEscape(onClose);
   const [type, setType] = useState("leave");
   const [start, setStart] = useState(todayIso());
   const [end, setEnd] = useState(todayIso());
@@ -140,6 +140,12 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   // Inline submit-error banner (sits above the Submit button, replaces
   // the easily-missed top-of-screen toast on POST /leaves failures).
   const formErr = useFormError();
+  // Dirty-guard: Esc / backdrop / X ask before discarding unsaved edits,
+  // and the top-of-modal Save button glows amber while anything changed.
+  const guard = useDirtyForm(
+    { type, start, end, reason, location, expectedArrival, halfDay, picked: Array.from(picked), autoApprove },
+    onClose,
+  );
 
   // Self path needs the current user's live balance for the notice block.
   // (Admin path already loads /members, which carries balances per row.)
@@ -351,6 +357,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   const submit = async (e) => {
     e.preventDefault();
     formErr.clear();
+    if (noticeBlocked) { formErr.setMessage(`Leaves need at least ${noticeDays} day${noticeDays === 1 ? "" : "s"} of advance notice — ask an admin to file on your behalf.`); return; }
     if (asAdmin && picked.size === 0) { formErr.setMessage("Pick at least one member"); return; }
     if (!reason.trim()) { formErr.setMessage("Enter a reason"); return; }
     if (type === "late_coming" && !expectedArrival) { formErr.setMessage("Tell us when you'll arrive"); return; }
@@ -437,13 +444,16 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={(e) => e.target === e.currentTarget && guard.close()}>
       <div className={`bg-white w-full ${asAdmin ? "md:max-w-3xl" : "md:max-w-md"} rounded-t-2xl md:rounded-2xl p-6 max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()} data-testid="apply-leave-form">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-extrabold">{asAdmin ? "Apply on behalf of members" : "New request"}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg" title="Close without saving"><X size={18} /></button>
+          <div className="flex items-center gap-2">
+            <TopSaveButton formId="apply-leave-form-el" dirty={guard.dirty} saving={busy} label="Submit" testId="leave-top-save" />
+            <button onClick={guard.close} className="p-2 hover:bg-slate-100 rounded-lg" title="Close without saving"><X size={18} /></button>
+          </div>
         </div>
-        <form onSubmit={submit} className="space-y-4">
+        <form id="apply-leave-form-el" onSubmit={submit} className="space-y-4">
           {asAdmin && (
             <MemberMultiPicker
               members={filteredMembers}

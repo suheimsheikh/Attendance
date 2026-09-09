@@ -3,6 +3,8 @@ import { Loader2, Plus, Edit3, Trash2, Sailboat, X, UserPlus, Users as UsersIcon
 import { toast } from "sonner";
 import { api } from "../../api";
 import { useEscape } from "../../hooks/useEscape";
+import { useDirtyForm } from "../../hooks/useDirtyForm";
+import TopSaveButton from "../../components/TopSaveButton";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
 
@@ -119,7 +121,6 @@ export default function Fleets() {
 }
 
 function FleetForm({ initial, onClose, onSaved }) {
-  useEscape(onClose);
   const isEdit = !!initial?.id;
   const [form, setForm] = useState({
     name: initial?.name || "",
@@ -128,6 +129,7 @@ function FleetForm({ initial, onClose, onSaved }) {
     active: initial?.active !== false,
   });
   const [saving, setSaving] = useState(false);
+  const guard = useDirtyForm(form, onClose);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const formErr = useFormError();
 
@@ -146,11 +148,14 @@ function FleetForm({ initial, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={onClose}>
-      <form onSubmit={submit} onClick={(e) => e.stopPropagation()} data-testid="fleet-form" className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl p-6 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={guard.close}>
+      <form id="fleet-form-el" onSubmit={submit} onClick={(e) => e.stopPropagation()} data-testid="fleet-form" className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl p-6 space-y-4">
         <header className="flex items-center justify-between">
           <h2 className="text-xl font-extrabold">{isEdit ? "Edit fleet" : "New fleet"}</h2>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+          <div className="flex items-center gap-2">
+            <TopSaveButton formId="fleet-form-el" dirty={guard.dirty} saving={saving} testId="ff-top-save" />
+            <button type="button" onClick={guard.close} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+          </div>
         </header>
         <div>
           <label className="iu-label">Name</label>
@@ -177,7 +182,7 @@ function FleetForm({ initial, onClose, onSaved }) {
             testId="ff-save-error"
           />
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
+            <button type="button" onClick={guard.close} className="iu-btn-secondary">Cancel</button>
             <button type="submit" disabled={saving} data-testid="ff-save" className="iu-btn-primary">
               {saving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Save
             </button>

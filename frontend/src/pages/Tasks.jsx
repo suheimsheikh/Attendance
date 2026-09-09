@@ -27,7 +27,7 @@ export default function Tasks() {
       <header className="flex flex-wrap items-end justify-between gap-3 mb-5">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-2"><ListTodo size={22} className="text-indigo-600" /> Tasks</h1>
-          <p className="text-slate-500 text-sm mt-1">Executive to-dos with deadlines, plus your daily / weekly / monthly must-do checklist. Ticked items flow into your DAR.</p>
+          <p className="text-slate-500 text-sm mt-1">Team to-dos with deadlines, plus your daily / weekly / monthly must-do checklist. Ticked items flow into your DAR.</p>
         </div>
         <div className="flex gap-2">
           {TABS.map(([v, l]) => (

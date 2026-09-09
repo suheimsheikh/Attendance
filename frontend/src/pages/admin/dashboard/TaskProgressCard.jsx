@@ -4,17 +4,17 @@ import { ListTodo, AlertTriangle } from "lucide-react";
 import { useApiQuery } from "../../../hooks/useApiQuery";
 import { SectionCard } from "./widgets";
 
-/** Executive task progress: checklist done/total + overdue to-dos per person. */
+/** Team task progress (executives + coaches): checklist done/total + overdue to-dos per person. */
 export default function TaskProgressCard() {
   const q = useApiQuery("/admin/tasks/overview", undefined, { staleTime: 30_000, refetchInterval: 60_000 });
   const rows = q.data?.rows || [];
   return (
-    <SectionCard title="Executive tasks today" testid="task-progress-card"
+    <SectionCard title="Team tasks today" testid="task-progress-card"
                  action={<Link to="/tasks?tab=todos" className="text-xs text-indigo-600 hover:underline">Open Tasks</Link>}>
       {q.isLoading ? (
         <p className="text-xs text-slate-400">Loading…</p>
       ) : rows.length === 0 ? (
-        <p className="text-xs text-slate-400 italic">No executives on the roster.</p>
+        <p className="text-xs text-slate-400 italic">No executives or coaches on the roster.</p>
       ) : (
         <ul className="divide-y divide-slate-100" data-testid="task-progress-list">
           {rows.map((r) => {
