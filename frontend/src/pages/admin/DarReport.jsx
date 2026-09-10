@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { FileText, Download, Loader2, Search, AlertTriangle, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob, showApiError } from "../../api";
@@ -12,18 +12,21 @@ const firstOfMonth = (iso) => `${monthOf(iso)}-01`;
 const CATS = [["", "All"], ["staff", "Staff"], ["coach", "Coaches"], ["executive", "Executives"], ["elite", "Elite athletes"]];
 
 export default function DarReport() {
-  const [tab, setTab] = useState("reports");
+  const [params] = useSearchParams();
+  const highlightMember = params.get("member") || "";
+  const [tab, setTab] = useState(params.get("tab") === "missed" ? "missed" : "reports");
   const [from, setFrom] = useState(firstOfMonth(todayISO()));
   const [to, setTo] = useState(todayISO());
   const [category, setCategory] = useState("");
-  const [memberId, setMemberId] = useState("");
+  const [memberId, setMemberId] = useState(highlightMember);
   const [q, setQ] = useState("");
   const [members, setMembers] = useState([]);
   const [rows, setRows] = useState(null);
   const [missed, setMissed] = useState(null);
-  const [month, setMonth] = useState(monthOf(todayISO()));
+  const [month, setMonth] = useState(params.get("month") || monthOf(todayISO()));
   const [groupName, setGroupName] = useState("");
   const [loading, setLoading] = useState(false);
+  const highlightRef = useRef(null);
 
   useEffect(() => {
     api.get("/members").then((m) => setMembers((m || []).filter((u) => ["staff", "coach", "executive"].includes(u.category) || u.dar_required)
@@ -51,6 +54,14 @@ export default function DarReport() {
       .catch((e) => showApiError(e, "Couldn't load missed DARs"))
       .finally(() => setLoading(false));
   }, [tab, month]);
+
+  // When arriving from the Grid's DAR ✗ column, scroll the flagged
+  // member's row into view once the missed table has rendered.
+  useEffect(() => {
+    if (tab === "missed" && highlightMember && missed && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [tab, highlightMember, missed]);
 
   const memberById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members]);
 
@@ -148,14 +159,19 @@ export default function DarReport() {
                   <tr><th className="text-left p-2">Member</th><th className="text-left p-2">Category</th><th className="text-right p-2">Missed</th><th className="text-left p-2">Dates</th></tr>
                 </thead>
                 <tbody>
-                  {missed.rows.map((r) => (
-                    <tr key={r.member_id} className="border-t border-slate-100" data-testid={`dar-missed-row-${r.member_id}`}>
+                  {missed.rows.map((r) => {
+                    const isHi = r.member_id === highlightMember;
+                    return (
+                    <tr key={r.member_id} ref={isHi ? highlightRef : null}
+                        className={`border-t border-slate-100 ${isHi ? "bg-sky-50 ring-2 ring-inset ring-sky-300" : ""}`}
+                        data-testid={`dar-missed-row-${r.member_id}`}>
                       <td className="p-2 font-semibold"><Link to={`/profile?member=${r.member_id}`} className="hover:underline">{r.member_name}</Link></td>
                       <td className="p-2 text-slate-500 uppercase text-[11px]">{r.category}</td>
                       <td className={`p-2 text-right tabular-nums font-bold ${r.missed > 0 ? "text-rose-600" : "text-emerald-700"}`}>{r.missed}</td>
                       <td className="p-2 text-xs text-slate-600">{r.missed_dates.map((d) => d.slice(8)).join(", ")}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
               {missed.exempt?.length > 0 && (

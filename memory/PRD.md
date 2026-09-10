@@ -102,6 +102,11 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 - Coach test account added: `coach.test@example.com / Coach@12345`.
 - Deploy: `.gitignore` no longer ignores `.env` files (deploy system needs them present). deployment_agent → PASS.
 
+### Sep 2026 — DAR ✗ column on the attendance Grid (this session)
+- Added a right-sticky "DAR" totals column (sub-label "Miss") to the admin Calendar Grid, sitting just left of the P (Present) column at sticky offset right-[244px]. Shows a red "✗N" for members with N missed DARs in the grid's month, blank for 0. Backend `dar_missed` already flowed in grid row totals (`reports.py` ~1316) — this surfaces it.
+- Double-clicking a DAR cell deep-links to the DAR report's Missed tab pre-set to the grid's month and scrolls/highlights that member's row (`DarReport.jsx` now reads `tab`/`member`/`month` URL params via useSearchParams). Selectors: `cal-total-dar-<id>`, `dar-tab-missed`, `dar-missed-row-<id>`.
+- Sticky offsets: LT=0, EO=34, OT=68, TR=108, LV=142, AB=176, P=210, DAR=244. Grid colSpans bumped +7→+8. testing_agent iter56: 100% pass, no overlap, ledger-modal regressions OK.
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked

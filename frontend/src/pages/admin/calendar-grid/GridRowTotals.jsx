@@ -1,17 +1,19 @@
 /**
- * GridRowTotals — the right-sticky totals strip (P · AB · LV · TR ·
- * OT h · EO · LT) for a single member row on the calendar grid.
- * Renders 7 <td>s in a fragment so the parent can put them at the end
+ * GridRowTotals — the right-sticky totals strip (DAR ✗ · P · AB · LV ·
+ * TR · OT h · EO · LT) for a single member row on the calendar grid.
+ * Renders 8 <td>s in a fragment so the parent can put them at the end
  * of the appropriate <tr>. In two-row mode (rowsMode === "double"),
  * every cell uses rowSpan=2 so the totals visually align with the
  * member's paired in/out rows.
  *
  * Double-click behaviour:
+ *   • DAR ✗ cell → open the DAR report (missed tab)
  *   • P / AB / LV / TR / EO / LT cells → open Attendance ledger
  *   • OT h cell                        → open OT ledger
  *   • LV cell shows an LOP pill when totals.lop > 0
  *
  * Extracted 14 Feb 2026 (item I of the low-risk refactor pass).
+ * DAR ✗ column added Sep 2026.
  */
 import React from "react";
 import { fmtOt } from "./gridHelpers";
@@ -23,6 +25,7 @@ export default function GridRowTotals({
   rowSpan = 1,
   onOpenAttn,
   onOpenOt,
+  onOpenDar,
 }) {
   const t = totals || {};
   const attnTitle = "Double-click for daily ledger";
@@ -32,7 +35,14 @@ export default function GridRowTotals({
     <>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[210px] ${base} border-l-2 border-slate-300 text-emerald-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        className={`sticky right-[244px] ${base} border-l-2 border-slate-300 text-rose-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        data-testid={`cal-total-dar-${memberId}`}
+        title={t.dar_missed ? `${t.dar_missed} missed DAR${t.dar_missed === 1 ? "" : "s"} · Double-click to open the DAR report` : "No missed DARs"}
+        onDoubleClick={onOpenDar}
+      >{t.dar_missed ? `✗${t.dar_missed}` : ""}</td>
+      <td
+        rowSpan={rowSpan}
+        className={`sticky right-[210px] ${base} text-emerald-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-p-${memberId}`}
         title={`Present · ${attnTitle}`}
         onDoubleClick={onOpenAttn}

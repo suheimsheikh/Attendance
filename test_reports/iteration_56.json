@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only verification of the new DAR '✗N' totals column on the admin Calendar Grid and double-click drill-in to the DAR Missed tab. All acceptance criteria pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verifications": [
+    "Login as admin (admin@attendance.app / Admin@12345 via 'Admin sign in with email' toggle) succeeds and redirects to /.",
+    "/admin/reports?tab=grid renders. After clicking data-testid=calendar-grid-run, September 2026 (CURRENT) grid loads with default 'Staff & Coaches' (49 members) filter.",
+    "New DAR header <th> is present (1 header with text 'DAR', sub-label 'Miss' visible in the sub-header row).",
+    "49 per-row cells matching [data-testid^='cal-total-dar-'] render — one per member — sitting between the row date-cells and the P column (correctly at right-[244px] before P at 210). Header order visible: DAR | P | AB | LV | TR | OT h | EO | LT (8 sticky totals columns, no overlap).",
+    "Campus Administrator row (id e6e43926-d069-4bb7-95fa-26b3272735d3) is present under default 'Staff & Coaches' filter and its cell data-testid='cal-total-dar-e6e43926-d069-4bb7-95fa-26b3272735d3' shows text '✗1'. Computed color of the count span is rgb(190,18,60) (rose-700 red).",
+    "Members with 0 missed DARs (e.g. Ainul Haque) render an empty cell — no '✗0'.",
+    "Double-clicking the Campus Administrator DAR cell navigates to /admin/dar?tab=missed&member=e6e43926-d069-4bb7-95fa-26b3272735d3&month=2026-09.",
+    "On the DAR report: data-testid=dar-tab-missed is active (styled bg-slate-900 text-white), the month input value is '2026-09', and the row data-testid='dar-missed-row-e6e43926-d069-4bb7-95fa-26b3272735d3' has classes 'bg-sky-50 ring-2 ring-inset ring-sky-300' and is scrolled into view / visible.",
+    "Regression: Double-clicking a P total cell (cal-total-p-<id>) opens data-testid='attendance-ledger-modal'. Double-clicking an OT total cell (cal-total-ot-<id>) opens data-testid='ot-ledger-modal'. No visual gap / overlap in the totals strip."
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: 'September 2026' as long text is not on the DAR report page (uses <input type=month>); acceptance criteria wording said 'September 2026' — value is correctly 2026-09, which is equivalent. No fix needed.",
+    "Consider adding data-testid to the DAR header <th> (e.g., 'cal-th-dar') and to the 'Miss' sub-label to make future automated header assertions cheaper."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (Admin sign in with email toggle)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "New DAR ✗N totals column on admin Calendar Grid (GridRowTotals.jsx / CalendarGridTab.jsx) + DAR Missed tab deep-link (DarReport.jsx) fully working. Selectors: cal-total-dar-<memberId>, dar-tab-missed, dar-missed-row-<memberId>. Sticky right offsets confirmed (DAR at 244, P at 210). URL pattern: /admin/dar?tab=missed&member=<id>&month=YYYY-MM."
+}
