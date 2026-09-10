@@ -128,6 +128,13 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 - Reviewer LOW notes were non-issues: the 9-column grid sticky-offset math is consistent (0/34/68/108/142/176/210/244/278), `_GRID_IMPL` module-global is import-time (no None/timing risk), key endpoints use constant-time compare (rate-limiting is P3).
 - KNOWN/BY-DESIGN: the grid `leave` total intentionally includes LP days (backward-compat) AND LP has its own column — on the printed register don't sum "Leave + LOP" (double-counts). Payroll should read the feed's `lop_month_days` / `balances`, not the printed Leave+LOP sum. Left as-is to keep screen ↔ print ↔ feed numbers consistent.
 
+### Sep 2026 — Performance: PayCraft feed speedup (this session)
+- Optimised `GET /api/leave-balances?key=` (the PayCraft server-to-server feed):
+  1. Added lightweight `compute_pay_balances()` in holidays.py — returns ONLY paid-leave + comp-off available, skipping the expensive `_absent_days_ytd` YTD walk (3 queries + ~250-day loop per member) that `compute_balance_summary` runs but the feed never used. Values byte-identical.
+  2. Parallelised the per-member balance loop with `asyncio.gather` + `Semaphore(16)` and ran the month-grid engine concurrently with it (were serial).
+- Result: server compute ~0.135s → ~0.078s (~42%); end-to-end via ingress ~0.30s → ~0.19s (~37%). Balances/LOP verified identical to before; admin (non-key) path, bad-key 401, no-auth 403, bad-month 400 all regression-pass.
+- Confirmed `GZipMiddleware` (minimum_size=500) is already enabled app-wide, so large JSON payloads (grid/reports) are compressed over the wire. No further change needed there.
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked

@@ -178,6 +178,35 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
     }
 
 
+async def compute_pay_balances(db, user: dict, year: Optional[str] = None) -> dict:
+    """Lightweight subset of compute_balance_summary for payroll feeds.
+
+    Returns ONLY the two numbers a payroll pull needs — paid-leave
+    available and comp-off available — using the exact same maths as
+    compute_balance_summary, but SKIPS the expensive YTD absent-day walk
+    (`_absent_days_ytd`: 3 queries + a ~250-day loop per member) and the
+    dashboard aggregates the feed never reads. Values are byte-identical
+    to compute_balance_summary's `paid_leave.available` / `comp_off.available`.
+    """
+    co = await compute_comp_off_balance(db, user, year=year)
+    if not year:
+        year = local_date_str(None)[:4]
+    yr_start, yr_end = f"{year}-01-01", f"{year}-12-31"
+    opening = user.get("leave_balance_opening")
+    tracked = (user.get("category") != "athlete") and (opening is not None)
+    rows = await db.leaves.find({
+        "user_id": user["id"],
+        "start_date": {"$gte": yr_start, "$lte": yr_end},
+        "type": {"$in": ["leave", "tour", "comp_off"]},
+    }, {"_id": 0, "type": 1, "status": 1, "start_date": 1, "end_date": 1,
+        "paid_leave_used": 1, "lop_days": 1, "comp_off_used": 1,
+        "half_day": 1}).to_list(2000)
+    buckets = _bucket_leave_rows(rows, local_date_str(None))
+    paid_avail = max(0.0, float(opening) - buckets["paid_used"]) if tracked else 0
+    return {"paid_available": paid_avail, "comp_available": co["available"]}
+
+
+
 def _expand_ranges_to_isos(
     rows: list, *, clip_lo: date, clip_hi: date,
     keep: Optional[Callable[[dict], bool]] = None,

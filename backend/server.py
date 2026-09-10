@@ -1488,7 +1488,7 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
     if key:
         if not valid_grid_key(key):
             raise HTTPException(status_code=401, detail="Invalid key")
-        from holidays import compute_balance_summary
+        from holidays import compute_pay_balances
         office = await db.config.find_one({"id": "office"})
         yr = local_date_str(office)[:4]
         # Month Loss-of-Pay per member — the EXACT same figure the admin
@@ -1500,27 +1500,37 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
             raise HTTPException(status_code=400, detail="month must be in YYYY-MM format (e.g. 2026-09)")
         import calendar as _cal
         month_label = f"{_cal.month_name[int(lop_month[5:7])]} {lop_month[:4]}"
-        grid = await _GRID_IMPL(lop_month, None, None, None, with_meta=False)
-        lop_map = {r["member_id"]: r["totals"].get("lop", 0) for r in grid.get("rows", [])}
         roster = await db.users.find({}, {"_id": 0}).to_list(5000)
         roster = _payroll_bucket(roster, category or "rest")
-        out_rows = []
-        for u in roster:
-            s = await compute_balance_summary(db, u, year=yr)
-            out_rows.append({
+        # Compute the month grid (for LOP) and every member's balances
+        # CONCURRENTLY. The per-member balance summaries are independent,
+        # so bound them with a semaphore and gather instead of awaiting in
+        # series (was ~5 round-trips × N members done sequentially — the
+        # dominant cost of the PayCraft feed). Numbers are byte-identical.
+        _sem = asyncio.Semaphore(16)
+        async def _member_row(u):
+            async with _sem:
+                b = await compute_pay_balances(db, u, year=yr)
+            return {
                 "member_id": u.get("id"),
                 "member_name": u.get("full_name"),
                 "category": u.get("category"),
                 "balances": {
-                    "leave": s["paid_leave"]["available"],
-                    "comp_off": s["comp_off"]["available"],
+                    "leave": b["paid_available"],
+                    "comp_off": b["comp_available"],
                 },
                 # Per-row month stamp so each LOP value is self-describing
                 # even after PayCraft flattens rows into a payroll sheet.
                 "lop_month": lop_month,
-                "lop_month_days": lop_map.get(u.get("id"), 0),
-            })
-        out_rows.sort(key=lambda r: (r["member_name"] or "").lower())
+            }
+        grid, bal_rows = await asyncio.gather(
+            _GRID_IMPL(lop_month, None, None, None, with_meta=False),
+            asyncio.gather(*[_member_row(u) for u in roster]),
+        )
+        lop_map = {r["member_id"]: r["totals"].get("lop", 0) for r in grid.get("rows", [])}
+        for r in bal_rows:
+            r["lop_month_days"] = lop_map.get(r["member_id"], 0)
+        out_rows = sorted(bal_rows, key=lambda r: (r["member_name"] or "").lower())
         return {"month": lop_month, "month_label": month_label, "rows": out_rows}
     if not user or user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin privileges required")
