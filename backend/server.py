@@ -1495,6 +1495,9 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
         # grid shows for that month (reuses the grid engine, no drift).
         # Caller may pass ?month=YYYY-MM; defaults to the current month.
         lop_month = (month or local_date_str(office)[:7])
+        import re as _re
+        if not _re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", lop_month):
+            raise HTTPException(status_code=400, detail="month must be in YYYY-MM format (e.g. 2026-09)")
         import calendar as _cal
         month_label = f"{_cal.month_name[int(lop_month[5:7])]} {lop_month[:4]}"
         grid = await _GRID_IMPL(lop_month, None, None, None, with_meta=False)

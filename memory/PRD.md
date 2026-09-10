@@ -122,6 +122,12 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 - Added **thin vertical separators** between every totals column: `border-l border-slate-200` on the shared cell `base` + both header rows; DAR keeps its stronger `!border-l-2 border-slate-300` divider (totals-vs-days boundary). Borders are inside the fixed 34px cells (border-box) so no offset shift.
 - Fixed the LV tooltip wording (now "Leave + Comp-off") since LOP has its own column.
 
+### Sep 2026 — App-wide code review fixes (this session)
+- **[MEDIUM] PayCraft feed 500 on bad month** — `/leave-balances?key=&month=` now validates `month` against `^\d{4}-(0[1-9]|1[0-2])$` and returns a clean **400** (was an unhandled 500 from `calendar.month_name[int(...)]`). Verified: `2026-13`/garbage → 400, `2026-09` → 200.
+- **[MEDIUM] Rules sign-off integrity** — `PUT /admin/rules` now **rejects (400)** editing the rule TEXT without bumping the version (acceptances are version-keyed, so a silent same-version edit would leave staff marked as accepting wording they never saw). No-op resaves (same content) still succeed; text edit + new version works. Frontend RulesEditor pre-warns before hitting the backend. Audit now records before/after sections + `content_changed`.
+- Reviewer LOW notes were non-issues: the 9-column grid sticky-offset math is consistent (0/34/68/108/142/176/210/244/278), `_GRID_IMPL` module-global is import-time (no None/timing risk), key endpoints use constant-time compare (rate-limiting is P3).
+- KNOWN/BY-DESIGN: the grid `leave` total intentionally includes LP days (backward-compat) AND LP has its own column — on the printed register don't sum "Leave + LOP" (double-counts). Payroll should read the feed's `lop_month_days` / `balances`, not the printed Leave+LOP sum. Left as-is to keep screen ↔ print ↔ feed numbers consistent.
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked

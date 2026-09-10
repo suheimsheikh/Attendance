@@ -101,20 +101,35 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     async def put_rules(body: RulesPolicyIn, admin: dict = Depends(require_admin)):
         before = await _policy()
         upd = {}
+        new_version = before["version"]
         if body.version and body.version.strip():
             upd["version"] = body.version.strip()
+            new_version = upd["version"]
+        content_changed = False
         if body.sections is not None:
             secs = [{"heading": str(s.get("heading") or "").strip(), "rules": [str(r).strip() for r in (s.get("rules") or []) if str(r).strip()]}
                     for s in body.sections if isinstance(s, dict)]
             if not any(s["rules"] for s in secs):
                 raise HTTPException(status_code=400, detail="At least one rule is required")
             upd["sections"] = secs
+            content_changed = secs != (before.get("sections") or [])
         if body.required_categories is not None:
             upd["required_categories"] = [c for c in body.required_categories if c in ("staff", "coach", "executive", "elite", "athlete")]
+        # Sign-off integrity: acceptances are keyed by version, so changing
+        # the rule TEXT without bumping the version would leave employees
+        # marked as having accepted wording they never saw. Force a new
+        # version whenever the content actually changes.
+        if content_changed and new_version == before["version"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Change the version when you edit the rule text so the team re-signs the updated rules.",
+            )
         if upd:
             await db.config.update_one({"id": "rules_policy"}, {"$set": upd}, upsert=True)
             await write_audit(db, actor=admin, action="rules_policy_update", entity_type="config", entity_id="rules_policy",
-                              entity_name="Attendance Rules", before={"version": before["version"]}, after={"version": upd.get("version", before["version"])},
+                              entity_name="Attendance Rules",
+                              before={"version": before["version"], "sections": before.get("sections")},
+                              after={"version": new_version, "sections": upd.get("sections", before.get("sections")), "content_changed": content_changed},
                               reason="Rules edited")
         return await _policy()
 

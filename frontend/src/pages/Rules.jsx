@@ -141,6 +141,11 @@ function RulesEditor({ data, onCancel, onSaved }) {
     const payload = parsed.filter((s) => s.rules.length);
     if (!payload.length) { toast.error("Add at least one rule before saving"); return; }
     if (payload.some((s) => !s.heading)) { toast.error("Every section needs a heading"); return; }
+    const contentChanged = JSON.stringify(payload) !== JSON.stringify(data.sections || []);
+    if (contentChanged && !versionBumped) {
+      toast.error("You changed the rule text — set a new version (e.g. bump the number) so the team re-signs the updated rules.");
+      return;
+    }
     if (versionBumped && !window.confirm(`Bump to version "${version.trim()}"?\n\nEveryone who signed the previous version will be asked to read and re-accept the rules.`)) return;
     setSaving(true);
     try {
