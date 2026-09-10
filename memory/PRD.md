@@ -107,6 +107,10 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 - Double-clicking a DAR cell deep-links to the DAR report's Missed tab pre-set to the grid's month and scrolls/highlights that member's row (`DarReport.jsx` now reads `tab`/`member`/`month` URL params via useSearchParams). Selectors: `cal-total-dar-<id>`, `dar-tab-missed`, `dar-missed-row-<id>`.
 - Sticky offsets: LT=0, EO=34, OT=68, TR=108, LV=142, AB=176, P=210, DAR=244. Grid colSpans bumped +7→+8. testing_agent iter56: 100% pass, no overlap, ledger-modal regressions OK.
 
+### Sep 2026 — High-contrast zebra across all reports (this session)
+- Q: the payroll-facing "staff attendance register print" = **The Grid** (sidebar → The Grid / Reports). Calendar Grid tab → **PDF** button gives the printable per-member×per-day register (P/AB/LV/TR/OT/DAR totals) — the rules call this "the single source of truth for payroll". Attendance tab → PDF/CSV gives the monthly summary. Endpoints: `/reports/calendar-grid/export`, `/reports/hours/export`.
+- Strengthened zebra to a significant-contrast band (even rows solid `bg-slate-200`, odd `bg-white`, hover `bg-sky-50`) across every report surface: Calendar Grid rows (`CalendarGridTab.jsx`, was faint slate-50), Attendance table (`AttendanceTab.jsx`, was slate-200/80 — colored group columns use /50 alpha so the darker even-row base now bands through), Leave Balances (`LeaveBalances.jsx`, dirty/active highlights still win), DAR Missed table (`DarReport.jsx`, flagged-member row still wins with sky-100+ring), Meals Report details list + monthly table (`MealsReport.jsx`), and the Daily Leave/Tour lists (`SectionList.jsx`). All className-only, compiles clean.
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked

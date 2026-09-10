@@ -159,11 +159,12 @@ export default function DarReport() {
                   <tr><th className="text-left p-2">Member</th><th className="text-left p-2">Category</th><th className="text-right p-2">Missed</th><th className="text-left p-2">Dates</th></tr>
                 </thead>
                 <tbody>
-                  {missed.rows.map((r) => {
+                  {missed.rows.map((r, idx) => {
                     const isHi = r.member_id === highlightMember;
+                    const zebra = idx % 2 === 1 ? "bg-slate-200" : "bg-white";
                     return (
                     <tr key={r.member_id} ref={isHi ? highlightRef : null}
-                        className={`border-t border-slate-100 ${isHi ? "bg-sky-50 ring-2 ring-inset ring-sky-300" : ""}`}
+                        className={`border-t border-slate-100 ${isHi ? "bg-sky-100 ring-2 ring-inset ring-sky-400" : `${zebra} hover:bg-sky-50`}`}
                         data-testid={`dar-missed-row-${r.member_id}`}>
                       <td className="p-2 font-semibold"><Link to={`/profile?member=${r.member_id}`} className="hover:underline">{r.member_name}</Link></td>
                       <td className="p-2 text-slate-500 uppercase text-[11px]">{r.category}</td>

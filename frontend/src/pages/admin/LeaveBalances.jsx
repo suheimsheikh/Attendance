@@ -260,7 +260,7 @@ export default function LeaveBalances() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((r) => {
+                {filtered.map((r, idx) => {
                   const ed = edits[r.id] || {};
                   const openingDirty = ed.opening !== undefined;
                   const opening = openingDirty ? ed.opening : r.opening;
@@ -270,10 +270,11 @@ export default function LeaveBalances() {
                     ? ed.comp_off_opening
                     : (r.comp_off_opening || 0);
                   const dirty = openingDirty || coOpeningDirty;
+                  const zebra = idx % 2 === 1 ? "bg-slate-200" : "bg-white";
                   return (
                     <tr
                       key={r.id}
-                      className={`${dirty ? "bg-amber-50" : activeId === r.id ? "bg-sky-50" : "hover:bg-slate-50"} cursor-pointer transition-colors`}
+                      className={`${dirty ? "bg-amber-100" : activeId === r.id ? "bg-sky-100" : `${zebra} hover:bg-sky-50`} cursor-pointer transition-colors`}
                       data-testid={`lb-row-${r.id}`}
                       onMouseEnter={() => setActiveId(r.id)}
                       onFocus={() => setActiveId(r.id)}

@@ -307,7 +307,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 // OVER the day columns while scrolling; a translucent bg let
                 // the underlying day-cell borders bleed through, drawing
                 // ghost outlines below the AB/P/LV totals headers.
-                const rowBg = i % 2 === 1 ? "bg-slate-50" : "bg-white";
+                const rowBg = i % 2 === 1 ? "bg-slate-200" : "bg-white";
                 const isDouble = rowsMode === "double";
                 const openAttn = () => setAttnLedger({
                   member_id: r.member_id,

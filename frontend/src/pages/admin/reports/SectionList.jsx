@@ -17,8 +17,8 @@ export default function SectionList({ title, items }) {
         <div className="p-6 text-center text-sm text-slate-500">Nobody.</div>
       ) : (
         <ul className="divide-y divide-slate-100">
-          {items.map((l) => (
-            <li key={l.id} className="px-5 py-3">
+          {items.map((l, idx) => (
+            <li key={l.id} className={`px-5 py-3 ${idx % 2 === 1 ? "bg-slate-200" : "bg-white"} hover:bg-sky-50`}>
               <div className="font-semibold text-sm">{l.member_name}</div>
               <div className="text-xs text-slate-500">{shortDate(l.start_date)} – {shortDate(l.end_date)}{l.location ? ` · ${l.location}` : ""}</div>
               <div className="text-xs text-slate-600 mt-1 line-clamp-2">{l.reason}</div>

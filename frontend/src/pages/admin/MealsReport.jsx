@@ -159,7 +159,7 @@ function DailyDetailsModal({ dateStr, meal, mealLabel, onClose }) {
                 </div>
                 <ul className="divide-y divide-slate-100">
                   {members.map((mem, idx) => (
-                    <li key={mem.user_id || idx} className="px-5 py-2 flex items-center gap-3 text-sm" data-testid={`meals-details-row-${mem.user_id}`}>
+                    <li key={mem.user_id || idx} className={`px-5 py-2 flex items-center gap-3 text-sm ${idx % 2 === 1 ? "bg-slate-200" : "bg-white"} hover:bg-sky-50`} data-testid={`meals-details-row-${mem.user_id}`}>
                       <span className="w-8 text-right text-slate-400 tabular-nums text-xs shrink-0">{idx + 1}.</span>
                       <span className="font-semibold text-slate-900 flex-1 truncate">{mem.user_name || "—"}</span>
                       {mem.institution && (
@@ -416,12 +416,13 @@ function MonthlyGridTab() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
+              {rows.map((row, idx) => {
                 const totalMeals = MEAL_ORDER.reduce((s, k) => s + (row.totals?.[k] || 0), 0);
+                const zebra = idx % 2 === 1 ? "bg-slate-200" : "bg-white";
                 return (
-                  <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50/60"
+                  <tr key={row.id} className={`border-t border-slate-100 ${zebra} hover:bg-sky-50`}
                       data-testid={`meals-report-monthly-row-${row.id}`}>
-                    <td className="p-2 sticky left-0 bg-white z-10 border-r border-slate-100">
+                    <td className={`p-2 sticky left-0 ${zebra} z-10 border-r border-slate-100`}>
                       <div className="font-semibold text-slate-900 truncate">{row.full_name}</div>
                       <div className="text-[10px] text-slate-500 capitalize">{row.category || ""}</div>
                     </td>
