@@ -249,16 +249,17 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                   </th>
                 ))}
                 {/* Sticky-right totals headers. Layout (rightmost-first):
-                    LT (Late) → EO (Early Out) → OT (mins) → TR → LV → AB → P → DAR.
-                    Offsets: LT=0, EO=34, OT=68, TR=108, LV=142, AB=176, P=210, DAR=244. */}
-                <th className="sticky right-[244px] z-40 bg-rose-100 text-rose-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l-2 border-slate-300 text-[10px] font-bold" title="Missed Daily Activity Reports (worked days with no DAR filed)">DAR</th>
-                <th className="sticky right-[210px] z-40 bg-emerald-100 text-emerald-800 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-slate-200 text-[10px] font-bold" title="Present days (incl. HD + Late)">P</th>
-                <th className="sticky right-[176px] z-40 bg-red-100 text-red-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-slate-200 text-[10px] font-bold" title="Absent days">AB</th>
-                <th className="sticky right-[142px] z-40 bg-amber-100 text-amber-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-slate-200 text-[10px] font-bold" title="Leave + Comp-off days">LV</th>
-                <th className="sticky right-[108px] z-40 bg-orange-200 text-orange-800 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-slate-200 text-[10px] font-bold" title="Tour days">TR</th>
-                <th className="sticky right-[68px] z-40 bg-violet-100 text-violet-800 h-6 w-[40px] min-w-[40px] max-w-[40px] text-center border-b border-slate-200 text-[10px] font-bold" title="Overtime hours accumulated (early arrival + late departure)">OT h</th>
-                <th className="sticky right-[34px] z-40 bg-rose-100 text-rose-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-slate-200 text-[10px] font-bold" title="Early-out days this month (checked out ≥15m before end time)">EO</th>
-                <th className="sticky right-0 z-40 bg-orange-500/90 text-white h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-slate-200 text-[10px] font-bold" title="Late days this month (subset of Present)">LT</th>
+                    LT (Late) → EO (Early Out) → OT (mins) → TR → LV → LP → AB → P → DAR.
+                    Offsets: LT=0, EO=34, OT=68, TR=108, LV=142, LP=176, AB=210, P=244, DAR=278. */}
+                <th className="sticky right-[278px] z-40 bg-rose-100 text-rose-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l-2 border-slate-300 text-[10px] font-bold" title="Missed Daily Activity Reports (worked days with no DAR filed)">DAR</th>
+                <th className="sticky right-[244px] z-40 bg-emerald-100 text-emerald-800 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Present days (incl. HD + Late)">P</th>
+                <th className="sticky right-[210px] z-40 bg-red-100 text-red-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Absent days">AB</th>
+                <th className="sticky right-[176px] z-40 bg-pink-100 text-pink-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Loss-of-pay days (leave days beyond paid balance)">LP</th>
+                <th className="sticky right-[142px] z-40 bg-amber-100 text-amber-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Leave + Comp-off days">LV</th>
+                <th className="sticky right-[108px] z-40 bg-orange-200 text-orange-800 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Tour days">TR</th>
+                <th className="sticky right-[68px] z-40 bg-violet-100 text-violet-800 h-6 w-[40px] min-w-[40px] max-w-[40px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Overtime hours accumulated (early arrival + late departure)">OT h</th>
+                <th className="sticky right-[34px] z-40 bg-rose-100 text-rose-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Early-out days this month (checked out ≥15m before end time)">EO</th>
+                <th className="sticky right-0 z-40 bg-orange-500/90 text-white h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Late days this month (subset of Present)">LT</th>
               </tr>
               <tr>
                 <th className="py-0.5 sticky left-0 z-40 bg-slate-50 w-7 min-w-[28px] max-w-[28px] border-b border-slate-200"></th>
@@ -272,14 +273,15 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                   </th>
                 ))}
                 {/* Sticky-right total sub-labels */}
-                <th className="sticky right-[244px] z-40 bg-rose-50 h-4 text-[8px] uppercase font-semibold text-rose-700 border-b border-l-2 border-slate-300 text-center">Miss</th>
-                <th className="sticky right-[210px] z-40 bg-emerald-50 h-4 text-[8px] uppercase font-semibold text-emerald-700 border-b border-slate-200 text-center">Total</th>
-                <th className="sticky right-[176px] z-40 bg-red-50 h-4 text-[8px] uppercase font-semibold text-red-600 border-b border-slate-200 text-center">Total</th>
-                <th className="sticky right-[142px] z-40 bg-amber-50 h-4 text-[8px] uppercase font-semibold text-amber-700 border-b border-slate-200 text-center">Total</th>
-                <th className="sticky right-[108px] z-40 bg-orange-100 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-slate-200 text-center">Total</th>
-                <th className="sticky right-[68px] z-40 bg-violet-50 h-4 text-[8px] uppercase font-semibold text-violet-700 border-b border-slate-200 text-center">Sum</th>
-                <th className="sticky right-[34px] z-40 bg-rose-50 h-4 text-[8px] uppercase font-semibold text-rose-700 border-b border-slate-200 text-center">Days</th>
-                <th className="sticky right-0 z-40 bg-orange-100 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-slate-200 text-center">Days</th>
+                <th className="sticky right-[278px] z-40 bg-rose-50 h-4 text-[8px] uppercase font-semibold text-rose-700 border-b border-l-2 border-slate-300 text-center">Miss</th>
+                <th className="sticky right-[244px] z-40 bg-emerald-50 h-4 text-[8px] uppercase font-semibold text-emerald-700 border-b border-l border-slate-200 text-center">Total</th>
+                <th className="sticky right-[210px] z-40 bg-red-50 h-4 text-[8px] uppercase font-semibold text-red-600 border-b border-l border-slate-200 text-center">Total</th>
+                <th className="sticky right-[176px] z-40 bg-pink-50 h-4 text-[8px] uppercase font-semibold text-pink-700 border-b border-l border-slate-200 text-center">Days</th>
+                <th className="sticky right-[142px] z-40 bg-amber-50 h-4 text-[8px] uppercase font-semibold text-amber-700 border-b border-l border-slate-200 text-center">Total</th>
+                <th className="sticky right-[108px] z-40 bg-orange-100 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-l border-slate-200 text-center">Total</th>
+                <th className="sticky right-[68px] z-40 bg-violet-50 h-4 text-[8px] uppercase font-semibold text-violet-700 border-b border-l border-slate-200 text-center">Sum</th>
+                <th className="sticky right-[34px] z-40 bg-rose-50 h-4 text-[8px] uppercase font-semibold text-rose-700 border-b border-l border-slate-200 text-center">Days</th>
+                <th className="sticky right-0 z-40 bg-orange-100 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-l border-slate-200 text-center">Days</th>
               </tr>
             </thead>
             <tbody>
@@ -292,14 +294,14 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 // 20 Feb 2026.)
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={`skeleton-${i}`} className={i % 2 === 1 ? "bg-slate-100/40" : "bg-white"} data-testid="calendar-skeleton-row">
-                    <td className="py-1 px-2" colSpan={2 + days.length + 8}>
+                    <td className="py-1 px-2" colSpan={2 + days.length + 9}>
                       <div className="h-4 rounded bg-slate-200/70 animate-pulse w-full" />
                     </td>
                   </tr>
                 ))
               )}
               {!loading && displayedRows.length === 0 && (
-                <tr><td colSpan={2 + days.length + 8} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
+                <tr><td colSpan={2 + days.length + 9} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
               )}
               {displayedRows.map((r, i) => {
                 // Opaque zebra bg (NOT the translucent slate-100/40) — the

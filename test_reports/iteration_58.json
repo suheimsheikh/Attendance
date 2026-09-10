@@ -1,0 +1,23 @@
+{
+  "summary": "Verified the new LP (Loss-of-Pay) totals column on the admin Calendar Grid (September 2026, Staff & Coaches). LP header renders in pink between AB and LV with sub-label 'Days' at sticky right offset 176px, and the corresponding <td> cells (data-testid cal-total-lop-<id>) render as full column cells (not the old pill). All 9 sticky totals columns align: DAR=278, P=244, AB=210, LP=176, LV=142, TR=108, OT=68, EO=34, LT=0 for both header and data rows. LP values are pink and match the per-row 'LP' day-cell count (1==1 for member f7b13eeb-...). Campus Administrator DAR still shows red '✗1'. No horizontal scroll at 1920 (scrollWidth=clientWidth=1598) or 1536 (scrollWidth=clientWidth=1214). LP double-click opens a modal (custom modal element, not role=dialog).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "The custom modal component used by the Attendance/OT ledgers does not expose role='dialog' or an accessible aria attribute. Consider adding role='dialog' + aria-modal='true' for a11y and easier automated testing.",
+    "LP cell tooltip text ('Loss of pay') and LV cell tooltip ('Leave (N of which are LOP)') both reference LOP; verify wording is intentional — the LV tooltip still uses t.lop and could confuse users now that LP is its own column."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (admin email toggle)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sticky right offsets verified (DAR 278, P 244, AB 210, LP 176, LV 142, TR 108, OT 68, EO 34, LT 0). LP has data-testid cal-total-lop-<id>, renders as a <td> (no children/pill). Grid inner scroll container class 'overflow-auto': at 1920 sw=cw=1598; at 1536 sw=cw=1214 — grid fits with no horizontal scroll (spec expected ~1192). Only one member in Staff & Coaches filter for Sep 2026 had lop>0: f7b13eeb-601d-495e-b847-1349807412bf (LP=1, and exactly one 'LP' day-cell in row — matches). Campus Administrator DAR cell shows '✗1' in red (rgb(190,18,60)). LP dblclick opens a custom Attendance ledger modal (no role='dialog' attribute, so use a broader selector when checking). Screenshot: /app/test_reports/lp_1920.png",
+  "rca of the issue": "N/A — feature verification, no bugs found."
+}

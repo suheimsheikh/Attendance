@@ -117,6 +117,11 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 - **On-screen Calendar Grid now fits without horizontal scroll**: Reports container widened to `max-w-none`, day columns 28px→24px (`w-6`), sticky Member column 160px→132px. Table is ~1158px wide — fits at 1536/1920 with slack (testing_agent iter57: 100%, scrollWidth==clientWidth, all 30/31 days visible, totals intact, 2-letter codes readable).
 - Note: the payroll "attendance register print" = The Grid → Calendar Grid tab → PDF (per-member×per-day register); Attendance tab → PDF/CSV = monthly summary.
 
+### Sep 2026 — LP totals column + thin column separators on the on-screen grid (this session)
+- Added a dedicated **LP** (loss-of-pay) totals column to the on-screen Calendar Grid right-sticky strip, positioned immediately left of LV (pink, `cal-total-lop-<id>`); removed the old cramped LOP pill badge on the LV cell. Strip is now 9 columns: DAR, P, AB, LP, LV, TR, OT h, EO, LT (offsets DAR=278…LT=0). `t.lop` = count of `LP` day-cells that month (same source as the PDF). testing_agent iter58: 100%, aligned, values correct, still no horizontal scroll.
+- Added **thin vertical separators** between every totals column: `border-l border-slate-200` on the shared cell `base` + both header rows; DAR keeps its stronger `!border-l-2 border-slate-300` divider (totals-vs-days boundary). Borders are inside the fixed 34px cells (border-box) so no offset shift.
+- Fixed the LV tooltip wording (now "Leave + Comp-off") since LOP has its own column.
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked
