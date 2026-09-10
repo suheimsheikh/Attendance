@@ -135,6 +135,12 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 - Result: server compute ~0.135s → ~0.078s (~42%); end-to-end via ingress ~0.30s → ~0.19s (~37%). Balances/LOP verified identical to before; admin (non-key) path, bad-key 401, no-auth 403, bad-month 400 all regression-pass.
 - Confirmed `GZipMiddleware` (minimum_size=500) is already enabled app-wide, so large JSON payloads (grid/reports) are compressed over the wire. No further change needed there.
 
+### Sep 2026 — Suggestions feature (any user) (this session)
+- New **Suggestions** item in the main member menu (`Layout.jsx` NAV_MEMBER, Sparkles icon) → `/suggestions` page (`pages/Suggestions.jsx`), route wrapped in RequireMember (all real app users; escorts excluded like /rules & /profile).
+- Any signed-in user can submit an idea (text + optional area tag) and see their own past suggestions with a status badge + any admin note. Admins get an extra "All suggestions" tab to view everyone's, with a per-row status dropdown (new / planned / in_progress / done / declined) and counts.
+- Backend `routes/suggestions.py` (`suggestions` collection, uuid id): `POST /api/suggestions`, `GET /api/suggestions/mine`, `GET /api/admin/suggestions` (admin, +counts), `PATCH /api/admin/suggestions/{id}` (admin, status/admin_note, audit-logged). Wired in server.py after the rules router.
+- Verified: backend curl (submit, mine, admin list+counts, PATCH, non-admin 403, bad-status 400) + testing_agent iter59 100% (nav item, submit+toast+refresh, admin all-tab, admin-note propagation).
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked

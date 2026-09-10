@@ -4339,6 +4339,8 @@ app.include_router(_tasks_router(db, get_current_user, require_admin, write_audi
 
 from routes.rules import make_router as _rules_router  # noqa: E402
 app.include_router(_rules_router(db, get_current_user, require_admin, write_audit))
+from routes.suggestions import make_router as _suggestions_router  # noqa: E402
+app.include_router(_suggestions_router(db, get_current_user, require_admin, write_audit))
 
 # Data-quality dashboard — read-only DB sweep for dupes, missing
 # fields, and structural inconsistencies.

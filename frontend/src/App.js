@@ -16,6 +16,7 @@ const Presence = lazy(() => import("./pages/Presence"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Tasks = lazy(() => import("./pages/Tasks"));
 const Rules = lazy(() => import("./pages/Rules"));
+const Suggestions = lazy(() => import("./pages/Suggestions"));
 const MyLeaves = lazy(() => import("./pages/MyLeaves"));
 const Muster = lazy(() => import("./pages/Muster"));
 const Meals = lazy(() => import("./pages/Meals"));
@@ -149,6 +150,7 @@ function App() {
             <Route path="profile" element={<RequireMember><Profile /></RequireMember>} />
             <Route path="tasks" element={<RequireTasks><Tasks /></RequireTasks>} />
             <Route path="rules" element={<RequireMember><Rules /></RequireMember>} />
+            <Route path="suggestions" element={<RequireMember><Suggestions /></RequireMember>} />
             <Route path="admin" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="admin/dashboard" element={<RequireAdmin><Dashboard /></RequireAdmin>} />
             <Route path="admin/chefs-view" element={<RequireChefOrAdmin><ChefsView /></RequireChefOrAdmin>} />

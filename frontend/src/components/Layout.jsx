@@ -47,6 +47,7 @@ const NAV_MEMBER = [
   // login (auth.jsx forces the redirect when `is_escort=true`).
   { to: "/escort-checkin", label: "Escorts Check in/Out", icon: UserCheck, hint: "Mark escorts (parents/guardians) in and out of campus" },
   { to: "/rules", label: "Attendance Rules", icon: ScrollText, hint: "The numbered attendance rules every employee signs up to" },
+  { to: "/suggestions", label: "Suggestions", icon: Sparkles, hint: "Share an idea to improve the app — anyone can suggest" },
   { to: "/profile", label: "My Profile", icon: UserCog, hint: "Your photo, contact details and login settings" },
 ];
 
