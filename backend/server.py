@@ -1495,6 +1495,8 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
         # grid shows for that month (reuses the grid engine, no drift).
         # Caller may pass ?month=YYYY-MM; defaults to the current month.
         lop_month = (month or local_date_str(office)[:7])
+        import calendar as _cal
+        month_label = f"{_cal.month_name[int(lop_month[5:7])]} {lop_month[:4]}"
         grid = await _GRID_IMPL(lop_month, None, None, None, with_meta=False)
         lop_map = {r["member_id"]: r["totals"].get("lop", 0) for r in grid.get("rows", [])}
         roster = await db.users.find({}, {"_id": 0}).to_list(5000)
@@ -1510,10 +1512,13 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
                     "leave": s["paid_leave"]["available"],
                     "comp_off": s["comp_off"]["available"],
                 },
+                # Per-row month stamp so each LOP value is self-describing
+                # even after PayCraft flattens rows into a payroll sheet.
+                "lop_month": lop_month,
                 "lop_month_days": lop_map.get(u.get("id"), 0),
             })
         out_rows.sort(key=lambda r: (r["member_name"] or "").lower())
-        return {"month": lop_month, "rows": out_rows}
+        return {"month": lop_month, "month_label": month_label, "rows": out_rows}
     if not user or user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin privileges required")
     users = await db.users.find(
