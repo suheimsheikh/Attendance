@@ -1468,6 +1468,7 @@ async def delete_member(member_id: str, admin: dict = Depends(require_admin)):
 
 @api_router.get("/leave-balances")
 async def list_leave_balances(key: str = "", category: Optional[str] = None,
+                              month: Optional[str] = None,
                               user: Optional[dict] = Depends(optional_user)):
     """Return every NON-ATHLETE member with their opening leave balance and
     current usage, used by the spreadsheet-style admin editor.
@@ -1488,18 +1489,14 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
         if not valid_grid_key(key):
             raise HTTPException(status_code=401, detail="Invalid key")
         from holidays import compute_balance_summary
-        yr = local_date_str(await db.config.find_one({"id": "office"}))[:4]
-        # YTD Loss-of-Pay days per member (sum of lop_days on approved
-        # leaves this year) so payroll can deduct LOP without reading the
-        # grid. NEW field — existing balances shape is untouched.
-        lop_rows = await db.leaves.aggregate([
-            {"$match": {"status": "approved",
-                        "start_date": {"$lte": f"{yr}-12-31"},
-                        "end_date": {"$gte": f"{yr}-01-01"},
-                        "lop_days": {"$gt": 0}}},
-            {"$group": {"_id": "$user_id", "lop": {"$sum": "$lop_days"}}},
-        ]).to_list(5000)
-        lop_map = {r["_id"]: round(float(r["lop"] or 0), 1) for r in lop_rows}
+        office = await db.config.find_one({"id": "office"})
+        yr = local_date_str(office)[:4]
+        # Month Loss-of-Pay per member — the EXACT same figure the admin
+        # grid shows for that month (reuses the grid engine, no drift).
+        # Caller may pass ?month=YYYY-MM; defaults to the current month.
+        lop_month = (month or local_date_str(office)[:7])
+        grid = await _GRID_IMPL(lop_month, None, None, None, with_meta=False)
+        lop_map = {r["member_id"]: r["totals"].get("lop", 0) for r in grid.get("rows", [])}
         roster = await db.users.find({}, {"_id": 0}).to_list(5000)
         roster = _payroll_bucket(roster, category or "rest")
         out_rows = []
@@ -1513,10 +1510,10 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
                     "leave": s["paid_leave"]["available"],
                     "comp_off": s["comp_off"]["available"],
                 },
-                "lop_ytd_days": lop_map.get(u.get("id"), 0.0),
+                "lop_month_days": lop_map.get(u.get("id"), 0),
             })
         out_rows.sort(key=lambda r: (r["member_name"] or "").lower())
-        return {"rows": out_rows}
+        return {"month": lop_month, "rows": out_rows}
     if not user or user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin privileges required")
     users = await db.users.find(
@@ -4379,9 +4376,13 @@ enrich_leaves = _leaves.enrich_leaves  # type: ignore[attr-defined]
 # Reports — heavy aggregation lives in `compute_hours_report` (still in
 # server.py for now); the router file owns the HTTP shape + exports.
 from routes.reports import make_router as _reports_router  # noqa: E402
-app.include_router(_reports_router(
+_reports_router_instance = _reports_router(
     db, require_admin, get_current_user, compute_hours_report, enrich_leaves,
-))
+)
+# Reach the month-grid engine from the PayCraft /leave-balances feed so its
+# LOP figure is the exact same number the grid shows (see list_leave_balances).
+_GRID_IMPL = _reports_router_instance.grid_impl
+app.include_router(_reports_router_instance)
 
 # Corrections facility — member-raised after-the-fact fixes to attendance
 # and leave rows, admin-approved. See routes/corrections.py for the full

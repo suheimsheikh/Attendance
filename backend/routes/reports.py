@@ -2445,4 +2445,8 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                      f"attachment; filename=leave_ledger_{member_name.replace(' ', '_')}_{label}.pdf"},
         )
 
+    # Expose the month-grid engine so server-to-server endpoints (e.g. the
+    # PayCraft /leave-balances feed) can read the SAME per-member month
+    # totals the grid shows — no reimplementation, no drift.
+    router.grid_impl = _grid_impl
     return router
