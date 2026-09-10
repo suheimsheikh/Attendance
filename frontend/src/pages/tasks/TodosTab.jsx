@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, Loader2, CheckSquare, Square, User, CalendarClock } from "lucide-react";
+import { Plus, Trash2, Loader2, CheckSquare, Square, User, CalendarClock, Edit3, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 
@@ -12,6 +12,8 @@ export default function TodosTab({ user, group }) {
   const [today, setToday] = useState("");
   const [form, setForm] = useState({ title: "", due_date: "", owner_id: "", notes: "" });
   const [busy, setBusy] = useState("");
+  const [editId, setEditId] = useState("");
+  const [edit, setEdit] = useState({ title: "", due_date: "", owner_id: "", notes: "" });
 
   const load = () => api.get("/todos", { scope, status }).then((r) => { setRows(r.rows); setToday(r.today); }).catch((e) => toast.error(e?.message || "Failed"));
   useEffect(() => { load(); }, [scope, status]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -47,6 +49,17 @@ export default function TodosTab({ user, group }) {
     catch (err) { toast.error(err?.message || "Not allowed"); }
   };
   const canTick = (t) => t.owner_id === user.id || user.role === "admin";
+  const canEdit = (t) => t.owner_id === user.id || t.created_by_id === user.id || user.role === "admin";
+  const startEdit = (t) => { setEditId(t.id); setEdit({ title: t.title, due_date: t.due_date || "", owner_id: t.owner_id || "", notes: t.notes || "" }); };
+  const saveEdit = async () => {
+    if (!edit.title.trim()) { toast.error("Title can't be empty"); return; }
+    setBusy(editId);
+    try {
+      await api.patch(`/todos/${editId}`, { title: edit.title.trim(), due_date: edit.due_date || null, owner_id: edit.owner_id || null, notes: edit.notes || null });
+      toast.success("To-do updated"); setEditId(""); load();
+    } catch (err) { toast.error(err?.message || "Couldn't update"); }
+    finally { setBusy(""); }
+  };
 
   return (
     <div data-testid="todos-tab">
@@ -78,6 +91,25 @@ export default function TodosTab({ user, group }) {
             <ul className="divide-y divide-slate-100">
               {g.items.map((t) => {
                 const overdue = t.status === "open" && t.due_date && t.due_date < today;
+                if (editId === t.id) {
+                  return (
+                    <li key={t.id} className="py-2" data-testid={`todo-edit-${t.id}`}>
+                      <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
+                        <input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} className="iu-input !h-9 text-sm" data-testid={`todo-edit-title-${t.id}`} placeholder="Title" />
+                        <input type="date" value={edit.due_date} onChange={(e) => setEdit({ ...edit, due_date: e.target.value })} className="iu-input !h-9 !w-auto text-sm" data-testid={`todo-edit-due-${t.id}`} title="Deadline" />
+                        <select value={edit.owner_id} onChange={(e) => setEdit({ ...edit, owner_id: e.target.value })} className="iu-input !h-9 !w-auto text-sm" data-testid={`todo-edit-owner-${t.id}`} title="Assign to">
+                          <option value={user.id}>Me</option>
+                          {group.filter((m) => m.id !== user.id).map((m) => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                        </select>
+                      </div>
+                      <input value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} className="iu-input !h-9 text-sm mt-2" data-testid={`todo-edit-notes-${t.id}`} placeholder="Notes (optional)" />
+                      <div className="flex gap-2 justify-end mt-2">
+                        <button onClick={() => setEditId("")} className="iu-btn-secondary !h-8 text-xs" data-testid={`todo-edit-cancel-${t.id}`}><X size={13} /> Cancel</button>
+                        <button onClick={saveEdit} disabled={busy === t.id} className="iu-btn-primary !h-8 text-xs" data-testid={`todo-edit-save-${t.id}`}>{busy === t.id ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save</button>
+                      </div>
+                    </li>
+                  );
+                }
                 return (
                   <li key={t.id} className="flex items-start gap-2 py-2" data-testid={`todo-${t.id}`}>
                     <button onClick={() => canTick(t) && toggle(t)} disabled={!canTick(t) || busy === t.id} title={canTick(t) ? "Toggle done" : "Only the owner or an admin can tick this"} className="mt-0.5 disabled:opacity-40" data-testid={`todo-toggle-${t.id}`}>
@@ -92,6 +124,9 @@ export default function TodosTab({ user, group }) {
                         {t.notes && <span className="text-slate-400">· {t.notes}</span>}
                       </div>
                     </div>
+                    {canEdit(t) && (
+                      <button onClick={() => startEdit(t)} className="text-slate-300 hover:text-indigo-600" title="Edit" data-testid={`todo-edit-btn-${t.id}`}><Edit3 size={15} /></button>
+                    )}
                     {(t.owner_id === user.id || t.created_by_id === user.id || user.role === "admin") && (
                       <button onClick={() => remove(t)} className="text-slate-300 hover:text-rose-600" title="Delete" data-testid={`todo-delete-${t.id}`}><Trash2 size={15} /></button>
                     )}

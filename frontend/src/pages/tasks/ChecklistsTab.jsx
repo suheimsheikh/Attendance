@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Plus, Trash2, Loader2, Repeat } from "lucide-react";
+import { Plus, Trash2, Loader2, Repeat, Edit3, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 
 const DOW = [["monday", "Mon"], ["tuesday", "Tue"], ["wednesday", "Wed"], ["thursday", "Thu"], ["friday", "Fri"], ["saturday", "Sat"], ["sunday", "Sun"]];
-const EMPTY = { title: "", recurrence: "daily", days_of_week: [], day_of_month: "1" };
+const EMPTY = { title: "", recurrence: "daily", days_of_week: [], day_of_month: "1", active: true };
 
 export function recurrenceLabel(c) {
   if (c.recurrence === "daily") return "Every day";
@@ -17,23 +17,36 @@ export default function ChecklistsTab({ user, group }) {
   const [rows, setRows] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
+  const [editId, setEditId] = useState("");
   const mine = ownerId === user.id;
 
   const load = () => api.get("/checklists", { owner_id: ownerId }).then((r) => setRows(r.rows)).catch((e) => toast.error(e?.message || "Failed"));
   useEffect(() => { load(); }, [ownerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const add = async (e) => {
+  const submitForm = async (e) => {
     e.preventDefault();
     setBusy(true);
     try {
-      await api.post("/checklists", form);
-      setForm(EMPTY); toast.success("Checklist item added"); load();
-    } catch (err) { toast.error(err?.message || "Couldn't add"); }
+      if (editId) {
+        await api.patch(`/checklists/${editId}`, form);
+        toast.success("Checklist item updated");
+      } else {
+        await api.post("/checklists", form);
+        toast.success("Checklist item added");
+      }
+      setForm(EMPTY); setEditId(""); load();
+    } catch (err) { toast.error(err?.message || "Couldn't save"); }
     finally { setBusy(false); }
   };
+  const startEdit = (c) => {
+    setEditId(c.id);
+    setForm({ title: c.title, recurrence: c.recurrence, days_of_week: c.days_of_week || [], day_of_month: c.day_of_month || "1", active: c.active !== false });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const cancelEdit = () => { setEditId(""); setForm(EMPTY); };
   const remove = async (c) => {
     if (!window.confirm(`Remove "${c.title}" from the checklist?`)) return;
-    try { await api.del(`/checklists/${c.id}`); load(); } catch (err) { toast.error(err?.message || "Not allowed"); }
+    try { await api.del(`/checklists/${c.id}`); if (editId === c.id) cancelEdit(); load(); } catch (err) { toast.error(err?.message || "Not allowed"); }
   };
   const toggleActive = async (c) => {
     try { await api.patch(`/checklists/${c.id}`, { ...c, active: !c.active }); load(); } catch (err) { toast.error(err?.message || "Not allowed"); }
@@ -51,14 +64,18 @@ export default function ChecklistsTab({ user, group }) {
           </select>
         </div>
       )}
-      {mine && (
-        <form onSubmit={add} className="iu-card p-3 md:p-4 mb-4 space-y-2" data-testid="checklist-add-form">
+      {(mine || editId) && (
+        <form onSubmit={submitForm} className="iu-card p-3 md:p-4 mb-4 space-y-2" data-testid="checklist-add-form">
+          {editId && <div className="text-xs font-bold text-indigo-600" data-testid="checklist-editing-banner">Editing checklist item</div>}
           <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
             <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Must-do item, e.g. Reconcile petty cash" className="iu-input !h-10 text-sm" data-testid="checklist-title" required />
             <select value={form.recurrence} onChange={(e) => setForm({ ...form, recurrence: e.target.value })} className="iu-input !h-10 !w-auto text-sm" data-testid="checklist-recurrence">
               <option value="daily">Daily</option><option value="dow">Days of week</option><option value="monthly">Monthly</option>
             </select>
-            <button className="iu-btn-primary !h-10" disabled={busy} data-testid="checklist-add">{busy ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Add</button>
+            <div className="flex gap-2">
+              {editId && <button type="button" onClick={cancelEdit} className="iu-btn-secondary !h-10" data-testid="checklist-cancel"><X size={15} /> Cancel</button>}
+              <button className="iu-btn-primary !h-10" disabled={busy} data-testid="checklist-add">{busy ? <Loader2 size={15} className="animate-spin" /> : editId ? <Save size={15} /> : <Plus size={15} />} {editId ? "Save" : "Add"}</button>
+            </div>
           </div>
           {form.recurrence === "dow" && (
             <div className="flex flex-wrap gap-1.5" data-testid="checklist-dow">
@@ -93,6 +110,7 @@ export default function ChecklistsTab({ user, group }) {
                 </div>
                 {(mine || user.role === "admin") && (
                   <>
+                    <button onClick={() => startEdit(c)} className="text-slate-300 hover:text-indigo-600" title="Edit" data-testid={`checklist-edit-${c.id}`}><Edit3 size={15} /></button>
                     <button onClick={() => toggleActive(c)} className="text-[11px] text-slate-500 hover:text-slate-900" data-testid={`checklist-pause-${c.id}`}>{c.active === false ? "Resume" : "Pause"}</button>
                     <button onClick={() => remove(c)} className="text-slate-300 hover:text-rose-600" title="Delete" data-testid={`checklist-delete-${c.id}`}><Trash2 size={15} /></button>
                   </>

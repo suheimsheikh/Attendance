@@ -141,6 +141,12 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 - Backend `routes/suggestions.py` (`suggestions` collection, uuid id): `POST /api/suggestions`, `GET /api/suggestions/mine`, `GET /api/admin/suggestions` (admin, +counts), `PATCH /api/admin/suggestions/{id}` (admin, status/admin_note, audit-logged). Wired in server.py after the rules router.
 - Verified: backend curl (submit, mine, admin list+counts, PATCH, non-admin 403, bad-status 400) + testing_agent iter59 100% (nav item, submit+toast+refresh, admin all-tab, admin-note propagation).
 
+### Sep 2026 — Task manager edit facility (this session)
+- Added inline **edit** to both Tasks tabs (backend PATCH `/todos/{id}` + `/checklists/{id}` already existed; this was the missing UI):
+  - **To-dos** (`TodosTab.jsx`): pencil button (`todo-edit-btn-<id>`) → inline editor for title, deadline, assignee, notes with Save/Cancel (`todo-edit-*` testids). Editable by owner, creator or admin.
+  - **Checklists** (`ChecklistsTab.jsx`): pencil button (`checklist-edit-<id>`) repurposes the top form into edit mode (banner `checklist-editing-banner`, Save + Cancel), editing title / recurrence / days-of-week / day-of-month; preserves the item's active/paused state. Editable by owner or admin (form now shows for admin editing another member's item).
+- Verified: backend curl (todo title/due/notes; checklist title/recurrence/dows) + testing_agent iter60 100% (edit save, cancel discard, recurrence switch, add/toggle/pause/delete regressions).
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked
