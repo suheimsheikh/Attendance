@@ -237,11 +237,11 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
             <thead className="sticky top-0 z-30 bg-slate-50">
               <tr>
                 <th className="py-1.5 px-1 text-center sticky left-0 z-40 bg-slate-50 w-7 min-w-[28px] max-w-[28px] border-b border-slate-200 font-semibold text-slate-500 text-[10px] uppercase tracking-wider">#</th>
-                <th className="py-1.5 px-2 text-left sticky left-[28px] z-40 bg-slate-50 w-[160px] min-w-[160px] max-w-[160px] border-b border-slate-200 font-semibold text-slate-700">Member</th>
+                <th className="py-1.5 px-2 text-left sticky left-[28px] z-40 bg-slate-50 w-[132px] min-w-[132px] max-w-[132px] border-b border-slate-200 font-semibold text-slate-700">Member</th>
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso}
-                    className={`text-center h-6 w-7 border-b border-r border-slate-200 tabular-nums font-bold ${h.isWeekend ? "bg-slate-100 text-slate-400" : "bg-slate-50 text-slate-700"} ${h.isToday ? "!bg-sky-100 !text-sky-800" : ""}`}
+                    className={`text-center h-6 w-6 border-b border-r border-slate-200 tabular-nums font-bold ${h.isWeekend ? "bg-slate-100 text-slate-400" : "bg-slate-50 text-slate-700"} ${h.isToday ? "!bg-sky-100 !text-sky-800" : ""}`}
                     title={`${h.dow} · ${h.iso}`}
                     data-testid={`cal-header-${h.iso}`}
                   >
@@ -262,7 +262,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
               </tr>
               <tr>
                 <th className="py-0.5 sticky left-0 z-40 bg-slate-50 w-7 min-w-[28px] max-w-[28px] border-b border-slate-200"></th>
-                <th className="py-0.5 px-2 sticky left-[28px] z-40 bg-slate-50 w-[160px] min-w-[160px] max-w-[160px] text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">Name / Rank</th>
+                <th className="py-0.5 px-2 sticky left-[28px] z-40 bg-slate-50 w-[132px] min-w-[132px] max-w-[132px] text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">Name / Rank</th>
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso + "-dow"}
@@ -372,7 +372,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                       >{i + 1}</td>
                       <td
                         rowSpan={isDouble ? 2 : 1}
-                        className={`py-1 px-2 font-semibold text-slate-800 sticky left-[28px] z-20 w-[160px] min-w-[160px] max-w-[160px] ${rowBg} group-hover:bg-sky-50 border-b border-slate-100 cursor-pointer select-none`}
+                        className={`py-1 px-2 font-semibold text-slate-800 sticky left-[28px] z-20 w-[132px] min-w-[132px] max-w-[132px] ${rowBg} group-hover:bg-sky-50 border-b border-slate-100 cursor-pointer select-none`}
                         onDoubleClick={() => setEditingMemberId(r.member_id)}
                         title="Double-click to edit member"
                         data-testid={`calendar-name-${r.member_id}`}

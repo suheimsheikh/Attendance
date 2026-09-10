@@ -45,7 +45,7 @@ export const CELL_STYLE = {
  * the whole 31-day grid stays fast when hovering across 100 rows. */
 export function GridCell({ code, dow, onClick, meta, iso, rowSpan }) {
   if (!code) {
-    return <td rowSpan={rowSpan} className="border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-7">·</td>;
+    return <td rowSpan={rowSpan} className="border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-6">·</td>;
   }
   const s = CELL_STYLE[code] || CELL_STYLE.AB;
   const clickable = !!onClick;
@@ -53,7 +53,7 @@ export function GridCell({ code, dow, onClick, meta, iso, rowSpan }) {
   return (
     <td
       rowSpan={rowSpan}
-      className={`border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-7 leading-none ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
+      className={`border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-6 leading-none ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
       title={title}
       onClick={onClick}
     >

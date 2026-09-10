@@ -1489,6 +1489,17 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
             raise HTTPException(status_code=401, detail="Invalid key")
         from holidays import compute_balance_summary
         yr = local_date_str(await db.config.find_one({"id": "office"}))[:4]
+        # YTD Loss-of-Pay days per member (sum of lop_days on approved
+        # leaves this year) so payroll can deduct LOP without reading the
+        # grid. NEW field — existing balances shape is untouched.
+        lop_rows = await db.leaves.aggregate([
+            {"$match": {"status": "approved",
+                        "start_date": {"$lte": f"{yr}-12-31"},
+                        "end_date": {"$gte": f"{yr}-01-01"},
+                        "lop_days": {"$gt": 0}}},
+            {"$group": {"_id": "$user_id", "lop": {"$sum": "$lop_days"}}},
+        ]).to_list(5000)
+        lop_map = {r["_id"]: round(float(r["lop"] or 0), 1) for r in lop_rows}
         roster = await db.users.find({}, {"_id": 0}).to_list(5000)
         roster = _payroll_bucket(roster, category or "rest")
         out_rows = []
@@ -1502,6 +1513,7 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
                     "leave": s["paid_leave"]["available"],
                     "comp_off": s["comp_off"]["available"],
                 },
+                "lop_ytd_days": lop_map.get(u.get("id"), 0.0),
             })
         out_rows.sort(key=lambda r: (r["member_name"] or "").lower())
         return {"rows": out_rows}

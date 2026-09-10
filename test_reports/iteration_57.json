@@ -1,0 +1,40 @@
+{
+  "summary": "Frontend-only verification of Calendar Grid on-screen fit (item C). Logged in as admin, opened /admin/reports?tab=grid, ran the grid for September 2026 (49 Staff & Coaches loaded). Measured the horizontal scroll container at desktop widths 1920 and 1536, verified grid structural integrity (day headers, sticky Member col, right-sticky totals strip), verified Campus Administrator DAR ✗1 cell renders, and re-tested regression double-click behaviors on P-total and DAR-miss cells.",
+  "primary_measurements": {
+    "viewport_1920": {"scrollWidth": 1598, "clientWidth": 1598, "hasHorizontalScroll": false, "tableWidth": 1158},
+    "viewport_1536": {"scrollWidth": 1214, "clientWidth": 1214, "hasHorizontalScroll": false, "tableWidth": 1158},
+    "day_cell_width_px": 24,
+    "day_cell_2letter_readability": "P, WO, LV, TR, LT, AB all fit inside 24px cells without clipping (verified in screenshots)",
+    "conclusion": "No horizontal scrolling at either 1920 or 1536 viewport widths. Grid fits fully on screen."
+  },
+  "grid_integrity": {
+    "day_headers_visible": "01..30 (all 30 September days present as column headers)",
+    "sticky_left_member_col": "Present at 132px wide, member names visible (AINUL HAQUE, AJAY, Campus Administrator, etc.)",
+    "right_sticky_totals_order": "DAR, P, AB, LV, TR, OT h, EO, LT — all 8 columns visible in correct order with correct alignment; no overlap or clipping observed",
+    "campus_administrator_dar_cell": "Row 6 Campus Administrator (member e6e43926-d069-4bb7-95fa-26b3272735d3) — cal-total-dar-<id> testid found and text content is '✗1' (red). Category filter 'Staff & Coaches' (default) already includes this admin row, so no filter change was required.",
+    "total_columns_thCount": 80
+  },
+  "regression_tests": {
+    "dblclick_P_total_cell": "PASS — Double-click on cal-total-p-<memberId> opens the 'Attendance ledger — <Member>' modal with date-wise ledger rows.",
+    "dblclick_DAR_missed_cell": "PASS — Double-click on cal-total-dar-e6e43926-... (text '✗1') navigates to /admin/dar?tab=missed&member=e6e43926-d069-4bb7-95fa-26b3272735d3&month=2026-09 and the Missed tab loads showing Campus Administrator with 1 miss on 09.",
+    "day_cell_readability": "PASS — 2-letter codes (P, WO, LV, TR, LT, AB) render inside the narrower 24px day columns without truncation."
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Grid resize achieves the goal: at 1920 the overflow-auto container has scrollWidth=clientWidth=1598 (comfortable ~440px slack over the 1158px table) and at 1536 both = 1214. No further narrowing needed for desktop. If mobile/tablet fit becomes a requirement it will re-introduce scroll, but that is out of scope for this iteration."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (out of scope)", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (admin email toggle on /login)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Calendar grid at /admin/reports?tab=grid; container widened to max-w-none; day columns are w-6 (24px); Member sticky col 132px. Login flow: click 'Admin sign in with email' toggle (data-testid=toggle-admin-login) then fill login-email-input / login-password-input and click login-submit-button. Key testids: calendar-grid-run, cal-total-p-<memberId>, cal-total-dar-<memberId>, cal-total-{ab,lv,tr,ot,eo,lt}-<memberId>, calendar-row-<memberId>, calendar-name-<memberId>."
+}

@@ -81,7 +81,7 @@ export default function Reports() {
   }, []);
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 max-w-none mx-auto">
       <header className="mb-6">
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">The Grid</h1>
         <p className="text-slate-500 text-sm mt-1">Calendar view, attendance summaries and daily leave/tour lists — all in one place.</p>
