@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, LineChart as LineIcon, Search, X, ShoppingCart, Utensils } from "lucide-react";
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine } from "recharts";
 import { api, showApiError } from "../../api";
 import { fmtQty } from "../../utils";
 
@@ -63,9 +63,9 @@ export default function MealCompareTab() {
     const map = Object.fromEntries((data.days || []).map((d) => [d.date, d]));
     return eachDay(from, to).map((dd) => {
       const r = map[dd] || {};
-      return { date: shortDate(dd),
-        Purchases: metric === "qty" ? (r.purch_qty || 0) : (r.purch_amt || 0),
-        Issues: metric === "qty" ? (r.issue_qty || 0) : (r.issue_amt || 0) };
+      const p = metric === "qty" ? (r.purch_qty || 0) : (r.purch_amt || 0);
+      const i = metric === "qty" ? (r.issue_qty || 0) : (r.issue_amt || 0);
+      return { date: shortDate(dd), Purchases: p, Issues: i, Net: Math.round((p - i) * 100) / 100 };
     });
   }, [data, from, to, metric]);
 
@@ -126,7 +126,7 @@ export default function MealCompareTab() {
         </div>
 
         {totals && (
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="grid grid-cols-3 gap-2 mb-3">
             <div className="rounded-xl bg-blue-50 ring-1 ring-blue-100 px-3 py-2" data-testid="compare-total-purchases">
               <p className="text-[10px] uppercase font-bold text-blue-700 flex items-center gap-1"><ShoppingCart size={11} /> Purchased</p>
               <p className="text-sm font-extrabold text-blue-900 tabular-nums">{metric === "qty" ? `${fmtQty(totals.purch_qty)} units` : `₹${inr(totals.purch_amt)}`}</p>
@@ -135,6 +135,17 @@ export default function MealCompareTab() {
               <p className="text-[10px] uppercase font-bold text-orange-700 flex items-center gap-1"><Utensils size={11} /> Issued</p>
               <p className="text-sm font-extrabold text-orange-900 tabular-nums">{metric === "qty" ? `${fmtQty(totals.issue_qty)} units` : `₹${inr(totals.issue_amt)}`}</p>
             </div>
+            {(() => {
+              const nq = totals.purch_qty - totals.issue_qty, na = totals.purch_amt - totals.issue_amt;
+              const v = metric === "qty" ? nq : na;
+              const pos = v >= 0;
+              return (
+                <div className={`rounded-xl px-3 py-2 ring-1 ${pos ? "bg-emerald-50 ring-emerald-100" : "bg-rose-50 ring-rose-100"}`} data-testid="compare-total-net">
+                  <p className={`text-[10px] uppercase font-bold flex items-center gap-1 ${pos ? "text-emerald-700" : "text-rose-700"}`}>Net (buy − issue)</p>
+                  <p className={`text-sm font-extrabold tabular-nums ${pos ? "text-emerald-900" : "text-rose-900"}`}>{metric === "qty" ? `${pos ? "+" : ""}${fmtQty(v)} units` : `${pos ? "+" : "−"}₹${inr(Math.abs(na))}`}</p>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -150,8 +161,10 @@ export default function MealCompareTab() {
               <YAxis tick={{ fontSize: 10 }} width={48} />
               <Tooltip formatter={(v, n) => [fmtVal(v), n]} />
               <Legend />
+              <ReferenceLine y={0} stroke="#cbd5e1" />
               <Line type="monotone" dataKey="Purchases" stroke="#2563EB" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="Issues" stroke="#F97316" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="Net" stroke="#059669" strokeWidth={2} strokeDasharray="5 4" dot={false} />
             </LineChart>
           </ResponsiveContainer>
         )}

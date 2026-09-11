@@ -247,7 +247,7 @@ function AddItemForm({ catKey, units, onDone, onCancel }) {
 // Unit(w-14) Opening(w-24) Min(w-20) Norm(w-20) Purch(w-32) Issue(w-32) Close(w-32).
 const COL_GRID = "grid grid-cols-[2.75rem_5rem_3.5rem_3.5rem_7rem_7rem_7rem] gap-x-3 shrink-0";
 
-function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMoveUp, onMoveDown, canMoveUp, canMoveDown, dnd }) {
+function ItemRow({ item, stock, cats, subcats = [], isAdmin, onPatch, onDelete, onOpen, onMoveUp, onMoveDown, canMoveUp, canMoveDown, dnd }) {
   const [renaming, setRenaming] = useState(false);
   const [editingNutrition, setEditingNutrition] = useState(false);
   const inactive = item.active === false;
@@ -307,6 +307,18 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMove
                 <option key={c.key} value={c.key}>{c.label}</option>
               ))}
             </select>
+            {subcats.length > 0 && (
+              <select
+                value={item.subcategory_key || ""}
+                onChange={(e) => onPatch(item.id, { subcategory_key: e.target.value })}
+                className="iu-input !h-6 !w-auto !py-0 !px-1 text-[11px]"
+                title="Assign to a sub-category"
+                data-testid={`masters-item-subcat-${item.id}`}
+              >
+                <option value="">No sub-group</option>
+                {subcats.map((s) => <option key={s.key} value={s.key}>{s.name}</option>)}
+              </select>
+            )}
             <button onClick={() => setRenaming(true)} className="p-1 rounded hover:bg-white text-slate-500" title="Rename" data-testid={`masters-item-rename-btn-${item.id}`}><Pencil size={12}/></button>
             <button
               onClick={() => setEditingNutrition(true)}
@@ -534,6 +546,25 @@ export default function MealMastersTab({ liveSig }) {
   const isAdmin = user?.role === "admin";
   const [cats, setCats] = useState([]);
   const [items, setItems] = useState([]);
+  const [subcats, setSubcats] = useState([]);
+  const [addingSubCat, setAddingSubCat] = useState(null);
+  const [newSubName, setNewSubName] = useState("");
+  const subcatsByCat = React.useMemo(() => {
+    const m = new Map();
+    (subcats || []).forEach((s) => { if (!m.has(s.category_key)) m.set(s.category_key, []); m.get(s.category_key).push(s); });
+    return m;
+  }, [subcats]);
+  const addSubcat = async (category_key) => {
+    const name = newSubName.trim();
+    if (!name) return;
+    try { await api.post("/meals/subcategories", { category_key, name }); setNewSubName(""); setAddingSubCat(null); await load(); }
+    catch (err) { showApiError(err, "Couldn't add sub-category"); }
+  };
+  const deleteSubcat = async (s) => {
+    if (!window.confirm(`Delete sub-category "${s.name}"? Items in it move to Ungrouped.`)) return;
+    try { await api.del(`/meals/subcategories/${s.id}`); await load(); }
+    catch (err) { showApiError(err, "Couldn't delete"); }
+  };
   const [units, setUnits] = useState(["kg", "g", "L", "mL", "pcs", "dozen", "packet"]);
   const [stockMap, setStockMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -550,15 +581,17 @@ export default function MealMastersTab({ liveSig }) {
 
   const load = async (asOfVal = asOf) => {
     try {
-      const [c, i, s, rs] = await Promise.all([
+      const [c, i, s, rs, sc] = await Promise.all([
         api.get("/meals/purchase-categories"),
         api.get("/meals/items?include_inactive=true"),
         api.get(`/meals/stock${asOfVal ? `?as_of=${asOfVal}` : ""}`),
         api.get("/meals/reorder-suggestions"),
+        api.get("/meals/subcategories"),
       ]);
       setShop(rs);
       setCats(c.categories || []);
       setItems(i.items || []);
+      setSubcats(sc.subcategories || []);
       if (i.units?.length) setUnits(i.units);
       const m = {};
       (s.rows || []).forEach((r) => { m[r.item_id] = r; });
@@ -998,29 +1031,72 @@ export default function MealMastersTab({ liveSig }) {
                   {catItems.length === 0 && addingItemCat !== cat.key && (
                     <p className="ml-8 py-1 text-xs text-slate-400 italic">No items yet.</p>
                   )}
-                  {catItems.map((it, itIdx) => (
-                    <ItemRow
-                      key={it.id}
-                      item={it}
-                      stock={stockMap[it.id]}
-                      cats={cats}
-                      isAdmin={isAdmin}
-                      onPatch={patchItem}
-                      onDelete={deleteItem}
-                      onOpen={(id) => setDetail({ type: "item", id })}
-                      onMoveUp={() => moveItem(it, "up")}
-                      onMoveDown={() => moveItem(it, "down")}
-                      canMoveUp={itIdx > 0}
-                      canMoveDown={itIdx < catItems.length - 1}
-                      dnd={{
-                        over: drag?.overId === it.id && drag?.catKey === cat.key && drag?.itemId !== it.id,
-                        onDragStart: () => setDrag({ catKey: cat.key, itemId: it.id }),
-                        onDragOver: (e) => { e.preventDefault(); if (drag && drag.catKey === cat.key) setDrag({ ...drag, overId: it.id }); },
-                        onDrop: (e) => { e.preventDefault(); dropOn(cat.key, it.id); },
-                        onDragEnd: () => setDrag(null),
-                      }}
-                    />
-                  ))}
+                  {(() => {
+                    const catSubs = subcatsByCat.get(cat.key) || [];
+                    const idxOf = (id) => catItems.findIndex((x) => x.id === id);
+                    const renderRow = (it) => {
+                      const itIdx = idxOf(it.id);
+                      return (
+                        <ItemRow
+                          key={it.id}
+                          item={it}
+                          stock={stockMap[it.id]}
+                          cats={cats}
+                          subcats={catSubs}
+                          isAdmin={isAdmin}
+                          onPatch={patchItem}
+                          onDelete={deleteItem}
+                          onOpen={(id) => setDetail({ type: "item", id })}
+                          onMoveUp={() => moveItem(it, "up")}
+                          onMoveDown={() => moveItem(it, "down")}
+                          canMoveUp={itIdx > 0}
+                          canMoveDown={itIdx < catItems.length - 1}
+                          dnd={{
+                            over: drag?.overId === it.id && drag?.catKey === cat.key && drag?.itemId !== it.id,
+                            onDragStart: () => setDrag({ catKey: cat.key, itemId: it.id }),
+                            onDragOver: (e) => { e.preventDefault(); if (drag && drag.catKey === cat.key) setDrag({ ...drag, overId: it.id }); },
+                            onDrop: (e) => { e.preventDefault(); dropOn(cat.key, it.id); },
+                            onDragEnd: () => setDrag(null),
+                          }}
+                        />
+                      );
+                    };
+                    if (catSubs.length === 0) return catItems.map(renderRow);
+                    const groups = catSubs.map((s) => ({ s, list: catItems.filter((it) => it.subcategory_key === s.key) }));
+                    const grouped = new Set(catSubs.map((s) => s.key));
+                    const ungrouped = catItems.filter((it) => !it.subcategory_key || !grouped.has(it.subcategory_key));
+                    return (
+                      <>
+                        {groups.map(({ s, list }) => (
+                          <div key={s.id} data-testid={`masters-subcat-${cat.key}-${s.key}`}>
+                            <div className="flex items-center gap-2 ml-6 mt-1 mb-0.5">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700">{s.name}</span>
+                              <span className="text-[9px] font-bold text-slate-400">{list.length}</span>
+                              {isAdmin && <button onClick={() => deleteSubcat(s)} className="text-slate-300 hover:text-rose-600" title="Delete sub-category" data-testid={`masters-subcat-del-${s.id}`}><Trash2 size={11} /></button>}
+                            </div>
+                            {list.length === 0 ? <p className="ml-8 py-0.5 text-[11px] text-slate-300 italic">empty</p> : list.map(renderRow)}
+                          </div>
+                        ))}
+                        {ungrouped.length > 0 && (
+                          <div>
+                            <div className="ml-6 mt-1 mb-0.5 text-[10px] font-black uppercase tracking-wider text-slate-400">Ungrouped</div>
+                            {ungrouped.map(renderRow)}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                  {isAdmin && (
+                    addingSubCat === cat.key ? (
+                      <div className="flex items-center gap-1 ml-6 mt-1.5">
+                        <input autoFocus value={newSubName} onChange={(e) => setNewSubName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addSubcat(cat.key); if (e.key === "Escape") { setAddingSubCat(null); setNewSubName(""); } }} placeholder="Sub-category name…" className="iu-input !h-7 !w-44 text-xs" data-testid={`masters-subcat-input-${cat.key}`} />
+                        <button onClick={() => addSubcat(cat.key)} className="iu-btn-primary !h-7 !px-2 text-xs" data-testid={`masters-subcat-save-${cat.key}`}>Add</button>
+                        <button onClick={() => { setAddingSubCat(null); setNewSubName(""); }} className="iu-btn-secondary !h-7 !px-2 text-xs">Cancel</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setAddingSubCat(cat.key); setNewSubName(""); }} className="ml-6 mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:underline" data-testid={`masters-subcat-add-${cat.key}`}><Plus size={12} /> Add sub-category</button>
+                    )
+                  )}
                   {addingItemCat === cat.key && (
                     <AddItemForm
                       catKey={cat.key}

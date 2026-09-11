@@ -164,6 +164,7 @@ class ItemIn(BaseModel):
     min_stock: float = 0.0                      # low-stock alert level; 0 = off
     norm_per_serving: float = 0.0               # expected qty per meal serving; 0 = untracked
     sort_order: int = 100
+    subcategory_key: Optional[str] = None       # optional grouping within a category
     # Optional per-item nutrition override (per 100 g):
     #   {kcal, protein_g, carbs_g, fat_g, fibre_g, grams_per_unit}
     # Any/all keys may be omitted. Falls back to the built-in
@@ -181,6 +182,7 @@ class ItemPatch(BaseModel):
     min_stock: Optional[float] = None
     norm_per_serving: Optional[float] = None
     sort_order: Optional[int] = None
+    subcategory_key: Optional[str] = None       # "" or null clears the grouping
     active: Optional[bool] = None
     nutrition: Optional[dict] = None
 
@@ -190,6 +192,18 @@ class ItemsReorderIn(BaseModel):
     of items within one category from the Masters tree."""
     category_key: str
     item_ids: List[str]
+
+
+class SubcatIn(BaseModel):
+    category_key: str = Field(..., min_length=1, max_length=60)
+    name: str = Field(..., min_length=1, max_length=60)
+
+
+class SubcatPatch(BaseModel):
+    name: Optional[str] = None
+    order: Optional[int] = None
+    active: Optional[bool] = None
+
 
 
 class IssuesUpsertIn(BaseModel):
@@ -2047,6 +2061,76 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             .to_list(500)
         return {"items": rows, "units": list(VALID_UNITS)}
 
+    # ── Sub-categories (optional grouping of items within a category) ──
+    def _subcat_slug(s: str) -> str:
+        import re
+        return re.sub(r"[^a-z0-9]+", "-", (s or "").strip().lower()).strip("-") or "grp"
+
+    @router.get("/meals/subcategories")
+    async def list_subcategories(category_key: Optional[str] = Query(None),
+                                 user: dict = Depends(require_chef_or_admin)):
+        q: dict = {"active": {"$ne": False}}
+        if category_key:
+            q["category_key"] = category_key
+        rows = await db.meal_subcategories.find(q, {"_id": 0}) \
+            .sort([("category_key", 1), ("order", 1), ("name", 1)]).to_list(1000)
+        return {"subcategories": rows}
+
+    @router.post("/meals/subcategories")
+    async def create_subcategory(body: SubcatIn, user: dict = Depends(require_chef_or_admin)):
+        cats = await _purchase_categories()
+        if body.category_key not in {c["key"] for c in cats}:
+            raise HTTPException(status_code=400, detail=f"Unknown category '{body.category_key}'")
+        name = body.name.strip()
+        key = _subcat_slug(name)
+        existing = await db.meal_subcategories.find_one(
+            {"category_key": body.category_key, "key": key}, {"_id": 0})
+        if existing:
+            if existing.get("active") is False:
+                await db.meal_subcategories.update_one(
+                    {"id": existing["id"]}, {"$set": {"active": True, "name": name}})
+                existing.update({"active": True, "name": name})
+                await _signal_meals("items")
+                return existing
+            raise HTTPException(status_code=409, detail=f"Sub-category '{name}' already exists here")
+        n = await db.meal_subcategories.count_documents({"category_key": body.category_key})
+        doc = {"id": str(uuid.uuid4()), "category_key": body.category_key, "key": key,
+               "name": name, "order": n, "active": True, "created_at": now_utc().isoformat()}
+        await db.meal_subcategories.insert_one(dict(doc))
+        await _signal_meals("items")
+        return doc
+
+    @router.patch("/meals/subcategories/{sid}")
+    async def patch_subcategory(sid: str, body: SubcatPatch, user: dict = Depends(require_chef_or_admin)):
+        row = await db.meal_subcategories.find_one({"id": sid}, {"_id": 0})
+        if not row:
+            raise HTTPException(status_code=404, detail="Sub-category not found")
+        upd: dict = {}
+        if body.name is not None:
+            upd["name"] = body.name.strip()
+        if body.order is not None:
+            upd["order"] = int(body.order)
+        if body.active is not None:
+            upd["active"] = bool(body.active)
+        if upd:
+            await db.meal_subcategories.update_one({"id": sid}, {"$set": upd})
+            row.update(upd)
+            await _signal_meals("items")
+        return row
+
+    @router.delete("/meals/subcategories/{sid}")
+    async def delete_subcategory(sid: str, user: dict = Depends(require_chef_or_admin)):
+        row = await db.meal_subcategories.find_one({"id": sid}, {"_id": 0})
+        if not row:
+            return {"ok": True, "already_deleted": True}
+        await db.meal_subcategories.update_one({"id": sid}, {"$set": {"active": False}})
+        # Detach items so they fall back to "Ungrouped" rather than dangling.
+        await db.meal_items.update_many(
+            {"category_key": row["category_key"], "subcategory_key": row["key"]},
+            {"$set": {"subcategory_key": None}})
+        await _signal_meals("items")
+        return {"ok": True}
+
     @router.post("/meals/items")
     async def create_item(body: ItemIn, user: dict = Depends(require_chef_or_admin)):
         _valid_unit(body.unit)
@@ -2089,6 +2173,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "min_stock": round(float(body.min_stock or 0), 4),
             "norm_per_serving": round(float(body.norm_per_serving or 0), 4),
             "sort_order": int(body.sort_order),
+            "subcategory_key": (body.subcategory_key or None),
             "active": True,
             "created_at": now_utc().isoformat(),
             "created_by": user.get("id"),
@@ -2148,6 +2233,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             update["norm_per_serving"] = round(float(body.norm_per_serving), 4)
         if body.sort_order is not None:
             update["sort_order"] = int(body.sort_order)
+        if body.subcategory_key is not None:
+            update["subcategory_key"] = body.subcategory_key or None
         if body.active is not None:
             update["active"] = bool(body.active)
         if update:

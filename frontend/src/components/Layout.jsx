@@ -5,7 +5,7 @@ import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, Building2, IdCard, Sailboat,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, Utensils, PieChart, CalendarRange, FileText, ListTodo, ScrollText
+  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, Utensils, PieChart, CalendarRange, FileText, ListTodo, ScrollText, LineChart
 } from "lucide-react";
 import RulesGate from "./RulesGate";
 import Avatar from "./Avatar";
@@ -63,6 +63,7 @@ const NAV_COACH_KITCHEN = [
   { to: "/admin/meals-calendar", label: "Consumption", icon: CalendarRange, hint: "Daily headcount log — Breakfast / Midmorning / Lunch / Afternoon Snack / Dinner totals per day" },
   { to: "/admin/meals-report", label: "Purchases & Issues", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, consumption, wastage and stock" },
   { to: "/admin/meals-report?tab=analytics", label: "Kitchen Analytics", icon: PieChart, hint: "Purchase & consumption graphics — trends, top items, category share" },
+  { to: "/admin/meals-report?tab=compare", label: "Compare Items", icon: LineChart, hint: "Compare purchases vs issues for any items over time" },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
 ];
 
@@ -97,6 +98,7 @@ const NAV_KITCHEN = [
   { to: "/admin/meals-calendar", label: "Consumption", icon: CalendarRange, hint: "Daily headcount log — Breakfast / Midmorning / Lunch / Afternoon Snack / Dinner totals per day" },
   { to: "/admin/meals-report", label: "Purchases & Issues", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, consumption, wastage and stock" },
   { to: "/admin/meals-report?tab=analytics", label: "Kitchen Analytics", icon: PieChart, hint: "Purchase & consumption graphics — trends, top items, category share" },
+  { to: "/admin/meals-report?tab=compare", label: "Compare Items", icon: LineChart, hint: "Compare purchases vs issues for any items over time" },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
 ];
 

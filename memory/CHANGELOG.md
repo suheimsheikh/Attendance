@@ -4,6 +4,16 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
 
+## 11 Jun 2026 (pt.6) — Net-movement line, sub-categories, deploy migration
+
+- **Compare tab — Net line**: added a third line **Net (purchased − issued)** (green dashed, with a zero reference line) and a Net total card that flips sign/colour; works in both Quantity and ₹ modes.
+- **Sub-categories under any category**: new `meal_subcategories` collection + `subcategory_key` on items. CRUD at `/meals/subcategories` (GET/POST/PATCH/DELETE); deleting a sub-category detaches its items to "Ungrouped". Stock Master now lets admins add sub-categories, assign items via a per-row dropdown, and shows items grouped under sub-headers.
+- **Deploy migration** `backend/scripts/subcategories_seed.py`: `export` dumps the current setup to `backend/data/subcategories_seed.json`; `seed` idempotently applies it to any database (matches by category + name, assigns only unassigned items) — so the preview setup carries to production on deploy.
+- **Compare Items** also added as a direct sidebar shortcut.
+- Tested: iteration 69 (100%). NOTE: Daily-entry item grouping by sub-category is NOT yet done (Stock Master only) — deferred to keep the entry screen stable.
+
+---
+
 ## 11 Jun 2026 (pt.5) — Analytics 'All' fix, Compare-items chart, issues-vs-consumption labelling
 
 - **Bugfix**: Kitchen Analytics 'All' preset threw "Range too large (max ~13 months)". `clampAllStart()` now caps the All window to the last 365 days (safe for both analytics endpoints).
