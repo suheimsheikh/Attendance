@@ -1,0 +1,43 @@
+{
+  "summary": "Frontend-only verification of two new Task Manager features: Task Comments (notes/blockers with author-delete + persistent count badge) and Weekly Heat-strip (7-day cells with due/overdue counts, urgent flame, active-ring, day-click to change date, scope-aware header). All requested behaviors pass. Regression checks (urgent pill, added-date, checklist rows, date bar prev/next/today, delete) also pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "TodoComments.jsx data-testids for kind toggle, input and send button include the todo id suffix (comment-kind-note-<id>, comment-input-<id>, comment-send-<id>) whereas the review request lists the shorter forms (comment-kind-note, comment-input, comment-send). Both point to the same elements; only nomenclature. Consider aligning docs or adding aliased attrs to keep the review contract exact.",
+    "load() inside TodoComments always triggers onCountChange with the fetched length; this is called on every open which causes an extra network round-trip and a re-render of the parent list on each expansion. Acceptable but could be memoised.",
+    "delete confirmation for comments is silent (no window.confirm); an accidental click permanently deletes. Consider a confirm or an undo toast."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "exec.test@example.com / Exec@12345 — login worked. Admin creds admin@attendance.app / Admin@12345 available.",
+  "seed_data_creation": "Created and cleaned up one to-do 'TEST_HeatToday_Urgent' (due today, urgent) plus 2 comments (note + blocker); both comments and the to-do deleted at end of run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Playwright login flow requires clicking [data-testid=toggle-admin-login] to reveal the email/password form (login-email-input, login-password-input, login-submit-button). Server today = 2026-09-11 confirmed via date label. Heat-strip active cell carries class 'ring-2 ring-indigo-500'.",
+  "verifications": {
+    "heatstrip_present": true,
+    "heat_day_cells_count": 7,
+    "today_cell_count_increments_after_add": "before empty -> after '1'",
+    "flame_on_urgent_today": true,
+    "header_everyone_scope": true,
+    "header_mine_scope": true,
+    "click_day_updates_date_label": "heat-day-2026-09-12 clicked -> label became 'Sat, 12 Sept 2026'",
+    "checklist_rows_no_comments_btn": true,
+    "note_added_count_1_and_grey_badge": true,
+    "blocker_added_count_2_and_red_badge": true,
+    "author_can_delete_own_comment_count_decrements": true,
+    "count_persists_on_collapse": true,
+    "count_persists_on_reload": true,
+    "urgent_pill_visible": true,
+    "added_date_visible": true,
+    "date_bar_prev_next_work": true,
+    "cleanup_success": true
+  }
+}

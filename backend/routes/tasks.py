@@ -10,13 +10,25 @@ from __future__ import annotations
 
 import calendar
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from services.time_utils import local_date_str, now_utc
+from services.time_utils import local_date_str, now_utc, office_tz
+
+
+def _local_day_utc_window(office: dict, iso: str) -> tuple[str, str]:
+    """UTC ISO bounds [start, end) for the office-local calendar day `iso`.
+    Used to match UTC `done_at` timestamps to a local date without the
+    string-prefix bug (early-morning completions in +TZ offsets)."""
+    tz = office_tz(office)
+    day = date.fromisoformat(iso)
+    start_local = datetime.combine(day, time.min, tzinfo=tz)
+    end_local = start_local + timedelta(days=1)
+    return (start_local.astimezone(timezone.utc).isoformat(),
+            end_local.astimezone(timezone.utc).isoformat())
 
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 RECURRENCES = {"daily", "dow", "monthly"}
@@ -51,6 +63,11 @@ class ChecklistIn(BaseModel):
 class TickIn(BaseModel):
     date: Optional[str] = None
     done: bool = True
+
+
+class CommentIn(BaseModel):
+    text: str
+    kind: str = "note"  # "note" | "blocker"
 
 
 def _valid_date(s: Optional[str], field: str) -> Optional[str]:
@@ -114,7 +131,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
         return {k: t.get(k) for k in (
             "id", "title", "notes", "owner_id", "owner_name", "created_by_id", "created_by_name",
             "due_date", "status", "urgent", "done_at", "done_by_name", "created_at", "updated_at",
-            "source", "checklist_id", "recurrence")}
+            "source", "checklist_id", "recurrence", "comment_count")}
 
     def _pack_cl(c: dict) -> dict:
         return {k: c.get(k) for k in (
@@ -131,8 +148,11 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
         todos_open = await db.todos.find({"owner_id": user["id"], "status": "open"}, {"_id": 0}).sort("due_date", 1).to_list(500)
         due = [_pack_todo(t) for t in todos_open if t.get("due_date") and t["due_date"] <= iso]
         upcoming = [_pack_todo(t) for t in todos_open if not t.get("due_date") or t["due_date"] > iso]
+        # Urgent-first so a long upcoming list never hides urgent items when sliced.
+        upcoming.sort(key=lambda t: (not t.get("urgent"),))
+        done_start, done_end = _local_day_utc_window(office, iso)
         done_today = await db.todos.find(
-            {"owner_id": user["id"], "status": "done", "done_at": {"$regex": f"^{iso}"}}, {"_id": 0}).to_list(200)
+            {"owner_id": user["id"], "status": "done", "done_at": {"$gte": done_start, "$lt": done_end}}, {"_id": 0}).to_list(200)
         pending = sum(1 for c in checklist if not c["done"]) + len(due)
         return {
             "date": iso, "enabled": True,
@@ -200,24 +220,30 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
             }
 
         out = []
+        if not owners:
+            return out
+        owner_ids = [o["id"] for o in owners]
+        days = [iso] + ([yday] if carry else [])
+        # Batch fetch checklists + ticks for all owners in one round-trip each.
+        items_by_owner: dict = {}
+        async for c in db.checklists.find(
+                {"owner_id": {"$in": owner_ids}, "active": {"$ne": False}}, {"_id": 0}):
+            items_by_owner.setdefault(c["owner_id"], []).append(c)
+        ticks_by: dict = {}  # (owner_id, date) -> set of checklist_ids
+        async for t in db.checklist_ticks.find(
+                {"owner_id": {"$in": owner_ids}, "date": {"$in": days}},
+                {"_id": 0, "owner_id": 1, "checklist_id": 1, "date": 1}):
+            ticks_by.setdefault((t["owner_id"], t["date"]), set()).add(t["checklist_id"])
         for o in owners:
             wo = (o.get("weekly_off") or default_wo).lower()
-            items = await db.checklists.find({"owner_id": o["id"], "active": {"$ne": False}}, {"_id": 0}).to_list(500)
-            if not items:
-                continue
-            dates = [iso] + ([yday] if carry else [])
-            ticks_by_day = {}
-            for day in dates:
-                ticks_by_day[day] = {t["checklist_id"] async for t in db.checklist_ticks.find(
-                    {"owner_id": o["id"], "date": day}, {"_id": 0, "checklist_id": 1})}
-            for c in items:
+            for c in items_by_owner.get(o["id"], []):
                 if checklist_applies(c, iso, wo):
-                    done = c["id"] in ticks_by_day[iso]
+                    done = c["id"] in ticks_by.get((o["id"], iso), set())
                     st = "done" if done else "open"
                     if not (status in ("open", "done") and status != st):
                         out.append(_row(c, o, iso, st, False))
                 # Yesterday's missed (applied yesterday, still not ticked)
-                if carry and checklist_applies(c, yday, wo) and c["id"] not in ticks_by_day[yday]:
+                if carry and checklist_applies(c, yday, wo) and c["id"] not in ticks_by.get((o["id"], yday), set()):
                     out.append(_row(c, o, yday, "open", True))
         return out
 
@@ -239,6 +265,17 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
             date_or.append({"due_date": {"$lt": iso, "$ne": None}, "status": "open"})
         q["$or"] = date_or
         rows = await db.todos.find(q, {"_id": 0}).sort([("status", 1), ("due_date", 1), ("created_at", -1)]).to_list(2000)
+        # Attach comment counts in a single aggregate (avoids N+1).
+        ids = [t["id"] for t in rows]
+        counts: dict = {}
+        if ids:
+            async for g in db.todo_comments.aggregate([
+                {"$match": {"todo_id": {"$in": ids}}},
+                {"$group": {"_id": "$todo_id", "n": {"$sum": 1}}},
+            ]):
+                counts[g["_id"]] = g["n"]
+        for t in rows:
+            t["comment_count"] = counts.get(t["id"], 0)
         packed = [_pack_todo(t) for t in rows]
         packed += await _checklist_todos(user, scope, status, iso, server_today)
         return {"rows": packed, "today": server_today, "view_date": iso}
@@ -246,9 +283,9 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     async def _owner(owner_id: Optional[str], user: dict) -> dict:
         if not owner_id or owner_id == user["id"]:
             return user
-        o = await db.users.find_one({"id": owner_id}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "role": 1})
-        if not o or not _is_member(o):
-            raise HTTPException(status_code=400, detail="Assignee must be an executive or coach")
+        o = await db.users.find_one({"id": owner_id}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "role": 1, "status": 1})
+        if not o or not _is_member(o) or o.get("status") == "left":
+            raise HTTPException(status_code=400, detail="Assignee must be an active executive or coach")
         return o
 
     @router.post("/todos")
@@ -310,7 +347,71 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
         if user["id"] not in (t["owner_id"], t.get("created_by_id")) and user.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Only the owner, creator or an admin can delete this to-do")
         await db.todos.delete_one({"id": tid})
+        await db.todo_comments.delete_many({"todo_id": tid})
         return {"ok": True}
+
+    # ── To-do comments (progress notes / blockers) ────────────────────
+    def _pack_comment(c: dict) -> dict:
+        return {k: c.get(k) for k in ("id", "todo_id", "text", "kind", "author_id", "author_name", "created_at")}
+
+    @router.get("/todos/{tid}/comments")
+    async def list_comments(tid: str, user: dict = Depends(get_current_user)):
+        _require(user)
+        rows = await db.todo_comments.find({"todo_id": tid}, {"_id": 0}).sort("created_at", 1).to_list(500)
+        return {"rows": [_pack_comment(c) for c in rows]}
+
+    @router.post("/todos/{tid}/comments")
+    async def add_comment(tid: str, body: CommentIn, user: dict = Depends(get_current_user)):
+        _require(user)
+        t = await db.todos.find_one({"id": tid}, {"_id": 0, "id": 1})
+        if not t:
+            raise HTTPException(status_code=404, detail="To-do not found")
+        text = (body.text or "").strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="Comment can't be empty")
+        kind = body.kind if body.kind in ("note", "blocker") else "note"
+        doc = {"id": str(uuid.uuid4()), "todo_id": tid, "text": text[:2000], "kind": kind,
+               "author_id": user["id"], "author_name": user.get("full_name"),
+               "created_at": now_utc().isoformat()}
+        await db.todo_comments.insert_one(dict(doc))
+        return _pack_comment(doc)
+
+    @router.delete("/todos/{tid}/comments/{cid}")
+    async def delete_comment(tid: str, cid: str, user: dict = Depends(get_current_user)):
+        _require(user)
+        c = await db.todo_comments.find_one({"id": cid, "todo_id": tid}, {"_id": 0})
+        if not c:
+            raise HTTPException(status_code=404, detail="Comment not found")
+        if c["author_id"] != user["id"] and user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Only the author or an admin can delete this comment")
+        await db.todo_comments.delete_one({"id": cid})
+        return {"ok": True}
+
+    # ── Weekly heat-strip (due / overdue counts per day) ──────────────
+    @router.get("/tasks/heatmap")
+    async def tasks_heatmap(scope: str = "all", days: int = 7, user: dict = Depends(get_current_user)):
+        _require(user)
+        days = max(1, min(days, 31))
+        start = local_date_str(await _office())
+        window = [(date.fromisoformat(start) + timedelta(days=i)).isoformat() for i in range(days)]
+        end = window[-1]
+        q: dict = {"status": "open", "due_date": {"$ne": None}}
+        if scope == "mine":
+            q["owner_id"] = user["id"]
+        rows = await db.todos.find(q, {"_id": 0, "due_date": 1, "urgent": 1}).to_list(5000)
+        buckets = {d: {"due": 0, "overdue": 0, "urgent": 0} for d in window}
+        for t in rows:
+            dd = t.get("due_date")
+            if dd < start:
+                buckets[start]["overdue"] += 1
+                if t.get("urgent"):
+                    buckets[start]["urgent"] += 1
+            elif start <= dd <= end:
+                buckets[dd]["due"] += 1
+                if t.get("urgent"):
+                    buckets[dd]["urgent"] += 1
+        return {"today": start, "days": [{"date": d, **buckets[d]} for d in window]}
+
 
     # ── Checklists ────────────────────────────────────────────────────
     @router.get("/checklists")

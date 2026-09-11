@@ -3,6 +3,16 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 11 Jun 2026 (pt.3) — Task Comments, Weekly Heat-strip, dead-code cleanup, review fixes
+
+- **Task Comments**: progress notes / blockers under any real to-do. Backend GET/POST/DELETE `/api/todos/{tid}/comments` (kind note|blocker), `comment_count` added to the todos list via one aggregate; delete cascades. Frontend `TodoComments.jsx` + inline panel and count badge in `TodosTab.jsx`.
+- **Weekly Heat-strip**: `GET /api/tasks/heatmap?scope=&days=` returns per-day due/overdue/urgent buckets; 7-day strip atop the To-dos tab, click a day to set the date picker, scope-aware, urgent flame.
+- **Dead-code cleanup**: deleted 6 orphaned pages — `CheckIn.jsx`, `admin/Sessions.jsx`, `admin/Overtime.jsx`, `admin/CheckinApprovals.jsx`, `admin/AdminCorrections.jsx`, `DisabledFeature.jsx` (all confirmed unreferenced; `admin/Camps.jsx` kept for `CampForm`).
+- **Code-review fixes**: (MEDIUM) done-today/DAR/pending now use a local-day UTC window instead of a UTC regex prefix — fixes early-morning completions in +TZ offsets; (MEDIUM) request-token guards on To-dos + heat-strip loaders to prevent stale responses; (MEDIUM) checklist expansion batched via `$in` (was N+1 per member); (LOW) reject assigning to `left` users, null-safe owner sort, heat-cell aria-label, confirm on comment delete, urgent-first upcoming ordering.
+- Tested: iteration 65 (comments + heat-strip UI, 100%); backend curl-verified incl. timezone boundary.
+
+---
+
 ## 11 Jun 2026 (pt.2) — Carry-forward, de-assign, check-out nudge, Approvals colour
 
 - **Checklist carry-forward**: on today's To-dos view, yesterday's missed (unticked) checklist items surface as extra read-only rows with an amber "Missed yesterday" badge (`_checklist_todos` now takes `server_today`; frontend `todo-carried-pill`). Historical date views are unaffected.
