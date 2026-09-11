@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend + integration testing of Task Manager rework (rename, urgent pill, added-date/days-ago, days-to-due, checklist virtual rows, DAR prefill, gradient banner). All requested behaviours verified end-to-end as exec.test@example.com.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_results": {
+    "nav_and_heading": "PASS - sidebar label 'Task Manager' (Layout.jsx line 204) and /tasks header <h1> reads 'Task Manager'.",
+    "gradient_banner": "PASS - header has bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600.",
+    "add_urgent_todo": "PASS - Mark urgent checkbox toggles, POST /api/todos includes urgent:true, row renders todo-urgent-pill-<id> and rose-50/60 row background.",
+    "added_date_days_elapsed": "PASS - todo-added-<id> shows 'Added 11 Sept 26 · today' (elapsedLabel handles today/1 day/N days).",
+    "days_to_due_and_overdue": "PASS - 'Due 01 Dec (in 81d)' rendered for future date; 'Due 01 Sept (in -10d)' shows overdue styling; existing overdue todos show '(Nd ago)'. Minor: due-in value uses negative number for past dates in the non-overdue branch (only visible if due==today edge? verified overdue branch used - no bug).",
+    "checklist_virtual_rows": "PASS - Two rows with data-testid todo-checklist-pill-<cl:id:date> visible on To-dos tab dated today, no edit/delete buttons rendered for source==='checklist'.",
+    "checklist_tick_via_todos": "PASS - toggling a source=checklist row on To-dos tab calls POST /api/checklists/{id}/tick and moves item into Done filter after reload.",
+    "edit_urgent_toggle": "PASS - todo-edit-btn opens inline editor with todo-edit-urgent-<id>; unchecking removes pill; re-checking restores it (2 PATCH /api/todos/{id} roundtrips both 200).",
+    "delete_todo": "PASS",
+    "dar_prefill_integration": "PASS - after marking 'Renew insurance' done today, GET /api/tasks/dar-prefill returned 200 with body {\"text\":\"✅ Done: Renew insurance\\n⏳ Not done: Open the boat shed and log the keys\"}. Confirms DarPendingCard will prefill correctly.",
+    "regression_add_toggle_delete": "PASS - urgent test todo created, edited twice, and deleted cleanly; existing 'Renew insurance' toggle round-trip works."
+  },
+  "test_report_links": ["/app/test_reports/screens_iter61_todos.jpg"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "TodosTab.jsx line 153: non-overdue branch shows 'in ${dd}d'. When due_date equals today, dd==0, so text becomes 'Due today' via the earlier ternary (OK). For future dates dd is positive. No bug, but consider using elapsedLabel-style singular ('in 1 day') for polish.",
+    "TodosTab.jsx daysSince uses Math.floor over ms diff so day rollover depends on browser TZ vs created_at UTC timestamp; acceptable but a member checking-in near midnight may see 'today' when server day flipped. Not blocking.",
+    "backend/routes/tasks.py _pack_todo drops fields correctly and excludes _id (good). Response includes urgent/source/checklist_id/recurrence as spec'd."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (verified via UI + fetch)", "frontend": "100%"},
+  "test_credentials": "exec.test@example.com / Exec@12345 (email login toggle) works and lands on / with sidebar including Task Manager.",
+  "seed_data_creation": "Created and deleted transient TEST_urgent_iter61_* todo. Toggled 'Renew insurance' done->open (final state = open, matches pre-test).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Auth token is stored in localStorage under key 'ishowedup_token'. Use it as Bearer for /api calls when scripting fetch. Task Manager route is /tasks; tabs via data-testid tasks-tab-{today|todos|checklists}. Checklist virtual todo IDs use format 'cl:<uuid>:<YYYY-MM-DD>'.",
+  "rca of the issue": "N/A - no bugs found."
+}

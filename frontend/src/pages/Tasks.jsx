@@ -24,16 +24,18 @@ export default function Tasks() {
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6" data-testid="tasks-page">
-      <header className="flex flex-wrap items-end justify-between gap-3 mb-5">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-2"><ListTodo size={22} className="text-indigo-600" /> Tasks</h1>
-          <p className="text-slate-500 text-sm mt-1">Team to-dos with deadlines, plus your daily / weekly / monthly must-do checklist. Ticked items flow into your DAR.</p>
-        </div>
-        <div className="flex gap-2">
-          {TABS.map(([v, l]) => (
-            <button key={v} onClick={() => setParams({ tab: v })} data-testid={`tasks-tab-${v}`}
-                    className={`px-4 h-9 rounded-full text-sm font-semibold ${tab === v ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}>{l}</button>
-          ))}
+      <header className="rounded-2xl p-5 mb-5 bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-lg shadow-indigo-200">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-2"><ListTodo size={24} /> Task Manager</h1>
+            <p className="text-indigo-100 text-sm mt-1">Team to-dos with deadlines, plus your daily / weekly / monthly must-do checklist. Ticked items flow into your DAR.</p>
+          </div>
+          <div className="flex gap-2">
+            {TABS.map(([v, l]) => (
+              <button key={v} onClick={() => setParams({ tab: v })} data-testid={`tasks-tab-${v}`}
+                      className={`px-4 h-9 rounded-full text-sm font-semibold transition-colors ${tab === v ? "bg-white text-indigo-700" : "bg-white/20 text-white hover:bg-white/30"}`}>{l}</button>
+            ))}
+          </div>
         </div>
       </header>
       {tab === "today" && <TodayTasksCard key={key} userName={user?.full_name} compact onChanged={() => setKey((k) => k + 1)} />}

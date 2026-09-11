@@ -3,6 +3,19 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 11 Jun 2026 — Task Manager: date view, urgent, DAR panel + checklist injection
+
+- Renamed **Tasks → Task Manager** (sidebar label in `Layout.jsx`, page heading in `Tasks.jsx`). Added a colourful gradient banner header + coloured tabs/cards.
+- **Urgent flag** (manual): `urgent` added to `TodoIn`/`TodoPatch`/`_pack_todo` in `tasks.py`; checkbox on add + inline edit; red "Urgent" pill + rose row background on the To-dos list.
+- **Added-date + days-elapsed**: each real to-do shows "Added <date> · N days ago" (from creation) and due info now shows days-to-due / days-overdue.
+- **Checklist → To-dos auto-injection**: checklist items due on the viewed day surface in the To-dos list as read-only virtual rows (violet "Checklist" pill); ticking there calls `POST /api/checklists/{id}/tick`. Implemented via `_checklist_todos` in `tasks.py`.
+- **Date picker** on the To-dos tab (`TodosTab.jsx`): defaults to today, prev/next day arrow flippers + native date input + "Jump to today". `GET /api/todos` now takes a `date` param; day-view filter = due==date OR undated OR open-overdue carried forward; returns `view_date`.
+- **Inline DAR panel** (`TaskDarPanel.jsx`, new): when scope = "Mine", shows the user's DAR for the selected day, editable/fileable inline (`GET /api/dar/mine`, `POST /api/dar`, `GET /api/config/dar-policy`); future dates are read-only; Share-to-WhatsApp when a DAR exists.
+- **DAR prefill gap fixed**: `DarPendingCard.jsx` (post-checkout late-DAR filing) now calls `/api/tasks/dar-prefill`, so the DAR is pre-populated with the day's completed to-dos/checklist ticks (previously only the inline check-out textarea did).
+- Tested: iteration 61 (rename/urgent/dates/checklist/DAR-prefill — 100%) and iteration 62 (date bar + DAR panel — 100%).
+
+---
+
 ## 19 Feb 2026 — Wastage merged into Daily Entry
 
 - Added `PATCH /api/meals/wastage/{date_str}` — granular per-line patch mirroring the issues endpoint (reason + notes per line).

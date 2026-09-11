@@ -10,7 +10,14 @@ export default function DarPendingCard({ status, userName, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(null);
 
-  useEffect(() => { setSaved(null); setText(""); }, [status?.today]);
+  useEffect(() => {
+    setSaved(null);
+    setText("");
+    // Pre-fill with today's completed to-dos / checklist ticks (executives & coaches).
+    if (status?.required && status?.worked_today && !status?.today_dar) {
+      api.get("/tasks/dar-prefill").then((r) => { if (r?.text) setText(r.text); }).catch(() => {});
+    }
+  }, [status?.today, status?.required, status?.worked_today, status?.today_dar]);
 
   if (!status?.required || !status?.worked_today) return null;
   const existing = saved || status.today_dar;

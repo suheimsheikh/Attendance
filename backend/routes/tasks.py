@@ -28,6 +28,7 @@ class TodoIn(BaseModel):
     notes: Optional[str] = None
     owner_id: Optional[str] = None
     due_date: Optional[str] = None
+    urgent: bool = False
 
 
 class TodoPatch(BaseModel):
@@ -36,6 +37,7 @@ class TodoPatch(BaseModel):
     owner_id: Optional[str] = None
     due_date: Optional[str] = None
     status: Optional[str] = None
+    urgent: Optional[bool] = None
 
 
 class ChecklistIn(BaseModel):
@@ -111,7 +113,8 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     def _pack_todo(t: dict) -> dict:
         return {k: t.get(k) for k in (
             "id", "title", "notes", "owner_id", "owner_name", "created_by_id", "created_by_name",
-            "due_date", "status", "done_at", "done_by_name", "created_at", "updated_at")}
+            "due_date", "status", "urgent", "done_at", "done_by_name", "created_at", "updated_at",
+            "source", "checklist_id", "recurrence")}
 
     def _pack_cl(c: dict) -> dict:
         return {k: c.get(k) for k in (
@@ -165,16 +168,64 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
         return {"members": await _group()}
 
     # ── To-dos ────────────────────────────────────────────────────────
+    async def _checklist_todos(user: dict, scope: str, status: str, iso: str) -> list:
+        """Checklist items due on `iso` surface in the To-dos list as virtual,
+        read-only tasks dated to that day. Ticking one flows to /checklists tick."""
+        office = await _office()
+        default_wo = (office.get("default_weekly_off") or "sunday").lower()
+        if scope == "mine":
+            owners = [{"id": user["id"], "full_name": user.get("full_name"), "weekly_off": user.get("weekly_off")}]
+        else:
+            owners = await db.users.find(
+                {"status": {"$ne": "left"}, "category": {"$in": sorted(TASK_CATEGORIES)}},
+                {"_id": 0, "id": 1, "full_name": 1, "weekly_off": 1},
+            ).to_list(500)
+        out = []
+        for o in owners:
+            wo = (o.get("weekly_off") or default_wo).lower()
+            items = await db.checklists.find({"owner_id": o["id"], "active": {"$ne": False}}, {"_id": 0}).to_list(500)
+            applicable = [c for c in items if checklist_applies(c, iso, wo)]
+            if not applicable:
+                continue
+            ticks = {t["checklist_id"] async for t in db.checklist_ticks.find(
+                {"owner_id": o["id"], "date": iso}, {"_id": 0, "checklist_id": 1})}
+            for c in applicable:
+                done = c["id"] in ticks
+                st = "done" if done else "open"
+                if status in ("open", "done") and status != st:
+                    continue
+                out.append({
+                    "id": f"cl:{c['id']}:{iso}", "title": c["title"], "notes": None,
+                    "owner_id": o["id"], "owner_name": o.get("full_name"),
+                    "created_by_id": o["id"], "created_by_name": o.get("full_name"),
+                    "due_date": iso, "status": st, "urgent": False,
+                    "done_at": None, "done_by_name": None, "created_at": c.get("created_at"),
+                    "updated_at": None, "source": "checklist", "checklist_id": c["id"],
+                    "recurrence": c.get("recurrence"),
+                })
+        return out
+
     @router.get("/todos")
-    async def list_todos(scope: str = "all", status: str = "open", user: dict = Depends(get_current_user)):
+    async def list_todos(scope: str = "all", status: str = "open", date: Optional[str] = None,
+                         user: dict = Depends(get_current_user)):
         _require(user)
+        server_today = local_date_str(await _office())
+        iso = _valid_date(date, "date") or server_today
         q: dict = {}
         if scope == "mine":
             q["owner_id"] = user["id"]
         if status in ("open", "done"):
             q["status"] = status
+        # Day view: to-dos due on `iso`, undated (ongoing) to-dos, plus open
+        # overdue to-dos carried forward so nothing actionable gets lost.
+        date_or = [{"due_date": iso}, {"due_date": None}]
+        if status != "done":
+            date_or.append({"due_date": {"$lt": iso, "$ne": None}, "status": "open"})
+        q["$or"] = date_or
         rows = await db.todos.find(q, {"_id": 0}).sort([("status", 1), ("due_date", 1), ("created_at", -1)]).to_list(2000)
-        return {"rows": [_pack_todo(t) for t in rows], "today": local_date_str(await _office())}
+        packed = [_pack_todo(t) for t in rows]
+        packed += await _checklist_todos(user, scope, status, iso)
+        return {"rows": packed, "today": server_today, "view_date": iso}
 
     async def _owner(owner_id: Optional[str], user: dict) -> dict:
         if not owner_id or owner_id == user["id"]:
@@ -197,6 +248,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
             "owner_id": owner["id"], "owner_name": owner.get("full_name"),
             "created_by_id": user["id"], "created_by_name": user.get("full_name"),
             "due_date": _valid_date(body.due_date, "due_date"), "status": "open",
+            "urgent": bool(body.urgent),
             "done_at": None, "done_by_name": None, "created_at": now, "updated_at": now,
         }
         await db.todos.insert_one(dict(doc))
@@ -228,6 +280,8 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
         if body.owner_id is not None:
             o = await _owner(body.owner_id, user)
             upd["owner_id"], upd["owner_name"] = o["id"], o.get("full_name")
+        if body.urgent is not None:
+            upd["urgent"] = bool(body.urgent)
         await db.todos.update_one({"id": tid}, {"$set": upd})
         return _pack_todo({**t, **upd})
 
