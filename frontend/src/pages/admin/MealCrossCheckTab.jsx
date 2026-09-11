@@ -8,7 +8,7 @@ import { Loader2, Scale, AlertTriangle, ArrowUp, ArrowDown, Check } from "lucide
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 
-const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
+const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 }));
 
 function isoDaysAgo(days) {
   const d = new Date();

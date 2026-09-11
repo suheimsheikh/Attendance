@@ -3,6 +3,15 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+
+## 11 Jun 2026 (pt.4) — Meals: Daily-entry default, category qty+amount headers, 1-decimal quantities
+
+- **Purchases & Issues** page (`MealsReport.jsx`) now defaults to and lists **Daily entry** as the first tab (was Stock Master); param-less URL maps to entry.
+- **Daily entry category headers** (`MealEntryTab.jsx`): each category (Grocery, Fruits, …) now shows total **qty and amount** for Purchases, Issues and Wastage inline with the category title, aligned under the respective Qty/Amount columns (`entry-cat-{purch|issue|wastage}-{qty|total}-<catKey>`).
+- **Quantities capped at 1 decimal app-wide** (rates/amounts stay at 2): changed every qty formatter from `maximumFractionDigits:3` to `1` across MealEntryTab, MealMastersTab, MealExpensesTab, MealCrossCheckTab, MealWastageTab, MealIssuesTab, MealNodeDetail, KitchenAnalyticsTab, ProcurementPlanTab, ItemPriceTrendDrawer, ShoppingListPanel, VendorScorecardDrawer.
+- Tested: iteration 66 (100%) — header totals summed correctly (Fruits: purch 4.1/₹45.60, issue 1.3/₹129.74, wastage 0.5/₹48.77); no 3-decimal quantities found; default tab confirmed. Test pantry data cleaned up afterwards.
+
+---
 ## 11 Jun 2026 (pt.3) — Task Comments, Weekly Heat-strip, dead-code cleanup, review fixes
 
 - **Task Comments**: progress notes / blockers under any real to-do. Backend GET/POST/DELETE `/api/todos/{tid}/comments` (kind note|blocker), `comment_count` added to the todos list via one aggregate; delete cascades. Frontend `TodoComments.jsx` + inline panel and count badge in `TodosTab.jsx`.

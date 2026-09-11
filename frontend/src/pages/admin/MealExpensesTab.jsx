@@ -153,7 +153,7 @@ function ItemBreakdownTable({ rows, title, testid, footNote }) {
             {rows.map((r) => (
               <tr key={r.item_id} className="border-b border-slate-100 hover:bg-slate-50" data-testid={`${testid}-row-${r.item_id}`}>
                 <td className="px-2 py-1.5 font-semibold text-slate-800">{r.name}</td>
-                <td className="px-2 py-1.5 text-right tabular-nums">{Number(r.qty || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums">{Number(r.qty || 0).toLocaleString("en-IN", { maximumFractionDigits: 1 })}</td>
                 <td className="px-2 py-1.5 text-slate-500">{r.unit || ""}</td>
                 <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{inr(r.amount)}</td>
                 <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{r.lines}</td>
@@ -161,7 +161,7 @@ function ItemBreakdownTable({ rows, title, testid, footNote }) {
             ))}
             <tr className="border-t-2 border-slate-400 font-extrabold bg-slate-50">
               <td className="px-2 py-1.5">TOTAL</td>
-              <td className="px-2 py-1.5 text-right tabular-nums">{Number(totalQty).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums">{Number(totalQty).toLocaleString("en-IN", { maximumFractionDigits: 1 })}</td>
               <td></td>
               <td className="px-2 py-1.5 text-right tabular-nums text-emerald-800">{inr(total)}</td>
               <td></td>
@@ -364,7 +364,7 @@ export default function MealExpensesTab({ liveSig }) {
               <h2 className="font-extrabold text-sm mb-1">Item-wise Purchases</h2>
               <table className="w-full text-[11px] border-collapse">
                 <thead><tr className="border-b border-slate-400"><th className="text-left px-1">Item</th><th className="text-right px-1">Qty</th><th className="text-left px-1">Unit</th><th className="text-right px-1">Amount (₹)</th></tr></thead>
-                <tbody>{trimmed.item_purchases.map((r) => (<tr key={r.item_id}><td className="px-1">{r.name}</td><td className="text-right px-1 tabular-nums">{Number(r.qty).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td><td className="px-1">{r.unit || ""}</td><td className="text-right px-1 tabular-nums">{inr(r.amount)}</td></tr>))}</tbody>
+                <tbody>{trimmed.item_purchases.map((r) => (<tr key={r.item_id}><td className="px-1">{r.name}</td><td className="text-right px-1 tabular-nums">{Number(r.qty).toLocaleString("en-IN", { maximumFractionDigits: 1 })}</td><td className="px-1">{r.unit || ""}</td><td className="text-right px-1 tabular-nums">{inr(r.amount)}</td></tr>))}</tbody>
               </table>
             </div>
           )}
@@ -373,7 +373,7 @@ export default function MealExpensesTab({ liveSig }) {
               <h2 className="font-extrabold text-sm mb-1">Item-wise Consumption (valued at wtd-avg rate)</h2>
               <table className="w-full text-[11px] border-collapse">
                 <thead><tr className="border-b border-slate-400"><th className="text-left px-1">Item</th><th className="text-right px-1">Qty</th><th className="text-left px-1">Unit</th><th className="text-right px-1">Amount (₹)</th></tr></thead>
-                <tbody>{trimmed.item_issues.map((r) => (<tr key={r.item_id}><td className="px-1">{r.name}</td><td className="text-right px-1 tabular-nums">{Number(r.qty).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td><td className="px-1">{r.unit || ""}</td><td className="text-right px-1 tabular-nums">{inr(r.amount)}</td></tr>))}</tbody>
+                <tbody>{trimmed.item_issues.map((r) => (<tr key={r.item_id}><td className="px-1">{r.name}</td><td className="text-right px-1 tabular-nums">{Number(r.qty).toLocaleString("en-IN", { maximumFractionDigits: 1 })}</td><td className="px-1">{r.unit || ""}</td><td className="text-right px-1 tabular-nums">{inr(r.amount)}</td></tr>))}</tbody>
               </table>
             </div>
           )}

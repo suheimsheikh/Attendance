@@ -38,7 +38,7 @@ const num = (v) => (v === "" || v == null ? 0 : Number(v) || 0);
 const inr = (n) =>
   n == null ? "0.00" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtQty = (n) =>
-  n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 });
+  n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 });
 
 /**
  * Per-row Supplier picker — visible column on the Daily-entry grid
@@ -641,12 +641,16 @@ export default function MealEntryTab({ liveSig }) {
       // Sum Purch, Issue and Wastage amounts for the category header
       // chips. Wastage merged into the entry grid Feb 2026.
       let pAmt = 0, iAmt = 0, wAmt = 0;
+      let pQty = 0, iQty = 0, wQty = 0;
       for (const it of rows) {
         const e = purch[it.id] || {};
         pAmt += num(e.qty) * num(e.rate);
+        pQty += num(e.qty);
         const rate = avgRate[it.id] || 0;
         iAmt += num(issues[it.id]) * rate;
+        iQty += num(issues[it.id]);
         wAmt += num(wastage[it.id]?.qty) * rate;
+        wQty += num(wastage[it.id]?.qty);
       }
       // Feb 2026: apply the toggle's LOCAL sort mode. "consumption" =
       // busiest first based on TODAY's entered data (purch qty + issue
@@ -680,7 +684,7 @@ export default function MealEntryTab({ liveSig }) {
           });
         }
       }
-      return { cat, rows: sortedRows, purchAmt: pAmt, issueAmt: iAmt, wastageAmt: wAmt };
+      return { cat, rows: sortedRows, purchAmt: pAmt, issueAmt: iAmt, wastageAmt: wAmt, purchQty: pQty, issueQty: iQty, wastageQty: wQty };
     });
   }, [grouped, nonZeroOnly, purch, issues, wastage, avgRate, search, catSortMode, catSortSnapshot]);
 
@@ -997,7 +1001,7 @@ export default function MealEntryTab({ liveSig }) {
               </tr>
             </thead>
             <tbody>
-              {filteredGrouped.map(({ cat, rows, purchAmt, issueAmt, wastageAmt }) => {
+              {filteredGrouped.map(({ cat, rows, purchAmt, issueAmt, wastageAmt, purchQty, issueQty, wastageQty }) => {
                 const isCollapsed = collapsedCats.has(cat.key);
                 return (
                 <React.Fragment key={cat.key}>
@@ -1024,7 +1028,7 @@ export default function MealEntryTab({ liveSig }) {
                         </span>
                       </span>
                     </td>
-                    <td colSpan={3} className="px-2 py-1.5 text-right">
+                    <td colSpan={1} className="px-2 py-1.5 text-right border-l-2 border-emerald-500 bg-amber-100">
                       {!isCollapsed && rows.length > 1 && (
                         (() => {
                           const mode = catSortMode[cat.key] || "consumption";
@@ -1047,22 +1051,33 @@ export default function MealEntryTab({ liveSig }) {
                         })()
                       )}
                     </td>
-                    {/* Purch subtotal — same typography as the item-row
+                    {/* Purch qty subtotal — aligned under the Purchases Qty col. */}
+                    <td className="p-2 text-right font-semibold tabular-nums text-emerald-800/80 text-xs" data-testid={`entry-cat-purch-qty-${cat.key}`}>
+                      {purchQty > 0 ? fmtQty(purchQty) : ""}
+                    </td>
+                    {/* Spacer over Purch Rate. */}
+                    <td/>
+                    {/* Purch amount subtotal — same typography as the item-row
                         Amount cells so the eye reads the column as one
                         continuous currency stream. */}
                     <td className="p-2 text-right font-semibold tabular-nums text-emerald-700" data-testid={`entry-cat-purch-total-${cat.key}`}>
                       {purchAmt > 0 ? `₹${inr(purchAmt)}` : <span className="text-emerald-700/40">—</span>}
                     </td>
-                    {/* Two-cell spacer over Issues Qty & Rate so the
-                        Issue subtotal lines up under the Issues Amount
-                        column. */}
-                    <td colSpan={2}/>
+                    {/* Issue qty subtotal under Issues Qty col. */}
+                    <td className="p-2 text-right font-semibold tabular-nums text-amber-800/80 text-xs border-l-2 border-amber-500" data-testid={`entry-cat-issue-qty-${cat.key}`}>
+                      {issueQty > 0 ? fmtQty(issueQty) : ""}
+                    </td>
+                    {/* Spacer over Issues Rate. */}
+                    <td/>
                     <td className="p-2 text-right font-semibold tabular-nums text-amber-700" data-testid={`entry-cat-issue-total-${cat.key}`}>
                       {issueAmt > 0 ? `₹${inr(issueAmt)}` : <span className="text-amber-700/40">—</span>}
                     </td>
-                    {/* Two-cell spacer over Wastage Qty & Reason so the
-                        Wastage subtotal lines up under its Amount col. */}
-                    <td colSpan={2}/>
+                    {/* Wastage qty subtotal under Wastage Qty col. */}
+                    <td className="p-2 text-right font-semibold tabular-nums text-rose-800/80 text-xs border-l-2 border-rose-500" data-testid={`entry-cat-wastage-qty-${cat.key}`}>
+                      {wastageQty > 0 ? fmtQty(wastageQty) : ""}
+                    </td>
+                    {/* Spacer over Wastage Reason. */}
+                    <td/>
                     <td className="p-2 text-right font-semibold tabular-nums text-rose-700" data-testid={`entry-cat-wastage-total-${cat.key}`}>
                       {wastageAmt > 0 ? `₹${inr(wastageAmt)}` : <span className="text-rose-700/40">—</span>}
                     </td>

@@ -23,7 +23,7 @@ function todayISO() {
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
-const fmtQty = (n) => (n == null ? "0" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
+const fmtQty = (n) => (n == null ? "0" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 }));
 
 export default function MealWastageTab({ liveSig }) {
   const [recent, setRecent] = useState([]);

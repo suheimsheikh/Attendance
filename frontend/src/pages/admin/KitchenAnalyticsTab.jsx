@@ -45,7 +45,7 @@ const inr = (n) =>
 const inr2 = (n) =>
   n == null ? "—" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtQty = (n) =>
-  n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 });
+  n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 });
 
 function todayIso() {
   const d = new Date();

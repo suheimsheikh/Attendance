@@ -6,7 +6,7 @@ import React, { useState } from "react";
 import { ShoppingCart, ChevronDown, ChevronRight, Copy, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
-const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
+const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 }));
 
 export default function ShoppingListPanel({ data }) {
   const [open, setOpen] = useState(false);

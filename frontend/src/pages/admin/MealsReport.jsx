@@ -474,7 +474,7 @@ export default function MealsReport() {
   // shortcut so admins can jump straight to the graphics panel).
   const [searchParams, setSearchParams] = useSearchParams();
   const urlTab = searchParams.get("tab");
-  const [tab, setTab] = useState(urlTab || "masters");
+  const [tab, setTab] = useState(urlTab || "entry");
   // Sync tab state whenever the URL query changes (e.g. sidebar click
   // while already on the page). Also keep the URL in sync when the
   // user manually clicks a tab so refreshes / deep-links stay stable.
@@ -484,7 +484,7 @@ export default function MealsReport() {
   const changeTab = (key) => {
     setTab(key);
     const next = new URLSearchParams(searchParams);
-    if (key === "masters") next.delete("tab"); else next.set("tab", key);
+    if (key === "entry") next.delete("tab"); else next.set("tab", key);
     setSearchParams(next, { replace: true });
   };
   const [lowCount, setLowCount] = useState(0);
@@ -504,8 +504,8 @@ export default function MealsReport() {
     api.get("/meals/stock").then((r) => setLowCount(r.low_count || 0)).catch(() => {});
   }, [tab, liveSig]);
   const TABS = [
-    { key: "masters",   label: "Stock Master",       Icon: FolderTree, hint: "Central tree of categories and items — stock on hand, opening balance as-of date, low-stock alerts and item management" },
     { key: "entry",     label: "Daily entry",   Icon: ShoppingCart, hint: "One screen to enter both supplier purchases (qty · rate) and kitchen consumption (qty) for a day — auto-saves as you type" },
+    { key: "masters",   label: "Stock Master",       Icon: FolderTree, hint: "Central tree of categories and items — stock on hand, opening balance as-of date, low-stock alerts and item management" },
     { key: "wastage",   label: "Wastage & losses", Icon: Flame, hint: "Record rotten, spilled or lost stock with a reason" },
     { key: "crosscheck", label: "Cross-check", Icon: Scale, hint: "Compare what the kitchen consumed vs meals served × per-item norms — flags over/under days" },
     { key: "daily",     label: "Daily counts",  Icon: Utensils, hint: "Headcount of meals served per day" },

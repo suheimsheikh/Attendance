@@ -14,7 +14,7 @@ function todayISO() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 const num = (v) => (v === "" || v == null ? 0 : Number(v) || 0);
-const fmtQty = (n) => (n == null ? "0" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
+const fmtQty = (n) => (n == null ? "0" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 }));
 
 export default function MealIssuesTab() {
   const [dateStr, setDateStr] = useState(todayISO());

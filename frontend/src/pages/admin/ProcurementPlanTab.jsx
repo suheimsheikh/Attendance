@@ -36,7 +36,7 @@ function fmtQty(v) {
   if (v == null) return "—";
   const n = Number(v);
   if (!Number.isFinite(n)) return "—";
-  return n.toFixed(3).replace(/\.?0+$/, "");
+  return n.toFixed(1).replace(/\.?0+$/, "");
 }
 
 function csvEscape(v) {

@@ -16,7 +16,7 @@ import { api, showApiError } from "../api";
 const inr = (n) =>
   n == null ? "—" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtQty = (n) =>
-  n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 });
+  n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 });
 
 export default function VendorScorecardDrawer({ vendorId, days = 30, onClose, onOpenItem }) {
   const [data, setData] = useState(null);

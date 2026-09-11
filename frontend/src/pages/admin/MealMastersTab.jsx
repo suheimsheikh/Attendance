@@ -20,7 +20,7 @@ import { useAuth } from "../../auth";
 import { ItemDetailPanel, CategoryDetailPanel } from "./MealNodeDetail";
 import ShoppingListPanel from "../../components/ShoppingListPanel";
 
-const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
+const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 }));
 const fmtRs = (n) => (n == null || !Number(n) ? "₹0.00" : `₹${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
 function InlineEdit({ value, onSave, onCancel, testid }) {
