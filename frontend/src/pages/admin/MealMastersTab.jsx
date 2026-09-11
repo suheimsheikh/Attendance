@@ -15,12 +15,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
+import { fmtQty as uQty } from "../../utils";
 import { isUserEditing } from "../../hooks/useMealsEvents";
 import { useAuth } from "../../auth";
 import { ItemDetailPanel, CategoryDetailPanel } from "./MealNodeDetail";
 import ShoppingListPanel from "../../components/ShoppingListPanel";
 
-const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 }));
+const fmt = (n, unit) => (n == null ? "—" : uQty(n, unit));
 const fmtRs = (n) => (n == null || !Number(n) ? "₹0.00" : `₹${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
 function InlineEdit({ value, onSave, onCancel, testid }) {
@@ -47,7 +48,7 @@ function InlineEdit({ value, onSave, onCancel, testid }) {
 // Inline number cell — displays a value, click to turn into an input. Used
 // for editable Opening Stock and Min Level columns in the Masters tree so
 // admins don't need a separate `⋯` panel. Enter/blur saves, Escape cancels.
-function InlineNum({ value, onSave, testid, hint }) {
+function InlineNum({ value, onSave, testid, hint, unit }) {
   const [editing, setEditing] = useState(false);
   const [v, setV] = useState(value ?? 0);
   useEffect(() => { setV(value ?? 0); }, [value]);
@@ -59,7 +60,7 @@ function InlineNum({ value, onSave, testid, hint }) {
         data-testid={testid}
         title={hint || "Click to edit"}
       >
-        {value == null || value === "" ? "—" : fmt(value)}
+        {value == null || value === "" ? "—" : fmt(value, unit)}
       </button>
     );
   }
@@ -102,7 +103,7 @@ function InlineRate({ value, unit, onSave, testid }) {
         data-testid={testid}
         title="Opening rate (₹ per unit) — click to edit. Used to value opening stock before the first purchase."
       >
-        {Number(value) > 0 ? `@₹${fmt(value)}/${unit}` : "@₹—"}
+        {Number(value) > 0 ? `@${fmtRs(value)}/${unit}` : "@₹—"}
       </button>
     );
   }
@@ -355,6 +356,7 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMove
             <span className="flex flex-col">
               <InlineNum
                 value={item.opening_stock || 0}
+                unit={item.unit}
                 onSave={(n) => onPatch(item.id, { opening_stock: n })}
                 testid={`masters-item-opening-${item.id}`}
                 hint={`Click to edit opening stock${item.opening_stock_as_of ? ` (as of ${item.opening_stock_as_of})` : ""}`}
@@ -377,9 +379,9 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMove
             </span>
           ) : (
             <span className="flex flex-col text-right">
-              <span className="font-semibold text-slate-700">{fmt(item.opening_stock || 0)}</span>
+              <span className="font-semibold text-slate-700">{fmt(item.opening_stock || 0, item.unit)}</span>
               {Number(item.opening_stock) > 0 && Number(item.opening_rate) > 0 && (
-                <span className="text-[9px] leading-tight text-emerald-700 tabular-nums">@₹{fmt(item.opening_rate)}/{item.unit}</span>
+                <span className="text-[9px] leading-tight text-emerald-700 tabular-nums">@{fmtRs(item.opening_rate)}/{item.unit}</span>
               )}
               {Number(item.opening_stock) > 0 && item.opening_stock_as_of && (
                 <span className="text-[9px] leading-tight text-slate-500 tabular-nums">
@@ -392,12 +394,13 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMove
           {isAdmin ? (
             <InlineNum
               value={item.min_stock || 0}
+              unit={item.unit}
               onSave={(n) => onPatch(item.id, { min_stock: n })}
               testid={`masters-item-min-${item.id}`}
               hint="Click to edit low-stock alert level (0 = off)"
             />
           ) : (
-            <span className="text-right text-slate-500">{fmt(item.min_stock || 0)}</span>
+            <span className="text-right text-slate-500">{fmt(item.min_stock || 0, item.unit)}</span>
           )}
           {/* Norm per serving (editable qty) — expected quantity of THIS
               item consumed per meal serving. Used by the Cross-check tab
@@ -405,18 +408,19 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMove
           {isAdmin ? (
             <InlineNum
               value={item.norm_per_serving || 0}
+              unit={item.unit}
               onSave={(n) => onPatch(item.id, { norm_per_serving: n })}
               testid={`masters-item-norm-${item.id}`}
               hint="Click to edit norm per serving (expected qty per meal — used by Cross-check)"
             />
           ) : (
-            <span className="text-right text-slate-500">{fmt(item.norm_per_serving || 0)}</span>
+            <span className="text-right text-slate-500">{fmt(item.norm_per_serving || 0, item.unit)}</span>
           )}
           {/* Purch qty + ₹ inline */}
           <span className="text-right whitespace-nowrap" title="Total purchases since opening date">
             {showStock ? (
               <>
-                <span className="font-semibold text-slate-700">{fmt(stock.purchased)}</span>
+                <span className="font-semibold text-slate-700">{fmt(stock.purchased, item.unit)}</span>
                 <span className="text-[10px] text-emerald-700 font-medium ml-1.5">{fmtRs(stock.purchased_amount)}</span>
               </>
             ) : <span className="text-slate-300">—</span>}
@@ -425,7 +429,7 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMove
           <span className="text-right whitespace-nowrap" title="Total kitchen issues since opening date">
             {showStock ? (
               <>
-                <span className="font-semibold text-slate-700">{fmt(stock.issued)}</span>
+                <span className="font-semibold text-slate-700">{fmt(stock.issued, item.unit)}</span>
                 <span className="text-[10px] text-amber-700 font-medium ml-1.5">{fmtRs(stock.issued_value)}</span>
               </>
             ) : <span className="text-slate-300">—</span>}
@@ -437,7 +441,7 @@ function ItemRow({ item, stock, cats, isAdmin, onPatch, onDelete, onOpen, onMove
           >
             {showStock ? (
               <>
-                <span className={`font-bold ${stock.low ? "text-rose-600" : "text-emerald-700"}`}>{fmt(stock.on_hand)}</span>
+                <span className={`font-bold ${stock.low ? "text-rose-600" : "text-emerald-700"}`}>{fmt(stock.on_hand, item.unit)}</span>
                 <span className={`text-[10px] font-medium ml-1.5 ${stock.low ? "text-rose-500" : "text-slate-600"}`}>{fmtRs(stock.on_hand_value)}</span>
               </>
             ) : <span className="text-slate-300">—</span>}

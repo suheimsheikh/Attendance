@@ -1,6 +1,31 @@
 // Browser device id + helpers.
 const DEVICE_KEY = "ishowedup_device_id";
 
+// ── Quantity formatting by unit ───────────────────────────────────
+// Countable units (pieces / packets / etc.) render as whole numbers.
+// Everything else (weight & volume) renders with exactly ONE decimal,
+// even when it is zero — e.g. "2.0", "16.5". Rates & amounts are
+// formatted separately (always 2 decimals) and are unaffected.
+const COUNT_UNITS = new Set([
+  "pc", "pcs", "piece", "pieces", "no", "no.", "nos", "number", "numbers",
+  "pkt", "pkts", "packet", "packets", "pack", "packs", "unit", "units",
+  "each", "ea", "dozen", "doz", "bunch", "bunches", "tin", "tins",
+  "tray", "trays", "bottle", "bottles", "can", "cans", "box", "boxes",
+  "loaf", "loaves", "egg", "eggs", "nug", "roll", "rolls", "cake", "cakes",
+]);
+
+export const isCountUnit = (u) => COUNT_UNITS.has(String(u || "").trim().toLowerCase());
+
+export function fmtQty(n, unit) {
+  if (n == null || n === "") return "—";
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "—";
+  return isCountUnit(unit)
+    ? v.toLocaleString("en-IN", { maximumFractionDigits: 0 })
+    : v.toLocaleString("en-IN", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+
 export function getDeviceId() {
   let id = localStorage.getItem(DEVICE_KEY);
   if (!id) {

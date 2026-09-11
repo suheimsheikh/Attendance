@@ -3531,6 +3531,91 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         return {"items": items, "kind": kind, "start": s, "end": e}
 
 
+    @router.get("/meals/kitchen-analytics/item-compare")
+    async def kitchen_analytics_item_compare(
+        start: str, end: str,
+        item_ids: str = Query(..., description="Comma-separated item IDs"),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Combined purchases-vs-consumption series for a basket of items
+        over [start, end]. Aggregates the selected items into one Purchases
+        and one Consumption line per day (qty + ₹). Powers the Compare tab."""
+        s = _valid_date(start)
+        e = _valid_date(end)
+        if s > e:
+            raise HTTPException(status_code=400, detail="start must be before end")
+        if (date.fromisoformat(e) - date.fromisoformat(s)).days > 400:
+            raise HTTPException(status_code=400, detail="Range too large (max ~13 months)")
+        ids = [x.strip() for x in (item_ids or "").split(",") if x.strip()]
+        if not ids:
+            return {"days": [], "totals": {"purch_qty": 0, "purch_amt": 0, "issue_qty": 0, "issue_amt": 0}, "items": []}
+
+        item_rows = await db.meal_items.find(
+            {"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1, "unit": 1}).to_list(len(ids))
+        idset = set(ids)
+
+        # Per-item, per-date buckets so consumption can be valued at each
+        # item's window weighted-average PURCHASE rate (issue lines carry
+        # no rate — they're costed at avg like the rest of the app).
+        purch: dict[str, dict[str, float]] = {}   # item -> {date: qty}
+        purch_amt: dict[str, dict[str, float]] = {}
+        issue: dict[str, dict[str, float]] = {}
+        p_tot_qty: dict[str, float] = {i: 0.0 for i in ids}
+        p_tot_amt: dict[str, float] = {i: 0.0 for i in ids}
+
+        pdocs = await db.meal_purchases.find(
+            {"date": {"$gte": s, "$lte": e}, "lines.item_id": {"$in": ids}},
+            {"_id": 0, "date": 1, "lines": 1}).to_list(5000)
+        for d in pdocs:
+            for ln in (d.get("lines") or []):
+                iid = ln.get("item_id")
+                if iid not in idset:
+                    continue
+                qv = float(ln.get("qty") or 0)
+                av = qv * float(ln.get("rate") or 0)
+                purch.setdefault(iid, {})[d["date"]] = purch.get(iid, {}).get(d["date"], 0.0) + qv
+                purch_amt.setdefault(iid, {})[d["date"]] = purch_amt.get(iid, {}).get(d["date"], 0.0) + av
+                p_tot_qty[iid] += qv
+                p_tot_amt[iid] += av
+
+        idocs = await db.meal_issues.find(
+            {"date": {"$gte": s, "$lte": e}, "lines.item_id": {"$in": ids}},
+            {"_id": 0, "date": 1, "lines": 1}).to_list(5000)
+        for d in idocs:
+            for ln in (d.get("lines") or []):
+                iid = ln.get("item_id")
+                if iid not in idset:
+                    continue
+                issue.setdefault(iid, {})[d["date"]] = issue.get(iid, {}).get(d["date"], 0.0) + float(ln.get("qty") or 0)
+
+        avg_rate = {i: (p_tot_amt[i] / p_tot_qty[i] if p_tot_qty[i] else 0.0) for i in ids}
+
+        # Roll up to per-date totals across the selected basket.
+        by_date: dict[str, dict[str, float]] = {}
+        for iid in ids:
+            for dd, qv in purch.get(iid, {}).items():
+                c = by_date.setdefault(dd, {"purch_qty": 0.0, "purch_amt": 0.0, "issue_qty": 0.0, "issue_amt": 0.0})
+                c["purch_qty"] += qv
+                c["purch_amt"] += purch_amt.get(iid, {}).get(dd, 0.0)
+            for dd, qv in issue.get(iid, {}).items():
+                c = by_date.setdefault(dd, {"purch_qty": 0.0, "purch_amt": 0.0, "issue_qty": 0.0, "issue_amt": 0.0})
+                c["issue_qty"] += qv
+                c["issue_amt"] += qv * avg_rate[iid]
+
+        days = [{"date": dd,
+                 "purch_qty": round(v["purch_qty"], 1), "purch_amt": round(v["purch_amt"], 2),
+                 "issue_qty": round(v["issue_qty"], 1), "issue_amt": round(v["issue_amt"], 2)}
+                for dd, v in sorted(by_date.items())]
+        totals = {
+            "purch_qty": round(sum(v["purch_qty"] for v in by_date.values()), 1),
+            "purch_amt": round(sum(v["purch_amt"] for v in by_date.values()), 2),
+            "issue_qty": round(sum(v["issue_qty"] for v in by_date.values()), 1),
+            "issue_amt": round(sum(v["issue_amt"] for v in by_date.values()), 2),
+        }
+        return {"days": days, "totals": totals, "start": s, "end": e,
+                "items": [{"id": i["id"], "name": i["name"], "unit": i.get("unit")} for i in item_rows]}
+
+
     @router.get("/meals/kitchen-analytics/bounds")
     async def kitchen_analytics_bounds(user: dict = Depends(require_chef_or_admin)):
         """Earliest and latest dates for which any pantry activity exists

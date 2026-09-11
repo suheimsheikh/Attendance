@@ -4,6 +4,18 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
 
+## 11 Jun 2026 (pt.5) — Analytics 'All' fix, Compare-items chart, issues-vs-consumption labelling
+
+- **Bugfix**: Kitchen Analytics 'All' preset threw "Range too large (max ~13 months)". `clampAllStart()` now caps the All window to the last 365 days (safe for both analytics endpoints).
+- **NEW 'Compare items' tab** (`MealCompareTab.jsx` + `GET /meals/kitchen-analytics/item-compare`): pick one or many pantry items and see a combined line chart of **Purchases vs Issues** over any period, with a Quantity/Amount(₹) toggle and totals. Consumption ₹ is valued at each item's window weighted-average purchase rate. Range >400 days is rejected.
+- **Data-accuracy relabel**: the second series is labelled **Issues / Issued** (not "Consumption"), because the app only captures purchases + issues from Daily Entry — true consumption isn't tracked yet.
+- Tested: iteration 68 (Compare tab + All-preset fix, 100%).
+
+### Pending (approved, not yet built)
+- **Sub-categories under any category** (Groceries → Pulses/Spices/Oils etc.) across Stock Master + Daily entry grouping, with items reassignable, PLUS a one-time migration/seed to carry the preview setup to production on deploy.
+
+---
+
 ## 11 Jun 2026 (pt.4) — Meals: Daily-entry default, category qty+amount headers, 1-decimal quantities
 
 - **Purchases & Issues** page (`MealsReport.jsx`) now defaults to and lists **Daily entry** as the first tab (was Stock Master); param-less URL maps to entry.

@@ -5,8 +5,9 @@
 import React, { useState } from "react";
 import { ShoppingCart, ChevronDown, ChevronRight, Copy, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { fmtQty as uQty } from "../utils";
 
-const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 }));
+const fmt = (n, unit) => (n == null ? "—" : uQty(n, unit));
 
 export default function ShoppingListPanel({ data }) {
   const [open, setOpen] = useState(false);
@@ -14,7 +15,7 @@ export default function ShoppingListPanel({ data }) {
   if (items.length === 0) return null;
 
   const copyList = async () => {
-    const lines = items.map((i) => `• ${i.name}: buy ${fmt(i.suggested_qty)} ${i.unit} (${fmt(i.on_hand)} on hand)`);
+    const lines = items.map((i) => `• ${i.name}: buy ${fmt(i.suggested_qty, i.unit)} ${i.unit} (${fmt(i.on_hand, i.unit)} on hand)`);
     try {
       await navigator.clipboard.writeText(`Pantry shopping list — ${new Date().toLocaleDateString("en-IN")}\n${lines.join("\n")}`);
       toast.success("Shopping list copied");
@@ -56,12 +57,12 @@ export default function ShoppingListPanel({ data }) {
               {items.map((i) => (
                 <tr key={i.item_id} className="border-t border-amber-200/60" data-testid={`shopping-row-${i.item_id}`}>
                   <td className="p-1.5 font-semibold text-slate-900">{i.name} <span className="text-[10px] text-slate-400">{i.category_label}</span></td>
-                  <td className={`p-1.5 text-right tabular-nums ${i.low ? "text-rose-600 font-bold" : "text-slate-700"}`}>{fmt(i.on_hand)} {i.unit}</td>
-                  <td className="p-1.5 text-right tabular-nums text-slate-600">{i.daily_rate > 0 ? `${fmt(i.daily_rate)} ${i.unit}` : "—"}</td>
+                  <td className={`p-1.5 text-right tabular-nums ${i.low ? "text-rose-600 font-bold" : "text-slate-700"}`}>{fmt(i.on_hand, i.unit)} {i.unit}</td>
+                  <td className="p-1.5 text-right tabular-nums text-slate-600">{i.daily_rate > 0 ? `${fmt(i.daily_rate, i.unit)} ${i.unit}` : "—"}</td>
                   <td className={`p-1.5 text-right tabular-nums font-semibold ${i.days_left != null && i.days_left <= 3 ? "text-rose-600" : "text-slate-700"}`}>
                     {i.days_left != null ? `~${fmt(i.days_left)}` : "—"}
                   </td>
-                  <td className="p-1.5 text-right tabular-nums font-extrabold text-emerald-800" data-testid={`shopping-buy-${i.item_id}`}>{fmt(i.suggested_qty)} {i.unit}</td>
+                  <td className="p-1.5 text-right tabular-nums font-extrabold text-emerald-800" data-testid={`shopping-buy-${i.item_id}`}>{fmt(i.suggested_qty, i.unit)} {i.unit}</td>
                   <td className="p-1.5">
                     {i.reasons.map((r, idx) => (
                       <span key={idx} className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5 mr-1">

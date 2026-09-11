@@ -12,7 +12,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
-import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale, Store, PieChart } from "lucide-react";
+import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale, Store, PieChart, LineChart } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import { useMealsEvents } from "../../hooks/useMealsEvents";
@@ -26,6 +26,7 @@ import MealMastersTab from "./MealMastersTab";
 import MealCrossCheckTab from "./MealCrossCheckTab";
 import MealVendorsTab from "./MealVendorsTab";
 import KitchenAnalyticsTab from "./KitchenAnalyticsTab";
+import MealCompareTab from "./MealCompareTab";
 import ProcurementPlanTab from "./ProcurementPlanTab";
 import { useEscape } from "../../hooks/useEscape";
 
@@ -512,6 +513,7 @@ export default function MealsReport() {
     { key: "monthly",   label: "Monthly grid",  Icon: CalendarDays, hint: "Month-long meal count audit grid" },
     { key: "expenses",  label: "Expense report", Icon: IndianRupee, hint: "Category-wise purchase spend for the accountant" },
     { key: "analytics", label: "Analytics",      Icon: PieChart, hint: "Kitchen graphics panel — purchase/consumption trends, top items, category share" },
+    { key: "compare",   label: "Compare items",  Icon: LineChart, hint: "Pick one or many items and see their purchases vs issues on one graph over any period" },
     { key: "procurement", label: "Procurement plan", Icon: ClipboardList, hint: "Suggested monthly buy list per item based on historical average consumption × horizon − current stock + buffer" },
     { key: "vendors",   label: "Vendors",       Icon: Store, hint: "Suppliers you can attribute purchase lines to — name and phone" },
   ];
@@ -571,6 +573,7 @@ export default function MealsReport() {
       {tab === "masters" && <MealMastersTab liveSig={liveSig} />}
       {tab === "vendors" && <MealVendorsTab liveSig={liveSig} />}
       {tab === "analytics" && <KitchenAnalyticsTab liveSig={liveSig} />}
+      {tab === "compare" && <MealCompareTab />}
       {tab === "procurement" && <ProcurementPlanTab liveSig={liveSig} />}
       </div>
     </div>

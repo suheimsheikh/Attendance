@@ -24,6 +24,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ClipboardList, Loader2, Download, RefreshCw, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
+import { fmtQty as uQty } from "../../utils";
 
 // Indian-format rupee amount (matches KitchenAnalyticsTab's local
 // `inr` helper — kept local to avoid a shared-utils PR).
@@ -32,11 +33,11 @@ const inr = (n) =>
 
 // Small utility — the API returns qty to 3 dp. Trim trailing zeros
 // for display so "0.500" prints as "0.5" but "6" prints as "6".
-function fmtQty(v) {
+function fmtQty(v, unit) {
   if (v == null) return "—";
   const n = Number(v);
   if (!Number.isFinite(n)) return "—";
-  return n.toFixed(1).replace(/\.?0+$/, "");
+  return uQty(n, unit);
 }
 
 function csvEscape(v) {
@@ -277,13 +278,13 @@ export default function ProcurementPlanTab({ liveSig }) {
                       </td>
                       <td className="py-1.5 px-3 text-center text-slate-500 text-xs">{r.unit}</td>
                       <td className={`py-1.5 px-3 text-right tabular-nums font-mono ${oh < 0 ? "text-rose-700 font-extrabold" : zero ? "text-rose-500 font-semibold" : "text-slate-700"}`}>
-                        {fmtQty(oh)}
+                        {fmtQty(oh, r.unit)}
                       </td>
-                      <td className="py-1.5 px-3 text-right tabular-nums text-slate-600 text-xs">{fmtQty(r.avg_per_day)}</td>
-                      <td className="py-1.5 px-3 text-right tabular-nums text-slate-700 text-xs">{fmtQty(r.est_use)}</td>
-                      <td className="py-1.5 px-3 text-right tabular-nums text-slate-500 text-xs">{fmtQty(r.buffer)}</td>
+                      <td className="py-1.5 px-3 text-right tabular-nums text-slate-600 text-xs">{fmtQty(r.avg_per_day, r.unit)}</td>
+                      <td className="py-1.5 px-3 text-right tabular-nums text-slate-700 text-xs">{fmtQty(r.est_use, r.unit)}</td>
+                      <td className="py-1.5 px-3 text-right tabular-nums text-slate-500 text-xs">{fmtQty(r.buffer, r.unit)}</td>
                       <td className={`py-1.5 px-3 text-right tabular-nums font-bold ${r.to_buy > 0 ? (urgent ? "text-rose-700" : "text-emerald-700") : "text-slate-400"}`}>
-                        {r.to_buy > 0 ? fmtQty(r.to_buy) : "—"}
+                        {r.to_buy > 0 ? fmtQty(r.to_buy, r.unit) : "—"}
                       </td>
                       <td className="py-1.5 px-3 text-right tabular-nums text-slate-700 text-xs">
                         {r.est_amount > 0 ? `₹${inr(r.est_amount)}` : "—"}

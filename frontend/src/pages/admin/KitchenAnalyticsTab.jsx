@@ -18,7 +18,7 @@ import {
   CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList,
 } from "recharts";
 import { api, showApiError } from "../../api";
-import { formatDate } from "../../utils";
+import { formatDate, fmtQty as uQty } from "../../utils";
 
 // Same palette + a deterministic (item_id → colour) mapping so the
 // same item paints in the same colour across ALL charts on this
@@ -44,8 +44,8 @@ const inr = (n) =>
   n == null ? "—" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const inr2 = (n) =>
   n == null ? "—" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtQty = (n) =>
-  n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 });
+const fmtQty = (n, unit) =>
+  n == null ? "—" : uQty(n, unit);
 
 function todayIso() {
   const d = new Date();
@@ -58,6 +58,14 @@ function isoDaysAgo(n) {
   const p = (x) => String(x).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
+// The analytics endpoints cap the window (~1 year). Clamp the "All" preset's
+// start to at most this many days back so a long pantry history never trips
+// the "Range too large" 400 — we simply show the most recent ~12 months.
+const MAX_RANGE_DAYS = 365;
+const clampAllStart = (minD) => {
+  const floor = isoDaysAgo(MAX_RANGE_DAYS);
+  return minD && minD > floor ? minD : floor;
+};
 
 function StatPill({ icon: Icon, label, value, tint }) {
   return (
@@ -236,7 +244,7 @@ function TopItemsTooltip({ active, payload }) {
         <span className="text-slate-500">Amount</span>
         <span className="tabular-nums text-slate-800 text-right font-semibold">₹{inr2(r.amount)}</span>
         <span className="text-slate-500">Qty</span>
-        <span className="tabular-nums text-slate-800 text-right font-semibold">{fmtQty(r.qty)}{r.unit ? <span className="text-slate-400 font-normal ml-0.5">{r.unit}</span> : null}</span>
+        <span className="tabular-nums text-slate-800 text-right font-semibold">{fmtQty(r.qty, r.unit)}{r.unit ? <span className="text-slate-400 font-normal ml-0.5">{r.unit}</span> : null}</span>
         <span className="text-slate-500">Lines</span>
         <span className="tabular-nums text-slate-800 text-right">{r.lines}</span>
       </div>
@@ -957,7 +965,7 @@ export default function KitchenAnalyticsTab({ liveSig }) {
     api.get("/meals/kitchen-analytics/bounds")
       .then((b) => {
         setMinDate(b?.min_date || "");
-        if (b?.min_date) setFrom(b.min_date);
+        if (b?.min_date) setFrom(clampAllStart(b.min_date));
         else setFrom(isoDaysAgo(30));
       })
       .catch(() => setFrom(isoDaysAgo(30)));
@@ -972,7 +980,7 @@ export default function KitchenAnalyticsTab({ liveSig }) {
 
   useEffect(() => {
     if (preset !== "all") return;
-    if (minDate) setFrom(minDate);
+    setFrom(clampAllStart(minDate));
     setTo(todayIso());
   }, [preset, minDate]);
 

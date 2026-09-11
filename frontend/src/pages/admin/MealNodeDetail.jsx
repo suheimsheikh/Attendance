@@ -6,10 +6,10 @@
 import React, { useEffect, useState } from "react";
 import { Loader2, X, ShoppingCart, ClipboardList, Flame, AlertTriangle } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate } from "../../utils";
+import { formatDate, fmtQty as uQty } from "../../utils";
 import { useEscape } from "../../hooks/useEscape";
 
-const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 }));
+const fmt = (n, unit) => (n == null ? "—" : uQty(n, unit));
 const rupee = (n) => (n == null ? "—" : `₹${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
 function isoDaysAgo(days) {
@@ -92,7 +92,7 @@ export function ItemDetailPanel({ itemId, onClose }) {
   return (
     <Sheet
       title={item ? item.name : "Item"}
-      subtitle={item ? `${item.unit} · opening ${fmt(item.opening_stock)} as of ${formatDate(item.opening_stock_as_of)}${item.min_stock > 0 ? ` · min level ${fmt(item.min_stock)} ${item.unit}` : ""}` : ""}
+      subtitle={item ? `${item.unit} · opening ${fmt(item.opening_stock, item.unit)} as of ${formatDate(item.opening_stock_as_of)}${item.min_stock > 0 ? ` · min level ${fmt(item.min_stock, item.unit)} ${item.unit}` : ""}` : ""}
       onClose={onClose}
       testid="item-detail-panel"
     >
@@ -107,13 +107,13 @@ export function ItemDetailPanel({ itemId, onClose }) {
                 On hand now {low && <AlertTriangle size={11} className="text-rose-500"/>}
               </p>
               <p className={`text-sm font-extrabold tabular-nums ${low ? "text-rose-700" : "text-slate-900"}`} data-testid="item-detail-onhand">
-                {fmt(data.on_hand)} {item.unit}
+                {fmt(data.on_hand, item.unit)} {item.unit}
               </p>
             </div>
-            <Chip label="Purchased" value={`${fmt(tot.purchased_qty)} ${item.unit}`}/>
+            <Chip label="Purchased" value={`${fmt(tot.purchased_qty, item.unit)} ${item.unit}`}/>
             <Chip label="Spend" value={rupee(tot.purchased_amount)}/>
-            <Chip label="Issued" value={`${fmt(tot.issued_qty)} ${item.unit}`}/>
-            <Chip label="Wasted" value={`${fmt(tot.wasted_qty)} ${item.unit}`}/>
+            <Chip label="Issued" value={`${fmt(tot.issued_qty, item.unit)} ${item.unit}`}/>
+            <Chip label="Wasted" value={`${fmt(tot.wasted_qty, item.unit)} ${item.unit}`}/>
           </div>
 
           {data.events.length === 0 ? (
@@ -143,7 +143,7 @@ export function ItemDetailPanel({ itemId, onClose }) {
                         </span>
                       </td>
                       <td className={`p-2 text-right tabular-nums font-semibold ${ev.type === "purchase" ? "text-emerald-700" : ev.type === "issue" ? "text-sky-700" : "text-amber-700"}`}>
-                        {m.sign}{fmt(ev.qty)} {item.unit}
+                        {m.sign}{fmt(ev.qty, item.unit)} {item.unit}
                       </td>
                       <td className="p-2 text-right tabular-nums text-slate-600">
                         {ev.type === "purchase" ? `${rupee(ev.rate)} → ${rupee(ev.amount)}` : "—"}
@@ -216,12 +216,12 @@ export function CategoryDetailPanel({ categoryKey, stockMap, onClose }) {
                   return (
                     <tr key={r.item_id} className="border-t border-slate-100">
                       <td className="p-2 font-semibold text-slate-900">{r.name} <span className="text-[10px] text-slate-400 uppercase">{r.unit}</span></td>
-                      <td className="p-2 text-right tabular-nums text-emerald-700">{r.purchased_qty ? `+${fmt(r.purchased_qty)}` : "0"}</td>
+                      <td className="p-2 text-right tabular-nums text-emerald-700">{r.purchased_qty ? `+${fmt(r.purchased_qty, r.unit)}` : "0"}</td>
                       <td className="p-2 text-right tabular-nums text-slate-600">{r.purchased_amount ? rupee(r.purchased_amount) : "—"}</td>
-                      <td className="p-2 text-right tabular-nums text-sky-700">{r.issued_qty ? `−${fmt(r.issued_qty)}` : "0"}</td>
-                      <td className="p-2 text-right tabular-nums text-amber-700">{r.wasted_qty ? `−${fmt(r.wasted_qty)}` : "0"}</td>
+                      <td className="p-2 text-right tabular-nums text-sky-700">{r.issued_qty ? `−${fmt(r.issued_qty, r.unit)}` : "0"}</td>
+                      <td className="p-2 text-right tabular-nums text-amber-700">{r.wasted_qty ? `−${fmt(r.wasted_qty, r.unit)}` : "0"}</td>
                       <td className={`p-2 text-right tabular-nums font-bold bg-slate-50/70 ${st?.low ? "text-rose-700" : "text-slate-900"}`}>
-                        {st ? fmt(st.on_hand) : "—"}
+                        {st ? fmt(st.on_hand, r.unit) : "—"}
                         {st?.low && <AlertTriangle size={11} className="inline ml-1 text-rose-500 -mt-0.5"/>}
                       </td>
                     </tr>

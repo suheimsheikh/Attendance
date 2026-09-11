@@ -1,25 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Trash2, Loader2, CheckSquare, Square, User, CalendarClock, Edit3, Save, X, Flame, Repeat, CalendarPlus, ChevronLeft, ChevronRight, UserMinus, History, MessageSquare } from "lucide-react";
+import { Plus, Loader2, User, Flame, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
-import { recurrenceLabel } from "./ChecklistsTab";
 import TaskDarPanel from "./TaskDarPanel";
-import TodoComments from "./TodoComments";
+import HeatStrip from "./HeatStrip";
+import TodoRow from "./TodoRow";
 
-const fmtDay = (iso) => iso ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "";
-const fmtStamp = (iso) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }) : "";
-const daysSince = (iso) => { if (!iso) return null; const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000); return diff < 0 ? 0 : diff; };
-const elapsedLabel = (n) => n === null ? "" : n === 0 ? "today" : n === 1 ? "1 day ago" : `${n} days ago`;
-const daysToDue = (due, today) => { if (!due || !today) return null; return Math.round((new Date(due + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000); };
 const todayISO = () => new Date().toLocaleDateString("en-CA");
 const shiftISO = (iso, delta) => { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + delta); return d.toLocaleDateString("en-CA"); };
 const fmtLong = (iso) => iso ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) : "";
-const fmtWeekday = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" });
-const fmtDayNum = (iso) => new Date(iso + "T00:00:00").getDate();
-const heatIntensity = (total) => total === 0 ? "bg-slate-50 text-slate-400 hover:bg-slate-100"
-  : total <= 2 ? "bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
-  : total <= 5 ? "bg-indigo-300 text-indigo-900 hover:bg-indigo-400"
-  : "bg-indigo-600 text-white hover:bg-indigo-700";
 
 export default function TodosTab({ user, group }) {
   const [scope, setScope] = useState("all");
@@ -63,11 +52,8 @@ export default function TodosTab({ user, group }) {
   const toggle = async (t) => {
     setBusy(t.id);
     try {
-      if (t.source === "checklist") {
-        await api.post(`/checklists/${t.checklist_id}/tick`, { date: t.due_date, done: t.status !== "done" });
-      } else {
-        await api.patch(`/todos/${t.id}`, { status: t.status === "done" ? "open" : "done" });
-      }
+      if (t.source === "checklist") await api.post(`/checklists/${t.checklist_id}/tick`, { date: t.due_date, done: t.status !== "done" });
+      else await api.patch(`/todos/${t.id}`, { status: t.status === "done" ? "open" : "done" });
       load();
     } catch (err) { toast.error(err?.message || "Not allowed"); }
     finally { setBusy(""); }
@@ -83,8 +69,6 @@ export default function TodosTab({ user, group }) {
     catch (err) { toast.error(err?.message || "Couldn't reassign"); }
     finally { setBusy(""); }
   };
-  const canTick = (t) => t.owner_id === user.id || user.role === "admin";
-  const canEdit = (t) => t.source !== "checklist";
   const startEdit = (t) => { setEditId(t.id); setEdit({ title: t.title, due_date: t.due_date || "", owner_id: t.owner_id || "", notes: t.notes || "", urgent: !!t.urgent }); };
   const saveEdit = async () => {
     if (!edit.title.trim()) { toast.error("Title can't be empty"); return; }
@@ -95,6 +79,7 @@ export default function TodosTab({ user, group }) {
     } catch (err) { toast.error(err?.message || "Couldn't update"); }
     finally { setBusy(""); }
   };
+  const canTick = (t) => t.owner_id === user.id || user.role === "admin";
 
   return (
     <div data-testid="todos-tab">
@@ -114,29 +99,7 @@ export default function TodosTab({ user, group }) {
         </label>
       </form>
 
-      {heat && (
-        <div className="mb-3" data-testid="task-heatstrip">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Your week at a glance {scope === "mine" ? "(mine)" : "(everyone)"}</div>
-          <div className="grid grid-cols-7 gap-1">
-            {heat.days.map((d) => {
-              const total = d.due + d.overdue;
-              const active = d.date === viewDate;
-              return (
-                <button key={d.date} onClick={() => setViewDate(d.date)} data-testid={`heat-day-${d.date}`}
-                        aria-label={`${fmtLong(d.date)}: ${d.due} due${d.overdue ? `, ${d.overdue} overdue` : ""}${d.urgent ? `, ${d.urgent} urgent` : ""}`}
-                        title={`${d.due} due${d.overdue ? ` · ${d.overdue} overdue` : ""}${d.urgent ? ` · ${d.urgent} urgent` : ""}`}
-                        className={`relative rounded-lg py-1.5 text-center transition-colors ${heatIntensity(total)} ${active ? "ring-2 ring-indigo-500" : ""}`}>
-                  {d.urgent > 0 && <Flame size={9} className="absolute top-1 right-1 text-rose-500" />}
-                  <div className="text-[9px] font-bold uppercase opacity-70">{fmtWeekday(d.date)}</div>
-                  <div className="text-sm font-extrabold leading-tight">{fmtDayNum(d.date)}</div>
-                  <div className="text-[10px] font-semibold h-3 leading-3">{total > 0 ? total : ""}</div>
-                  {d.overdue > 0 && <div className="text-[8px] font-bold text-rose-600 leading-none">{d.overdue} od</div>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <HeatStrip heat={heat} viewDate={viewDate} scope={scope} onPick={setViewDate} />
 
       <div className="flex items-center justify-between gap-2 mb-3 rounded-xl bg-slate-50 ring-1 ring-slate-100 px-2 py-1.5" data-testid="todo-date-bar">
         <button onClick={() => setViewDate((d) => shiftISO(d, -1))} className="h-8 w-8 grid place-items-center rounded-full hover:bg-slate-200 text-slate-600" title="Previous day" data-testid="todo-date-prev"><ChevronLeft size={18} /></button>
@@ -167,84 +130,18 @@ export default function TodosTab({ user, group }) {
           <section key={oid} className="iu-card p-3 md:p-4 mb-3 border-l-4 border-l-indigo-400" data-testid={`todo-group-${oid}`}>
             <h3 className="text-xs font-black uppercase tracking-wider text-indigo-600 flex items-center gap-1.5 mb-2"><User size={12} /> {oid === user.id ? "My to-dos" : g.name}</h3>
             <ul className="divide-y divide-slate-100">
-              {g.items.map((t) => {
-                const overdue = t.status === "open" && t.due_date && t.due_date < today;
-                const dd = daysToDue(t.due_date, today);
-                if (editId === t.id) {
-                  return (
-                    <li key={t.id} className="py-2" data-testid={`todo-edit-${t.id}`}>
-                      <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
-                        <input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} className="iu-input !h-9 text-sm" data-testid={`todo-edit-title-${t.id}`} placeholder="Title" />
-                        <input type="date" value={edit.due_date} onChange={(e) => setEdit({ ...edit, due_date: e.target.value })} className="iu-input !h-9 !w-auto text-sm" data-testid={`todo-edit-due-${t.id}`} title="Deadline" />
-                        <select value={edit.owner_id} onChange={(e) => setEdit({ ...edit, owner_id: e.target.value })} className="iu-input !h-9 !w-auto text-sm" data-testid={`todo-edit-owner-${t.id}`} title="Assign to">
-                          <option value={user.id}>Me</option>
-                          {group.filter((m) => m.id !== user.id).map((m) => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-                        </select>
-                      </div>
-                      <input value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} className="iu-input !h-9 text-sm mt-2" data-testid={`todo-edit-notes-${t.id}`} placeholder="Notes (optional)" />
-                      <div className="flex items-center justify-between mt-2">
-                        <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 cursor-pointer select-none">
-                          <input type="checkbox" checked={edit.urgent} onChange={(e) => setEdit({ ...edit, urgent: e.target.checked })} className="accent-rose-600" data-testid={`todo-edit-urgent-${t.id}`} />
-                          <Flame size={13} /> Urgent
-                        </label>
-                        <div className="flex gap-2">
-                          <button onClick={() => setEditId("")} className="iu-btn-secondary !h-8 text-xs" data-testid={`todo-edit-cancel-${t.id}`}><X size={13} /> Cancel</button>
-                          <button onClick={saveEdit} disabled={busy === t.id} className="iu-btn-primary !h-8 text-xs" data-testid={`todo-edit-save-${t.id}`}>{busy === t.id ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save</button>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                }
-                return (
-                  <li key={t.id} className={`py-2 ${t.urgent && t.status !== "done" ? "-mx-3 md:-mx-4 px-3 md:px-4 bg-rose-50/60" : ""}`} data-testid={`todo-${t.id}`}>
-                    <div className="flex items-start gap-2">
-                    <button onClick={() => canTick(t) && toggle(t)} disabled={!canTick(t) || busy === t.id} title={canTick(t) ? "Toggle done" : "Only the owner or an admin can tick this"} className="mt-0.5 disabled:opacity-40" data-testid={`todo-toggle-${t.id}`}>
-                      {busy === t.id ? <Loader2 size={18} className="animate-spin" /> : t.status === "done" ? <CheckSquare size={18} className="text-emerald-600" /> : <Square size={18} className="text-slate-400" />}
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-sm ${t.status === "done" ? "line-through text-slate-400" : "text-slate-900"}`}>{t.title}</span>
-                        {t.urgent && t.status !== "done" && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-rose-600 text-white" data-testid={`todo-urgent-pill-${t.id}`}><Flame size={10} /> Urgent</span>
-                        )}
-                        {t.source === "checklist" && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-violet-100 text-violet-700" data-testid={`todo-checklist-pill-${t.id}`}><Repeat size={10} /> Checklist</span>
-                        )}
-                        {t.carried && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700" data-testid={`todo-carried-pill-${t.id}`}><History size={10} /> Missed yesterday</span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
-                        {t.due_date && <span className={`inline-flex items-center gap-1 font-semibold ${overdue ? "text-rose-600" : t.due_date === today ? "text-amber-700" : "text-slate-600"}`}><CalendarClock size={11} /> {overdue ? `Overdue ${fmtDay(t.due_date)} (${Math.abs(dd)}d ago)` : t.due_date === today ? "Due today" : `Due ${fmtDay(t.due_date)}${dd != null ? ` (in ${dd}d)` : ""}`}</span>}
-                        {t.source !== "checklist" && t.created_at && <span className="inline-flex items-center gap-1 text-slate-500" data-testid={`todo-added-${t.id}`}><CalendarPlus size={11} /> Added {fmtStamp(t.created_at)} · {elapsedLabel(daysSince(t.created_at))}</span>}
-                        {t.source === "checklist" && <span className="text-violet-600">{recurrenceLabel(t)}</span>}
-                        {t.created_by_id !== t.owner_id && <span>assigned by {t.created_by_name}</span>}
-                        {t.status === "done" && t.done_by_name && <span>done by {t.done_by_name}</span>}
-                        {t.notes && <span className="text-slate-400">· {t.notes}</span>}
-                      </div>
-                    </div>
-                    {canEdit(t) && (
-                      <button onClick={() => startEdit(t)} className="text-slate-300 hover:text-indigo-600" title="Edit" data-testid={`todo-edit-btn-${t.id}`}><Edit3 size={15} /></button>
-                    )}
-                    {t.source !== "checklist" && (
-                      <button onClick={() => setOpenComments((o) => o === t.id ? "" : t.id)} className={`relative ${openComments === t.id ? "text-indigo-600" : "text-slate-300 hover:text-indigo-600"}`} title="Progress notes & blockers" data-testid={`todo-comments-btn-${t.id}`}>
-                        <MessageSquare size={15} />
-                        {t.comment_count > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-0.5 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center" data-testid={`todo-comment-count-${t.id}`}>{t.comment_count}</span>}
-                      </button>
-                    )}
-                    {t.source !== "checklist" && t.owner_id !== user.id && (
-                      <button onClick={() => takeToMe(t)} disabled={busy === t.id} className="text-slate-300 hover:text-emerald-600 disabled:opacity-40" title="De-assign — bring this task to me" data-testid={`todo-take-${t.id}`}><UserMinus size={15} /></button>
-                    )}
-                    {t.source !== "checklist" && (t.owner_id === user.id || t.created_by_id === user.id || user.role === "admin") && (
-                      <button onClick={() => remove(t)} className="text-slate-300 hover:text-rose-600" title="Delete" data-testid={`todo-delete-${t.id}`}><Trash2 size={15} /></button>
-                    )}
-                    </div>
-                    {openComments === t.id && t.source !== "checklist" && (
-                      <TodoComments todo={t} user={user} onCountChange={updateCount} />
-                    )}
-                  </li>
-                );
-              })}
+              {g.items.map((t) => (
+                <TodoRow
+                  key={t.id} t={t} user={user} group={group} today={today} busy={busy}
+                  isEditing={editId === t.id} edit={edit} setEdit={setEdit}
+                  commentsOpen={openComments === t.id}
+                  canTick={canTick(t)} canEditRow={t.source !== "checklist"}
+                  onToggle={toggle} onRemove={remove} onTake={takeToMe}
+                  onStartEdit={startEdit} onSaveEdit={saveEdit} onCancelEdit={() => setEditId("")}
+                  onToggleComments={() => setOpenComments((o) => o === t.id ? "" : t.id)}
+                  onCommentCount={updateCount}
+                />
+              ))}
             </ul>
           </section>
         ))}

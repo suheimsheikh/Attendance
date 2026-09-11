@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Save, Boxes } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate } from "../../utils";
+import { formatDate, fmtQty as uQty } from "../../utils";
 
 function todayISO() {
   const d = new Date();
@@ -14,7 +14,7 @@ function todayISO() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 const num = (v) => (v === "" || v == null ? 0 : Number(v) || 0);
-const fmtQty = (n) => (n == null ? "0" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 }));
+const fmtQty = (n, unit) => (n == null ? "0" : uQty(n, unit));
 
 export default function MealIssuesTab() {
   const [dateStr, setDateStr] = useState(todayISO());
@@ -130,7 +130,7 @@ export default function MealIssuesTab() {
                     return (
                       <tr key={it.id} className={`border-t border-slate-100 ${over ? "bg-rose-50/60" : ""}`} data-testid={`issues-row-${it.id}`}>
                         <td className="p-2 font-semibold text-slate-900">{it.name}</td>
-                        <td className="p-2 text-right tabular-nums text-slate-600" data-testid={`issues-onhand-${it.id}`}>{oh != null ? fmtQty(oh) : "—"}</td>
+                        <td className="p-2 text-right tabular-nums text-slate-600" data-testid={`issues-onhand-${it.id}`}>{oh != null ? fmtQty(oh, it.unit) : "—"}</td>
                         <td className="p-2">
                           <input type="number" min="0" step="0.01" value={entries[it.id] ?? ""} onChange={(e) => setEntries({ ...entries, [it.id]: e.target.value })} className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`} placeholder="0" data-testid={`issues-qty-${it.id}`} />
                         </td>

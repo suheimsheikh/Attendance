@@ -12,11 +12,12 @@
 import React, { useEffect, useState } from "react";
 import { X, TrendingUp, TrendingDown, Minus, Phone, Loader2, Store } from "lucide-react";
 import { api, showApiError } from "../api";
+import { fmtQty as uQty } from "../utils";
 
 const inr = (n) =>
   n == null ? "—" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtQty = (n) =>
-  n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 });
+const fmtQty = (n, unit) =>
+  n == null ? "—" : uQty(n, unit);
 
 export default function VendorScorecardDrawer({ vendorId, days = 30, onClose, onOpenItem }) {
   const [data, setData] = useState(null);
@@ -118,7 +119,7 @@ export default function VendorScorecardDrawer({ vendorId, days = 30, onClose, on
                           </div>
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums text-slate-700">
-                          {fmtQty(it.qty)} <span className="text-[10px] text-slate-400">{it.unit}</span>
+                          {fmtQty(it.qty, it.unit)} <span className="text-[10px] text-slate-400">{it.unit}</span>
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums font-semibold text-emerald-700">
                           ₹{inr(it.spend)}

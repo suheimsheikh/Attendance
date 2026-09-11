@@ -18,7 +18,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, ChevronDown, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search, StickyNote, Store, TrendingUp } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate } from "../../utils";
+import { formatDate, fmtQty } from "../../utils";
 import { useRowFocus } from "../../hooks/useRowFocus";
 import VendorScorecardDrawer from "../../components/VendorScorecardDrawer";
 import ItemPriceTrendDrawer from "../../components/ItemPriceTrendDrawer";
@@ -37,8 +37,6 @@ function addDays(iso, delta) {
 const num = (v) => (v === "" || v == null ? 0 : Number(v) || 0);
 const inr = (n) =>
   n == null ? "0.00" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtQty = (n) =>
-  n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 });
 
 /**
  * Per-row Supplier picker — visible column on the Daily-entry grid
@@ -166,6 +164,14 @@ export default function MealEntryTab({ liveSig }) {
       return next;
     });
   };
+  // Start every visit to Daily entry with all categories collapsed so the
+  // long grocery list opens compact — the chef expands only what they need.
+  const didInitCollapse = useRef(false);
+  useEffect(() => {
+    if (didInitCollapse.current || cats.length === 0) return;
+    didInitCollapse.current = true;
+    setCollapsedCats(new Set(cats.map((c) => c.key)));
+  }, [cats]);
   // Date-wise totals drill-down: opened by double-clicking either the
   // Purchases or the Issues day-total card. `historyKind` picks which
   // column is emphasised in the modal ('purchase' | 'issue').
@@ -1128,12 +1134,12 @@ export default function MealEntryTab({ liveSig }) {
                             oh < 0
                               ? <span
                                   className="font-extrabold text-rose-700"
-                                  title={`Stock is negative (${fmtQty(oh)}) — likely from over-issuing on a past day. Reconcile before fresh issues.`}
+                                  title={`Stock is negative (${fmtQty(oh, it.unit)}) — likely from over-issuing on a past day. Reconcile before fresh issues.`}
                                   data-testid={`entry-onhand-negative-${it.id}`}
-                                >{fmtQty(oh)}</span>
+                                >{fmtQty(oh, it.unit)}</span>
                               : oh === 0
-                                ? <span className="font-semibold text-rose-500" title="Zero stock — nothing to issue">{fmtQty(oh)}</span>
-                                : fmtQty(oh)
+                                ? <span className="font-semibold text-rose-500" title="Zero stock — nothing to issue">{fmtQty(oh, it.unit)}</span>
+                                : fmtQty(oh, it.unit)
                           ) : "—"}
                         </td>
                         <td className="p-2 border-l-2 border-emerald-100">
@@ -1223,7 +1229,7 @@ export default function MealEntryTab({ liveSig }) {
                               const q = num(issueQty);
                               if (oh != null && q > oh + 1e-6) {
                                 toast.warning(
-                                  `Issuing ${fmtQty(q)} ${it.unit} of ${it.name} — only ${fmtQty(oh)} on hand. Stock will drop to ${fmtQty(oh - q)}.`,
+                                  `Issuing ${fmtQty(q, it.unit)} ${it.unit} of ${it.name} — only ${fmtQty(oh, it.unit)} on hand. Stock will drop to ${fmtQty(oh - q, it.unit)}.`,
                                   { duration: 6000 },
                                 );
                               }

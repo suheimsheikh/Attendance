@@ -14,11 +14,12 @@ import {
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import { api, showApiError } from "../api";
+import { fmtQty as uQty } from "../utils";
 
 const inr = (n) =>
   n == null ? "—" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtQty = (n) =>
-  n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 });
+const fmtQty = (n, unit) =>
+  n == null ? "—" : uQty(n, unit);
 
 export default function ItemPriceTrendDrawer({ itemId, itemName, onClose }) {
   const [data, setData] = useState(null);
@@ -160,7 +161,7 @@ export default function ItemPriceTrendDrawer({ itemId, itemName, onClose }) {
                       <tr key={`${p.date}-${i}`} className="border-t border-slate-100 hover:bg-slate-50/70">
                         <td className="px-3 py-1.5 tabular-nums text-slate-700">{p.date}</td>
                         <td className="px-2 py-1.5 text-slate-600">{p.vendor_name || <span className="text-slate-400">—</span>}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{fmtQty(p.qty)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{fmtQty(p.qty, data?.item?.unit)}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums text-sky-700 font-semibold">₹{inr(p.rate)}</td>
                         <td className="pr-3 pl-2 py-1.5 text-right tabular-nums font-semibold text-emerald-700">₹{inr(p.amount)}</td>
                       </tr>
@@ -169,7 +170,7 @@ export default function ItemPriceTrendDrawer({ itemId, itemName, onClose }) {
                 </table>
               </div>
               <div className="px-3 py-2 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
-                <span>Total qty: <b className="tabular-nums">{fmtQty(s.total_qty)}</b> {data?.item?.unit}</span>
+                <span>Total qty: <b className="tabular-nums">{fmtQty(s.total_qty, data?.item?.unit)}</b> {data?.item?.unit}</span>
                 <span>Total spend: <b className="tabular-nums text-emerald-700">₹{inr(s.total_spend)}</b></span>
               </div>
             </div>
@@ -203,7 +204,7 @@ function PriceTooltip({ active, payload, label, unit }) {
     <div className="bg-white ring-1 ring-slate-200 shadow-lg rounded-lg p-2 text-xs">
       <div className="font-bold text-slate-900 mb-1">{label}</div>
       <div className="text-sky-700">Rate: ₹{inr(p.rate)} / {unit || "unit"}</div>
-      <div className="text-emerald-700">Qty: {fmtQty(p.qty)} {unit || ""}</div>
+      <div className="text-emerald-700">Qty: {fmtQty(p.qty, unit)} {unit || ""}</div>
       <div className="text-slate-600">Amount: ₹{inr(p.amount)}</div>
       {p.vendor_name && <div className="text-slate-500 mt-0.5">From: {p.vendor_name}</div>}
     </div>

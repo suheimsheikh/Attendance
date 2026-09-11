@@ -6,9 +6,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, Scale, AlertTriangle, ArrowUp, ArrowDown, Check } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate } from "../../utils";
+import { formatDate, fmtQty as uQty } from "../../utils";
 
-const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN", { maximumFractionDigits: 1 }));
+const fmt = (n, unit) => (n == null ? "—" : uQty(n, unit));
 
 function isoDaysAgo(days) {
   const d = new Date();
@@ -124,10 +124,10 @@ export default function MealCrossCheckTab({ onGoMasters, liveSig }) {
                           <tr key={`${d}-${r.item_id}`} className="border-t border-slate-100" data-testid={`crosscheck-row-${d}-${r.item_id}`}>
                             <td className="p-2 font-semibold text-slate-900">{r.name} <span className="text-[10px] text-slate-400 uppercase">{r.unit}</span></td>
                             <td className="p-2 text-right tabular-nums text-slate-600">{r.servings}</td>
-                            <td className="p-2 text-right tabular-nums text-slate-600" title={`${r.servings} × ${fmt(r.norm)} ${r.unit}`}>{fmt(r.expected)}</td>
-                            <td className="p-2 text-right tabular-nums font-semibold">{fmt(r.issued)}</td>
+                            <td className="p-2 text-right tabular-nums text-slate-600" title={`${r.servings} × ${fmt(r.norm, r.unit)} ${r.unit}`}>{fmt(r.expected, r.unit)}</td>
+                            <td className="p-2 text-right tabular-nums font-semibold">{fmt(r.issued, r.unit)}</td>
                             <td className={`p-2 text-right tabular-nums font-semibold ${r.diff > 0 ? "text-rose-600" : r.diff < 0 ? "text-amber-700" : "text-slate-500"}`}>
-                              {r.diff > 0 ? "+" : ""}{fmt(r.diff)}{r.pct != null && <span className="text-[10px] text-slate-400"> ({r.pct > 0 ? "+" : ""}{r.pct}%)</span>}
+                              {r.diff > 0 ? "+" : ""}{fmt(r.diff, r.unit)}{r.pct != null && <span className="text-[10px] text-slate-400"> ({r.pct > 0 ? "+" : ""}{r.pct}%)</span>}
                             </td>
                             <td className="p-2">
                               <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${f.cls}`}

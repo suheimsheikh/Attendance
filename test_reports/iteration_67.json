@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend-only verification of three related changes: (A) Meals Daily-entry collapse-on-entry, (B) unit-aware qty decimals across meal screens + Stock Master, (C) Task Manager To-dos regression after HeatStrip/TodoRow component extraction. All three PASS visually + via data-testid probes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/meals_entry_collapsed.jpeg",
+    "/app/test_reports/meals_stockmaster.jpeg",
+    "/app/test_reports/tasks_todos_iter67.jpeg"
+  ],
+  "action_items": [
+    "None from a functional standpoint — all three changes verified.",
+    "ENV NOTE (not caused by this change): The exec.test@example.com / dar.test@example.com test users are documented in /app/memory/test_credentials.md but are NOT seeded by the backend startup routine — the users collection in the preview DB had them missing. Testing agent had to re-seed exec.test manually (users doc + rules_acceptances). Consider adding an idempotent seed for these two accounts in _seed_database so future iterations don't hit the same wall."
+  ],
+  "critical_code_review_comments": [
+    "utils.fmtQty correctly uses en-IN locale with min/maxFractionDigits=1 for weight/volume (guarantees trailing .0) and 0 for count units — matches requirement precisely.",
+    "MealEntryTab.jsx didInitCollapse useRef pattern ensures collapse-on-entry fires exactly once after cats load — and because collapsedCats is initialised from localStorage, subsequent expands are still persisted across renders within the same session. Confirmed collapsed state also survives leaving the /admin/meals-report route and coming back (component unmounts → didInitCollapse resets → re-collapses all cats, which matches the requested 'each time you enter the tab' behaviour).",
+    "MealEntryTab still writes to localStorage 'mealEntry.collapsedCats' on toggle but overwrites it on remount via the init effect — the localStorage read on mount is effectively ignored. Harmless but dead code."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "Admin: admin@attendance.app / Admin@12345 (works). Executive: exec.test@example.com / Exec@12345 — had to be re-seeded via direct DB insert (see action_items). Rules acceptance also seeded for this user.",
+  "seed_data_creation": "Inserted users doc for exec.test@example.com (bcrypt Exec@12345, role=member, category=executive) and a rules_acceptances doc for version 2026-09 so /tasks is reachable without the /rules gate.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Meals Daily-entry categories are collapsed by default on every mount via didInitCollapse useRef. Unit-decimal rules live in /app/frontend/src/utils.js fmtQty(); COUNT_UNITS covers pc/pcs/pkt/dozen/tray/etc. If you see a count-unit item still showing a decimal, double-check the item's `unit` string matches the whitelist (case-insensitive, trimmed). Task Manager /tasks?tab=todos requires the exec test user to (a) exist and (b) have a rules_acceptances row for the current version, otherwise the route redirects to /rules.",
+  "verification_details": {
+    "A_collapse_on_entry": "7 category headers visible, entry-row-* count on load = 0. Navigated away to /admin and back to /admin/meals-report — still 0 visible rows on re-entry. PASS.",
+    "B_unit_decimals": "Stock Master screenshot verified: Guava/Orange/Papaya (KG) → 12.1, 0.0, 12.6; Almonds (KG) → 2.0/0.4/1.6 (trailing zero preserved); Atta (KG) → 0.0/15.0/-15.0; Apple/Pineapple (PC) → 16/8 whole; Banana (DO=dozen) → 26/5/21 whole; Bread (PA=pack) → 21/12/9 whole. Rates/amounts all show 2 decimals (₹1,823.29, ₹1,131.90, ₹1,852.61).",
+    "C_task_manager": "heatstrip present, heat-day-2026-09-11 … heat-day-2026-09-17 (7 days). Clicking heat-day-2026-09-14 applies ring-2 ring-indigo-500 and date bar switches to 'Mon, 14 Sept 2026'. Tabs today/todos/checklists all rendered. Todo row shows todo-toggle, todo-edit-btn, todo-comments-btn, todo-take. Delete is only shown to creators (row was authored by another user) — expected. Clicking edit reveals inline edit form with Save/Cancel. No console errors during flow."
+  }
+}
