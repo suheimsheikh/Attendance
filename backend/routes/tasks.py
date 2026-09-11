@@ -168,9 +168,11 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
         return {"members": await _group()}
 
     # ── To-dos ────────────────────────────────────────────────────────
-    async def _checklist_todos(user: dict, scope: str, status: str, iso: str) -> list:
+    async def _checklist_todos(user: dict, scope: str, status: str, iso: str, server_today: str) -> list:
         """Checklist items due on `iso` surface in the To-dos list as virtual,
-        read-only tasks dated to that day. Ticking one flows to /checklists tick."""
+        read-only tasks dated to that day. Ticking one flows to /checklists tick.
+        On today's view we also carry forward *yesterday's* missed (unticked)
+        items so nothing quietly slips through."""
         office = await _office()
         default_wo = (office.get("default_weekly_off") or "sunday").lower()
         if scope == "mine":
@@ -180,29 +182,43 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
                 {"status": {"$ne": "left"}, "category": {"$in": sorted(TASK_CATEGORIES)}},
                 {"_id": 0, "id": 1, "full_name": 1, "weekly_off": 1},
             ).to_list(500)
+        # Carry-forward only applies when looking at the real "today", and only
+        # for the pending/all filters (a missed item is by definition open).
+        carry = iso == server_today and status != "done"
+        yday = (date.fromisoformat(iso) - timedelta(days=1)).isoformat() if carry else None
+
+        def _row(c: dict, o: dict, day: str, st: str, carried: bool) -> dict:
+            return {
+                "id": f"cl:{c['id']}:{day}", "title": c["title"], "notes": None,
+                "owner_id": o["id"], "owner_name": o.get("full_name"),
+                "created_by_id": o["id"], "created_by_name": o.get("full_name"),
+                "due_date": day, "status": st, "urgent": False,
+                "done_at": None, "done_by_name": None, "created_at": c.get("created_at"),
+                "updated_at": None, "source": "checklist", "checklist_id": c["id"],
+                "recurrence": c.get("recurrence"), "carried": carried,
+                "carried_from": yday if carried else None,
+            }
+
         out = []
         for o in owners:
             wo = (o.get("weekly_off") or default_wo).lower()
             items = await db.checklists.find({"owner_id": o["id"], "active": {"$ne": False}}, {"_id": 0}).to_list(500)
-            applicable = [c for c in items if checklist_applies(c, iso, wo)]
-            if not applicable:
+            if not items:
                 continue
-            ticks = {t["checklist_id"] async for t in db.checklist_ticks.find(
-                {"owner_id": o["id"], "date": iso}, {"_id": 0, "checklist_id": 1})}
-            for c in applicable:
-                done = c["id"] in ticks
-                st = "done" if done else "open"
-                if status in ("open", "done") and status != st:
-                    continue
-                out.append({
-                    "id": f"cl:{c['id']}:{iso}", "title": c["title"], "notes": None,
-                    "owner_id": o["id"], "owner_name": o.get("full_name"),
-                    "created_by_id": o["id"], "created_by_name": o.get("full_name"),
-                    "due_date": iso, "status": st, "urgent": False,
-                    "done_at": None, "done_by_name": None, "created_at": c.get("created_at"),
-                    "updated_at": None, "source": "checklist", "checklist_id": c["id"],
-                    "recurrence": c.get("recurrence"),
-                })
+            dates = [iso] + ([yday] if carry else [])
+            ticks_by_day = {}
+            for day in dates:
+                ticks_by_day[day] = {t["checklist_id"] async for t in db.checklist_ticks.find(
+                    {"owner_id": o["id"], "date": day}, {"_id": 0, "checklist_id": 1})}
+            for c in items:
+                if checklist_applies(c, iso, wo):
+                    done = c["id"] in ticks_by_day[iso]
+                    st = "done" if done else "open"
+                    if not (status in ("open", "done") and status != st):
+                        out.append(_row(c, o, iso, st, False))
+                # Yesterday's missed (applied yesterday, still not ticked)
+                if carry and checklist_applies(c, yday, wo) and c["id"] not in ticks_by_day[yday]:
+                    out.append(_row(c, o, yday, "open", True))
         return out
 
     @router.get("/todos")
@@ -224,7 +240,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
         q["$or"] = date_or
         rows = await db.todos.find(q, {"_id": 0}).sort([("status", 1), ("due_date", 1), ("created_at", -1)]).to_list(2000)
         packed = [_pack_todo(t) for t in rows]
-        packed += await _checklist_todos(user, scope, status, iso)
+        packed += await _checklist_todos(user, scope, status, iso, server_today)
         return {"rows": packed, "today": server_today, "view_date": iso}
 
     async def _owner(owner_id: Optional[str], user: dict) -> dict:

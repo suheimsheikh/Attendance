@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, Loader2, CheckSquare, Square, User, CalendarClock, Edit3, Save, X, Flame, Repeat, CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Loader2, CheckSquare, Square, User, CalendarClock, Edit3, Save, X, Flame, Repeat, CalendarPlus, ChevronLeft, ChevronRight, UserMinus, History } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { recurrenceLabel } from "./ChecklistsTab";
@@ -64,8 +64,14 @@ export default function TodosTab({ user, group }) {
     try { await api.del(`/todos/${t.id}`); load(); }
     catch (err) { toast.error(err?.message || "Not allowed"); }
   };
+  const takeToMe = async (t) => {
+    setBusy(t.id);
+    try { await api.patch(`/todos/${t.id}`, { owner_id: user.id }); toast.success("Task is now yours"); load(); }
+    catch (err) { toast.error(err?.message || "Couldn't reassign"); }
+    finally { setBusy(""); }
+  };
   const canTick = (t) => t.owner_id === user.id || user.role === "admin";
-  const canEdit = (t) => t.source !== "checklist" && (t.owner_id === user.id || t.created_by_id === user.id || user.role === "admin");
+  const canEdit = (t) => t.source !== "checklist";
   const startEdit = (t) => { setEditId(t.id); setEdit({ title: t.title, due_date: t.due_date || "", owner_id: t.owner_id || "", notes: t.notes || "", urgent: !!t.urgent }); };
   const saveEdit = async () => {
     if (!edit.title.trim()) { toast.error("Title can't be empty"); return; }
@@ -166,6 +172,9 @@ export default function TodosTab({ user, group }) {
                         {t.source === "checklist" && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-violet-100 text-violet-700" data-testid={`todo-checklist-pill-${t.id}`}><Repeat size={10} /> Checklist</span>
                         )}
+                        {t.carried && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700" data-testid={`todo-carried-pill-${t.id}`}><History size={10} /> Missed yesterday</span>
+                        )}
                       </div>
                       <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
                         {t.due_date && <span className={`inline-flex items-center gap-1 font-semibold ${overdue ? "text-rose-600" : t.due_date === today ? "text-amber-700" : "text-slate-600"}`}><CalendarClock size={11} /> {overdue ? `Overdue ${fmtDay(t.due_date)} (${Math.abs(dd)}d ago)` : t.due_date === today ? "Due today" : `Due ${fmtDay(t.due_date)}${dd != null ? ` (in ${dd}d)` : ""}`}</span>}
@@ -178,6 +187,9 @@ export default function TodosTab({ user, group }) {
                     </div>
                     {canEdit(t) && (
                       <button onClick={() => startEdit(t)} className="text-slate-300 hover:text-indigo-600" title="Edit" data-testid={`todo-edit-btn-${t.id}`}><Edit3 size={15} /></button>
+                    )}
+                    {t.source !== "checklist" && t.owner_id !== user.id && (
+                      <button onClick={() => takeToMe(t)} disabled={busy === t.id} className="text-slate-300 hover:text-emerald-600 disabled:opacity-40" title="De-assign — bring this task to me" data-testid={`todo-take-${t.id}`}><UserMinus size={15} /></button>
                     )}
                     {t.source !== "checklist" && (t.owner_id === user.id || t.created_by_id === user.id || user.role === "admin") && (
                       <button onClick={() => remove(t)} className="text-slate-300 hover:text-rose-600" title="Delete" data-testid={`todo-delete-${t.id}`}><Trash2 size={15} /></button>

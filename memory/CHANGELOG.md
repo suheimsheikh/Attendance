@@ -3,6 +3,17 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 11 Jun 2026 (pt.2) — Carry-forward, de-assign, check-out nudge, Approvals colour
+
+- **Checklist carry-forward**: on today's To-dos view, yesterday's missed (unticked) checklist items surface as extra read-only rows with an amber "Missed yesterday" badge (`_checklist_todos` now takes `server_today`; frontend `todo-carried-pill`). Historical date views are unaffected.
+- **De-assign / open reassign** (`TodosTab.jsx`): a `todo-take-<id>` (UserMinus) button on any to-do owned by someone else reassigns it to the current user ("Task is now yours"); `canEdit` relaxed so any task-manager member can open the edit form and reassign to anybody (backend `patch_todo` already permits owner changes). Delete stays owner/creator/admin-only.
+- **Pre-checkout WhatsApp nudge** (`components/CheckoutTaskNudge.jsx`, new): when a task-manager user is checked in, an amber banner on the check-in page lists their urgent + due-today/overdue open to-dos with a one-tap "Share to WhatsApp" button (client-initiated, reuses `shareToWhatsApp`). Wired into `SelfCheckIn.jsx`.
+- **Approvals nav colour**: removed the amber/yellow `highlight` styling from the Approvals sidebar item — it now uses the standard sky active pill + neutral badge.
+- Tested: iteration 63 (carry-forward + de-assign, 100%) and iteration 64 (check-out nudge, 100%).
+- Advisory (no code change): provided the user a list of orphaned/dead pages (CheckIn, admin/Sessions, admin/Overtime, admin/CheckinApprovals, admin/AdminCorrections, DisabledFeature) and live-but-maybe-unused features for their review before any removal.
+
+---
+
 ## 11 Jun 2026 — Task Manager: date view, urgent, DAR panel + checklist injection
 
 - Renamed **Tasks → Task Manager** (sidebar label in `Layout.jsx`, page heading in `Tasks.jsx`). Added a colourful gradient banner header + coloured tabs/cards.

@@ -1,0 +1,23 @@
+{
+  "summary": "Tested CheckoutTaskNudge (pre-checkout WhatsApp nudge) on SelfCheckIn page for executive user. All acceptance criteria pass: nudge renders only when checked in, lists urgent/due-today todo with red flame + 'URGENT · DUE TODAY' label, Share to WhatsApp button opens wa.me deep link with correct caption and shows toast, Open Task Manager link navigates to /tasks?tab=todos, and nudge is absent when checked out. No JS/console errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CheckoutTaskNudge.jsx: on desktop share button always opens WhatsApp Web via popup + copies caption; on browsers blocking window.open the toast still says 'WhatsApp Web opened' — minor UX nit, not blocking.",
+    "The nudge also surfaces urgent items from todos_upcoming (future-dated). Copy 'Before you leave' fits due/overdue but may feel odd for a far-future urgent item; consider filtering to due within N days. Not blocking."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "exec.test@example.com / Exec@12345",
+  "seed_data_creation": "Created urgent due-today todo 'TEST_Submit regatta report' (id e1d289ae...) via POST /api/todos and deleted it after test. Checked exec user in via /api/attendance/geo-toggle and checked them out again (with DAR text) to restore state.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "CheckoutTaskNudge is stable. localStorage token key is 'ishowedup_token'. Login UI defaults to phone; email/password requires clicking 'Admin sign in with email' — easier for automation to POST /api/auth/login and inject token into localStorage. DAR (>=20 chars) required on checkout via geo-toggle.",
+  "captured_share_url": "https://web.whatsapp.com/send?text=...Before%20I%20leave...%F0%9F%94%B4%20%5BURGENT%5D%20TEST_Submit%20regatta%20report%20(due%20today)"
+}

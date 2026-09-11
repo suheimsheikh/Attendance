@@ -1,0 +1,27 @@
+{
+  "summary": "Frontend verification of Task Manager - To-dos new features: (1) Checklist Carry-Forward and (2) De-assign to self / Open reassign. All flows worked correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verified_flows": [
+    "Login as exec.test@example.com and navigate to /tasks?tab=todos OK",
+    "Carry-forward on TODAY (Everyone, Pending): 2 carried rows with data-testid todo-carried-pill-cl:<uuid>:2026-09-10 and amber 'Missed yesterday' badge; 'Open the boat shed and log the keys' appears twice (today + carried)",
+    "Mine scope shows 1 carried row (exec's own checklist)",
+    "Navigating to previous day (todo-date-prev) shows 0 carried badges (historical view has none)",
+    "Ticking a carried row toggle removes it after reload (checklist tick recorded for yesterday's date)",
+    "Take-to-me (todo-take-<id>) reassigned Coach's non-checklist todo to exec; toast 'To-do updated' shown; row moved to MY TO-DOS on reload; take button no longer visible for exec",
+    "Edit reassign: todo-edit-btn-<id> visible on non-checklist rows the user does not own; owner dropdown (todo-edit-owner-<id>) populated with 19 users; changing owner to ASIF AHMED persisted (row appeared under ASIF AHMED with 'assigned by Coach Test User')",
+    "Ownership restored back to Coach Test User for cleanup"
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Success toast in TodosTab shows 'To-do updated' rather than the requested 'Task is now yours' text for the take-to-me action. Minor UX mismatch with the review spec - consider distinguishing take-to-me toast."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "exec.test@example.com / Exec@12345",
+  "seed_data_creation": "None; existing seeded 'Coach test todo' was temporarily reassigned during edit test and restored to Coach Test User.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Server today = 2026-09-11; carried rows carry ids like cl:<uuid>:2026-09-10. Coach todo id used: 1f21b0a1-c288-4a2c-99b9-4ca23012b41e (owned by Coach ae0fffb3-31bb-498a-99a2-e6dcdc1399c0)."
+}

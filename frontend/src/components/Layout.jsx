@@ -74,7 +74,7 @@ const NAV_ATTENDANCE_LIVE = [
   { to: "/presence", label: "Presence", icon: LayoutDashboard, hint: "Who is on campus right now" },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays, hint: "Holidays, weekly offs, camps and regattas at a glance", adminOnly: true },
   { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true, hint: "Single-glance summary: on campus, on leave, alerts", adminOnly: true },
-  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, highlight: true, badgeKey: "approvals_page", hint: "Pending leaves, corrections and check-in approvals in one queue", adminOnly: true },
+  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, badgeKey: "approvals_page", hint: "Pending leaves, corrections and check-in approvals in one queue", adminOnly: true },
   { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, hint: "All-in-one 31-day attendance grid with drill-downs and exports", adminOnly: true },
   { to: "/admin/dar", label: "DAR Reports", icon: FileText, hint: "Daily Activity Reports filed at check-out — search, filter, missed-DAR payroll list", adminOnly: true },
   { to: "/admin/devices", label: "Access Requests", icon: IdCard, hint: "Approve or block new phones/devices requesting access", adminOnly: true },

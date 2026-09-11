@@ -11,6 +11,7 @@ import ReasonPrompt from "../components/ReasonPrompt";
 import { DarTextarea, DarShareButton } from "../components/Dar";
 import DarPendingCard from "../components/DarPendingCard";
 import TodayTasksCard from "../components/TodayTasksCard";
+import CheckoutTaskNudge from "../components/CheckoutTaskNudge";
 import { formatDistance } from "../utils/shareWhatsApp";
 import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import OutOfGeofenceModal from "../components/OutOfGeofenceModal";
@@ -380,6 +381,7 @@ export default function SelfCheckIn() {
       {!onTempOut && (
         <div className="iu-card p-8 text-center" data-testid="self-checkin-card">
           <Greeting user={user} checkedIn={!!status?.checked_in} />
+          {status?.checked_in && <CheckoutTaskNudge userName={user?.full_name} />}
           {darNeededNow && (
             <DarTextarea value={darText} onChange={setDarText} minChars={darMin} />
           )}
