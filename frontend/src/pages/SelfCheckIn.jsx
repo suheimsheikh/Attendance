@@ -525,7 +525,7 @@ export default function SelfCheckIn() {
               <DarShareButton dar={lastDar} name={user?.full_name} groupName={darStatus?.group_name} />
             </div>
           )}
-          {lastAction && (
+          {lastAction && !lastDar && (
             <button
               type="button"
               data-testid="share-whatsapp-btn"
