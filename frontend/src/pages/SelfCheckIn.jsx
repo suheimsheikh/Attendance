@@ -136,6 +136,8 @@ export default function SelfCheckIn() {
     }
     if (!darNeededNow) spokenRef.current = false;
   }, [darNeededNow]);
+  // Stop any in-progress spoken reminder when leaving the page.
+  useEffect(() => () => { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch { /* no-op */ } }, []);
 
 
   // Overtime detection (staff only).

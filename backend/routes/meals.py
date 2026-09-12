@@ -2943,7 +2943,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         #    their own columns per date; `balance` carries forward the
         #    on-hand after each day.
         opening_stock = float(item.get("opening_stock") or 0)
-        low = min(as_of, s)
+        low = as_of   # never pull movements before the opening baseline
         rng_q = {"date": {"$gte": low, "$lte": e}, "lines.item_id": item_id}
         mv_proj = {"_id": 0, "date": 1, "lines": 1}
         p_all = await db.meal_purchases.find(rng_q, mv_proj).to_list(3000)
@@ -3156,6 +3156,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "qty": variance,               # signed: +extra / −loss
                 "physical": round(physical, 4),
                 "system": round(system, 4),
+                "avg_rate": round(float(namemap.get(iid, {}).get("avg_rate") or 0), 4),
                 "kind": "stock_take",
                 "notes": (str(ln.get("notes") or "").strip() or None),
                 "at": now_iso,
@@ -3169,6 +3170,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         await db.meal_adjustments.update_one(
             {"date": d}, {"$set": {"updated_at": now_iso, "updated_by": by_id,
                                    "updated_by_name": by_name}}, upsert=True)
+        # Don't leave an empty adjustments doc behind (all-unchanged counts).
+        after = await db.meal_adjustments.find_one({"date": d}, {"_id": 0, "lines": 1})
+        if not (after or {}).get("lines"):
+            await db.meal_adjustments.delete_one({"date": d})
         await _signal_meals("adjustments", d)
         return {"date": d, "counted": counted, "losses": losses,
                 "extras": extras, "unchanged": unchanged, "lines": result_lines}
@@ -3203,11 +3208,20 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 if not iid:
                     continue
                 qty = float(ln.get("qty") or 0)
-                a = agg.setdefault(iid, {"loss_qty": 0.0, "extra_qty": 0.0, "count": 0})
+                # Value each line at the rate captured when it was counted;
+                # fall back to the item's current avg rate for older lines.
+                rate = ln.get("avg_rate")
+                if rate is None:
+                    rate = float((info.get(iid) or {}).get("avg_rate") or 0)
+                rate = float(rate or 0)
+                a = agg.setdefault(iid, {"loss_qty": 0.0, "extra_qty": 0.0,
+                                         "loss_value": 0.0, "extra_value": 0.0, "count": 0})
                 if qty < 0:
                     a["loss_qty"] += -qty
+                    a["loss_value"] += -qty * rate
                 elif qty > 0:
                     a["extra_qty"] += qty
+                    a["extra_value"] += qty * rate
                 a["count"] += 1
                 history.append({
                     "date": d["date"], "item_id": iid, "qty": round(qty, 4),
@@ -3225,22 +3239,20 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "unit": m.get("unit") or im.get("unit"),
                 "category_key": ckey,
                 "category_label": cat_label.get(ckey, (ckey or "").replace("_", " ").title()),
-                "avg_rate": float(m.get("avg_rate") or 0),
             }
 
         rows = []
         for iid, a in agg.items():
             m = _meta(iid)
-            rate = m["avg_rate"]
             net_qty = round(a["extra_qty"] - a["loss_qty"], 4)
             rows.append({
                 "item_id": iid, "name": m["name"], "unit": m["unit"],
                 "category_key": m["category_key"], "category_label": m["category_label"],
                 "loss_qty": round(a["loss_qty"], 4), "extra_qty": round(a["extra_qty"], 4),
                 "net_qty": net_qty, "count": a["count"],
-                "loss_value": round(a["loss_qty"] * rate, 2),
-                "extra_value": round(a["extra_qty"] * rate, 2),
-                "net_value": round(net_qty * rate, 2),
+                "loss_value": round(a["loss_value"], 2),
+                "extra_value": round(a["extra_value"], 2),
+                "net_value": round(a["extra_value"] - a["loss_value"], 2),
             })
         rows.sort(key=lambda r: (-(r["loss_value"] + r["extra_value"]),
                                  -(r["loss_qty"] + r["extra_qty"])))

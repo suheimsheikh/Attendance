@@ -25,11 +25,13 @@ export default function ItemLedgerDrawer({ itemId, itemName, unit, onClose }) {
   useEscape(onClose);
 
   useEffect(() => {
+    let ignore = false;
     setLoading(true);
     api.get(`/meals/items/${itemId}/ledger?start=${start}&end=${end}&granularity=${gran}`)
-      .then(setData)
-      .catch((err) => showApiError(err, "Couldn't load ledger"))
-      .finally(() => setLoading(false));
+      .then((d) => { if (!ignore) setData(d); })
+      .catch((err) => { if (!ignore) showApiError(err, "Couldn't load ledger"); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
   }, [itemId, start, end, gran]);
 
   const item = data?.item;

@@ -4,6 +4,19 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
 
+## 12 Sep 2026 (pt.4) — Code review fixes
+
+- **[MEDIUM fixed]** Stock-take variance report undervalued items that were later deactivated (avg_rate fell back to 0 → ₹0 loss/extra, mis-ranked, excluded from totals). Now each adjustment line stores `avg_rate` at count time and the report values every line by its stored rate (falls back to current avg rate for legacy lines). Verified: value persists after an item is deactivated.
+- **[LOW]** `stock_take_save` no longer leaves an empty `meal_adjustments` doc behind for all-unchanged counts (deletes the doc if `lines` ends empty).
+- **[LOW]** `ItemLedgerDrawer` fetch now has a stale-response guard (ignore flag) so fast granularity/range toggling can't show mismatched data.
+- **[LOW]** `SelfCheckIn` cancels any in-progress spoken DAR reminder on unmount.
+- **[LOW]** Stock-take printable count sheet portal is now gated to the "count" view (won't render/print in the report view).
+- **[LOW]** `item_ledger` no longer pulls movements before `opening_stock_as_of` when the chosen range starts earlier (`low = as_of`), preventing a wrong running balance.
+- Reviewed & accepted as-is: non-atomic per-item `$pull`+`$push` (negligible under admin/chef concurrency); back-dated counts don't retro-reconcile later days (inherent to the chosen start-of-day continuous ledger — expected). ruff/eslint clean; no dead code (PieChart already removed).
+
+---
+
+
 ## 12 Sep 2026 (pt.3) — DAR voice reminder + forgot-checkout DAR gate; DAR bypass RCA
 
 - **Voice reminder (SelfCheckIn)**: DAR-required members now hear a spoken prompt ("Please fill in your Daily Activity Report before checking out") via the browser's built-in speech synthesis — once when the DAR first becomes needed and again if they tap Check out while it's still empty. Added a "Hear reminder" replay button (`dar-voice-replay`) by the DAR box. Zero cost, plays on the member's own device.

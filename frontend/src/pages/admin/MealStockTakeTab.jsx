@@ -225,7 +225,7 @@ export default function MealStockTakeTab({ liveSig }) {
       )}
 
       {/* Printable count sheet — blank physical column to tick on paper. */}
-      {typeof document !== "undefined" && createPortal(
+      {view === "count" && typeof document !== "undefined" && createPortal(
         <div className="hidden print:block bg-white" data-testid="stocktake-print-region">
           <div className="border-b-2 border-slate-800 pb-3 mb-4">
             <h1 className="text-2xl font-extrabold text-slate-900">Stock-take Count Sheet</h1>
