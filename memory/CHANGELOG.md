@@ -4,6 +4,18 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
 
+## 12 Sep 2026 — Stock ledger drawer, weekly Stock Take, sidebar cleanup
+
+- **Sidebar cleanup**: removed the standalone **Kitchen Analytics** link from the left nav (both `NAV_COACH_KITCHEN` and `NAV_KITCHEN` in `Layout.jsx`). It stays reachable as the **Analytics** tab inside Purchases & Issues. "Compare Items" kept.
+- **Item ledger drawer** (`ItemLedgerDrawer.jsx`): double-clicking an item's name on the **Daily Entry** grid now opens a passbook-style ledger (was: price-trend). Columns per date: Purchased / Amount / Issued / Wasted / **Stock-take** / running **Stock on hand**; plus an opening-balance row, totals footer and final on-hand. Backend `GET /meals/items/{id}/ledger` extended with `rows[]` (per-date, running `balance`, `adj_qty`), `opening_balance`, and `totals.adjusted_qty`. (Price-trend drawer still reachable from the Vendor Scorecard.)
+- **Weekly Stock Take** (`MealStockTakeTab.jsx`, new tab in Purchases & Issues): pick a date → see each item's SYSTEM on-hand at the **start** of that day, enter the **physical** count, live **Variance** shows loss (red) / extra (green). Save posts a **signed stock-take adjustment line** (new `meal_adjustments` collection) so the **continuous ledger reconciles** — NOT a re-baseline. Partial counts allowed; re-opening a date prefills prior counts. Endpoints `GET/POST /meals/stock-take`.
+- **On-hand math**: `_stock_snapshot` (central helper used by `/meals/stock`, procurement, cross-check, ledger) now includes signed adjustments in both qty (`adjusted`) and value (`on_hand_value`).
+- User choices: continuous ledger + signed loss/extra line (not re-baseline); partial stock-take; count at START of day.
+- Tested: backend curl (adjustment posts, ledger reconciles, sheet prefills); testing_agent iteration_70 (frontend 6/7 flows verified, no bugs; 7th skipped due to a Playwright selector quirk, not a product issue).
+
+---
+
+
 ## 11 Jun 2026 (pt.6) — Net-movement line, sub-categories, deploy migration
 
 - **Compare tab — Net line**: added a third line **Net (purchased − issued)** (green dashed, with a zero reference line) and a Net total card that flips sign/colour; works in both Quantity and ₹ modes.

@@ -249,6 +249,16 @@ class WastageUpsertIn(BaseModel):
     lines: List[dict]
 
 
+class StockTakeIn(BaseModel):
+    """Body for POST /api/meals/stock-take — a weekly physical count.
+    `lines` is a list of `{item_id, physical_qty, notes?}`. The server
+    computes the variance vs system on-hand and posts a signed
+    adjustment line (loss/extra) so the continuous ledger reconciles to
+    the counted number."""
+    date: str
+    lines: List[dict]
+
+
 class MealMarkIn(BaseModel):
     """Body for /api/meals/mark-bulk and /api/meals/unmark-bulk.
     Defined at module scope (not inside make_router) so `from __future__
@@ -2569,6 +2579,9 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         wast_docs = await db.meal_wastage.find(
             {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
         ).to_list(5000)
+        adj_docs = await db.meal_adjustments.find(
+            {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
+        ).to_list(5000)
 
         item_opening_as_of = {i["id"]: i.get("opening_stock_as_of") or "1970-01-01"
                               for i in items}
@@ -2599,6 +2612,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         purch_from = _sum_from(purch_docs)
         iss_from = _sum_from(iss_docs)
         wast_from = _sum_from(wast_docs)
+        adj_from = _sum_from(adj_docs)   # signed: +extra / −loss
         purch_amount = _sum_amount_from(purch_docs)
 
         rows = []
@@ -2608,7 +2622,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             p = round(purch_from.get(iid, 0.0), 4)
             iq = round(iss_from.get(iid, 0.0), 4)
             w = round(wast_from.get(iid, 0.0), 4)
-            on_hand = round(opening + p - iq - w, 4)
+            adj = round(adj_from.get(iid, 0.0), 4)
+            on_hand = round(opening + p - iq - w + adj, 4)
             min_s = round(float(it.get("min_stock") or 0), 4)
             low = on_hand <= (min_s if min_s > 0 else 0.001)
             # Weighted-avg cost for stock valuation. Standard WAC approach:
@@ -2628,7 +2643,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 opening_value = round(opening * avg_rate, 2)
             issued_value = round(iq * avg_rate, 2)
             wasted_value = round(w * avg_rate, 2)
-            on_hand_value = round(opening_value + purch_amt - issued_value - wasted_value, 2)
+            adj_value = round(adj * avg_rate, 2)   # signed
+            on_hand_value = round(opening_value + purch_amt - issued_value - wasted_value + adj_value, 2)
             rows.append({
                 "item_id": iid,
                 "name": it.get("name"),
@@ -2641,6 +2657,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "purchased": p,
                 "issued": iq,
                 "wasted": w,
+                "adjusted": adj,
                 "on_hand": on_hand,
                 "min_stock": min_s,
                 "low": low,
@@ -2863,7 +2880,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
 
         events: list[dict] = []
         tot = {"purchased_qty": 0.0, "purchased_amount": 0.0,
-               "issued_qty": 0.0, "wasted_qty": 0.0}
+               "issued_qty": 0.0, "wasted_qty": 0.0, "adjusted_qty": 0.0}
 
         def _collect(docs, typ):
             for doc in docs:
@@ -2880,15 +2897,22 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                         tot["purchased_amount"] += float(line.get("amount") or 0)
                     elif typ == "issue":
                         tot["issued_qty"] += qty
+                    elif typ == "adjustment":
+                        ev["physical"] = line.get("physical")
+                        ev["system"] = line.get("system")
+                        ev["notes"] = line.get("notes")
+                        tot["adjusted_qty"] += qty
                     else:
                         ev["reason"] = line.get("reason")
                         ev["notes"] = line.get("notes")
                         tot["wasted_qty"] += qty
                     events.append(ev)
 
+        adj = await db.meal_adjustments.find(q, proj).to_list(400)
         _collect(purch, "purchase")
         _collect(iss, "issue")
         _collect(wast, "wastage")
+        _collect(adj, "adjustment")
         events.sort(key=lambda x: (x["date"], x["type"]), reverse=True)
 
         # Current on-hand (same math as /meals/stock, single item, as of today).
@@ -2907,10 +2931,187 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         on_hand = round(float(item.get("opening_stock") or 0)
                         + await _qty_sum(db.meal_purchases)
                         - await _qty_sum(db.meal_issues)
-                        - await _qty_sum(db.meal_wastage), 4)
+                        - await _qty_sum(db.meal_wastage)
+                        + await _qty_sum(db.meal_adjustments), 4)
+
+        # ── Passbook-style per-date rows with a running stock-in-hand
+        #    balance (Jun 2026 — double-click ledger on Daily Entry).
+        #    Purchases / Issues / Wastage / Stock-take adjustments sit in
+        #    their own columns per date; `balance` carries forward the
+        #    on-hand after each day.
+        opening_stock = float(item.get("opening_stock") or 0)
+        low = min(as_of, s)
+        rng_q = {"date": {"$gte": low, "$lte": e}, "lines.item_id": item_id}
+        mv_proj = {"_id": 0, "date": 1, "lines": 1}
+        p_all = await db.meal_purchases.find(rng_q, mv_proj).to_list(3000)
+        i_all = await db.meal_issues.find(rng_q, mv_proj).to_list(3000)
+        w_all = await db.meal_wastage.find(rng_q, mv_proj).to_list(3000)
+        a_all = await db.meal_adjustments.find(rng_q, mv_proj).to_list(3000)
+
+        move: dict[str, dict] = {}
+
+        def _bucket(dd: str) -> dict:
+            return move.setdefault(dd, {"purch_qty": 0.0, "purch_amt": 0.0,
+                                        "issue_qty": 0.0, "waste_qty": 0.0,
+                                        "adj_qty": 0.0})
+
+        for doc in p_all:
+            for ln in doc.get("lines") or []:
+                if ln.get("item_id") != item_id:
+                    continue
+                qv = float(ln.get("qty") or 0)
+                b = _bucket(doc["date"])
+                b["purch_qty"] += qv
+                b["purch_amt"] += float(ln.get("amount") or (qv * float(ln.get("rate") or 0)))
+        for doc in i_all:
+            for ln in doc.get("lines") or []:
+                if ln.get("item_id") == item_id:
+                    _bucket(doc["date"])["issue_qty"] += float(ln.get("qty") or 0)
+        for doc in w_all:
+            for ln in doc.get("lines") or []:
+                if ln.get("item_id") == item_id:
+                    _bucket(doc["date"])["waste_qty"] += float(ln.get("qty") or 0)
+        for doc in a_all:
+            for ln in doc.get("lines") or []:
+                if ln.get("item_id") == item_id:
+                    _bucket(doc["date"])["adj_qty"] += float(ln.get("qty") or 0)
+
+        # Opening balance = opening stock + net movement between the
+        # opening as-of date and the day BEFORE the range start.
+        opening_balance = opening_stock
+        for dd, mv in move.items():
+            if as_of <= dd < s:
+                opening_balance += mv["purch_qty"] - mv["issue_qty"] - mv["waste_qty"] + mv["adj_qty"]
+
+        rows: list[dict] = []
+        bal = opening_balance
+        for dd in sorted(d for d in move if s <= d <= e):
+            mv = move[dd]
+            bal += mv["purch_qty"] - mv["issue_qty"] - mv["waste_qty"] + mv["adj_qty"]
+            rows.append({
+                "date": dd,
+                "purch_qty": round(mv["purch_qty"], 4),
+                "purch_amt": round(mv["purch_amt"], 2),
+                "issue_qty": round(mv["issue_qty"], 4),
+                "waste_qty": round(mv["waste_qty"], 4),
+                "adj_qty": round(mv["adj_qty"], 4),
+                "balance": round(bal, 4),
+            })
+
         return {"item": item, "start": s, "end": e, "events": events,
                 "totals": {k: round(v, 4) for k, v in tot.items()},
-                "on_hand": on_hand}
+                "on_hand": on_hand,
+                "opening_balance": round(opening_balance, 4),
+                "rows": rows}
+
+    # ==================================================================
+    # Weekly stock-take (Jun 2026)
+    # ------------------------------------------------------------------
+    # Chefs count physical stock every week. The count is taken at the
+    # START of the chosen day. We compare it to the system on-hand at
+    # that moment and post the difference as a signed adjustment line in
+    # `meal_adjustments` (+extra found / −loss). The ledger stays
+    # continuous — the adjustment simply reconciles the running balance
+    # to the counted number. Partial counts are fine: only items with a
+    # physical value entered are touched.
+    # ==================================================================
+    @router.get("/meals/stock-take")
+    async def stock_take_sheet(
+        date: str,  # noqa: A002 — API contract; local name via _valid_date
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Physical-count worksheet: every active item with its SYSTEM
+        on-hand at the START of `date`, plus any count already recorded
+        for that date (so a partial take can be resumed)."""
+        from datetime import date as _date_cls
+        d = _valid_date(date)
+        _not_future(d)
+        prev = (_date_cls.fromisoformat(d) - timedelta(days=1)).isoformat()
+        snap_rows, cats = await _stock_snapshot(prev)
+        adj_doc = await db.meal_adjustments.find_one({"date": d}, {"_id": 0, "lines": 1})
+        recorded = {ln["item_id"]: ln for ln in (adj_doc or {}).get("lines") or []}
+        rows = []
+        for r in snap_rows:
+            rec = recorded.get(r["item_id"])
+            rows.append({
+                "item_id": r["item_id"],
+                "name": r["name"],
+                "category_key": r["category_key"],
+                "category_label": r["category_label"],
+                "unit": r["unit"],
+                "system_qty": r["on_hand"],
+                "avg_rate": r.get("avg_rate", 0),
+                "physical_qty": (rec or {}).get("physical"),
+                "variance": (rec or {}).get("qty"),
+                "recorded": rec is not None,
+            })
+        return {"date": d, "categories": cats, "rows": rows}
+
+    @router.post("/meals/stock-take")
+    async def stock_take_save(body: StockTakeIn, user: dict = Depends(require_chef_or_admin)):
+        """Save a (partial) physical count for a day. For each counted
+        item: variance = physical − system-on-hand-at-start-of-day; a
+        signed adjustment line is upserted so the ledger reconciles."""
+        from datetime import date as _date_cls
+        d = _valid_date(body.date)
+        _not_future(d)
+        prev = (_date_cls.fromisoformat(d) - timedelta(days=1)).isoformat()
+        snap_rows, _ = await _stock_snapshot(prev)
+        sysmap = {r["item_id"]: r["on_hand"] for r in snap_rows}
+        namemap = {r["item_id"]: r for r in snap_rows}
+        now_iso = now_utc().isoformat()
+        by_id = user.get("id")
+        by_name = user.get("full_name") or user.get("email") or "Chef"
+        counted = losses = extras = unchanged = 0
+        result_lines = []
+        for ln in body.lines:
+            iid = str(ln.get("item_id") or "")
+            if iid not in sysmap:
+                continue
+            phys_raw = ln.get("physical_qty")
+            if phys_raw is None or phys_raw == "":
+                continue
+            try:
+                physical = float(phys_raw)
+            except (TypeError, ValueError):
+                continue
+            if physical < 0:
+                continue
+            counted += 1
+            system = sysmap[iid]
+            variance = round(physical - system, 4)
+            # Replace any prior line for this item on this date first.
+            await db.meal_adjustments.update_one(
+                {"date": d}, {"$pull": {"lines": {"item_id": iid}}}, upsert=True)
+            if abs(variance) < 1e-9:
+                unchanged += 1
+                continue
+            if variance > 0:
+                extras += 1
+            else:
+                losses += 1
+            line = {
+                "item_id": iid,
+                "qty": variance,               # signed: +extra / −loss
+                "physical": round(physical, 4),
+                "system": round(system, 4),
+                "kind": "stock_take",
+                "notes": (str(ln.get("notes") or "").strip() or None),
+                "at": now_iso,
+                "by": by_id,
+                "by_name": by_name,
+            }
+            await db.meal_adjustments.update_one(
+                {"date": d}, {"$push": {"lines": line}}, upsert=True)
+            result_lines.append({**line, "name": namemap.get(iid, {}).get("name"),
+                                 "unit": namemap.get(iid, {}).get("unit")})
+        await db.meal_adjustments.update_one(
+            {"date": d}, {"$set": {"updated_at": now_iso, "updated_by": by_id,
+                                   "updated_by_name": by_name}}, upsert=True)
+        await _signal_meals("adjustments", d)
+        return {"date": d, "counted": counted, "losses": losses,
+                "extras": extras, "unchanged": unchanged, "lines": result_lines}
+
 
     @router.get("/meals/categories/{category_key}/summary")
     async def category_summary(

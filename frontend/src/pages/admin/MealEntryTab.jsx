@@ -22,6 +22,7 @@ import { formatDate, fmtQty } from "../../utils";
 import { useRowFocus } from "../../hooks/useRowFocus";
 import VendorScorecardDrawer from "../../components/VendorScorecardDrawer";
 import ItemPriceTrendDrawer from "../../components/ItemPriceTrendDrawer";
+import ItemLedgerDrawer from "./ItemLedgerDrawer";
 
 function todayISO() {
   const d = new Date();
@@ -180,6 +181,7 @@ export default function MealEntryTab({ liveSig }) {
   // read-only views wired to the same masters the grid already loads.
   const [scorecardVendorId, setScorecardVendorId] = useState(null);
   const [trendItem, setTrendItem] = useState(null);  // {id, name} or null
+  const [ledgerItem, setLedgerItem] = useState(null); // {id, name, unit} or null
 
   // ---------------------------------------------------------------------
   // Load masters once. Item / category list stays stable across day nav
@@ -1111,8 +1113,8 @@ export default function MealEntryTab({ liveSig }) {
                       <tr key={it.id} className={`border-t border-slate-100 hover:bg-slate-50/70 ${over ? "bg-rose-50/60" : peer ? "bg-sky-50/40" : ""}`} data-testid={`entry-row-${it.id}`}>
                         <td
                           className="p-2 cursor-pointer select-none"
-                          onDoubleClick={() => setTrendItem({ id: it.id, name: it.name })}
-                          title="Double-click to see full price history for this item"
+                          onDoubleClick={() => setLedgerItem({ id: it.id, name: it.name, unit: it.unit })}
+                          title="Double-click for this item's stock ledger — purchases, issues, wastage and running on-hand balance"
                           data-testid={`entry-item-name-${it.id}`}
                         >
                           <div className="font-semibold text-slate-900 flex items-center gap-1.5 hover:text-sky-700">
@@ -1374,6 +1376,14 @@ export default function MealEntryTab({ liveSig }) {
           itemId={trendItem.id}
           itemName={trendItem.name}
           onClose={() => setTrendItem(null)}
+        />
+      )}
+      {ledgerItem && (
+        <ItemLedgerDrawer
+          itemId={ledgerItem.id}
+          itemName={ledgerItem.name}
+          unit={ledgerItem.unit}
+          onClose={() => setLedgerItem(null)}
         />
       )}
     </div>
