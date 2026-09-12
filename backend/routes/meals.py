@@ -2943,8 +2943,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         #    their own columns per date; `balance` carries forward the
         #    on-hand after each day.
         opening_stock = float(item.get("opening_stock") or 0)
-        low = as_of   # never pull movements before the opening baseline
-        rng_q = {"date": {"$gte": low, "$lte": e}, "lines.item_id": item_id}
+        low = min(as_of, s)   # show every in-range transaction (incl.
+        rng_q = {"date": {"$gte": low, "$lte": e}, "lines.item_id": item_id}   # pre-baseline)
         mv_proj = {"_id": 0, "date": 1, "lines": 1}
         p_all = await db.meal_purchases.find(rng_q, mv_proj).to_list(3000)
         i_all = await db.meal_issues.find(rng_q, mv_proj).to_list(3000)
@@ -2997,7 +2997,13 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         bal = opening_balance
         for dd in sorted(d for d in move if s <= d <= e):
             mv = move[dd]
-            bal += mv["purch_qty"] - mv["issue_qty"] - mv["waste_qty"] + mv["adj_qty"]
+            # Transactions dated before the opening baseline are shown for
+            # visibility but don't move the on-hand balance (the opening
+            # stock already reflects the position as of `as_of`), so the
+            # running balance still reconciles to `on_hand`.
+            pre_opening = dd < as_of
+            if not pre_opening:
+                bal += mv["purch_qty"] - mv["issue_qty"] - mv["waste_qty"] + mv["adj_qty"]
             rows.append({
                 "date": dd,
                 "purch_qty": round(mv["purch_qty"], 4),
@@ -3009,7 +3015,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "adj_at": mv["adj_at"],
                 "adj_physical": mv["adj_physical"],
                 "adj_system": mv["adj_system"],
-                "balance": round(bal, 4),
+                "pre_opening": pre_opening,
+                "balance": None if pre_opening else round(bal, 4),
             })
 
         return {"item": item, "start": s, "end": e, "events": events,
@@ -3060,7 +3067,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "purch_qty": round(g["purch_qty"], 4), "purch_amt": round(g["purch_amt"], 2),
                 "issue_qty": round(g["issue_qty"], 4), "waste_qty": round(g["waste_qty"], 4),
                 "adj_qty": round(g["adj_qty"], 4), "adj_count": g["adj_ct"],
-                "balance": round(g["balance"], 4),
+                "balance": None if g["balance"] is None else round(g["balance"], 4),
+                "pre_opening": g["balance"] is None,
                 "adj_by": None, "adj_at": None, "adj_physical": None, "adj_system": None,
             })
         return out

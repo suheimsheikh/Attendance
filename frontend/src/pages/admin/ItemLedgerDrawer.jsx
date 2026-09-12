@@ -134,7 +134,7 @@ export default function ItemLedgerDrawer({ itemId, itemName, unit, onClose }) {
                       <td className={`p-2.5 text-right tabular-nums font-semibold border-l border-slate-50 ${r.adj_qty > 0 ? "text-emerald-700" : r.adj_qty < 0 ? "text-rose-700" : "text-slate-400"}`} title={adjTitle(r)}>
                         {r.adj_qty ? `${r.adj_qty > 0 ? "+" : "−"}${fmt(Math.abs(r.adj_qty), u)}` : ""}
                       </td>
-                      <td className="p-2.5 text-right tabular-nums font-bold bg-slate-50/70 text-slate-900">{fmt(r.balance, u)}</td>
+                      <td className="p-2.5 text-right tabular-nums font-bold bg-slate-50/70 text-slate-900" title={r.pre_opening ? "Before the opening-stock baseline — not counted in on-hand" : ""}>{r.pre_opening ? <span className="text-slate-300 font-normal">—</span> : fmt(r.balance, u)}</td>
                     </tr>
                   ))}
                 </tbody>

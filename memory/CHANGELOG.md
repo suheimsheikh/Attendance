@@ -4,6 +4,15 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
 
+## 12 Sep 2026 (pt.5) — Bug fix: Daily-Entry ledger hid pre-baseline purchases
+
+- **Regression fixed**: after the pt.4 `low = as_of` guard, the Daily-Entry double-click ledger stopped showing any transaction dated *before* an item's `opening_stock_as_of` — e.g. High Protein Milk's 07 Sep purchase (baseline 09 Sep) vanished from the rows while totals still counted it (hence "totals look ok" but no purchase row). The Stock Master ledger (events) was unaffected, so the two views disagreed.
+- **Fix**: the ledger again lists every in-range transaction (`low = min(as_of, s)`), but rows dated before the opening baseline are flagged `pre_opening` with a blank balance ("—", tooltip explains). The running balance only accumulates from the baseline date, so it still reconciles exactly to `on_hand`. Verified for High Protein Milk (purchase +64 now shows; balance ends at −49 = on_hand) across day/week/month. `_group_ledger_rows` guards null balances.
+- Note: High Protein Milk's negative on-hand (−49) is a data-entry quirk (opening set to 0 as-of 09 Sep despite a 07 Sep purchase of 64), not a code issue — the ledger now shows this transparently.
+
+---
+
+
 ## 12 Sep 2026 (pt.4) — Code review fixes
 
 - **[MEDIUM fixed]** Stock-take variance report undervalued items that were later deactivated (avg_rate fell back to 0 → ₹0 loss/extra, mis-ranked, excluded from totals). Now each adjustment line stores `avg_rate` at count time and the report values every line by its stored rate (falls back to current avg rate for legacy lines). Verified: value persists after an item is deactivated.
