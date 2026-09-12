@@ -4,6 +4,15 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
 
+## 12 Sep 2026 (pt.3) — DAR voice reminder + forgot-checkout DAR gate; DAR bypass RCA
+
+- **Voice reminder (SelfCheckIn)**: DAR-required members now hear a spoken prompt ("Please fill in your Daily Activity Report before checking out") via the browser's built-in speech synthesis — once when the DAR first becomes needed and again if they tap Check out while it's still empty. Added a "Hear reminder" replay button (`dar-voice-replay`) by the DAR box. Zero cost, plays on the member's own device.
+- **Forgot-checkout gate**: `/attendance/resolve-stale` (closing a forgotten prior-day session) now enforces the same DAR gate — rejects with `DAR_REQUIRED` and files the DAR (source `resolve_stale`, `filed_late=true`) when provided. Verified via curl.
+- **RCA — why some DAR-required members checked out without a DAR**: The main self check-out (`/attendance/geo-toggle` → `_geo_toggle`) DOES enforce the gate. Bypasses were: (1) **historical** — the DAR policy is new (effective 2026-09-09, only a handful of DARs filed) so checkouts before the gate deployed had none (leak counts fell 19→18→16→1 over 09-09..09-12); (2) **admin proxy** paths (Muster bulk, admin console, scan-card) skip the gate BY DESIGN (staff closing sessions for phone-less members); (3) **midnight auto-checkout** closes forgotten sessions with no DAR (correctly counted as a missed DAR to payroll); (4) **forgot-checkout** (now fixed above). One coach leaked today via the gated path — most likely her category was set to "coach" after she'd already checked out, or just before the gate deployed.
+
+---
+
+
 ## 12 Sep 2026 (pt.2) — Variance report, adjustment audit, count-sheet print, weekly ledger, tab wrap
 
 - **Stock-take Print**: "Print sheet" button on the Stock Take tab prints a blank count sheet (items grouped by category, System column + blank Physical column + Counted/Verified signature lines) so staff can tick on paper first. Portaled print region + `stocktake-print-active` CSS.

@@ -2220,6 +2220,7 @@ class ResolveStaleIn(BaseModel):
     session_id: str
     # One of: ISO datetime (close at this time) | "work_end" | "skip"
     action: str
+    dar_text: Optional[str] = None
 
 
 @api_router.post("/attendance/resolve-stale")
@@ -2240,6 +2241,32 @@ async def resolve_stale(body: ResolveStaleIn, user: dict = Depends(get_current_u
     office = await db.config.find_one({"id": "office"})
     cin = datetime.fromisoformat(sess["check_in_at"])
     cin_local = cin.astimezone(office_tz(office))
+
+    # DAR gate (Sep 2026): a DAR-required member cannot silently close a
+    # forgotten session without filing the DAR either — same rule as the
+    # normal self check-out, keyed to the session's (past) date.
+    dar_saved = None
+    if dar_required_for(user):
+        _today = local_date_str(office)
+        policy = await get_dar_policy(db, _today)
+        dar_date = sess.get("date") or _today
+        if policy.get("enabled", True) and dar_date >= policy["effective_from"]:
+            has_dar = await db.dars.find_one(
+                {"user_id": user["id"], "date": dar_date}, {"_id": 0, "id": 1})
+            if not has_dar:
+                if not (body.dar_text or "").strip():
+                    raise HTTPException(status_code=400, detail="DAR_REQUIRED: Please enter your Daily Activity Report before closing this session")
+                clean = validate_dar_text(body.dar_text, policy["min_chars"])
+                _iso = now_utc().isoformat()
+                dar_saved = {
+                    "id": str(uuid.uuid4()), "user_id": user["id"],
+                    "user_name": user.get("full_name"), "category": user.get("category"),
+                    "rank": user.get("rank"), "date": dar_date, "text": clean,
+                    "submitted_at": _iso, "updated_at": _iso,
+                    "attendance_id": sess["id"], "check_in_at": sess["check_in_at"],
+                    "site_name": sess.get("site_name") or office.get("name"),
+                    "check_out_at": None, "filed_late": True, "source": "resolve_stale",
+                }
 
     # Decide the close time
     if body.action == "work_end":
@@ -2279,6 +2306,9 @@ async def resolve_stale(body: ResolveStaleIn, user: dict = Depends(get_current_u
         "forgot_checkout": True,
         "checked_out_by": user["full_name"],
     }})
+    if dar_saved:
+        dar_saved["check_out_at"] = close_utc.isoformat()
+        await db.dars.insert_one(dict(dar_saved))
     return {"ok": True, "action": "closed", "hours": hours, "close_at": close_utc.isoformat()}
 
 

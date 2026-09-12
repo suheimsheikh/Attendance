@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { Loader2, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, Camera, Share2, AlertTriangle } from "lucide-react";
+import { Loader2, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, Camera, Share2, AlertTriangle, Volume2 } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { getLocation, speakLateMessage, resolveNearestSite } from "../utils";
@@ -112,6 +112,32 @@ export default function SelfCheckIn() {
     api.get("/tasks/dar-prefill").then((r) => { if (r?.text) setDarText((cur) => cur || r.text); }).catch(() => {});
   }, [darNeededNow]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Voice reminder (Sep 2026): DAR-required members are prompted aloud to
+  // file their DAR before check-out. Uses the browser's built-in speech
+  // synthesis — zero cost, plays on the member's own device. Spoken once
+  // when the DAR first becomes needed, and again on a blocked check-out.
+  const spokenRef = useRef(false);
+  const speakDar = () => {
+    try {
+      const synth = window.speechSynthesis;
+      if (!synth) return;
+      synth.cancel();
+      const msg = new SpeechSynthesisUtterance(
+        "Please fill in your Daily Activity Report before checking out.");
+      msg.lang = "en-IN";
+      msg.rate = 0.98;
+      synth.speak(msg);
+    } catch { /* speech not supported — silent no-op */ }
+  };
+  useEffect(() => {
+    if (darNeededNow && !spokenRef.current) {
+      spokenRef.current = true;
+      speakDar();
+    }
+    if (!darNeededNow) spokenRef.current = false;
+  }, [darNeededNow]);
+
+
   // Overtime detection (staff only).
   const otInfo = useMemo(() => {
     if (user?.category !== "staff") return null;
@@ -159,6 +185,7 @@ export default function SelfCheckIn() {
   // is confirmed, so the reason lands on the attendance row.
   const performToggle = async (geoReason = null) => {
     if (darBlocked) {
+      speakDar();
       toast.error(`Please enter your Daily Activity Report (at least ${darMin} characters) before checking out`);
       return;
     }
@@ -383,7 +410,13 @@ export default function SelfCheckIn() {
           <Greeting user={user} checkedIn={!!status?.checked_in} />
           {status?.checked_in && <CheckoutTaskNudge userName={user?.full_name} />}
           {darNeededNow && (
-            <DarTextarea value={darText} onChange={setDarText} minChars={darMin} />
+            <div data-testid="dar-voice-block">
+              <button type="button" onClick={speakDar} data-testid="dar-voice-replay"
+                      className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                <Volume2 size={14} /> Hear reminder
+              </button>
+              <DarTextarea value={darText} onChange={setDarText} minChars={darMin} />
+            </div>
           )}
           {otInfo && (
             <ReasonPrompt
