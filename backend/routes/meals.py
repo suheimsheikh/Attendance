@@ -2865,9 +2865,12 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         item_id: str,
         start: Optional[str] = Query(None),
         end: Optional[str] = Query(None),
+        granularity: str = Query("day", pattern="^(day|week|month)$"),
         user: dict = Depends(require_chef_or_admin),
     ):
-        """Merged purchase/issue/wastage history for one item, newest first."""
+        """Merged purchase/issue/wastage/stock-take history for one item.
+        `granularity` rolls the per-date rows up into week/month periods
+        (running balance = balance at the end of each period)."""
         item = await db.meal_items.find_one({"id": item_id}, {"_id": 0})
         if not item:
             raise HTTPException(status_code=404, detail="Item not found")
@@ -2953,7 +2956,9 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         def _bucket(dd: str) -> dict:
             return move.setdefault(dd, {"purch_qty": 0.0, "purch_amt": 0.0,
                                         "issue_qty": 0.0, "waste_qty": 0.0,
-                                        "adj_qty": 0.0})
+                                        "adj_qty": 0.0, "adj_by": None,
+                                        "adj_at": None, "adj_physical": None,
+                                        "adj_system": None})
 
         for doc in p_all:
             for ln in doc.get("lines") or []:
@@ -2974,7 +2979,12 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         for doc in a_all:
             for ln in doc.get("lines") or []:
                 if ln.get("item_id") == item_id:
-                    _bucket(doc["date"])["adj_qty"] += float(ln.get("qty") or 0)
+                    b = _bucket(doc["date"])
+                    b["adj_qty"] += float(ln.get("qty") or 0)
+                    b["adj_by"] = ln.get("by_name")
+                    b["adj_at"] = ln.get("at")
+                    b["adj_physical"] = ln.get("physical")
+                    b["adj_system"] = ln.get("system")
 
         # Opening balance = opening stock + net movement between the
         # opening as-of date and the day BEFORE the range start.
@@ -2995,6 +3005,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "issue_qty": round(mv["issue_qty"], 4),
                 "waste_qty": round(mv["waste_qty"], 4),
                 "adj_qty": round(mv["adj_qty"], 4),
+                "adj_by": mv["adj_by"],
+                "adj_at": mv["adj_at"],
+                "adj_physical": mv["adj_physical"],
+                "adj_system": mv["adj_system"],
                 "balance": round(bal, 4),
             })
 
@@ -3002,7 +3016,54 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "totals": {k: round(v, 4) for k, v in tot.items()},
                 "on_hand": on_hand,
                 "opening_balance": round(opening_balance, 4),
-                "rows": rows}
+                "granularity": granularity,
+                "rows": _group_ledger_rows(rows, granularity)}
+
+    def _group_ledger_rows(rows: list, granularity: str) -> list:
+        """Roll daily ledger rows up into week/month periods. Running
+        balance for a period = the balance of its last active day (no
+        movement after it within the period, so it's the period-end
+        on-hand). Only periods with activity appear — same as daily."""
+        if granularity == "day" or not rows:
+            return rows
+
+        def _key(dd: str) -> str:
+            dt = date.fromisoformat(dd)
+            if granularity == "week":
+                return (dt - timedelta(days=dt.weekday())).isoformat()  # Monday
+            return dt.replace(day=1).isoformat()
+
+        grouped: dict[str, dict] = {}
+        order: list[str] = []
+        for r in rows:  # oldest → newest
+            k = _key(r["date"])
+            if k not in grouped:
+                grouped[k] = {"purch_qty": 0.0, "purch_amt": 0.0, "issue_qty": 0.0,
+                              "waste_qty": 0.0, "adj_qty": 0.0, "balance": r["balance"],
+                              "end": r["date"], "adj_ct": 0}
+                order.append(k)
+            g = grouped[k]
+            g["purch_qty"] += r["purch_qty"]
+            g["purch_amt"] += r["purch_amt"]
+            g["issue_qty"] += r["issue_qty"]
+            g["waste_qty"] += r["waste_qty"]
+            g["adj_qty"] += r["adj_qty"]
+            if r["adj_qty"]:
+                g["adj_ct"] += 1
+            g["balance"] = r["balance"]
+            g["end"] = r["date"]
+        out = []
+        for k in order:
+            g = grouped[k]
+            out.append({
+                "date": k, "period_start": k, "period_end": g["end"],
+                "purch_qty": round(g["purch_qty"], 4), "purch_amt": round(g["purch_amt"], 2),
+                "issue_qty": round(g["issue_qty"], 4), "waste_qty": round(g["waste_qty"], 4),
+                "adj_qty": round(g["adj_qty"], 4), "adj_count": g["adj_ct"],
+                "balance": round(g["balance"], 4),
+                "adj_by": None, "adj_at": None, "adj_physical": None, "adj_system": None,
+            })
+        return out
 
     # ==================================================================
     # Weekly stock-take (Jun 2026)
@@ -3111,6 +3172,96 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         await _signal_meals("adjustments", d)
         return {"date": d, "counted": counted, "losses": losses,
                 "extras": extras, "unchanged": unchanged, "lines": result_lines}
+
+    @router.get("/meals/stock-take/report")
+    async def stock_take_report(
+        start: Optional[str] = Query(None),
+        end: Optional[str] = Query(None),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Variance summary + audit history of stock-take adjustments in a
+        range. `rows` ranks items by total variance value (loss+extra) so
+        the biggest problem stock floats to the top; `history` is the
+        chronological who/when audit trail of every count line."""
+        s, e = _range_or_default(start, end)
+        docs = await db.meal_adjustments.find(
+            {"date": {"$gte": s, "$lte": e}},
+            {"_id": 0, "date": 1, "lines": 1}).to_list(5000)
+        snap_rows, _ = await _stock_snapshot(e)
+        info = {r["item_id"]: r for r in snap_rows}
+        all_items = await db.meal_items.find(
+            {}, {"_id": 0, "id": 1, "name": 1, "unit": 1, "category_key": 1}).to_list(2000)
+        item_map = {i["id"]: i for i in all_items}
+        cats = await _purchase_categories()
+        cat_label = {c["key"]: c["label"] for c in cats}
+
+        agg: dict[str, dict] = {}
+        history: list[dict] = []
+        for d in docs:
+            for ln in d.get("lines") or []:
+                iid = ln.get("item_id")
+                if not iid:
+                    continue
+                qty = float(ln.get("qty") or 0)
+                a = agg.setdefault(iid, {"loss_qty": 0.0, "extra_qty": 0.0, "count": 0})
+                if qty < 0:
+                    a["loss_qty"] += -qty
+                elif qty > 0:
+                    a["extra_qty"] += qty
+                a["count"] += 1
+                history.append({
+                    "date": d["date"], "item_id": iid, "qty": round(qty, 4),
+                    "physical": ln.get("physical"), "system": ln.get("system"),
+                    "by_name": ln.get("by_name"), "at": ln.get("at"),
+                    "notes": ln.get("notes"),
+                })
+
+        def _meta(iid: str) -> dict:
+            m = info.get(iid) or {}
+            im = item_map.get(iid) or {}
+            ckey = m.get("category_key") or im.get("category_key")
+            return {
+                "name": m.get("name") or im.get("name") or "(deleted item)",
+                "unit": m.get("unit") or im.get("unit"),
+                "category_key": ckey,
+                "category_label": cat_label.get(ckey, (ckey or "").replace("_", " ").title()),
+                "avg_rate": float(m.get("avg_rate") or 0),
+            }
+
+        rows = []
+        for iid, a in agg.items():
+            m = _meta(iid)
+            rate = m["avg_rate"]
+            net_qty = round(a["extra_qty"] - a["loss_qty"], 4)
+            rows.append({
+                "item_id": iid, "name": m["name"], "unit": m["unit"],
+                "category_key": m["category_key"], "category_label": m["category_label"],
+                "loss_qty": round(a["loss_qty"], 4), "extra_qty": round(a["extra_qty"], 4),
+                "net_qty": net_qty, "count": a["count"],
+                "loss_value": round(a["loss_qty"] * rate, 2),
+                "extra_value": round(a["extra_qty"] * rate, 2),
+                "net_value": round(net_qty * rate, 2),
+            })
+        rows.sort(key=lambda r: (-(r["loss_value"] + r["extra_value"]),
+                                 -(r["loss_qty"] + r["extra_qty"])))
+
+        for h in history:
+            m = _meta(h["item_id"])
+            h["name"] = m["name"]
+            h["unit"] = m["unit"]
+        history.sort(key=lambda h: (h["date"], h.get("at") or ""), reverse=True)
+
+        totals = {
+            "loss_qty": round(sum(r["loss_qty"] for r in rows), 4),
+            "extra_qty": round(sum(r["extra_qty"] for r in rows), 4),
+            "loss_value": round(sum(r["loss_value"] for r in rows), 2),
+            "extra_value": round(sum(r["extra_value"] for r in rows), 2),
+            "net_value": round(sum(r["net_value"] for r in rows), 2),
+            "count": sum(r["count"] for r in rows),
+            "items": len(rows),
+        }
+        return {"start": s, "end": e, "rows": rows, "history": history, "totals": totals}
+
 
 
     @router.get("/meals/categories/{category_key}/summary")

@@ -536,21 +536,21 @@ export default function MealsReport() {
           <PresenceChip where="Pantry" />
         </header>
 
-        <div className="flex gap-2 border-b border-slate-200 overflow-x-auto" data-testid="meals-report-tabs">
+        <div className="flex flex-wrap gap-1.5" data-testid="meals-report-tabs">
           {TABS.map(({ key, label, Icon, hint }) => (
             <button
               key={key}
               data-testid={`meals-report-tab-${key}`}
               onClick={() => changeTab(key)}
               title={hint}
-              className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 whitespace-nowrap rounded-t-md ${
-                tab === key ? "border-blue-600 bg-blue-100 text-blue-800" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+              className={`px-3 py-1.5 text-[13px] font-semibold whitespace-nowrap rounded-lg transition-colors ${
+                tab === key ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
-              <span className="inline-flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5">
                 <Icon size={14}/> {label}
                 {key === "masters" && lowCount > 0 && (
-                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold" title={`${lowCount} item${lowCount === 1 ? "" : "s"} at or below the minimum stock level`} data-testid="stock-low-badge">
+                  <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold ${tab === key ? "bg-white text-rose-600" : "bg-rose-600 text-white"}`} title={`${lowCount} item${lowCount === 1 ? "" : "s"} at or below the minimum stock level`} data-testid="stock-low-badge">
                     {lowCount}
                   </span>
                 )}

@@ -8,15 +8,18 @@
  * Partial counts are fine — only rows you type into are touched.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { Loader2, ClipboardCheck, Save, Search, ChevronDown, ChevronRight, TrendingDown, TrendingUp } from "lucide-react";
+import { Loader2, ClipboardCheck, Save, Search, ChevronDown, ChevronRight, TrendingDown, TrendingUp, Printer, ClipboardList, BarChart3 } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate, fmtQty } from "../../utils";
+import StockVarianceReport from "./StockVarianceReport";
 
 const todayISO = () => new Date().toLocaleDateString("sv-SE");
 const num = (v) => { const n = Number(v); return isFinite(n) ? n : 0; };
 
 export default function MealStockTakeTab({ liveSig }) {
+  const [view, setView] = useState("count");   // count | report
   const [dateStr, setDateStr] = useState(todayISO());
   const [rows, setRows] = useState([]);
   const [cats, setCats] = useState([]);
@@ -95,8 +98,29 @@ export default function MealStockTakeTab({ liveSig }) {
     }
   };
 
+  const handlePrint = () => {
+    document.body.classList.add("stocktake-print-active");
+    const cleanup = () => {
+      document.body.classList.remove("stocktake-print-active");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+  };
+
   return (
     <div data-testid="meal-stocktake-tab">
+      <div className="flex rounded-lg overflow-hidden ring-1 ring-slate-200 w-fit mb-4" data-testid="stocktake-view-toggle">
+        {[["count", "Count sheet", ClipboardList], ["report", "Variance & audit", BarChart3]].map(([v, l, Ic]) => (
+          <button key={v} onClick={() => setView(v)} data-testid={`stocktake-view-${v}`}
+                  className={`px-4 h-9 text-sm font-bold inline-flex items-center gap-1.5 ${view === v ? "bg-violet-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+            <Ic size={15} /> {l}
+          </button>
+        ))}
+      </div>
+
+      {view === "report" ? <StockVarianceReport liveSig={liveSig} /> : (
+      <>
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="flex items-center gap-2">
           <label className="text-xs font-semibold text-slate-600" htmlFor="stocktake-date">Count date</label>
@@ -113,6 +137,10 @@ export default function MealStockTakeTab({ liveSig }) {
           <span className="text-xs text-slate-500" data-testid="stocktake-summary">
             <b>{summary.counted}</b> counted · <span className="text-rose-600 font-semibold">{summary.losses} loss</span> · <span className="text-emerald-600 font-semibold">{summary.extras} extra</span>
           </span>
+          <button onClick={handlePrint} data-testid="stocktake-print"
+                  className="iu-btn-secondary !h-9 !px-3 text-sm" title="Print a blank count sheet to tick on paper first">
+            <Printer size={15} /> Print sheet
+          </button>
           <button onClick={save} disabled={saving || summary.counted === 0} data-testid="stocktake-save"
                   className="iu-btn-primary !h-9 !px-4 text-sm disabled:opacity-50">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save count
@@ -192,6 +220,50 @@ export default function MealStockTakeTab({ liveSig }) {
             );
           })}
         </div>
+      )}
+      </>
+      )}
+
+      {/* Printable count sheet — blank physical column to tick on paper. */}
+      {typeof document !== "undefined" && createPortal(
+        <div className="hidden print:block bg-white" data-testid="stocktake-print-region">
+          <div className="border-b-2 border-slate-800 pb-3 mb-4">
+            <h1 className="text-2xl font-extrabold text-slate-900">Stock-take Count Sheet</h1>
+            <p className="text-sm text-slate-600 mt-1">Count date: {formatDate(dateStr)} · Printed {new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata" })}</p>
+          </div>
+          {grouped.map(([ck, list]) => (
+            <section key={ck} className="mb-4 break-inside-avoid">
+              <h2 className="text-sm font-extrabold uppercase tracking-wider bg-slate-100 px-2 py-1 mb-2">{catLabel[ck] || ck}</h2>
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-400 text-xs text-slate-600 uppercase">
+                    <th className="text-left p-1 w-8">#</th>
+                    <th className="text-left p-1">Item</th>
+                    <th className="text-left p-1 w-16">Unit</th>
+                    <th className="text-right p-1 w-24">System</th>
+                    <th className="text-right p-1 w-32">Physical count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((r, idx) => (
+                    <tr key={r.item_id} className="border-b border-slate-200">
+                      <td className="p-1 text-slate-500 tabular-nums">{idx + 1}</td>
+                      <td className="p-1 font-semibold">{r.name}</td>
+                      <td className="p-1 text-slate-600">{r.unit}</td>
+                      <td className="p-1 text-right tabular-nums text-slate-700">{fmtQty(r.system_qty, r.unit)}</td>
+                      <td className="p-1 text-right">______________</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ))}
+          <div className="mt-8 flex gap-16 text-sm text-slate-700">
+            <div>Counted by: ______________________</div>
+            <div>Verified by: ______________________</div>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

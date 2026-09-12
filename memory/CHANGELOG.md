@@ -4,6 +4,18 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
 
+## 12 Sep 2026 (pt.2) — Variance report, adjustment audit, count-sheet print, weekly ledger, tab wrap
+
+- **Stock-take Print**: "Print sheet" button on the Stock Take tab prints a blank count sheet (items grouped by category, System column + blank Physical column + Counted/Verified signature lines) so staff can tick on paper first. Portaled print region + `stocktake-print-active` CSS.
+- **Variance & audit view**: Stock Take tab now has a "Count sheet" / "Variance & audit" toggle. New `StockVarianceReport.jsx` (backend `GET /meals/stock-take/report`) ranks items by ₹ value impact (loss+extra), with summary stat cards and a chronological **audit trail** (who counted, when, physical vs system).
+- **Adjustment audit in ledger**: item ledger drawer shows a tooltip on the Stock-take cell — "Counted X vs system Y · by <name> · on <date>". Backend ledger rows carry `adj_by/adj_at/adj_physical/adj_system`.
+- **Ledger granularity**: item ledger opened from Daily Entry now DEFAULTS to **Weekly** summaries, with **Monthly** and **Daily** toggles (`item_ledger?granularity=day|week|month`; `_group_ledger_rows` rolls daily rows into periods with period-end running balance). Default range widened to 89 days.
+- **Purchases & Issues tabs**: tab bar changed from horizontal-scroll to a **wrapping pill toolbar** so all options are visible without scrolling sideways.
+- Tested: testing_agent iteration_71 — all four features (print, variance, audit, granularity) verified 100%, no bugs; DB left clean. Tab layout is a CSS-only change (same testids/handlers).
+
+---
+
+
 ## 12 Sep 2026 — Stock ledger drawer, weekly Stock Take, sidebar cleanup
 
 - **Sidebar cleanup**: removed the standalone **Kitchen Analytics** link from the left nav (both `NAV_COACH_KITCHEN` and `NAV_KITCHEN` in `Layout.jsx`). It stays reachable as the **Analytics** tab inside Purchases & Issues. "Compare Items" kept.

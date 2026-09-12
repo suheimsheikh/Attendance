@@ -245,5 +245,12 @@ input[data-testid^="search-"]::placeholder {
     max-height: none !important;
     overflow: visible !important;
   }
+  /* Weekly stock-take count sheet — portaled print region. */
+  body.stocktake-print-active > *:not([data-testid="stocktake-print-region"]) {
+    display: none !important;
+  }
+  body.stocktake-print-active [data-testid="stocktake-print-region"] {
+    display: block !important;
+  }
   @page { margin: 1cm; }
 }
