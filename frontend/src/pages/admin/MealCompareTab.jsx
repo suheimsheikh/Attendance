@@ -79,11 +79,11 @@ export default function MealCompareTab() {
       <div className="iu-card p-3">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Pick items ({picked.size})</h3>
-          {picked.size > 0 && <button onClick={() => setPicked(new Set())} className="text-[11px] text-rose-600 font-semibold hover:underline" data-testid="compare-clear">Clear</button>}
+          {picked.size > 0 && <button onClick={() => setPicked(new Set())} className="text-[11px] text-rose-600 font-semibold hover:underline" data-testid="compare-clear" title="Clear all selected items">Clear</button>}
         </div>
         <div className="relative mb-2">
           <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search items…" className="iu-input !h-8 text-sm !pl-7" data-testid="compare-search" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search items…" className="iu-input !h-8 text-sm !pl-7" data-testid="compare-search" title="Filter the item list by name" />
         </div>
         <div className="max-h-[420px] overflow-y-auto pr-1 space-y-2">
           {filtered.length === 0 ? <p className="text-xs text-slate-400 italic">No items.</p>
@@ -108,19 +108,19 @@ export default function MealCompareTab() {
           <h2 className="text-lg font-extrabold flex items-center gap-2 mr-auto"><LineIcon size={18} className="text-indigo-600" /> Purchases vs Issues</h2>
           <div className="flex rounded-lg overflow-hidden ring-1 ring-slate-200">
             {[["qty", "Quantity"], ["amount", "Amount ₹"]].map(([v, l]) => (
-              <button key={v} onClick={() => setMetric(v)} data-testid={`compare-metric-${v}`} className={`px-3 h-9 text-xs font-bold ${metric === v ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{l}</button>
+              <button key={v} onClick={() => setMetric(v)} data-testid={`compare-metric-${v}`} title={v === "qty" ? "Plot quantities (in each item's unit)" : "Plot rupee value of purchases vs issues"} className={`px-3 h-9 text-xs font-bold ${metric === v ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{l}</button>
             ))}
           </div>
           <div className="flex rounded-lg overflow-hidden ring-1 ring-slate-200">
             {[["30", "30d"], ["90", "90d"], ["365", "1yr"], ["custom", "Custom"]].map(([v, l]) => (
-              <button key={v} onClick={() => setPreset(v)} data-testid={`compare-preset-${v}`} className={`px-3 h-9 text-xs font-bold ${preset === v ? "bg-indigo-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{l}</button>
+              <button key={v} onClick={() => setPreset(v)} data-testid={`compare-preset-${v}`} title={v === "custom" ? "Pick your own start and end dates" : `Show the last ${l}`} className={`px-3 h-9 text-xs font-bold ${preset === v ? "bg-indigo-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{l}</button>
             ))}
           </div>
           {preset === "custom" && (
             <div className="flex items-center gap-1">
-              <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className="iu-input !h-9 !w-auto text-xs" data-testid="compare-from" />
+              <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className="iu-input !h-9 !w-auto text-xs" data-testid="compare-from" title="Chart start date" />
               <span className="text-slate-400">→</span>
-              <input type="date" value={to} min={from} max={todayIso()} onChange={(e) => setTo(e.target.value)} className="iu-input !h-9 !w-auto text-xs" data-testid="compare-to" />
+              <input type="date" value={to} min={from} max={todayIso()} onChange={(e) => setTo(e.target.value)} className="iu-input !h-9 !w-auto text-xs" data-testid="compare-to" title="Chart end date" />
             </div>
           )}
         </div>

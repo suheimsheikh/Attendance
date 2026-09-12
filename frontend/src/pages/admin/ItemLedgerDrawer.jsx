@@ -70,7 +70,7 @@ export default function ItemLedgerDrawer({ itemId, itemName, unit, onClose }) {
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">Stock ledger — purchases, issues &amp; wastage with running balance</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500" data-testid="item-ledger-close"><X size={18} /></button>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500" data-testid="item-ledger-close" title="Close ledger (Esc)"><X size={18} /></button>
         </header>
 
         <div className="flex-1 overflow-auto p-5">
@@ -78,15 +78,17 @@ export default function ItemLedgerDrawer({ itemId, itemName, unit, onClose }) {
             <div className="flex rounded-lg overflow-hidden ring-1 ring-slate-200" data-testid="ledger-granularity">
               {[["week", "Weekly"], ["month", "Monthly"], ["day", "Daily"]].map(([v, l]) => (
                 <button key={v} onClick={() => setGran(v)} data-testid={`ledger-gran-${v}`}
+                        title={v === "week" ? "Group the ledger by week (Mon–Sun)" : v === "month" ? "Group the ledger by calendar month" : "Show every day individually"}
                         className={`px-3 h-8 text-xs font-bold ${gran === v ? "bg-emerald-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{l}</button>
               ))}
             </div>
             <span className="w-px h-6 bg-slate-200 mx-1" />
-            <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="ledger-range-start" />
+            <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="ledger-range-start" title="Ledger start date" />
             <span className="text-xs text-slate-400">to</span>
-            <input type="date" value={end} min={start} max={todayISO()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="ledger-range-end" />
+            <input type="date" value={end} min={start} max={todayISO()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="ledger-range-end" title="Ledger end date" />
             {[["30d", 29], ["90d", 89], ["1y", 364]].map(([lbl, days]) => (
               <button key={lbl} onClick={() => { setStart(isoDaysAgo(days)); setEnd(todayISO()); }}
+                      title={`Show the last ${lbl.replace("d", " days").replace("1y", "year")}`}
                       className="text-[11px] font-bold text-slate-500 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 rounded-full px-2.5 py-1">
                 {lbl}
               </button>

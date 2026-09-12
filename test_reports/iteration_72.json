@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend-only verification of Consumption page (/admin/meals-calendar) after moving meal-count table above Analytics, adding Purchase ₹ / Issue ₹ table columns, and adding cost KPI pills (Purchase ₹, Issue ₹, Issue ₹ / Meal). All requested behaviours are working. Admin login via toggle-admin-login → login-submit-button succeeds. On date range 2026-09-01 to 2026-09-12: cost KPIs render ₹31,817 / ₹28,430 / ₹48.02 (no NaN), matching expected backend values. Meal-count KPI pills render correct non-NaN numbers (BF 289, MM 2, L 246, AS 26, D 29, Total 592). Table is DOM- and layout-ordered above the Analytics toggle (tableTop=294 < analyticsTop=564, compareDocumentPosition confirms table precedes analytics). Table headers correctly contain PURCHASE ₹ and ISSUE ₹ after TOTAL; footer TOTAL row is 10-column aligned with header (₹31,817 / ₹28,430). Expanding mc-month-header-2026-09 shows per-day mc-pcost-* and mc-icost-* cells with rupee-formatted values. Edit row (mc-edit-btn-2026-09-01) renders 10 tds aligned exactly with header column left-edges (513/802/903/1003/1104/1205/1306/1379/1498/1595 px); cost columns show '—' placeholders during edit; Save (mc-save-YYYY-MM-DD) and Cancel (mc-cancel-YYYY-MM-DD) work. Overall NaN count on page = 0.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/consumption_top.png"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Save/Cancel edit-row buttons use data-testid mc-save-<date> and mc-cancel-<date> in MealsCalendar.jsx, while the review request references mc-save-btn-<date>/mc-cancel-btn-<date>. Not a functional bug, but consider aligning naming across code + review docs to avoid confusion in future automation.",
+    "The meal-count KPI pills (Breakfast/Midmorning/Lunch/AS/Dinner/Total) don't have individual data-testid attributes (KpiPill has none). Values render correctly, but adding mc-kpi-<slot> testids would make regression checks against 'not NaN' trivial."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 via toggle-admin-login",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Consumption page passes all requested acceptance checks in iteration 72. To reproduce: login via [data-testid=toggle-admin-login] then [data-testid=login-submit-button]; go to /admin/meals-calendar; set mc-from=2026-09-01, mc-to=2026-09-12; click mc-month-header-2026-09 to expand day rows. Table is above analytics; cost KPI pills live under [data-testid=mc-cost-kpis]; edit save/cancel testids are mc-save-<date>/mc-cancel-<date> (NOT mc-*-btn-<date>).",
+  "rca of the issue": "n/a — no defects observed."
+}

@@ -4,6 +4,16 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
 
+## 12 Sep 2026 (pt.6) — Consumption per-meal column, date logic, app-wide tooltips
+
+- **Consumption page (/admin/meals-calendar)**: moved the daily meal-count table ABOVE the Analytics panel; added per-day **Purchase ₹** and **Issue ₹** columns and a new **₹/Meal** column (issue cost ÷ meals served, rounded to whole rupees) on day rows, month subtotals and the footer total; added Purchase ₹ / Issue ₹ / Issue ₹-per-Meal KPI pills. Backend `/meals/meal-calendar` now returns per-day `purchase_cost`, `issue_cost` and window `issue_cost_per_meal` (issues valued at weighted-avg purchase rate). Fixed a latent tfoot that was missing the Midmorning/Afternoon-Snack columns.
+- **Date logic**: the page now reliably lands on the FULL history (from earliest recorded date → today) and gained an **"All days"** button to reset the range instantly.
+- **Tooltips sweep**: added `title` tooltips across the app where missing — Consumption KPI pills & date controls & month headers, the item ledger drawer (granularity/preset/date/close), the stock-take view toggle + category headers + physical-count inputs, the variance report date controls, Compare Items (metric/preset/date/search/clear), DAR report tabs, and Task Manager scope/status filters. (The sidebar already renders its `hint` as tooltips.)
+- Verified: backend curl (per-meal & costs correct); frontend compiles clean; table column counts checked to stay aligned (11 columns across all row types).
+
+---
+
+
 ## 12 Sep 2026 (pt.5) — Bug fix: Daily-Entry ledger hid pre-baseline purchases
 
 - **Regression fixed**: after the pt.4 `low = as_of` guard, the Daily-Entry double-click ledger stopped showing any transaction dated *before* an item's `opening_stock_as_of` — e.g. High Protein Milk's 07 Sep purchase (baseline 09 Sep) vanished from the rows while totals still counted it (hence "totals look ok" but no purchase row). The Stock Master ledger (events) was unaffected, so the two views disagreed.

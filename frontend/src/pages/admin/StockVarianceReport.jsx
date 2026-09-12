@@ -52,11 +52,12 @@ export default function StockVarianceReport({ liveSig }) {
   return (
     <div data-testid="stock-variance-report">
       <div className="flex items-center gap-2 flex-wrap mb-4">
-        <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="variance-start" />
+        <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="variance-start" title="Report start date" />
         <span className="text-xs text-slate-400">to</span>
-        <input type="date" value={end} min={start} max={todayISO()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="variance-end" />
+        <input type="date" value={end} min={start} max={todayISO()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="variance-end" title="Report end date" />
         {[["30d", 29], ["90d", 89], ["1y", 364]].map(([lbl, days]) => (
           <button key={lbl} onClick={() => { setStart(isoDaysAgo(days)); setEnd(todayISO()); }}
+                  title={`Show the last ${lbl.replace("d", " days").replace("1y", "year")}`}
                   className="text-[11px] font-bold text-slate-500 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 rounded-full px-2.5 py-1">{lbl}</button>
         ))}
       </div>

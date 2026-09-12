@@ -113,6 +113,7 @@ export default function MealStockTakeTab({ liveSig }) {
       <div className="flex rounded-lg overflow-hidden ring-1 ring-slate-200 w-fit mb-4" data-testid="stocktake-view-toggle">
         {[["count", "Count sheet", ClipboardList], ["report", "Variance & audit", BarChart3]].map(([v, l, Ic]) => (
           <button key={v} onClick={() => setView(v)} data-testid={`stocktake-view-${v}`}
+                  title={v === "count" ? "Enter this week's physical stock count" : "See ranked losses/extras and the who/when audit trail"}
                   className={`px-4 h-9 text-sm font-bold inline-flex items-center gap-1.5 ${view === v ? "bg-violet-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
             <Ic size={15} /> {l}
           </button>
@@ -163,7 +164,7 @@ export default function MealStockTakeTab({ liveSig }) {
             const isCollapsed = collapsed.has(ck);
             return (
               <div key={ck} className="iu-card overflow-hidden" data-testid={`stocktake-cat-${ck}`}>
-                <button onClick={() => toggle(ck)} className="w-full flex items-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-left" data-testid={`stocktake-cat-toggle-${ck}`}>
+                <button onClick={() => toggle(ck)} className="w-full flex items-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-left" data-testid={`stocktake-cat-toggle-${ck}`} title={isCollapsed ? "Expand this category" : "Collapse this category"}>
                   {isCollapsed ? <ChevronRight size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
                   <span className="font-bold text-slate-800 text-sm">{catLabel[ck] || ck}</span>
                   <span className="text-xs text-slate-400">· {list.length} item{list.length === 1 ? "" : "s"}</span>
@@ -196,6 +197,7 @@ export default function MealStockTakeTab({ liveSig }) {
                                 <input type="number" min="0" step="0.01" value={v ?? ""}
                                        onChange={(e) => setPhys(r.item_id, e.target.value)}
                                        placeholder="—"
+                                       title={`Enter the physical quantity of ${r.name} you counted (system shows ${fmtQty(r.system_qty, r.unit)} ${r.unit || ""})`}
                                        className="iu-input !h-8 !px-2 text-sm w-28 text-right tabular-nums"
                                        data-testid={`stocktake-physical-${r.item_id}`} />
                               </td>

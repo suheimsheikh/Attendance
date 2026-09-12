@@ -114,11 +114,11 @@ export default function TodosTab({ user, group }) {
 
       <div className="flex flex-wrap gap-2 mb-3 text-xs">
         {[["all", "Everyone"], ["mine", "Mine"]].map(([v, l]) => (
-          <button key={v} onClick={() => setScope(v)} data-testid={`todo-scope-${v}`} className={`px-3 h-8 rounded-full font-semibold transition-colors ${scope === v ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>{l}</button>
+          <button key={v} onClick={() => setScope(v)} data-testid={`todo-scope-${v}`} title={v === "mine" ? "Show only to-dos assigned to me" : "Show to-dos for the whole team"} className={`px-3 h-8 rounded-full font-semibold transition-colors ${scope === v ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>{l}</button>
         ))}
         <span className="w-px bg-slate-200 mx-1" />
         {[["open", "Pending"], ["done", "Done"], ["all", "All"]].map(([v, l]) => (
-          <button key={v} onClick={() => setStatus(v)} data-testid={`todo-status-${v}`} className={`px-3 h-8 rounded-full font-semibold transition-colors ${status === v ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>{l}</button>
+          <button key={v} onClick={() => setStatus(v)} data-testid={`todo-status-${v}`} title={v === "open" ? "Show only unfinished to-dos" : v === "done" ? "Show only completed to-dos" : "Show every to-do regardless of status"} className={`px-3 h-8 rounded-full font-semibold transition-colors ${status === v ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>{l}</button>
         ))}
       </div>
 

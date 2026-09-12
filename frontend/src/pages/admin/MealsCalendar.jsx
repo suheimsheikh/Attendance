@@ -6,7 +6,7 @@
  * can also type new days here — a single PUT upserts the row.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, Pencil, Check, X as CloseIcon, Upload, BarChart3, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
+import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, Pencil, Check, X as CloseIcon, Upload, BarChart3, ChevronDown, ChevronUp, ChevronRight, IndianRupee, Divide } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
 import { formatDate, dayOfWeek } from "../../utils";
@@ -33,13 +33,15 @@ function lastOfMonth(iso) {
   return `${nxt.getFullYear()}-${p2(nxt.getMonth() + 1)}-${p2(nxt.getDate())}`;
 }
 const inr = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN"));
+const money = (n) => (n == null ? "—" : `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`);
+const money2 = (n) => (n == null ? "—" : `₹${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
-function KpiPill({ icon: Icon, label, value, tint }) {
+function KpiPill({ icon: Icon, label, value, tint, title }) {
   return (
-    <div className={`iu-card !py-1.5 !px-2.5 flex items-center gap-2 ${tint || ""}`}>
+    <div className={`iu-card !py-1.5 !px-2.5 flex items-center gap-2 ${tint || ""}`} title={title}>
       <Icon size={14} className="shrink-0 opacity-70" />
       <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500 whitespace-nowrap">{label}</div>
-      <div className="ml-auto text-sm font-black tabular-nums">{inr(value)}</div>
+      <div className="ml-auto text-sm font-black tabular-nums">{typeof value === "number" ? inr(value) : value}</div>
     </div>
   );
 }
@@ -87,6 +89,9 @@ function EditRow({ date, initial, onSave, onCancel }) {
                className="iu-input !h-8 !w-16 text-right tabular-nums" data-testid={`mc-edit-d-${date}`} />
       </td>
       <td className="p-2 text-right font-bold tabular-nums text-slate-700">{total}</td>
+      <td className="p-2 text-right text-slate-300 tabular-nums">—</td>
+      <td className="p-2 text-right text-slate-300 tabular-nums">—</td>
+      <td className="p-2 text-right text-slate-300 tabular-nums">—</td>
       <td className="p-2 text-right">
         <div className="inline-flex gap-1">
           <button onClick={submit} disabled={saving}
@@ -221,6 +226,7 @@ export default function MealsCalendar() {
   // ~90 days ago if the endpoint hasn't returned yet or has no data).
   const [from, setFrom] = useState("");
   const [to, setTo] = useState(today);
+  const [minDate, setMinDate] = useState("");
   const [data, setData] = useState(null);
   const [events, setEvents] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -242,10 +248,12 @@ export default function MealsCalendar() {
   useEffect(() => {
     api.get("/meals/meal-calendar/bounds")
       .then((b) => {
-        if (b?.min_date) setFrom(b.min_date);
-        else setFrom(firstOfMonth(today));
+        const min = b?.min_date || firstOfMonth(today);
+        setMinDate(min);
+        setFrom(min);   // land on ALL available days by default
+        setTo(today);
       })
-      .catch(() => setFrom(firstOfMonth(today)));
+      .catch(() => { setMinDate(firstOfMonth(today)); setFrom(firstOfMonth(today)); });
   }, []);
 
   const load = () => {
@@ -279,11 +287,13 @@ export default function MealsCalendar() {
           key,
           label: new Date(d.date + "T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
           rows: [],
-          totals: { breakfast: 0, midmorning: 0, lunch: 0, snacks: 0, dinner: 0, total: 0, days: 0 },
+          totals: { breakfast: 0, midmorning: 0, lunch: 0, snacks: 0, dinner: 0, total: 0, days: 0, purchase_cost: 0, issue_cost: 0 },
         });
       }
       const g = map.get(key);
       g.rows.push(d);
+      g.totals.purchase_cost += d.purchase_cost || 0;
+      g.totals.issue_cost += d.issue_cost || 0;
       if (d.has_data) {
         g.totals.breakfast += d.breakfast || 0;
         g.totals.midmorning += d.midmorning || 0;
@@ -342,47 +352,38 @@ export default function MealsCalendar() {
       </p>
 
       <div className="iu-card p-3 mb-4 flex items-center gap-2 flex-wrap" data-testid="meals-calendar-controls">
-        <button onClick={() => shift(-1)} className="iu-btn-secondary !h-9" data-testid="mc-prev-month">‹ Prev month</button>
+        <button onClick={() => shift(-1)} className="iu-btn-secondary !h-9" data-testid="mc-prev-month" title="Jump to the previous month">‹ Prev month</button>
         <div className="flex items-center gap-1 mx-2">
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-                 className="iu-input !h-9 !w-auto text-sm" data-testid="mc-from" />
+                 className="iu-input !h-9 !w-auto text-sm" data-testid="mc-from" title="Range start date" />
           <span className="text-slate-400 text-xs">→</span>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
-                 className="iu-input !h-9 !w-auto text-sm" data-testid="mc-to" />
+                 className="iu-input !h-9 !w-auto text-sm" data-testid="mc-to" title="Range end date" />
         </div>
-        <button onClick={() => shift(1)} className="iu-btn-secondary !h-9" data-testid="mc-next-month">Next month ›</button>
-        <button onClick={() => { setFrom(isoDaysAgo(30)); setTo(today); }} className="iu-btn-secondary !h-9 text-xs" data-testid="mc-last-30">Last 30d</button>
+        <button onClick={() => shift(1)} className="iu-btn-secondary !h-9" data-testid="mc-next-month" title="Jump to the next month">Next month ›</button>
+        <button onClick={() => { setFrom(isoDaysAgo(30)); setTo(today); }} className="iu-btn-secondary !h-9 text-xs" data-testid="mc-last-30" title="Show the last 30 days">Last 30d</button>
+        <button onClick={() => { setFrom(minDate || firstOfMonth(today)); setTo(today); }} className="iu-btn-secondary !h-9 text-xs" data-testid="mc-all-days" title="Show every day on record (the full history)">All days</button>
         <div className="flex-1" />
-        <label className="text-xs text-slate-600 inline-flex items-center gap-2 cursor-pointer">
+        <label className="text-xs text-slate-600 inline-flex items-center gap-2 cursor-pointer" title="Include days that have no meal counts recorded (otherwise only days with data are shown)">
           <input type="checkbox" checked={showEmpty} onChange={(e) => setShowEmpty(e.target.checked)} data-testid="mc-show-empty" />
           Show days with no data
         </label>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
-        <KpiPill icon={Coffee}   label="Breakfast"        value={data?.totals?.breakfast || 0}  tint="bg-amber-50" />
-        <KpiPill icon={Coffee}   label="Midmorning"       value={data?.totals?.midmorning || 0} tint="bg-orange-50" />
-        <KpiPill icon={Sun}      label="Lunch"            value={data?.totals?.lunch || 0}      tint="bg-emerald-50" />
-        <KpiPill icon={Sun}      label="Afternoon Snack"  value={data?.totals?.snacks || 0}     tint="bg-violet-50" />
-        <KpiPill icon={Moon}     label="Dinner"           value={data?.totals?.dinner || 0}     tint="bg-indigo-50" />
-        <KpiPill icon={Utensils} label="Total"     value={data?.totals?.total || 0}     tint="bg-slate-100" />
+        <KpiPill icon={Coffee}   label="Breakfast"        value={data?.totals?.breakfast || 0}  tint="bg-amber-50" title="Total breakfast servings in this range" />
+        <KpiPill icon={Coffee}   label="Midmorning"       value={data?.totals?.midmorning || 0} tint="bg-orange-50" title="Total mid-morning snack servings in this range" />
+        <KpiPill icon={Sun}      label="Lunch"            value={data?.totals?.lunch || 0}      tint="bg-emerald-50" title="Total lunch servings in this range" />
+        <KpiPill icon={Sun}      label="Afternoon Snack"  value={data?.totals?.snacks || 0}     tint="bg-violet-50" title="Total afternoon-snack servings in this range" />
+        <KpiPill icon={Moon}     label="Dinner"           value={data?.totals?.dinner || 0}     tint="bg-indigo-50" title="Total dinner servings in this range" />
+        <KpiPill icon={Utensils} label="Total"     value={data?.totals?.total || 0}     tint="bg-slate-100" title="Total meals served across all slots in this range" />
       </div>
 
-      {data?.days && (
-        <div className="mb-4">
-          <button
-            type="button"
-            onClick={() => setShowAnalytics((v) => !v)}
-            className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-700 hover:text-slate-900 mb-2"
-            data-testid="mc-toggle-analytics"
-          >
-            <BarChart3 size={16} className="text-emerald-600"/>
-            Analytics
-            {showAnalytics ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
-          </button>
-          {showAnalytics && <MealsAnalyticsPanel days={data.days} events={events} />}
-        </div>
-      )}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4" data-testid="mc-cost-kpis">
+        <KpiPill icon={IndianRupee} label="Purchase ₹" value={money(data?.totals?.purchase_cost)} tint="bg-emerald-50" title="Total purchase spend entered in this range" />
+        <KpiPill icon={IndianRupee} label="Issue ₹"    value={money(data?.totals?.issue_cost)}    tint="bg-sky-50" title="Total consumption cost — kitchen issues valued at each item's weighted-average purchase rate" />
+        <KpiPill icon={Divide}      label="Issue ₹ / Meal" value={money2(data?.totals?.issue_cost_per_meal)} tint="bg-amber-50" title="Per-meal consumption cost = total issue cost ÷ total meals served" />
+      </div>
 
       <div className="iu-card overflow-auto" data-testid="meals-calendar-table-wrap">
         <table className="w-full text-sm">
@@ -395,14 +396,17 @@ export default function MealsCalendar() {
               <th className="text-right p-2.5" title="Afternoon Snack">AS</th>
               <th className="text-right p-2.5"><Moon size={12} className="inline mr-1" />D</th>
               <th className="text-right p-2.5 bg-emerald-700">Total</th>
+              <th className="text-right p-2.5 bg-emerald-800" title="Purchase spend for the day">Purchase ₹</th>
+              <th className="text-right p-2.5 bg-sky-800" title="Consumption cost — issues valued at weighted-avg purchase rate">Issue ₹</th>
+              <th className="text-right p-2.5 bg-amber-700" title="Per-meal cost = issue cost ÷ meals served (rounded to whole rupees)">₹/Meal</th>
               {canEdit && <th className="text-right p-2.5 w-16"> </th>}
             </tr>
           </thead>
           <tbody data-testid="meals-calendar-tbody">
             {loading ? (
-              <tr><td colSpan={canEdit ? 8 : 7} className="text-center py-10"><Loader2 className="animate-spin inline text-slate-400"/></td></tr>
+              <tr><td colSpan={canEdit ? 11 : 10} className="text-center py-10"><Loader2 className="animate-spin inline text-slate-400"/></td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={canEdit ? 8 : 7} className="text-center py-10 text-slate-400">No data in this window.</td></tr>
+              <tr><td colSpan={canEdit ? 11 : 10} className="text-center py-10 text-slate-400">No data in this window.</td></tr>
             ) : months.map((month) => {
               const collapsed = !openMonths.has(month.key);
               return (
@@ -410,6 +414,7 @@ export default function MealsCalendar() {
                   <tr
                     className="bg-slate-100 hover:bg-slate-200 cursor-pointer border-t-2 border-slate-300 sticky"
                     onClick={() => toggleMonth(month.key)}
+                    title={collapsed ? `Expand ${month.label} to see each day` : `Collapse ${month.label}`}
                     data-testid={`mc-month-header-${month.key}`}
                   >
                     <td className="p-2.5 font-black text-slate-900 whitespace-nowrap">
@@ -425,6 +430,9 @@ export default function MealsCalendar() {
                     <td className="p-2.5 text-right font-black tabular-nums text-slate-800">{inr(month.totals.snacks)}</td>
                     <td className="p-2.5 text-right font-black tabular-nums text-slate-800">{inr(month.totals.dinner)}</td>
                     <td className="p-2.5 text-right font-black tabular-nums text-emerald-700 bg-emerald-50">{inr(month.totals.total)}</td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-emerald-800">{money(month.totals.purchase_cost)}</td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-sky-800">{money(month.totals.issue_cost)}</td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-amber-700">{month.totals.total ? money(month.totals.issue_cost / month.totals.total) : <span className="text-slate-300">—</span>}</td>
                     {canEdit && <td className="p-2.5"/>}
                   </tr>
                   {!collapsed && month.rows.map((d) => {
@@ -466,6 +474,9 @@ export default function MealsCalendar() {
                             <td className={`p-2 text-right tabular-nums font-bold ${d.has_data ? "text-emerald-700" : "text-slate-300"}`} data-testid={`mc-total-${d.date}`}>
                               {d.has_data ? d.total : "—"}
                             </td>
+                            <td className="p-2 text-right tabular-nums text-emerald-800" data-testid={`mc-pcost-${d.date}`}>{d.purchase_cost ? money(d.purchase_cost) : <span className="text-slate-300">—</span>}</td>
+                            <td className="p-2 text-right tabular-nums text-sky-800" data-testid={`mc-icost-${d.date}`}>{d.issue_cost ? money(d.issue_cost) : <span className="text-slate-300">—</span>}</td>
+                            <td className="p-2 text-right tabular-nums font-bold text-amber-700" data-testid={`mc-permeal-${d.date}`} title="Issue cost ÷ meals served">{d.issue_cost && d.total ? money(d.issue_cost / d.total) : <span className="text-slate-300">—</span>}</td>
                             {canEdit && (
                               <td className="p-2 text-right">
                                 <button
@@ -490,15 +501,36 @@ export default function MealsCalendar() {
               <tr>
                 <td className="p-2.5 font-black">TOTAL</td>
                 <td className="p-2.5 text-right font-black tabular-nums">{inr(data.totals.breakfast)}</td>
+                <td className="p-2.5 text-right font-black tabular-nums">{inr(data.totals.midmorning)}</td>
                 <td className="p-2.5 text-right font-black tabular-nums">{inr(data.totals.lunch)}</td>
+                <td className="p-2.5 text-right font-black tabular-nums">{inr(data.totals.snacks)}</td>
                 <td className="p-2.5 text-right font-black tabular-nums">{inr(data.totals.dinner)}</td>
                 <td className="p-2.5 text-right font-black tabular-nums text-emerald-300">{inr(data.totals.total)}</td>
+                <td className="p-2.5 text-right font-black tabular-nums text-emerald-300">{money(data.totals.purchase_cost)}</td>
+                <td className="p-2.5 text-right font-black tabular-nums text-sky-300">{money(data.totals.issue_cost)}</td>
+                <td className="p-2.5 text-right font-black tabular-nums text-amber-300">{data.totals.total ? money(data.totals.issue_cost / data.totals.total) : "—"}</td>
                 {canEdit && <td/>}
               </tr>
             </tfoot>
           )}
         </table>
       </div>
+
+      {data?.days && (
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => setShowAnalytics((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-700 hover:text-slate-900 mb-2"
+            data-testid="mc-toggle-analytics"
+          >
+            <BarChart3 size={16} className="text-emerald-600"/>
+            Analytics
+            {showAnalytics ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+          </button>
+          {showAnalytics && <MealsAnalyticsPanel days={data.days} events={events} />}
+        </div>
+      )}
     </div>
   );
 }

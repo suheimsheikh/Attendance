@@ -4734,6 +4734,52 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 for k in ("breakfast", "midmorning", "lunch", "snacks", "dinner"):
                     totals[k] += r.get(k, 0) or 0
                 totals["total"] += r["total"]
+
+        # ── Per-day purchase & issue COST (Sep 2026 Consumption view) ──
+        # Purchases valued at their entered amount; issues valued at each
+        # item's weighted-avg purchase rate over the window (fallback:
+        # current stock snapshot rate). "Issue cost ÷ total meals" gives a
+        # true per-meal consumption cost.
+        purch_docs_c = await db.meal_purchases.find(
+            {"date": {"$gte": s, "$lte": e}}, {"_id": 0, "date": 1, "lines": 1, "amounts": 1}).to_list(3000)
+        iss_docs_c = await db.meal_issues.find(
+            {"date": {"$gte": s, "$lte": e}}, {"_id": 0, "date": 1, "lines": 1}).to_list(3000)
+        pq_c: dict[str, float] = {}
+        pa_c: dict[str, float] = {}
+        for doc in purch_docs_c:
+            for ln in doc.get("lines") or []:
+                iid = ln.get("item_id"); q = float(ln.get("qty") or 0); rt = float(ln.get("rate") or 0)
+                if iid and q > 0:
+                    pq_c[iid] = pq_c.get(iid, 0.0) + q
+                    pa_c[iid] = pa_c.get(iid, 0.0) + q * rt
+        snap_rows_c, _ = await _stock_snapshot(e)
+        snap_rate_c = {r["item_id"]: float(r.get("avg_rate") or 0) for r in snap_rows_c}
+
+        def _rate_c(iid: str) -> float:
+            return pa_c[iid] / pq_c[iid] if pq_c.get(iid, 0) > 0 else snap_rate_c.get(iid, 0.0)
+
+        pcost_by_date: dict[str, float] = {}
+        icost_by_date: dict[str, float] = {}
+        for doc in purch_docs_c:
+            amts = doc.get("amounts") or {}
+            if amts:
+                c = sum(float(v or 0) for v in amts.values())
+            else:
+                c = sum(float(ln.get("amount") or (float(ln.get("qty") or 0) * float(ln.get("rate") or 0)))
+                        for ln in doc.get("lines") or [])
+            pcost_by_date[doc["date"]] = pcost_by_date.get(doc["date"], 0.0) + c
+        for doc in iss_docs_c:
+            c = sum(float(ln.get("qty") or 0) * _rate_c(ln.get("item_id"))
+                    for ln in doc.get("lines") or [] if ln.get("item_id"))
+            icost_by_date[doc["date"]] = icost_by_date.get(doc["date"], 0.0) + c
+        for r in out:
+            r["purchase_cost"] = round(pcost_by_date.get(r["date"], 0.0), 2)
+            r["issue_cost"] = round(icost_by_date.get(r["date"], 0.0), 2)
+        totals["purchase_cost"] = round(sum(pcost_by_date.values()), 2)
+        totals["issue_cost"] = round(sum(icost_by_date.values()), 2)
+        totals["issue_cost_per_meal"] = round(totals["issue_cost"] / totals["total"], 2) if totals["total"] else None
+        totals["purchase_cost_per_meal"] = round(totals["purchase_cost"] / totals["total"], 2) if totals["total"] else None
+
         return {
             "start": s, "end": e,
             "days": out,

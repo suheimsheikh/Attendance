@@ -84,10 +84,12 @@ export default function DarReport() {
         </div>
         <div className="flex gap-2">
           <button onClick={() => setTab("reports")} data-testid="dar-tab-reports"
+                  title="Browse and search all filed Daily Activity Reports"
                   className={`px-4 h-9 rounded-full text-sm font-semibold ${tab === "reports" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}>
             Reports
           </button>
           <button onClick={() => setTab("missed")} data-testid="dar-tab-missed"
+                  title="See DAR-required members who worked but did not file a DAR (for payroll)"
                   className={`px-4 h-9 rounded-full text-sm font-semibold inline-flex items-center gap-1 ${tab === "missed" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}>
             <AlertTriangle size={13} /> Missed
           </button>
