@@ -1215,7 +1215,7 @@ export default function MealEntryTab({ liveSig }) {
                           <input
                             type="number" min="0" step="0.01"
                             value={issueQty ?? ""}
-                            onChange={(ev) => { dirtyIssues.current.add(it.id); setIssues({ ...issues, [it.id]: ev.target.value }); }}
+                            onChange={(ev) => { const v = ev.target.value; dirtyIssues.current.add(it.id); setIssues((prev) => ({ ...prev, [it.id]: v })); }}
                             onFocus={() => notifyFocus("issue", it.id)}
                             onBlur={() => {
                               notifyBlur("issue", it.id);

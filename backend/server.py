@@ -2287,6 +2287,10 @@ async def resolve_stale(body: ResolveStaleIn, user: dict = Depends(get_current_u
             close_dt = datetime.fromisoformat(target_hm)
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid close time")
+        # A tz-naive ISO string means an office-local wall-clock time, not the
+        # server host's zone — anchor it to the office tz before converting.
+        if close_dt.tzinfo is None:
+            close_dt = close_dt.replace(tzinfo=office_tz(office))
 
     close_utc = close_dt.astimezone(timezone.utc)
     # Close any open excursion at the close-time as well

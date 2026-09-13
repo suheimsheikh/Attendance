@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Loader2, Search, RefreshCw, CheckSquare, Square, LogIn, LogOut as LogOutIcon, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
@@ -46,6 +46,7 @@ export default function Muster() {
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState(new Set());
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);   // synchronous re-entry guard for runBulk
   const [photoTarget, setPhotoTarget] = useState(null); // {id, full_name}
   // Queue of athlete IDs to capture photos for *before* submitting the muster.
   // Each capture or skip pops the next; once empty we run the bulk endpoint.
@@ -85,6 +86,8 @@ export default function Muster() {
   useEffect(() => { setInstitutionFilter("all"); }, [mode, scope]);
 
   const runBulk = useCallback(async (ids) => {
+    if (savingRef.current) return;   // guard against a double submit opening two sessions
+    savingRef.current = true;
     setSaving(true);
     try {
       // Capture the coach's current GPS (best-effort, 8s budget). We
@@ -183,6 +186,7 @@ export default function Muster() {
     } catch (err) {
       showApiError(err, "Save failed");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }, [mode, office, sites, load, data]);

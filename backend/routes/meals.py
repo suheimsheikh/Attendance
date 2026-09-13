@@ -1613,7 +1613,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         # Weighted-avg cost per item — reuse the SAME stock-snapshot math
         # the entry grid's Issues card uses (/meals/stock: opening_rate
         # blend + as-of date cap) so this drill-down agrees with the grid.
-        snap_rows, _snap_cats = await _stock_snapshot(e)
+        snap_rows, _snap_cats = await _stock_snapshot(e, include_inactive=True)
         avg_rate: dict = {
             r["item_id"]: float(r.get("avg_rate") or 0) for r in snap_rows
         }
@@ -2562,10 +2562,17 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     # Stock on hand — opening + Σ purchases − Σ issues − Σ wastage,
     # per item.
     # ------------------------------------------------------------------
-    async def _stock_snapshot(as_of_iso: str):
-        """Shared stock math for /meals/stock and reorder suggestions."""
+    async def _stock_snapshot(as_of_iso: str, include_inactive: bool = False):
+        """Shared stock math for /meals/stock and reorder suggestions.
+
+        `include_inactive=True` also returns rows for deactivated items so
+        their weighted-avg rate is available for VALUATION reports (issue
+        cost / ₹-per-meal). Stock-on-hand and reorder keep the default
+        (active-only) so discontinued items don't clutter those lists.
+        """
+        item_filter = {} if include_inactive else {"active": True}
         items = await db.meal_items.find(
-            {"active": True}, {"_id": 0},
+            item_filter, {"_id": 0},
         ).sort([("category_key", 1), ("sort_order", 1), ("name", 1)]).to_list(500)
         cats = await _purchase_categories()
         cat_label = {c["key"]: c["label"] for c in cats}
@@ -3859,7 +3866,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 p_qty[iid] = p_qty.get(iid, 0.0) + q
                 p_amt[iid] = p_amt.get(iid, 0.0) + q * r
                 p_lines[iid] = p_lines.get(iid, 0) + 1
-        snap_rows2, _ = await _stock_snapshot(e)
+        snap_rows2, _ = await _stock_snapshot(e, include_inactive=True)
         snap_rate2 = {r["item_id"]: float(r.get("avg_rate") or 0) for r in snap_rows2}
 
         def _rate_for2(iid: str) -> float:
@@ -4752,7 +4759,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 if iid and q > 0:
                     pq_c[iid] = pq_c.get(iid, 0.0) + q
                     pa_c[iid] = pa_c.get(iid, 0.0) + q * rt
-        snap_rows_c, _ = await _stock_snapshot(e)
+        snap_rows_c, _ = await _stock_snapshot(e, include_inactive=True)
         snap_rate_c = {r["item_id"]: float(r.get("avg_rate") or 0) for r in snap_rows_c}
 
         def _rate_c(iid: str) -> float:

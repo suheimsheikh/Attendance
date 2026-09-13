@@ -4541,3 +4541,21 @@ green**. Mongo unique index confirmed via index_information().
   no notify_log index / pagination needed at ~62-member scale; template reset-to-default
   is a future nicety). notify-log route guard stays RequireMuster; backend enforces
   admin+coach and the sidebar link is hidden from chef/escort.
+
+## 13 Jun 2026 (pt.5) — Across-the-board code review + safe fixes (attendance/muster + meals)
+Two read-only reviews (backend + frontend) of the busiest modules; fixed the confirmed issues, played safe on the live app.
+- MONEY (MEDIUM): deactivated pantry items were valued at ₹0 in issue-cost / ₹-per-meal / expense reports.
+  Added `include_inactive` to _stock_snapshot() and passed it in the 3 valuation callers (daily-totals,
+  expense-report, meal-calendar). Stock-on-hand & reorder stay active-only (unchanged). Verified via curl.
+- TIMEZONE (MEDIUM): /attendance/resolve-stale mis-converted a tz-naive ISO close time using the server's
+  zone; now anchored to the office tz (HH:MM/work_end paths were already correct).
+- FRONTEND (MEDIUM): MealEntryTab Issues input used a stale-closure setIssues({...issues}) — switched to the
+  functional updater so a peer's live-merged rows no longer flicker away during concurrent entry.
+- FRONTEND (LOW): SelfCheckIn now clears freshSelfie at the start of each toggle, so a check-in selfie is not
+  re-attached to a later check-out's WhatsApp share; MealsReport DailyDetailsModal fetch got an unmount/stale
+  guard; Muster runBulk got a ref-based re-entry guard against double-submit opening two sessions.
+- Deliberately NOT done (play safe): no unique index added to the live `attendance` collection (would fail if
+  dup open sessions exist; mitigated client-side instead); no split of the MealEntryTab/MealMastersTab monoliths
+  (high risk vs benefit on a live app); fmtRs/inr are distinct formatters, not real duplication.
+- Verified: backend clean; meal-calendar (issue ₹102822.95, ₹/meal 53.06) + daily-totals return correct figures;
+  stock unchanged (138 active rows); Muster + Meals pages render with no compile errors.

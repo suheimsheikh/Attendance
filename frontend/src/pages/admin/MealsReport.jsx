@@ -65,11 +65,13 @@ function DailyDetailsModal({ dateStr, meal, mealLabel, onClose }) {
   useEscape(onClose);
 
   useEffect(() => {
+    let ignore = false;
     setLoading(true);
     api.get(`/meals/daily-details?date=${dateStr}&meal=${meal}`)
-      .then(setData)
-      .catch((err) => showApiError(err, "Couldn't load details"))
-      .finally(() => setLoading(false));
+      .then((res) => { if (!ignore) setData(res); })
+      .catch((err) => { if (!ignore) showApiError(err, "Couldn't load details"); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
   }, [dateStr, meal]);
 
   // Printing: give body a marker class so the print CSS knows to

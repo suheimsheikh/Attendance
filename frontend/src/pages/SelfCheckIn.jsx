@@ -194,6 +194,9 @@ export default function SelfCheckIn() {
     setWorking(true);
     setLastAction(null);
     setLastDar(null);
+    // Start each toggle with no carried-over selfie: a check-in's fresh
+    // selfie must not be re-attached to a later check-out's WhatsApp share.
+    setFreshSelfie(null);
     setLocating("Getting your location…");
     let lat = null, lng = null, acc = null;
     try {
