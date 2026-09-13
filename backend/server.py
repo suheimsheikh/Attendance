@@ -1,5 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query
-from fastapi.responses import Response
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, Request
+from fastapi.responses import Response, JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -95,6 +95,13 @@ from services.photo import (  # noqa: E402, F401
 from services.auth_utils import (  # noqa: E402
     hash_password, verify_password, create_token,
 )
+from services.service_tokens import (  # noqa: E402
+    is_service_token as _svc_is_service_token,
+    authenticate_service_token as _svc_authenticate,
+    create_or_replace_service_token as _svc_create,
+    revoke_service_tokens as _svc_revoke,
+    active_token_status as _svc_status,
+)
 from services.attendance_calc import (  # noqa: E402, F401
     OVERTIME_THRESHOLD_MIN, OVERTIME_CATEGORIES, ATHLETE_CATEGORIES,
     compute_late,
@@ -121,6 +128,14 @@ from config import DEVICE_TOKEN_MINUTES  # noqa: E402, F401
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+    # Service tokens (svc_…) — additive, read-only PATs for background API
+    # access. A normal JWT never starts with "svc_" so existing logins are
+    # untouched. Read-only is enforced by the write-guard middleware below.
+    if _svc_is_service_token(token):
+        identity = await _svc_authenticate(db, token, JWT_SECRET)
+        if identity:
+            return identity
+        raise HTTPException(status_code=401, detail="Invalid authentication token")
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
         user_id = payload.get("sub")
@@ -4323,6 +4338,39 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
 
 
 # ----------------------------------------------------------------------------
+# API service tokens (read-only PATs) — admin-issued, non-expiring, for
+# background/programmatic GET access. Secret shown once; only a hash stored.
+# ----------------------------------------------------------------------------
+@api_router.post("/auth/service-token")
+async def create_service_token(admin: dict = Depends(require_admin)):
+    raw = await _svc_create(db, admin["id"], JWT_SECRET)
+    return {
+        "token": raw,
+        "warning": "Copy this now — it is shown only once and cannot be retrieved again.",
+    }
+
+
+@api_router.get("/auth/service-token")
+async def get_service_token_status(admin: dict = Depends(require_admin)):
+    doc = await _svc_status(db)
+    if not doc:
+        return {"exists": False}
+    return {
+        "exists": True,
+        "last4": doc.get("last4"),
+        "prefix": doc.get("prefix"),
+        "created_at": doc.get("created_at"),
+        "last_used_at": doc.get("last_used_at"),
+    }
+
+
+@api_router.delete("/auth/service-token")
+async def delete_service_token(admin: dict = Depends(require_admin)):
+    n = await _svc_revoke(db)
+    return {"revoked": n > 0}
+
+
+# ----------------------------------------------------------------------------
 app.include_router(api_router)
 
 # Auth + device-approval — split out 06/2026 during the server.py refactor.
@@ -4584,6 +4632,20 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(RequestIDMiddleware)
+
+
+@app.middleware("http")
+async def reject_service_writes(request: Request, call_next):
+    # Read-only guard for API service tokens: block any state-changing method
+    # when the caller presents a svc_ bearer token. Syntactic check only —
+    # authentication still happens in get_current_user (a forged svc_ string
+    # is rejected there). Purely additive; JWT sessions are unaffected.
+    auth = request.headers.get("authorization", "")
+    scheme, _, cred = auth.partition(" ")
+    if scheme.lower() == "bearer" and cred.startswith("svc_") \
+            and request.method not in ("GET", "HEAD", "OPTIONS"):
+        return JSONResponse(status_code=403, content={"detail": "This API token is read-only"})
+    return await call_next(request)
 
 # --- Cache-Control on stable read-only endpoints -----------------------
 # Small, rarely-changing reference data can safely sit in the browser

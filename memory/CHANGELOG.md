@@ -4594,3 +4594,15 @@ Two read-only reviews (backend + frontend) of the busiest modules; fixed the con
   labelled on the step line at the last week of each month. New WeeklyStackTooltip shows every
   category + Week total + Month total on hover. Focus drill-down (per-item daily lines) preserved.
 - Verified via curl (per-day cat present) + screenshots (single month + Jul–Sep range).
+
+## 13 Jun 2026 (pt.10) — Read-only API service token (PAT)
+- New admin-issued, non-expiring, READ-ONLY API token for background/programmatic access.
+  Backend: services/service_tokens.py (HMAC-SHA256 digest peppered with JWT_SECRET, only the
+  hash + prefix/last4 stored; secret shown once). Additive svc_ branch in get_current_user
+  (JWT logins untouched). Read-only enforced by reject_service_writes http middleware
+  (blocks non-GET/HEAD/OPTIONS for svc_ bearer). Endpoints: POST/GET/DELETE /api/auth/service-token (admin only).
+- Frontend: Office Settings → "API Access Token" panel (generate/regenerate shows secret once,
+  copy button, status with prefix/last4/created/last-used, revoke). No multi-token management UI (per user).
+- Verified via curl: generate→GET 200, POST 403 (read-only), invalid 401, regenerate invalidates old,
+  revoke→401, admin-only gate; existing JWT auth unaffected. UI verified via screenshot.
+- Usage: Authorization: Bearer svc_...  on GET endpoints only.
