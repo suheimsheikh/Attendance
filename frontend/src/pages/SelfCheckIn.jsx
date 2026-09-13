@@ -491,7 +491,7 @@ export default function SelfCheckIn() {
           {!locating && lastDistance && lastDistance.dist != null && (
             <div className="mt-5 text-xs text-slate-600 flex items-center justify-center gap-1.5" data-testid="last-distance">
               <MapPin size={13} className="text-slate-400" />
-              Logged {Math.round(lastDistance.dist)} m from the office
+              Logged {Math.round(lastDistance.dist)} m from {siteLabel}
               {lastDistance.acc ? <span className="text-slate-400">· ±{Math.round(lastDistance.acc)} m</span> : null}
               {lastDistance.off ? <span className="ml-1 text-rose-600 font-bold">off-site</span> : <span className="ml-1 text-emerald-600 font-semibold">on-site</span>}
             </div>

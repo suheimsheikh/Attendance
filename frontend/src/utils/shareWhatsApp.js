@@ -157,11 +157,15 @@ export function formatCheckinCaption({ action, name, siteName, when = new Date()
   });
   const isOut = action === "checkout";
   const emoji = isOut ? "🏁" : "✅";
-  const verb  = isOut ? "Check-out" : "Check-in";
+  const verb  = isOut ? "OUT:" : "IN:";
   const bits = [`${emoji} ${name}`, `${verb} ${hhmm}`];
-  if (siteName) bits.push(siteName);
   const dist = formatDistance(distanceM);
-  if (dist) bits.push(offSite ? `⚠️ ${dist} from site (OFF-SITE)` : `📍 ${dist} from site`);
+  const place = siteName || "site";
+  if (dist) {
+    bits.push(offSite ? `⚠️ ${dist} from ${place} (OFF-SITE)` : `📍 ${dist} from ${place}`);
+  } else if (siteName) {
+    bits.push(siteName);
+  }
   return bits.join(" · ");
 }
 
