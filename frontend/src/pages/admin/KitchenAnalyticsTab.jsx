@@ -4,7 +4,7 @@
  * Renders four chart clusters for both PURCHASES and ISSUES over a
  * selectable date window — a single month (prev / next / this-month) or a
  * custom date range:
- *   • Daily trend line (₹ + line count)
+ *   • Spend trend: weekly ₹ bars + monthly ₹ total line (dual axis)
  *   • Top items by ₹ (bar)
  *   • Top items by qty (bar)
  *   • Category share (pie)
@@ -16,7 +16,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, TrendingUp, BarChart3, PieChart as PieIcon, ListOrdered, IndianRupee, ShoppingCart, Boxes, Flame, Beef, Wheat, Droplet, Maximize2, X as CloseIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList,
+  CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList, ComposedChart,
 } from "recharts";
 import { api, showApiError } from "../../api";
 import { formatDate, fmtQty as uQty } from "../../utils";
@@ -102,47 +102,67 @@ function makeDotRenderer(seriesKey, color, fullscreen) {
   };
 }
 
+// Bucket the sparse daily series into weekly ₹ totals (bars) plus each
+// week's calendar-month ₹ total (line overlay). Weeks start Monday and
+// are labelled by their start date. A week is attributed to the month of
+// its Monday for the monthly-total line.
+function weekStartIso(iso) {
+  const d = new Date(iso + "T00:00:00");
+  const dow = (d.getDay() + 6) % 7; // Monday = 0
+  d.setDate(d.getDate() - dow);
+  const p = (x) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function buildWeeklyMonthly(daily) {
+  if (!daily || !daily.length) return [];
+  const weekMap = new Map();     // weekStartIso -> ₹
+  const monthTotal = new Map();  // "YYYY-MM"   -> ₹
+  for (const d of daily) {
+    if (!d?.date) continue;
+    const amt = Number(d.amount) || 0;
+    const ws = weekStartIso(d.date);
+    weekMap.set(ws, (weekMap.get(ws) || 0) + amt);
+    const mk = d.date.slice(0, 7);
+    monthTotal.set(mk, (monthTotal.get(mk) || 0) + amt);
+  }
+  const r2 = (x) => Math.round(x * 100) / 100;
+  return [...weekMap.keys()].sort().map((ws) => ({
+    key: ws,
+    label: new Date(ws + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" }),
+    weekly: r2(weekMap.get(ws)),
+    monthly: r2(monthTotal.get(ws.slice(0, 7)) || 0),
+  }));
+}
+
 function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, fullscreen = false, focusSeries, from, to }) {
-  // When focusSeries is supplied we render one Line per selected item
-  // (all dates from window filled with 0) instead of the single
-  // aggregate "Amount" line. The click flow still works — it opens
-  // the day-detail popup for the clicked date regardless of which
-  // series was clicked.
   const useFocus = !!(focusSeries && focusSeries.items && focusSeries.items.length && from && to);
-  const rows = useFocus
-    ? buildFocusRows(focusSeries.items, from, to)
-    : (data || []).map((d) => ({ date: d.date, label: formatDate(d.date), Amount: d.amount }));
-  if (!rows.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
-  const handleDivClick = (e) => {
-    if (!onDayClick) return;
-    const grid = e.currentTarget.querySelector(".recharts-cartesian-grid");
-    const rect = grid?.getBoundingClientRect
-      ? grid.getBoundingClientRect()
-      : e.currentTarget.getBoundingClientRect();
-    if (!rect.width) return;
-    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const idx = Math.round(frac * (rows.length - 1));
-    const day = rows[idx]?.date;
-    if (day) onDayClick(day);
-  };
   const fontSize = fullscreen ? 12 : 10;
-  return (
-    <div data-testid={testid} style={{ width: "100%", height, cursor: onDayClick ? "pointer" : "default" }} onClick={handleDivClick}>
-      <ResponsiveContainer>
-        <LineChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey="label" tick={{ fontSize }} interval="preserveStartEnd" minTickGap={20} />
-          <YAxis tick={{ fontSize }} tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
-          <Tooltip
-            content={useFocus
-              ? <FocusDailyTooltip itemUnitById={focusUnitMap(focusSeries)} />
-              : undefined}
-            formatter={useFocus ? undefined : ((v) => `₹${inr2(v)}`)}
-            contentStyle={{ fontSize: 12 }}
-          />
-          {useFocus && <Legend wrapperStyle={{ fontSize: fullscreen ? 13 : 11 }} />}
-          {useFocus ? (
-            focusSeries.items.map((it) => (
+
+  // Drill-down: when a Top-items bar is tapped, keep the per-item DAILY
+  // lines (unchanged) so a coach can trace one ingredient day by day.
+  if (useFocus) {
+    const rows = buildFocusRows(focusSeries.items, from, to);
+    if (!rows.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
+    const handleDivClick = (e) => {
+      if (!onDayClick) return;
+      const grid = e.currentTarget.querySelector(".recharts-cartesian-grid");
+      const rect = grid?.getBoundingClientRect ? grid.getBoundingClientRect() : e.currentTarget.getBoundingClientRect();
+      if (!rect.width) return;
+      const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const idx = Math.round(frac * (rows.length - 1));
+      const day = rows[idx]?.date;
+      if (day) onDayClick(day);
+    };
+    return (
+      <div data-testid={testid} style={{ width: "100%", height, cursor: onDayClick ? "pointer" : "default" }} onClick={handleDivClick}>
+        <ResponsiveContainer>
+          <LineChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis dataKey="label" tick={{ fontSize }} interval="preserveStartEnd" minTickGap={20} />
+            <YAxis tick={{ fontSize }} tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
+            <Tooltip content={<FocusDailyTooltip itemUnitById={focusUnitMap(focusSeries)} />} contentStyle={{ fontSize: 12 }} />
+            <Legend wrapperStyle={{ fontSize: fullscreen ? 13 : 11 }} />
+            {focusSeries.items.map((it) => (
               <Line
                 key={it.item_id}
                 type="monotone" dataKey={it.item_id}
@@ -152,16 +172,32 @@ function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, ful
                 dot={makeDotRenderer(it.item_id, colorForItem(it.item_id), fullscreen)}
                 activeDot={{ r: onDayClick ? 6 : 5, style: { cursor: onDayClick ? "pointer" : "default" } }}
               />
-            ))
-          ) : (
-            <Line
-              type="monotone" dataKey="Amount"
-              stroke={colorAmt} strokeWidth={2}
-              dot={makeDotRenderer("Amount", colorAmt, fullscreen)}
-              activeDot={{ r: onDayClick ? 6 : 5, style: { cursor: onDayClick ? "pointer" : "default" } }}
-            />
-          )}
-        </LineChart>
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  // Default: WEEKLY spend bars + MONTHLY-total line overlay (dual ₹ axis:
+  // weekly on the left, the larger monthly total on the right so both
+  // stay readable). Replaces the old noisy per-day line.
+  const rows = buildWeeklyMonthly(data);
+  if (!rows.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
+  const rupeeK = (v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`;
+  return (
+    <div data-testid={testid} style={{ width: "100%", height }}>
+      <ResponsiveContainer>
+        <ComposedChart data={rows} margin={{ top: 8, right: 16, left: 4, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="label" tick={{ fontSize }} interval={0} />
+          <YAxis yAxisId="left" tick={{ fontSize }} tickFormatter={rupeeK} />
+          <YAxis yAxisId="right" orientation="right" tick={{ fontSize }} tickFormatter={rupeeK} />
+          <Tooltip formatter={(v, n) => [`₹${inr2(v)}`, n]} contentStyle={{ fontSize: 12 }} />
+          <Legend wrapperStyle={{ fontSize: fullscreen ? 13 : 11 }} />
+          <Bar yAxisId="left" dataKey="weekly" name="Weekly spend (week starting)" fill={colorAmt} radius={[3, 3, 0, 0]} maxBarSize={fullscreen ? 64 : 40} isAnimationActive={false} />
+          <Line yAxisId="right" type="stepAfter" dataKey="monthly" name="Month total" stroke="#0F172A" strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
@@ -622,7 +658,7 @@ function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
       <div className="iu-card p-3 mb-3">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <TrendingUp size={14} className="text-slate-500" />
-          <div className="font-bold text-sm">Daily trend</div>
+          <div className="font-bold text-sm">Spend trend</div>
           {focusedIds.size > 0 ? (
             <>
               <span className="text-[10px] text-slate-400 ml-1">· focused on:</span>
@@ -646,7 +682,7 @@ function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
               {focusLoading && <Loader2 size={12} className="animate-spin text-slate-400" />}
             </>
           ) : (
-            <span className="hidden sm:inline text-[10px] text-slate-400 ml-1">· tap a day for detail · tap a bar below to focus one item</span>
+            <span className="hidden sm:inline text-[10px] text-slate-400 ml-1">· weekly spend (bars) + month total (line) · tap a bar below to focus one item</span>
           )}
           <button
             type="button"
@@ -705,7 +741,7 @@ function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
         >
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp size={18} className={accent === "purchases" ? "text-blue-600" : "text-orange-600"} />
-            <h2 className="font-black text-xl">{title} · Daily trend</h2>
+            <h2 className="font-black text-xl">{title} · Spend trend</h2>
             <span className="text-xs text-slate-400 ml-2">Tap any day to see the line-level detail</span>
             <div className="flex-1" />
             <button

@@ -4574,3 +4574,14 @@ Two read-only reviews (backend + frontend) of the busiest modules; fixed the con
   mode with from/to pickers. from/to derive from the selected month automatically.
 - Removed now-dead helpers (isoDaysAgo, MAX_RANGE_DAYS, clampAllStart) and the bounds fetch.
 - Verified via screenshot: month nav (Sep→Aug), This-month jump, and range mode all reload data.
+
+## 13 Jun 2026 (pt.8) — Analytics "Spend trend": weekly bars + monthly line
+- Replaced the per-day line chart in Meals Report → Analytics with a ComposedChart:
+  WEEKLY ₹ spend as bars (left axis, weeks start Monday, labelled by week-start) + the
+  calendar-MONTH ₹ total as a stepAfter line overlay (right axis, so the larger monthly
+  figure stays readable next to weekly bars). Legend: "Weekly spend" + "Month total".
+- Aggregation is client-side from the existing daily series (buildWeeklyMonthly / weekStartIso).
+- Preserved the "tap a Top-items bar to focus" drill-down: in focus mode the chart still
+  shows per-item DAILY lines (unchanged). Renamed the card to "Spend trend".
+- Verified via screenshot: single-month (flat month line) and a Jun–Sep custom range
+  (month line steps down per month) both render correctly with dual axes.
