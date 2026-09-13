@@ -4559,3 +4559,11 @@ Two read-only reviews (backend + frontend) of the busiest modules; fixed the con
   (high risk vs benefit on a live app); fmtRs/inr are distinct formatters, not real duplication.
 - Verified: backend clean; meal-calendar (issue ₹102822.95, ₹/meal 53.06) + daily-totals return correct figures;
   stock unchanged (138 active rows); Muster + Meals pages render with no compile errors.
+
+## 13 Jun 2026 (pt.6) — Analytics readability (Category share)
+- Redesigned CategoryPie in KitchenAnalyticsTab (Meals Report → Analytics): removed the overlapping
+  perimeter % labels + cramped wrapping legend. Now a clean donut with the total in the centre and a
+  sorted, readable legend list (colour swatch · category · % · ₹), aligned with tabular-nums. Stays
+  readable at any category count. Frontend-only, verified via screenshot.
+- Added a small-slice label threshold (≥6%) to the Macros / Calorie-source nutrition pies so tiny
+  slices don't collide.

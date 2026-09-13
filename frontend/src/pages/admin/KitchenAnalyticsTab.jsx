@@ -389,27 +389,59 @@ function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit, onTog
 }
 
 function CategoryPie({ rows, testid }) {
-  const data = (rows || []).filter((r) => r.amount > 0);
+  const data = (rows || []).filter((r) => r.amount > 0)
+    .slice().sort((a, b) => (b.amount || 0) - (a.amount || 0));
   if (!data.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
+  const total = data.reduce((s, r) => s + (r.amount || 0), 0);
   return (
-    <div data-testid={testid} style={{ width: "100%", height: 260 }}>
-      <ResponsiveContainer>
-        <PieChart>
-          <Pie
-            data={data}
-            dataKey="amount"
-            nameKey="label"
-            outerRadius={90}
-            innerRadius={45}
-            label={(e) => `${e.pct}%`}
-            labelLine={false}
+    <div data-testid={testid} className="flex flex-col items-center">
+      {/* Clean donut — no perimeter labels (they overlap when categories
+          are many + the column is narrow). Total sits in the centre; the
+          per-category breakdown lives in the readable legend list below. */}
+      <div style={{ width: "100%", height: 200, position: "relative" }}>
+        <ResponsiveContainer>
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="amount"
+              nameKey="label"
+              outerRadius={86}
+              innerRadius={54}
+              paddingAngle={1}
+              stroke="#fff"
+              strokeWidth={1}
+              isAnimationActive={false}
+            >
+              {data.map((r, i) => <Cell key={r.key} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+            </Pie>
+            <Tooltip formatter={(v, n) => [`₹${inr2(v)}`, n]} contentStyle={{ fontSize: 12 }} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div
+          className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
+          aria-hidden="true"
+        >
+          <div className="text-[10px] uppercase tracking-wide text-slate-400 leading-none">Total</div>
+          <div className="text-sm font-bold text-slate-700 leading-tight mt-0.5">₹{inr(total)}</div>
+        </div>
+      </div>
+      <ul className="w-full mt-2 space-y-1" data-testid={`${testid}-legend`}>
+        {data.map((r, i) => (
+          <li
+            key={r.key}
+            className="flex items-center gap-2 text-[11px]"
+            title={`${r.label}: ₹${inr2(r.amount)} (${r.pct}%)`}
           >
-            {data.map((r, i) => <Cell key={r.key} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-          </Pie>
-          <Tooltip formatter={(v, n) => [`₹${inr2(v)}`, n]} contentStyle={{ fontSize: 12 }} />
-          <Legend wrapperStyle={{ fontSize: 11 }} />
-        </PieChart>
-      </ResponsiveContainer>
+            <span
+              className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+              style={{ background: CHART_COLORS[i % CHART_COLORS.length] }}
+            />
+            <span className="flex-1 min-w-0 truncate text-slate-700">{r.label}</span>
+            <span className="tabular-nums font-semibold text-slate-600 w-9 text-right">{r.pct}%</span>
+            <span className="tabular-nums text-slate-400 w-16 text-right">₹{inr(r.amount)}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -795,7 +827,7 @@ function NutritionBlock({ nutrition, testKind, accent }) {
                 <ResponsiveContainer>
                   <PieChart>
                     <Pie data={macros} dataKey="grams" nameKey="label" outerRadius={80} innerRadius={40}
-                         label={(e) => `${e.pct}%`} labelLine={false}>
+                         label={(e) => (e.pct >= 6 ? `${e.pct}%` : "")} labelLine={false}>
                       {macros.map((m) => <Cell key={m.key} fill={MACRO_COLORS[m.key]} />)}
                     </Pie>
                     <Tooltip formatter={(v, n) => [KG_G(v), n]} contentStyle={{ fontSize: 12 }} />
@@ -814,7 +846,7 @@ function NutritionBlock({ nutrition, testKind, accent }) {
                 <ResponsiveContainer>
                   <PieChart>
                     <Pie data={kcalPie} dataKey="kcal" nameKey="label" outerRadius={80} innerRadius={40}
-                         label={(e) => `${e.pct}%`} labelLine={false}>
+                         label={(e) => (e.pct >= 6 ? `${e.pct}%` : "")} labelLine={false}>
                       {kcalPie.map((m) => <Cell key={m.key} fill={MACRO_COLORS[m.key]} />)}
                     </Pie>
                     <Tooltip formatter={(v, n) => [`${inr(v)} kcal`, n]} contentStyle={{ fontSize: 12 }} />
