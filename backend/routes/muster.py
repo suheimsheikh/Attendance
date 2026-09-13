@@ -228,7 +228,8 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         cats = list({*athlete_keys, "coach"})
         members = await db.users.find(
             {"active": {"$ne": False}, "category": {"$in": cats}},
-            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1},
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1,
+             "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1},
         ).to_list(2000)
         members = [m for m in members if not is_ex_member(m, today)]
         present_ids = set(await db.attendance.distinct("user_id", {"date": today}))
@@ -238,6 +239,12 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         }))
         absent_athletes: List[str] = []
         absent_coaches: List[str] = []
+        # Per-athlete contact rows for the one-tap "Notify parent on
+        # WhatsApp" flow (Jun 2026). Only athletes carry parent numbers,
+        # so coaches are intentionally excluded here. The name arrays
+        # above are kept unchanged so the existing group-share message
+        # builder stays byte-for-byte identical (live app, backward-compat).
+        absent_athlete_contacts: List[dict] = []
         total_athletes = total_coaches = 0
         for m in members:
             is_coach = m.get("category") == "coach"
@@ -247,9 +254,20 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 total_athletes += 1
             if m["id"] in present_ids or m["id"] in on_leave_ids:
                 continue
-            (absent_coaches if is_coach else absent_athletes).append(m["full_name"])
+            if is_coach:
+                absent_coaches.append(m["full_name"])
+            else:
+                absent_athletes.append(m["full_name"])
+                absent_athlete_contacts.append({
+                    "id": m["id"],
+                    "name": m["full_name"],
+                    "father_mobile": m.get("father_mobile"),
+                    "mother_mobile": m.get("mother_mobile"),
+                    "guardian_mobile": m.get("guardian_mobile"),
+                })
         absent_athletes.sort(key=str.lower)
         absent_coaches.sort(key=str.lower)
+        absent_athlete_contacts.sort(key=lambda x: (x["name"] or "").lower())
         ws = office.get("default_work_start") or "09:00"
         grace = int(office.get("parent_notify_grace_minutes") or 5)
         try:
@@ -266,6 +284,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             "ready": ln >= ready_at,
             "athletes": absent_athletes,
             "coaches": absent_coaches,
+            "athlete_contacts": absent_athlete_contacts,
             "total_athletes": total_athletes,
             "total_coaches": total_coaches,
         }

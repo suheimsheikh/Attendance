@@ -4487,3 +4487,16 @@ green**. Mongo unique index confirmed via index_information().
   to /rules; sidebar "Attendance Rules". Acceptances audited.
 - testing_agent iter 54: 100% backend + frontend. Fixed <option> hydration
   warning in MemberForm institution select.
+
+## 13 Jun 2026 — WhatsApp parent notifications (Option A, deep links)
+- Added one-tap "Notify parents individually" to the Muster absent-without-info
+  banner. Per absent athlete, a WhatsApp button per parent on file (F/M/G) opens
+  wa.me with number + absence note pre-filled. "no number on file" when missing.
+- Backend: /muster/absent-report now returns athlete_contacts[] (id, name,
+  father/mother/guardian mobiles); legacy name arrays untouched (live-safe).
+- New utils in shareWhatsApp.js: normalizeWaNumber (adds 91 to bare Indian
+  10-digit), openWhatsAppChat, formatAbsentParentMessage.
+- ParentContact popover gained a WhatsApp action alongside call/SMS.
+- Groups stay manual (Meta API cannot post to groups; unofficial tools risk ban).
+- Verified: curl (athlete_contacts present, 63 contacts) + screenshot (list renders,
+  55/63 with number). See memory/whatsapp_integration_guide.md for Meta Option B steps.

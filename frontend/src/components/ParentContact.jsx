@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Phone, MessageSquare, X } from "lucide-react";
+import { Phone, MessageSquare, X, Send } from "lucide-react";
+import { openWhatsAppChat } from "../utils/shareWhatsApp";
 
 /**
  * Tiny popover that lists parent / guardian mobiles with one-tap
@@ -80,6 +81,15 @@ export default function ParentContact({ father, mother, guardian, size = 14, com
                 >
                   <Phone size={14} />
                 </a>
+                <button
+                  type="button"
+                  data-testid={`parent-whatsapp-${c.label.toLowerCase()}`}
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#25D366] text-white hover:brightness-95"
+                  title={`WhatsApp ${c.label}`}
+                  onClick={(e) => { e.stopPropagation(); openWhatsAppChat({ phone: c.number, text: "" }); }}
+                >
+                  <Send size={14} />
+                </button>
                 <a
                   href={`sms:${c.number}`}
                   data-testid={`parent-sms-${c.label.toLowerCase()}`}

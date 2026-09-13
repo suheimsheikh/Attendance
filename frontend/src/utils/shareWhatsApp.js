@@ -179,3 +179,66 @@ export async function dataUrlToBlob(dataUrl) {
     return null;
   }
 }
+
+
+/**
+ * Normalise a stored parent mobile into a wa.me-ready number:
+ * digits only, with a country code. Numbers in the DB are cleaned to
+ * digits (see backend norm_mobile) but usually lack a country code, so
+ * bare 10-digit Indian mobiles get a "91" prefix. Returns null if the
+ * value can't be a real mobile (too short / empty).
+ */
+export function normalizeWaNumber(raw) {
+  if (!raw) return null;
+  let d = String(raw).replace(/\D/g, "");
+  if (!d) return null;
+  if (d.length === 12 && d.startsWith("91")) return d;           // 91XXXXXXXXXX
+  if (d.length === 11 && d.startsWith("0")) return "91" + d.slice(1); // 0XXXXXXXXXX
+  if (d.length === 10) return "91" + d;                          // bare Indian mobile
+  if (d.length >= 11 && d.length <= 15) return d;                // already has some CC
+  return null;                                                    // too short to dial
+}
+
+/**
+ * Open a WhatsApp chat with a specific number, message pre-filled.
+ * Uses the universal `wa.me` deep link which works on mobile (opens the
+ * WhatsApp app) and desktop (opens WhatsApp Web / Desktop). One tap → the
+ * chat opens with the text ready; the user just presses send. No Meta API,
+ * no cost, no ban risk (it uses the sender's own WhatsApp).
+ */
+export function openWhatsAppChat({ phone, text }) {
+  const num = normalizeWaNumber(phone);
+  if (!num) {
+    toast.error("No valid WhatsApp number on file for this contact");
+    return false;
+  }
+  const url = `https://wa.me/${num}?text=${encodeURIComponent(text || "")}`;
+  const win = typeof window !== "undefined" ? window.open(url, "_blank", "noopener") : null;
+  if (!win) {
+    toast.warning("Couldn't open WhatsApp", {
+      description: "Your browser blocked the popup — allow popups and try again.",
+    });
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Build the parent-facing "absent without information" message for a
+ * single athlete. Kept short and respectful — parents read this directly.
+ */
+export function formatAbsentParentMessage({ name, dateIso, academy }) {
+  const day = dateIso
+    ? new Date(dateIso + "T00:00:00").toLocaleDateString("en-GB", {
+        weekday: "long", day: "numeric", month: "long",
+      })
+    : new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  const from = academy ? ` from ${academy}` : "";
+  return (
+    `Namaste 🙏\n\n` +
+    `This is a note${from} regarding ${name}.\n\n` +
+    `${name} has not reported for training today (${day}) and we have no prior information ` +
+    `(no approved leave or tour on record).\n\n` +
+    `Kindly confirm their status at your earliest. Thank you.`
+  );
+}
