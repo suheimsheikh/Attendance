@@ -4529,3 +4529,15 @@ green**. Mongo unique index confirmed via index_information().
 - Added notify_log to BACKUP_COLLECTIONS. Sidebar: "Parent Notify Log" under System (admin)
   and coach Attendance list.
 - Verified: testing_agent iteration_73 — 100% backend (13/13) + 100% frontend, no blockers.
+
+## 13 Jun 2026 (pt.4) — Code-review fixes (parent-notify)
+- SECURITY: escorts (external, institution-scoped) can no longer pull parent phone
+  numbers. Removed escort from notify.py _can_notify; added 403 escort guard to
+  /muster/absent-report and /muster/late-report (mirrors the existing staff-roster guard).
+- BUGFIX: parent_notify_grace_minutes falsy-zero — an admin-set grace of 0 was silently
+  becoming 5; now an explicit 0 is honored and the fallback is 30 (matches server default).
+- Verified via curl: absent-report (ready, 62 contacts), late-report (1), notify/today 200.
+- Non-blocking review notes left as-is (append-only log = intended proof-of-contact;
+  no notify_log index / pagination needed at ~62-member scale; template reset-to-default
+  is a future nicety). notify-log route guard stays RequireMuster; backend enforces
+  admin+coach and the sidebar link is hidden from chef/escort.

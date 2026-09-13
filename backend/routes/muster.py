@@ -222,6 +222,10 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         Becomes `ready` at reporting time + parent_notify_grace_minutes so
         the frontend can surface a one-tap WhatsApp share banner."""
         _require_muster(user)
+        # Parent contact numbers are internal PII — escort tokens (external,
+        # institution-scoped) must not receive them (code review, Jun 2026).
+        if user.get("is_escort"):
+            raise HTTPException(status_code=403, detail="Escorts cannot view the absentee report")
         office = await db.config.find_one({"id": "office"}) or {}
         today = local_date_str(office)
         athlete_keys = await _athlete_like_keys()
@@ -269,7 +273,8 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         absent_coaches.sort(key=str.lower)
         absent_athlete_contacts.sort(key=lambda x: (x["name"] or "").lower())
         ws = office.get("default_work_start") or "09:00"
-        grace = int(office.get("parent_notify_grace_minutes") or 5)
+        _grace = office.get("parent_notify_grace_minutes")
+        grace = int(_grace) if _grace is not None else 30
         try:
             h, mi = (int(x) for x in ws.split(":")[:2])
         except Exception:
@@ -297,6 +302,8 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         parents); staff/coach lateness is handled via payroll, not parent
         alerts. Mirrors /muster/absent-report's contact shape."""
         _require_muster(user)
+        if user.get("is_escort"):
+            raise HTTPException(status_code=403, detail="Escorts cannot view the late report")
         office = await db.config.find_one({"id": "office"}) or {}
         today = local_date_str(office)
         att = await db.attendance.find(

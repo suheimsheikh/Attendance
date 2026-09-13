@@ -70,10 +70,12 @@ def make_router(db, get_current_user, require_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     def _can_notify(user: dict) -> bool:
+        # Parent notification is an internal admin/coach/chef action. Escorts
+        # are external, institution-scoped tokens and must NOT be able to pull
+        # arbitrary members' parent phone numbers (code review, Jun 2026).
         return (
             user.get("role") in ("admin", "chef")
             or user.get("category") == "coach"
-            or bool(user.get("is_escort"))
         )
 
     def _can_view_log(user: dict) -> bool:
