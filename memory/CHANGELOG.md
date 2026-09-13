@@ -4567,3 +4567,10 @@ Two read-only reviews (backend + frontend) of the busiest modules; fixed the con
   readable at any category count. Frontend-only, verified via screenshot.
 - Added a small-slice label threshold (≥6%) to the Macros / Calorie-source nutrition pies so tiny
   slices don't collide.
+
+## 13 Jun 2026 (pt.7) — Analytics date scope simplified to Month + Date range
+- Meals Report → Analytics: removed All / 7d / 30d / 90d presets. New controls: a "Month" mode
+  (defaults to current month, with ‹ prev / next › and a "This month" jump) and a "Date range"
+  mode with from/to pickers. from/to derive from the selected month automatically.
+- Removed now-dead helpers (isoDaysAgo, MAX_RANGE_DAYS, clampAllStart) and the bounds fetch.
+- Verified via screenshot: month nav (Sep→Aug), This-month jump, and range mode all reload data.

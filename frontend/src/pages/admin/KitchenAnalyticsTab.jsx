@@ -2,7 +2,8 @@
  * KitchenAnalyticsTab — pantry graphics panel.
  *
  * Renders four chart clusters for both PURCHASES and ISSUES over a
- * configurable date window (7d / 30d / 90d / custom):
+ * selectable date window — a single month (prev / next / this-month) or a
+ * custom date range:
  *   • Daily trend line (₹ + line count)
  *   • Top items by ₹ (bar)
  *   • Top items by qty (bar)
@@ -12,7 +13,7 @@
  * All numbers come from GET /api/meals/kitchen-analytics.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, TrendingUp, BarChart3, PieChart as PieIcon, ListOrdered, IndianRupee, ShoppingCart, Boxes, Flame, Beef, Wheat, Droplet, Maximize2, X as CloseIcon } from "lucide-react";
+import { Loader2, TrendingUp, BarChart3, PieChart as PieIcon, ListOrdered, IndianRupee, ShoppingCart, Boxes, Flame, Beef, Wheat, Droplet, Maximize2, X as CloseIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList,
@@ -52,20 +53,6 @@ function todayIso() {
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
-function isoDaysAgo(n) {
-  const d = new Date();
-  d.setDate(d.getDate() - (n - 1));
-  const p = (x) => String(x).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-// The analytics endpoints cap the window (~1 year). Clamp the "All" preset's
-// start to at most this many days back so a long pantry history never trips
-// the "Range too large" 400 — we simply show the most recent ~12 months.
-const MAX_RANGE_DAYS = 365;
-const clampAllStart = (minD) => {
-  const floor = isoDaysAgo(MAX_RANGE_DAYS);
-  return minD && minD > floor ? minD : floor;
-};
 
 function StatPill({ icon: Icon, label, value, tint }) {
   return (
@@ -981,40 +968,44 @@ function PantryDayModal({ date, kind, accent, onClose }) {
   );
 }
 
+function firstOfMonthIso(iso) {
+  const d = new Date(iso + "T00:00:00");
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+function addMonthsIso(iso, delta) {
+  const d = new Date(iso + "T00:00:00");
+  const nd = new Date(d.getFullYear(), d.getMonth() + delta, 1);
+  return `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}-01`;
+}
+function monthRange(anchorIso) {
+  const d = new Date(anchorIso + "T00:00:00");
+  const y = d.getFullYear(), m = d.getMonth();
+  const fmt = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  return {
+    from: fmt(new Date(y, m, 1)),
+    to: fmt(new Date(y, m + 1, 0)),
+    label: new Date(y, m, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
+  };
+}
+
 export default function KitchenAnalyticsTab({ liveSig }) {
-  const [preset, setPreset] = useState("all");
+  // Date scope: a single MONTH (prev / next / this-month nav) or a custom
+  // DATE RANGE. (Older All / 7d / 30d / 90d presets were dropped — the
+  // pantry is run month-to-month, so a month view + range is what's used.)
+  const [mode, setMode] = useState("month");            // "month" | "custom"
+  const [monthAnchor, setMonthAnchor] = useState(() => firstOfMonthIso(todayIso()));
   const [from, setFrom] = useState("");
   const [to, setTo] = useState(todayIso());
-  const [minDate, setMinDate] = useState("");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // On mount, ask the backend for the earliest pantry-activity date
-  // and use that as the "All" preset's lower bound — same UX as the
-  // Meals Calendar page. Falls back to 30 days ago if the endpoint
-  // hasn't returned yet or there's no data.
+  // In month mode, from/to track the selected month's first/last day.
   useEffect(() => {
-    api.get("/meals/kitchen-analytics/bounds")
-      .then((b) => {
-        setMinDate(b?.min_date || "");
-        if (b?.min_date) setFrom(clampAllStart(b.min_date));
-        else setFrom(isoDaysAgo(30));
-      })
-      .catch(() => setFrom(isoDaysAgo(30)));
-  }, []);
-
-  useEffect(() => {
-    if (preset === "custom" || preset === "all") return;
-    const days = parseInt(preset, 10);
-    setFrom(isoDaysAgo(days));
-    setTo(todayIso());
-  }, [preset]);
-
-  useEffect(() => {
-    if (preset !== "all") return;
-    setFrom(clampAllStart(minDate));
-    setTo(todayIso());
-  }, [preset, minDate]);
+    if (mode !== "month") return;
+    const r = monthRange(monthAnchor);
+    setFrom(r.from);
+    setTo(r.to);
+  }, [mode, monthAnchor]);
 
   useEffect(() => {
     if (!from || !to || from > to) return;
@@ -1031,16 +1022,42 @@ export default function KitchenAnalyticsTab({ liveSig }) {
     <div data-testid="kitchen-analytics-tab">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
-          {[["all", "All"], ["7", "7d"], ["30", "30d"], ["90", "90d"], ["custom", "Custom"]].map(([v, l]) => (
+          {[["month", "Month"], ["custom", "Date range"]].map(([v, l]) => (
             <button
               key={v}
-              onClick={() => setPreset(v)}
-              className={`px-3 h-9 text-xs font-bold ${preset === v ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-              data-testid={`kitchen-analytics-preset-${v}`}
+              onClick={() => setMode(v)}
+              className={`px-3 h-9 text-xs font-bold ${mode === v ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              data-testid={`kitchen-analytics-mode-${v}`}
+              title={v === "month" ? "View one month at a time" : "Pick a custom start and end date"}
             >{l}</button>
           ))}
         </div>
-        {preset === "custom" && (
+        {mode === "month" && (
+          <div className="inline-flex items-center gap-1">
+            <button
+              onClick={() => setMonthAnchor((a) => addMonthsIso(a, -1))}
+              title="Previous month"
+              data-testid="kitchen-analytics-prev-month"
+              className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+            ><ChevronLeft size={16} /></button>
+            <div className="min-w-[150px] text-center text-sm font-bold text-slate-700" data-testid="kitchen-analytics-month-label">
+              {monthRange(monthAnchor).label}
+            </div>
+            <button
+              onClick={() => setMonthAnchor((a) => addMonthsIso(a, 1))}
+              title="Next month"
+              data-testid="kitchen-analytics-next-month"
+              className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+            ><ChevronRight size={16} /></button>
+            <button
+              onClick={() => setMonthAnchor(firstOfMonthIso(todayIso()))}
+              title="Jump to the current month"
+              data-testid="kitchen-analytics-this-month"
+              className="h-9 px-3 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+            >This month</button>
+          </div>
+        )}
+        {mode === "custom" && (
           <>
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
                    className="iu-input !h-9 !w-auto text-sm" data-testid="kitchen-analytics-from" />
