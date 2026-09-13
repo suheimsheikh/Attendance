@@ -365,7 +365,8 @@ def _kitchen_daily_series(daily: dict) -> list:
         {"date": d,
          "amount": round(v["amount"], 2),
          "qty":    round(v["qty"], 3),
-         "lines":  v["lines"]}
+         "lines":  v["lines"],
+         "cat":    {k: round(a, 2) for k, a in (v.get("cat") or {}).items()}}
         for d, v in sorted(daily.items())
     ]
 
@@ -4272,7 +4273,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         # ---- Roll-ups ----
         def _blank_day():
             return {"amount": 0.0, "qty": 0.0, "lines": 0,
-                    "itemised_amount": 0.0, "unitemised_amount": 0.0}
+                    "itemised_amount": 0.0, "unitemised_amount": 0.0,
+                    "cat": {}}
 
         def _blank_item():
             # `vendors`: {vendor_id: rupee_amount} for purchases.
@@ -4320,6 +4322,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             # spices from Vendor B). Falls back to doc-level vendor_id
             # if the line doesn't carry one.
             doc_vendors: dict[str, float] = {}
+            doc_line_cat: dict[str, float] = {}   # per-day category ₹ from lines
             for ln in (doc.get("lines") or []):
                 iid = ln.get("item_id")
                 q = float(ln.get("qty") or 0)
@@ -4328,6 +4331,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                     continue
                 amt = q * r
                 itemised_from_lines += amt
+                _ck = (by_id.get(iid) or {}).get("category_key") or "uncategorised"
+                doc_line_cat[_ck] = doc_line_cat.get(_ck, 0.0) + amt
                 slot["qty"] += q
                 slot["lines"] += 1
                 it = purch_items.setdefault(iid, _blank_item())
@@ -4343,6 +4348,15 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             # days still contribute to the pie.
             for ckey, v in amounts_map.items():
                 purch_cat[ckey] = purch_cat.get(ckey, 0.0) + float(v or 0)
+            # Per-day category breakdown for the stacked weekly bars —
+            # same source as the category share: `amounts` when present,
+            # else the per-line item categories.
+            if amounts_map:
+                for ckey, v in amounts_map.items():
+                    slot["cat"][ckey] = slot["cat"].get(ckey, 0.0) + float(v or 0)
+            else:
+                for _ck, _a in doc_line_cat.items():
+                    slot["cat"][_ck] = slot["cat"].get(_ck, 0.0) + _a
             # If no `amounts` (very early docs), fall back to lines.
             eff_day_total = day_total if amounts_map else itemised_from_lines
             slot["amount"] += eff_day_total
@@ -4386,6 +4400,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 info = by_id.get(iid) or {}
                 ckey = info.get("category_key") or "uncategorised"
                 iss_cat[ckey] = iss_cat.get(ckey, 0.0) + amt
+                slot["cat"][ckey] = slot["cat"].get(ckey, 0.0) + amt
                 iss_daily_lines.setdefault(d, []).append((iid, q))
 
         def _daily_series(daily: dict) -> list:

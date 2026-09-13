@@ -4585,3 +4585,12 @@ Two read-only reviews (backend + frontend) of the busiest modules; fixed the con
   shows per-item DAILY lines (unchanged). Renamed the card to "Spend trend".
 - Verified via screenshot: single-month (flat month line) and a Jun–Sep custom range
   (month line steps down per month) both render correctly with dual axes.
+
+## 13 Jun 2026 (pt.9) — Spend trend: stacked-by-category weekly bars + week/month ₹ labels
+- Backend (meals.py /kitchen-analytics): daily series now carries a per-day `cat` {category_key: ₹}
+  breakdown (same source as the category share) for both purchases and issues.
+- Frontend (KitchenAnalyticsTab): weekly bars are now STACKED BY CATEGORY (colours match the
+  Category-share donut). Weekly total ₹ is labelled on top of each bar; the month total ₹ is
+  labelled on the step line at the last week of each month. New WeeklyStackTooltip shows every
+  category + Week total + Month total on hover. Focus drill-down (per-item daily lines) preserved.
+- Verified via curl (per-day cat present) + screenshots (single month + Jul–Sep range).

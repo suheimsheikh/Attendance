@@ -113,28 +113,69 @@ function weekStartIso(iso) {
   const p = (x) => String(x).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
-function buildWeeklyMonthly(daily) {
+function buildWeeklyMonthly(daily, catKeys) {
   if (!daily || !daily.length) return [];
-  const weekMap = new Map();     // weekStartIso -> ₹
+  const weekMap = new Map();     // weekStartIso -> { total, cat:{} }
   const monthTotal = new Map();  // "YYYY-MM"   -> ₹
   for (const d of daily) {
     if (!d?.date) continue;
     const amt = Number(d.amount) || 0;
     const ws = weekStartIso(d.date);
-    weekMap.set(ws, (weekMap.get(ws) || 0) + amt);
+    const wk = weekMap.get(ws) || { total: 0, cat: {} };
+    wk.total += amt;
+    for (const [k, v] of Object.entries(d.cat || {})) wk.cat[k] = (wk.cat[k] || 0) + (Number(v) || 0);
+    weekMap.set(ws, wk);
     const mk = d.date.slice(0, 7);
     monthTotal.set(mk, (monthTotal.get(mk) || 0) + amt);
   }
   const r2 = (x) => Math.round(x * 100) / 100;
-  return [...weekMap.keys()].sort().map((ws) => ({
-    key: ws,
-    label: new Date(ws + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" }),
-    weekly: r2(weekMap.get(ws)),
-    monthly: r2(monthTotal.get(ws.slice(0, 7)) || 0),
-  }));
+  const weeks = [...weekMap.keys()].sort();
+  return weeks.map((ws, i) => {
+    const mk = ws.slice(0, 7);
+    const nextMk = i + 1 < weeks.length ? weeks[i + 1].slice(0, 7) : null;
+    const wk = weekMap.get(ws);
+    const row = {
+      key: ws,
+      label: new Date(ws + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" }),
+      weekly: r2(wk.total),
+      monthly: r2(monthTotal.get(mk) || 0),
+      // Month-total label shown only on the LAST week of each month run
+      // so the stepped line isn't labelled on every point.
+      monthLabel: mk !== nextMk ? r2(monthTotal.get(mk) || 0) : null,
+    };
+    (catKeys || []).forEach((k) => { row[k] = r2(wk.cat[k] || 0); });
+    return row;
+  });
 }
 
-function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, fullscreen = false, focusSeries, from, to }) {
+function WeeklyStackTooltip({ active, payload, label }) {
+  if (!active || !payload || !payload.length) return null;
+  const catRows = payload.filter((p) => p.dataKey !== "monthly" && (p.value || 0) > 0);
+  const weekTotal = catRows.reduce((s, p) => s + (p.value || 0), 0);
+  const monthEntry = payload.find((p) => p.dataKey === "monthly");
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg shadow p-2 text-xs min-w-[180px]">
+      <div className="font-bold mb-1">Week of {label}</div>
+      {catRows.slice().sort((a, b) => b.value - a.value).map((p) => (
+        <div key={p.dataKey} className="flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-sm shrink-0" style={{ background: p.color }} />
+          <span className="flex-1 truncate text-slate-600">{p.name}</span>
+          <span className="tabular-nums font-semibold text-slate-700">₹{inr2(p.value)}</span>
+        </div>
+      ))}
+      <div className="mt-1 pt-1 border-t border-slate-100 flex justify-between font-bold text-slate-800">
+        <span>Week total</span><span className="tabular-nums">₹{inr2(weekTotal)}</span>
+      </div>
+      {monthEntry && (
+        <div className="flex justify-between text-slate-500">
+          <span>Month total</span><span className="tabular-nums">₹{inr2(monthEntry.value)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DailyTrendChart({ data, colorAmt, categoryTotals, testid, onDayClick, height = 260, fullscreen = false, focusSeries, from, to }) {
   const useFocus = !!(focusSeries && focusSeries.items && focusSeries.items.length && from && to);
   const fontSize = fullscreen ? 12 : 10;
 
@@ -179,24 +220,51 @@ function DailyTrendChart({ data, colorAmt, testid, onDayClick, height = 260, ful
     );
   }
 
-  // Default: WEEKLY spend bars + MONTHLY-total line overlay (dual ₹ axis:
-  // weekly on the left, the larger monthly total on the right so both
-  // stay readable). Replaces the old noisy per-day line.
-  const rows = buildWeeklyMonthly(data);
+  // Default: WEEKLY spend as bars STACKED BY CATEGORY + a MONTHLY-total
+  // line overlay (dual ₹ axis so the larger monthly figure stays readable).
+  // Each week's bar shows the total ₹ on top; the month total is labelled
+  // on the last week of each month.
+  const catList = (categoryTotals || []).filter((c) => (c.amount || 0) > 0);
+  const catKeys = catList.map((c) => c.key);
+  const catLabel = Object.fromEntries(catList.map((c) => [c.key, c.label]));
+  const catColor = Object.fromEntries(catList.map((c, i) => [c.key, CHART_COLORS[i % CHART_COLORS.length]]));
+  const rows = buildWeeklyMonthly(data, catKeys);
   if (!rows.length) return <div className="text-center text-slate-400 text-sm py-8">No data</div>;
-  const rupeeK = (v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`;
+  const rupeeK = (v) => `₹${v >= 1000 ? (v / 1000).toFixed(0) + "k" : Math.round(v)}`;
+  const labelFont = { fontSize: fullscreen ? 12 : 9, fontWeight: 700 };
+  const barKeys = catKeys.length ? catKeys : ["weekly"];
   return (
     <div data-testid={testid} style={{ width: "100%", height }}>
       <ResponsiveContainer>
-        <ComposedChart data={rows} margin={{ top: 8, right: 16, left: 4, bottom: 4 }}>
+        <ComposedChart data={rows} margin={{ top: 20, right: 16, left: 4, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="label" tick={{ fontSize }} interval={0} />
           <YAxis yAxisId="left" tick={{ fontSize }} tickFormatter={rupeeK} />
           <YAxis yAxisId="right" orientation="right" tick={{ fontSize }} tickFormatter={rupeeK} />
-          <Tooltip formatter={(v, n) => [`₹${inr2(v)}`, n]} contentStyle={{ fontSize: 12 }} />
-          <Legend wrapperStyle={{ fontSize: fullscreen ? 13 : 11 }} />
-          <Bar yAxisId="left" dataKey="weekly" name="Weekly spend (week starting)" fill={colorAmt} radius={[3, 3, 0, 0]} maxBarSize={fullscreen ? 64 : 40} isAnimationActive={false} />
-          <Line yAxisId="right" type="stepAfter" dataKey="monthly" name="Month total" stroke="#0F172A" strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
+          <Tooltip content={<WeeklyStackTooltip />} />
+          <Legend wrapperStyle={{ fontSize: fullscreen ? 12 : 10 }} />
+          {barKeys.map((k, i) => {
+            const isTop = i === barKeys.length - 1;
+            return (
+              <Bar
+                key={k}
+                yAxisId="left"
+                dataKey={k}
+                name={catLabel[k] || "Weekly spend"}
+                stackId="w"
+                fill={catColor[k] || colorAmt}
+                maxBarSize={fullscreen ? 64 : 40}
+                isAnimationActive={false}
+              >
+                {isTop && (
+                  <LabelList dataKey="weekly" position="top" formatter={rupeeK} style={{ ...labelFont, fill: "#334155" }} />
+                )}
+              </Bar>
+            );
+          })}
+          <Line yAxisId="right" type="stepAfter" dataKey="monthly" name="Month total" stroke="#0F172A" strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false}>
+            <LabelList dataKey="monthLabel" position="top" formatter={(v) => (v == null ? "" : rupeeK(v))} style={{ ...labelFont, fill: "#0F172A" }} />
+          </Line>
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -682,7 +750,7 @@ function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
               {focusLoading && <Loader2 size={12} className="animate-spin text-slate-400" />}
             </>
           ) : (
-            <span className="hidden sm:inline text-[10px] text-slate-400 ml-1">· weekly spend (bars) + month total (line) · tap a bar below to focus one item</span>
+            <span className="hidden sm:inline text-[10px] text-slate-400 ml-1">· weekly spend stacked by category + month total · tap a bar below to focus one item</span>
           )}
           <button
             type="button"
@@ -696,6 +764,7 @@ function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
         </div>
         <DailyTrendChart
           data={data?.daily} colorAmt={colorAmt}
+          categoryTotals={data?.category_totals}
           testid={`kitchen-${testKind}-daily`}
           onDayClick={openDay} height={280}
           focusSeries={focusSeries} from={from} to={to}
@@ -758,6 +827,7 @@ function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
             <DailyTrendChart
               data={data?.daily}
               colorAmt={colorAmt}
+              categoryTotals={data?.category_totals}
               testid={`kitchen-${testKind}-daily-fs`}
               onDayClick={openDay}
               height={Math.max(320, window.innerHeight - 160)}
