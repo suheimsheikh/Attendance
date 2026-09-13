@@ -39,6 +39,7 @@ BACKUP_COLLECTIONS = [
     "guests", "daily_content", "sms_log", "breaks", "fleets",
     "sites", "roles", "categories", "holidays",
     "escorts", "escort_attendance", "corrections", "audit_log",
+    "notify_log",
     # Pantry / meals — added 02/2026 after prod->preview restore dropped
     # the pantry masters and every purchase/issue/wastage row.
     "meal_items", "meal_purchases", "meal_issues", "meal_wastage",

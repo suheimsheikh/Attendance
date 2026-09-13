@@ -11,6 +11,7 @@ import MusterRow from "./muster/MusterRow";
 import { MusterScopeChips, MusterInstitutionChips } from "./muster/MusterFilters";
 import MusterBreakdownBar from "./muster/MusterBreakdownBar";
 import AbsentShareBanner from "./muster/AbsentShareBanner";
+import LateArrivalsBanner from "./muster/LateArrivalsBanner";
 import DailyRosterShareButton from "./muster/DailyRosterShareButton";
 import PresentShareButton from "./muster/PresentShareButton";
 import PresenceChip from "../components/PresenceChip";
@@ -389,6 +390,8 @@ export default function Muster() {
       <GeoPermissionBanner state={geoPerm} />
 
       <AbsentShareBanner />
+
+      <LateArrivalsBanner />
 
       <DailyRosterShareButton />
 

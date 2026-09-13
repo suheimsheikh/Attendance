@@ -4512,3 +4512,20 @@ green**. Mongo unique index confirmed via index_information().
 - Voice attachment intentionally NOT built: wa.me deep links cannot carry audio; Meta
   API can't proactively send voice to parents outside a 24h window (user chose text-only).
 - Verified: screenshot shows tag + done count after seeding; Telugu stored uncorrupted.
+
+## 13 Jun 2026 (pt.3) — Late Alerts, editable templates, Notify Log, shared ticks
+- Late Alerts: new orange "Late arrivals today" banner on Muster with one-tap
+  parent notify (F/M/G) + ✓ tracking, athletes only. Source: GET /muster/late-report.
+- Editable templates: Office Settings → "WhatsApp Parent Messages" panel edits
+  bilingual Absent/Late templates (absent_te/en, late_te/en) with placeholders
+  {name}{academy}{day}{time}{minutes}. Config id="notify_templates". GET/PUT /notify/templates.
+- Notify Log: /admin/notify-log page (admins + coaches) — dated proof-of-contact
+  (contact INITIATED; no WhatsApp delivery receipt). Backed by notify_log collection.
+  POST /notify/parent records each tap (server resolves name/number authoritatively).
+- Shared ✓ ticks: GET /notify/today?reason= drives tick state from the server so a
+  parent messaged by any coach shows done for everyone (replaces per-device localStorage).
+- Refactor: shared components/ParentNotifyList.jsx used by both Absent + Late banners;
+  hooks/useNotifyTemplates.js; shareWhatsApp.js gained substituteTemplate + formatParentMessage.
+- Added notify_log to BACKUP_COLLECTIONS. Sidebar: "Parent Notify Log" under System (admin)
+  and coach Attendance list.
+- Verified: testing_agent iteration_73 — 100% backend (13/13) + 100% frontend, no blockers.

@@ -250,3 +250,20 @@ export function formatAbsentParentMessage({ name, dateIso, academy }) {
     `Kindly confirm their status at your earliest. Thank you.`;
   return `${telugu}\n\n——————————\n\n${english}`;
 }
+
+/** Replace {placeholder} tokens in a template string with vars values. */
+export function substituteTemplate(tpl, vars = {}) {
+  if (!tpl) return "";
+  return String(tpl).replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : ""));
+}
+
+/**
+ * Build a bilingual parent message from editable templates. Telugu first,
+ * English below a divider. Either half is omitted if its template is blank.
+ */
+export function formatParentMessage({ templateTe, templateEn, vars }) {
+  const te = substituteTemplate(templateTe, vars).trim();
+  const en = substituteTemplate(templateEn, vars).trim();
+  if (te && en) return `${te}\n\n——————————\n\n${en}`;
+  return te || en;
+}

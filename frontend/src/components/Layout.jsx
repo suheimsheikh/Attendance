@@ -57,6 +57,7 @@ const NAV_MEMBER = [
 const NAV_COACH_ATTENDANCE = [
   { to: "/muster", label: "Muster Roll", icon: ClipboardCheck, hint: "Roll-call: check members in/out in bulk with photos" },
   { to: "/presence", label: "Presence", icon: LayoutDashboard, hint: "Who is on campus right now" },
+  { to: "/admin/notify-log", label: "Parent Notify Log", icon: MessageSquare, hint: "Proof of contact — every WhatsApp parent notification sent from Muster, with who sent it and when" },
 ];
 const NAV_COACH_KITCHEN = [
   { to: "/meals", label: "Meals Muster", icon: Utensils, hint: "Mark who is eating which meal today" },
@@ -109,6 +110,7 @@ const NAV_SYSTEM = [
   { to: "/admin/data-quality", label: "Data Quality", icon: ShieldAlert, hint: "Automatic checks that flag suspicious or missing data" },
   { to: "/admin/category-health", label: "Category Health", icon: ShieldAlert, hint: "Members whose category setup looks wrong" },
   { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare, hint: "Every OTP and SMS the app has sent" },
+  { to: "/admin/notify-log", label: "Parent Notify Log", icon: MessageSquare, hint: "Proof of contact — every WhatsApp parent notification sent from Muster (absent / late), with who sent it and when" },
   { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera, hint: "Review and purge old escort check-in photos" },
   { to: "/admin/audit-log", label: "Audit Log", icon: ScanLine, hint: "Who changed what, when — full history" },
   { to: "/admin/backup", label: "Backup & Restore", icon: Database, hint: "Download backups or restore data" },

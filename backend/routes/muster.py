@@ -289,6 +289,54 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             "total_coaches": total_coaches,
         }
 
+    @router.get("/muster/late-report")
+    async def muster_late_report(user: dict = Depends(get_current_user)):
+        """Athletes who arrived LATE today — with parent contacts + the
+        check-in time and minutes late — to power the one-tap parent notify
+        (with ✓ tracking) on the Muster page. Athletes only (they have
+        parents); staff/coach lateness is handled via payroll, not parent
+        alerts. Mirrors /muster/absent-report's contact shape."""
+        _require_muster(user)
+        office = await db.config.find_one({"id": "office"}) or {}
+        today = local_date_str(office)
+        att = await db.attendance.find(
+            {"date": today, "late": True},
+            {"_id": 0, "user_id": 1, "check_in_at": 1, "late_minutes": 1},
+        ).to_list(5000)
+        office_name = (office.get("name") or "").strip()
+        if not att:
+            return {"date": today, "office_name": office_name, "athlete_contacts": [], "total_late": 0}
+        # Earliest late check-in per member (a member with multiple sessions
+        # today should reflect their first, actual late arrival).
+        by_user: dict = {}
+        for a in att:
+            uid = a["user_id"]
+            prev = by_user.get(uid)
+            if not prev or (a.get("check_in_at") or "") < (prev.get("check_in_at") or ""):
+                by_user[uid] = a
+        athlete_keys = await _athlete_like_keys()
+        members = await db.users.find(
+            {"id": {"$in": list(by_user.keys())}, "category": {"$in": athlete_keys}},
+            {"_id": 0, "id": 1, "full_name": 1, "leaving_date": 1,
+             "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1},
+        ).to_list(5000)
+        members = [m for m in members if not is_ex_member(m, today)]
+        contacts = []
+        for m in members:
+            a = by_user.get(m["id"], {})
+            contacts.append({
+                "id": m["id"],
+                "name": m["full_name"],
+                "father_mobile": m.get("father_mobile"),
+                "mother_mobile": m.get("mother_mobile"),
+                "guardian_mobile": m.get("guardian_mobile"),
+                "check_in_at": a.get("check_in_at"),
+                "late_minutes": a.get("late_minutes"),
+            })
+        contacts.sort(key=lambda x: (x["name"] or "").lower())
+        return {"date": today, "office_name": office_name,
+                "athlete_contacts": contacts, "total_late": len(contacts)}
+
     @router.get("/muster/daily-roster")
     async def muster_daily_roster(user: dict = Depends(get_current_user)):
         """Today's day-roster of staff + coaches: who is On Leave, On Tour,

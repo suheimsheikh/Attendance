@@ -38,6 +38,7 @@ const Calendar = lazy(() => import("./pages/admin/Calendar"));
 const BackupRestore = lazy(() => import("./pages/admin/BackupRestore"));
 const ImportMembers = lazy(() => import("./pages/admin/ImportMembers"));
 const SmsLog = lazy(() => import("./pages/admin/SmsLog"));
+const NotifyLog = lazy(() => import("./pages/admin/NotifyLog"));
 const WhatsNew = lazy(() => import("./pages/WhatsNew"));
 const Cards = lazy(() => import("./pages/admin/Cards"));
 const EscortCheckIn = lazy(() => import("./pages/EscortCheckIn"));
@@ -173,6 +174,7 @@ function App() {
             <Route path="admin/devices" element={<RequireAdmin><Devices /></RequireAdmin>} />
             <Route path="admin/office" element={<RequireAdmin><OfficeSettings /></RequireAdmin>} />
             <Route path="admin/sms-log" element={<RequireAdmin><SmsLog /></RequireAdmin>} />
+            <Route path="admin/notify-log" element={<RequireMuster><NotifyLog /></RequireMuster>} />
             <Route path="admin/reports" element={<RequireAdmin><Reports /></RequireAdmin>} />
             <Route path="admin/dar" element={<RequireAdmin><DarReport /></RequireAdmin>} />
             {/* Payroll merged into Reports as a tab (1 Feb 2026). Keep deep-links alive. */}

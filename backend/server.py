@@ -4347,11 +4347,12 @@ app.include_router(_sites_router(db, require_admin, get_current_user))
 from routes.muster import make_router as _muster_router  # noqa: E402
 app.include_router(_muster_router(db, get_current_user, _active_camp_for, _resolve_site_for))
 
+from routes.notify import make_router as _notify_router  # noqa: E402
+app.include_router(_notify_router(db, get_current_user, require_admin))
+
 # Admin tooling (wipe / backup / restore / preflight / summary / activity).
 from routes.admin_tools import make_router as _admin_tools_router  # noqa: E402
-app.include_router(_admin_tools_router(db, require_admin))
-
-# Admin audit log — one row per admin-mutating action (member edits,
+app.include_router(_admin_tools_router(db, require_admin))# Admin audit log — one row per admin-mutating action (member edits,
 # leave-balance changes, retroactive attendance overrides, etc.).
 # Read endpoint: GET /api/admin/audit-log.
 from routes.admin_audit import make_router as _audit_router, write_audit  # noqa: E402

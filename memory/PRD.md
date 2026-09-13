@@ -186,3 +186,13 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 - Data Quality: 171 findings (29 high, 26 medium, 65 low, 51 info); 4 duplicate categories flagged
 - Kitchen analytics window (Aug): ₹76,233 across 67 items in 168 line entries
 
+
+---
+## Update 13 Jun 2026 — WhatsApp parent notifications (P1, shipped)
+Delivery mechanism: free `wa.me` deep links (no Meta API; groups stay manual — Meta cannot post to groups).
+- Absent + Late one-tap parent notify on Muster (bilingual Telugu+English), per parent (F/M/G).
+- Shared server-backed ✓ tracking (notify_log) so no double-messaging across coaches; resets daily.
+- Editable templates in Office Settings (absent/late × TE/EN, placeholders {name}{academy}{day}{time}{minutes}).
+- Parent Notify Log page (admins + coaches) = proof of contact INITIATED (no delivery receipt).
+Key endpoints: /muster/absent-report, /muster/late-report, /notify/parent, /notify/today, /notify/log, /notify/templates.
+Backlog (P2, optional): message preview before opening; "notify all remaining" stepper; per-athlete notify-log detail; template reset-to-default button; notify_log index if volume grows; full-auto via Meta Cloud API (see memory/whatsapp_integration_guide.md — note Meta blocks proactive sends outside 24h window).
