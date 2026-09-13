@@ -1177,12 +1177,20 @@ export default function KitchenAnalyticsTab({ liveSig }) {
         </div>
       </div>
 
-      {loading ? (
+      {loading && !data ? (
         <div className="text-center py-12"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
       ) : !data ? (
         <div className="text-center text-slate-400 py-12">No data yet.</div>
       ) : (
         <>
+          {/* Keep the charts on screen during background refreshes (a live
+              pantry edit or a date change) so the panel no longer blanks to
+              a spinner and "flashes" while staff are entering data. */}
+          {loading && (
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-1" data-testid="kitchen-analytics-updating">
+              <Loader2 className="animate-spin" size={11} /> Updating…
+            </div>
+          )}
           <Section
             title="Purchases"
             subtitle="What came into the pantry"

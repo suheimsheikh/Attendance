@@ -4606,3 +4606,11 @@ Two read-only reviews (backend + frontend) of the busiest modules; fixed the con
 - Verified via curl: generate→GET 200, POST 403 (read-only), invalid 401, regenerate invalidates old,
   revoke→401, admin-only gate; existing JWT auth unaffected. UI verified via screenshot.
 - Usage: Authorization: Bearer svc_...  on GET endpoints only.
+
+## 13 Jun 2026 (pt.11) — Fix Analytics "keeps refreshing" flash
+- KitchenAnalyticsTab blanked the whole panel to a spinner on EVERY refetch — and it refetches on
+  each live SSE pantry update (fired whenever any staff enters purchases/issues) and on date change.
+  During kitchen hours this made the Analytics tab flash/"keep refreshing".
+- Fix: stale-while-revalidate — charts stay on screen during background refreshes; full spinner only
+  on first load; added a subtle "Updating…" pill. Verified via screenshot (charts persist across a
+  month switch, no blanking). No fetch-loop found (1 request over 10s idle).
