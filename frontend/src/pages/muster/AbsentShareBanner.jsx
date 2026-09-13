@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Share2, UserX, ChevronDown, ChevronRight } from "lucide-react";
+import React, { useEffect, useState, useCallback } from "react";
+import { Share2, UserX, ChevronDown, ChevronRight, Check } from "lucide-react";
 import { api } from "../../api";
 import {
   shareToWhatsApp,
@@ -35,43 +35,89 @@ const PARENT_ROLES = [
   { key: "guardian_mobile", label: "Guardian", badge: "G" },
 ];
 
+// ---- "notified ✓" persistence -------------------------------------------
+// Keyed by report date so the ticks reset naturally each morning but
+// survive a page refresh during the same day. Stored as a flat array of
+// "<athleteId>:<roleKey>" strings under one localStorage key per date.
+const NOTIFIED_LS_KEY = (dateIso) => `absent_notified_v1:${dateIso}`;
+
+function loadNotified(dateIso) {
+  try {
+    const raw = localStorage.getItem(NOTIFIED_LS_KEY(dateIso));
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveNotified(dateIso, set) {
+  try {
+    localStorage.setItem(NOTIFIED_LS_KEY(dateIso), JSON.stringify([...set]));
+  } catch { /* storage full / disabled — ticks just won't persist */ }
+}
+
 /** One absent-athlete row with a WhatsApp button per parent on file. */
-function AbsentContactRow({ contact, dateIso, academy }) {
+function AbsentContactRow({ contact, dateIso, academy, notified, onNotified }) {
   const numbers = PARENT_ROLES
     .map((r) => ({ ...r, number: (contact[r.key] || "").trim() }))
     .filter((r) => r.number && normalizeWaNumber(r.number));
 
   const notify = (role) => {
-    openWhatsAppChat({
+    const ok = openWhatsAppChat({
       phone: role.number,
       text: formatAbsentParentMessage({ name: contact.name, dateIso, academy }),
     });
+    if (ok) onNotified(`${contact.id}:${role.key}`);
   };
+
+  const allDone = numbers.length > 0 && numbers.every((r) => notified.has(`${contact.id}:${r.key}`));
 
   return (
     <li
       className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/70"
       data-testid={`absent-contact-${contact.id}`}
     >
-      <span className="flex-1 min-w-0 text-sm text-slate-800 truncate">{contact.name}</span>
+      <span className="flex-1 min-w-0 text-sm text-slate-800 truncate flex items-center gap-1.5">
+        {contact.name}
+        {allDone && (
+          <span
+            data-testid={`absent-all-notified-${contact.id}`}
+            title="All parents on file have been notified"
+            className="inline-flex items-center gap-0.5 px-1.5 h-4 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold shrink-0"
+          >
+            <Check size={9} /> notified
+          </span>
+        )}
+      </span>
       {numbers.length === 0 ? (
         <span className="text-[11px] text-slate-400 italic shrink-0" title="No parent WhatsApp number on file">
           no number on file
         </span>
       ) : (
         <div className="flex items-center gap-1 shrink-0">
-          {numbers.map((role) => (
-            <button
-              key={role.key}
-              type="button"
-              onClick={() => notify(role)}
-              data-testid={`absent-notify-${role.key}-${contact.id}`}
-              title={`WhatsApp ${contact.name}'s ${role.label} (${role.number}) — opens chat with the absence note ready to send`}
-              className="inline-flex items-center gap-1 px-2 h-7 rounded-full bg-[#25D366] text-white text-[11px] font-bold hover:brightness-95 transition"
-            >
-              <MessageIcon /> {role.badge}
-            </button>
-          ))}
+          {numbers.map((role) => {
+            const done = notified.has(`${contact.id}:${role.key}`);
+            return (
+              <button
+                key={role.key}
+                type="button"
+                onClick={() => notify(role)}
+                data-testid={`absent-notify-${role.key}-${contact.id}`}
+                title={
+                  done
+                    ? `Already notified ${contact.name}'s ${role.label} (${role.number}) — tap to message again`
+                    : `WhatsApp ${contact.name}'s ${role.label} (${role.number}) — opens chat with the Telugu + English absence note ready to send`
+                }
+                className={
+                  done
+                    ? "inline-flex items-center gap-1 px-2 h-7 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 text-[11px] font-bold hover:bg-emerald-200 transition"
+                    : "inline-flex items-center gap-1 px-2 h-7 rounded-full bg-[#25D366] text-white text-[11px] font-bold hover:brightness-95 transition"
+                }
+              >
+                {done ? <Check size={12} /> : <MessageIcon />} {role.badge}
+              </button>
+            );
+          })}
         </div>
       )}
     </li>
@@ -88,13 +134,29 @@ const MessageIcon = () => (
 export const AbsentShareBanner = () => {
   const [report, setReport] = useState(null);
   const [expanded, setExpanded] = useState(false);
+  const [notified, setNotified] = useState(() => new Set());
+
   useEffect(() => {
     let alive = true;
     api.get("/muster/absent-report")
-      .then((r) => { if (alive) setReport(r); })
+      .then((r) => {
+        if (!alive) return;
+        setReport(r);
+        if (r?.date) setNotified(loadNotified(r.date));
+      })
       .catch(() => {});
     return () => { alive = false; };
   }, []);
+
+  const markNotified = useCallback((key) => {
+    setNotified((prev) => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      if (report?.date) saveNotified(report.date, next);
+      return next;
+    });
+  }, [report]);
 
   if (!report || !report.ready) return null;
   const n = report.athletes.length + report.coaches.length;
@@ -108,6 +170,11 @@ export const AbsentShareBanner = () => {
   const withNumbers = contacts.filter((c) =>
     PARENT_ROLES.some((r) => (c[r.key] || "").trim() && normalizeWaNumber(c[r.key]))
   ).length;
+  // Athletes where every parent number on file has been messaged.
+  const doneCount = contacts.filter((c) => {
+    const nums = PARENT_ROLES.filter((r) => (c[r.key] || "").trim() && normalizeWaNumber(c[r.key]));
+    return nums.length > 0 && nums.every((r) => notified.has(`${c.id}:${r.key}`));
+  }).length;
 
   return (
     <div
@@ -135,14 +202,14 @@ export const AbsentShareBanner = () => {
         </button>
       </div>
 
-      {/* Per-athlete parent notify — one tap per parent, message pre-filled. */}
+      {/* Per-athlete parent notify — one tap per parent, Telugu+English pre-filled. */}
       {contacts.length > 0 && (
         <div className="mt-3 border-t border-amber-200 pt-2">
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
             data-testid="absent-notify-parents-toggle"
-            title="Message each absent athlete's parent individually on WhatsApp"
+            title="Message each absent athlete's parent individually on WhatsApp (Telugu + English)"
             className="flex items-center gap-1.5 text-xs font-bold text-amber-800 hover:text-amber-900"
           >
             {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -150,6 +217,15 @@ export const AbsentShareBanner = () => {
             <span className="ml-1 inline-flex items-center px-1.5 h-4 rounded-full bg-amber-200 text-amber-800 text-[10px]">
               {withNumbers}/{contacts.length} with number
             </span>
+            {doneCount > 0 && (
+              <span
+                data-testid="absent-notified-count"
+                className="inline-flex items-center gap-0.5 px-1.5 h-4 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold"
+                title="Athletes whose parents you've already messaged today"
+              >
+                <Check size={9} /> {doneCount} done
+              </span>
+            )}
           </button>
           {expanded && (
             <ul className="mt-2 space-y-1" data-testid="absent-notify-list">
@@ -159,6 +235,8 @@ export const AbsentShareBanner = () => {
                   contact={c}
                   dateIso={report.date}
                   academy={report.office_name}
+                  notified={notified}
+                  onNotified={markNotified}
                 />
               ))}
             </ul>

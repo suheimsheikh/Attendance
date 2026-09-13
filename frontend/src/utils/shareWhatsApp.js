@@ -225,7 +225,8 @@ export function openWhatsAppChat({ phone, text }) {
 
 /**
  * Build the parent-facing "absent without information" message for a
- * single athlete. Kept short and respectful — parents read this directly.
+ * single athlete. Bilingual — Telugu first (parents read this), then the
+ * English version below a divider. Kept short and respectful.
  */
 export function formatAbsentParentMessage({ name, dateIso, academy }) {
   const day = dateIso
@@ -233,12 +234,19 @@ export function formatAbsentParentMessage({ name, dateIso, academy }) {
         weekday: "long", day: "numeric", month: "long",
       })
     : new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
-  const from = academy ? ` from ${academy}` : "";
-  return (
+  const teFrom = academy ? `${academy} నుండి ` : "";
+  const enFrom = academy ? ` from ${academy}` : "";
+  const telugu =
+    `నమస్తే 🙏\n\n` +
+    `${teFrom}${name} గురించి ఒక సందేశం.\n\n` +
+    `${name} ఈరోజు (${day}) శిక్షణకు హాజరు కాలేదు, మరియు మాకు ఎటువంటి ముందస్తు సమాచారం లేదు ` +
+    `(అనుమతించిన సెలవు లేదా టూర్ నమోదు కాలేదు).\n\n` +
+    `దయచేసి వారి స్థితిని వీలైనంత త్వరగా తెలియజేయండి. ధన్యవాదాలు.`;
+  const english =
     `Namaste 🙏\n\n` +
-    `This is a note${from} regarding ${name}.\n\n` +
+    `This is a note${enFrom} regarding ${name}.\n\n` +
     `${name} has not reported for training today (${day}) and we have no prior information ` +
     `(no approved leave or tour on record).\n\n` +
-    `Kindly confirm their status at your earliest. Thank you.`
-  );
+    `Kindly confirm their status at your earliest. Thank you.`;
+  return `${telugu}\n\n——————————\n\n${english}`;
 }

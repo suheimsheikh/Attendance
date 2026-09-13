@@ -4500,3 +4500,15 @@ green**. Mongo unique index confirmed via index_information().
 - Groups stay manual (Meta API cannot post to groups; unofficial tools risk ban).
 - Verified: curl (athlete_contacts present, 63 contacts) + screenshot (list renders,
   55/63 with number). See memory/whatsapp_integration_guide.md for Meta Option B steps.
+
+## 13 Jun 2026 (pt.2) — Bilingual parent note + "notified ✓" tracking
+- Absence WhatsApp message is now bilingual: Telugu first, English below a divider
+  (formatAbsentParentMessage in shareWhatsApp.js).
+- Per-parent "notified ✓" tracking on the absent list: tapping a WhatsApp button
+  (only when the chat actually opens) marks that parent done. Button flips to a green
+  ✓ style, the athlete row shows a "notified" tag, and the header shows "N done".
+- Persisted in localStorage keyed by report date (absent_notified_v1:<date>) so ticks
+  survive page refresh but reset naturally the next morning.
+- Voice attachment intentionally NOT built: wa.me deep links cannot carry audio; Meta
+  API can't proactively send voice to parents outside a 24h window (user chose text-only).
+- Verified: screenshot shows tag + done count after seeding; Telugu stored uncorrupted.
