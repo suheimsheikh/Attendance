@@ -34,6 +34,7 @@ from services.grid_lock import assert_dates_unlocked
 from pydantic import BaseModel, Field
 
 from services.time_utils import now_utc, local_date_str
+from services.permissions import is_super_admin
 
 
 # Rolling window in which members may request a correction. Fits the
@@ -365,9 +366,19 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
         admin — either self-filing or filing on behalf of a member
         via `on_behalf_of` — the correction is applied immediately and
         the row is stamped ``status="approved"`` with the admin as
-        both filer and decider. Second-admin-approval policy is
-        dropped per user request: "When admins make a correction there
-        should be no need for approval."
+        both filer and decider.
+
+        **Super-Admin gate for attendance (Jun 2026, user request):**
+        "All changes, edits, deletions to Attendance need to be part
+        of the audit log and sent to Super Admin for approval in the
+        same approvals screen as Leave." So a *non-super* admin filing
+        an ATTENDANCE correction (missed_checkin / time_adjust) no
+        longer auto-applies — it lands in the pending queue stamped
+        ``needs_super_admin=True`` and only a Super Admin (phone on the
+        SUPER_ADMIN_PHONES whitelist) can approve it. A Super Admin's
+        own attendance corrections still auto-apply, and admin-filed
+        LEAVE corrections are unchanged (auto-apply). Member-filed
+        corrections keep working exactly as before.
         """
         if body.entity_type not in VALID_ENTITY_KINDS:
             raise HTTPException(status_code=400,
@@ -440,12 +451,23 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             "filed_by_admin_name": filed_by_admin_name,
         }
 
-        # Admin auto-apply (9 Feb 2026). If the requester is an admin,
-        # skip the pending queue entirely — apply the change now and
-        # stamp the row as approved. Audit rows are still written by
-        # each applier + the audit line below.
+        # Super-Admin gate (Jun 2026). An ATTENDANCE correction filed by
+        # a non-super admin must NOT auto-apply — it goes to the pending
+        # queue and only a Super Admin can approve it. This flag drives
+        # both the auto-apply skip below and the approval gate in
+        # `_decide_one`.
+        is_admin = user.get("role") == "admin"
+        is_super = is_super_admin(user)
+        attendance_needs_super = (
+            is_admin and not is_super and body.entity_type == "attendance"
+        )
+        doc["needs_super_admin"] = attendance_needs_super
+
+        # Admin auto-apply (9 Feb 2026, narrowed Jun 2026). Applies when
+        # the requester is an admin AND this isn't a non-super-admin
+        # attendance correction (which now requires Super Admin sign-off).
         applied: Optional[dict] = None
-        if user.get("role") == "admin":
+        if is_admin and not attendance_needs_super:
             applier = APPLIERS.get((body.entity_type, body.kind))
             if not applier:
                 raise HTTPException(
@@ -476,7 +498,23 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             return {"ok": True, "id": doc["id"], "auto_approved": True, "applied": applied}
 
         await db.corrections.insert_one(doc)
-        return {"ok": True, "id": doc["id"], "auto_approved": False}
+        # Audit the *request* itself when an admin-filed attendance change
+        # is awaiting Super Admin approval, so the paper trail captures the
+        # intended change the moment it's raised (not just at decision time).
+        if attendance_needs_super:
+            await write_audit(
+                db, actor=user,
+                action="correction_requested",
+                entity_type="correction",
+                entity_id=doc["id"],
+                entity_name=f"{doc['entity_type']}/{doc['kind']} · {doc['requester_name']} · {doc['target_date']}",
+                before=None,
+                after={"status": "pending", "needs_super_admin": True,
+                       "payload": doc["payload"], "entity_id": doc["entity_id"]},
+                reason=doc["reason"],
+            )
+        return {"ok": True, "id": doc["id"], "auto_approved": False,
+                "needs_super_admin": attendance_needs_super}
 
     @router.get("/me/corrections")
     async def my_corrections(user: dict = Depends(get_current_user), status: Optional[str] = None):
@@ -558,6 +596,15 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             raise HTTPException(status_code=409, detail=f"Correction already {correction['status']}")
         if decision not in ("approved", "rejected"):
             raise HTTPException(status_code=400, detail="status must be approved or rejected")
+        # Super-Admin gate (Jun 2026). Attendance corrections filed by a
+        # non-super admin are flagged `needs_super_admin` and can only be
+        # decided by a Super Admin. Applies to both approve AND reject so
+        # a regular admin can't quietly clear the queue either way.
+        if correction.get("needs_super_admin") and not is_super_admin(admin):
+            raise HTTPException(
+                status_code=403,
+                detail="Only a Super Admin can approve or reject this attendance change.",
+            )
         applied: Optional[dict] = None
         if decision == "approved":
             await assert_dates_unlocked(db, correction.get("target_date"))

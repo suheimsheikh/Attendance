@@ -14,9 +14,10 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCw, Check, X, Plane, LogIn, PencilRuler, Plus, Coffee, ChevronDown, ChevronRight, History, AlertTriangle } from "lucide-react";
+import { Loader2, RefreshCw, Check, X, Plane, LogIn, PencilRuler, Plus, Coffee, ChevronDown, ChevronRight, History, AlertTriangle, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
+import { useAuth } from "../../auth";
 import { formatDate, formatTime, dayOfWeek, shortDate } from "../../utils";
 import { ApplyForm } from "../MyLeaves";
 import { BreakForm } from "./Calendar";
@@ -126,6 +127,8 @@ function normCorrection(row) {
     member_name: row.requester_name || "—",
     submitted_at: row.requested_at,
     when: `${dayOfWeek(row.target_date)} ${formatDate(row.target_date)}`,
+    // Attendance change filed by an admin — awaiting Super Admin sign-off.
+    needs_super_admin: !!row.needs_super_admin,
     details: [
       (row.kind || "").replace(/_/g, " "),
       row.filed_by_admin_name ? `filed by ${row.filed_by_admin_name}` : null,
@@ -147,6 +150,8 @@ function normCorrection(row) {
 // --- Component --------------------------------------------------------------
 
 export default function ApprovalsUnified() {
+  const { user } = useAuth();
+  const isSuper = !!user?.is_super_admin;
   const [filter, setFilter] = useState("all");
   const [busyId, setBusyId] = useState(null);
   const queryClient = useQueryClient();
@@ -623,11 +628,29 @@ export default function ApprovalsUnified() {
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${meta.tone || "bg-slate-100 text-slate-600"}`}>
                         {Icon && <Icon size={11}/>} {meta.label || r.kind}
                       </span>
+                      {r.needs_super_admin && (
+                        <span
+                          className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-700"
+                          title="Attendance change filed by an admin — needs Super Admin approval"
+                          data-testid={`approvals-superadmin-badge-${r.id}`}
+                        >
+                          <ShieldAlert size={9}/> Super Admin
+                        </span>
+                      )}
                     </td>
                     <td className="py-2 px-3 text-slate-500 text-xs tabular-nums whitespace-nowrap">{fmtDateTime(r.submitted_at)}</td>
                     <td className="py-2 px-3 text-slate-700 tabular-nums whitespace-nowrap">{r.when}</td>
                     <td className="py-2 px-3 text-slate-600 text-xs">{r.details || "—"}</td>
                     <td className="py-2 px-3 text-center">
+                      {r.needs_super_admin && !isSuper ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-1"
+                          title="Only a Super Admin can approve or reject attendance changes"
+                          data-testid={`approvals-superadmin-lock-${r.id}`}
+                        >
+                          <ShieldAlert size={12}/> Super Admin only
+                        </span>
+                      ) : (
                       <div className="inline-flex gap-1.5">
                         <button
                           onClick={() => decide(r, "approve")}
@@ -648,6 +671,7 @@ export default function ApprovalsUnified() {
                           {busyId === `${r.kind}-${r.id}-reject` ? <Loader2 size={14} className="animate-spin"/> : <X size={14}/>}
                         </button>
                       </div>
+                      )}
                     </td>
                   </tr>
                   {isExpanded && (

@@ -185,14 +185,19 @@ export default function CorrectionRequestModal({
         on_behalf_of: isAdmin && onBehalfMember ? onBehalfMember.id : undefined,
       });
       // Backend auto-approves admin-filed corrections (9 Feb 2026) —
-      // reflect that in the toast so admins get instant feedback.
+      // reflect that in the toast so admins get instant feedback. Since
+      // Jun 2026 a non-super admin's ATTENDANCE correction instead goes
+      // to the Super Admin approval queue (needs_super_admin).
       const autoApproved = !!res?.auto_approved;
+      const needsSuper = !!res?.needs_super_admin;
       toast.success(
         autoApproved
           ? (onBehalfMember
               ? `Correction applied for ${onBehalfMember.full_name}`
               : "Correction applied")
-          : "Correction request submitted — pending approval"
+          : (needsSuper
+              ? "Attendance change submitted — pending Super Admin approval"
+              : "Correction request submitted — pending approval")
       );
       onSaved?.(res);
       onClose?.();

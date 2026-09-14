@@ -4624,3 +4624,31 @@ Two read-only reviews (backend + frontend) of the busiest modules; fixed the con
   (admins). Route gated by RequireMuster (admin/coach/chef); escorts are blocked at the API so their
   banners stay empty. No separate super-admin role exists — admin is the top role.
 - Verified via screenshot: page renders with the absent list expanded; menu item highlighted.
+
+### Jun 2026 — Super-Admin approval gate for admin-filed attendance corrections
+User request: "All changes, edits, deletions to Attendance need to be part of the audit
+log and sent to Super Admin for approval in the same approvals screen as Leave."
+
+Scope (confirmed via ask_human): admin-filed ATTENDANCE corrections only (missed_checkin /
+time_adjust), pending-before-apply, Super Admin = SUPER_ADMIN_PHONES whitelist account.
+
+- `backend/routes/corrections.py`:
+  - `create_correction`: a NON-super admin filing an attendance correction no longer
+    auto-applies. Row is inserted `status="pending"` + `needs_super_admin=True` and an
+    audit row (`action="correction_requested"`) is written at request time.
+  - Super Admin's own attendance corrections still auto-apply (Q4). Admin-filed LEAVE
+    corrections unchanged (still auto-apply — attendance-only scope). Member-filed
+    corrections unchanged.
+  - `_decide_one`: added gate — a `needs_super_admin` correction can only be approved OR
+    rejected by a Super Admin (403 otherwise). This also makes a regular admin's
+    `approve-all` skip these rows.
+- `frontend/src/pages/admin/ApprovalsUnified.jsx`: reads `is_super_admin` from useAuth;
+  correction rows carry `needs_super_admin`. Kind cell shows an amber "Super Admin" badge;
+  action cell replaces approve/reject with a "Super Admin only" lock for non-super admins.
+- `frontend/src/components/CorrectionRequestModal.jsx`: toast now says "Attendance change
+  submitted — pending Super Admin approval" when `needs_super_admin` is returned.
+- Tests: `backend/tests/test_superadmin_attendance_gate.py` (4 passing) — non-super admin
+  file→pending+flag, non-super cannot decide (403), Super Admin approves→applies, leave
+  correction still auto-applies. Uses throwaway athlete + full cleanup.
+- Note: seeded admin `admin@attendance.app` (phone 9849002111) IS the Super Admin in every
+  env, so pre-existing admin auto-apply tests remain green.
