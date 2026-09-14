@@ -4652,3 +4652,22 @@ time_adjust), pending-before-apply, Super Admin = SUPER_ADMIN_PHONES whitelist a
   correction still auto-applies. Uses throwaway athlete + full cleanup.
 - Note: seeded admin `admin@attendance.app` (phone 9849002111) IS the Super Admin in every
   env, so pre-existing admin auto-apply tests remain green.
+
+### Jun 2026 — Consolidated "Access Requests" into the Approvals screen
+User asked whether to merge Access Requests + Approvals and drop the standalone menu item.
+Chose approach (a): a dedicated tab that renders the full Devices workflow inline (not merged
+into the unified table), so approve-to-create-member + revoke/reinstate stay intact.
+
+- `frontend/src/pages/admin/Devices.jsx`: added `embedded` prop — when true, drops the outer
+  page padding/max-width and its own page header (the Approvals chip labels it).
+- `frontend/src/pages/admin/ApprovalsUnified.jsx`: added an "Access Requests" filter chip
+  (key `device`) with a pending-count badge (new `/admin/devices?status_filter=pending`
+  query). When active it renders `<Devices embedded />` in place of the unified table +
+  decision-history sections. Refresh now also invalidates `/admin/devices`.
+- `frontend/src/components/Layout.jsx`: removed the standalone "Access Requests" nav item
+  (and the now-unused `IdCard` icon import); Approvals hint updated to mention device access
+  requests. The Approvals sidebar badge already counted pending devices in its total.
+- `/admin/devices` route kept in App.js as a still-working fallback/bookmark (renders the
+  non-embedded standalone page).
+- Verified via screenshot: chip present with count, embedded Devices renders with its
+  sub-filters, sidebar item gone, no console errors.

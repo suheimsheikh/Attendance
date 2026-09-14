@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
-  CalendarCheck2, Building2, IdCard, Sailboat,
+  CalendarCheck2, Building2, Sailboat,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
   ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, Utensils, CalendarRange, FileText, ListTodo, ScrollText, LineChart
 } from "lucide-react";
@@ -77,10 +77,9 @@ const NAV_ATTENDANCE_LIVE = [
   { to: "/parent-notifications", label: "Parent Notifications", icon: MessageSquare, hint: "Message parents/guardians on WhatsApp about today's absent & late athletes — one tap each, Telugu + English" },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays, hint: "Holidays, weekly offs, camps and regattas at a glance", adminOnly: true },
   { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true, hint: "Single-glance summary: on campus, on leave, alerts", adminOnly: true },
-  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, badgeKey: "approvals_page", hint: "Pending leaves, corrections and check-in approvals in one queue", adminOnly: true },
+  { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, badgeKey: "approvals_page", hint: "Pending leaves, corrections, check-ins and device access requests in one queue", adminOnly: true },
   { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, hint: "All-in-one 31-day attendance grid with drill-downs and exports", adminOnly: true },
   { to: "/admin/dar", label: "DAR Reports", icon: FileText, hint: "Daily Activity Reports filed at check-out — search, filter, missed-DAR payroll list", adminOnly: true },
-  { to: "/admin/devices", label: "Access Requests", icon: IdCard, hint: "Approve or block new phones/devices requesting access", adminOnly: true },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2, hint: "Paid leave, comp-off and tour balances for every member", adminOnly: true },
 ];
 

@@ -19,7 +19,7 @@ const FILTERS = [
   { key: "revoked", label: "Revoked" },
 ];
 
-export default function Devices() {
+export default function Devices({ embedded = false }) {
   const [filter, setFilter] = useState("pending");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,11 +49,13 @@ export default function Devices() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
-      <header className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Access Requests</h1>
-        <p className="text-slate-500 text-sm mt-1">Approve new browser sign-ins from your members.</p>
-      </header>
+    <div className={embedded ? "" : "p-4 md:p-8 max-w-5xl mx-auto"} data-testid="devices-page">
+      {!embedded && (
+        <header className="mb-6">
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Access Requests</h1>
+          <p className="text-slate-500 text-sm mt-1">Approve new browser sign-ins from your members.</p>
+        </header>
+      )}
 
       <div className="flex gap-2 overflow-x-auto pb-3 mb-2">
         {FILTERS.map((f) => (

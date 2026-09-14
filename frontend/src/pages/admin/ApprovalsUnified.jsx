@@ -21,6 +21,7 @@ import { useAuth } from "../../auth";
 import { formatDate, formatTime, dayOfWeek, shortDate } from "../../utils";
 import { ApplyForm } from "../MyLeaves";
 import { BreakForm } from "./Calendar";
+import Devices from "./Devices";
 import LeaveContextPanel from "./LeaveContextPanel";
 import LeaveApprovalConfirmModal from "./LeaveApprovalConfirmModal";
 import { round1 } from "../leaves/utils";
@@ -38,6 +39,11 @@ const FILTERS = [
   { key: "leave",      label: "Leaves" },
   { key: "checkin",    label: "Check-ins" },
   { key: "correction", label: "Corrections" },
+  // Device/phone access approvals — consolidated onto this page (Jun 2026,
+  // user request) so the standalone "Access Requests" menu item could be
+  // removed. Renders the full Devices workflow inline (approve-to-create
+  // member, revoke, reinstate) rather than as unified-table rows.
+  { key: "device",     label: "Access Requests" },
 ];
 
 function fmtDateTime(iso) {
@@ -255,10 +261,14 @@ export default function ApprovalsUnified() {
           ]);
           return [...(a || []), ...(r || [])];
         } },
+      // Pending device count — powers the "Access Requests" chip badge.
+      { queryKey: ["/admin/devices", { status: "pending" }],
+        queryFn: () => api.get("/admin/devices", { status_filter: "pending" }) },
     ],
   });
-  const [leavesQ, checkinsQ, correctionsQ, checkinsDecidedQ, correctionsDecidedQ] = queries;
+  const [leavesQ, checkinsQ, correctionsQ, checkinsDecidedQ, correctionsDecidedQ, devicesPendingQ] = queries;
   const loading = queries.some((q) => q.isFetching);
+  const deviceCount = Array.isArray(devicesPendingQ?.data) ? devicesPendingQ.data.length : 0;
 
   // Surface any queue-level failures via toast, keyed by label so a stale
   // toast doesn't linger after a subsequent successful refetch.
@@ -299,11 +309,12 @@ export default function ApprovalsUnified() {
   }, [leavesQ.data, checkinsQ.data, correctionsQ.data]);
 
   const load = useCallback(() => {
-    // Blow away all three queue caches so a click on "Refresh" or a
+    // Blow away all queue caches so a click on "Refresh" or a
     // successful decide() gets fresh data across the board.
     queryClient.invalidateQueries({ queryKey: ["/leaves"] });
     queryClient.invalidateQueries({ queryKey: ["/admin/checkin-approvals"] });
     queryClient.invalidateQueries({ queryKey: ["/admin/corrections"] });
+    queryClient.invalidateQueries({ queryKey: ["/admin/devices"] });
   }, [queryClient]);
 
   const filteredRows = useMemo(() => {
@@ -312,10 +323,10 @@ export default function ApprovalsUnified() {
   }, [rows, filter]);
 
   const counts = useMemo(() => {
-    const c = { all: rows.length, leave: 0, checkin: 0, correction: 0 };
+    const c = { all: rows.length, leave: 0, checkin: 0, correction: 0, device: deviceCount };
     for (const r of rows) c[r.kind] = (c[r.kind] || 0) + 1;
     return c;
-  }, [rows]);
+  }, [rows, deviceCount]);
 
   const decide = async (row, decision) => {
     // Two-step guard: first Approve click on a LEAVE row opens the
@@ -559,6 +570,12 @@ export default function ApprovalsUnified() {
         })}
       </div>
 
+      {filter === "device" ? (
+        <div data-testid="approvals-devices-embed">
+          <Devices embedded />
+        </div>
+      ) : (
+      <>
       <div className="iu-card overflow-hidden">
         <div className="overflow-x-auto">          <table className="w-full text-sm" data-testid="approvals-table">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider">
@@ -705,6 +722,8 @@ export default function ApprovalsUnified() {
       />
       <DecisionHistoryCheckins rows={decidedCheckins} />
       <DecisionHistoryCorrections rows={decidedCorrections} />
+      </>
+      )}
 
       {showOnBehalf && (
         <ApplyForm
