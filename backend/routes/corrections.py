@@ -33,7 +33,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from services.grid_lock import assert_dates_unlocked
 from pydantic import BaseModel, Field
 
-from services.time_utils import now_utc, local_date_str
+from services.time_utils import now_utc, local_date_str, office_tz
 from services.permissions import is_super_admin
 
 
@@ -134,6 +134,29 @@ async def _apply_time_adjust(db, c: dict, admin: dict) -> dict:
         update["check_in_at"] = f"{row['date']}T{p['check_in_time']}:00"
     if p.get("check_out_time"):
         update["check_out_at"] = f"{row['date']}T{p['check_out_time']}:00"
+    # Recompute hours from the resulting timestamps and clear any
+    # "missing checkout / needs correction" flags (Jun 2026): fixing a
+    # forgotten checkout must credit the real hours back into payroll.
+    final_in = update.get("check_in_at") or row.get("check_in_at")
+    final_out = update.get("check_out_at") or row.get("check_out_at")
+    if final_in and final_out:
+        try:
+            office = await db.config.find_one({"id": "office"}, {"_id": 0, "timezone": 1})
+            tz = office_tz(office)
+            ci = datetime.fromisoformat(final_in)
+            co = datetime.fromisoformat(final_out)
+            # Naive strings are office-local wall-clock; make both tz-aware
+            # before differencing so we never mix naive/aware (TypeError) or
+            # silently miscount across the UTC offset.
+            if ci.tzinfo is None:
+                ci = ci.replace(tzinfo=tz)
+            if co.tzinfo is None:
+                co = co.replace(tzinfo=tz)
+            update["hours"] = round(max(0.0, (co - ci).total_seconds() / 3600.0), 2)
+            update["missing_checkout"] = False
+            update["needs_correction"] = False
+        except Exception:
+            pass
     await db.attendance.update_one({"id": c["entity_id"]}, {"$set": update})
     return {"attendance_id": c["entity_id"], "updated": list(update.keys())}
 

@@ -872,28 +872,50 @@ async def _seed_database() -> None:
 # ----------------------------------------------------------------------------
 async def _close_stale_open_sessions(reason: str) -> int:
     """Close every attendance session with check_out_at=None whose `date` is
-    before today in office-local time. Returns count of sessions closed."""
+    before today in office-local time. Returns count of sessions closed.
+
+    Jun 2026 (user request — "members leave in 2h without checking out, so
+    hours are wrong"): a forgotten checkout must NOT credit inflated hours.
+    We close the session so the member stops showing on-campus, but stamp it
+    `missing_checkout` / `needs_correction` with **hours=None** so payroll
+    excludes it until an admin or the member fixes the real checkout time.
+    `check_out_at` is set to the member's scheduled `work_end` for that day
+    (falling back to the office default, then end-of-day) purely so the row
+    is closed and shows a plausible boundary — the hours stay uncredited.
+    """
     office = await db.config.find_one({"id": "office"}, {"_id": 0})
     today_str = local_date_str(office)
     tz = office_tz(office)
+    default_end = (office or {}).get("default_work_end") or "17:00"
     cur = db.attendance.find({"check_out_at": None, "date": {"$lt": today_str}}, {"_id": 0})
     count = 0
     async for sess in cur:
         try:
-            close_local = datetime.fromisoformat(sess["date"] + "T23:59:59").replace(tzinfo=tz)
-            close_utc = close_local.astimezone(timezone.utc)
             ci = datetime.fromisoformat(sess["check_in_at"])
-            hours = round(max(0.0, (close_utc - ci).total_seconds() / 3600), 2)
+            # Prefer the member's own work_end, else office default.
+            u = await db.users.find_one({"id": sess.get("user_id")}, {"_id": 0, "work_end": 1})
+            end_hm = (u or {}).get("work_end") or default_end
+            hh, mm = (int(x) for x in str(end_hm).split(":"))
+            close_local = datetime.fromisoformat(sess["date"] + f"T{hh:02d}:{mm:02d}:00").replace(tzinfo=tz)
+            close_utc = close_local.astimezone(timezone.utc)
+            # Never let the boundary precede check-in (e.g. an evening session
+            # started after work_end) — fall back to end-of-day.
+            if close_utc <= ci:
+                eod_local = datetime.fromisoformat(sess["date"] + "T23:59:59").replace(tzinfo=tz)
+                close_utc = eod_local.astimezone(timezone.utc)
         except Exception:
             close_utc = now_utc()
-            hours = 0
         await db.attendance.update_one(
             {"id": sess["id"]},
             {"$set": {
                 "check_out_at": close_utc.isoformat(),
                 "auto_checkout": True,
                 "auto_checkout_reason": reason,
-                "hours": hours,
+                "missing_checkout": True,
+                "needs_correction": True,
+                # Uncredited — a forgotten checkout adds ZERO hours to payroll
+                # until corrected. (All hour sums use `(hours or 0)`.)
+                "hours": None,
             }},
         )
         count += 1

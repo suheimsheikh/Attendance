@@ -4736,3 +4736,31 @@ User request: "show a big 'You are checked in' message and a 'checking you in' d
     seconds + a Cancel button, shown during the auto check-in window.
 - Verified: "You're checked in" hero rendered via a simulated open session (screenshot),
   cleaned up after. The countdown hero shares the same pattern (only fires with a live GPS fix).
+
+### Jun 2026 — Forgotten checkout no longer inflates hours
+Problem: members check in, leave in ~2h without checking out; the midnight auto-close credited
+hours to 23:59:59 → grossly inflated working hours.
+
+Decision (ask_human, reconciled): a forgotten checkout is NOT credited and is flagged
+"missing checkout / needs correction" (excluded from payroll until fixed); the session is closed
+at the member's scheduled work_end so presence clears and a plausible boundary shows.
+
+- `backend/server.py` `_close_stale_open_sessions` (midnight cron + startup catch-up): instead
+  of crediting to 23:59:59, closes forgotten sessions with `hours=None`, `missing_checkout=True`,
+  `needs_correction=True`, `auto_checkout=True`. `check_out_at` set to the member's `work_end`
+  (office default fallback; end-of-day if work_end precedes check-in). All hour sums use
+  `(hours or 0)`, so None = zero credit.
+- `backend/routes/corrections.py` `_apply_time_adjust`: now recomputes `hours` from the final
+  check-in/out (office-tz normalised to avoid naive/aware mismatch) and clears
+  missing_checkout/needs_correction — so correcting the checkout credits the real hours.
+- `backend/routes/reports.py` day-detail: exposes `missing_checkout` / `needs_correction`.
+- `frontend/src/components/MemberTimelineModal.jsx`: drill-down shows "⚠ MISSING CHECKOUT —
+  needs correction" instead of "auto-checkout" for these rows.
+- The existing resolve-stale prompt (member self-closes at work_end / a chosen time when they
+  reopen the app) is unchanged and still credits hours normally.
+- Verified end-to-end: stale session → closed at work_end, hours=None + flagged; time_adjust
+  correction → hours recomputed (2h) + flags cleared.
+- NOTE: geofence-exit auto-checkout and extra reminders were declined for now. True
+  phone-in-pocket exit detection still needs a native app.
+- BEHAVIOUR CHANGE: on next restart/midnight, any currently-open stale sessions are closed with
+  0 credited hours + needs-correction (previously inflated to end-of-day) — intended.

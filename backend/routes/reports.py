@@ -715,6 +715,8 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                     "late_minutes": s.get("late_minutes"),
                     "method": s.get("method"),
                     "auto_checkout": bool(s.get("auto_checkout")),
+                    "missing_checkout": bool(s.get("missing_checkout")),
+                    "needs_correction": bool(s.get("needs_correction")),
                     "overtime_total_min": s.get("overtime_total_min"),
                     "overtime_status": s.get("overtime_status"),
                     "out_of_geofence": bool(s.get("out_of_geofence")),

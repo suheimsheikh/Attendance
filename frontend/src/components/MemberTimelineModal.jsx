@@ -57,7 +57,8 @@ function renderDetail(d) {
     if (d.check_out_time) parts.push(`out ${d.check_out_time}`);
     if (d.hours) parts.push(`${d.hours}h`);
     if (d.late) parts.push(`late ${d.late_minutes || 0}m`);
-    if (d.auto_checkout) parts.push("auto-checkout");
+    if (d.missing_checkout) parts.push("⚠ MISSING CHECKOUT — needs correction");
+    else if (d.auto_checkout) parts.push("auto-checkout");
     if (d.out_of_geofence) parts.push("off-geo");
     if (d.overtime_total_min) {
       parts.push(`OT ${d.overtime_total_min}m`);
