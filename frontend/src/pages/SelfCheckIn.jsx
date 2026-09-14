@@ -59,6 +59,17 @@ export default function SelfCheckIn() {
   // the photo to the WhatsApp share when the member's stored profile
   // photo hasn't propagated yet. Cleared on next toggle.
   const [freshSelfie, setFreshSelfie] = useState(null);
+  // Geofence-aware auto check-in + off-site enforcement (Jun 2026).
+  // pendingCoords: coords resolved for a check-in that's waiting on a
+  // selfie/reason. showOffsiteSelfie/offSiteSelfie: the mandatory proof
+  // selfie captured when a check-in lands OUTSIDE every geofence.
+  // autoCountdown: seconds left in the "auto-checking-you-in… cancel" window.
+  const [pendingCoords, setPendingCoords] = useState(null);
+  const [showOffsiteSelfie, setShowOffsiteSelfie] = useState(false);
+  const [offSiteSelfie, setOffSiteSelfie] = useState(null);
+  const [autoCountdown, setAutoCountdown] = useState(null);
+  const autoTriedRef = useRef(false);
+  const autoTimerRef = useRef(null);
   // DAR (Sep 2026): payroll employees must file a Daily Activity Report
   // before check-out. `darStatus` from /dar/status; `darText` is the
   // inline textarea; `lastDar` is the DAR saved with the last check-out.
@@ -181,67 +192,41 @@ export default function SelfCheckIn() {
     return null;
   }, [user, status]);
 
-  // Core check-in/out logic — extracted so it can be invoked directly after
-  // the first-time selfie is captured (without re-tripping the photo guard).
-  // Also invoked with an explicit `geoReason` after the off-geofence modal
-  // is confirmed, so the reason lands on the attendance row.
-  const performToggle = async (geoReason = null) => {
-    if (darBlocked) {
-      speakDar();
-      toast.error(`Please enter your Daily Activity Report (at least ${darMin} characters) before checking out`);
-      return;
+  // Low-level location fetch — returns {lat,lng,acc} or nulls if no fix.
+  const getCoords = async () => {
+    setLocating("Getting your location…");
+    try {
+      const loc = await getLocation({ targetAccuracy: 100, maxWaitMs: 8000 });
+      return { lat: loc.latitude, lng: loc.longitude, acc: loc.accuracy };
+    } catch (err) {
+      console.debug("location unavailable:", err?.message);
+      return { lat: null, lng: null, acc: null };
+    } finally {
+      setLocating("");
     }
+  };
+
+  // Core network submit for BOTH check-in and check-out. The off-geofence
+  // resolution + selfie/reason gathering happens in beginCheckin BEFORE this
+  // runs, so here we just POST what we were given.
+  const submitToggle = async ({ lat, lng, reason = null, checkInPhoto = null }) => {
+    if (working) return;
     setWorking(true);
     setLastAction(null);
     setLastDar(null);
-    // Start each toggle with no carried-over selfie: a check-in's fresh
-    // selfie must not be re-attached to a later check-out's WhatsApp share.
-    setFreshSelfie(null);
-    setLocating("Getting your location…");
-    let lat = null, lng = null, acc = null;
+    if (!checkInPhoto) setFreshSelfie(null);
     try {
-      try {
-        const loc = await getLocation({ targetAccuracy: 100, maxWaitMs: 8000 });
-        lat = loc.latitude; lng = loc.longitude; acc = loc.accuracy;
-      } catch (err) {
-        console.debug("location unavailable, proceeding without:", err?.message);
-      }
-      setLocating("");
-
-      // Pre-flight geofence check on the client — only for CHECK-INS.
-      // Checkouts are trusted (person is leaving; asking a reason
-      // would just create friction). If we have NO GPS fix at all
-      // (permission denied / hardware off), we let the check-in
-      // through — the backend stamps `geo_unavailable=true` and admins
-      // can follow up from Data Quality. Enforcing a reason here would
-      // block members on locked-down browsers from checking in at all.
-      if (lat != null && lng != null && !status?.checked_in && !geoReason) {
-        const resolved = resolveNearestSite(lat, lng, office, sites);
-        if (resolved?.out_of_geofence) {
-          setOffGeoPending({
-            lat, lng,
-            distance_m: resolved.nearest_distance_m,
-            nearest_name: resolved.nearest_name,
-          });
-          setWorking(false);
-          return;   // await user's reason
-        }
-      }
-
-      const body = lat != null && lng != null
+      const body = (lat != null && lng != null)
         ? { latitude: lat, longitude: lng }
         : { latitude: 0, longitude: 0 };
       if (otInfo && overtimeReason.trim()) body.overtime_reason = overtimeReason.trim();
       if (earlyOutInfo && earlyOutReason.trim()) body.early_out_reason = earlyOutReason.trim();
-      if (geoReason) body.reason = geoReason;
+      if (reason) body.reason = reason;
+      if (checkInPhoto) body.check_in_photo = checkInPhoto;
       if (darNeededNow && darText.trim()) body.dar_text = darText.trim();
       const res = await api.post("/attendance/geo-toggle", body);
       const dist = res.distance_m;
-      setLastDistance({ dist, acc, off: res.out_of_geofence });
-      // Location-aware toast — tell the member which geofence they landed
-      // in so they can spot a mis-tagged check-in immediately. When the
-      // check-in was accepted OUTSIDE the geofence, use the red error
-      // toast so the member notices at a glance (Feb 2026 user request).
+      setLastDistance({ dist, acc: null, off: res.out_of_geofence });
       const locBit = ` at ${res.site_label || res.site_name || office?.name?.trim() || "office"}`;
       if (res.out_of_geofence && res.action === "checkin") {
         toast.error(
@@ -257,19 +242,14 @@ export default function SelfCheckIn() {
             : `Checked out${locBit} — ${res.member} (${res.hours}h)`
         );
       }
-      // Stash the just-completed action so the card can offer a
-      // one-tap "Share to WhatsApp" button. Cleared when the member
-      // acts again (see start of performToggle).
       setLastAction({
         action: res.action,
         name: res.member,
         siteName: res.site_label || res.site_name || "",
-        distanceM: lat != null && lng != null ? res.distance_m : null,
+        distanceM: (lat != null && lng != null) ? res.distance_m : null,
         offSite: !!res.out_of_geofence,
         at: new Date(),
       });
-      // Play a friendly Indian-female voice nudge when a check-in is marked
-      // late — handy reminder for the member at the device.
       if (res.action === "checkin" && res.late) {
         speakLateMessage(res.late_minutes, res.member);
       }
@@ -280,7 +260,6 @@ export default function SelfCheckIn() {
       }
       setOvertimeReason("");
       setEarlyOutReason("");
-      setOffGeoPending(null);
       refresh();
     } catch (err) {
       toast.error(err?.message || "Failed");
@@ -290,17 +269,59 @@ export default function SelfCheckIn() {
     }
   };
 
-  const handleToggle = async () => {
-    // Force a selfie when the member has no photo on file OR their photo is
-    // older than the refresh threshold (365 days). The captured selfie becomes
-    // their new profile photo and check-in continues automatically.
-    if (photoNeeded && !status?.checked_in) {
-      setShowSelfie(true);
+  // Check-OUT — trusted, no geofence/selfie friction (person is leaving).
+  const performCheckout = async () => {
+    if (darBlocked) {
+      speakDar();
+      toast.error(`Please enter your Daily Activity Report (at least ${darMin} characters) before checking out`);
       return;
     }
-    performToggle();
+    const { lat, lng } = await getCoords();
+    submitToggle({ lat, lng });
   };
 
+  // Check-IN — resolves the geofence first, then branches:
+  //  • inside a geofence  → refresh selfie if due, then submit (this is the
+  //    path auto check-in uses).
+  //  • outside every fence → ENFORCE a proof selfie + a reason, then submit.
+  // `auto` bails out for anything that isn't a confirmed in-geofence fix so
+  // an unattended device never silently logs an off-site / unknown check-in.
+  const beginCheckin = async ({ auto = false } = {}) => {
+    if (working || status?.checked_in || onTempOut) return;
+    const { lat, lng, acc } = await getCoords();
+    const geoUnknown = (lat == null || lng == null);
+    const resolved = geoUnknown ? null : resolveNearestSite(lat, lng, office, sites);
+    const off = !!resolved?.out_of_geofence;
+
+    if (auto && (geoUnknown || off)) return;   // auto only for confirmed in-fence
+
+    setLastDistance({ dist: resolved?.nearest_distance_m ?? null, acc, off });
+
+    if (off) {
+      // Off-geofence: proof selfie (step 1) → reason (step 2) → submit.
+      setPendingCoords({ lat, lng, acc });
+      setOffGeoPending({ lat, lng, distance_m: resolved.nearest_distance_m, nearest_name: resolved.nearest_name });
+      setOffSiteSelfie(null);
+      setShowOffsiteSelfie(true);
+      return;
+    }
+    // Inside a geofence (or geo unavailable on a manual tap).
+    if (photoNeeded) {
+      setPendingCoords({ lat, lng, acc });
+      setShowSelfie(true);   // weekly/missing profile selfie, then submit
+      return;
+    }
+    submitToggle({ lat, lng });
+  };
+
+  const handleToggle = () => {
+    if (status?.checked_in) { performCheckout(); return; }
+    cancelAuto();            // a manual tap supersedes any running countdown
+    beginCheckin({ auto: false });
+  };
+
+  // Profile-refresh selfie (inside geofence) — saved as the member's photo,
+  // then the check-in continues automatically with the resolved coords.
   const saveSelfie = async (dataUrl) => {
     if (!user?.id) return;
     setShowSelfie(false);
@@ -308,16 +329,79 @@ export default function SelfCheckIn() {
     try {
       await api.post("/members/me/photo", { photo: dataUrl });
       await refreshMe();
-      // Pull fresh photo-status so the yearly refresh logic recomputes correctly.
       api.get("/me/photo-status").then(setPhotoStatus).catch(() => {});
       toast.success("Photo saved — checking you in…");
     } catch (err) {
       toast.error(err?.message || "Couldn't save photo");
       return;
     }
-    // Auto-proceed with the actual check-in so the member doesn't have to tap again.
-    performToggle();
+    const c = pendingCoords || {};
+    setPendingCoords(null);
+    submitToggle({ lat: c.lat ?? null, lng: c.lng ?? null });
   };
+
+  // Off-site proof selfie captured → stash it and advance to the reason modal.
+  const captureOffsiteSelfie = (dataUrl) => {
+    setOffSiteSelfie(dataUrl);
+    setFreshSelfie(dataUrl);           // so the WhatsApp share can attach it
+    setShowOffsiteSelfie(false);       // reveals the OutOfGeofence reason modal
+  };
+
+  const cancelOffSite = () => {
+    setShowOffsiteSelfie(false);
+    setOffGeoPending(null);
+    setOffSiteSelfie(null);
+    setPendingCoords(null);
+  };
+
+  const cancelAuto = useCallback(() => {
+    if (autoTimerRef.current) { clearInterval(autoTimerRef.current); autoTimerRef.current = null; }
+    setAutoCountdown(null);
+  }, []);
+
+  // Fully hands-free path: short cancel window, then submit.
+  const startAutoCountdown = (lat, lng) => {
+    setAutoCountdown(3);
+    let n = 3;
+    autoTimerRef.current = setInterval(() => {
+      n -= 1;
+      setAutoCountdown(n);
+      if (n <= 0) {
+        clearInterval(autoTimerRef.current);
+        autoTimerRef.current = null;
+        setAutoCountdown(null);
+        submitToggle({ lat, lng });
+      }
+    }, 1000);
+  };
+
+  // Auto check-in — runs ONCE after the page loads. Only fires for a
+  // confirmed in-geofence GPS fix; off-site / no-fix fall back to the
+  // manual button (which enforces the selfie + reason).
+  useEffect(() => {
+    if (loading || autoTriedRef.current) return;
+    if (status?.checked_in || onTempOut) return;
+    if (geoPerm === "denied") { autoTriedRef.current = true; return; }
+    autoTriedRef.current = true;
+    (async () => {
+      const { lat, lng, acc } = await getCoords();
+      if (lat == null || lng == null) return;
+      const resolved = resolveNearestSite(lat, lng, office, sites);
+      if (resolved?.out_of_geofence) return;   // off-site → manual
+      setLastDistance({ dist: resolved?.nearest_distance_m ?? null, acc, off: false });
+      if (photoNeeded) {
+        // Weekly/missing selfie due — auto-open the capture; submit follows.
+        setPendingCoords({ lat, lng, acc });
+        setShowSelfie(true);
+        return;
+      }
+      startAutoCountdown(lat, lng);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, status, onTempOut, geoPerm, office, sites, photoNeeded]);
+
+  // Clear any running countdown on unmount.
+  useEffect(() => () => { if (autoTimerRef.current) clearInterval(autoTimerRef.current); }, []);
 
   const handleTempReturn = async () => {
     setWorking(true);
@@ -413,6 +497,28 @@ export default function SelfCheckIn() {
       {!onTempOut && (
         <div className="iu-card p-8 text-center" data-testid="self-checkin-card">
           <Greeting user={user} checkedIn={!!status?.checked_in} />
+          {autoCountdown != null && !status?.checked_in && (
+            <div
+              className="mb-4 mx-auto max-w-sm rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 flex items-center justify-between gap-3"
+              data-testid="auto-checkin-banner"
+              role="status"
+            >
+              <div className="flex items-center gap-2 text-left">
+                <Loader2 size={16} className="animate-spin text-sky-600 shrink-0" />
+                <span className="text-sm font-semibold text-sky-900">
+                  You&apos;re on-site — checking you in in {autoCountdown}s…
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={cancelAuto}
+                data-testid="auto-checkin-cancel"
+                className="text-xs font-bold text-sky-700 hover:text-sky-900 underline underline-offset-2 shrink-0"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
           {status?.checked_in && <CheckoutTaskNudge userName={user?.full_name} />}
           {darNeededNow && (
             <div data-testid="dar-voice-block">
@@ -611,14 +717,30 @@ export default function SelfCheckIn() {
               ? "Your photo's over a year old — let's update it so your coach can still recognise you on the muster."
               : "So your coach can recognise you on the muster list. You only do this once.")}
           onCapture={saveSelfie}
-          onClose={() => setShowSelfie(false)}
+          onClose={() => { setShowSelfie(false); setPendingCoords(null); }}
         />
       )}
 
+      {/* Off-geofence STEP 1 — mandatory proof selfie before the reason. */}
+      {showOffsiteSelfie && (
+        <SelfieCapture
+          title="Off-site check-in — quick selfie"
+          subtitle="You're outside the usual geofence, so we need a quick selfie as proof of who's checking in. Next you'll add a short reason."
+          onCapture={captureOffsiteSelfie}
+          onClose={cancelOffSite}
+        />
+      )}
+
+      {/* Off-geofence STEP 2 — reason (only after the proof selfie). */}
       <OutOfGeofenceModal
-        open={!!offGeoPending}
-        onClose={() => setOffGeoPending(null)}
-        onConfirm={(reason) => performToggle(reason)}
+        open={!!offGeoPending && !showOffsiteSelfie}
+        onClose={cancelOffSite}
+        onConfirm={(reason) => {
+          const c = pendingCoords || {};
+          const photo = offSiteSelfie;
+          cancelOffSite();
+          submitToggle({ lat: c.lat ?? null, lng: c.lng ?? null, reason, checkInPhoto: photo });
+        }}
         distanceM={offGeoPending?.distance_m}
         nearestName={offGeoPending?.nearest_name}
         submitting={working}

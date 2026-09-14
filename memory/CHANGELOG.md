@@ -4699,3 +4699,29 @@ long as they check in that week (no carry-over for fully-absent weeks); REMOVED 
   triggers, never on weekly-off, monotonic once-per-week, not-synchronised across members,
   already-refreshed skip. E2E verified: missing→prompt, save→skipped for the week.
 - Only triggers on the self check-in screen; QR/muster-scan and escort check-ins are unaffected.
+
+### Jun 2026 — Geofence-aware auto check-in + off-site selfie/reason enforcement
+User request (option a): clickless check-in inside the geofence, combined with the weekly
+random selfie; and when a member is NOT within any geofence, ENFORCE a selfie + a reason.
+"I will be adding another geofence or maybe two more" — multi-site already supported.
+
+- `frontend/src/pages/SelfCheckIn.jsx` (check-in flow rewritten):
+  - Auto check-in: on page load, one attempt — if a confirmed in-geofence GPS fix and not
+    already checked in, either auto-open the weekly/missing selfie (if due) or start a 3-second
+    "checking you in… Cancel" countdown then submit. Off-site or no-fix → falls back to the
+    manual button (no silent off-site logging).
+  - Off-geofence check-in now ENFORCES a two-step flow: mandatory proof selfie (step 1) →
+    reason (step 2, existing OutOfGeofenceModal) → submit. The proof selfie is sent as
+    `check_in_photo` and does NOT overwrite the profile photo.
+  - In-geofence check-in still runs the weekly/missing profile-refresh selfie when due.
+  - Refactored `performToggle` → `getCoords` + `submitToggle` + `beginCheckin` +
+    `performCheckout`; check-out remains trusted (no selfie/reason).
+  - Multi-geofence: uses existing `resolveNearestSite(lat,lng,office,sites)` so any sites added
+    in admin Sites are honoured automatically.
+- `backend/server.py`: `GeoToggleIn.check_in_photo` added; `_geo_toggle` stores it on the
+  attendance row's `check_in_photo` ONLY for off-geofence check-ins (size-checked). On-site
+  check-ins never store it.
+- Verified: backend E2E (off-site → out_of_geofence=True + check_in_photo + geo_reason stored;
+  on-site → no proof photo); check-in page renders clean, no console errors. NOTE: the auto-
+  checkin countdown + off-site selfie UI couldn't be exercised headless (no GPS in the test
+  browser) — backend contract + render verified; recommend a quick real-device sanity check.

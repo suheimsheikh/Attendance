@@ -507,6 +507,11 @@ class GeoToggleIn(BaseModel):
     overtime_reason: Optional[str] = None
     early_out_reason: Optional[str] = None
     dar_text: Optional[str] = None
+    # Off-geofence proof selfie (Jun 2026). When a check-in resolves OUTSIDE
+    # every geofence, the app forces a fresh selfie + reason; this holds that
+    # selfie (data-URL). Stored on the attendance row as `check_in_photo`
+    # (NOT the profile photo) so an off-site pic never becomes the muster photo.
+    check_in_photo: Optional[str] = None
 
 
 class MarkMemberIn(BaseModel):
@@ -2566,7 +2571,8 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
                       reason: Optional[str], by: Optional[str],
                       overtime_reason: Optional[str] = None,
                       early_out_reason: Optional[str] = None,
-                      dar_text: Optional[str] = None) -> dict:
+                      dar_text: Optional[str] = None,
+                      check_in_photo: Optional[str] = None) -> dict:
     """GPS-based check in/out (no QR). Distance from the office is recorded but
     NOT enforced — a check-in always succeeds. If the caller could not obtain
     a GPS fix they pass (0, 0) and we mark the row as `geo_unavailable`."""
@@ -2578,6 +2584,8 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             detail=f"{target.get('full_name') or 'This member'} has exited — check-in blocked from {target.get('leaving_date')}.",
         )
     geo_unavailable = (lat == 0 and lng == 0)
+    if check_in_photo:
+        _check_photo_size(check_in_photo)
     if geo_unavailable:
         dist = None
         out = False
@@ -2718,7 +2726,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         "date": local_date_str(office, ts),
         "check_in_at": ts.isoformat(),
         "check_out_at": None,
-        "check_in_photo": None,
+        "check_in_photo": check_in_photo if (out and check_in_photo) else None,
         "check_out_photo": None,
         "hours": None,
         "latitude": stored_lat, "longitude": stored_lng,
@@ -2774,7 +2782,8 @@ async def geo_toggle(body: GeoToggleIn, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Office not configured")
     return await _geo_toggle(user, office, body.latitude, body.longitude,
                              body.reason, None, body.overtime_reason,
-                             body.early_out_reason, body.dar_text)
+                             body.early_out_reason, body.dar_text,
+                             body.check_in_photo)
 
 
 @api_router.post("/attendance/mark-member")
