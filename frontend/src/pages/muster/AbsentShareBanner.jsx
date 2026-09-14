@@ -24,9 +24,9 @@ export function buildAbsentMessage(r) {
   return lines.join("\n");
 }
 
-export const AbsentShareBanner = () => {
+export const AbsentShareBanner = ({ defaultExpanded = false }) => {
   const [report, setReport] = useState(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const templates = useNotifyTemplates();
 
   useEffect(() => {

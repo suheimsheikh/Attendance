@@ -57,7 +57,8 @@ const NAV_MEMBER = [
 const NAV_COACH_ATTENDANCE = [
   { to: "/muster", label: "Muster Roll", icon: ClipboardCheck, hint: "Roll-call: check members in/out in bulk with photos" },
   { to: "/presence", label: "Presence", icon: LayoutDashboard, hint: "Who is on campus right now" },
-  { to: "/admin/notify-log", label: "Parent Notify Log", icon: MessageSquare, hint: "Proof of contact — every WhatsApp parent notification sent from Muster, with who sent it and when" },
+  { to: "/parent-notifications", label: "Parent Notifications", icon: MessageSquare, hint: "Message parents/guardians on WhatsApp about today's absent & late athletes — one tap each, Telugu + English" },
+  { to: "/admin/notify-log", label: "Parent Notify Log", icon: MessageSquare, hint: "Proof of contact — every WhatsApp parent notification sent, with who sent it and when" },
 ];
 const NAV_COACH_KITCHEN = [
   { to: "/meals", label: "Meals Muster", icon: Utensils, hint: "Mark who is eating which meal today" },
@@ -73,6 +74,7 @@ const NAV_COACH_KITCHEN = [
 const NAV_ATTENDANCE_LIVE = [
   { to: "/muster", label: "Muster Roll", icon: ClipboardCheck, hint: "Roll-call: check members in/out in bulk with photos" },
   { to: "/presence", label: "Presence", icon: LayoutDashboard, hint: "Who is on campus right now" },
+  { to: "/parent-notifications", label: "Parent Notifications", icon: MessageSquare, hint: "Message parents/guardians on WhatsApp about today's absent & late athletes — one tap each, Telugu + English" },
   { to: "/admin/calendar", label: "Calendar", icon: CalendarDays, hint: "Holidays, weekly offs, camps and regattas at a glance", adminOnly: true },
   { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true, hint: "Single-glance summary: on campus, on leave, alerts", adminOnly: true },
   { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, badgeKey: "approvals_page", hint: "Pending leaves, corrections and check-in approvals in one queue", adminOnly: true },

@@ -10,9 +10,9 @@ import ParentNotifyList from "../../components/ParentNotifyList";
  * banner but pulls from /muster/late-report and uses the "late" template
  * (includes check-in time + minutes late). Athletes only.
  */
-export default function LateArrivalsBanner() {
+export default function LateArrivalsBanner({ defaultExpanded = false }) {
   const [report, setReport] = useState(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const templates = useNotifyTemplates();
 
   useEffect(() => {

@@ -4614,3 +4614,13 @@ Two read-only reviews (backend + frontend) of the busiest modules; fixed the con
 - Fix: stale-while-revalidate — charts stay on screen during background refreshes; full spinner only
   on first load; added a subtle "Updating…" pill. Verified via screenshot (charts persist across a
   month switch, no blanking). No fetch-loop found (1 request over 10s idle).
+
+## 14 Jun 2026 — Dedicated "Parent Notifications" menu page
+- New page /parent-notifications (pages/ParentNotifications.jsx) — a home for the one-tap WhatsApp
+  absent + late parent alerts (reuses AbsentShareBanner + LateArrivalsBanner, opened expanded via a
+  new defaultExpanded prop). Includes a "View log" link and a help card; admins get an "edit wording"
+  link to Office Settings.
+- Menu item "Parent Notifications" added to NAV_COACH_ATTENDANCE (coaches) and NAV_ATTENDANCE_LIVE
+  (admins). Route gated by RequireMuster (admin/coach/chef); escorts are blocked at the API so their
+  banners stay empty. No separate super-admin role exists — admin is the top role.
+- Verified via screenshot: page renders with the absent list expanded; menu item highlighted.
