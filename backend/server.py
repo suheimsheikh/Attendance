@@ -2055,33 +2055,71 @@ async def import_parents(
 # Source of truth in backend/config.py.
 from config import PHOTO_REFRESH_DAYS  # noqa: E402, F401
 
+# Weekly photo-refresh (Jun 2026, user request): once a week, on a RANDOM
+# working day, the self check-in prompts for a fresh selfie that replaces
+# the stored photo. No fixed pattern, never on the member's weekly-off,
+# and unsynchronised across members. This replaces the old yearly refresh.
+_WEEKDAY_NAMES = ["monday", "tuesday", "wednesday", "thursday",
+                  "friday", "saturday", "sunday"]
+
+
+def _iso_week_key(d) -> str:
+    """`YYYY-Www` ISO-week key for a date — the unit a weekly refresh is
+    scoped to (Mon–Sun)."""
+    y, w, _ = d.isocalendar()
+    return f"{y}-W{w:02d}"
+
+
+def _weekly_photo_due(user: dict, office: Optional[dict], local_date) -> bool:
+    """True when this member is due their weekly random photo refresh AND
+    today is on/after their randomly-assigned working day for the week.
+
+    Random day is a deterministic hash of (member_id, iso-week), so it's
+    stable within the week, differs per member (no sync) and per week (no
+    pattern). The assigned day is drawn only from the member's WORKING days
+    (weekly-off excluded), and we fire on the first check-in whose weekday
+    is on/after it — so the member's LAST working day always qualifies,
+    guaranteeing the refresh happens once that week as long as they check
+    in. Already-refreshed weeks (photo_refresh_week == this week) are skipped.
+    """
+    week_key = _iso_week_key(local_date)
+    if user.get("photo_refresh_week") == week_key:
+        return False
+    weekly_off = (user.get("weekly_off")
+                  or (office or {}).get("default_weekly_off")
+                  or "sunday").strip().lower()
+    working_indices = [i for i in range(7) if _WEEKDAY_NAMES[i] != weekly_off]
+    if not working_indices:
+        return False
+    today_weekday = local_date.weekday()  # Mon=0 … Sun=6
+    if today_weekday not in working_indices:
+        return False  # member's weekly-off — real check-ins won't land here
+    import hashlib
+    seed = int(hashlib.sha256(f"{user['id']}:{week_key}".encode()).hexdigest(), 16)
+    target_pos = seed % len(working_indices)
+    today_pos = working_indices.index(today_weekday)
+    return today_pos >= target_pos
+
 
 @api_router.get("/me/photo-status")
 async def my_photo_status(user: dict = Depends(get_current_user)):
     """Tells the SelfCheckIn page whether the member needs to (re)capture a
-    selfie before checking in. A photo is "needed" if missing OR older than
-    PHOTO_REFRESH_DAYS. Legacy timestamps that fail to parse are treated as
-    fresh (no forced re-capture of pre-existing photos)."""
+    selfie before checking in. A photo is "needed" if it's MISSING, or when
+    the member is due their weekly random refresh (see `_weekly_photo_due`)."""
     photo = user.get("photo")
-    captured_at = user.get("photo_captured_at")
-    days_since = None
+    office = await db.config.find_one({"id": "office"}, {"_id": 0})
+    local_date = local_now(office).date()
+    week_key = _iso_week_key(local_date)
+
     needs = not photo  # no photo at all → always need one
-    if photo and captured_at:
-        try:
-            dt = datetime.fromisoformat(captured_at)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            days_since = (now_utc() - dt).days
-            if days_since >= PHOTO_REFRESH_DAYS:
-                needs = True
-        except Exception:
-            pass
-    reason = "missing" if not photo else ("expired" if needs else "ok")
+    reason = "missing" if not photo else "ok"
+    if photo and _weekly_photo_due(user, office, local_date):
+        needs = True
+        reason = "weekly_refresh"
     return {
         "has_photo": bool(photo),
-        "captured_at": captured_at,
-        "days_since": days_since,
-        "refresh_after_days": PHOTO_REFRESH_DAYS,
+        "captured_at": user.get("photo_captured_at"),
+        "week_key": week_key,
         "needs_photo": needs,
         "reason": reason,
     }
@@ -2161,9 +2199,13 @@ async def set_my_photo(body: dict, user: dict = Depends(get_current_user)):
     photo = body.get("photo")
     _check_photo_size(photo)
     thumb = _make_thumbnail(photo) if photo else None
+    office = await db.config.find_one({"id": "office"}, {"_id": 0, "timezone": 1})
+    week_key = _iso_week_key(local_now(office).date())
     await db.users.update_one(
         {"id": user["id"]},
-        {"$set": {"photo": photo, "photo_thumb": thumb, "photo_captured_at": now_utc().isoformat()}},
+        {"$set": {"photo": photo, "photo_thumb": thumb,
+                  "photo_captured_at": now_utc().isoformat(),
+                  "photo_refresh_week": week_key}},
     )
     u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
@@ -2185,9 +2227,13 @@ async def set_member_photo(member_id: str, body: dict, user: dict = Depends(get_
     photo = body.get("photo")
     _check_photo_size(photo)
     thumb = _make_thumbnail(photo) if photo else None
+    office = await db.config.find_one({"id": "office"}, {"_id": 0, "timezone": 1})
+    week_key = _iso_week_key(local_now(office).date())
     await db.users.update_one(
         {"id": member_id},
-        {"$set": {"photo": photo, "photo_thumb": thumb, "photo_captured_at": now_utc().isoformat()}},
+        {"$set": {"photo": photo, "photo_thumb": thumb,
+                  "photo_captured_at": now_utc().isoformat(),
+                  "photo_refresh_week": week_key}},
     )
     u = await db.users.find_one({"id": member_id}, {"_id": 0})
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})

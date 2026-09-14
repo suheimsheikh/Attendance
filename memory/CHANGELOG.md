@@ -4671,3 +4671,31 @@ into the unified table), so approve-to-create-member + revoke/reinstate stay int
   non-embedded standalone page).
 - Verified via screenshot: chip present with count, embedded Devices renders with its
   sub-filters, sidebar item gone, no console errors.
+
+### Jun 2026 — Weekly random photo refresh on self check-in
+User request: "Once a week at random days the check-in should ask for a photo and replace the
+existing photo with the new one. No pattern, not on weekly-offs, but once a week for sure, and
+not all members on the same day."
+
+Decisions (ask_human): everyone who self-checks-in; self check-in screen only; guaranteed as
+long as they check in that week (no carry-over for fully-absent weeks); REMOVED the old yearly
+(365-day) refresh in favour of this.
+
+- `backend/server.py`:
+  - `_weekly_photo_due(user, office, local_date)` — deterministic per-(member, ISO-week) random
+    working day via `sha256(member_id:week)`. Fires on the first check-in whose weekday is on/
+    after the assigned day; the member's LAST working day always qualifies → once-a-week
+    guarantee. Weekly-off excluded (from `weekly_off` / office `default_weekly_off`), so no
+    prompt on offs; unsynchronised across members; new pattern each week.
+  - `/me/photo-status` now returns `needs_photo=True` + `reason="weekly_refresh"` when due
+    (still `reason="missing"` when no photo). Yearly `PHOTO_REFRESH_DAYS`/`days_since` logic
+    removed.
+  - `set_my_photo` + `set_member_photo` stamp `photo_refresh_week` (ISO week) so a capture this
+    week isn't re-prompted.
+- `frontend/src/pages/SelfCheckIn.jsx`: friendly weekly copy for the selfie hint + SelfieCapture
+  title/subtitle when `reason === "weekly_refresh"`. Existing capture→`POST /members/me/photo`
+  →replace flow reused unchanged.
+- Tests: `backend/tests/test_weekly_photo_refresh.py` (6 passing) — last-working-day always
+  triggers, never on weekly-off, monotonic once-per-week, not-synchronised across members,
+  already-refreshed skip. E2E verified: missing→prompt, save→skipped for the week.
+- Only triggers on the self check-in screen; QR/muster-scan and escort check-ins are unaffected.

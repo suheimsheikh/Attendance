@@ -481,9 +481,11 @@ export default function SelfCheckIn() {
           {photoNeeded && !status?.checked_in && (
             <p className="text-[11px] text-slate-500 mt-3 flex items-center justify-center gap-1.5" data-testid="selfie-hint">
               <Camera size={12} />
-              {photoStatus?.reason === "expired"
-                ? "Your photo is over a year old — we'll grab a fresh selfie first."
-                : "We'll grab a quick selfie first — one tap and you're done."}
+              {photoStatus?.reason === "weekly_refresh"
+                ? "Quick weekly photo check — smile! We'll refresh your picture, then check you in."
+                : photoStatus?.reason === "expired"
+                  ? "Your photo is over a year old — we'll grab a fresh selfie first."
+                  : "We'll grab a quick selfie first — one tap and you're done."}
             </p>
           )}
 
@@ -600,10 +602,14 @@ export default function SelfCheckIn() {
 
       {showSelfie && (
         <SelfieCapture
-          title={photoStatus?.reason === "expired" ? "Time for a fresh photo" : "One quick selfie"}
-          subtitle={photoStatus?.reason === "expired"
-            ? "Your photo's over a year old — let's update it so your coach can still recognise you on the muster."
-            : "So your coach can recognise you on the muster list. You only do this once."}
+          title={photoStatus?.reason === "weekly_refresh"
+            ? "Weekly photo check 📸"
+            : (photoStatus?.reason === "expired" ? "Time for a fresh photo" : "One quick selfie")}
+          subtitle={photoStatus?.reason === "weekly_refresh"
+            ? "Once a week we refresh your photo so your coach always has a current picture on the muster. Smile — then you're checked in."
+            : (photoStatus?.reason === "expired"
+              ? "Your photo's over a year old — let's update it so your coach can still recognise you on the muster."
+              : "So your coach can recognise you on the muster list. You only do this once.")}
           onCapture={saveSelfie}
           onClose={() => setShowSelfie(false)}
         />
