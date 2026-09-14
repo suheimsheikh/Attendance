@@ -497,23 +497,44 @@ export default function SelfCheckIn() {
       {!onTempOut && (
         <div className="iu-card p-8 text-center" data-testid="self-checkin-card">
           <Greeting user={user} checkedIn={!!status?.checked_in} />
+          {/* Big, loud checked-in confirmation (user request Jun 2026). */}
+          {status?.checked_in && (
+            <div
+              className="mb-5 mx-auto max-w-sm rounded-2xl border-2 border-emerald-200 bg-emerald-50 px-5 py-4"
+              data-testid="checked-in-hero"
+              role="status"
+            >
+              <div className="flex items-center justify-center gap-2 text-emerald-700">
+                <CheckCircle2 size={30} strokeWidth={2.5} />
+                <span className="text-2xl md:text-3xl font-extrabold tracking-tight">You&apos;re checked in</span>
+              </div>
+              {status?.session?.check_in_at && (
+                <p className="text-sm text-emerald-800/80 mt-1 font-medium">
+                  Since {new Date(status.session.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}
+                  {siteLine ? ` · ${siteLine}` : ""}
+                </p>
+              )}
+            </div>
+          )}
+          {/* Big "Checking you in…" during the auto countdown. */}
           {autoCountdown != null && !status?.checked_in && (
             <div
-              className="mb-4 mx-auto max-w-sm rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 flex items-center justify-between gap-3"
+              className="mb-5 mx-auto max-w-sm rounded-2xl border-2 border-sky-200 bg-sky-50 px-5 py-5"
               data-testid="auto-checkin-banner"
               role="status"
             >
-              <div className="flex items-center gap-2 text-left">
-                <Loader2 size={16} className="animate-spin text-sky-600 shrink-0" />
-                <span className="text-sm font-semibold text-sky-900">
-                  You&apos;re on-site — checking you in in {autoCountdown}s…
-                </span>
+              <div className="flex items-center justify-center gap-2 text-sky-700">
+                <Loader2 size={26} className="animate-spin" />
+                <span className="text-2xl md:text-3xl font-extrabold tracking-tight">Checking you in…</span>
               </div>
+              <p className="text-sm text-sky-800/80 mt-1 font-medium">
+                You&apos;re on-site · <span className="tabular-nums font-bold">{autoCountdown}s</span>
+              </p>
               <button
                 type="button"
                 onClick={cancelAuto}
                 data-testid="auto-checkin-cancel"
-                className="text-xs font-bold text-sky-700 hover:text-sky-900 underline underline-offset-2 shrink-0"
+                className="mt-3 inline-flex items-center justify-center h-9 px-4 rounded-full bg-white border border-sky-300 text-sky-800 text-sm font-bold hover:bg-sky-100 transition"
               >
                 Cancel
               </button>

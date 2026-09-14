@@ -4725,3 +4725,14 @@ random selfie; and when a member is NOT within any geofence, ENFORCE a selfie + 
   on-site → no proof photo); check-in page renders clean, no console errors. NOTE: the auto-
   checkin countdown + off-site selfie UI couldn't be exercised headless (no GPS in the test
   browser) — backend contract + render verified; recommend a quick real-device sanity check.
+
+### Jun 2026 — Loud check-in state on SelfCheckIn
+User request: "show a big 'You are checked in' message and a 'checking you in' during the countdown".
+- `frontend/src/pages/SelfCheckIn.jsx`: replaced the small auto-countdown banner with two big
+  hero blocks inside the check-in card:
+  - `data-testid="checked-in-hero"` — large emerald "You're checked in" + since-time/site,
+    shown whenever the member has an open session.
+  - `data-testid="auto-checkin-banner"` — large sky "Checking you in…" with the live countdown
+    seconds + a Cancel button, shown during the auto check-in window.
+- Verified: "You're checked in" hero rendered via a simulated open session (screenshot),
+  cleaned up after. The countdown hero shares the same pattern (only fires with a live GPS fix).
