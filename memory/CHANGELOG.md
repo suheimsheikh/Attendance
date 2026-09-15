@@ -4768,3 +4768,9 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 ## 2026-09-15 — Vahini Nagar geofence + Maps-link paste
 - Added "Vahini Nagar" site (17.465895, 78.495148, 100 m) to preview DB via `POST /api/sites`. User to add on production via Admin → Sites.
 - Sites form: new "Google Maps link or lat,lng" field auto-fills Latitude/Longitude from a pasted share link (`data-testid="site-maps-link"`).
+
+## 2026-09-15 — Stock Take: first-count opening balances + print sheet upgrade
+- `GET /meals/stock-take` rows now carry `needs_rate` (true when item has no purchase/opening cost history).
+- `POST /meals/stock-take` accepts optional `rate` per line; when `needs_rate`, the count is written as the item's opening balance (`opening_stock`, `opening_stock_as_of`=count date, `opening_rate`) instead of an un-valued adjustment. Response adds `opening_set`.
+- UI: Rate ₹/unit column (input only on no-history rows, amber hint banner), toast reports opening balances set.
+- Print sheet: Rate column (blank where needed), 2 write-in rows per category, instructions line.

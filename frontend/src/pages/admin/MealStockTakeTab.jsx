@@ -24,6 +24,7 @@ export default function MealStockTakeTab({ liveSig }) {
   const [rows, setRows] = useState([]);
   const [cats, setCats] = useState([]);
   const [physical, setPhysical] = useState({});   // item_id -> string
+  const [rates, setRates] = useState({});         // item_id -> string (₹/unit, first-count only)
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -40,6 +41,7 @@ export default function MealStockTakeTab({ liveSig }) {
         const pre = {};
         (r.rows || []).forEach((x) => { if (x.physical_qty != null) pre[x.item_id] = String(x.physical_qty); });
         setPhysical(pre);
+        setRates({});
         dirty.current = false;
       })
       .catch((e) => showApiError(e, "Couldn't load stock-take sheet"))
@@ -78,17 +80,25 @@ export default function MealStockTakeTab({ liveSig }) {
   }, [rows, physical]);
 
   const setPhys = (id, val) => { dirty.current = true; setPhysical((p) => ({ ...p, [id]: val })); };
+  const setRate = (id, val) => { dirty.current = true; setRates((p) => ({ ...p, [id]: val })); };
+  const needsRateCount = useMemo(() => rows.filter((r) => r.needs_rate).length, [rows]);
   const toggle = (k) => setCollapsed((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
   const save = async () => {
     const lines = rows
       .filter((r) => { const v = physical[r.item_id]; return v !== undefined && v !== ""; })
-      .map((r) => ({ item_id: r.item_id, physical_qty: num(physical[r.item_id]) }));
+      .map((r) => {
+        const line = { item_id: r.item_id, physical_qty: num(physical[r.item_id]) };
+        const rt = rates[r.item_id];
+        if (r.needs_rate && rt !== undefined && rt !== "" && num(rt) > 0) line.rate = num(rt);
+        return line;
+      });
     if (lines.length === 0) { toast.info("Enter at least one physical count first."); return; }
     setSaving(true);
     try {
       const res = await api.post("/meals/stock-take", { date: dateStr, lines });
-      toast.success(`Stock-take saved · ${res.counted} counted · ${res.losses} loss${res.losses === 1 ? "" : "es"} · ${res.extras} extra${res.extras === 1 ? "" : "s"}`);
+      const opening = res.opening_set ? ` · ${res.opening_set} opening balance${res.opening_set === 1 ? "" : "s"} set` : "";
+      toast.success(`Stock-take saved · ${res.counted} counted · ${res.losses} loss${res.losses === 1 ? "" : "es"} · ${res.extras} extra${res.extras === 1 ? "" : "s"}${opening}`);
       dirty.current = false;
       load();
     } catch (e) {
@@ -153,6 +163,11 @@ export default function MealStockTakeTab({ liveSig }) {
         <ClipboardCheck size={14} className="text-violet-500 shrink-0 mt-0.5" />
         Counts are taken at the <b className="mx-1">start</b> of the chosen day. Any difference vs the system on-hand is posted as a stock-take loss/extra so the ledgers reconcile — untouched items are left as-is.
       </p>
+      {needsRateCount > 0 && (
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3" data-testid="stocktake-opening-hint">
+          <b>{needsRateCount} item{needsRateCount === 1 ? " has" : "s have"} no cost history yet.</b> Enter a ₹/unit rate alongside the count and it becomes the item's <b>opening balance</b> as of this date (so stock value is right from day one). Leave the rate blank to record just the quantity.
+        </p>
+      )}
 
       {loading ? (
         <div className="text-center py-12"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
@@ -178,6 +193,7 @@ export default function MealStockTakeTab({ liveSig }) {
                           <th className="text-left p-2.5 w-16">Unit</th>
                           <th className="text-right p-2.5 w-32">System on-hand</th>
                           <th className="text-right p-2.5 w-36">Physical count</th>
+                          <th className="text-right p-2.5 w-32">Rate ₹/unit</th>
                           <th className="text-right p-2.5 w-36">Variance</th>
                         </tr>
                       </thead>
@@ -200,6 +216,18 @@ export default function MealStockTakeTab({ liveSig }) {
                                        title={`Enter the physical quantity of ${r.name} you counted (system shows ${fmtQty(r.system_qty, r.unit)} ${r.unit || ""})`}
                                        className="iu-input !h-8 !px-2 text-sm w-28 text-right tabular-nums"
                                        data-testid={`stocktake-physical-${r.item_id}`} />
+                              </td>
+                              <td className="p-2.5 text-right">
+                                {r.needs_rate ? (
+                                  <input type="number" min="0" step="0.01" value={rates[r.item_id] ?? ""}
+                                         onChange={(e) => setRate(r.item_id, e.target.value)}
+                                         placeholder="₹/unit"
+                                         title={`No purchase history for ${r.name} yet — enter its ₹ per ${r.unit || "unit"} to set a valued opening balance`}
+                                         className="iu-input !h-8 !px-2 text-sm w-24 text-right tabular-nums border-amber-300"
+                                         data-testid={`stocktake-rate-${r.item_id}`} />
+                                ) : (
+                                  <span className="text-xs text-slate-400 tabular-nums" data-testid={`stocktake-avgrate-${r.item_id}`}>₹{num(r.avg_rate).toFixed(2)}</span>
+                                )}
                               </td>
                               <td className={`p-2.5 text-right tabular-nums font-bold ${loss ? "text-rose-700" : extra ? "text-emerald-700" : "text-slate-300"}`} data-testid={`stocktake-variance-${r.item_id}`}>
                                 {variance == null ? "—" : Math.abs(variance) < 1e-9 ? (
@@ -232,6 +260,7 @@ export default function MealStockTakeTab({ liveSig }) {
           <div className="border-b-2 border-slate-800 pb-3 mb-4">
             <h1 className="text-2xl font-extrabold text-slate-900">Stock-take Count Sheet</h1>
             <p className="text-sm text-slate-600 mt-1">Count date: {formatDate(dateStr)} · Printed {new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata" })}</p>
+            <p className="text-xs text-slate-500 mt-1">Fill <b>Physical count</b> for every item. Where the Rate column is blank the item has no cost history yet — write its ₹ per unit so the opening value is captured. Use the write-in rows for items not on the list (add them to Stock Master afterwards).</p>
           </div>
           {grouped.map(([ck, list]) => (
             <section key={ck} className="mb-4 break-inside-avoid">
@@ -244,6 +273,7 @@ export default function MealStockTakeTab({ liveSig }) {
                     <th className="text-left p-1 w-16">Unit</th>
                     <th className="text-right p-1 w-24">System</th>
                     <th className="text-right p-1 w-32">Physical count</th>
+                    <th className="text-right p-1 w-28">Rate ₹/unit</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -254,6 +284,17 @@ export default function MealStockTakeTab({ liveSig }) {
                       <td className="p-1 text-slate-600">{r.unit}</td>
                       <td className="p-1 text-right tabular-nums text-slate-700">{fmtQty(r.system_qty, r.unit)}</td>
                       <td className="p-1 text-right">______________</td>
+                      <td className="p-1 text-right tabular-nums text-slate-700">{r.needs_rate ? "__________" : `₹${num(r.avg_rate).toFixed(2)}`}</td>
+                    </tr>
+                  ))}
+                  {[0, 1].map((i) => (
+                    <tr key={`blank-${i}`} className="border-b border-dashed border-slate-300 text-slate-400">
+                      <td className="p-1 tabular-nums">{list.length + i + 1}</td>
+                      <td className="p-1 italic text-xs">write-in: ____________________________</td>
+                      <td className="p-1">______</td>
+                      <td className="p-1 text-right">—</td>
+                      <td className="p-1 text-right">______________</td>
+                      <td className="p-1 text-right">__________</td>
                     </tr>
                   ))}
                 </tbody>

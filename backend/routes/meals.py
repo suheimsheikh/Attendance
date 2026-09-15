@@ -3118,6 +3118,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "unit": r["unit"],
                 "system_qty": r["on_hand"],
                 "avg_rate": r.get("avg_rate", 0),
+                "needs_rate": not (r.get("avg_rate") or 0) > 0,
                 "physical_qty": (rec or {}).get("physical"),
                 "variance": (rec or {}).get("qty"),
                 "recorded": rec is not None,
@@ -3139,7 +3140,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         now_iso = now_utc().isoformat()
         by_id = user.get("id")
         by_name = user.get("full_name") or user.get("email") or "Chef"
-        counted = losses = extras = unchanged = 0
+        counted = losses = extras = unchanged = opening_set = 0
         result_lines = []
         for ln in body.lines:
             iid = str(ln.get("item_id") or "")
@@ -3156,10 +3157,30 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 continue
             counted += 1
             system = sysmap[iid]
-            variance = round(physical - system, 4)
             # Replace any prior line for this item on this date first.
             await db.meal_adjustments.update_one(
                 {"date": d}, {"$pull": {"lines": {"item_id": iid}}}, upsert=True)
+            # First-count path: an item with no cost history yet can take a
+            # ₹/unit rate — the count then becomes its opening balance as of
+            # this date (valued), rather than an un-valued adjustment.
+            rate_raw = ln.get("rate")
+            try:
+                rate = float(rate_raw) if rate_raw not in (None, "") else 0.0
+            except (TypeError, ValueError):
+                rate = 0.0
+            if rate > 0 and not (namemap.get(iid, {}).get("avg_rate") or 0) > 0:
+                await db.meal_items.update_one({"id": iid}, {"$set": {
+                    "opening_stock": round(physical, 4),
+                    "opening_stock_as_of": d,
+                    "opening_rate": round(rate, 4),
+                    "updated_at": now_iso,
+                }})
+                opening_set += 1
+                result_lines.append({"item_id": iid, "kind": "opening", "physical": round(physical, 4),
+                                     "rate": round(rate, 4), "name": namemap.get(iid, {}).get("name"),
+                                     "unit": namemap.get(iid, {}).get("unit")})
+                continue
+            variance = round(physical - system, 4)
             if abs(variance) < 1e-9:
                 unchanged += 1
                 continue
@@ -3192,7 +3213,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             await db.meal_adjustments.delete_one({"date": d})
         await _signal_meals("adjustments", d)
         return {"date": d, "counted": counted, "losses": losses,
-                "extras": extras, "unchanged": unchanged, "lines": result_lines}
+                "extras": extras, "unchanged": unchanged, "opening_set": opening_set, "lines": result_lines}
 
     @router.get("/meals/stock-take/report")
     async def stock_take_report(
