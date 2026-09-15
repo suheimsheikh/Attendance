@@ -124,8 +124,19 @@ function SiteForm({ initial, onClose, onSaved }) {
   const [notes, setNotes] = useState(initial?.notes || "");
   const [saving, setSaving] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [mapsLink, setMapsLink] = useState("");
   const { error, setMessage, clear } = useFormError();
   useEscape(onClose);
+
+  const applyMapsLink = (v) => {
+    setMapsLink(v);
+    const m = v.match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+    if (m) {
+      setLat(m[1]);
+      setLng(m[2]);
+      toast.success("Coordinates filled from link");
+    }
+  };
 
   const useMyLocation = () => {
     if (!navigator.geolocation) {
@@ -198,6 +209,18 @@ function SiteForm({ initial, onClose, onSaved }) {
               placeholder="Rowing Academy"
               className="iu-input mt-1"
             />
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-medium text-slate-600">Google Maps link or "lat, lng" (optional)</span>
+            <input
+              data-testid="site-maps-link"
+              value={mapsLink}
+              onChange={(e) => applyMapsLink(e.target.value)}
+              placeholder="https://maps.google.com/?q=17.465895,78.495148"
+              className="iu-input mt-1 text-xs"
+            />
+            <span className="text-[11px] text-slate-400">Paste a Maps share link and the coordinates below fill in automatically.</span>
           </label>
 
           <div className="grid grid-cols-2 gap-2">

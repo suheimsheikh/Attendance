@@ -4764,3 +4764,7 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
   phone-in-pocket exit detection still needs a native app.
 - BEHAVIOUR CHANGE: on next restart/midnight, any currently-open stale sessions are closed with
   0 credited hours + needs-correction (previously inflated to end-of-day) — intended.
+
+## 2026-09-15 — Vahini Nagar geofence + Maps-link paste
+- Added "Vahini Nagar" site (17.465895, 78.495148, 100 m) to preview DB via `POST /api/sites`. User to add on production via Admin → Sites.
+- Sites form: new "Google Maps link or lat,lng" field auto-fills Latitude/Longitude from a pasted share link (`data-testid="site-maps-link"`).

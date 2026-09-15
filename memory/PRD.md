@@ -147,6 +147,12 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
   - **Checklists** (`ChecklistsTab.jsx`): pencil button (`checklist-edit-<id>`) repurposes the top form into edit mode (banner `checklist-editing-banner`, Save + Cancel), editing title / recurrence / days-of-week / day-of-month; preserves the item's active/paused state. Editable by owner or admin (form now shows for admin editing another member's item).
 - Verified: backend curl (todo title/due/notes; checklist title/recurrence/dows) + testing_agent iter60 100% (edit save, cancel discard, recurrence switch, add/toggle/pause/delete regressions).
 
+### 15 Sep 2026 — Vahini Nagar geofence + Maps-link paste (this session)
+- Site "Vahini Nagar" (17.465895, 78.495148, 100 m) added in preview via API; **user must add it in production via Admin → Sites**.
+- Sites form gained a "Google Maps link or lat,lng" field that auto-fills coordinates — the "provision to add more locations" the user asked for.
+- Pending from earlier: Super-Admin gate on bulk attendance deletions / wipe tool (P0).
+
+
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked
