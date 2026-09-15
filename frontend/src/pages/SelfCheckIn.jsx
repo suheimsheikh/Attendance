@@ -262,6 +262,17 @@ export default function SelfCheckIn() {
       setEarlyOutReason("");
       refresh();
     } catch (err) {
+      const m = /OFFSITE_PROOF_REQUIRED:(\d+)/.exec(err?.message || "");
+      if (m && !checkInPhoto) {
+        // Server resolved us off-site (client fence list was stale) — run the
+        // proof selfie → reason flow and resubmit with both attached.
+        setPendingCoords({ lat, lng });
+        setOffGeoPending({ lat, lng, distance_m: Number(m[1]), nearest_name: office?.name || "the office" });
+        setOffSiteSelfie(null);
+        setShowOffsiteSelfie(true);
+        toast.info("You're outside the site — please take a quick selfie and give a reason.");
+        return;
+      }
       toast.error(err?.message || "Failed");
     } finally {
       setWorking(false);

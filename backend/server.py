@@ -2737,9 +2737,11 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
                 "dar": {k: dar_saved[k] for k in ("id", "date", "text")} if dar_saved else None,
                 "overtime_minutes": ot_updates.get("overtime_total_min", 0)}
     if out:
-        # Geofence is informational only — distance is recorded on the
-        # attendance row but does not block the check-in.
-        pass
+        # Geofence never blocks a check-in, but a SELF check-in from outside
+        # every fence must carry the proof selfie + reason the UI collects.
+        # Proxy paths (admin/muster, by=<admin id>) are exempt.
+        if by is None and not (check_in_photo and (reason or "").strip()):
+            raise HTTPException(status_code=400, detail=f"OFFSITE_PROOF_REQUIRED:{int(dist)}")
     late, late_minutes = compute_late(office, target, ts, camp=await _active_camp_for(target, ts, office))
     early_min, work_start_hm = compute_overtime_in(office, target, ts)
     doc = {
@@ -3979,7 +3981,8 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
         cout = datetime.fromisoformat(s["check_out_at"]) if s.get("check_out_at") else None
         end_ref = cout or now
         away_s = _excursion_seconds(excursions, up_to=end_ref if not cout else None)
-        hours = round(max(0.0, (end_ref - cin).total_seconds()) / 3600.0, 2)
+        missing = bool(s.get("missing_checkout"))
+        hours = 0.0 if missing else round(max(0.0, (end_ref - cin).total_seconds()) / 3600.0, 2)
 
         rows.append({
             "session_id": s["id"],
@@ -4003,6 +4006,8 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
             "away_minutes": int(away_s / 60),
             "hours": hours,
             "stored_hours": s.get("hours"),
+            "missing_checkout": missing,
+            "needs_correction": bool(s.get("needs_correction")),
             "auto_checkout": bool(s.get("auto_checkout")),
             "auto_checkout_reason": s.get("auto_checkout_reason"),
             "reminder_sent_at": s.get("reminder_sent_at"),

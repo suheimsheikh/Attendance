@@ -4774,3 +4774,12 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - `POST /meals/stock-take` accepts optional `rate` per line; when `needs_rate`, the count is written as the item's opening balance (`opening_stock`, `opening_stock_as_of`=count date, `opening_rate`) instead of an un-valued adjustment. Response adds `opening_set`.
 - UI: Rate ₹/unit column (input only on no-history rows, amber hint banner), toast reports opening balances set.
 - Print sheet: Rate column (blank where needed), 2 write-in rows per category, instructions line.
+
+## 2026-09-15 — Code review fixes
+- meals.py `_stock_snapshot`: opening balance now only counts from `opening_stock_as_of` (back-dated stock/valuation reports no longer show stock that wasn't counted yet).
+- meals.py `stock_take_save`: rejects non-finite (`inf`/`nan`) physical qty and rate.
+- services/geo.py `resolve_site`: on-site if inside ANY active fence (prefers closest containing fence); previously only tested the nearest centre. Tests: tests/test_geo_multi_fence.py.
+- server.py `_geo_toggle`: SELF check-in resolved off-site now requires proof selfie + reason server-side (`400 OFFSITE_PROOF_REQUIRED:<m>`); proxy/admin paths exempt. SelfCheckIn.jsx catches it and launches the selfie→reason flow.
+- server.py `/admin/sessions`: hours=0 + `missing_checkout`/`needs_correction` flags for forgotten-checkout rows.
+- sites.py: lat/lng range validation (422).
+- MealStockTakeTab: rated first-count rows show "opening balance" instead of a loss/extra; summary counts openings.

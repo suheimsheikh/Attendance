@@ -26,8 +26,8 @@ from services.time_utils import now_utc
 
 class SiteIn(BaseModel):
     name: str = Field(min_length=1)
-    latitude: float
-    longitude: float
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
     radius_m: int = Field(default=150, gt=0, lt=5000)
     active: bool = True
     notes: Optional[str] = None

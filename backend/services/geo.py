@@ -63,10 +63,10 @@ def resolve_site(office: dict, lat: float, lng: float,
         # check-in being flagged off-site during initial setup.
         return None, None, 0.0, False
 
-    best = min(
-        candidates,
-        key=lambda c: haversine_m(lat, lng, c["lat"], c["lng"]),
-    )
-    dist = round(haversine_m(lat, lng, best["lat"], best["lng"]), 1)
-    out = dist > best["radius_m"]
-    return best["site_id"], best["site_name"], dist, out
+    for c in candidates:
+        c["dist"] = haversine_m(lat, lng, c["lat"], c["lng"])
+    # Prefer the closest fence the member is actually INSIDE; only when no
+    # fence contains them fall back to the nearest centre for the hint.
+    inside = [c for c in candidates if c["dist"] <= c["radius_m"]]
+    best = min(inside or candidates, key=lambda c: c["dist"])
+    return best["site_id"], best["site_name"], round(best["dist"], 1), not inside

@@ -147,6 +147,9 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
   - **Checklists** (`ChecklistsTab.jsx`): pencil button (`checklist-edit-<id>`) repurposes the top form into edit mode (banner `checklist-editing-banner`, Save + Cancel), editing title / recurrence / days-of-week / day-of-month; preserves the item's active/paused state. Editable by owner or admin (form now shows for admin editing another member's item).
 - Verified: backend curl (todo title/due/notes; checklist title/recurrence/dows) + testing_agent iter60 100% (edit save, cancel discard, recurrence switch, add/toggle/pause/delete regressions).
 
+### 15 Sep 2026 — Code review fixes (this session)
+- Back-dated stock valuation gate, inside-any-fence geo resolution, server-side off-site proof enforcement for self check-ins, /admin/sessions missing_checkout hours, non-finite input guards. See CHANGELOG.
+
 ### 15 Sep 2026 — Stock Take first-count opening balances (this session)
 - Stock Take rows with no cost history show a Rate ₹/unit input; saving with a rate sets the item's opening balance (qty+rate as-of count date) so stock value is right from day one. Print sheet gained Rate column + write-in rows.
 

@@ -2626,7 +2626,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         rows = []
         for it in items:
             iid = it["id"]
-            opening = float(it.get("opening_stock") or 0)
+            # Opening balance only exists from its as-of date — a back-dated
+            # snapshot must not show stock that hadn't been counted yet.
+            opening = float(it.get("opening_stock") or 0) \
+                if as_of_iso >= item_opening_as_of.get(iid, "1970-01-01") else 0.0
             p = round(purch_from.get(iid, 0.0), 4)
             iq = round(iss_from.get(iid, 0.0), 4)
             w = round(wast_from.get(iid, 0.0), 4)
@@ -3153,7 +3156,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 physical = float(phys_raw)
             except (TypeError, ValueError):
                 continue
-            if physical < 0:
+            if physical < 0 or not math.isfinite(physical):
                 continue
             counted += 1
             system = sysmap[iid]
@@ -3167,6 +3170,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             try:
                 rate = float(rate_raw) if rate_raw not in (None, "") else 0.0
             except (TypeError, ValueError):
+                rate = 0.0
+            if not math.isfinite(rate):
                 rate = 0.0
             if rate > 0 and not (namemap.get(iid, {}).get("avg_rate") or 0) > 0:
                 await db.meal_items.update_one({"id": iid}, {"$set": {

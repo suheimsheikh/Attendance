@@ -66,18 +66,21 @@ export default function MealStockTakeTab({ liveSig }) {
     return [...m.entries()];
   }, [rows, search]);
 
+  const isOpening = (r) => r.needs_rate && rates[r.item_id] !== undefined && rates[r.item_id] !== "" && num(rates[r.item_id]) > 0;
+
   const summary = useMemo(() => {
-    let counted = 0, losses = 0, extras = 0;
+    let counted = 0, losses = 0, extras = 0, openings = 0;
     rows.forEach((r) => {
       const v = physical[r.item_id];
       if (v === undefined || v === "") return;
       counted += 1;
+      if (r.needs_rate && num(rates[r.item_id]) > 0) { openings += 1; return; }
       const variance = num(v) - num(r.system_qty);
       if (Math.abs(variance) < 1e-9) return;
       if (variance > 0) extras += 1; else losses += 1;
     });
-    return { counted, losses, extras };
-  }, [rows, physical]);
+    return { counted, losses, extras, openings };
+  }, [rows, physical, rates]);
 
   const setPhys = (id, val) => { dirty.current = true; setPhysical((p) => ({ ...p, [id]: val })); };
   const setRate = (id, val) => { dirty.current = true; setRates((p) => ({ ...p, [id]: val })); };
@@ -146,7 +149,7 @@ export default function MealStockTakeTab({ liveSig }) {
         </div>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-slate-500" data-testid="stocktake-summary">
-            <b>{summary.counted}</b> counted · <span className="text-rose-600 font-semibold">{summary.losses} loss</span> · <span className="text-emerald-600 font-semibold">{summary.extras} extra</span>
+            <b>{summary.counted}</b> counted · <span className="text-rose-600 font-semibold">{summary.losses} loss</span> · <span className="text-emerald-600 font-semibold">{summary.extras} extra</span>{summary.openings > 0 && <> · <span className="text-amber-700 font-semibold">{summary.openings} opening</span></>}
           </span>
           <button onClick={handlePrint} data-testid="stocktake-print"
                   className="iu-btn-secondary !h-9 !px-3 text-sm" title="Print a blank count sheet to tick on paper first">
@@ -201,7 +204,8 @@ export default function MealStockTakeTab({ liveSig }) {
                         {list.map((r) => {
                           const v = physical[r.item_id];
                           const has = v !== undefined && v !== "";
-                          const variance = has ? num(v) - num(r.system_qty) : null;
+                          const opening = has && isOpening(r);
+                          const variance = has && !opening ? num(v) - num(r.system_qty) : null;
                           const loss = variance != null && variance < -1e-9;
                           const extra = variance != null && variance > 1e-9;
                           return (
@@ -230,7 +234,9 @@ export default function MealStockTakeTab({ liveSig }) {
                                 )}
                               </td>
                               <td className={`p-2.5 text-right tabular-nums font-bold ${loss ? "text-rose-700" : extra ? "text-emerald-700" : "text-slate-300"}`} data-testid={`stocktake-variance-${r.item_id}`}>
-                                {variance == null ? "—" : Math.abs(variance) < 1e-9 ? (
+                                {opening ? (
+                                  <span className="text-amber-700 font-semibold text-xs">opening balance</span>
+                                ) : variance == null ? "—" : Math.abs(variance) < 1e-9 ? (
                                   <span className="text-slate-400 font-medium">no change</span>
                                 ) : (
                                   <span className="inline-flex items-center gap-1 justify-end">
