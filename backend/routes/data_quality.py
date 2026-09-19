@@ -26,6 +26,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends
 
+from services.attendance_bulk import run_or_queue
 from services.time_utils import local_date_str
 
 
@@ -789,11 +790,7 @@ def make_router(db, require_admin) -> APIRouter:
 
     @router.post("/admin/data-quality/fix/session.zero_duration")
     async def fix_zero(admin: dict = Depends(require_admin)):
-        r = await db.attendance.delete_many(
-            {"$expr": {"$eq": ["$check_in_at", "$check_out_at"]},
-             "check_out_at": {"$ne": None}}
-        )
-        return {"fixed": r.deleted_count}
+        return await run_or_queue(db, admin, "session.zero_duration", "Data-quality fix: zero-duration sessions")
 
     @router.post("/admin/data-quality/fix/session.too_long_16h")
     async def fix_long(admin: dict = Depends(require_admin)):
@@ -829,21 +826,7 @@ def make_router(db, require_admin) -> APIRouter:
 
     @router.post("/admin/data-quality/fix/session.duplicate_open")
     async def fix_dupe_open(admin: dict = Depends(require_admin)):
-        groups = await db.attendance.aggregate([
-            {"$match": {"check_out_at": None}},
-            {"$group": {"_id": "$user_id",
-                        "sessions": {"$push": {"id": "$id",
-                                               "check_in_at": "$check_in_at"}},
-                        "n": {"$sum": 1}}},
-            {"$match": {"n": {"$gt": 1}}},
-        ]).to_list(2000)
-        fixed = 0
-        for g in groups:
-            sessions = sorted(g["sessions"], key=lambda s: s.get("check_in_at") or "")
-            for s in sessions[1:]:
-                r = await db.attendance.delete_one({"id": s["id"]})
-                fixed += r.deleted_count
-        return {"fixed": fixed}
+        return await run_or_queue(db, admin, "session.duplicate_open", "Data-quality fix: duplicate open sessions")
 
     @router.post("/admin/data-quality/fix/session.open_over_36h")
     async def fix_dangling(admin: dict = Depends(require_admin)):

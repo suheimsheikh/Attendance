@@ -18,7 +18,7 @@ import { Loader2, RefreshCw, Check, X, Plane, LogIn, PencilRuler, Plus, Coffee, 
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
 import { useAuth } from "../../auth";
-import { formatDate, formatTime, dayOfWeek, shortDate } from "../../utils";
+import { formatDate, formatTime, shortDate } from "../../utils";
 import { ApplyForm } from "../MyLeaves";
 import { BreakForm } from "./Calendar";
 import Devices from "./Devices";
@@ -61,6 +61,21 @@ function daysBetween(start, end) {
 
 // --- Per-type normalisers ---------------------------------------------------
 
+// "Waiting Nd" chip — how long a request has sat in the queue. Amber
+// from 3 days, red from 7 so stale leave applications stand out.
+function ElapsedChip({ since, testid }) {
+  if (!since) return null;
+  const days = Math.floor((Date.now() - new Date(since).getTime()) / 86400000);
+  if (!Number.isFinite(days) || days < 0) return null;
+  const tone = days >= 7 ? "bg-rose-100 text-rose-700" : days >= 3 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600";
+  const label = days === 0 ? "today" : `${days}d ago`;
+  return (
+    <span className={`ml-1.5 inline-block px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tone}`} title={`Applied ${days} day${days === 1 ? "" : "s"} ago`} data-testid={testid}>
+      {label}
+    </span>
+  );
+}
+
 function normLeave(row) {
   const days = daysBetween(row.start_date, row.end_date);
   return {
@@ -70,7 +85,7 @@ function normLeave(row) {
     submitted_at: row.created_at || row.applied_at || row.start_date,
     // Include the weekday so weekend (Sat/Sun) leave requests jump out
     // at the approver — user request, Jun 2026.
-    when: `${dayOfWeek(row.start_date)} ${formatDate(row.start_date)}${row.end_date && row.end_date !== row.start_date ? ` → ${dayOfWeek(row.end_date)} ${formatDate(row.end_date)}` : ""}`,
+    when: `${formatDate(row.start_date)}${row.end_date && row.end_date !== row.start_date ? ` → ${formatDate(row.end_date)}` : ""}`,
     details: [
       (row.type || "leave").toUpperCase(),
       days ? `${days}d` : null,
@@ -106,7 +121,7 @@ function normCheckin(row) {
     id: row.id,
     member_name: row.user_name || row.member_name || "—",
     submitted_at: row.requested_at || row.check_in_at,
-    when: `${dayOfWeek(row.date)} ${formatDate(row.date)} · ${formatTime(row.check_in_at)}`,
+    when: `${formatDate(row.date)} · ${formatTime(row.check_in_at)}`,
     details: [
       row.method ? row.method.toUpperCase() : null,
       row.geofence_status || (row.distance_m ? `${Math.round(row.distance_m)}m from site` : null),
@@ -127,19 +142,25 @@ function normCheckin(row) {
 }
 
 function normCorrection(row) {
+  const isBulk = row.kind === "bulk_delete";
+  const p = row.payload || {};
   return {
     kind: "correction",
     id: row.id,
-    member_name: row.requester_name || "—",
+    member_name: isBulk ? "⚠ Bulk deletion" : (row.requester_name || "—"),
     submitted_at: row.requested_at,
-    when: `${dayOfWeek(row.target_date)} ${formatDate(row.target_date)}`,
+    when: isBulk ? `${formatDate(row.target_date)} · raised by ${row.requester_name || "admin"}` : formatDate(row.target_date),
     // Attendance change filed by an admin — awaiting Super Admin sign-off.
     needs_super_admin: !!row.needs_super_admin,
-    details: [
-      (row.kind || "").replace(/_/g, " "),
-      row.filed_by_admin_name ? `filed by ${row.filed_by_admin_name}` : null,
-      row.reason,
-    ].filter(Boolean).join(" · "),
+    details: isBulk
+      ? [p.label || p.tool, p.affected_rows != null ? `${p.affected_rows} row${p.affected_rows === 1 ? "" : "s"} will be deleted` : null, row.reason].filter(Boolean).join(" · ")
+      : [
+        (row.kind || "").replace(/_/g, " "),
+        p.check_in_time ? `in ${p.check_in_time}` : null,
+        p.check_out_time ? `out ${p.check_out_time}` : null,
+        row.filed_by_admin_name ? `filed by ${row.filed_by_admin_name}` : null,
+        row.reason,
+      ].filter(Boolean).join(" · "),
     raw: row,
     apply: async (decision, extra = {}) => {
       const body = { status: decision === "approve" ? "approved" : "rejected" };
@@ -655,7 +676,10 @@ export default function ApprovalsUnified() {
                         </span>
                       )}
                     </td>
-                    <td className="py-2 px-3 text-slate-500 text-xs tabular-nums whitespace-nowrap">{fmtDateTime(r.submitted_at)}</td>
+                    <td className="py-2 px-3 text-slate-500 text-xs tabular-nums whitespace-nowrap">
+                      {fmtDateTime(r.submitted_at)}
+                      <ElapsedChip since={r.submitted_at} testid={`approvals-elapsed-${r.kind}-${r.id}`} />
+                    </td>
                     <td className="py-2 px-3 text-slate-700 tabular-nums whitespace-nowrap">{r.when}</td>
                     <td className="py-2 px-3 text-slate-600 text-xs">{r.details || "—"}</td>
                     <td className="py-2 px-3 text-center">
@@ -1325,7 +1349,7 @@ function DecisionHistoryCheckins({ rows }) {
                   <tr key={r.id} data-testid={`history-checkin-row-${r.id}`} className="border-b border-slate-100 hover:bg-sky-50/40">
                     <td className="py-2 px-3 font-semibold text-slate-800">{r.user_name || r.member_name || "—"}</td>
                     <td className="py-2 px-3 whitespace-nowrap text-slate-700 text-xs">
-                      {r.date && dayOfWeek(r.date)} {r.date && formatDate(r.date)} · {r.check_in_at && formatTime(r.check_in_at)}
+                      {r.date && formatDate(r.date)} · {r.check_in_at && formatTime(r.check_in_at)}
                     </td>
                     <td className="py-2 px-3 text-slate-600 text-xs">
                       {[r.method?.toUpperCase(), r.geofence_status || (r.distance_m ? `${Math.round(r.distance_m)}m from site` : null)]
@@ -1415,7 +1439,7 @@ function DecisionHistoryCorrections({ rows }) {
                       {(r.kind || "").replace(/_/g, " ")}
                     </td>
                     <td className="py-2 px-3 whitespace-nowrap text-slate-700 text-xs">
-                      {r.target_date && `${dayOfWeek(r.target_date)} ${formatDate(r.target_date)}`}
+                      {r.target_date && formatDate(r.target_date)}
                     </td>
                     <td className="py-2 px-3 text-slate-700 text-xs max-w-[240px]">
                       <div className="line-clamp-2" title={r.reason}>{r.reason || <span className="text-slate-300">—</span>}</div>

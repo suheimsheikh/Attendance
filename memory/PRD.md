@@ -147,6 +147,9 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
   - **Checklists** (`ChecklistsTab.jsx`): pencil button (`checklist-edit-<id>`) repurposes the top form into edit mode (banner `checklist-editing-banner`, Save + Cancel), editing title / recurrence / days-of-week / day-of-month; preserves the item's active/paused state. Editable by owner or admin (form now shows for admin editing another member's item).
 - Verified: backend curl (todo title/due/notes; checklist title/recurrence/dows) + testing_agent iter60 100% (edit save, cancel discard, recurrence switch, add/toggle/pause/delete regressions).
 
+### 19 Sep 2026 — Deletion sign-off (this session)
+- Bulk attendance deletions (wipe-all, data-quality delete fixes) gated: Super Admin runs now, others queue to Approvals as `bulk_delete` corrections. Correction payload validated at filing. Approvals shows elapsed days.
+
 ### 19 Sep 2026 — Off-site stamping fix · proxy DAR gate · late-day counter (this session)
 - Off-fence check-ins no longer carry a real site name (was "Rowing Academy" for far-away HO check-ins); stamped as "Off-site" bucket with nearest name kept for copy. Prod needs `scripts/offsite_site_name_fix.py` once.
 - DAR required → no check-out via ANY path (self, admin console, card, Muster bulk).

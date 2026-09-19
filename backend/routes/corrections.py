@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 
 from services.time_utils import now_utc, local_date_str, office_tz
 from services.permissions import is_super_admin
+from services.attendance_bulk import apply_bulk_delete
 
 
 # Rolling window in which members may request a correction. Fits the
@@ -42,7 +43,7 @@ from services.permissions import is_super_admin
 CORRECTION_WINDOW_DAYS: int = 31
 
 VALID_ENTITY_KINDS: Dict[str, set] = {
-    "attendance": {"missed_checkin", "time_adjust"},
+    "attendance": {"missed_checkin", "time_adjust", "bulk_delete"},
     "leave": {"leave_date_change", "leave_cancel", "leave_type_change"},
 }
 VALID_STATUSES = {"pending", "approved", "rejected"}
@@ -82,7 +83,7 @@ async def _apply_missed_checkin(db, c: dict, admin: dict) -> dict:
     check_in_time = p.get("check_in_time")   # HH:MM
     check_out_time = p.get("check_out_time")  # optional HH:MM
     if not check_in_time:
-        raise HTTPException(status_code=400, detail="payload.check_in_time is required")
+        raise HTTPException(status_code=400, detail="This request has no check-in time — reject it and ask the member to re-file with the time they arrived")
     # Reject if a row already exists for this date (they wanted `time_adjust`).
     existing = await db.attendance.find_one(
         {"user_id": c["requester_id"], "date": c["target_date"]},
@@ -248,6 +249,7 @@ async def _apply_leave_type_change(db, c: dict, admin: dict) -> dict:
 
 APPLIERS: Dict[tuple, Any] = {
     ("attendance", "missed_checkin"):    _apply_missed_checkin,
+    ("attendance", "bulk_delete"):       apply_bulk_delete,
     ("attendance", "time_adjust"):       _apply_time_adjust,
     ("leave",      "leave_date_change"): _apply_leave_date_change,
     ("leave",      "leave_cancel"):      _apply_leave_cancel,
@@ -411,6 +413,17 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
                                 detail=f"kind for {body.entity_type!r} must be one of {sorted(VALID_ENTITY_KINDS[body.entity_type])}")
         if not (body.reason or "").strip():
             raise HTTPException(status_code=400, detail="reason is required")
+        # bulk_delete rows are only ever created by the deletion tools
+        # themselves (services.attendance_bulk) — never filed directly.
+        if body.kind == "bulk_delete":
+            raise HTTPException(status_code=400, detail="bulk_delete is raised by the deletion tools, not filed directly")
+        # Validate the payload up-front so a bad request fails for the
+        # filer now, not for the approver later ("payload.check_in_time
+        # is required" used to surface only at approval time).
+        if body.kind == "missed_checkin" and not (body.payload or {}).get("check_in_time"):
+            raise HTTPException(status_code=400, detail="Check-in time is required for a missed check-in")
+        if body.kind == "time_adjust" and not ((body.payload or {}).get("check_in_time") or (body.payload or {}).get("check_out_time")):
+            raise HTTPException(status_code=400, detail="Enter a new check-in and/or check-out time")
 
         # Resolve target member — admin-on-behalf-of flow takes precedence.
         # Only actual admins may impersonate; non-admins get a 403 rather
@@ -683,6 +696,10 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
         approved = 0
         errors: List[dict] = []
         for c in pending:
+            # Never mass-approve a bulk deletion — it must be an explicit, single click.
+            if c.get("kind") == "bulk_delete":
+                errors.append({"id": c["id"], "detail": "Bulk deletions must be approved individually"})
+                continue
             try:
                 await _decide_one(c, "approved", "Bulk approved by admin", admin)
                 approved += 1

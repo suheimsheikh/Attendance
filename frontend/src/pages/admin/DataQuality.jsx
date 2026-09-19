@@ -47,11 +47,15 @@ function FixButton({ finding, onFixed }) {
   if (finding.auto_fix) {
     const trigger = async () => {
       if (busy) return;
-      if (!window.confirm(`Auto-fix all "${finding.code}" issues in bulk? This runs immediately.`)) return;
+      if (!window.confirm(`Auto-fix all "${finding.code}" issues in bulk? Deletions run immediately for a Super Admin, otherwise they are queued for Super Admin approval.`)) return;
       setBusy(true);
       try {
         const r = await api.post(`/admin/data-quality/fix/${finding.code}`);
-        toast.success(`Fixed ${r?.fixed ?? 0} record${(r?.fixed ?? 0) === 1 ? "" : "s"}.`);
+        if (r?.queued) {
+          toast.info(r.detail || "Queued for Super Admin approval", { duration: 8000 });
+        } else {
+          toast.success(`Fixed ${r?.fixed ?? 0} record${(r?.fixed ?? 0) === 1 ? "" : "s"}.`);
+        }
         onFixed?.();
       } catch (err) {
         toast.error(err?.message || "Auto-fix failed");

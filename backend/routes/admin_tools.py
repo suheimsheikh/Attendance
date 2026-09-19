@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 
+from services.attendance_bulk import run_or_queue
 from services.time_utils import (
     DEFAULT_TZ, local_date_str, local_hm, local_now, now_utc, office_tz,
 )
@@ -52,16 +53,10 @@ def make_router(db, require_admin) -> APIRouter:
 
     @router.post("/admin/attendance/wipe")
     async def admin_wipe_attendance(admin: dict = Depends(require_admin)):
-        """Danger zone: delete ALL attendance records. Useful when starting a
-        fresh term or restoring from a master-only backup. Leaves users,
-        leaves, institutions, and office config untouched."""
-        before = await db.attendance.count_documents({})
-        res = await db.attendance.delete_many({})
-        return {
-            "before": before,
-            "deleted": res.deleted_count,
-            "remaining": await db.attendance.count_documents({}),
-        }
+        """Danger zone: delete ALL attendance records. Super Admin runs it
+        immediately; any other admin's request is queued for Super Admin
+        sign-off in Approvals (Sep 2026 deletion gate)."""
+        return await run_or_queue(db, admin, "wipe_all", "Wipe all attendance (admin tool)")
 
     @router.get("/admin/backup")
     async def admin_backup(admin: dict = Depends(require_admin)):

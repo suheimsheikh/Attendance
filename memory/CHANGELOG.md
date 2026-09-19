@@ -4788,3 +4788,9 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - `_resolve_site_for` now returns 5-tuple; off-fence check-ins/outs are stamped `site_id="offsite"`, `site_name="Off-site"` (+ `nearest_site_name` / `exit_nearest_site_name`) instead of the nearest real site's name ("Rowing Academy" bug). `scripts/offsite_site_name_fix.py` re-stamps history (run on prod after deploy; idempotent).
 - DAR gate extended to proxy check-outs: admin console / scan-card raise `DAR_REQUIRED`, Muster bulk skips with reason "DAR not filed" (toast lists names). Helper `services.dar.dar_missing_for_session`.
 - `/attendance/status` + check-in response carry `late_days_this_month`; SelfCheckIn hero shows "Late by N min (Nth late day this month)" and a warning toast at check-in.
+
+## 2026-09-19 — Deletion sign-off · correction validation · approvals elapsed chip
+- New `services/attendance_bulk.py`: `run_or_queue` — Super Admin runs bulk deletes immediately (audited `attendance_bulk_delete`); other admins get a pending `corrections` row (`attendance/bulk_delete`, `needs_super_admin`) approved only by Super Admin. Wired: `POST /admin/attendance/wipe`, `fix/session.zero_duration`, `fix/session.duplicate_open`. `approve-all` refuses bulk_delete rows.
+- `POST /corrections` validates payload up-front: missed_checkin needs `check_in_time`; time_adjust needs at least one time. Modal validates too. (Fixes "payload.check_in_time is required" seen at approval.)
+- Approvals pending table: "Nd ago" chip beside Submitted (amber ≥3d, red ≥7d); bulk-delete rows show tool + row count; fixed duplicated weekday ("Sat Sat").
+- Test admin `admin2.test@example.com` / `Admin@12345` (non-super, mobile 9000000002).
