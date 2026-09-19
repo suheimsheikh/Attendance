@@ -76,6 +76,11 @@ export default function SelfCheckIn() {
   const [darStatus, setDarStatus] = useState(null);
   const [darText, setDarText] = useState("");
   const [lastDar, setLastDar] = useState(null);
+  // Fallback when /dar/status couldn't load (flaky on-site network) but the
+  // server rejects check-out with DAR_REQUIRED — we flip this so the DAR
+  // textarea appears and the member can file it inline instead of hitting a
+  // dead-end enabled button (code review, Jun 2026).
+  const [darServerForced, setDarServerForced] = useState(false);
   const geoPerm = useGeoPermission();
 
   const photoNeeded = photoStatus ? photoStatus.needs_photo : !user?.photo;
@@ -105,7 +110,7 @@ export default function SelfCheckIn() {
   const currentExcursion = status?.current_excursion;
   const actionLabel = status?.checked_in ? "Leaving Campus" : "I showed up 😊";
   const darMin = darStatus?.min_chars || 20;
-  const darNeededNow = !!(status?.checked_in && darStatus?.required && !darStatus?.done_today);
+  const darNeededNow = !!(status?.checked_in && ((darStatus?.required && !darStatus?.done_today) || darServerForced));
   const darBlocked = darNeededNow && darText.trim().length < darMin;
   // Extra safety (Jun 2026 user request): even though the server blocks a
   // DAR-required check-out without a DAR, we also hide the check-out
@@ -113,7 +118,8 @@ export default function SelfCheckIn() {
   // required member can never post a check-out to the group without one.
   // `lastDar` (DAR saved on this very check-out) or done_today both satisfy it.
   const checkoutShareBlocked = !!(
-    lastAction?.action === "checkout" && darStatus?.required && !darStatus?.done_today && !lastDar
+    lastAction?.action === "checkout" && !lastDar &&
+    ((darStatus?.required && !darStatus?.done_today) || darServerForced)
   );
   // Site label for the status banner: satellite site name, else the office
   // name; off-site sessions show distance from the nearest geofence.
@@ -235,6 +241,7 @@ export default function SelfCheckIn() {
       if (checkInPhoto) body.check_in_photo = checkInPhoto;
       if (darNeededNow && darText.trim()) body.dar_text = darText.trim();
       const res = await api.post("/attendance/geo-toggle", body);
+      setDarServerForced(false);
       const dist = res.distance_m;
       setLastDistance({ dist, acc: null, off: res.out_of_geofence });
       const locBit = ` at ${res.site_label || res.site_name || office?.name?.trim() || "office"}`;
@@ -283,6 +290,15 @@ export default function SelfCheckIn() {
         setOffSiteSelfie(null);
         setShowOffsiteSelfie(true);
         toast.info("You're outside the site — please take a quick selfie and give a reason.");
+        return;
+      }
+      if (/DAR_REQUIRED/.test(err?.message || "")) {
+        // Server enforced the DAR even though the UI didn't show the field
+        // (status failed to load). Reveal it inline and let them file + retry.
+        setDarServerForced(true);
+        speakDar();
+        toast.error(`Please enter your Daily Activity Report (at least ${darMin} characters) before checking out`);
+        refresh();
         return;
       }
       toast.error(err?.message || "Failed");
