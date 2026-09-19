@@ -300,7 +300,7 @@ async def require_chef_or_admin(user: dict = Depends(get_current_user)) -> dict:
 # Models
 # ----------------------------------------------------------------------------
 from models import UserPublic  # shared model (moved to backend/models.py 06/2026)
-from services.dar import dar_required_for, get_dar_policy, validate_dar_text
+from services.dar import dar_required_for, dar_missing_for_session, get_dar_policy, validate_dar_text
 
 
 class MemberCreate(BaseModel):
@@ -2273,15 +2273,26 @@ async def open_session_for(user_id: str) -> Optional[dict]:
     return await db.attendance.find_one({"user_id": user_id, "check_out_at": None}, {"_id": 0})
 
 
+async def _late_days_in_month(user_id: str, date_iso: str) -> int:
+    """Distinct late days for the member in the calendar month of `date_iso`."""
+    rows = await db.attendance.find(
+        {"user_id": user_id, "late": True, "date": {"$gte": date_iso[:7] + "-01", "$lte": date_iso[:7] + "-31"}},
+        {"_id": 0, "date": 1},
+    ).to_list(200)
+    return len({r["date"] for r in rows})
+
+
 @api_router.get("/attendance/status")
 async def my_attendance_status(user: dict = Depends(get_current_user)):
     sess = await open_session_for(user["id"])
     open_exc = _open_excursion(sess) if sess else None
+    late_days = await _late_days_in_month(user["id"], sess["date"]) if sess and sess.get("late") else 0
     return {
         "checked_in": sess is not None,
         "on_temp_exit": open_exc is not None,
         "current_excursion": open_exc,
         "session": sess,
+        "late_days_this_month": late_days,
     }
 
 
@@ -2466,10 +2477,17 @@ def geo_check(office: dict, lat: float, lng: float, reason: Optional[str]):
 
 async def _resolve_site_for(office: dict, lat: float, lng: float):
     """Wrap services.geo.resolve_site by pulling the active satellite sites
-    from the DB. Returns (site_id, site_name, distance_m, out_of_geofence).
-    The main office still 'wins' when it's the closest geofence."""
+    from the DB. Returns (site_id, site_name, distance_m, out_of_geofence,
+    nearest_label). Off-fence check-ins are stamped as the "Off-site"
+    bucket (never a real site's name — that misled the Presence board when
+    a far-away check-in happened to be nearest e.g. Rowing Academy); the
+    nearest fence's label is returned separately for "X m from …" copy."""
     sites = await db.sites.find({"active": True}, {"_id": 0}).to_list(200)
-    return resolve_site(office, lat, lng, sites)
+    site_id, site_name, dist, out = resolve_site(office, lat, lng, sites)
+    nearest_label = site_name or office.get("name") or "Office"
+    if out:
+        site_id, site_name = "offsite", "Off-site"
+    return site_id, site_name, dist, out, nearest_label
 
 
 async def perform_toggle(target, office, lat, lng, photo, reason, method, scanned_by):
@@ -2483,13 +2501,21 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
             status_code=403,
             detail=f"{target.get('full_name') or 'This member'} has exited — check-in blocked from {target.get('leaving_date')}.",
         )
-    site_id, site_name, dist, out = await _resolve_site_for(office, lat, lng)
+    site_id, site_name, dist, out, nearest_label = await _resolve_site_for(office, lat, lng)
     sess = await open_session_for(target["id"])
     ts = now_utc()
     # Build a small thumbnail of the verification photo so the Presence board
     # can render it without pulling the full ~30 KB JPEG per member.
     photo_thumb = _make_thumbnail(photo) if photo else None
     if sess:
+        # DAR gate on proxy check-outs too (Sep 2026 user rule: no check-out
+        # without the DAR when it's required) — console / card operators
+        # see who's blocked and can ask the member to file it first.
+        if await dar_missing_for_session(db, target, sess, local_date_str(office)):
+            raise HTTPException(
+                status_code=400,
+                detail=f"DAR_REQUIRED: {target.get('full_name') or 'This member'} must file today's Daily Activity Report before check-out",
+            )
         cin = datetime.fromisoformat(sess["check_in_at"])
         excursions = sess.get("excursions") or []
         # Auto-close a still-open excursion at this moment for clean records.
@@ -2515,12 +2541,13 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
             "exit_out_of_geofence": out,
             "exit_site_id": site_id,
             "exit_site_name": site_name,
+            "exit_nearest_site_name": nearest_label,
             "exit_reason": (reason or None),
             "checked_out_by": scanned_by,
         }})
         return {"ok": True, "action": "checkout", "member": target["full_name"],
                 "hours": hours, "out_of_geofence": out, "distance_m": dist,
-                "site_id": site_id, "site_name": site_name}
+                "site_id": site_id, "site_name": site_name, "site_label": nearest_label}
     late, late_minutes = compute_late(office, target, ts, camp=await _active_camp_for(target, ts, office))
     doc = {
         "id": str(uuid.uuid4()),
@@ -2539,6 +2566,7 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
         "out_of_geofence": out,
         "site_id": site_id,
         "site_name": site_name,
+        "nearest_site_name": nearest_label,
         "geo_reason": (reason or None),
         "late": late,
         "late_minutes": late_minutes,
@@ -2560,7 +2588,7 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
     await db.attendance.insert_one(doc)
     return {"ok": True, "action": "checkin", "member": target["full_name"],
             "out_of_geofence": out, "distance_m": dist,
-            "site_id": site_id, "site_name": site_name,
+            "site_id": site_id, "site_name": site_name, "site_label": nearest_label,
             "late": late, "late_minutes": late_minutes}
 
 
@@ -2613,8 +2641,9 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         out = False
         stored_lat, stored_lng = None, None
         site_id, site_name = None, None
+        nearest_label = office.get("name") or "Office"
     else:
-        site_id, site_name, dist, out = await _resolve_site_for(office, lat, lng)
+        site_id, site_name, dist, out, nearest_label = await _resolve_site_for(office, lat, lng)
         stored_lat, stored_lng = lat, lng
     sess = await open_session_for(target["id"])
     ts = now_utc()
@@ -2712,6 +2741,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             "exit_latitude": stored_lat, "exit_longitude": stored_lng,
             "exit_distance_m": dist, "exit_out_of_geofence": out,
             "exit_site_id": site_id, "exit_site_name": site_name,
+            "exit_nearest_site_name": nearest_label,
             "exit_geo_unavailable": geo_unavailable,
             "exit_reason": (reason or None),
             "exit_method": "geo",
@@ -2732,7 +2762,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         return {"ok": True, "action": "checkout", "member": target["full_name"],
                 "hours": hours, "out_of_geofence": out, "distance_m": dist,
                 "site_id": site_id, "site_name": site_name,
-                "site_label": site_name or office.get("name") or "Office",
+                "site_label": nearest_label,
                 "check_in_at": sess["check_in_at"], "check_out_at": ts.isoformat(),
                 "dar": {k: dar_saved[k] for k in ("id", "date", "text")} if dar_saved else None,
                 "overtime_minutes": ot_updates.get("overtime_total_min", 0)}
@@ -2756,6 +2786,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         "latitude": stored_lat, "longitude": stored_lng,
         "distance_m": dist, "out_of_geofence": out,
         "site_id": site_id, "site_name": site_name,
+        "nearest_site_name": nearest_label,
         "geo_unavailable": geo_unavailable,
         "geo_reason": (reason or None) if out else None,
         "late": late,
@@ -2793,8 +2824,9 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
     return {"ok": True, "action": "checkin", "member": target["full_name"],
             "out_of_geofence": out, "distance_m": dist,
             "site_id": site_id, "site_name": site_name,
-            "site_label": site_name or office.get("name") or "Office",
+            "site_label": nearest_label,
             "late": late, "late_minutes": late_minutes,
+            "late_days_this_month": (await _late_days_in_month(target["id"], doc["date"])) if late else 0,
             "overtime_minutes": early_min}
 
 

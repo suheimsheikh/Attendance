@@ -142,6 +142,10 @@ export default function Muster() {
           ? `${doneCount} ${noun} marked present${skipNote}`
           : `${doneCount} ${noun} marked departed${skipNote}`
       );
+      const darSkips = (res.skipped || []).filter((s) => s.reason === "DAR not filed");
+      if (darSkips.length > 0) {
+        toast.error(`Not checked out — DAR not filed: ${darSkips.map((s) => s.name).join(", ")}`, { duration: 9000 });
+      }
       // Auto-share the just-checked-in batch to WhatsApp (Feb 2026 user
       // request). Fires the OS share sheet with a photo mosaic of the
       // members we just ticked in — single or multi treated the same.

@@ -37,6 +37,7 @@ from pydantic import BaseModel
 
 from services.time_utils import now_utc, local_date_str, local_now
 from services.attendance_calc import compute_late, excursion_seconds
+from services.dar import dar_missing_for_session
 from services.permissions import is_ex_member
 from services.photo import member_photo_url
 from services.scope import athlete_like_keys as _athlete_like_keys_shared, scoped_user_query as _scoped_user_query_shared
@@ -470,7 +471,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         has_gps = (body.latitude is not None and body.longitude is not None
                    and not (body.latitude == 0 and body.longitude == 0))
         if has_gps:
-            site_id, site_name, distance_m, out_of_geofence = await resolve_site_for(
+            site_id, site_name, distance_m, out_of_geofence, _nearest = await resolve_site_for(
                 office, body.latitude, body.longitude,
             )
             stamped_lat, stamped_lng = body.latitude, body.longitude
@@ -586,7 +587,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         has_gps = (body.latitude is not None and body.longitude is not None
                    and not (body.latitude == 0 and body.longitude == 0))
         if has_gps:
-            site_id, site_name, distance_m, out_of_geofence = await resolve_site_for(
+            site_id, site_name, distance_m, out_of_geofence, _nearest = await resolve_site_for(
                 office, body.latitude, body.longitude,
             )
             stamped_lat, stamped_lng = body.latitude, body.longitude
@@ -619,6 +620,9 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             sess = await db.attendance.find_one({"user_id": sid, "check_out_at": None}, {"_id": 0})
             if not sess:
                 skipped.append({"id": sid, "name": athlete["full_name"], "reason": "not checked in"})
+                continue
+            if await dar_missing_for_session(db, athlete, sess, local_date_str(office)):
+                skipped.append({"id": sid, "name": athlete["full_name"], "reason": "DAR not filed"})
                 continue
             cin = datetime.fromisoformat(sess["check_in_at"])
             if cin.tzinfo is None:

@@ -24,6 +24,19 @@ DAR_USER_FILTER = {"status": {"$ne": "left"},
                    "$or": [{"category": {"$in": sorted(DAR_CATEGORIES)}}, {"dar_required": True}]}
 
 
+async def dar_missing_for_session(db, user: dict, sess: dict, today_iso: str) -> bool:
+    """True when `user` must file a DAR for the session's date and hasn't.
+    Shared by self + proxy (muster / console / card) check-out paths so a
+    DAR-required member can never be closed out without their report."""
+    if not dar_required_for(user):
+        return False
+    policy = await get_dar_policy(db, today_iso)
+    dar_date = sess.get("date") or today_iso
+    if not (policy.get("enabled", True) and dar_date >= policy["effective_from"]):
+        return False
+    return await db.dars.find_one({"user_id": user["id"], "date": dar_date}, {"_id": 0, "id": 1}) is None
+
+
 async def get_dar_policy(db, today_iso: str) -> dict:
     doc = await db.config.find_one({"id": "dar_policy"}, {"_id": 0})
     if not doc:

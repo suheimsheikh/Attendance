@@ -4783,3 +4783,8 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - server.py `/admin/sessions`: hours=0 + `missing_checkout`/`needs_correction` flags for forgotten-checkout rows.
 - sites.py: lat/lng range validation (422).
 - MealStockTakeTab: rated first-count rows show "opening balance" instead of a loss/extra; summary counts openings.
+
+## 2026-09-19 — Off-site stamping, proxy DAR gate, late-day counter
+- `_resolve_site_for` now returns 5-tuple; off-fence check-ins/outs are stamped `site_id="offsite"`, `site_name="Off-site"` (+ `nearest_site_name` / `exit_nearest_site_name`) instead of the nearest real site's name ("Rowing Academy" bug). `scripts/offsite_site_name_fix.py` re-stamps history (run on prod after deploy; idempotent).
+- DAR gate extended to proxy check-outs: admin console / scan-card raise `DAR_REQUIRED`, Muster bulk skips with reason "DAR not filed" (toast lists names). Helper `services.dar.dar_missing_for_session`.
+- `/attendance/status` + check-in response carry `late_days_this_month`; SelfCheckIn hero shows "Late by N min (Nth late day this month)" and a warning toast at check-in.

@@ -113,9 +113,11 @@ export default function SelfCheckIn() {
   const siteLabel = sess?.site_name || office?.name?.trim() || "Office";
   const siteLine = sess
     ? (sess.out_of_geofence
-        ? `Off-site · ${formatDistance(sess.distance_m)} from ${siteLabel}`
+        ? `Off-site · ${formatDistance(sess.distance_m)} from ${sess.nearest_site_name || office?.name?.trim() || "the office"}`
         : `at ${siteLabel}`)
     : "";
+  const lateDays = status?.late_days_this_month || 0;
+  const ordinal = (n) => `${n}${["th", "st", "nd", "rd"][((n % 100) - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th"}`;
 
   // Pre-fill the DAR with today's checklist ticks / to-dos (executives).
   useEffect(() => {
@@ -252,6 +254,8 @@ export default function SelfCheckIn() {
       });
       if (res.action === "checkin" && res.late) {
         speakLateMessage(res.late_minutes, res.member);
+        const n = res.late_days_this_month || 0;
+        toast.warning(`Late by ${res.late_minutes} min${n > 0 ? ` (${ordinal(n)} late day this month)` : ""}`, { duration: 8000 });
       }
       if (res.action === "checkout" && res.dar) {
         setLastDar({ ...res.dar, check_in_at: res.check_in_at, check_out_at: res.check_out_at, site_name: res.site_label });
@@ -523,6 +527,12 @@ export default function SelfCheckIn() {
                 <p className="text-sm text-emerald-800/80 mt-1 font-medium">
                   Since {new Date(status.session.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}
                   {siteLine ? ` · ${siteLine}` : ""}
+                </p>
+              )}
+              {sess?.late && (
+                <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-100 text-amber-900 px-3 py-1 text-sm font-bold" data-testid="checked-in-late-line">
+                  <AlertTriangle size={14} className="text-amber-600" />
+                  Late by {sess.late_minutes} min{lateDays > 0 ? ` (${ordinal(lateDays)} late day this month)` : ""}
                 </p>
               )}
             </div>
