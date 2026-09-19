@@ -107,6 +107,14 @@ export default function SelfCheckIn() {
   const darMin = darStatus?.min_chars || 20;
   const darNeededNow = !!(status?.checked_in && darStatus?.required && !darStatus?.done_today);
   const darBlocked = darNeededNow && darText.trim().length < darMin;
+  // Extra safety (Jun 2026 user request): even though the server blocks a
+  // DAR-required check-out without a DAR, we also hide the check-out
+  // "Share to WhatsApp" button until the DAR is confirmed filed — so a
+  // required member can never post a check-out to the group without one.
+  // `lastDar` (DAR saved on this very check-out) or done_today both satisfy it.
+  const checkoutShareBlocked = !!(
+    lastAction?.action === "checkout" && darStatus?.required && !darStatus?.done_today && !lastDar
+  );
   // Site label for the status banner: satellite site name, else the office
   // name; off-site sessions show distance from the nearest geofence.
   const sess = status?.session;
@@ -678,7 +686,19 @@ export default function SelfCheckIn() {
               <DarShareButton dar={lastDar} name={user?.full_name} groupName={darStatus?.group_name} />
             </div>
           )}
-          {lastAction && !lastDar && (
+          {lastAction && !lastDar && checkoutShareBlocked && (
+            <div
+              className="mt-5 mx-auto max-w-md border-2 border-amber-400 bg-amber-50 rounded-xl p-3 flex items-start gap-2 shadow-sm"
+              data-testid="checkout-share-blocked"
+              role="alert"
+            >
+              <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" strokeWidth={2.5} />
+              <div className="text-left text-sm font-semibold text-amber-900 leading-tight">
+                File your Daily Activity Report before sharing your check-out to WhatsApp.
+              </div>
+            </div>
+          )}
+          {lastAction && !lastDar && !checkoutShareBlocked && (
             <button
               type="button"
               data-testid="share-whatsapp-btn"
