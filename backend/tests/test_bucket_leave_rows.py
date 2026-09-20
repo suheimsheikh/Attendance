@@ -16,7 +16,7 @@ from holidays import _bucket_leave_rows, _tally_approved_leave
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
-def L(start, end, type_, status, **extra):
+def L(start: str, end: str, type_: str, status: str, **extra: object) -> dict:
     """Compact factory so each test row fits on one line."""
     return {"start_date": start, "end_date": end, "type": type_,
             "status": status, **extra}
@@ -25,7 +25,7 @@ def L(start, end, type_, status, **extra):
 TODAY = "2026-06-15"
 
 
-def test_empty_input_returns_all_zeros():
+def test_empty_input_returns_all_zeros() -> None:
     out = _bucket_leave_rows([], TODAY)
     assert out == {
         "paid_used": 0.0,
@@ -39,7 +39,7 @@ def test_empty_input_returns_all_zeros():
     }
 
 
-def test_approved_leave_uses_stamped_paid_leave_used():
+def test_approved_leave_uses_stamped_paid_leave_used() -> None:
     """paid_leave_used stamp on the row wins over the raw window length."""
     rows = [L("2026-06-01", "2026-06-05", "leave", "approved",
               paid_leave_used=3.0, lop_days=2.0)]
@@ -50,14 +50,14 @@ def test_approved_leave_uses_stamped_paid_leave_used():
     assert out["leave_half_count"] == 0
 
 
-def test_approved_leave_legacy_row_falls_back_to_window_length():
+def test_approved_leave_legacy_row_falls_back_to_window_length() -> None:
     """Rows without paid_leave_used → count the whole inclusive window."""
     rows = [L("2026-06-01", "2026-06-05", "leave", "approved")]
     out = _bucket_leave_rows(rows, TODAY)
     assert out["paid_used"] == 5   # inclusive
 
 
-def test_half_day_leave_bumps_half_counter_not_full():
+def test_half_day_leave_bumps_half_counter_not_full() -> None:
     rows = [L("2026-06-01", "2026-06-01", "leave", "approved",
               half_day=True, paid_leave_used=0.5)]
     out = _bucket_leave_rows(rows, TODAY)
@@ -66,7 +66,7 @@ def test_half_day_leave_bumps_half_counter_not_full():
     assert out["paid_used"] == 0.5
 
 
-def test_future_approved_leave_is_flagged():
+def test_future_approved_leave_is_flagged() -> None:
     """start_date strictly after `today` → future_approved_leave_days bucket."""
     rows = [L("2026-08-01", "2026-08-03", "leave", "approved",
               paid_leave_used=3)]
@@ -74,14 +74,14 @@ def test_future_approved_leave_is_flagged():
     assert out["future_approved_leave_days"] == 3
 
 
-def test_today_start_is_not_future():
+def test_today_start_is_not_future() -> None:
     """A row that starts *on* today is currently-active, not future."""
     rows = [L(TODAY, TODAY, "leave", "approved", paid_leave_used=1)]
     out = _bucket_leave_rows(rows, TODAY)
     assert out["future_approved_leave_days"] == 0
 
 
-def test_pending_leave_uses_window_length_not_paid_leave_used():
+def test_pending_leave_uses_window_length_not_paid_leave_used() -> None:
     """Pending rows haven't been ladder-stamped; count the raw window."""
     rows = [L("2026-06-01", "2026-06-03", "leave", "pending",
               paid_leave_used=99)]   # should be ignored
@@ -90,7 +90,7 @@ def test_pending_leave_uses_window_length_not_paid_leave_used():
     assert out["paid_used"] == 0
 
 
-def test_approved_tour_accumulates_and_ignores_paid_leave_used():
+def test_approved_tour_accumulates_and_ignores_paid_leave_used() -> None:
     rows = [L("2026-05-01", "2026-05-03", "tour", "approved",
               paid_leave_used=999)]
     out = _bucket_leave_rows(rows, TODAY)
@@ -98,14 +98,14 @@ def test_approved_tour_accumulates_and_ignores_paid_leave_used():
     assert out["paid_used"] == 0
 
 
-def test_pending_tour_accumulates_separately():
+def test_pending_tour_accumulates_separately() -> None:
     rows = [L("2026-05-01", "2026-05-02", "tour", "pending")]
     out = _bucket_leave_rows(rows, TODAY)
     assert out["pending_tour_days"] == 2
     assert out["tour_ytd_days"] == 0
 
 
-def test_unknown_row_type_is_ignored():
+def test_unknown_row_type_is_ignored() -> None:
     """comp_off rows are accounted elsewhere; unknown types are no-ops."""
     rows = [
         L("2026-06-01", "2026-06-05", "comp_off", "approved"),
@@ -117,7 +117,7 @@ def test_unknown_row_type_is_ignored():
         assert v == 0 or v == 0.0, f"{k} should be zero, got {v}"
 
 
-def test_mixed_bag_matches_prerefactor_totals():
+def test_mixed_bag_matches_prerefactor_totals() -> None:
     """Regression fingerprint: 6 rows spanning every branch of the
     original nested implementation. If any bucket drifts, this test
     surfaces it."""
@@ -140,7 +140,7 @@ def test_mixed_bag_matches_prerefactor_totals():
     assert out["leave_half_count"] == 1   # feb
 
 
-def test_tally_approved_leave_mutates_agg_in_place():
+def test_tally_approved_leave_mutates_agg_in_place() -> None:
     """The extracted helper is called with a fresh aggregate; verify
     it mutates every relevant key correctly."""
     agg = {

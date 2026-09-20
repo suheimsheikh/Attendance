@@ -3,6 +3,7 @@ import sys
 import pytest
 import requests
 from pathlib import Path
+from typing import Any, Optional
 from dotenv import load_dotenv
 
 # Make `services/`, `parents_import_utils`, and the other top-level backend
@@ -30,13 +31,13 @@ ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@12345")
 
 
 @pytest.fixture(scope="session")
-def base_url():
+def base_url() -> str:
     assert BASE_URL, "REACT_APP_BACKEND_URL is required"
     return BASE_URL
 
 
 @pytest.fixture(scope="session")
-def admin_token(base_url):
+def admin_token(base_url: str) -> str:
     r = requests.post(f"{base_url}/api/auth/login",
                       json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
                       timeout=30)
@@ -45,7 +46,7 @@ def admin_token(base_url):
 
 
 @pytest.fixture(scope="session")
-def admin_client(base_url, admin_token):
+def admin_client(base_url: str, admin_token: str) -> requests.Session:
     s = requests.Session()
     s.headers.update({"Authorization": f"Bearer {admin_token}",
                       "Content-Type": "application/json"})
@@ -53,7 +54,7 @@ def admin_client(base_url, admin_token):
 
 
 @pytest.fixture(scope="session")
-def athlete(admin_client, base_url):
+def athlete(admin_client: requests.Session, base_url: str) -> dict:
     """Pick an existing athlete (or create one) to drive muster + leave tests.
     Re-used across all flows so we don't litter the DB."""
     import uuid
@@ -75,12 +76,12 @@ def athlete(admin_client, base_url):
 
 
 @pytest.fixture(scope="session")
-def shared_state():
+def shared_state() -> dict:
     return {}
 
 
 @pytest.fixture(scope="session")
-def mongo_db():
+def mongo_db() -> Optional[Any]:
     """Direct pymongo handle to the app's MongoDB. Only used by tests
     that need to seed fields the API doesn't expose (e.g. server-
     stamped `photo_captured_at` for stale-photo detection).

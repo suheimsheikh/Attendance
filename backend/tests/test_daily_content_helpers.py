@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime
+from typing import Any, Awaitable
 from unittest.mock import AsyncMock
 
 import pytest
@@ -21,7 +22,7 @@ import pytest
 import daily_content as dc
 
 
-def _run(coro):
+def _run(coro: Awaitable[Any]) -> Any:
     """Small helper to run an async coroutine in a sync pytest test —
     the project doesn't ship pytest-asyncio, and these helpers only
     need a one-off event loop each."""
@@ -29,7 +30,7 @@ def _run(coro):
 
 
 # ── _is_valid_generated ──────────────────────────────────────────────
-def test_valid_generated_requires_both_en_and_te_strings():
+def test_valid_generated_requires_both_en_and_te_strings() -> None:
     assert dc._is_valid_generated({"en": "Hello", "te": "నమస్తే"})
     assert not dc._is_valid_generated({"en": "Hello"})           # missing te
     assert not dc._is_valid_generated({"en": "", "te": "నమస్తే"})  # empty en
@@ -40,7 +41,7 @@ def test_valid_generated_requires_both_en_and_te_strings():
 
 
 # ── _build_doc ───────────────────────────────────────────────────────
-def test_build_doc_word_kind_strips_and_keeps_examples():
+def test_build_doc_word_kind_strips_and_keeps_examples() -> None:
     doc = dc._build_doc(
         "2026-02-14", "word",
         {"en": "  courage  ", "te": " ధైర్యం ",
@@ -60,7 +61,7 @@ def test_build_doc_word_kind_strips_and_keeps_examples():
     datetime.fromisoformat(doc["generated_at"].replace("Z", "+00:00"))
 
 
-def test_build_doc_word_kind_omits_empty_examples():
+def test_build_doc_word_kind_omits_empty_examples() -> None:
     doc = dc._build_doc(
         "2026-02-14", "word",
         {"en": "grit", "te": "సహనం",
@@ -73,7 +74,7 @@ def test_build_doc_word_kind_omits_empty_examples():
     assert doc["source"] == "fallback"
 
 
-def test_build_doc_quote_kind_keeps_author_ignores_examples():
+def test_build_doc_quote_kind_keeps_author_ignores_examples() -> None:
     doc = dc._build_doc(
         "2026-02-15", "quote",
         {"en": "Be kind.", "te": "దయగా ఉండండి.",
@@ -87,7 +88,7 @@ def test_build_doc_quote_kind_keeps_author_ignores_examples():
     assert "example_te" not in doc
 
 
-def test_build_doc_quote_kind_omits_blank_author():
+def test_build_doc_quote_kind_omits_blank_author() -> None:
     doc = dc._build_doc(
         "2026-02-15", "quote",
         {"en": "Truth wins.", "te": "సత్యం గెలుస్తుంది.", "author": "  "},
@@ -97,7 +98,7 @@ def test_build_doc_quote_kind_omits_blank_author():
 
 
 # ── _generate_or_fallback ────────────────────────────────────────────
-def test_generate_or_fallback_uses_llm_when_output_valid(monkeypatch):
+def test_generate_or_fallback_uses_llm_when_output_valid(monkeypatch: pytest.MonkeyPatch) -> None:
     """Happy path — Gemini returns a well-shaped dict, source=='llm'."""
     async def fake_word(_iso):
         return {"en": "grit", "te": "పట్టుదల"}
@@ -110,7 +111,7 @@ def test_generate_or_fallback_uses_llm_when_output_valid(monkeypatch):
     assert payload["en"] == "grit"
 
 
-def test_generate_or_fallback_falls_back_when_llm_raises(monkeypatch):
+def test_generate_or_fallback_falls_back_when_llm_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     """Any exception from the LLM → fallback pool, source=='fallback'."""
     async def boom(_iso):
         raise RuntimeError("gemini down")
@@ -123,7 +124,7 @@ def test_generate_or_fallback_falls_back_when_llm_raises(monkeypatch):
     assert payload["en"] and payload["te"]
 
 
-def test_generate_or_fallback_falls_back_on_malformed_output(monkeypatch):
+def test_generate_or_fallback_falls_back_on_malformed_output(monkeypatch: pytest.MonkeyPatch) -> None:
     """Wrong-shape LLM output (missing te) → falls back silently."""
     async def bad_shape(_iso):
         return {"en": "ok but no te"}
@@ -135,7 +136,7 @@ def test_generate_or_fallback_falls_back_on_malformed_output(monkeypatch):
     assert source == "fallback"
 
 
-def test_fallback_is_deterministic_per_day(monkeypatch):
+def test_fallback_is_deterministic_per_day(monkeypatch: pytest.MonkeyPatch) -> None:
     """Same date → same fallback item so a user refreshing doesn't
     see two different quotes."""
     async def boom(_iso):
@@ -149,7 +150,7 @@ def test_fallback_is_deterministic_per_day(monkeypatch):
 
 
 # ── _cache_daily_content ─────────────────────────────────────────────
-def test_cache_write_swallows_db_errors():
+def test_cache_write_swallows_db_errors() -> None:
     """A cache-write failure must NOT propagate — the client already
     has the payload; a warning is enough."""
     db = type("DB", (), {})()
@@ -159,7 +160,7 @@ def test_cache_write_swallows_db_errors():
     _run(dc._cache_daily_content(db, {"date": "2026-02-14", "kind": "word"}))
 
 
-def test_cache_write_upserts_with_correct_filter():
+def test_cache_write_upserts_with_correct_filter() -> None:
     """Verify the (date, kind) filter is what upserts against — protects
     the composite-key contract that avoids double-writes per day."""
     db = type("DB", (), {})()

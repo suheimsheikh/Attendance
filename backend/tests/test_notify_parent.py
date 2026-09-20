@@ -6,7 +6,7 @@ import pytest
 import requests
 
 COACH_EMAIL = "coach.test@example.com"
-COACH_PASSWORD = "Exec@12345"
+COACH_PASSWORD = os.environ.get("TEST_COACH_PASSWORD", "Exec@12345")
 
 
 # ---------- helpers ----------

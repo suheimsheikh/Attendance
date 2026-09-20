@@ -19,7 +19,7 @@ import httpx
 
 API_URL = os.environ.get("API_BASE_URL") or "http://localhost:8001"
 ADMIN_EMAIL = "admin@attendance.app"
-ADMIN_PASSWORD = "Admin@12345"
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@12345")
 
 
 @pytest.fixture(scope="module")

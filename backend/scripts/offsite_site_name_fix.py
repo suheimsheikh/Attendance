@@ -17,7 +17,7 @@ from motor.motor_asyncio import AsyncIOMotorClient  # noqa: E402
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
 
-async def main():
+async def main() -> None:
     db = AsyncIOMotorClient(os.environ["MONGO_URL"])[os.environ["DB_NAME"]]
     q_in = {"out_of_geofence": True, "site_name": {"$nin": [None, "Off-site"]}}
     n_in = 0

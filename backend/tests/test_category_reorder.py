@@ -10,11 +10,11 @@ import httpx
 
 API_URL = os.environ.get("API_BASE_URL") or "http://localhost:8001"
 ADMIN_EMAIL = "admin@attendance.app"
-ADMIN_PASSWORD = "Admin@12345"
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@12345")
 
 
 @pytest.fixture(scope="module")
-def admin_token():
+def admin_token() -> str:
     r = httpx.post(f"{API_URL}/api/auth/login",
                    json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
                    timeout=15)
@@ -23,17 +23,17 @@ def admin_token():
 
 
 @pytest.fixture
-def hdr(admin_token):
+def hdr(admin_token: str) -> dict:
     return {"Authorization": f"Bearer {admin_token}"}
 
 
-def _keys(hdr):
+def _keys(hdr: dict) -> list:
     r = httpx.get(f"{API_URL}/api/meals/purchase-categories", headers=hdr, timeout=10)
     r.raise_for_status()
     return [c["key"] for c in r.json().get("categories") or []]
 
 
-def test_reorder_moves_dairy_above_cleaning(hdr):
+def test_reorder_moves_dairy_above_cleaning(hdr: dict) -> None:
     initial = _keys(hdr)
     assert "dairy_products" in initial and "cleaning_items" in initial
 
@@ -51,7 +51,7 @@ def test_reorder_moves_dairy_above_cleaning(hdr):
     assert got.index("dairy_products") < got.index("cleaning_items"), got
 
 
-def test_reorder_rejects_unknown_key(hdr):
+def test_reorder_rejects_unknown_key(hdr: dict) -> None:
     r = httpx.put(f"{API_URL}/api/meals/purchase-categories/reorder",
                   headers=hdr, json={"keys": ["totally_made_up_key"]},
                   timeout=10)
@@ -59,7 +59,7 @@ def test_reorder_rejects_unknown_key(hdr):
     assert "unknown" in r.json()["detail"].lower()
 
 
-def test_reorder_preserves_forgotten_keys_at_tail(hdr):
+def test_reorder_preserves_forgotten_keys_at_tail(hdr: dict) -> None:
     """Sending a subset of keys must not drop the missing ones — they
     slide to the bottom so nothing disappears from Daily Entry."""
     initial = _keys(hdr)
@@ -74,7 +74,7 @@ def test_reorder_preserves_forgotten_keys_at_tail(hdr):
     assert set(got) == set(initial)
 
 
-def test_sort_items_by_consumption_only_touches_items(hdr):
+def test_sort_items_by_consumption_only_touches_items(hdr: dict) -> None:
     """Feb 20 clarification: categories keep their manual order — ONLY
     items get renumbered inside each category. The new endpoint returns
     per-category touched counts and never emits a `categories` array."""
@@ -92,7 +92,7 @@ def test_sort_items_by_consumption_only_touches_items(hdr):
     assert after == before, f"categories moved: before {before} → after {after}"
 
 
-def test_sort_items_alphabetically(hdr):
+def test_sort_items_alphabetically(hdr: dict) -> None:
     r = httpx.post(f"{API_URL}/api/meals/items/sort-within-categories",
                    params={"by": "alpha"},
                    headers=hdr, timeout=15)
@@ -119,7 +119,7 @@ def test_sort_items_alphabetically(hdr):
         break   # one populated category is enough
 
 
-def test_sort_only_one_category(hdr):
+def test_sort_only_one_category(hdr: dict) -> None:
     """Feb 20 request: per-category sort button on Daily Entry rows.
     Passing category_key limits the renumber to that ONE category and
     reports it in the response — other categories keep their order."""
