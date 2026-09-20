@@ -419,9 +419,14 @@ export default function SelfCheckIn() {
   // manual button (which enforces the selfie + reason).
   useEffect(() => {
     if (loading || autoTriedRef.current) return;
-    if (status?.checked_in || onTempOut) return;
-    if (geoPerm === "denied") { autoTriedRef.current = true; return; }
+    // Arm-once BEFORE the checked-in guard (bug fix Jun 2026): a member who
+    // opens the page while ALREADY checked in must NOT be silently
+    // re-checked-in the instant they later tap check-OUT. Marking the ref
+    // here means auto check-in is evaluated exactly once per page load, so
+    // the post-checkout status flip can never re-trigger it.
     autoTriedRef.current = true;
+    if (status?.checked_in || onTempOut) return;
+    if (geoPerm === "denied") return;
     (async () => {
       const { lat, lng, acc } = await getCoords();
       if (lat == null || lng == null) return;
