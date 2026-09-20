@@ -2287,12 +2287,22 @@ async def my_attendance_status(user: dict = Depends(get_current_user)):
     sess = await open_session_for(user["id"])
     open_exc = _open_excursion(sess) if sess else None
     late_days = await _late_days_in_month(user["id"], sess["date"]) if sess and sess.get("late") else 0
+    # One-check-in-per-day: when the member has no open session but already
+    # has a row for today, they've completed their day — the UI shows a
+    # "Checked out for the day" state instead of offering check-in again.
+    done_for_today = False
+    if sess is None:
+        office = await db.config.find_one({"id": "office"})
+        row = await db.attendance.find_one(
+            {"user_id": user["id"], "date": local_date_str(office)}, {"_id": 0, "id": 1})
+        done_for_today = row is not None
     return {
         "checked_in": sess is not None,
         "on_temp_exit": open_exc is not None,
         "current_excursion": open_exc,
         "session": sess,
         "late_days_this_month": late_days,
+        "done_for_today": done_for_today,
     }
 
 
@@ -2508,6 +2518,17 @@ async def _cancel_stale_missed_checkin(user_id: str, date_iso: str) -> int:
     return res.modified_count
 
 
+async def _has_checkin_today(user_id: str, date_str: str) -> bool:
+    """One-check-in-per-day rule (Jun 2026, user-confirmed, no exceptions).
+    Once a member has ANY attendance row for the office-local day, a fresh
+    check-in is refused across every surface (self GPS, QR/console, muster).
+    Intra-day breaks use Step Out (excursions, same row); a check-out ends
+    the day. This structurally prevents the auto-checkin-after-checkout bug
+    from ever creating a second session again."""
+    row = await db.attendance.find_one(
+        {"user_id": user_id, "date": date_str}, {"_id": 0, "id": 1})
+    return row is not None
+
 
 async def perform_toggle(target, office, lat, lng, photo, reason, method, scanned_by):
     """Check a member in (if no open session) or out (if open). Stores location + reason."""
@@ -2523,6 +2544,10 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
     site_id, site_name, dist, out, nearest_label = await _resolve_site_for(office, lat, lng)
     sess = await open_session_for(target["id"])
     ts = now_utc()
+    if not sess and await _has_checkin_today(target["id"], local_date_str(office, ts)):
+        raise HTTPException(
+            status_code=400,
+            detail=f"ALREADY_CHECKED_IN_TODAY: {target.get('full_name') or 'This member'} has already checked in today. Use Step Out for breaks; once checked out, they're done for the day.")
     # Build a small thumbnail of the verification photo so the Presence board
     # can render it without pulling the full ~30 KB JPEG per member.
     photo_thumb = _make_thumbnail(photo) if photo else None
@@ -2667,6 +2692,10 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         stored_lat, stored_lng = lat, lng
     sess = await open_session_for(target["id"])
     ts = now_utc()
+    if not sess and await _has_checkin_today(target["id"], local_date_str(office, ts)):
+        raise HTTPException(
+            status_code=400,
+            detail="ALREADY_CHECKED_IN_TODAY: You've already checked in today. Use Step Out for breaks; once you check out, you're done for the day. If this is a mistake, please ask an admin.")
     if sess:
         # DAR gate (Sep 2026): payroll employees must file a Daily Activity
         # Report before their self check-out completes. Proxy paths
@@ -4564,6 +4593,10 @@ app.include_router(_suggestions_router(db, get_current_user, require_admin, writ
 # fields, and structural inconsistencies.
 from routes.data_quality import make_router as _data_quality_router  # noqa: E402
 app.include_router(_data_quality_router(db, require_admin))
+
+# Attendance dedupe / repair tool (Jun 2026) — one-check-in-per-day cleanup.
+from routes.attendance_repair import make_router as _attendance_repair_router  # noqa: E402
+app.include_router(_attendance_repair_router(db, require_admin))
 
 # Single-glance admin dashboard (GET /api/admin/dashboard) — aggregates
 # Now / This week / This month / Attention widgets in one payload.

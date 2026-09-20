@@ -8,7 +8,7 @@
  *      drift (say, someone typing a 9-digit mobile) surfaces fast.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCw, ShieldAlert, CheckCircle2, Wrench } from "lucide-react";
+import { Loader2, RefreshCw, ShieldAlert, CheckCircle2, Wrench, Trash2, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
@@ -122,6 +122,136 @@ function EntityRefs({ f }) {
   );
 }
 
+function AttendanceDedupePanel() {
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [done, setDone] = useState(null);
+
+  const runPreview = async () => {
+    setLoading(true); setDone(null);
+    try {
+      const r = await api.get("/admin/tools/attendance-dedupe/preview");
+      setPreview(r);
+    } catch (e) {
+      toast.error(e?.message || "Preview failed");
+    } finally { setLoading(false); }
+  };
+
+  const runApply = async () => {
+    if (!preview || preview.rows_to_remove === 0) return;
+    if (!window.confirm(
+      `Repair ${preview.days_affected} day(s) across ${preview.members_affected} member(s)?\n\n` +
+      `This removes ${preview.rows_to_remove} extra same-day check-in row(s), keeps the first session, and recomputes hours + late.\n\n` +
+      `Removed rows are archived (reversible) and audit-logged. Super Admin only.`
+    )) return;
+    setApplying(true);
+    try {
+      const r = await api.post("/admin/tools/attendance-dedupe/apply");
+      setDone(r);
+      toast.success(`Repaired — ${r.rows_removed} row(s) removed, ${r.kept_rows_fixed} session(s) fixed.`);
+      await runPreview();
+    } catch (e) {
+      toast.error(/403/.test(e?.message || "") ? "Super Admin only — ask the Super Admin to run this." : (e?.message || "Apply failed"));
+    } finally { setApplying(false); }
+  };
+
+  return (
+    <div className="iu-card p-4 md:p-5 mb-6 border-2 border-amber-200 bg-amber-50/40" data-testid="dedupe-panel">
+      <div className="flex items-start gap-2 mb-2">
+        <Wrench size={18} className="text-amber-600 mt-0.5 shrink-0" />
+        <div>
+          <h2 className="text-base md:text-lg font-extrabold tracking-tight text-slate-800">Repair auto check-in duplicates</h2>
+          <p className="text-sm text-slate-600 mt-0.5">
+            Cleans up extra same-day check-ins left by the old auto check-in bug. Keeps the first
+            session per day, carries the day's last check-out onto it, recomputes hours + late.
+            Removed rows are archived and audit-logged. <span className="font-semibold">Preview is safe; Apply is Super-Admin only.</span>
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 mt-3">
+        <button
+          type="button" onClick={runPreview} disabled={loading || applying}
+          data-testid="dedupe-preview-btn"
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-white border border-slate-300 text-slate-800 text-sm font-bold hover:bg-slate-100 transition disabled:opacity-60"
+        >
+          {loading ? <Loader2 size={15} className="animate-spin" /> : <ClipboardList size={15} />} Preview
+        </button>
+        {preview && preview.rows_to_remove > 0 && (
+          <button
+            type="button" onClick={runApply} disabled={applying || loading}
+            data-testid="dedupe-apply-btn"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-rose-600 text-white text-sm font-bold hover:bg-rose-700 transition disabled:opacity-60"
+          >
+            {applying ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Apply repair
+          </button>
+        )}
+      </div>
+
+      {preview && (
+        <div className="mt-4" data-testid="dedupe-summary">
+          <div className="grid grid-cols-3 gap-3 max-w-md">
+            <div className="rounded-xl bg-white border border-slate-200 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">Days affected</div>
+              <div className="text-2xl font-extrabold tabular-nums text-slate-800">{preview.days_affected}</div>
+            </div>
+            <div className="rounded-xl bg-white border border-slate-200 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">Members</div>
+              <div className="text-2xl font-extrabold tabular-nums text-slate-800">{preview.members_affected}</div>
+            </div>
+            <div className="rounded-xl bg-white border border-slate-200 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">Rows to remove</div>
+              <div className="text-2xl font-extrabold tabular-nums text-rose-700">{preview.rows_to_remove}</div>
+            </div>
+          </div>
+          {preview.rows_to_remove === 0 ? (
+            <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
+              <CheckCircle2 size={15} /> All clean — every day has a single check-in.
+            </p>
+          ) : (
+            <div className="mt-3 max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 text-slate-500 sticky top-0">
+                  <tr className="text-left">
+                    <th className="px-3 py-2 font-bold">Member</th>
+                    <th className="px-3 py-2 font-bold">Date</th>
+                    <th className="px-3 py-2 font-bold">Remove</th>
+                    <th className="px-3 py-2 font-bold">Late</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.plan.slice(0, 300).map((p) => (
+                    <tr key={p.keep_id} className="border-t border-slate-100" data-testid="dedupe-row">
+                      <td className="px-3 py-1.5 font-semibold text-slate-800">{p.name}</td>
+                      <td className="px-3 py-1.5 tabular-nums text-slate-600">{p.date}</td>
+                      <td className="px-3 py-1.5 tabular-nums text-rose-700 font-bold">{p.remove_count}</td>
+                      <td className="px-3 py-1.5">
+                        {p.late_was !== p.late_now ? (
+                          <span className="text-emerald-700 font-semibold">{p.late_was ? "LT→on-time" : "→LT"}</span>
+                        ) : (
+                          <span className="text-slate-400">{p.late_now ? "LT" : "—"}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {preview.plan.length > 300 && (
+                <div className="px-3 py-2 text-[11px] text-slate-500">Showing first 300 of {preview.plan.length} days.</div>
+              )}
+            </div>
+          )}
+          {done && (
+            <p className="mt-2 text-sm font-semibold text-emerald-700" data-testid="dedupe-done">
+              ✓ Removed {done.rows_removed}, fixed {done.kept_rows_fixed}. Archived to attendance_removed.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DataQuality() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -163,6 +293,8 @@ export default function DataQuality() {
         <ShieldAlert size={20} className="text-slate-500" />
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Data Quality</h1>
       </div>
+
+      <AttendanceDedupePanel />
 
       {/* Summary strip */}
       {data && (

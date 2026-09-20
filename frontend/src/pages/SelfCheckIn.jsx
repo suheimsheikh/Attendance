@@ -109,6 +109,9 @@ export default function SelfCheckIn() {
   const onTempOut = !!status?.on_temp_exit;
   const currentExcursion = status?.current_excursion;
   const actionLabel = status?.checked_in ? "Leaving Campus" : "I showed up 😊";
+  // One-check-in-per-day: member has a completed session today and is not
+  // currently checked in → they're done. Show a closing card, no re-check-in.
+  const doneToday = !!status?.done_for_today && !status?.checked_in;
   const darMin = darStatus?.min_chars || 20;
   const darNeededNow = !!(status?.checked_in && ((darStatus?.required && !darStatus?.done_today) || darServerForced));
   const darBlocked = darNeededNow && darText.trim().length < darMin;
@@ -292,6 +295,13 @@ export default function SelfCheckIn() {
         toast.info("You're outside the site — please take a quick selfie and give a reason.");
         return;
       }
+      if (/ALREADY_CHECKED_IN_TODAY/.test(err?.message || "")) {
+        // One-check-in-per-day rule — refresh so the UI flips to the
+        // "checked out for the day" state and drop the raw error text.
+        toast.info("You're done for the day — you've already checked in and out today.");
+        refresh();
+        return;
+      }
       if (/DAR_REQUIRED/.test(err?.message || "")) {
         // Server enforced the DAR even though the UI didn't show the field
         // (status failed to load). Reveal it inline and let them file + retry.
@@ -425,7 +435,7 @@ export default function SelfCheckIn() {
     // here means auto check-in is evaluated exactly once per page load, so
     // the post-checkout status flip can never re-trigger it.
     autoTriedRef.current = true;
-    if (status?.checked_in || onTempOut) return;
+    if (status?.checked_in || onTempOut || status?.done_for_today) return;
     if (geoPerm === "denied") return;
     (async () => {
       const { lat, lng, acc } = await getCoords();
@@ -533,7 +543,7 @@ export default function SelfCheckIn() {
       )}
 
       {/* DAR pending / filed card — after check-out (or when checked out by a proxy) */}
-      {!status?.checked_in && !lastDar && (
+      {!status?.checked_in && !lastDar && !doneToday && (
         <DarPendingCard status={darStatus} userName={user?.full_name} onSaved={refresh} />
       )}
 
@@ -591,6 +601,24 @@ export default function SelfCheckIn() {
             </div>
           )}
           {status?.checked_in && <CheckoutTaskNudge userName={user?.full_name} />}
+          {doneToday && (
+            <div
+              className="mb-2 mx-auto max-w-sm rounded-2xl border-2 border-slate-200 bg-slate-50 px-5 py-6"
+              data-testid="done-for-today-card"
+              role="status"
+            >
+              <div className="flex items-center justify-center gap-2 text-slate-700">
+                <CheckCircle2 size={30} strokeWidth={2.5} className="text-emerald-600" />
+                <span className="text-2xl md:text-3xl font-extrabold tracking-tight">Done for the day</span>
+              </div>
+              <p className="text-sm text-slate-600 mt-2 font-medium">
+                You&apos;ve already checked in and out today. Enjoy the rest of your day! 👋
+              </p>
+              <p className="text-xs text-slate-500 mt-2">
+                Checked out by mistake? Please ask an admin to fix it — you can&apos;t check in again today.
+              </p>
+            </div>
+          )}
           {darNeededNow && (
             <div data-testid="dar-voice-block">
               <button type="button" onClick={speakDar} data-testid="dar-voice-replay"
@@ -629,7 +657,7 @@ export default function SelfCheckIn() {
             disabled={working || darBlocked}
             onClick={handleToggle}
             title={darBlocked ? `Enter your DAR (min ${darMin} characters) to check out` : undefined}
-            className={`mx-auto inline-flex flex-col items-center justify-center gap-2 rounded-3xl shadow-xl transition active:scale-[0.97] disabled:opacity-60 w-44 h-44 ${
+            className={`mx-auto ${doneToday ? "hidden" : "inline-flex"} flex-col items-center justify-center gap-2 rounded-3xl shadow-xl transition active:scale-[0.97] disabled:opacity-60 w-44 h-44 ${
               status?.checked_in
                 ? "bg-gradient-to-br from-rose-500 to-rose-700 text-white"
                 : "bg-white text-slate-900 ring-2 ring-sky-100 hover:ring-sky-200"
@@ -655,7 +683,7 @@ export default function SelfCheckIn() {
             <span className="text-base font-extrabold tracking-tight">{actionLabel}</span>
           </button>
 
-          {photoNeeded && !status?.checked_in && (
+          {photoNeeded && !status?.checked_in && !doneToday && (
             <p className="text-[11px] text-slate-500 mt-3 flex items-center justify-center gap-1.5" data-testid="selfie-hint">
               <Camera size={12} />
               {photoStatus?.reason === "weekly_refresh"

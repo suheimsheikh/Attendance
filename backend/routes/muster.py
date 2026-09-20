@@ -166,6 +166,14 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         ).to_list(2000)
         open_map = {s["user_id"]: s for s in open_sessions}
         open_ids = set(open_map.keys())
+        # One-check-in-per-day (Jun 2026): members who already CHECKED OUT
+        # today are done for the day — grey them out in the check-in list too
+        # (not only those still open), matching the backend block.
+        done_today = await db.attendance.find(
+            {"date": today, "check_out_at": {"$ne": None}},
+            {"_id": 0, "user_id": 1},
+        ).to_list(2000)
+        done_today_ids = {d["user_id"] for d in done_today}
 
         # Members on Leave or Tour are excluded from muster (they can't
         # be checked in). Postings are NOT in this list — R2 (30 Jun 2026)
@@ -183,6 +191,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         for s in athletes:
             sid = s["id"]
             already_in = sid in open_ids
+            completed_today = sid in done_today_ids
             if mode == "checkin":
                 # On leave or tour → skip entirely (they're not eligible at all).
                 if sid in on_leave_ids:
@@ -209,7 +218,8 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 "guardian_mobile": s.get("guardian_mobile"),
                 # New: the frontend uses these two to render a disabled
                 # "Already checked in · HH:MM" pill instead of a tickable row.
-                "already_checked_in": bool(already_in) if mode == "checkin" else False,
+                "already_checked_in": bool(already_in or completed_today) if mode == "checkin" else False,
+                "completed_today": bool(completed_today) if mode == "checkin" else False,
                 "check_in_at": sess.get("check_in_at") if (mode == "checkin" and sess) else None,
             })
 
@@ -516,8 +526,14 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 skipped.append({"id": sid, "name": athlete["full_name"],
                                 "reason": f"exited on {athlete.get('leaving_date')}"})
                 continue
-            if await db.attendance.find_one({"user_id": sid, "check_out_at": None}):
-                skipped.append({"id": sid, "name": athlete["full_name"], "reason": "already checked in"})
+            # One-check-in-per-day (Jun 2026): skip anyone who already has
+            # ANY attendance row today — still open OR already checked out.
+            # Once done for the day, muster can't re-add them.
+            existing = await db.attendance.find_one(
+                {"user_id": sid, "date": today}, {"_id": 0, "check_out_at": 1})
+            if existing:
+                reason_txt = "already checked in" if existing.get("check_out_at") is None else "already completed today"
+                skipped.append({"id": sid, "name": athlete["full_name"], "reason": reason_txt})
                 continue
             late, late_min = compute_late(
                 office, athlete, now, camp=await active_camp_for(athlete, now, office),

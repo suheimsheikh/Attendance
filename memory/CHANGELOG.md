@@ -4,6 +4,26 @@ Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
 
+## 20 Sep 2026 — Auto check-in-after-checkout bug + one-check-in-per-day rule + repair tool
+
+**Root cause of the field reports** ("as soon as staff checked out, the app auto checked them back in, then they checked out again and got marked late"): in `SelfCheckIn.jsx` the auto check-in effect armed its `autoTriedRef` guard *after* the "already checked in?" early-return. Members who opened the page already checked in never armed the guard, so tapping check-OUT flipped `status.checked_in` false and re-triggered the auto check-in. Created spurious late-flagged re-check-in rows (measured: 268 re-check-ins within 10 min of a checkout, 217 wrongly late).
+
+**Fixes shipped (all code — auto-live on deploy):**
+- **Frontend auto check-in fix**: arm `autoTriedRef` on the first post-load evaluation, BEFORE the checked-in guard, so auto check-in evaluates exactly once per page load and a same-session checkout can't re-trigger it. Also added `status.done_for_today` to the effect's early-return.
+- **One-check-in-per-day enforcement (user-confirmed, no exceptions)** across every surface: `_geo_toggle` (self GPS) and `perform_toggle` (QR/console) in `server.py`, and `muster_checkin_bulk` + the muster listing in `routes/muster.py`. New helper `_has_checkin_today(user_id, date)` — once ANY attendance row exists for the office-local day, a fresh check-in is refused (`400 ALREADY_CHECKED_IN_TODAY`). Intra-day breaks use Step Out; a check-out ends the day. Accidental checkout → admin correction only.
+- **Status endpoint** `/attendance/status` now returns `done_for_today` (no open session but a row exists today) → frontend shows a "Done for the day" card instead of the check-in button.
+- **`_apply_time_adjust`** (`routes/corrections.py`) now recomputes `late`/`late_minutes` from the corrected check-in time (was keeping the stale flag → wrong LT on the grid, e.g. KARTHIKEYAN 19 Sep). Uses `compute_late`.
+- Earlier same-session: DAR-required WhatsApp checkout-share guard, correction duplicate/stale guards + `_cancel_stale_missed_checkin`, DAR-exempt grid projection fix (`reports.py` `_grid_impl` now projects `dar_exempt`/`dar_required`/`status`).
+
+**Super-Admin data-repair tool (`routes/attendance_repair.py`, UI in `admin/DataQuality.jsx`):**
+- `GET /api/admin/tools/attendance-dedupe/preview` (dry-run, any admin) and `POST .../apply` (Super-Admin only). Keeps the FIRST check-in per day, carries the day's LAST checkout onto it, recomputes hours + late, archives removed rows to `attendance_removed` (reversible) + audit-logs each removal. Preview on preview DB: 356 days / 72 members / 455 rows.
+- **Must be run once on PROD after deploy** (Data Quality → "Repair auto check-in duplicates" → Preview → Apply). Preview-DB data changes do NOT carry to prod.
+
+**Verification**: e2e enforcement via live geo-toggle endpoint (checkin→checkout→2nd checkin=400; status done_for_today=true), apply logic on synthetic data (1 row kept, checkout merged, hours 8.25, late cleared, 2 archived), preview endpoint via curl. Frontend compiles clean. Also cleared 5 legacy stale-LT corrected rows on preview only.
+
+---
+
+
 ## 12 Sep 2026 (pt.6) — Consumption per-meal column, date logic, app-wide tooltips
 
 - **Consumption page (/admin/meals-calendar)**: moved the daily meal-count table ABOVE the Analytics panel; added per-day **Purchase ₹** and **Issue ₹** columns and a new **₹/Meal** column (issue cost ÷ meals served, rounded to whole rupees) on day rows, month subtotals and the footer total; added Purchase ₹ / Issue ₹ / Issue ₹-per-Meal KPI pills. Backend `/meals/meal-calendar` now returns per-day `purchase_cost`, `issue_cost` and window `issue_cost_per_meal` (issues valued at weighted-avg purchase rate). Fixed a latent tfoot that was missing the Midmorning/Afternoon-Snack columns.
