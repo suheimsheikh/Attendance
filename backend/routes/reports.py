@@ -883,6 +883,12 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1,
              "fleet": 1, "institution": 1, "weekly_off": 1,
              "work_start": 1, "work_end": 1,
+             # dar_exempt / dar_required MUST be projected — the DAR-miss
+             # column runs dar_required_for() on these dicts, and without
+             # these fields every staff/coach is wrongly treated as
+             # DAR-required (exempt cooks/drivers/security showed misses).
+             # Fixed Jun 2026 (user report).
+             "dar_exempt": 1, "dar_required": 1, "status": 1,
              # Joining/leaving dates drive the "NJ" (Not Joined) and
              # "LF" (Left) cell codes so the Grid doesn't show
              # pre-joining or post-leaving days as absent. Added
