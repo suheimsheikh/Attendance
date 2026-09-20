@@ -450,6 +450,32 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             requester_id = user["id"]
             requester_name = user["full_name"]
 
+        # Guard (Jun 2026, user request) — avoid stale/duplicate corrections:
+        #   (a) A "missed check-in" creates a NEW row, so refuse to file one
+        #       when a row already exists for that member+date (they checked
+        #       in after all / another correction already made it). Point
+        #       them at "time adjust" instead.
+        #   (b) Block a second PENDING request for the same member + date +
+        #       kind so the same fix can't be queued twice.
+        # (The check-in path also auto-cancels any missed-checkin correction
+        #  filed BEFORE the row appeared — see _cancel_stale_missed_checkin.)
+        if body.entity_type == "attendance" and body.kind == "missed_checkin":
+            existing_row = await db.attendance.find_one(
+                {"user_id": requester_id, "date": body.target_date}, {"_id": 0, "id": 1})
+            if existing_row:
+                raise HTTPException(
+                    status_code=409,
+                    detail="This day already has an attendance record — file a 'Time adjust' to fix the times instead of a missed check-in.")
+        dup = await db.corrections.find_one({
+            "entity_type": body.entity_type, "kind": body.kind,
+            "requester_id": requester_id, "target_date": body.target_date,
+            "status": "pending",
+        }, {"_id": 0, "id": 1})
+        if dup:
+            raise HTTPException(
+                status_code=409,
+                detail="There's already a pending request for this date — an admin will review it. No need to file it again.")
+
         # Admins bypass the retro window — they're often filing late
         # corrections precisely BECAUSE the member missed the window.
         # Non-admin self-filed requests still respect the policy.

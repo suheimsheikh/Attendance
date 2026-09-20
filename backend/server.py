@@ -2490,6 +2490,25 @@ async def _resolve_site_for(office: dict, lat: float, lng: float):
     return site_id, site_name, dist, out, nearest_label
 
 
+async def _cancel_stale_missed_checkin(user_id: str, date_iso: str) -> int:
+    """When a real attendance row is created for a member+date, auto-cancel
+    any still-pending 'missed check-in' correction for that same member+date.
+    Once a row exists the correction can never be applied (it would duplicate
+    the day), so we resolve it here instead of letting it 409 at approval
+    time. Covers both: (a) member files a missed check-in then actually
+    checks in that day, and (b) a duplicate correction whose earlier twin
+    already produced the row."""
+    res = await db.corrections.update_many(
+        {"entity_type": "attendance", "kind": "missed_checkin", "status": "pending",
+         "requester_id": user_id, "target_date": date_iso},
+        {"$set": {"status": "rejected", "decided_at": now_utc().isoformat(),
+                  "decided_by_name": "System (auto)",
+                  "admin_note": "Auto-resolved — member now has an attendance record for this date, so no missed check-in to create."}},
+    )
+    return res.modified_count
+
+
+
 async def perform_toggle(target, office, lat, lng, photo, reason, method, scanned_by):
     """Check a member in (if no open session) or out (if open). Stores location + reason."""
     # Ex-member cutoff: once a member's leaving_date is in the past,
@@ -2586,6 +2605,7 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
         } if (late or out) else None,
     }
     await db.attendance.insert_one(doc)
+    await _cancel_stale_missed_checkin(doc["user_id"], doc["date"])
     return {"ok": True, "action": "checkin", "member": target["full_name"],
             "out_of_geofence": out, "distance_m": dist,
             "site_id": site_id, "site_name": site_name, "site_label": nearest_label,
@@ -2818,6 +2838,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             "work_start_at_session": work_start_hm,
         })
     await db.attendance.insert_one(doc)
+    await _cancel_stale_missed_checkin(doc["user_id"], doc["date"])
     # Early-OT reason → personal bank (see notes on _ensure_reason_in_bank).
     if early_min > 0 and overtime_reason and overtime_reason.strip():
         await _ensure_reason_in_bank(target["id"], overtime_reason)
