@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field
 from services.time_utils import now_utc, local_date_str, office_tz
 from services.permissions import is_super_admin
 from services.attendance_bulk import apply_bulk_delete
+from services.attendance_calc import compute_late
 
 
 # Rolling window in which members may request a correction. Fits the
@@ -156,6 +157,23 @@ async def _apply_time_adjust(db, c: dict, admin: dict) -> dict:
             update["hours"] = round(max(0.0, (co - ci).total_seconds() / 3600.0), 2)
             update["missing_checkout"] = False
             update["needs_correction"] = False
+        except Exception:
+            pass
+    # Recompute the late flag from the corrected check-in time (Jun 2026,
+    # user report): a time-adjust that moves the arrival to on-time must
+    # clear a stale `late`, otherwise the Grid keeps showing "LT" for a day
+    # the admin just fixed. Uses the member's work_start + office grace via
+    # the same compute_late() the check-in path uses.
+    if p.get("check_in_time"):
+        try:
+            office_full = await db.config.find_one({"id": "office"}, {"_id": 0})
+            member = await db.users.find_one({"id": row["user_id"]}, {"_id": 0})
+            ci_late = datetime.fromisoformat(update["check_in_at"])
+            if ci_late.tzinfo is None:
+                ci_late = ci_late.replace(tzinfo=office_tz(office_full))
+            is_late, late_min = compute_late(office_full or {}, member or {}, ci_late)
+            update["late"] = is_late
+            update["late_minutes"] = late_min
         except Exception:
             pass
     await db.attendance.update_one({"id": c["entity_id"]}, {"$set": update})
