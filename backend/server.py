@@ -107,6 +107,7 @@ from services.attendance_calc import (  # noqa: E402, F401
     compute_late,
     hm_to_minutes as _hm_to_minutes,
     compute_overtime_in, compute_overtime_out,
+    session_ot_minutes as _session_ot_minutes,
     excursion_seconds as _excursion_seconds,
     open_excursion as _open_excursion,
     parse_expected_return as _parse_expected_return,
@@ -346,6 +347,11 @@ class MemberCreate(BaseModel):
     ot_eligible: Optional[bool] = None
     dar_exempt: Optional[bool] = None
     dar_required: Optional[bool] = None
+    # Hourly-wager flag (Jun 2026). When True, the member is paid purely
+    # for hours actually worked (check-in → check-out), fed to payroll via
+    # the OT channel rounded to the nearest half hour. They accrue no
+    # standard early-in/late-out OT and get no leave / weekly-off pay.
+    hourly_wager: Optional[bool] = None
     # 20 Feb 2026 chef request: allow per-member override of the
     # category-level `meal_eligible` flag so edge cases (e.g. a driver
     # who never eats mess) don't require creating a whole new category.
@@ -382,6 +388,8 @@ class MemberUpdate(BaseModel):
     ot_eligible: Optional[bool] = None
     dar_exempt: Optional[bool] = None
     dar_required: Optional[bool] = None
+    # See the note on MemberCreate.hourly_wager.
+    hourly_wager: Optional[bool] = None
     # Per-member override — see the note on MemberIn.meal_eligible.
     meal_eligible: Optional[bool] = None
 
@@ -1107,6 +1115,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
         "ot_eligible": body.ot_eligible,
         "dar_exempt": body.dar_exempt,
         "dar_required": body.dar_required,
+        "hourly_wager": body.hourly_wager,
         "photo": None,
         "personal_qr": "CARD-" + uuid.uuid4().hex[:12].upper(),
         "hashed_password": hash_password(body.password),
@@ -4123,7 +4132,7 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
 async def compute_hours_report(start: str, end: str) -> List[dict]:
     """Aggregate hours and days present per member between dates inclusive."""
     users = await db.users.find(
-        {}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "weekly_off": 1, "fleet": 1, "leaving_date": 1}
+        {}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "weekly_off": 1, "fleet": 1, "leaving_date": 1, "hourly_wager": 1}
     ).sort("full_name", 1).to_list(2000)
     sd = date.fromisoformat(start)
     ed = date.fromisoformat(end)
@@ -4327,7 +4336,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         # pending buckets are collapsed into the same value). Keys kept
         # for backward-compat with older frontend clients that still
         # read `overtime_hours_approved` / `overtime_hours_pending`.
-        total_ot_min = sum(int(s.get("overtime_total_min") or 0) for s in sessions)
+        total_ot_min = sum(_session_ot_minutes(u, s) for s in sessions)
         approved_ot_min = total_ot_min
         pending_ot_min = 0
         # Compensatory off bookkeeping (within this report's date range)
@@ -4436,7 +4445,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             # (7 Jul 2026 — drives the Attendance table's Overtime · Served
             # column). Rejected OT is still time-served, so it's included.
             "overtime_hours_served": round(
-                sum(int(s.get("overtime_total_min") or 0) for s in sessions) / 60.0, 2
+                sum(_session_ot_minutes(u, s) for s in sessions) / 60.0, 2
             ),
             "comp_off_earned": co_earned,
             "comp_off_used": co_used,
@@ -4474,7 +4483,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "dates_escort": sorted(escort_days_by_user.get(u["id"], set())),
             "dates_overtime_served": sorted({
                 s["date"] for s in sessions
-                if int(s.get("overtime_total_min") or 0) > 0
+                if _session_ot_minutes(u, s) > 0
             }),
             # 15 Feb 2026: OT no longer has an approval workflow, so
             # applied/approved buckets are now aliases of served. Kept
@@ -4482,7 +4491,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "dates_overtime_applied": [],
             "dates_overtime_approved": sorted({
                 s["date"] for s in sessions
-                if int(s.get("overtime_total_min") or 0) > 0
+                if _session_ot_minutes(u, s) > 0
             }),
             "dates_comp_off_earned": sorted({
                 s["date"] for s in sessions

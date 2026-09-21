@@ -43,6 +43,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     // Undefined on legacy members → treat as eligible (matches the
     // backend's opt-out semantics). Admin can uncheck to disable.
     ot_eligible: initial?.ot_eligible !== false,
+    hourly_wager: initial?.hourly_wager === true,
     dar_exempt: initial?.dar_exempt === true,
     dar_required: initial?.dar_required === true,
     // Per-member meal-eligibility override (Feb 2026). Three states,
@@ -357,6 +358,26 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               </span>
             </label>
           </div>
+          {["staff", "coach", "executive"].includes(form.category) && (
+            <div>
+              <label className="iu-label">Hourly wager</label>
+              <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
+                <input
+                  data-testid="mf-hourly-wager"
+                  type="checkbox"
+                  checked={!!form.hourly_wager}
+                  onChange={(e) => set("hourly_wager", e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800"
+                />
+                <span className="text-sm text-slate-700 leading-snug">
+                  Paid per hour worked — check-in to check-out hours, rounded to the nearest half hour, are passed to payroll as OT.
+                  <span className="block text-[11px] text-slate-500 mt-0.5">
+                    For occasional coaches who are paid only for time present. They earn no leave or weekly-off pay and accrue no standard early-in/late-out OT.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
           {["elite", "athlete"].includes(form.category) && (
             <div>
               <label className="iu-label">Daily Activity Report</label>

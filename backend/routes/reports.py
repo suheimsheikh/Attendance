@@ -27,6 +27,7 @@ from services.time_utils import local_date_str, local_hm, local_now, now_utc
 from services.permissions import is_super_admin
 from grid_models import GridReadResponse
 from services.grid_punches import grid_punch_meta
+from services.attendance_calc import session_ot_minutes
 import breaks as _breaks_module
 
 
@@ -264,6 +265,42 @@ def _csv_response(headers: List[str], rows: List[List], filename: str) -> Respon
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+async def _hourly_wager_ot_rows(db, member_id: str, start: str, end: str) -> List[dict]:
+    """OT-ledger rows for an hourly-wager member. Each worked day (a
+    closed session with `hours`) becomes one row whose OT total is the
+    hours worked rounded to the nearest half hour — mirroring how their
+    pay is fed to payroll. The early/late split doesn't apply, so the
+    whole value sits in the Total column with a self-describing reason."""
+    docs = await db.attendance.find(
+        {"user_id": member_id,
+         "date": {"$gte": start, "$lte": end},
+         "hours": {"$gt": 0}},
+        {"_id": 0, "date": 1, "check_in_at": 1, "check_out_at": 1, "hours": 1},
+    ).sort("date", 1).to_list(2000)
+    member = {"hourly_wager": True}
+    rows: List[dict] = []
+    for d in docs:
+        ot = session_ot_minutes(member, d)
+        if ot <= 0:
+            continue
+        hrs = float(d.get("hours") or 0)
+        rows.append({
+            "date": d.get("date"),
+            "check_in_at": d.get("check_in_at"),
+            "check_out_at": d.get("check_out_at"),
+            "overtime_early_min": 0,
+            "overtime_late_min": 0,
+            "overtime_total_min": ot,
+            "overtime_reason": f"Hourly wage — {hrs:g}h worked",
+            "overtime_early_reason": None,
+            "overtime_late_reason": None,
+            "overtime_status": None,
+            "hourly_wager": True,
+        })
+    return rows
+
 
 
 def make_router(db, require_admin, get_current_user, compute_hours_report, enrich_leaves) -> APIRouter:
@@ -897,6 +934,8 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
              # DAR-required (exempt cooks/drivers/security showed misses).
              # Fixed Jun 2026 (user report).
              "dar_exempt": 1, "dar_required": 1, "status": 1,
+             # Hourly-wager pay: OT column reflects rounded hours worked.
+             "hourly_wager": 1,
              # Joining/leaving dates drive the "NJ" (Not Joined) and
              # "LF" (Left) cell codes so the Grid doesn't show
              # pre-joining or post-leaving days as absent. Added
@@ -957,7 +996,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                  # into a plain `P` cell on the Grid while the
                  # Attendance report (which correctly reads `late`)
                  # showed them. Prod bug 20 Feb 2026.
-                 "late": 1, "overtime_total_min": 1,
+                 "late": 1, "overtime_total_min": 1, "hours": 1,
                  # Early-out flag stamped at checkout (13 Feb 2026);
                  # historical rows are computed on-the-fly from
                  # check_out_at + user.work_end so the Grid tally is
@@ -1257,8 +1296,9 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                             m["check_out_at"] = att["check_out_at"]
                         if code == "LT" and att.get("late_minutes"):
                             m["late_minutes"] = int(att.get("late_minutes") or 0)
-                        if att.get("overtime_total_min"):
-                            m["ot_minutes"] = int(att.get("overtime_total_min") or 0)
+                        _ot = session_ot_minutes(u, att)
+                        if _ot:
+                            m["ot_minutes"] = _ot
                     if m:
                         cell_meta[iso] = m
             if with_punch_times:
@@ -1271,7 +1311,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             # admins can spot high-OT staff at a glance (15 Feb 2026
             # user request).
             ot_minutes = sum(
-                int((att_by_user.get(uid, {}).get(iso) or {}).get("overtime_total_min") or 0)
+                session_ot_minutes(u, att_by_user.get(uid, {}).get(iso))
                 for iso in days
             )
             # Early-out count (13 Feb 2026 user request) — days where
@@ -1904,27 +1944,30 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         PDF exports.
         """
         start, end, label = _ledger_window(year, month)
-        rows = await db.attendance.find(
-            {"user_id": member_id,
-             "date": {"$gte": start, "$lte": end},
-             "overtime_total_min": {"$gt": 0}},
-            {"_id": 0,
-             "date": 1, "check_in_at": 1, "check_out_at": 1,
-             "overtime_early_min": 1, "overtime_late_min": 1,
-             "overtime_total_min": 1,
-             # Legacy single-field reason kept for backward compat with
-             # rows pre-8-Jul-2026 that never had the split. Post-split
-             # rows carry both `overtime_early_reason` + `overtime_late_reason`.
-             "overtime_reason": 1,
-             "overtime_early_reason": 1, "overtime_late_reason": 1,
-             "overtime_status": 1, "overtime_admin_note": 1,
-             "work_start_at_session": 1, "work_end_at_session": 1,
-             "overtime_decided_by": 1, "overtime_decided_at": 1},
-        ).sort("date", 1).to_list(2000)
         u = await db.users.find_one(
             {"id": member_id},
-            {"_id": 0, "full_name": 1, "rank": 1, "category": 1},
+            {"_id": 0, "full_name": 1, "rank": 1, "category": 1, "hourly_wager": 1},
         )
+        if (u or {}).get("hourly_wager"):
+            rows = await _hourly_wager_ot_rows(db, member_id, start, end)
+        else:
+            rows = await db.attendance.find(
+                {"user_id": member_id,
+                 "date": {"$gte": start, "$lte": end},
+                 "overtime_total_min": {"$gt": 0}},
+                {"_id": 0,
+                 "date": 1, "check_in_at": 1, "check_out_at": 1,
+                 "overtime_early_min": 1, "overtime_late_min": 1,
+                 "overtime_total_min": 1,
+                 # Legacy single-field reason kept for backward compat with
+                 # rows pre-8-Jul-2026 that never had the split. Post-split
+                 # rows carry both `overtime_early_reason` + `overtime_late_reason`.
+                 "overtime_reason": 1,
+                 "overtime_early_reason": 1, "overtime_late_reason": 1,
+                 "overtime_status": 1, "overtime_admin_note": 1,
+                 "work_start_at_session": 1, "work_end_at_session": 1,
+                 "overtime_decided_by": 1, "overtime_decided_at": 1},
+            ).sort("date", 1).to_list(2000)
         total_min = sum(int(r.get("overtime_total_min") or 0) for r in rows)
         return {
             "member_id": member_id,
@@ -1961,22 +2004,25 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         # Reuse the same query as `ot_ledger` so PDF output can never
         # drift from what's on screen.
         start, end, label = _ledger_window(year, month)
-        rows = await db.attendance.find(
-            {"user_id": member_id,
-             "date": {"$gte": start, "$lte": end},
-             "overtime_total_min": {"$gt": 0}},
-            {"_id": 0,
-             "date": 1, "check_in_at": 1, "check_out_at": 1,
-             "overtime_early_min": 1, "overtime_late_min": 1,
-             "overtime_total_min": 1,
-             "overtime_reason": 1,
-             "overtime_early_reason": 1, "overtime_late_reason": 1,
-             "overtime_status": 1, "overtime_admin_note": 1},
-        ).sort("date", 1).to_list(2000)
         u = await db.users.find_one(
             {"id": member_id},
-            {"_id": 0, "full_name": 1, "category": 1, "rank": 1},
+            {"_id": 0, "full_name": 1, "category": 1, "rank": 1, "hourly_wager": 1},
         )
+        if (u or {}).get("hourly_wager"):
+            rows = await _hourly_wager_ot_rows(db, member_id, start, end)
+        else:
+            rows = await db.attendance.find(
+                {"user_id": member_id,
+                 "date": {"$gte": start, "$lte": end},
+                 "overtime_total_min": {"$gt": 0}},
+                {"_id": 0,
+                 "date": 1, "check_in_at": 1, "check_out_at": 1,
+                 "overtime_early_min": 1, "overtime_late_min": 1,
+                 "overtime_total_min": 1,
+                 "overtime_reason": 1,
+                 "overtime_early_reason": 1, "overtime_late_reason": 1,
+                 "overtime_status": 1, "overtime_admin_note": 1},
+            ).sort("date", 1).to_list(2000)
         member_name = (u or {}).get("full_name") or "Member"
         # For IST-correct HH:MM rendering below.
         office = await db.config.find_one({"id": "office"})

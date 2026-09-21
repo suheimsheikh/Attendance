@@ -21,6 +21,16 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 21 Sep 2026 — Hourly-wager pay → OT channel
+- User request: occasional coaches (who study, attend sporadically, get NO leave / weekly-off pay) should be paid purely for hours actually worked. Mark them per-member; their daily hours (check-in→check-out only) flow to payroll through the existing OT channel, rounded to the nearest half hour (5h44m→5.5h, 5h45m→6.0h, half rounds up). Standard early-in/late-out OT is suppressed for them (no double-count). All confirmed via ask_human.
+- New per-member flag **`hourly_wager`** (MemberCreate/MemberUpdate/UserPublic + create doc). Frontend: "Hourly wager" checkbox on MemberForm (`mf-hourly-wager`, shown for staff/coach/executive only), mirrors the dar_required conditional pattern.
+- Single source of truth: `services/attendance_calc.session_ot_minutes(member, session)` — hourly wagers → `round_half_hour_minutes(hours*60)`; everyone else → stamped `overtime_total_min`. `compute_overtime_in/out` now short-circuit to 0 for hourly wagers (suppresses standard OT at the stamp).
+- Routed through EVERY payroll-facing OT consumer: `compute_hours_report` (Reports Attendance `overtime_hours_served` + dates_overtime_served), Grid `_grid_impl` totals.ot_minutes + per-cell tooltip ot_minutes (added `hours` to the grid attendance projection), OT ledger + PDF/CSV export (synthetic per-day rows via `_hourly_wager_ot_rows`, reason "Hourly wage — Xh worked"), and dashboard top-OT / MTD-OT. `/api/grid` external key feed (PayCraft) picks it up automatically via totals.ot_minutes.
+- The stored `hours` field = pure check-in→check-out (excursions NOT subtracted, server.py ~2733) — matches user's "actual check-in/out times only".
+- Verified e2e (throwaway coach, 3 injected days 5.83/5.73/8.08h): Grid ot_minutes=1170 (6.0+5.5+8.0h), payroll overtime_hours_served=19.5, OT ledger total=1170 with per-day rows; cleaned up after. Existing 64 OT/holiday pytests still pass; non-hourly members unaffected. Frontend compiles clean.
+- No production data mutated (consumer-layer computation only — fully reversible by toggling the flag). NOTE: payroll applies the hourly rate on their side; the app only passes the hours as OT.
+
+
 ### 21 Sep 2026 — Integration Grid daily IN/OUT punches
 - User request: "Expose daily IN/OUT punch times in the /api/grid API (for our integration key)". Preferred contract: date-keyed `cell_meta` inside each member row, preserving `cells`, `totals`, `work_start`, `work_end`; key-only access and `category=all`/individual filters. User confirmed the existing office timezone (Asia/Kolkata).
 - `GET /api/grid?month=YYYY-MM&key={GRID_API_KEY}` now fills every date's `cell_meta` with its exact Grid `code`. Worked codes P/LT/HD include `in` and `out` as zero-padded local HH:MM; missing punches are null. All code-only days (WO/HO/LV/TR/PS/CO/BK/AB/LP/NJ/LF/blank) omit punch fields, including stale punches on pre-joining dates and leave/off manual overrides.

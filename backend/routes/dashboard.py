@@ -17,6 +17,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends
 
 from services.time_utils import local_date_str, now_utc
+from services.attendance_calc import session_ot_minutes
 
 
 def _has_valid_parent_mobile(u: dict) -> bool:
@@ -82,7 +83,7 @@ def make_router(db, require_admin) -> APIRouter:
             {
                 "_id": 0, "id": 1, "full_name": 1, "category": 1, "role": 1,
                 "photo_thumb": 1, "date_of_birth": 1, "created_at": 1,
-                "institution": 1, "fleet": 1,
+                "institution": 1, "fleet": 1, "hourly_wager": 1,
                 "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1,
             },
         ).to_list(5000)
@@ -175,7 +176,7 @@ def make_router(db, require_admin) -> APIRouter:
         week_atts = await db.attendance.find(
             {"date": {"$gte": week_start, "$lte": today_iso}},
             {"_id": 0, "user_id": 1, "date": 1, "late": 1,
-             "overtime_total_min": 1},
+             "hours": 1, "overtime_total_min": 1},
         ).to_list(30000)
 
         # Sparkline: unique members present per day, split staff-side vs athletes.
@@ -221,9 +222,9 @@ def make_router(db, require_admin) -> APIRouter:
         # raw signal before approvals are cleared.
         ot_by_user: dict[str, int] = {}
         for r in week_atts:
-            mins = int(r.get("overtime_total_min") or 0)
+            uid = r.get("user_id")
+            mins = session_ot_minutes(users_by_id.get(uid), r)
             if mins > 0:
-                uid = r["user_id"]
                 ot_by_user[uid] = ot_by_user.get(uid, 0) + mins
         ot_ranked = sorted(ot_by_user.items(), key=lambda x: -x[1])
         top_ot = _hydrate_top_users(ot_ranked, users_by_id, value_key="ot_minutes")
@@ -276,7 +277,7 @@ def make_router(db, require_admin) -> APIRouter:
                 staff_hours += float(r.get("hours") or 0)
             # 15 Feb 2026: OT approval workflow removed — every minute
             # recorded on the attendance row counts as time served.
-            ot_minutes += int(r.get("overtime_total_min") or 0)
+            ot_minutes += session_ot_minutes(u, r)
 
         # Leave days consumed this month (type=leave, approved, overlap
         # with the month window).

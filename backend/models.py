@@ -57,6 +57,10 @@ class UserPublic(BaseModel):
     # Activity Report at check-out unless this is True.
     dar_exempt: Optional[bool] = None
     dar_required: Optional[bool] = None
+    # Hourly-wager flag (Jun 2026). Paid for actual hours worked, fed to
+    # payroll via the OT channel rounded to the nearest half hour; no
+    # standard OT accrual and no leave / weekly-off pay.
+    hourly_wager: Optional[bool] = None
     # Weekly off (day of week, lowercase e.g. "monday"). Drives comp-off
     # accrual and the "day off" bucket in Reports. Was silently stripped
     # from /members responses until 04 Feb 2026 because it wasn't

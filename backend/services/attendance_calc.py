@@ -57,6 +57,48 @@ def hm_to_minutes(hm: Optional[str]) -> Optional[int]:
     return h * 60 + m
 
 
+def round_half_hour_minutes(minutes: float) -> int:
+    """Round a minute count to the nearest 30 minutes (a half hour), with
+    the half-way point rounding UP. 0/negative → 0.
+
+    Examples (user-confirmed rule): 5h44m (344) → 330 (5.5h);
+    5h45m (345) → 360 (6.0h); 5h50m (350) → 360 (6.0h)."""
+    if not minutes or minutes <= 0:
+        return 0
+    return int((minutes + 15) // 30) * 30
+
+
+def is_hourly_wager(member: Optional[dict]) -> bool:
+    """True when a member is paid purely for hours actually worked
+    (per-member "Hourly wager" toggle). Such members get no leave /
+    weekly-off pay; their pay is driven entirely by daily hours, fed to
+    payroll through the OT channel."""
+    return bool((member or {}).get("hourly_wager"))
+
+
+def session_ot_minutes(member: Optional[dict], session: Optional[dict]) -> int:
+    """OT minutes credited to payroll for ONE attendance session.
+
+    Hourly-wager members are paid for the hours they were actually present
+    (check-in → check-out, i.e. the stored `hours` field), expressed as
+    overtime rounded to the nearest half hour, and never accrue the
+    standard early-in/late-out OT. Everyone else keeps their stamped
+    `overtime_total_min`.
+
+    This is the single source of truth for "OT passed to payroll" — every
+    payroll-facing consumer (Grid totals, Attendance report, OT ledger,
+    dashboard) routes through it so hourly-wager pay stays consistent."""
+    session = session or {}
+    if is_hourly_wager(member):
+        hrs = session.get("hours")
+        try:
+            worked_min = float(hrs) * 60.0 if hrs else 0.0
+        except (TypeError, ValueError):
+            worked_min = 0.0
+        return round_half_hour_minutes(worked_min)
+    return int(session.get("overtime_total_min") or 0)
+
+
 def compute_overtime_in(office: Optional[dict], member: dict, ts: datetime) -> Tuple[int, str]:
     """Returns (early_minutes, work_start_hm). 0 if not applicable.
 
@@ -71,6 +113,9 @@ def compute_overtime_in(office: Optional[dict], member: dict, ts: datetime) -> T
     if member.get("category") not in OVERTIME_CATEGORIES:
         return 0, ""
     if member.get("ot_eligible") is False:
+        return 0, ""
+    if member.get("hourly_wager"):
+        # Hourly wagers are paid for actual hours worked, not early-in OT.
         return 0, ""
     work_start = member.get("work_start")
     ws_min = hm_to_minutes(work_start)
@@ -90,6 +135,9 @@ def compute_overtime_out(office: Optional[dict], member: dict, ts: datetime) -> 
     if member.get("category") not in OVERTIME_CATEGORIES:
         return 0, ""
     if member.get("ot_eligible") is False:
+        return 0, ""
+    if member.get("hourly_wager"):
+        # Hourly wagers are paid for actual hours worked, not late-out OT.
         return 0, ""
     work_end = member.get("work_end")
     we_min = hm_to_minutes(work_end)
