@@ -1,0 +1,46 @@
+{
+  "date": "2026-09-21",
+  "type": "Main-agent follow-up to iteration_74.json",
+  "status": "pass",
+  "backend": {
+    "suite": "/app/backend/tests/test_profile_attendance_iter74.py",
+    "report": "/app/test_reports/pytest/iter74_profile_attendance_verified.xml",
+    "passed": 16,
+    "skipped": 0,
+    "coverage": [
+      "All roster categories, default self month, spoofed member_id ignored",
+      "28/29/30/31 dates and invalid-month/missing-member validation",
+      "Anonymous rejection and real non-admin 403 on admin endpoint",
+      "Employee and athlete codes/totals equal current and historical Grid rows",
+      "Former-member profile supported while excluded from main Grid",
+      "Detailed session in/out, 0 hours, LT/EO/OT and excursions",
+      "Missing checkout suppresses stored hours",
+      "Approved tour, half-day leave, pending posting and manual override",
+      "DAR missed daily/total consistency and sensitive-field allowlisting"
+    ]
+  },
+  "frontend": {
+    "status": "pass",
+    "coverage": [
+      "Admin member/athlete direct switching and return to self (testing agent)",
+      "Deep-link month/member reload and rapid switching (testing agent)",
+      "Real QA member login, spoofed profile member parameter ignored, picker hidden",
+      "31 August dates, next/previous controls and current-month recovery",
+      "No page horizontal overflow at 320/768/1024/1440 pixels",
+      "Real employee session and lunch step-out detail",
+      "Real approved tour range, reason and approver",
+      "Register load error and Retry recover real data",
+      "Member picker load error and Retry recover real roster"
+    ],
+    "notes": [
+      "Removed duplicate request on Current month button exposed by first error-state test.",
+      "One test-only assertion expected Leave on a real Tour day; corrected assertion and verified Tour successfully.",
+      "Error UI verified with temporary browser-only 503 injection; route interception removed afterward. No product APIs mocked."
+    ]
+  },
+  "lint": "Changed frontend JSX passed eslint; backend files compiled successfully.",
+  "credentials": "/app/memory/test_credentials.md updated with verified isolated preview QA user; existing user credentials unchanged",
+  "fixture_cleanup": "Synthetic attendance/leaves/grid_overrides deleted; QA member restored after former-member scenario; preview QA user retained for repeatable testing",
+  "remaining_feature_issues": [],
+  "has_mocked_product_integrations": false
+}

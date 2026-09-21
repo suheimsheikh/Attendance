@@ -9,23 +9,25 @@
  *   4. YTD attendance summary (present · absent · leave · LOP · tour)
  *   5. Late arrivals this month — expandable list, dates + minutes late
  *   6. Early outs this month — expandable list
- *   7. Recent attendance timeline
+ *   7. Full-month attendance register (same classifications as The Grid)
  *   8. My reasons (reason-bank cleanup panel)
  *
  * 20 Feb 2026 — user request for a data-rich profile.
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  Clock, Calendar, AlertCircle, Loader2, Camera, TrendingUp,
+  Calendar, AlertCircle, Loader2, Camera, TrendingUp,
   Coffee, LogOut, ChevronDown, ChevronRight, Award, PhoneCall,
-  Zap, CalendarClock, Layers, Search, X,
+  Zap, CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
 import { useAuth } from "../auth";
 import Avatar from "../components/Avatar";
 import DarHistorySection from "../components/DarHistorySection";
+import { MemberProfilePicker } from "./profile/MemberProfilePicker";
+import { MonthlyAttendance } from "./profile/MonthlyAttendance";
 import { formatTime, formatDate, categoryLabel } from "../utils";
 
 /** Turn "78 minutes" into "1h 18m" / "0m". */
@@ -48,15 +50,20 @@ export default function Profile() {
   const isAdmin = authUser?.role === "admin";
   const targetId = isAdmin ? searchParams.get("member") : null;
   const viewingOther = !!targetId && targetId !== authUser?.id;
+  const monthParam = searchParams.get("month") || "";
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam) ? monthParam : "";
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setData(null);
+    setError("");
     (async () => {
       try {
         // Admin viewing someone else → admin endpoint (returns .user).
@@ -67,11 +74,11 @@ export default function Profile() {
         const payload = await api.get(path);
         if (!cancelled) setData(payload);
       } catch (err) {
-        if (!cancelled) showApiError(err, "Couldn't load profile");
+        if (!cancelled) setError(err.message || "Couldn't load profile");
       } finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [viewingOther, targetId]);
+  }, [viewingOther, targetId, retry]);
 
   const displayUser = viewingOther ? (data?.user || null) : authUser;
 
@@ -100,9 +107,10 @@ export default function Profile() {
   return (
     <div className="p-3 md:p-6 max-w-5xl mx-auto space-y-4" data-testid="profile-page">
       {isAdmin && (
-        <AdminMemberSearch
+        <MemberProfilePicker
           selfId={authUser?.id}
           targetId={targetId}
+          targetName={data?.user?.full_name}
           onPick={(id) => {
             const next = new URLSearchParams(searchParams);
             if (!id || id === authUser?.id) next.delete("member");
@@ -119,7 +127,11 @@ export default function Profile() {
       />
 
       {loading ? (
-        <div className="text-center py-10"><Loader2 className="mx-auto animate-spin text-slate-400" /></div>
+        <div className="text-center py-10" role="status" data-testid="profile-loading"><Loader2 className="mx-auto animate-spin text-slate-400" /></div>
+      ) : error ? (
+        <div role="alert" className="p-4 bg-rose-50 text-rose-800" data-testid="profile-error">
+          {error} <button className="iu-btn-secondary" data-testid="profile-retry" onClick={() => setRetry(n => n + 1)}>Retry</button>
+        </div>
       ) : data ? (
         <>
           <KPIStrip d={data}/>
@@ -127,7 +139,12 @@ export default function Profile() {
           <YearOverviewCard d={data}/>
           <LateArrivalsCard rows={data.late_this_month}/>
           <EarlyOutsCard rows={data.early_outs_this_month}/>
-          <RecentAttendanceCard rows={data.recent_attendance}/>
+          <MonthlyAttendance memberId={viewingOther ? targetId : null} month={month}
+            onMonthChange={value => {
+              const next = new URLSearchParams(searchParams);
+              if (value) next.set("month", value); else next.delete("month");
+              setSearchParams(next, { replace: true });
+            }}/>
           {/* Reason bank is a personal cleanup tool — only surfaced on
               self-view (18 Feb 2026). Admins viewing another member get
               a read-only profile per user pref (2a). */}
@@ -135,120 +152,6 @@ export default function Profile() {
           <DarHistorySection memberId={viewingOther ? targetId : null} memberName={displayUser?.full_name} />
         </>
       ) : null}
-    </div>
-  );
-}
-
-// ------------ Admin member search (18 Feb 2026 user request) -------------
-
-/**
- * Shown at the top of Profile only for admin users. Lets an admin
- * search any member by name / category / rank and swap the profile
- * view to that person via a ?member=<uuid> URL param. Picking their
- * own row (or clearing) restores the self-view.
- */
-function AdminMemberSearch({ selfId, targetId, onPick }) {
-  const [members, setMembers] = useState(null); // null = not yet fetched
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    // Lazy-load the full member roster the first time the admin
-    // clicks in. Keeps first-paint of Profile fast for the common
-    // "view my own profile" case.
-    if (open && members === null) {
-      api.get("/members")
-        .then((rows) => setMembers(Array.isArray(rows) ? rows : []))
-        .catch(() => setMembers([]));
-    }
-  }, [open, members]);
-
-  const currentTarget = useMemo(() => {
-    if (!targetId || !members) return null;
-    return members.find((m) => m.id === targetId) || null;
-  }, [targetId, members]);
-
-  const results = useMemo(() => {
-    if (!members) return [];
-    const q = query.trim().toLowerCase();
-    if (!q) return members.slice(0, 30);
-    return members
-      .filter((m) =>
-        (m.full_name || "").toLowerCase().includes(q)
-        || (m.category || "").toLowerCase().includes(q)
-        || (m.rank || "").toLowerCase().includes(q)
-        || (m.email || "").toLowerCase().includes(q)
-      )
-      .slice(0, 30);
-  }, [members, query]);
-
-  return (
-    <div className="iu-card p-3 md:p-4" data-testid="admin-profile-search-card">
-      <label className="iu-label flex items-center gap-1.5 mb-2">
-        <Search size={12}/> View any member&rsquo;s profile
-      </label>
-      {targetId && targetId !== selfId ? (
-        <div className="flex items-center gap-2">
-          <span className="iu-chip iu-chip-active" data-testid="admin-profile-search-current">
-            {currentTarget?.full_name || "Loading…"}
-          </span>
-          <button
-            type="button"
-            onClick={() => { onPick(null); setQuery(""); }}
-            className="iu-btn-secondary !h-8 !px-2"
-            data-testid="admin-profile-search-clear"
-            title="Return to my own profile"
-          >
-            <X size={12}/> Back to my profile
-          </button>
-        </div>
-      ) : (
-        <div className="relative">
-          <input
-            data-testid="admin-profile-member-search"
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setOpen(true)}
-            onBlur={() => setTimeout(() => setOpen(false), 180)}
-            placeholder="Search a member by name, category, rank, or email…"
-            className="iu-input w-full"
-          />
-          {open && results.length > 0 && (
-            <ul
-              className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-blue-200 rounded-lg shadow-lg divide-y"
-              data-testid="admin-profile-search-results"
-            >
-              {results.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => { onPick(m.id); setQuery(""); setOpen(false); }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2"
-                    data-testid={`admin-profile-search-pick-${m.id}`}
-                  >
-                    <Avatar name={m.full_name} photo={m.photo} size={24} />
-                    <span className="flex-1 truncate">
-                      <b>{m.full_name}</b>
-                      <span className="text-slate-400 text-xs ml-2">
-                        {categoryLabel(m.category)}
-                        {m.rank ? ` · ${m.rank}` : ""}
-                        {m.institution ? ` · ${m.institution}` : ""}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {open && members && results.length === 0 && (
-            <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow px-3 py-2 text-sm text-slate-500">
-              No matches.
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -566,42 +469,6 @@ function EarlyOutsCard({ rows }) {
         ))}
       </ul>
     </CollapsibleList>
-  );
-}
-
-// ------------ Section 7 — Recent attendance timeline ---------------------
-
-function RecentAttendanceCard({ rows }) {
-  return (
-    <section className="iu-card" data-testid="profile-recent">
-      <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2">
-        <Layers size={14} className="text-slate-500"/>
-        <h2 className="font-extrabold tracking-tight text-sm">Recent Attendance</h2>
-        <span className="ml-auto text-[11px] text-slate-400">Last {rows?.length || 0} sessions</span>
-      </div>
-      {(rows || []).length === 0 ? (
-        <div className="p-8 text-center text-slate-500 text-sm">No attendance logged yet.</div>
-      ) : (
-        <ul className="divide-y divide-slate-100">
-          {rows.map((s) => (
-            <li key={s.id} className="px-5 py-3 flex items-center gap-3" data-testid={`recent-${s.id}`}>
-              <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700"><Clock size={16}/></div>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm">{formatDate(s.date)}</div>
-                <div className="text-xs text-slate-500 flex flex-wrap gap-x-2">
-                  <span>{formatTime(s.check_in_at)} – {s.check_out_at ? formatTime(s.check_out_at) : "Open"}</span>
-                  {s.late ? <span className="text-amber-700 font-semibold">· Late {s.late_minutes}m</span> : null}
-                  {s.overtime_total_min ? <span className="text-violet-700 font-semibold">· OT {fmtMin(s.overtime_total_min)}</span> : null}
-                </div>
-              </div>
-              <div className="text-sm font-bold text-slate-900 tabular-nums">
-                {s.hours ?? "—"}{typeof s.hours === "number" ? "h" : ""}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }
 

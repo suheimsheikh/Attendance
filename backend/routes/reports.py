@@ -837,6 +837,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         fleet: Optional[str] = None,
         institution: Optional[str] = None,
         with_meta: bool = True,
+        member_id: Optional[str] = None,
     ):
         """Month-view calendar grid — one row per member, one cell per
         calendar day of the requested month.
@@ -879,7 +880,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
 
         # --- Roster (same filter pills as Attendance report). ---
         users = await db.users.find(
-            {"status": {"$ne": "left"}},
+            {"id": member_id} if member_id else {"status": {"$ne": "left"}},
             {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1,
              "fleet": 1, "institution": 1, "weekly_off": 1,
              "work_start": 1, "work_end": 1,
@@ -898,8 +899,9 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         # Members who left BEFORE this month starts are dropped entirely —
         # they only appear up to (and including) their leaving month, where
         # post-leaving days paint LF (user request, Jun 2026).
-        users = [u for u in users
-                 if not (u.get("leaving_date") and u["leaving_date"] < start_iso)]
+        if not member_id:
+            users = [u for u in users
+                     if not (u.get("leaving_date") and u["leaving_date"] < start_iso)]
         athlete_like = await _athlete_like_keys(db)
         if category == "athlete":
             users = [u for u in users if u.get("category") in athlete_like]
@@ -993,7 +995,8 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         # POST /api/grid/cell). A single explicit code per (user, date)
         # that trumps the computed classification below.
         override_docs = await db.grid_overrides.find(
-            {"date": {"$gte": start_iso, "$lte": end_iso}}, {"_id": 0},
+            {"user_id": {"$in": user_ids},
+             "date": {"$gte": start_iso, "$lte": end_iso}}, {"_id": 0},
         ).to_list(50000)
         overrides_by_user: dict = {}
         for o in override_docs:

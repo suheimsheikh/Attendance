@@ -3984,6 +3984,7 @@ async def admin_member_profile_details(
         "mobile": target.get("mobile"),
         "email": target.get("email"),
         "photo_url": target.get("photo_url"),
+        "photo": member_photo_url(target),
         "rank": target.get("rank"),
         "institution": target.get("institution"),
         "fleet": target.get("fleet"),
@@ -4654,6 +4655,9 @@ _reports_router_instance = _reports_router(
 # LOP figure is the exact same number the grid shows (see list_leave_balances).
 _GRID_IMPL = _reports_router_instance.grid_impl
 app.include_router(_reports_router_instance)
+
+from routes.profile_attendance import make_router as _profile_attendance_router  # noqa: E402
+app.include_router(_profile_attendance_router(db, get_current_user, require_admin, _GRID_IMPL))
 
 # Corrections facility — member-raised after-the-fact fixes to attendance
 # and leave rows, admin-approved. See routes/corrections.py for the full
