@@ -1,0 +1,36 @@
+{
+  "date": "2026-09-21",
+  "type": "Main-agent verification after iteration_75",
+  "requested_feature_status": "pass",
+  "targeted_tests": {
+    "passed": 46,
+    "failed": 0,
+    "skipped": 0,
+    "report": "/app/test_reports/pytest/iter75_grid_external_verified.xml",
+    "files": [
+      "/app/backend/tests/test_grid_external_iter75.py",
+      "/app/backend/tests/test_profile_attendance_iter74.py",
+      "/app/backend/tests/test_calendar_grid_ot.py"
+    ]
+  },
+  "followup_changes": [
+    "Enforced explicit user rule: all code-only statuses omit in/out even if stale or overridden attendance exists; added 12-code parameterized tests.",
+    "Added legacy bucket parity, exact-category row equality and missing-in/missing-out checks.",
+    "Added real API projection/serialization test for naive local corrected punches.",
+    "No changes to authentication, credentials, attendance records, schedules, cells or payroll totals."
+  ],
+  "legacy_compatibility": "Pre-change August/September integration snapshots match after excluding row.cell_meta; admin August Grid full snapshot matches without exclusions.",
+  "existing_separate_issue": {
+    "test": "test_grid_late_matches_payroll.py::test_grid_late_equals_payroll_late",
+    "status": "still fails; pre-existing discrepancy requires separate user-approved resolution",
+    "month": "2026-09",
+    "grid_late_before_change": 248,
+    "grid_late_after_change": 248,
+    "legacy_payroll_late": 249,
+    "cause": "SACHIN SINGH has joining_date 2026-09-04 and a late punch on 2026-09-01; Grid applies NJ, payroll late_days counts raw pre-joining attendance.",
+    "action": "Confirm joining/attendance dates or authorize separate payroll-report alignment. Do not change Grid totals because the user explicitly requires backward compatibility."
+  },
+  "fixture_cleanup": "Synthetic preview QA attendance and grid overrides removed in finally blocks; no existing users/credentials changed.",
+  "ui_smoke": "Existing application login page loads after backend-only change.",
+  "has_mocked_product_integrations": false
+}

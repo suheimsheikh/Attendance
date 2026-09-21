@@ -1,0 +1,46 @@
+{
+  "summary": "Executed backend-only regression for /api/grid key-gated punch metadata and required attendance/grid suites; 29/30 tests passed.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/reports/payroll + /api/reports/calendar-grid",
+        "issue": "Late totals diverge in current month regression: payroll late_days aggregate=249 vs grid totals.late aggregate=248.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_grid_external_iter75.py",
+    "/app/backend/tests/test_profile_attendance_iter74.py",
+    "/app/backend/tests/test_calendar_grid_ot.py",
+    "/app/backend/tests/test_grid_late_matches_payroll.py",
+    "/app/test_reports/pytest/iter75_grid_external.xml"
+  ],
+  "action_items": [
+    "Investigate the single-day late-count drift between payroll and calendar-grid for current month.",
+    "Re-run /app/backend/tests/test_grid_late_matches_payroll.py after fix and confirm aggregate + per-member parity."
+  ],
+  "critical_code_review_comments": [
+    "External /api/grid key-gated response contract is intact: legacy fields unchanged (excluding added row.cell_meta), and admin calendar-grid snapshot parity remains exact.",
+    "Category exact-match behavior for integration mode is working for staff/coach/executive and unknown keys now return empty rows as required."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_grid_external_iter75.py",
+    "/app/test_reports/iteration_75.json"
+  ],
+  "success_rate": {
+    "backend": "96.7%",
+    "frontend": "Not run (backend-only request)"
+  },
+  "seed_data_creation": "Synthetic preview-only QA fixtures created in test_grid_api_synthetic_projection_and_alias_exclude_unset (attendance + grid_overrides with iter75 prefix) and cleaned in finally block.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "New coverage file test_grid_external_iter75.py validates key-only auth, EMBED_KEY compatibility, Aug/Sep legacy parity vs snapshots, full admin-grid Aug snapshot parity, cell_meta date/code alignment, known AINUL Aug checks, category/fleet/institution filtering, helper unit cases, and synthetic projection/alias+exclude_unset behavior. Only failing regression is existing test_grid_late_matches_payroll.py aggregate mismatch by 1.",
+  "rca of the issue": "Reproduction: run pytest on test_grid_late_matches_payroll.py for current month; payroll and grid late totals differ by one. Likely drift in one member/day inclusion rule between payroll and grid late aggregation (windowing/member set/override handling), not key-gated /api/grid punch metadata logic."
+}

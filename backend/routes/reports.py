@@ -25,6 +25,8 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 
 from services.time_utils import local_date_str, local_hm, local_now, now_utc
 from services.permissions import is_super_admin
+from grid_models import GridReadResponse
+from services.grid_punches import grid_punch_meta
 import breaks as _breaks_module
 
 
@@ -838,6 +840,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         institution: Optional[str] = None,
         with_meta: bool = True,
         member_id: Optional[str] = None,
+        with_punch_times: bool = False,
     ):
         """Month-view calendar grid — one row per member, one cell per
         calendar day of the requested month.
@@ -846,6 +849,10 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         default is True to preserve the current UI contract; the CSV/PDF
         export path and any callers that don't need hover context can
         opt out to save ~30% payload size.
+
+        ``with_punch_times=True`` selects the integration-only code/in/out
+        metadata, using the same attendance records without changing cells
+        or totals. It does not expose private leave/break tooltip details.
 
         Cell codes (2-letter, uppercased):
           • ``P``  present (rendered filled-green in UI)
@@ -911,6 +918,10 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             users = [u for u in users if u.get("category") not in athlete_like]
         elif category == "payroll":
             users = [u for u in users if u.get("category") in {"staff", "coach"}]
+        elif with_punch_times and category and category != "all":
+            # Integration callers also need exact staff/coach/executive
+            # and custom category keys; retain all existing bucket meanings.
+            users = [u for u in users if u.get("category") == category]
         if fleet:
             if fleet == "__none__":
                 users = [u for u in users if not u.get("fleet")]
@@ -951,7 +962,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                  # historical rows are computed on-the-fly from
                  # check_out_at + user.work_end so the Grid tally is
                  # correct for pre-feature data too.
-                 "early_out_minutes": 1},
+                 "early_out_minutes": 1, "missing_checkout": 1, "auto_checkout": 1},
             ).to_list(20000),
             db.leaves.find(
                 # Also pull leaves that were cancelled + converted to LOP
@@ -1250,6 +1261,8 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                             m["ot_minutes"] = int(att.get("overtime_total_min") or 0)
                     if m:
                         cell_meta[iso] = m
+            if with_punch_times:
+                cell_meta = grid_punch_meta(days, cells, att_by_user.get(uid, {}), office)
             # Per-row totals — surfaces at the end of each row in the UI.
             # Half-day + Late still count as attendance (present-like);
             # Comp-off is bucketed with Leave (both are time-off types).
@@ -1357,7 +1370,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         pull (added Jun 2026 for the PayCraft integration)."""
         return await _grid_impl(month, category, fleet, institution, with_meta)
 
-    @router.get("/grid")
+    @router.get("/grid", response_model=GridReadResponse, response_model_exclude_unset=True)
     async def external_grid(
         month: str,
         key: str = "",
@@ -1369,13 +1382,15 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         (PayCraft payroll). Gated by a shared secret in the `key` query
         param, compared constant-time against `GRID_API_KEY` (server-to-
         server pulls) OR `EMBED_KEY` (the read-only /embed/grid iframe).
-        Returns the same JSON as the admin grid but with per-cell tooltip
-        metadata dropped (lighter payload for a scheduled pull).
+        Keeps legacy cells/totals/schedules unchanged. Each date in cell_meta
+        carries its code; worked days also carry office-local HH:MM in/out
+        (null for a missing punch). No private UI tooltip details are exposed.
 
         If neither key is configured the endpoint 503s — a mis-configured
         server must never behave like an open, PII-leaking endpoint.
-        `category` accepts the usual buckets (athlete / elite / rest /
-        payroll) so PayCraft can pull just the staff+coach population.
+        `category=all` (or omitted) returns all grid members. Existing buckets
+        (athlete / elite / rest / payroll) retain their meanings; staff,
+        coach, executive and other category keys select exact categories.
         """
         import hmac
         import os
@@ -1388,7 +1403,8 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         supplied = (key or "").strip()
         if not supplied or not any(hmac.compare_digest(supplied, k) for k in valid):
             raise HTTPException(status_code=401, detail="Invalid key")
-        return await _grid_impl(month, category, fleet, institution, with_meta=False)
+        return await _grid_impl(month, category, fleet, institution,
+                                with_meta=False, with_punch_times=True)
 
     @router.get("/embed/auth")
     async def embed_auth(x_embed_key: str = Header(default="")):

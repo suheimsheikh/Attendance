@@ -21,6 +21,18 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 21 Sep 2026 — Integration Grid daily IN/OUT punches
+- User request: "Expose daily IN/OUT punch times in the /api/grid API (for our integration key)". Preferred contract: date-keyed `cell_meta` inside each member row, preserving `cells`, `totals`, `work_start`, `work_end`; key-only access and `category=all`/individual filters. User confirmed the existing office timezone (Asia/Kolkata).
+- `GET /api/grid?month=YYYY-MM&key={GRID_API_KEY}` now fills every date's `cell_meta` with its exact Grid `code`. Worked codes P/LT/HD include `in` and `out` as zero-padded local HH:MM; missing punches are null. All code-only days (WO/HO/LV/TR/PS/CO/BK/AB/LP/NJ/LF/blank) omit punch fields, including stale punches on pre-joining dates and leave/off manual overrides.
+- Missing-checkout/synthetic auto-close timestamps are not exported as punches. Explicit `missing_checkout=False` restores a corrected real checkout even if a legacy auto-close flag remains. Naive correction timestamps are interpreted as office-local; offset-aware timestamps are converted normally.
+- Existing key authentication/EMBED_KEY compatibility remains unchanged, with no session or `/api/dar` request needed. No keys, auth implementation, records, schemas or payroll calculations changed. Private UI tooltip notes are not added to the integration response.
+- Fixed integration-only exact-category filters: staff/coach/executive/custom keys now select their category rather than silently returning all. Omitted/all and legacy athlete/elite/rest/payroll buckets keep their existing meanings. Fleet/institution filters preserved. Admin UI metadata and filters untouched.
+- Architecture: `backend/services/grid_punches.py`, `backend/grid_models.py`; `reports._grid_impl` adds optional internal `with_punch_times=False` enabled only by external `/grid`. Uses the SAME existing attendance map and query, no new network request or per-member DB query. Pydantic aliases/exclude-unset preserve null versus omitted punch fields.
+- Verification: **46 feature/profile/Grid OT tests passed**. Existing-key/no-login requests tested; missing/invalid key still 401; EMBED_KEY works; August and September full legacy payload snapshots match after excluding `cell_meta`; August admin Grid payload matches completely. Real AINUL HAQUE 01 Aug punches 09:22–18:01; 06 Aug TR code only. App-load smoke passed; no frontend change. No mocked product integrations.
+- Broader old late-count parity test revealed a **pre-existing data/report discrepancy**, not introduced here: SACHIN SINGH (`82ed06b2-9c39-43f4-9e12-73802e5fc135`) has joining_date 04 Sep but a late attendance row on 01 Sep. Existing Grid correctly says NJ (late total 248); legacy payroll report counts that row (249). Pre-change snapshot proves the same difference. Do NOT alter Grid totals or delete/change this attendance without user approval. This one old global-parity test remains failing pending confirmation of correct joining/attendance dates or separately approved payroll-report alignment.
+- Reports: `test_reports/iteration_75.json` (initial 29/30), `test_reports/grid_api_verification_75.json`, `test_reports/pytest/iter75_grid_external_verified.xml` (46/46 targeted checks). Integration instructions: `memory/grid_api_contract.md`.
+- Next: consumer reads `rows[].cell_meta[date].in/out` using its existing key. P1: confirm the pre-joining record discrepancy separately. Optional future enhancement: ISO punch timestamps for unambiguous overnight shifts (HH:MM contract intentionally unchanged).
+
 ### 21 Sep 2026 — Admin member profiles + full-month attendance register
 - User request: "When admins select My Profile they should be able to see the profile of any employee. Also my profile should show all days of the month under recent attendance including time in and out and leave and tour etc. Max details like as if the gridline of the specific employee". User explicitly confirmed **include athletes**.
 - Admin My Profile now has an always-available searchable member picker covering staff, coaches, executives, athletes and elite; direct person-to-person switching, own-profile reset, loading/error/retry states and URL-based member selection. No 30-result cap. Selected member photo is returned using the existing thumbnail URL helper.
@@ -184,6 +196,7 @@ Full suite runs in **1.77s**. Frontend regression verified via `testing_agent_v3
 ## Backlog (prioritised)
 
 ### P1 — user-requested, not blocked
+- **Data confirmation before payroll alignment** — SACHIN SINGH joining date 04 Sep 2026 versus a late punch dated 01 Sep; Grid excludes it as NJ, legacy payroll counts it. Existing Sep late counts differ by one (248/249). Preserve totals/records until the user confirms dates or approves a separate report fix.
 - **Pantry CSV export** — spreadsheet download alongside Print/PDF on Meals/Pantry Report
 - **Weekly Meal-Skip Pattern** — per-weekday overrides for members who skip specific weekdays (Sunday-off drivers)
 - **Payslip PDF + Payroll worksheet CSV** for staff
