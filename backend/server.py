@@ -1566,6 +1566,13 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
                 "member_id": u.get("id"),
                 "member_name": u.get("full_name"),
                 "category": u.get("category"),
+                # Hourly-wager members are paid purely for hours worked (fed
+                # via the Grid OT channel) and get no leave / weekly-off pay.
+                # Surfaced here so the payroll consumer can skip leave/LOP
+                # logic for them. Balances are still reported as-is (additive,
+                # no number changes) — the consumer decides based on pay_basis.
+                "hourly_wager": bool(u.get("hourly_wager")),
+                "pay_basis": "hourly" if u.get("hourly_wager") else "salaried",
                 "balances": {
                     "leave": b["paid_available"],
                     "comp_off": b["comp_available"],
@@ -3911,8 +3918,8 @@ async def _profile_details_for(user: dict) -> dict:
                 "reason": s.get("early_out_reason"),
             })
 
-    ot_minutes_month = sum((s.get("overtime_total_min") or 0) for s in month_sessions)
-    ot_minutes_ytd = sum((s.get("overtime_total_min") or 0) for s in sessions)
+    ot_minutes_month = sum(_session_ot_minutes(user, s) for s in month_sessions)
+    ot_minutes_ytd = sum(_session_ot_minutes(user, s) for s in sessions)
 
     week_hours = round(sum((s.get("hours") or 0) for s in week_sessions), 2)
     month_hours = round(sum((s.get("hours") or 0) for s in month_sessions), 2)
@@ -4423,6 +4430,7 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "member_id": u["id"],
             "member_name": u["full_name"],
             "category": u["category"],
+            "hourly_wager": bool(u.get("hourly_wager")),
             "rank": u.get("rank"),
             "weekly_off": u.get("weekly_off") or "monday",
             "fleet": u.get("fleet"),

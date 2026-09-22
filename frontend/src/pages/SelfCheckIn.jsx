@@ -136,6 +136,19 @@ export default function SelfCheckIn() {
   const lateDays = status?.late_days_this_month || 0;
   const ordinal = (n) => `${n}${["th", "st", "nd", "rd"][((n % 100) - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th"}`;
 
+  const shareBtnRef = useRef(null);
+  const shareScrolledRef = useRef(false);
+  // Bring the "Share to WhatsApp" button into view the first time the
+  // member lands on a checked-in screen (fresh check-in OR re-opened app),
+  // so it can't be missed — pairs with the pulse animation on the button.
+  useEffect(() => {
+    if (status?.checked_in && shareBtnRef.current && !shareScrolledRef.current) {
+      shareScrolledRef.current = true;
+      shareBtnRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    if (!status?.checked_in) shareScrolledRef.current = false;
+  }, [status?.checked_in]);
+
   // Share the current check-in / check-out to WhatsApp. Works from either
   // the transient `lastAction` (right after a toggle) OR the persistent
   // `status.session` (so a checked-in member who reopened the app can still
@@ -159,6 +172,8 @@ export default function SelfCheckIn() {
       at: sess?.check_in_at ? new Date(sess.check_in_at) : new Date(),
       distanceM: sess?.distance_m ?? null,
       offSite: !!sess?.out_of_geofence,
+      late: !!sess?.late,
+      lateMinutes: sess?.late_minutes ?? null,
     };
     shareToWhatsApp({
       text: formatCheckinCaption({
@@ -168,6 +183,8 @@ export default function SelfCheckIn() {
         when: src.at,
         distanceM: src.distanceM,
         offSite: src.offSite,
+        late: src.late,
+        lateMinutes: src.lateMinutes,
       }),
       imageBlob,
       filename: `${(src.name || "member").replace(/\s+/g, "_")}_${src.action}.jpg`,
@@ -307,6 +324,8 @@ export default function SelfCheckIn() {
         siteName: res.site_label || res.site_name || "",
         distanceM: (lat != null && lng != null) ? res.distance_m : null,
         offSite: !!res.out_of_geofence,
+        late: !!res.late,
+        lateMinutes: res.late_minutes ?? null,
         at: new Date(),
       });
       if (res.action === "checkin" && res.late) {
@@ -618,10 +637,11 @@ export default function SelfCheckIn() {
                   post-toggle button used to vanish on reload). */}
               <button
                 type="button"
+                ref={shareBtnRef}
                 data-testid="share-checkin-persistent-btn"
                 onClick={shareCheckinToWhatsApp}
                 title="Forward this check-in to a WhatsApp chat or group"
-                className="mt-3 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition"
+                className="wa-attention mt-3 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition"
               >
                 <Share2 size={15} />
                 Share to WhatsApp

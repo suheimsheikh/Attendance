@@ -148,7 +148,7 @@ export function formatDistance(m) {
   return n >= 1000 ? `${(n / 1000).toFixed(1)} km` : `${Math.round(n)} m`;
 }
 
-export function formatCheckinCaption({ action, name, siteName, when = new Date(), distanceM = null, offSite = false }) {
+export function formatCheckinCaption({ action, name, siteName, when = new Date(), distanceM = null, offSite = false, late = false, lateMinutes = null }) {
   const hhmm = when.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
@@ -159,6 +159,12 @@ export function formatCheckinCaption({ action, name, siteName, when = new Date()
   const emoji = isOut ? "🏁" : "✅";
   const verb  = isOut ? "OUT:" : "IN:";
   const bits = [`${emoji} ${name}`, `${verb} ${hhmm}`];
+  // Late flag — check-in only. WhatsApp messages can't render coloured
+  // text, so the closest thing to "in red" is a red dot 🔴 plus *bold*
+  // (WhatsApp turns *text* bold). Shows the minutes when we have them.
+  if (!isOut && late) {
+    bits.push(`🔴 *LATE${lateMinutes ? ` by ${lateMinutes} min` : ""}*`);
+  }
   const dist = formatDistance(distanceM);
   const place = siteName || "site";
   if (dist) {

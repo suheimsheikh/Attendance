@@ -254,3 +254,15 @@ input[data-testid^="search-"]::placeholder {
   }
   @page { margin: 1cm; }
 }
+
+/* Attention pulse for the check-in "Share to WhatsApp" button — a few
+   emerald ring pulses draw the eye on a fresh check-in / re-opened app,
+   then settle so it isn't naggy. */
+@keyframes wa-attention {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55); }
+  50%      { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+}
+.wa-attention { animation: wa-attention 1.25s ease-in-out 3; }
+@media (prefers-reduced-motion: reduce) {
+  .wa-attention { animation: none; }
+}

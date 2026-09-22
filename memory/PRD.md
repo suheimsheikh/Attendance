@@ -21,6 +21,25 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 22 Sep 2026 — Code review fixes (hourly-wager payroll consistency)
+- Full read-only code review (code_review_agent) of the session's changes + broader app. No HIGH/CRITICAL. Two MEDIUM payroll-consistency gaps found & fixed:
+  - **[MEDIUM] Profile OT parity** — `_profile_details_for` (`server.py:3914-3915`) still summed raw `overtime_total_min`, so an hourly-wager member saw 0 OT on their Profile while the Grid/ledger/report credited their hours. Now uses `_session_ot_minutes(user, s)` for month + YTD. Verified: Grid `totals.ot_minutes` == Profile `overtime.month_minutes` == 360 for a test hourly coach.
+  - **[MEDIUM] PayCraft leave feed unaware of hourly-wager** — `/api/leave-balances?key=` rows now carry `hourly_wager` + `pay_basis` ("hourly"/"salaried") so the payroll consumer can skip leave/weekly-off/LOP for hourly wagers. Additive only — existing balance numbers unchanged. Also added `hourly_wager` to `compute_hours_report` rows (Reports Attendance tab). Verified feed row shows `hourly_wager:true, pay_basis:"hourly"`.
+- Review confirmed clean: auth/key gates (`hmac.compare_digest`, 503-when-unconfigured), WhatsApp share/DAR gating (buttons mutually exclusive, no stale closure), lint clean. LOW items left as-is (re-scroll after temp-out is cosmetic; ledger rounding already shares `session_ot_minutes`). Multiple-sessions/day is moot under the one-check-in-per-day rule.
+- Regression: 78 pytest (OT + holidays) pass. Admin (non-key) leave path untouched.
+- NOTE: decision left to payroll side — whether to zero hourly-wager leave/LOP or just honour `pay_basis`. App exposes the flag; it does not change grid classification for them (avoids altering the shared Grid everyone sees).
+
+
+
+### 22 Sep 2026 — Share button pulse + LATE in WhatsApp message
+- Follow-ups to the persistent-share fix (same `SelfCheckIn.jsx` / `shareWhatsApp.js`):
+  - **Impossible to miss** (chosen over forced auto-open, which browsers block after the async check-in): the persistent "Share to WhatsApp" button now auto-scrolls into view the first time a checked-in screen loads and plays a 3× emerald ring-pulse (`.wa-attention` keyframe in `index.css`, respects `prefers-reduced-motion`). No forced pop-up.
+  - **Late flag in the message**: `formatCheckinCaption` now adds `🔴 *LATE by N min*` on check-in shares (WhatsApp has no coloured text; red dot + `*bold*` is the closest to "red"). Late/late_minutes flow from `lastAction` (fresh) and `status.session` (reopened). Checkout shares unaffected.
+  - Verified: caption via node (`✅ NAME · IN: 05:41 · 🔴 *LATE by 41 min* · 📍 12 m from …`), and a temp late checked-in coach on a fresh load shows the pulsing button + "Late by 41 min" line, no layout break. Frontend compiles clean. Temp data cleaned up.
+- OPEN (needs a concrete example): "site sometimes shows wrong". Confirmed null `site_name` is BY DESIGN (member inside the main office fence → site_name None → card shows office name). Real wrong-site risk is overlapping geofences (a satellite site radius covering the office) — `services/geo.resolve_site` picks the nearest fence the member is inside, so a boundary GPS fix can match the wrong one. Awaiting: which member/day, shown-vs-correct site, and whether sites have overlapping radii.
+
+
+
 ### 22 Sep 2026 — Persistent WhatsApp share on check-in (bug fix)
 - Report: coaches Laxman & Sravan "did not get the WhatsApp forward link on check-in" this morning; others did. Both had valid self check-ins recorded.
 - Root cause: the green "Share to WhatsApp" button on the check-in success screen was driven by transient React state (`lastAction`), so it only existed in the same session immediately after tapping check-in. Anyone who reopened/reloaded the app while checked in (the screenshot they sent shows the re-opened checked-in view) lost the button entirely. Not category- or member-gated.
