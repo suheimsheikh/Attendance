@@ -21,6 +21,15 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 22 Sep 2026 — Persistent WhatsApp share on check-in (bug fix)
+- Report: coaches Laxman & Sravan "did not get the WhatsApp forward link on check-in" this morning; others did. Both had valid self check-ins recorded.
+- Root cause: the green "Share to WhatsApp" button on the check-in success screen was driven by transient React state (`lastAction`), so it only existed in the same session immediately after tapping check-in. Anyone who reopened/reloaded the app while checked in (the screenshot they sent shows the re-opened checked-in view) lost the button entirely. Not category- or member-gated.
+- Fix (`pages/SelfCheckIn.jsx`, frontend-only): added a **persistent** "Share to WhatsApp" button inside the green "You're checked in" hero card, rendered whenever `status.checked_in` and sourced from the persistent `status.session` (check_in_at, site_name, off-site/distance). New reusable `shareCheckinToWhatsApp()` builds the caption from `lastAction` OR `status.session`, attaches fresh selfie → stored photo → text-only. The old transient button now only handles CHECKOUT shares (`lastAction?.action === "checkout"`) so there's no duplicate. testids: `share-checkin-persistent-btn` (persistent), `share-whatsapp-btn` (checkout).
+- Verified: temp checked-in staff member, fresh page load → persistent green "Share to WhatsApp" button visible in the checked-in hero (screenshot confirmed). Frontend compiles clean (only pre-existing Layout/useRowFocus eslint warnings). Temp member + data cleaned up.
+- ⚠️ Frontend-only change — must be REDEPLOYED for Laxman/Sravan (on production) to get it.
+
+
+
 ### 21 Sep 2026 — Hourly-wager pay → OT channel
 - User request: occasional coaches (who study, attend sporadically, get NO leave / weekly-off pay) should be paid purely for hours actually worked. Mark them per-member; their daily hours (check-in→check-out only) flow to payroll through the existing OT channel, rounded to the nearest half hour (5h44m→5.5h, 5h45m→6.0h, half rounds up). Standard early-in/late-out OT is suppressed for them (no double-count). All confirmed via ask_human.
 - New per-member flag **`hourly_wager`** (MemberCreate/MemberUpdate/UserPublic + create doc). Frontend: "Hourly wager" checkbox on MemberForm (`mf-hourly-wager`, shown for staff/coach/executive only), mirrors the dar_required conditional pattern.

@@ -136,6 +136,45 @@ export default function SelfCheckIn() {
   const lateDays = status?.late_days_this_month || 0;
   const ordinal = (n) => `${n}${["th", "st", "nd", "rd"][((n % 100) - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th"}`;
 
+  // Share the current check-in / check-out to WhatsApp. Works from either
+  // the transient `lastAction` (right after a toggle) OR the persistent
+  // `status.session` (so a checked-in member who reopened the app can still
+  // forward their check-in — the green button no longer vanishes on reload).
+  // Prefers a fresh selfie captured this session, else the stored profile
+  // photo, else shares text-only.
+  const shareCheckinToWhatsApp = async () => {
+    let imageBlob = null;
+    if (freshSelfie) {
+      imageBlob = await dataUrlToBlob(freshSelfie);
+    } else if (user?.photo) {
+      try {
+        const r = await fetch(user.photo, { credentials: "include" });
+        if (r.ok) imageBlob = await r.blob();
+      } catch { /* silent — share text-only */ }
+    }
+    const src = lastAction || {
+      action: "checkin",
+      name: user?.full_name,
+      siteName: sess?.site_name || siteLabel,
+      at: sess?.check_in_at ? new Date(sess.check_in_at) : new Date(),
+      distanceM: sess?.distance_m ?? null,
+      offSite: !!sess?.out_of_geofence,
+    };
+    shareToWhatsApp({
+      text: formatCheckinCaption({
+        action: src.action,
+        name: src.name,
+        siteName: src.siteName,
+        when: src.at,
+        distanceM: src.distanceM,
+        offSite: src.offSite,
+      }),
+      imageBlob,
+      filename: `${(src.name || "member").replace(/\s+/g, "_")}_${src.action}.jpg`,
+    });
+  };
+
+
   // Pre-fill the DAR with today's checklist ticks / to-dos (executives).
   useEffect(() => {
     if (!darNeededNow || darText) return;
@@ -574,6 +613,19 @@ export default function SelfCheckIn() {
                   Late by {sess.late_minutes} min{lateDays > 0 ? ` (${ordinal(lateDays)} late day this month)` : ""}
                 </p>
               )}
+              {/* Persistent WhatsApp forward — always available while
+                  checked in, even after reopening the app (the transient
+                  post-toggle button used to vanish on reload). */}
+              <button
+                type="button"
+                data-testid="share-checkin-persistent-btn"
+                onClick={shareCheckinToWhatsApp}
+                title="Forward this check-in to a WhatsApp chat or group"
+                className="mt-3 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition"
+              >
+                <Share2 size={15} />
+                Share to WhatsApp
+              </button>
             </div>
           )}
           {/* Big "Checking you in…" during the auto countdown. */}
@@ -747,39 +799,12 @@ export default function SelfCheckIn() {
               </div>
             </div>
           )}
-          {lastAction && !lastDar && !checkoutShareBlocked && (
+          {lastAction?.action === "checkout" && !lastDar && !checkoutShareBlocked && (
             <button
               type="button"
               data-testid="share-whatsapp-btn"
-              onClick={async () => {
-                // Attach the member's photo to the WhatsApp share so
-                // the group message shows WHO checked in, not just a
-                // caption. Prefer a fresh selfie captured this session
-                // (before it's compressed to a thumbnail); fall back to
-                // the stored profile photo URL.
-                let imageBlob = null;
-                if (freshSelfie) {
-                  imageBlob = await dataUrlToBlob(freshSelfie);
-                } else if (user?.photo) {
-                  try {
-                    const r = await fetch(user.photo, { credentials: "include" });
-                    if (r.ok) imageBlob = await r.blob();
-                  } catch { /* silent — share text-only */ }
-                }
-                shareToWhatsApp({
-                  text: formatCheckinCaption({
-                    action: lastAction.action,
-                    name: lastAction.name,
-                    siteName: lastAction.siteName,
-                    when: lastAction.at,
-                    distanceM: lastAction.distanceM,
-                    offSite: lastAction.offSite,
-                  }),
-                  imageBlob,
-                  filename: `${(lastAction.name || "member").replace(/\s+/g, "_")}_${lastAction.action}.jpg`,
-                });
-              }}
-              title="Share this check-in with photo to a WhatsApp chat or group"
+              onClick={shareCheckinToWhatsApp}
+              title="Share this check-out to a WhatsApp chat or group"
               className="mt-5 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition"
             >
               <Share2 size={15} />
