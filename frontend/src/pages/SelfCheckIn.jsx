@@ -127,11 +127,19 @@ export default function SelfCheckIn() {
   // Site label for the status banner: satellite site name, else the office
   // name; off-site sessions show distance from the nearest geofence.
   const sess = status?.session;
+  // When the phone couldn't get a GPS fix, the check-in was stored with
+  // geo_unavailable=true and NO real location — so we must NOT show a site
+  // name (that falsely implied the member was verified at the office). Show
+  // a clear "GPS Not working" marker instead. (Jun 2026 user request.)
+  const geoUnavailable = !!sess?.geo_unavailable;
+  const GPS_FAIL_TEXT = "🔴 GPS Not working";
   const siteLabel = sess?.site_name || office?.name?.trim() || "Office";
   const siteLine = sess
-    ? (sess.out_of_geofence
-        ? `Off-site · ${formatDistance(sess.distance_m)} from ${sess.nearest_site_name || office?.name?.trim() || "the office"}`
-        : `at ${siteLabel}`)
+    ? (geoUnavailable
+        ? GPS_FAIL_TEXT
+        : sess.out_of_geofence
+          ? `Off-site · ${formatDistance(sess.distance_m)} from ${sess.nearest_site_name || office?.name?.trim() || "the office"}`
+          : `at ${siteLabel}`)
     : "";
   const lateDays = status?.late_days_this_month || 0;
   const ordinal = (n) => `${n}${["th", "st", "nd", "rd"][((n % 100) - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th"}`;
@@ -172,6 +180,7 @@ export default function SelfCheckIn() {
       at: sess?.check_in_at ? new Date(sess.check_in_at) : new Date(),
       distanceM: sess?.distance_m ?? null,
       offSite: !!sess?.out_of_geofence,
+      geoUnavailable: !!sess?.geo_unavailable,
       late: !!sess?.late,
       lateMinutes: sess?.late_minutes ?? null,
     };
@@ -183,6 +192,7 @@ export default function SelfCheckIn() {
         when: src.at,
         distanceM: src.distanceM,
         offSite: src.offSite,
+        geoUnavailable: src.geoUnavailable,
         late: src.late,
         lateMinutes: src.lateMinutes,
       }),
@@ -303,7 +313,9 @@ export default function SelfCheckIn() {
       setDarServerForced(false);
       const dist = res.distance_m;
       setLastDistance({ dist, acc: null, off: res.out_of_geofence });
-      const locBit = ` at ${res.site_label || res.site_name || office?.name?.trim() || "office"}`;
+      const locBit = res.geo_unavailable
+        ? " · 🔴 GPS Not working"
+        : ` at ${res.site_label || res.site_name || office?.name?.trim() || "office"}`;
       if (res.out_of_geofence && res.action === "checkin") {
         toast.error(
           `Checked in OFF-SITE — ${formatDistance(res.distance_m)} from ${res.site_label || "the office"}. This will be flagged for review.`,
@@ -324,6 +336,7 @@ export default function SelfCheckIn() {
         siteName: res.site_label || res.site_name || "",
         distanceM: (lat != null && lng != null) ? res.distance_m : null,
         offSite: !!res.out_of_geofence,
+        geoUnavailable: !!res.geo_unavailable,
         late: !!res.late,
         lateMinutes: res.late_minutes ?? null,
         at: new Date(),
@@ -558,7 +571,7 @@ export default function SelfCheckIn() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-xs uppercase tracking-wide font-semibold text-slate-500">
-            {onTempOut ? "Stepped out" : status?.checked_in ? (sess?.out_of_geofence ? `Checked in ${siteLine}` : `Currently on campus ${siteLine}`) : "Not on campus"}
+            {onTempOut ? "Stepped out" : status?.checked_in ? ((geoUnavailable || sess?.out_of_geofence) ? `Checked in ${siteLine}` : `Currently on campus ${siteLine}`) : "Not on campus"}
           </div>
           <div className="text-sm font-semibold text-slate-900 truncate">
             {onTempOut
@@ -623,7 +636,13 @@ export default function SelfCheckIn() {
               {status?.session?.check_in_at && (
                 <p className="text-sm text-emerald-800/80 mt-1 font-medium">
                   Since {new Date(status.session.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}
-                  {siteLine ? ` · ${siteLine}` : ""}
+                  {siteLine && !geoUnavailable ? ` · ${siteLine}` : ""}
+                </p>
+              )}
+              {geoUnavailable && (
+                <p className="mt-2 inline-flex items-center gap-2 rounded-lg bg-red-100 text-red-900 px-3 py-1.5 text-sm font-extrabold" data-testid="checked-in-gps-fail-line">
+                  <span className="inline-block w-3.5 h-3.5 rounded-full bg-red-600 animate-pulse" aria-hidden="true" />
+                  GPS Not working
                 </p>
               )}
               {sess?.late && (

@@ -13,9 +13,9 @@ export function describeGeo(g) {
   // separate field so the UI can bold their name.
   if (g.geo_unavailable) {
     return {
-      label: "GPS unavailable",
+      label: "GPS Not working",
       verifierName: g.method === "muster" ? g.by || null : null,
-      tone: "amber",
+      tone: "red",
     };
   }
   const d = formatDist(g.distance_m);
@@ -36,7 +36,7 @@ export function describeGeo(g) {
 }
 
 function GeoChip({ label, tone, ...rest }) {
-  const colour = tone === "amber" ? "text-amber-600" : tone === "emerald" ? "text-emerald-600" : "text-slate-500";
+  const colour = tone === "red" ? "text-red-600" : tone === "amber" ? "text-amber-600" : tone === "emerald" ? "text-emerald-600" : "text-slate-500";
   return (
     <span className="inline-flex items-center gap-1">
       <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{label}</span>

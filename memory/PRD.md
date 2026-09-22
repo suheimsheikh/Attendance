@@ -21,6 +21,19 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 22 Sep 2026 — "Site shows wrong" → GPS-not-working fix
+- Report: Manoj checked out yesterday and it said "YCH Head Office" — wrong. Root cause (verified from his row): his phone sent NO GPS fix (`latitude`/`longitude` null, `geo_unavailable=true`, `distance_m` null). In `_geo_toggle` (server.py:2700-2705) the no-GPS branch sets `nearest_label = office.name` and `out_of_geofence=false`, so the app FALSELY showed the office name and "on-site" for any check-in where location wasn't captured. Affects ~20-30% of check-ins (phones failing to get GPS). Confirmed only ONE geofence exists (0 satellite sites) — not an overlap issue.
+- User decision: show a big red dot + "GPS Not working" everywhere (incl. WhatsApp). GPS-reliability itself deferred (separate task).
+- Fix (mostly frontend display, driven by the already-stored `geo_unavailable` flag → retroactively correct for historical rows like Manoj's):
+  - Backend: added `geo_unavailable` to both `/attendance/geo-toggle` return dicts (check-in + check-out) so the client knows immediately. No stored-data changes.
+  - `SelfCheckIn.jsx`: `siteLine` → "🔴 GPS Not working" when `geo_unavailable`; status banner no longer claims "Currently on campus"; checked-in hero shows a prominent red-dot "GPS Not working" badge (`checked-in-gps-fail-line`) instead of a site; toast + `lastAction` carry `geoUnavailable`.
+  - `shareWhatsApp.js` `formatCheckinCaption`: new `geoUnavailable` param → renders "🔴 *GPS Not working*" instead of a fake "at <site>".
+  - Presence board `GeoLine.jsx`: label "GPS unavailable" → "GPS Not working", tone amber → red (added `red` tone to GeoChip).
+  - Verified: caption (`🏁 MANOJ MAJJI · OUT: 18:52 · 🔴 *GPS Not working*`), and a temp no-GPS checked-in staff shows the red badge + "CHECKED IN · 🔴 GPS NOT WORKING" banner (screenshot). Normal geo-available check-ins still show the site. Frontend compiles clean. Temp data cleaned.
+- ⚠️ Needs REDEPLOY to reach production.
+
+
+
 ### 22 Sep 2026 — Code review fixes (hourly-wager payroll consistency)
 - Full read-only code review (code_review_agent) of the session's changes + broader app. No HIGH/CRITICAL. Two MEDIUM payroll-consistency gaps found & fixed:
   - **[MEDIUM] Profile OT parity** — `_profile_details_for` (`server.py:3914-3915`) still summed raw `overtime_total_min`, so an hourly-wager member saw 0 OT on their Profile while the Grid/ledger/report credited their hours. Now uses `_session_ot_minutes(user, s)` for month + YTD. Verified: Grid `totals.ot_minutes` == Profile `overtime.month_minutes` == 360 for a test hourly coach.

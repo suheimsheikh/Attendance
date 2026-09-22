@@ -148,7 +148,7 @@ export function formatDistance(m) {
   return n >= 1000 ? `${(n / 1000).toFixed(1)} km` : `${Math.round(n)} m`;
 }
 
-export function formatCheckinCaption({ action, name, siteName, when = new Date(), distanceM = null, offSite = false, late = false, lateMinutes = null }) {
+export function formatCheckinCaption({ action, name, siteName, when = new Date(), distanceM = null, offSite = false, late = false, lateMinutes = null, geoUnavailable = false }) {
   const hhmm = when.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
@@ -165,12 +165,19 @@ export function formatCheckinCaption({ action, name, siteName, when = new Date()
   if (!isOut && late) {
     bits.push(`🔴 *LATE${lateMinutes ? ` by ${lateMinutes} min` : ""}*`);
   }
-  const dist = formatDistance(distanceM);
-  const place = siteName || "site";
-  if (dist) {
-    bits.push(offSite ? `⚠️ ${dist} from ${place} (OFF-SITE)` : `📍 ${dist} from ${place}`);
-  } else if (siteName) {
-    bits.push(siteName);
+  // Location block. When the phone gave no GPS fix we must NOT claim a
+  // site (that misled everyone into thinking the person was verified
+  // on-site) — show a clear "GPS Not working" marker instead.
+  if (geoUnavailable) {
+    bits.push("🔴 *GPS Not working*");
+  } else {
+    const dist = formatDistance(distanceM);
+    const place = siteName || "site";
+    if (dist) {
+      bits.push(offSite ? `⚠️ ${dist} from ${place} (OFF-SITE)` : `📍 ${dist} from ${place}`);
+    } else if (siteName) {
+      bits.push(siteName);
+    }
   }
   return bits.join(" · ");
 }
