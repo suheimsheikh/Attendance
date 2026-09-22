@@ -181,6 +181,7 @@ export default function SelfCheckIn() {
       distanceM: sess?.distance_m ?? null,
       offSite: !!sess?.out_of_geofence,
       geoUnavailable: !!sess?.geo_unavailable,
+      placeName: sess?.place_name || null,
       late: !!sess?.late,
       lateMinutes: sess?.late_minutes ?? null,
     };
@@ -193,6 +194,7 @@ export default function SelfCheckIn() {
         distanceM: src.distanceM,
         offSite: src.offSite,
         geoUnavailable: src.geoUnavailable,
+        placeName: src.placeName,
         late: src.late,
         lateMinutes: src.lateMinutes,
       }),
@@ -337,6 +339,7 @@ export default function SelfCheckIn() {
         distanceM: (lat != null && lng != null) ? res.distance_m : null,
         offSite: !!res.out_of_geofence,
         geoUnavailable: !!res.geo_unavailable,
+        placeName: res.place_name || null,
         late: !!res.late,
         lateMinutes: res.late_minutes ?? null,
         at: new Date(),

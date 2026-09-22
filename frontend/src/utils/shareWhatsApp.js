@@ -148,7 +148,7 @@ export function formatDistance(m) {
   return n >= 1000 ? `${(n / 1000).toFixed(1)} km` : `${Math.round(n)} m`;
 }
 
-export function formatCheckinCaption({ action, name, siteName, when = new Date(), distanceM = null, offSite = false, late = false, lateMinutes = null, geoUnavailable = false }) {
+export function formatCheckinCaption({ action, name, siteName, when = new Date(), distanceM = null, offSite = false, late = false, lateMinutes = null, geoUnavailable = false, placeName = null }) {
   const hhmm = when.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
@@ -177,6 +177,12 @@ export function formatCheckinCaption({ action, name, siteName, when = new Date()
       bits.push(offSite ? `⚠️ ${dist} from ${place} (OFF-SITE)` : `📍 ${dist} from ${place}`);
     } else if (siteName) {
       bits.push(siteName);
+    }
+    // Off-site only: append the reverse-geocoded area name so the group
+    // knows roughly WHERE they were (OpenStreetMap). No-op when on-site
+    // or when the lookup failed.
+    if (offSite && placeName) {
+      bits.push(`📍 ${placeName}`);
     }
   }
   return bits.join(" · ");

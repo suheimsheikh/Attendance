@@ -21,6 +21,16 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 22 Sep 2026 — Off-site place name in WhatsApp (reverse geocoding)
+- Request: use GPS to say roughly WHERE a person checks in/out from, with a place name. User choices: OpenStreetMap/Nominatim (free, no key), WhatsApp message only, OFF-SITE check-ins only, short area name.
+- New `backend/services/geocode.py` → `reverse_geocode_area(lat,lng)`: Nominatim `/reverse` (jsonv2, zoom 16, addressdetails), custom User-Agent per policy, coord-rounded in-process cache (~11 m), 4 s timeout, best-effort (None on failure). Builds "<locality>, <city>" from address parts. httpx already in requirements (0.28.1) — no dep change.
+- `server.py` `_geo_toggle`: for OFF-SITE (out_of_geofence and GPS present) check-in → store `place_name`; check-out → store `exit_place_name`; both returned in the toggle response (as `place_name`). On-site / no-GPS → None (no lookup). Runs only for the handful of off-site punches/day, so well inside Nominatim limits.
+- Frontend: `formatCheckinCaption` new `placeName` param → appends `📍 <area>` ONLY when off-site; `shareCheckinToWhatsApp` + `lastAction` + persistent `status.session` all carry it.
+- Verified: service (Charminar→"Panjeshah, Hyderabad", Hitech City→"Madhapur, Hyderabad"), full API off-site check-in (7.3 km away → `place_name` returned + stored), caption (`… ⚠️ 7.3 km from YCH Head Office (OFF-SITE) · 📍 Panjeshah, Hyderabad`), on-site shows no place. Backend healthy, frontend compiles. Temp data cleaned.
+- Minor: OSM attribution kept out of the short WhatsApp line by design (internal ops message); data © OpenStreetMap noted in the service. ⚠️ Needs REDEPLOY for production.
+
+
+
 ### 22 Sep 2026 — "Site shows wrong" → GPS-not-working fix
 - Report: Manoj checked out yesterday and it said "YCH Head Office" — wrong. Root cause (verified from his row): his phone sent NO GPS fix (`latitude`/`longitude` null, `geo_unavailable=true`, `distance_m` null). In `_geo_toggle` (server.py:2700-2705) the no-GPS branch sets `nearest_label = office.name` and `out_of_geofence=false`, so the app FALSELY showed the office name and "on-site" for any check-in where location wasn't captured. Affects ~20-30% of check-ins (phones failing to get GPS). Confirmed only ONE geofence exists (0 satellite sites) — not an overlap issue.
 - User decision: show a big red dot + "GPS Not working" everywhere (incl. WhatsApp). GPS-reliability itself deferred (separate task).

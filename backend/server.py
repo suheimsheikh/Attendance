@@ -86,6 +86,7 @@ from services.time_utils import (  # noqa: E402, F401
     DEFAULT_TZ, now_utc, iso, office_tz, local_now, local_date_str, local_hm,
 )
 from services.geo import haversine_m, resolve_site  # noqa: E402
+from services.geocode import reverse_geocode_area  # noqa: E402
 from services.phone import phone_key  # noqa: E402
 from services.photo import (  # noqa: E402, F401
     MAX_PHOTO_BYTES, THUMB_MAX_PX, THUMB_QUALITY,
@@ -2798,6 +2799,8 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         _early_out_reason = (early_out_reason or "").strip() or None
         if early_out_minutes > 0 and _early_out_reason:
             await _ensure_reason_in_bank(target["id"], _early_out_reason)
+        # OFF-SITE check-out: short area name from GPS for the WhatsApp copy.
+        exit_place_name = await reverse_geocode_area(stored_lat, stored_lng) if (out and not geo_unavailable) else None
         update_fields = {
             "check_out_at": ts.isoformat(),
             "hours": hours,
@@ -2808,6 +2811,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             "exit_site_id": site_id, "exit_site_name": site_name,
             "exit_nearest_site_name": nearest_label,
             "exit_geo_unavailable": geo_unavailable,
+            "exit_place_name": exit_place_name,
             "exit_reason": (reason or None),
             "exit_method": "geo",
             "checked_out_by": by,
@@ -2829,6 +2833,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
                 "site_id": site_id, "site_name": site_name,
                 "site_label": nearest_label,
                 "geo_unavailable": geo_unavailable,
+                "place_name": exit_place_name,
                 "check_in_at": sess["check_in_at"], "check_out_at": ts.isoformat(),
                 "dar": {k: dar_saved[k] for k in ("id", "date", "text")} if dar_saved else None,
                 "overtime_minutes": ot_updates.get("overtime_total_min", 0)}
@@ -2840,6 +2845,10 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             raise HTTPException(status_code=400, detail=f"OFFSITE_PROOF_REQUIRED:{int(dist)}")
     late, late_minutes = compute_late(office, target, ts, camp=await _active_camp_for(target, ts, office))
     early_min, work_start_hm = compute_overtime_in(office, target, ts)
+    # OFF-SITE only: look up a short area name from the GPS fix so the
+    # WhatsApp check-in message can say roughly WHERE they checked in from.
+    # Best-effort — None on failure or when on-site / no GPS.
+    place_name = await reverse_geocode_area(stored_lat, stored_lng) if (out and not geo_unavailable) else None
     doc = {
         "id": str(uuid.uuid4()),
         "user_id": target["id"],
@@ -2854,6 +2863,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
         "site_id": site_id, "site_name": site_name,
         "nearest_site_name": nearest_label,
         "geo_unavailable": geo_unavailable,
+        "place_name": place_name,
         "geo_reason": (reason or None) if out else None,
         "late": late,
         "late_minutes": late_minutes,
@@ -2893,6 +2903,7 @@ async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
             "site_id": site_id, "site_name": site_name,
             "site_label": nearest_label,
             "geo_unavailable": geo_unavailable,
+            "place_name": place_name,
             "late": late, "late_minutes": late_minutes,
             "late_days_this_month": (await _late_days_in_month(target["id"], doc["date"])) if late else 0,
             "overtime_minutes": early_min}
