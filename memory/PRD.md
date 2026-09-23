@@ -21,6 +21,15 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 22 Sep 2026 — External roster API (Athlete Health Dashboard)
+- Added a server-to-server bearer-token path to `GET /api/members` for an external "Athlete Health Dashboard" to pull the roster + parent/guardian phones nightly. Reuses the codebase's existing external-key convention (hmac.compare_digest), NOT a new auth system.
+- New env `MEMBERS_API_TOKEN` (backend/.env). New helpers `valid_members_api_token`, `_bearer_from_header`, `_last10_digits`. Branch sits ABOVE the JWT check (the same Authorization header would otherwise be parsed as a failing JWT), below the `?key=` payroll branch.
+- Response: `{"members":[...]}`. Each member: `id, name, role, guardian_name, guardian_phone (+guardian_mobile/guardian_number aliases), mother_name/mother_phone/mother_mobile, father_name/father_phone/father_mobile, contacts[] {role,name,phone}, phone (guardian→mother→father→self fallback)`. Phones normalised to last-10 digits. WHITELISTED projection — never exposes PIN/password/hashed_password/attendance. Returns all non-left members (123).
+- Verified via curl: valid token → 200 (123, all fields, no sensitive keys leaked); no token → 401; wrong token → 401. Regression OK: admin-JWT path still returns the UserPublic list (frontend), PayCraft `?key=` still returns rows.
+- ⚠️ Needs REDEPLOY so the token/endpoint work in production. Token value delivered to user in chat for their app's `ATTENDANCE_API_TOKEN`.
+
+
+
 ### 22 Sep 2026 — Off-site place name in WhatsApp (reverse geocoding)
 - Request: use GPS to say roughly WHERE a person checks in/out from, with a place name. User choices: OpenStreetMap/Nominatim (free, no key), WhatsApp message only, OFF-SITE check-ins only, short area name.
 - New `backend/services/geocode.py` → `reverse_geocode_area(lat,lng)`: Nominatim `/reverse` (jsonv2, zoom 16, addressdetails), custom User-Agent per policy, coord-rounded in-process cache (~11 m), 4 s timeout, best-effort (None on failure). Builds "<locality>, <city>" from address parts. httpx already in requirements (0.28.1) — no dep change.

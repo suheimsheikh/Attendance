@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, Request, Header
 from fastapi.responses import Response, JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -251,6 +251,35 @@ def valid_grid_key(key: str) -> bool:
     import os
     expected = os.environ.get("GRID_API_KEY", "").strip()
     return bool(expected) and bool(key) and hmac.compare_digest((key or "").strip(), expected)
+
+
+def valid_members_api_token(token: str) -> bool:
+    """True when `token` matches MEMBERS_API_TOKEN (constant-time). Gates the
+    read-only roster-with-contacts feed consumed by the external Athlete
+    Health Dashboard via `Authorization: Bearer <token>`."""
+    import hmac
+    import os
+    expected = os.environ.get("MEMBERS_API_TOKEN", "").strip()
+    return bool(expected) and bool(token) and hmac.compare_digest((token or "").strip(), expected)
+
+
+def _bearer_from_header(authorization: Optional[str]) -> Optional[str]:
+    """Extract the raw token from an `Authorization: Bearer <token>` header."""
+    if not authorization:
+        return None
+    parts = authorization.split(None, 1)
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1].strip()
+    return None
+
+
+def _last10_digits(v: Optional[str]) -> Optional[str]:
+    """Normalise a phone to a 10-digit Indian mobile (strip spaces / +91 /
+    punctuation, keep the last 10 digits). None when there aren't 10 digits."""
+    if not v:
+        return None
+    digits = "".join(ch for ch in str(v) if ch.isdigit())
+    return digits[-10:] if len(digits) >= 10 else (digits or None)
 
 
 def _payroll_bucket(rows: list, category: Optional[str]) -> list:
@@ -1128,6 +1157,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
 
 @api_router.get("/members")
 async def list_members(key: str = "", category: Optional[str] = None,
+                       authorization: Optional[str] = Header(default=None),
                        user: Optional[dict] = Depends(optional_user)):
     """List all members. For bandwidth reasons we emit a small photo URL
     (`/api/members/{id}/photo?v=X`) in place of the base64 payload — this
@@ -1165,6 +1195,48 @@ async def list_members(key: str = "", category: Optional[str] = None,
         } for u in roster]
         rows.sort(key=lambda r: (r["member_name"] or "").lower())
         return {"rows": rows}
+    # Athlete Health Dashboard server-to-server mode:
+    # `Authorization: Bearer <MEMBERS_API_TOKEN>` → read-only roster with
+    # parent/guardian contact numbers ONLY. Never exposes PIN, password,
+    # or attendance data. Kept ABOVE the JWT check because the same
+    # Authorization header would otherwise be parsed as a (failing) JWT.
+    _svc_tok = _bearer_from_header(authorization)
+    if _svc_tok and valid_members_api_token(_svc_tok):
+        roster = await db.users.find(
+            {"status": {"$ne": "left"}},
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "mobile": 1,
+             "guardian_name": 1, "guardian_mobile": 1,
+             "mother_name": 1, "mother_mobile": 1,
+             "father_name": 1, "father_mobile": 1},
+        ).sort("full_name", 1).to_list(5000)
+        members = []
+        for u in roster:
+            g_ph = _last10_digits(u.get("guardian_mobile"))
+            m_ph = _last10_digits(u.get("mother_mobile"))
+            f_ph = _last10_digits(u.get("father_mobile"))
+            self_ph = _last10_digits(u.get("mobile"))
+            contacts = []
+            if u.get("guardian_name") or g_ph:
+                contacts.append({"role": "guardian", "name": u.get("guardian_name"), "phone": g_ph})
+            if u.get("mother_name") or m_ph:
+                contacts.append({"role": "mother", "name": u.get("mother_name"), "phone": m_ph})
+            if u.get("father_name") or f_ph:
+                contacts.append({"role": "father", "name": u.get("father_name"), "phone": f_ph})
+            members.append({
+                "id": u.get("id"),
+                "name": u.get("full_name"),
+                "role": u.get("category"),
+                "guardian_name": u.get("guardian_name"),
+                "guardian_phone": g_ph, "guardian_mobile": g_ph, "guardian_number": g_ph,
+                "mother_name": u.get("mother_name"),
+                "mother_phone": m_ph, "mother_mobile": m_ph,
+                "father_name": u.get("father_name"),
+                "father_phone": f_ph, "father_mobile": f_ph,
+                "contacts": contacts,
+                # Last-ditch single phone: guardian → mother → father → self.
+                "phone": g_ph or m_ph or f_ph or self_ph,
+            })
+        return {"members": members}
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     users = await db.users.find({}, {"_id": 0, "hashed_password": 0}).sort("full_name", 1).to_list(2000)
