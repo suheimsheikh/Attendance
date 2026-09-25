@@ -774,14 +774,17 @@ function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1"><PieIcon size={14} className="text-slate-500" /><div className="font-bold text-sm">Category share</div></div>
+          <Caption>Share of total {kind === "purchases" ? "purchase spend" : "consumption value"} (₹) by pantry category in this window.</Caption>
           <CategoryPie rows={data?.category_totals} testid={`kitchen-${testKind}-pie`} />
         </div>
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-slate-500" /><div className="font-bold text-sm">Top items by ₹</div><span className="text-[10px] text-slate-400">· tap to focus</span></div>
+          <Caption>Items with the highest {kind === "purchases" ? "purchase spend" : "consumption value"} (₹). Tap a bar to focus it in the Spend trend.</Caption>
           <TopItemsChart items={data?.top_by_amount} dataKey="amount" colorFn={(i) => CHART_COLORS[i % CHART_COLORS.length]} label="Amount" testid={`kitchen-${testKind}-top-amt`} onToggleItem={toggleItem} focusedIds={focusedIds} />
         </div>
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-slate-500" /><div className="font-bold text-sm">Top items by qty</div><span className="text-[10px] text-slate-400">(kg items only · tap to focus)</span></div>
+          <Caption>Items {kind === "purchases" ? "bought" : "consumed"} in the largest quantities (weight-based items only).</Caption>
           <TopItemsChart items={data?.top_by_qty} dataKey="qty" colorFn={(i) => CHART_COLORS[(i + 3) % CHART_COLORS.length]} label="Qty (kg)" testid={`kitchen-${testKind}-top-qty`} onToggleItem={toggleItem} focusedIds={focusedIds} />
         </div>
       </div>
@@ -799,7 +802,10 @@ function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
 
       <ItemsTable items={data?.items} kind={title.toLowerCase()} testid={`kitchen-${testKind}-items`} />
 
-      {data?.nutrition && <NutritionBlock nutrition={data.nutrition} testKind={testKind} accent={accent} />}
+      {/* Nutrition is only meaningful for what was actually CONSUMED
+          (Issues), not what was purchased/stockpiled — so it's shown
+          on the Consumption panel only. */}
+      {accent !== "purchases" && data?.nutrition && <NutritionBlock nutrition={data.nutrition} testKind={testKind} accent={accent} />}
 
       {fullscreen && (
         <div
@@ -858,6 +864,12 @@ const MACRO_COLORS = {
 };
 const KG_G = (g) => (g == null ? "—" : g >= 1000 ? `${(g / 1000).toFixed(1)} kg` : `${Math.round(g)} g`);
 
+// Small muted caption shown under a chart title to explain what the
+// graph depicts and what data it is based on.
+function Caption({ children }) {
+  return <p className="text-[11px] leading-snug text-slate-500 mb-2">{children}</p>;
+}
+
 function NutritionBlock({ nutrition, testKind, accent }) {
   const cov = nutrition.coverage || {};
   const macros = nutrition.macro_grams || [];
@@ -870,19 +882,25 @@ function NutritionBlock({ nutrition, testKind, accent }) {
   const missing = cov.qty_pct != null ? Math.max(0, 100 - cov.qty_pct) : 0;
   return (
     <div className="mt-5" data-testid={`kitchen-${testKind}-nutrition`}>
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-1">
         <Flame size={16} className="text-rose-600" />
-        <div className="font-extrabold text-sm">Nutrition</div>
+        <div className="font-extrabold text-sm">Nutrition of food consumed</div>
         {missing > 0 && (
           <span
             className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200"
-            title={`${cov.items_covered}/${cov.items_total} items have nutrition data`}
+            title={`${cov.items_covered} of ${cov.items_total} items have nutrition data. Items with no data — or sold by count with no gram weight set — are left out of every chart below.`}
             data-testid={`kitchen-${testKind}-nutrition-coverage`}
           >
-            {missing.toFixed(0)}% of qty has no nutrition data — chart is based on {cov.qty_pct}%
+            {missing.toFixed(0)}% of qty has no nutrition data — charts based on {cov.qty_pct}%
           </span>
         )}
       </div>
+      <Caption>
+        Based on what was <b>issued to the kitchen</b> (consumed) in this window — <b>not</b> ₹ spend.
+        Each item&apos;s quantity is converted to grams and multiplied by its per-100g nutrition
+        (an item-level override if set, otherwise a built-in reference table of common pantry items).
+        Approximate — good for portion planning, not medical advice.
+      </Caption>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
         <StatPill icon={Flame}   label="Total kcal"  value={inr(nutrition.kcal_total || 0)} tint="bg-rose-50" />
@@ -895,6 +913,7 @@ function NutritionBlock({ nutrition, testKind, accent }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1"><TrendingUp size={14} className="text-slate-500" /><div className="font-bold text-sm">Daily calories</div></div>
+          <Caption>Total calories of the food consumed each day across the window.</Caption>
           {(dailyKcal.length === 0)
             ? <div className="text-center text-slate-400 text-sm py-8">No data</div>
             : (
@@ -913,6 +932,7 @@ function NutritionBlock({ nutrition, testKind, accent }) {
         </div>
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1"><PieIcon size={14} className="text-slate-500" /><div className="font-bold text-sm">Macros (grams)</div></div>
+          <Caption>Total weight of protein, carbs, fat &amp; fibre consumed in the window.</Caption>
           {(macros.every((m) => (m.grams || 0) === 0))
             ? <div className="text-center text-slate-400 text-sm py-8">No data</div>
             : (
@@ -932,6 +952,7 @@ function NutritionBlock({ nutrition, testKind, accent }) {
         </div>
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1"><PieIcon size={14} className="text-slate-500" /><div className="font-bold text-sm">Calorie source</div><span className="text-[10px] text-slate-400">(kcal from macro)</span></div>
+          <Caption>Where the calories come from — protein &amp; carbs 4, fat 9, fibre 2 kcal per gram.</Caption>
           {(kcalPie.every((m) => (m.kcal || 0) === 0))
             ? <div className="text-center text-slate-400 text-sm py-8">No data</div>
             : (
@@ -951,6 +972,7 @@ function NutritionBlock({ nutrition, testKind, accent }) {
         </div>
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-slate-500" /><div className="font-bold text-sm">Top items by calories</div></div>
+          <Caption>The 10 items contributing the most calories in this window.</Caption>
           {((nutrition.top_by_kcal || []).length === 0)
             ? <div className="text-center text-slate-400 text-sm py-8">No data</div>
             : (

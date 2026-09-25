@@ -373,3 +373,14 @@ Implemented a new **"Price Movers"** tab in Purchases & Issues (Kitchen area) + 
 Files: `backend/routes/meals.py` (price_movers ~L2203), `frontend/src/pages/admin/MealPriceMoversTab.jsx` (new), `frontend/src/pages/admin/MealsReport.jsx` (tab wired), `frontend/src/components/Layout.jsx` (sidebar link in both kitchen nav arrays).
 Verified: backend curl (32 rising / 21 falling / 43 new over 30d); UI screenshots of chart, lists, and drill-down drawer.
 KNOWN CONSIDERATION: an extreme outlier (e.g., Cucumber +1173% caused by a bad ₹1.29/kg baseline purchase on 2026-08-13) stretches the bar-chart X-axis and compresses other bars. Could optionally clamp the domain / exclude anomalies — deferred. The feature usefully surfaces such data-entry anomalies.
+
+---
+## Update 25 Jun 2026 — Masters consolidation + Analytics nutrition cleanup (UX, shipped)
+- **Masters consolidation**: All master-data screens (Manage Members, Institutions, Fleets, Categories, Roles) are now TABS inside a single `/admin/masters` page (`frontend/src/pages/admin/Masters.jsx`, ?tab= deep-linking). The sidebar's 5 separate entries + the "MASTERS" sub-header are replaced by one "Masters" item (Layout.jsx). Old individual routes (`/admin/members` etc.) are retained for backward-compat with in-app links. Route added in App.js (RequireAdmin). NAV_ATTENDANCE_MASTERS array removed.
+- **Analytics nutrition**: Removed the Purchases-side Nutrition block (meaningless — nutrition only shown for what was CONSUMED/Issues now). Added explanatory captions under every Analytics chart (spend/category/top-items + all 4 nutrition charts) and a data-source note. Calorie data source documented: per-item `nutrition` override on meal_items, else `backend/services/nutrition_seed.py` (per-100g table, name-matched); qty→grams×per-100g. Coverage badge clarified.
+- Files: `frontend/src/pages/admin/KitchenAnalyticsTab.jsx` (Caption helper, captions, purchases-nutrition removed), `frontend/src/pages/admin/Masters.jsx` (new), `frontend/src/App.js`, `frontend/src/components/Layout.jsx`.
+Verified via screenshots (Masters tabs switch: Members/Fleets/Roles; single Nutrition block on Analytics).
+
+OPEN QUESTIONS (awaiting user):
+- Chef's View: keep / merge into Meals Muster / delete (my rec: keep — it's presence-based plate planning, distinct from Meals Muster's manual consumption record).
+- App-wide tooltip/caption pass: which screens to prioritise (Consumption, Grid, Dashboard, DAR, Reports) and whether to add ⓘ info-icon tooltips vs captions only.

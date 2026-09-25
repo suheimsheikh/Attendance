@@ -3,9 +3,9 @@ import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
 import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
-  CalendarCheck2, Building2, Sailboat,
+  CalendarCheck2,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, Utensils, CalendarRange, FileText, ListTodo, ScrollText, LineChart, TrendingUp
+  ShieldAlert, Gauge, ChefHat, PencilRuler, ChevronDown, ChevronRight, Utensils, CalendarRange, FileText, ListTodo, ScrollText, LineChart, TrendingUp
 } from "lucide-react";
 import RulesGate from "./RulesGate";
 import Avatar from "./Avatar";
@@ -84,17 +84,6 @@ const NAV_ATTENDANCE_LIVE = [
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2, hint: "Paid leave, comp-off and tour balances for every member", adminOnly: true },
 ];
 
-const NAV_ATTENDANCE_MASTERS = [
-  { to: "/admin/members", label: "Manage Members", icon: Users, hint: "Add, edit and organise athletes, staff and coaches" },
-  { to: "/admin/institutions", label: "Institutions", icon: Building2, hint: "Schools/colleges members belong to" },
-  { to: "/admin/fleets", label: "Fleets", icon: Sailboat, hint: "Boat fleets and class groupings" },
-  { to: "/admin/categories", label: "Categories", icon: ShieldAlert, hint: "Member categories and their attendance rules" },
-  { to: "/admin/roles", label: "Roles", icon: KeyRound, hint: "Who can see and do what in the app" },
-];
-
-// KITCHEN system — meals, pantry stock, chef's view, vendors. Kept
-// visually distinct with an amber accent (matches the pantry warm-
-// yellow banding on the Daily-entry grid).
 const NAV_KITCHEN = [
   { to: "/meals", label: "Meals Muster", icon: Utensils, hint: "Mark who is eating which meal today" },
   { to: "/admin/meals-calendar", label: "Consumption", icon: CalendarRange, hint: "Daily headcount log — Breakfast / Midmorning / Lunch / Afternoon Snack / Dinner totals per day" },
@@ -279,7 +268,7 @@ export default function Layout() {
         {!isEscort && isAdmin && (
           <>
             <SystemGroup label="Attendance" tone="cyan" icon={ClipboardCheck}
-                         count={NAV_ATTENDANCE_LIVE.length + NAV_ATTENDANCE_MASTERS.length}
+                         count={NAV_ATTENDANCE_LIVE.length + 1}
                          open={isOpen("attendance")} onToggle={() => toggleSection("attendance")}>
               {NAV_ATTENDANCE_LIVE.map((item) => {
                 // Synthetic key `approvals_page` sums only the queues that the
@@ -308,12 +297,10 @@ export default function Layout() {
                   />
                 );
               })}
-              {/* Attendance masters — nested under the same Attendance
-                  section so admins don't lose the visual grouping. */}
-              <div className="mt-2 mb-1 px-3 text-[10px] font-black uppercase tracking-[0.15em] text-cyan-300/60">Masters</div>
-              {NAV_ATTENDANCE_MASTERS.map((item) => (
-                <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
-              ))}
+              {/* All master-data screens now live under one Masters
+                  page (tabbed). Single entry keeps the sidebar tidy. */}
+              <NavItem to="/admin/masters" label="Masters" icon={Users} onClick={() => setOpen(false)}
+                       hint="Members, Institutions, Fleets, Categories and Roles — all in one place" />
             </SystemGroup>
 
             <SystemGroup label="Kitchen" tone="amber" icon={ChefHat}

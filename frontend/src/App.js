@@ -51,6 +51,7 @@ const ChefsView = lazy(() => import("./pages/admin/ChefsView"));
 const Categories = lazy(() => import("./pages/admin/Categories"));
 const CategoryHealth = lazy(() => import("./pages/admin/CategoryHealth"));
 const Roles = lazy(() => import("./pages/admin/Roles"));
+const Masters = lazy(() => import("./pages/admin/Masters"));
 const MyCorrections = lazy(() => import("./pages/MyCorrections"));
 
 function RequireAuth({ children }) {
@@ -161,6 +162,7 @@ function App() {
             <Route path="admin/category-health" element={<RequireAdmin><CategoryHealth /></RequireAdmin>} />
             <Route path="admin/roles" element={<RequireAdmin><Roles /></RequireAdmin>} />
             <Route path="admin/members" element={<RequireAdmin><Members /></RequireAdmin>} />
+            <Route path="admin/masters" element={<RequireAdmin><Masters /></RequireAdmin>} />
             <Route path="admin/approvals" element={<RequireAdmin><Approvals /></RequireAdmin>} />
             {/* Legacy direct links — keep deep-links working but funnel into Approvals.
                 Overtime routes redirect to The Grid where OT hours now live as a
