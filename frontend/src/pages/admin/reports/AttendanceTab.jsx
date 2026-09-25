@@ -8,6 +8,7 @@ import MemberTimelineModal from "../../../components/MemberTimelineModal";
 import OTLedgerModal from "../OTLedgerModal";
 import AttendanceLedgerModal from "../AttendanceLedgerModal";
 import CompOffLedgerModal from "../CompOffLedgerModal";
+import { InfoTip } from "../../../components/InfoTip";
 import LeaveLedgerModal from "../LeaveLedgerModal";
 import DrillDownBubble from "./DrillDownBubble";
 import MonthNav from "./MonthNav";
@@ -373,12 +374,32 @@ export default function AttendanceTab({
                   overlay the first data row on the initial paint. */}
               <tr className="sticky top-0 z-30 bg-slate-100 text-[10px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200 shadow-sm">
                 <th className="py-1.5 px-2 text-left sticky left-0 z-40 bg-slate-100" colSpan={2}>&nbsp;</th>
-                <th className="py-1.5 px-2 text-center bg-emerald-50 border-l border-r border-emerald-200 text-emerald-800" colSpan={8}>Attendance</th>
-                <th className="py-1.5 px-2 text-center bg-amber-50 border-r border-amber-200 text-amber-800" colSpan={5}>Leave</th>
-                <th className="py-1.5 px-2 text-center bg-violet-50 border-r border-violet-200 text-violet-800" colSpan={1}>Overtime</th>
-                <th className="py-1.5 px-2 text-center bg-sky-50 border-r border-sky-200 text-sky-800" colSpan={1}>Comp-Off</th>
+                <th className="py-1.5 px-2 text-center bg-emerald-50 border-l border-r border-emerald-200 text-emerald-800" colSpan={8}>
+                  <span className="inline-flex items-center gap-1 justify-center">Attendance
+                    <InfoTip id="rep-attendance" size={12} text="Day counts for the month: Pres (present, incl. half-day & late), Lv (leave), Tour, Off (weekly off/holiday), Late, Half (half-day), Abs (absent) and Tot (total accounted days)." />
+                  </span>
+                </th>
+                <th className="py-1.5 px-2 text-center bg-amber-50 border-r border-amber-200 text-amber-800" colSpan={5}>
+                  <span className="inline-flex items-center gap-1 justify-center">Leave
+                    <InfoTip id="rep-leave" size={12} text="Breakdown of leave taken this month by type, feeding the payroll leave/LOP calculation." />
+                  </span>
+                </th>
+                <th className="py-1.5 px-2 text-center bg-violet-50 border-r border-violet-200 text-violet-800" colSpan={1}>
+                  <span className="inline-flex items-center gap-1 justify-center">Overtime
+                    <InfoTip id="rep-ot" size={12} text="Overtime hours served this month (early arrival + late departure, or actual hours for hourly-wager staff)." />
+                  </span>
+                </th>
+                <th className="py-1.5 px-2 text-center bg-sky-50 border-r border-sky-200 text-sky-800" colSpan={1}>
+                  <span className="inline-flex items-center gap-1 justify-center">Comp-Off
+                    <InfoTip id="rep-comp-off" size={12} text="Compensatory-off days earned this month (e.g. a tour that spanned a weekly off)." />
+                  </span>
+                </th>
                 {showHours && (
-                  <th className="py-1.5 px-2 text-center bg-indigo-50 border-r border-indigo-200 text-indigo-800" colSpan={2}>Hours</th>
+                  <th className="py-1.5 px-2 text-center bg-indigo-50 border-r border-indigo-200 text-indigo-800" colSpan={2}>
+                    <span className="inline-flex items-center gap-1 justify-center">Hours
+                      <InfoTip id="rep-hours" size={12} text="Total worked hours (check-in to check-out) and average hours per present day." />
+                    </span>
+                  </th>
                 )}
               </tr>
               <tr className="sticky top-7 z-30 bg-slate-50 shadow-sm text-[10px] uppercase tracking-wider font-bold text-slate-500">

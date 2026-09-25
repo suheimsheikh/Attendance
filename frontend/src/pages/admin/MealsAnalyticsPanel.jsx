@@ -399,6 +399,11 @@ export default function MealsAnalyticsPanel({ days, events }) {
               <Maximize2 size={14}/>
             </button>
           </div>
+          <p className="text-[11px] leading-snug text-slate-500 mb-2">
+            Meals served each day, split by slot (Breakfast, Lunch, Dinner &amp; snacks) with a bold Total line.
+            A filled dot marks days recorded via per-person Meal Muster; days from spreadsheet imports have no dot.
+            Coloured bands under the chart mark camps &amp; regattas. Tap any Total dot to see who ate that day.
+          </p>
           {renderTrend(320)}
           {renderEventStrip(true)}
         </div>
@@ -409,6 +414,10 @@ export default function MealsAnalyticsPanel({ days, events }) {
             <div className="font-bold text-sm">Average meals by day of week</div>
             <span className="text-[10px] text-slate-400">(per-slot split)</span>
           </div>
+          <p className="text-[11px] leading-snug text-slate-500 mb-2">
+            The average number of meals served on each weekday across the selected range — useful for spotting
+            quieter days (e.g. Sundays) so the kitchen can plan portions and reduce waste.
+          </p>
           <div style={{ width: "100%", height: 320 }} data-testid="ma-dow-bar">
             <ResponsiveContainer>
               <BarChart data={m.dowRows} margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>

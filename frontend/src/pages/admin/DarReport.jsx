@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api, downloadBlob, showApiError } from "../../api";
 import { Highlight, fmtDate, fmtHM } from "../../components/DarHistorySection";
 import { DarShareButton } from "../../components/Dar";
+import { InfoTip } from "../../components/InfoTip";
 
 const todayISO = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 const monthOf = (iso) => iso.slice(0, 7);
@@ -158,7 +159,7 @@ export default function DarReport() {
             <div className="iu-card overflow-hidden">
               <table className="w-full text-sm" data-testid="dar-missed-table">
                 <thead className="text-[11px] uppercase text-slate-500 bg-slate-50">
-                  <tr><th className="text-left p-2">Member</th><th className="text-left p-2">Category</th><th className="text-right p-2">Missed</th><th className="text-left p-2">Dates</th></tr>
+                  <tr><th className="text-left p-2">Member</th><th className="text-left p-2">Category</th><th className="text-right p-2"><span className="inline-flex items-center gap-1 justify-end">Missed<InfoTip id="dar-missed" size={12} text="Number of days this member worked (checked in/out) but did not file a required Daily Activity Report this month. Payroll deducts a day per miss." /></span></th><th className="text-left p-2">Dates</th></tr>
                 </thead>
                 <tbody>
                   {missed.rows.map((r, idx) => {

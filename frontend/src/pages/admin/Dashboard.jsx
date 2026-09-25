@@ -116,11 +116,12 @@ export default function Dashboard() {
         {/* ── MAIN COLUMN ─────────────────────────────────── */}
         <div className="space-y-5">
           {/* NOW */}
-          <SectionCard title="Now" testid="dashboard-now">
+          <SectionCard title="Now" titleHint="A live snapshot of who is on campus and what needs action right now." testid="dashboard-now">
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
               <StatTile
                 testid="dashboard-tile-oncampus"
                 label="On campus"
+                hint="Everyone currently checked in and on-site right now, across all categories."
                 value={now.on_campus_total}
                 sub={<CategoryChips counts={now.on_campus_by_category} />}
                 icon={Users}
@@ -130,6 +131,7 @@ export default function Dashboard() {
               <StatTile
                 testid="dashboard-tile-late-today"
                 label="Late today"
+                hint="People who checked in after the 09:30 grace time today."
                 value={now.late_today}
                 sub="Since 09:30 grace"
                 icon={Clock}
@@ -139,6 +141,7 @@ export default function Dashboard() {
               <StatTile
                 testid="dashboard-tile-absent"
                 label="Absent athletes"
+                hint="Athletes with no check-in, approved leave, tour or other accounted status today."
                 value={now.absent_athletes_today}
                 sub="Unaccounted for today"
                 icon={AlertTriangle}
@@ -148,6 +151,7 @@ export default function Dashboard() {
               <StatTile
                 testid="dashboard-tile-guests"
                 label="Guests"
+                hint="Visitors signed in and currently on campus."
                 value={now.guests_present}
                 sub="Currently on campus"
                 icon={UserCheck}
@@ -157,6 +161,7 @@ export default function Dashboard() {
               <StatTile
                 testid="dashboard-tile-escorts"
                 label="Escorts"
+                hint="Escorts (parent/guardian drivers) signed in today."
                 value={now.escorts_present}
                 sub="Signed in today"
                 icon={IdCard}
@@ -166,6 +171,7 @@ export default function Dashboard() {
               <StatTile
                 testid="dashboard-tile-approvals"
                 label="Pending approvals"
+                hint="Leave, overtime and device requests waiting for an admin decision."
                 value={now.pending_approvals.total}
                 sub={`${now.pending_approvals.leaves} leaves · ${now.pending_approvals.overtime} OT · ${now.pending_approvals.devices} devices`}
                 icon={ClipboardCheck}
@@ -205,6 +211,7 @@ export default function Dashboard() {
           {/* THIS WEEK */}
           <SectionCard
             title="This week"
+            titleHint="Daily attendance trend for the current week — athletes (solid line) vs staff/coaches (dashed)."
             testid="dashboard-week"
             action={
               <span className="text-[11px] text-slate-400 tabular-nums">
@@ -343,6 +350,7 @@ export default function Dashboard() {
           {/* THIS MONTH */}
           <SectionCard
             title="This month"
+            titleHint="Payroll-relevant totals for the current month — hours, overtime, leave and new joiners."
             testid="dashboard-month"
             action={
               <span className="text-[11px] text-slate-400 tabular-nums">
@@ -354,6 +362,7 @@ export default function Dashboard() {
               <StatTile
                 testid="dashboard-tile-staff-hours"
                 label="Staff hours"
+                hint="Total worked hours this month for coaches, staff and executives (check-in to check-out)."
                 value={month.staff_hours}
                 sub="Coaches + staff + execs"
                 icon={Clock}
@@ -363,6 +372,7 @@ export default function Dashboard() {
               <StatTile
                 testid="dashboard-tile-ot-hours"
                 label="Approved OT hrs"
+                hint="Overtime hours credited for payroll this month."
                 value={month.ot_hours}
                 sub="Payroll-approved this month"
                 icon={TrendingUp}
@@ -372,6 +382,7 @@ export default function Dashboard() {
               <StatTile
                 testid="dashboard-tile-leave-days"
                 label="Leave days"
+                hint="Approved leave days consumed by everyone this month."
                 value={month.leave_days_consumed}
                 sub="Approved leave consumed"
                 icon={CalendarIcon}
@@ -381,6 +392,7 @@ export default function Dashboard() {
               <StatTile
                 testid="dashboard-tile-new-members"
                 label="New members"
+                hint="Members whose joining date falls in this month."
                 value={month.new_members}
                 sub="Joined this month"
                 icon={Users}
@@ -395,6 +407,7 @@ export default function Dashboard() {
         <aside className="space-y-5" data-testid="dashboard-attention">
           <SectionCard
             title="Attention"
+            titleHint="Items that need an admin's action — clear these to keep records clean."
             testid="dashboard-attention-card"
             action={
               <span
@@ -407,6 +420,7 @@ export default function Dashboard() {
             <ul className="space-y-2 text-sm">
               <AttentionRow
                 label="Pending leave requests"
+                hint="Leave applications awaiting approve/reject."
                 value={attention.pending_leaves}
                 to="/admin/approvals?tab=leaves"
                 testid="attention-leaves"
@@ -416,6 +430,7 @@ export default function Dashboard() {
                   now purely calculated, no approval queue. */}
               <AttentionRow
                 label="Device access requests"
+                hint="New browsers/devices waiting to be approved for check-in."
                 value={attention.pending_devices}
                 to="/admin/devices"
                 testid="attention-devices"
@@ -423,6 +438,7 @@ export default function Dashboard() {
               />
               <AttentionRow
                 label="Open sessions >36h"
+                hint="Check-ins with no check-out for over 36 hours — likely a forgotten checkout to fix in Data Quality."
                 value={attention.stale_sessions}
                 to="/admin/data-quality"
                 testid="attention-stale"
@@ -430,6 +446,7 @@ export default function Dashboard() {
               />
               <AttentionRow
                 label="Athletes w/o parent contact"
+                hint="Athletes missing a father/mother/guardian phone — needed for absence & late alerts."
                 value={attention.athletes_no_parent_contact}
                 to="/admin/data-quality"
                 testid="attention-noparent"

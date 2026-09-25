@@ -12,6 +12,7 @@ import { api, showApiError } from "../../api";
 import { formatDate, dayOfWeek } from "../../utils";
 import { useAuth } from "../../auth";
 import MealsAnalyticsPanel from "./MealsAnalyticsPanel";
+import { InfoTip } from "../../components/InfoTip";
 
 const p2 = (n) => String(n).padStart(2, "0");
 function isoToday() {
@@ -58,9 +59,12 @@ function FlagBadge({ flags }) {
 
 function KpiPill({ icon: Icon, label, value, tint, title }) {
   return (
-    <div className={`iu-card !py-1.5 !px-2.5 flex items-center gap-2 ${tint || ""}`} title={title}>
+    <div className={`iu-card !py-1.5 !px-2.5 flex items-center gap-2 ${tint || ""}`}>
       <Icon size={14} className="shrink-0 opacity-70" />
-      <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500 whitespace-nowrap">{label}</div>
+      <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500 whitespace-nowrap inline-flex items-center gap-1">
+        {label}
+        {title && <InfoTip text={title} size={11} />}
+      </div>
       <div className="ml-auto text-sm font-black tabular-nums">{typeof value === "number" ? inr(value) : value}</div>
     </div>
   );

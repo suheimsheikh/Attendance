@@ -14,6 +14,7 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, TrendingUp, BarChart3, PieChart as PieIcon, ListOrdered, IndianRupee, ShoppingCart, Boxes, Flame, Beef, Wheat, Droplet, Maximize2, X as CloseIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { InfoTip } from "../../components/InfoTip";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList, ComposedChart,
@@ -54,21 +55,24 @@ function todayIso() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-function StatPill({ icon: Icon, label, value, tint }) {
+function StatPill({ icon: Icon, label, value, tint, hint }) {
   return (
     <div className={`iu-card p-3 flex items-center gap-3 ${tint || ""}`}>
       <div className="w-9 h-9 rounded-lg bg-white/70 flex items-center justify-center shrink-0">
         <Icon size={16} />
       </div>
       <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500">{label}</div>
+        <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500 inline-flex items-center gap-1">
+          {label}
+          {hint && <InfoTip text={hint} size={11} />}
+        </div>
         <div className="text-lg font-extrabold tabular-nums truncate">{value}</div>
       </div>
     </div>
   );
 }
 
-function BannerStat({ icon: Icon, label, value }) {
+function BannerStat({ icon: Icon, label, value, hint }) {
   // Chip variant of StatPill rendered INSIDE the coloured banner.
   // Uses translucent white for readable contrast on both the blue
   // (Purchases) and orange (Consumption) bands.
@@ -78,7 +82,10 @@ function BannerStat({ icon: Icon, label, value }) {
         <Icon size={14} />
       </div>
       <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-wider font-bold opacity-80">{label}</div>
+        <div className="text-[10px] uppercase tracking-wider font-bold opacity-80 inline-flex items-center gap-1">
+          {label}
+          {hint && <InfoTip text={hint} size={11} iconClassName="text-white/80" />}
+        </div>
         <div className="text-base sm:text-lg font-black tabular-nums truncate">{value}</div>
       </div>
     </div>
@@ -709,9 +716,9 @@ function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3 mt-4">
-          <BannerStat icon={IndianRupee} label={`${title} Total`} value={`₹${inr(data?.total_amount || 0)}`} />
-          <BannerStat icon={Boxes} label="Distinct Items" value={data?.item_count || 0} />
-          <BannerStat icon={ShoppingCart} label="Line Entries" value={data?.total_lines || 0} />
+          <BannerStat icon={IndianRupee} label={`${title} Total`} value={`₹${inr(data?.total_amount || 0)}`} hint={kind === "purchases" ? "Total purchase spend (₹) in the selected window." : "Total value (₹) of items issued to the kitchen, priced at each item's weighted-average purchase rate."} />
+          <BannerStat icon={Boxes} label="Distinct Items" value={data?.item_count || 0} hint="Number of unique pantry items involved in this window." />
+          <BannerStat icon={ShoppingCart} label="Line Entries" value={data?.total_lines || 0} hint="Number of individual line rows entered (each item on each purchase/issue counts once)." />
         </div>
       </div>
       {accent === "purchases" && (data?.unitemised_amount || 0) > 0 && (
@@ -762,6 +769,11 @@ function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
             <Maximize2 size={14} />
           </button>
         </div>
+        <Caption>
+          {kind === "purchases"
+            ? "Weekly purchase spend (₹), stacked by pantry category, with a line for each month's running total. Tap any item bar in the charts below to focus its spend here."
+            : "Weekly consumption value (₹) of items issued to the kitchen, stacked by category, with a monthly-total line. Values use each item's weighted-average purchase rate. Tap an item bar below to focus it here."}
+        </Caption>
         <DailyTrendChart
           data={data?.daily} colorAmt={colorAmt}
           categoryTotals={data?.category_totals}
@@ -903,11 +915,11 @@ function NutritionBlock({ nutrition, testKind, accent }) {
       </Caption>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
-        <StatPill icon={Flame}   label="Total kcal"  value={inr(nutrition.kcal_total || 0)} tint="bg-rose-50" />
-        <StatPill icon={Beef}    label="Protein"     value={KG_G(nutrition.totals?.protein_g)} tint="bg-red-50" />
-        <StatPill icon={Wheat}   label="Carbs"       value={KG_G(nutrition.totals?.carbs_g)} tint="bg-amber-50" />
-        <StatPill icon={Droplet} label="Fat"         value={KG_G(nutrition.totals?.fat_g)} tint="bg-violet-50" />
-        <StatPill icon={Boxes}   label="Fibre"       value={KG_G(nutrition.totals?.fibre_g)} tint="bg-emerald-50" />
+        <StatPill icon={Flame}   label="Total kcal"  value={inr(nutrition.kcal_total || 0)} tint="bg-rose-50" hint="Total calories in all food consumed in this window, from issued quantities × per-100g nutrition data." />
+        <StatPill icon={Beef}    label="Protein"     value={KG_G(nutrition.totals?.protein_g)} tint="bg-red-50" hint="Total protein consumed in this window." />
+        <StatPill icon={Wheat}   label="Carbs"       value={KG_G(nutrition.totals?.carbs_g)} tint="bg-amber-50" hint="Total carbohydrates consumed in this window." />
+        <StatPill icon={Droplet} label="Fat"         value={KG_G(nutrition.totals?.fat_g)} tint="bg-violet-50" hint="Total fat consumed in this window." />
+        <StatPill icon={Boxes}   label="Fibre"       value={KG_G(nutrition.totals?.fibre_g)} tint="bg-emerald-50" hint="Total dietary fibre consumed in this window." />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">

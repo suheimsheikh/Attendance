@@ -6,6 +6,7 @@ import { categoryLabel } from "../../utils";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
 import { round1 } from "../leaves/utils";
+import { InfoTip } from "../../components/InfoTip";
 
 export default function LeaveBalances() {
   const [data, setData] = useState(null);
@@ -240,13 +241,19 @@ export default function LeaveBalances() {
                   <th className="iu-table-th !text-left hidden md:table-cell" rowSpan={2}>Category</th>
                   <th className="iu-table-th !text-left hidden lg:table-cell" rowSpan={2}>Institution</th>
                   <th className="iu-table-th !text-right bg-amber-50/60 border-l border-amber-100" colSpan={3}>
-                    <span className="inline-flex items-center gap-1 text-amber-700"><Bed size={12}/> Paid Leave</span>
+                    <span className="inline-flex items-center gap-1 text-amber-700"><Bed size={12}/> Paid Leave
+                      <InfoTip id="lb-paid-leave" size={12} text="Annual paid-leave entitlement. Opening = balance seeded/carried in; Used = approved leave consumed this year; Balance = Opening − Used. Athletes don't consume paid leave." />
+                    </span>
                   </th>
                   <th className="iu-table-th !text-right bg-violet-50/60 border-l border-violet-100" colSpan={4}>
-                    <span className="inline-flex items-center gap-1 text-violet-700"><RefreshCw size={12}/> Comp-Off</span>
+                    <span className="inline-flex items-center gap-1 text-violet-700"><RefreshCw size={12}/> Comp-Off
+                      <InfoTip id="lb-comp-off" size={12} text="Compensatory offs. Opening = seeded/carried-in; Accrued = earned when an approved tour spanned a weekly off; Used = comp-off taken; Available = Opening + Accrued − Used." />
+                    </span>
                   </th>
                   <th className="iu-table-th !text-right bg-orange-50/60 border-l border-orange-100" rowSpan={2}>
-                    <span className="inline-flex items-center gap-1 text-orange-700"><Plane size={12}/> Tour</span>
+                    <span className="inline-flex items-center gap-1 text-orange-700"><Plane size={12}/> Tour
+                      <InfoTip id="lb-tour" size={12} text="Total approved tour/duty-travel days this year (paid, not deducted from leave)." />
+                    </span>
                   </th>
                 </tr>
                 <tr className="text-[10px] uppercase tracking-wider">

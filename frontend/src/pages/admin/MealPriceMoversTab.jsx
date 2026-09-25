@@ -21,6 +21,7 @@ import { Loader2, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Sparkl
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import ItemPriceTrendDrawer from "../../components/ItemPriceTrendDrawer";
+import { InfoTip } from "../../components/InfoTip";
 
 const UP = "#EF4444";
 const DOWN = "#10B981";
@@ -35,12 +36,15 @@ function todayIso() {
 
 const WINDOWS = [7, 14, 30, 60, 90];
 
-function Kpi({ icon: Icon, label, value, tint }) {
+function Kpi({ icon: Icon, label, value, tint, hint }) {
   return (
     <div className={`iu-card !py-2 !px-3 flex items-center gap-2.5 ${tint || ""}`}>
       <Icon size={16} className="shrink-0 opacity-80" />
       <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500">{label}</div>
+        <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500 inline-flex items-center gap-1">
+          {label}
+          {hint && <InfoTip text={hint} size={11} />}
+        </div>
         <div className="text-lg font-black tabular-nums">{value}</div>
       </div>
     </div>
@@ -151,10 +155,10 @@ export default function MealPriceMoversTab({ liveSig }) {
         <>
           {/* KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4" data-testid="pm-kpis">
-            <Kpi icon={TrendingUp} label="Getting dearer" value={data.rising_count} tint="bg-rose-50" />
-            <Kpi icon={TrendingDown} label="Getting cheaper" value={data.falling_count} tint="bg-emerald-50" />
-            <Kpi icon={Sparkles} label="New this window" value={data.new_count} tint="bg-sky-50" />
-            <Kpi icon={IndianRupee} label="Avg change" value={pctStr(data.avg_change_pct)} tint="bg-amber-50" />
+            <Kpi icon={TrendingUp} label="Getting dearer" value={data.rising_count} tint="bg-rose-50" hint={`Items whose weighted-average purchase rate rose vs the previous ${days} days.`} />
+            <Kpi icon={TrendingDown} label="Getting cheaper" value={data.falling_count} tint="bg-emerald-50" hint={`Items whose weighted-average purchase rate fell vs the previous ${days} days.`} />
+            <Kpi icon={Sparkles} label="New this window" value={data.new_count} tint="bg-sky-50" hint="Items bought in this window that had no purchase in the previous window, so there is no rate to compare against yet." />
+            <Kpi icon={IndianRupee} label="Avg change" value={pctStr(data.avg_change_pct)} tint="bg-amber-50" hint="Average % rate change across all items that could be compared in both windows." />
           </div>
 
           {/* Diverging bar chart */}

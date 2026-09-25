@@ -8,6 +8,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
+import { InfoTip } from "../../../components/InfoTip";
 
 export const CATEGORY_COLOR = {
   athlete:   "bg-sky-100 text-sky-800",
@@ -19,7 +20,7 @@ export const CATEGORY_COLOR = {
 /** Big number tile — used in the "Now" strip and the "This month"
  *  strip. If `to` is set, the whole tile is a Link.
  */
-export function StatTile({ label, value, sub, icon: Icon, tone = "slate", to, testid }) {
+export function StatTile({ label, value, sub, icon: Icon, tone = "slate", to, testid, hint }) {
   const toneMap = {
     slate:   "bg-white border-slate-200",
     emerald: "bg-emerald-50 border-emerald-200",
@@ -42,8 +43,9 @@ export function StatTile({ label, value, sub, icon: Icon, tone = "slate", to, te
       data-testid={testid}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 inline-flex items-center gap-1">
           {label}
+          {hint && <InfoTip id={testid ? `${testid}-hint` : undefined} text={hint} size={12} />}
         </span>
         {Icon && <Icon size={16} className={iconTone[tone]} />}
       </div>
@@ -153,11 +155,14 @@ export function fmtRange(a, b) {
 }
 
 /** Boxed card with a small uppercase title + optional right-side action. */
-export function SectionCard({ title, testid, children, action }) {
+export function SectionCard({ title, testid, children, action, titleHint }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-4" data-testid={testid}>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold uppercase tracking-widest text-slate-700">{title}</h3>
+        <h3 className="text-sm font-bold uppercase tracking-widest text-slate-700 inline-flex items-center gap-1.5">
+          {title}
+          {titleHint && <InfoTip text={titleHint} size={13} />}
+        </h3>
         {action}
       </div>
       {children}
@@ -166,7 +171,7 @@ export function SectionCard({ title, testid, children, action }) {
 }
 
 /** One row in the Attention rail — label + numeric pill, linkified. */
-export function AttentionRow({ label, value, to, testid, tone = "slate" }) {
+export function AttentionRow({ label, value, to, testid, tone = "slate", hint }) {
   const toneMap = {
     slate:  "bg-slate-100 text-slate-700",
     amber:  "bg-amber-100 text-amber-800",
@@ -181,7 +186,10 @@ export function AttentionRow({ label, value, to, testid, tone = "slate" }) {
         className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-sm transition ${active ? "hover:bg-slate-50" : "opacity-50 hover:bg-slate-50"}`}
         data-testid={testid}
       >
-        <span className="text-slate-700">{label}</span>
+        <span className="text-slate-700 inline-flex items-center gap-1">
+          {label}
+          {hint && <InfoTip id={testid ? `${testid}-hint` : undefined} text={hint} size={12} />}
+        </span>
         <span className={`inline-flex px-2 py-0.5 rounded-full font-mono text-[11px] font-bold min-w-[28px] justify-center ${active ? toneMap[tone] : "bg-slate-100 text-slate-400"}`}>
           {value}
         </span>

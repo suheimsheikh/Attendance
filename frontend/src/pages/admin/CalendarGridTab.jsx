@@ -8,6 +8,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import { formatDate } from "../../utils";
 import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 import AttendanceLedgerModal from "./AttendanceLedgerModal";
+import { InfoTip } from "../../components/InfoTip";
 import OTLedgerModal from "./OTLedgerModal";
 import MemberForm from "./MemberForm";
 import { GridCell, GridTimeCell, CELL_STYLE, correctionForCode } from "./calendar-grid/gridHelpers";
@@ -222,7 +223,15 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
       />
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-2 mb-3 text-[11px]" data-testid="calendar-legend">
+      <div className="flex flex-wrap items-center gap-2 mb-3 text-[11px]" data-testid="calendar-legend">
+        <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
+          Legend
+          <InfoTip
+            id="grid-totals"
+            size={13}
+            text="The sticky columns on the right total each member's month: P = present days (incl. half-day & late), AB = absent, LP = loss-of-pay (leave beyond paid balance), LV = leave + comp-off, TR = tour, OT h = overtime hours, EO = early-out days, LT = late days, DAR = missed Daily Activity Reports. This grid is the single source of truth for payroll."
+          />
+        </span>
         {Object.entries(CELL_STYLE).map(([code, s]) => (
           <span key={code} className="inline-flex items-center gap-1.5">
             <span className={`inline-flex items-center justify-center w-6 h-5 rounded ${s.bg} ${s.text} font-bold text-[10px]`}>{s.label}</span>
