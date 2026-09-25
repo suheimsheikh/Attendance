@@ -510,8 +510,20 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         """Seed a default monthly wage bill for every month that already has
         meal data but no overhead entry. Idempotent — skips months that
         already have a value unless `overwrite` is set."""
-        month_dates = await db.meal_records.distinct("date")
-        months = sorted({d[:7] for d in month_dates if d})
+        import re as _re
+        _MONTH_RE = _re.compile(r"^20\d{2}-(0[1-9]|1[0-2])$")
+        # Meal data lives across several collections: per-person Muster
+        # marks (meal_records), manual/spreadsheet headcounts
+        # (meal_daily_counts) and kitchen consumption (meal_issues). Scan
+        # all of them so months that only have imported counts still count.
+        month_set: set[str] = set()
+        for coll in ("meal_records", "meal_daily_counts", "meal_issues"):
+            for d in await db[coll].distinct("date"):
+                if d:
+                    mk = str(d)[:7]
+                    if _MONTH_RE.match(mk):
+                        month_set.add(mk)
+        months = sorted(month_set)
         filled: list = []
         for mk in months:
             exists = await db.meal_overheads.find_one({"month": mk}, {"_id": 0, "month": 1})
@@ -4951,11 +4963,30 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             c = sum(float(ln.get("qty") or 0) * _rate_c(ln.get("item_id"))
                     for ln in doc.get("lines") or [] if ln.get("item_id"))
             icost_by_date[doc["date"]] = icost_by_date.get(doc["date"], 0.0) + c
-        overhead_map_c = await _overhead_daily_map(s, e)
+        # Kitchen wage bill is a FIXED monthly cost — it must NOT shrink
+        # just because fewer days were logged. So we take each month's full
+        # bill and spread it EQUALLY across that month's days that actually
+        # have meal data within this range. Summing those day-shares gives
+        # back the full monthly bill (75k stays 75k regardless of how many
+        # days were marked), and days with no meals carry ₹0.
+        oh_docs_c = await db.meal_overheads.find(
+            {"month": {"$gte": s[:7], "$lte": e[:7]}}, {"_id": 0}).to_list(400)
+        bill_by_month = {
+            d["month"]: float(d.get("staff_wages") or 0) + float(d.get("incidentals") or 0)
+            for d in oh_docs_c
+        }
+        mealdays_by_month: dict[str, int] = {}
+        for r in out:
+            if r["has_data"]:
+                mk = r["date"][:7]
+                mealdays_by_month[mk] = mealdays_by_month.get(mk, 0) + 1
         overhead_total_c = 0.0
         for r in out:
             r["purchase_cost"] = round(pcost_by_date.get(r["date"], 0.0), 2)
-            oh = round(overhead_map_c.get(r["date"], 0.0), 2)
+            mk = r["date"][:7]
+            bill = bill_by_month.get(mk, 0.0)
+            nd = mealdays_by_month.get(mk, 0)
+            oh = round(bill / nd, 2) if (r["has_data"] and bill and nd) else 0.0
             r["wage_cost"] = oh
             overhead_total_c += oh
             r["issue_cost"] = round(icost_by_date.get(r["date"], 0.0), 2)

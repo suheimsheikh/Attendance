@@ -399,7 +399,7 @@ export default function MealsCalendar() {
               <th className="text-right p-2.5"><Moon size={12} className="inline mr-1" />D</th>
               <th className="text-right p-2.5 bg-emerald-700">Total</th>
               <th className="text-right p-2.5 bg-emerald-800" title="Purchase spend for the day">Purchase ₹</th>
-              <th className="text-right p-2.5 bg-violet-800" title="Kitchen staff wage bill, apportioned equally per day">Wages ₹</th>
+              <th className="text-right p-2.5 bg-violet-800" title="Fixed monthly kitchen wage bill, spread across the days meals were served">Wages ₹</th>
               <th className="text-right p-2.5 bg-sky-800" title="Consumption cost — issues valued at weighted-avg purchase rate">Issue ₹</th>
               <th className="text-right p-2.5 bg-amber-700" title="Per-meal cost = (issue cost + apportioned wages) ÷ meals served">₹/Meal</th>
               {canEdit && <th className="text-right p-2.5 w-16"> </th>}

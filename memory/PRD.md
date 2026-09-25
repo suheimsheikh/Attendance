@@ -334,3 +334,13 @@ Delivery mechanism: free `wa.me` deep links (no Meta API; groups stay manual —
 - Parent Notify Log page (admins + coaches) = proof of contact INITIATED (no delivery receipt).
 Key endpoints: /muster/absent-report, /muster/late-report, /notify/parent, /notify/today, /notify/log, /notify/templates.
 Backlog (P2, optional): message preview before opening; "notify all remaining" stepper; per-athlete notify-log detail; template reset-to-default button; notify_log index if volume grows; full-auto via Meta Cloud API (see memory/whatsapp_integration_guide.md — note Meta blocks proactive sends outside 24h window).
+
+---
+## Update 25 Jun 2026 — Consumption wage totals + Backfill fix (bug fix, shipped)
+Problem: In Consumption (MealsCalendar), per-month **Wages ₹** subtotals varied month-to-month even though the kitchen wage bill is a fixed ₹75,000/month.
+Root causes & fixes:
+1. Wage was apportioned across ALL calendar days of the month but only summed over days that had meal data (empty days hidden by default) — so totals shrank/varied by how many days were logged. **Fix:** `GET /api/meals/meal-calendar` now spreads each month's full wage bill equally across that month's meal-data days within the range, so any month with an entry sums to exactly the bill (₹75k stays ₹75k) and day-rows sum to the month header. `₹/Meal (incl. wages)` = (issue cost + full monthly bill) ÷ meals served.
+2. `POST /api/meals/overheads/backfill` only scanned `meal_records` (muster marks). Months whose data lives only in `meal_daily_counts` / `meal_issues` (e.g. Jun/Jul 2026 spreadsheet imports) were never seen → "0 months backfilled". **Fix:** backfill now scans `meal_records` + `meal_daily_counts` + `meal_issues`, validates `^20\d{2}-(0[1-9]|1[0-2])$` (guards against a bad `0026-06` purchase date).
+Data action: backfilled ₹75,000 for Jun & Jul 2026 (Aug & Sep already present). All four months now show ₹75,000 in Consumption.
+Files: `backend/routes/meals.py` (meal_calendar_list wage block ~L4954; backfill_overheads ~L510), `frontend/src/pages/admin/MealsCalendar.jsx` (Wages ₹ th tooltip).
+Verified via curl (admin=super-admin, mobile 9849002111). NOTE: expense-report endpoint still uses calendar-day apportionment (unchanged) — only the Consumption view was in scope.
