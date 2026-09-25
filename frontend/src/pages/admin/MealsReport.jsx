@@ -12,7 +12,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
-import { Loader2, Utensils, CalendarDays, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale, Store, PieChart, LineChart, ClipboardCheck, TrendingUp } from "lucide-react";
+import { Loader2, Utensils, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale, Store, PieChart, LineChart, ClipboardCheck, TrendingUp } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate } from "../../utils";
 import { useMealsEvents } from "../../hooks/useMealsEvents";
@@ -32,7 +32,6 @@ import MealStockTakeTab from "./MealStockTakeTab";
 import ProcurementPlanTab from "./ProcurementPlanTab";
 import { useEscape } from "../../hooks/useEscape";
 
-const MEAL_ORDER = ["breakfast", "midmorning", "lunch", "snacks", "dinner"];
 const MEAL_LABELS = {
   breakfast:  "Breakfast",
   midmorning: "Midmorning Snack",
@@ -53,11 +52,6 @@ function todayISO() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-function currentMonth() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}`;
 }
 
 function DailyDetailsModal({ dateStr, meal, mealLabel, onClose }) {
@@ -346,139 +340,14 @@ function DailyTab() {
   );
 }
 
-function MonthlyGridTab() {
-  const [month, setMonth] = useState(currentMonth());
-  const [scope, setScope] = useState("all");
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    api.get(`/meals/monthly-grid?month=${month}&scope=${scope}`)
-      .then(setData)
-      .catch((err) => showApiError(err, "Load failed"))
-      .finally(() => setLoading(false));
-  }, [month, scope]);
-
-  const days = data?.days || [];
-  const rows = data?.rows || [];
-
-  return (
-    <div>
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <label className="text-xs font-semibold text-slate-600" htmlFor="meals-report-month">Month</label>
-        <input
-          id="meals-report-month"
-          data-testid="meals-report-month"
-          type="month"
-          value={month}
-          onChange={(e) => setMonth(e.target.value)}
-          max={currentMonth()}
-          className="iu-input !h-9 !w-auto text-sm"
-        />
-        <select
-          data-testid="meals-report-scope"
-          value={scope}
-          onChange={(e) => setScope(e.target.value)}
-          className="iu-input !h-9 !w-auto text-sm"
-        >
-          <option value="all">All</option>
-          <option value="athletes">Athletes</option>
-          <option value="staff">Staff</option>
-          <option value="coach">Coaches</option>
-          <option value="executive">Executives</option>
-          <option value="non_athletes">Non-athletes</option>
-        </select>
-        <span className="ml-auto text-xs text-slate-500">
-          <b>{rows.length}</b> {rows.length === 1 ? "member" : "members"} with meals
-        </span>
-      </div>
-
-      {loading ? (
-        <div className="text-center py-10"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
-      ) : rows.length === 0 ? (
-        <div className="iu-card p-10 text-center" data-testid="meals-report-monthly-empty">
-          <BarChart3 className="mx-auto text-slate-300 mb-2" size={36} />
-          <p className="font-semibold text-slate-700">No meal marks yet for this month.</p>
-          <p className="text-sm text-slate-500 mt-1">Start ticking members on the Meals page.</p>
-        </div>
-      ) : (
-        <div className="iu-card overflow-auto" data-testid="meals-report-monthly">
-          <table className="text-xs w-full">
-            <thead className="bg-slate-50 sticky top-0 z-10">
-              <tr>
-                <th className="p-2 text-left sticky left-0 bg-slate-50 z-20 min-w-[180px]">Member</th>
-                {days.map((d) => {
-                  const dayNum = d.slice(-2);
-                  return (
-                    <th key={d} className="p-1 text-center font-semibold text-slate-600 min-w-[54px]"
-                        title={d}>
-                      {dayNum}
-                    </th>
-                  );
-                })}
-                <th className="p-2 text-center bg-slate-100 min-w-[60px]">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, idx) => {
-                const totalMeals = MEAL_ORDER.reduce((s, k) => s + (row.totals?.[k] || 0), 0);
-                const zebra = idx % 2 === 1 ? "bg-slate-200" : "bg-white";
-                return (
-                  <tr key={row.id} className={`border-t border-slate-100 ${zebra} hover:bg-sky-50`}
-                      data-testid={`meals-report-monthly-row-${row.id}`}>
-                    <td className={`p-2 sticky left-0 ${zebra} z-10 border-r border-slate-100`}>
-                      <div className="font-semibold text-slate-900 truncate">{row.full_name}</div>
-                      <div className="text-[10px] text-slate-500 capitalize">{row.category || ""}</div>
-                    </td>
-                    {days.map((d) => {
-                      const cellMeals = row.days?.[d] || [];
-                      return (
-                        <td key={d} className="p-1 text-center align-middle" title={cellMeals.map((k) => MEAL_LABELS[k] || k).join(", ") || "—"}>
-                          <div className="inline-flex gap-0.5">
-                            {MEAL_ORDER.map((k) => (
-                              <span
-                                key={k}
-                                className="inline-block w-2 h-3 rounded-sm"
-                                style={{
-                                  background: cellMeals.includes(k) ? MEAL_COLOR[k] : "#e5e7eb",
-                                }}
-                                data-testid={`meals-report-cell-${row.id}-${d}-${k}`}
-                              />
-                            ))}
-                          </div>
-                        </td>
-                      );
-                    })}
-                    <td className="p-2 text-center font-bold bg-slate-50/60">{totalMeals}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {rows.length > 0 && (
-        <div className="mt-3 flex items-center gap-3 text-xs text-slate-500 flex-wrap" data-testid="meals-report-legend">
-          <span className="font-semibold">Legend:</span>
-          {MEAL_ORDER.map((k) => (
-            <span key={k} className="inline-flex items-center gap-1">
-              <span className="inline-block w-2 h-3 rounded-sm" style={{ background: MEAL_COLOR[k] }} />
-              {MEAL_LABELS[k]}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function MealsReport() {
   // Support ?tab= deep-links (used by the "Kitchen Analytics" sidebar
   // shortcut so admins can jump straight to the graphics panel).
   const [searchParams, setSearchParams] = useSearchParams();
-  const urlTab = searchParams.get("tab");
+  // "monthly" tab was removed (Jun 2026) — fold any stale bookmark back
+  // to the default Daily-entry tab so the body never renders blank.
+  const rawTab = searchParams.get("tab");
+  const urlTab = rawTab === "monthly" ? null : rawTab;
   const [tab, setTab] = useState(urlTab || "entry");
   // Sync tab state whenever the URL query changes (e.g. sidebar click
   // while already on the page). Also keep the URL in sync when the
@@ -515,7 +384,6 @@ export default function MealsReport() {
     { key: "stocktake", label: "Stock Take", Icon: ClipboardCheck, hint: "Weekly physical count — enter what you found and the loss/extra reconciles the ledger" },
     { key: "crosscheck", label: "Cross-check", Icon: Scale, hint: "Compare what the kitchen consumed vs meals served × per-item norms — flags over/under days" },
     { key: "daily",     label: "Daily counts",  Icon: Utensils, hint: "Headcount of meals served per day" },
-    { key: "monthly",   label: "Monthly grid",  Icon: CalendarDays, hint: "Month-long meal count audit grid" },
     { key: "expenses",  label: "Expense report", Icon: IndianRupee, hint: "Category-wise purchase spend for the accountant" },
     { key: "analytics", label: "Analytics",      Icon: PieChart, hint: "Kitchen graphics panel — purchase/consumption trends, top items, category share" },
     { key: "compare",   label: "Compare items",  Icon: LineChart, hint: "Pick one or many items and see their purchases vs issues on one graph over any period" },
@@ -566,7 +434,6 @@ export default function MealsReport() {
 
       <div className="pt-4">
       {tab === "daily" && <DailyTab />}
-      {tab === "monthly" && <MonthlyGridTab />}
       {tab === "expenses" && <MealExpensesTab liveSig={liveSig} />}
       {tab === "entry" && <MealEntryTab liveSig={liveSig} />}
       {/* Legacy: keep old tabs reachable via deep-link only, in case a

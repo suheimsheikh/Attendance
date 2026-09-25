@@ -424,3 +424,11 @@ User request: "When price data is being entered warn about outliers. If more or 
   - On Save: if any outliers, a confirmation modal (`purchase-outlier-modal`, "Unusual prices detected") lists each outlier with Previous ₹ / New ₹ / % change; user can "Go back & fix" (`purchase-outlier-cancel`) or "Save anyway" (`purchase-outlier-confirm`). No outliers → saves immediately. Baselines refresh after save.
 - Verified: `testing_agent` iteration_78 — 100% frontend pass (inline marker, amber ring, strict >5% boundary — 5% exactly shows NO marker, modal with per-item rows, cancel = no save, confirm = saves, no console errors). Backend test `test_item_last_rates_before_date` added (5/5 pass). Curl-verified endpoint (123 items before 2026-09-01).
 - ⚠️ Needs REDEPLOY. Note: warning fires whenever an outlier value is present at Save (even on re-saving a day with a pre-existing outlier) — matches the literal request. Backend already rejects future-dated purchase saves (400).
+
+---
+## Update 25 Jun 2026 — Kitchen nav cleanup (UX, shipped)
+User request: delete the "Monthly grid" tab under Purchases & Issues; remove "Compare Items" and "Price Movers" from the main sidebar (they remain as tabs under Purchases & Issues).
+- `MealsReport.jsx`: removed the **Monthly grid** tab (TABS entry + render + the whole `MonthlyGridTab` component and its now-orphaned `MonthlyGridTab`-only helpers `MEAL_ORDER`, `currentMonth`, and the `CalendarDays` import). A stale `?tab=monthly` bookmark now folds back to the default Daily-entry tab (no blank body). `compare` and `movers` tabs are untouched.
+- `Layout.jsx`: removed the two sidebar links "Compare Items" (`?tab=compare`) and "Price Movers" (`?tab=movers`) from both nav arrays; dropped the now-unused `LineChart`/`TrendingUp` icon imports. The "Purchases & Issues" sidebar link is unchanged.
+- Verified via screenshot: tab bar shows Daily entry · Stock Master · Wastage · Stock Take · Cross-check · Daily counts · Expense report · Analytics · Compare items · Price Movers · Procurement plan · Vendors (no Monthly grid); sidebar no longer lists Compare Items / Price Movers. Frontend compiles clean.
+- Backend `/meals/monthly-grid` endpoint left in place (harmless, unreferenced by UI now). ⚠️ Needs REDEPLOY.
