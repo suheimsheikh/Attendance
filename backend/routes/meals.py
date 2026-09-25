@@ -470,6 +470,114 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         d["total"] = round(float(d.get("staff_wages") or 0) + float(d.get("incidentals") or 0), 2)
         return d
 
+    # ── Data red flags (Jun 2026) ────────────────────────────────────
+    # Surfaced on the Daily-entry screen and the Consumption table so
+    # gaps are caught AT ENTRY TIME. All flags WARN, never block.
+    _MAIN_MEALS = ("breakfast", "lunch", "dinner")
+    _MAIN_LABELS = {"breakfast": "breakfast", "lunch": "lunch", "dinner": "dinner"}
+
+    async def _effective_meal_counts(d: str) -> tuple[dict, Optional[str]]:
+        """Headcount per meal for one day. A manual/spreadsheet row in
+        meal_daily_counts wins; otherwise distinct-user counts from the
+        Meal Muster (meal_records)."""
+        row = await db.meal_daily_counts.find_one({"date": d}, {"_id": 0})
+        if row:
+            return ({k: int(row.get(k) or 0) for k in MEAL_KEYS},
+                    row.get("source") or "manual")
+        out = {k: 0 for k in MEAL_KEYS}
+        async for g in db.meal_records.aggregate([
+            {"$match": {"date": d}},
+            {"$group": {"_id": "$meal", "users": {"$addToSet": "$user_id"}}},
+        ]):
+            m = (g["_id"] or "").lower()
+            if m in out:
+                out[m] = len([u for u in g["users"] if u])
+        return out, ("muster" if any(out.values()) else None)
+
+    async def _compute_day_flags(d: str) -> list[dict]:
+        """Full red-flag set for a single day (used by /meals/day-flags on
+        the Daily-entry screen). Each flag: {severity, code, message}."""
+        flags: list[dict] = []
+        counts, _src = await _effective_meal_counts(d)
+        any_meal = any(counts.values())
+        missing_main = [k for k in _MAIN_MEALS if counts.get(k, 0) <= 0]
+
+        iss = await db.meal_issues.find_one({"date": d}, {"_id": 0, "lines": 1})
+        pur = await db.meal_purchases.find_one({"date": d}, {"_id": 0, "lines": 1})
+        iss_lines = [l for l in ((iss or {}).get("lines") or []) if float(l.get("qty") or 0) > 0]
+        pur_lines = (pur or {}).get("lines") or []
+        has_issues = bool(iss_lines)
+        has_purch = any(float(l.get("qty") or 0) > 0 for l in pur_lines)
+
+        # 🔴 Missing main meal(s) / no headcount at all
+        if len(missing_main) == 3 and has_issues:
+            flags.append({"severity": "high", "code": "no_headcount",
+                          "message": "Stock was consumed but no meal headcount was entered for the day"})
+        elif 0 < len(missing_main) < 3 and (any_meal or has_issues):
+            names = " / ".join(_MAIN_LABELS[k] for k in missing_main)
+            flags.append({"severity": "high", "code": "missing_main_meal",
+                          "message": f"No {names} headcount recorded"})
+
+        # 🟠 Meals recorded but nothing consumed
+        if any_meal and not has_issues and not has_purch:
+            flags.append({"severity": "medium", "code": "counts_no_consumption",
+                          "message": "Meals were recorded but no kitchen consumption was entered"})
+
+        # Item-level checks need stock context (rate + on-hand)
+        if iss_lines:
+            prev = (date.fromisoformat(d) - timedelta(days=1)).isoformat()
+            snap_prev, _ = await _stock_snapshot(prev, include_inactive=True)
+            snap_day, _ = await _stock_snapshot(d, include_inactive=True)
+            onhand_prev = {r["item_id"]: r["on_hand"] for r in snap_prev}
+            rate_day = {r["item_id"]: r["avg_rate"] for r in snap_day}
+            name_day = {r["item_id"]: r["name"] for r in snap_day}
+            for l in iss_lines:
+                iid = l.get("item_id"); q = float(l.get("qty") or 0)
+                if not iid:
+                    continue
+                nm = name_day.get(iid, "An item")
+                if rate_day.get(iid, 0) <= 0:
+                    flags.append({"severity": "medium", "code": "issue_no_price",
+                                  "message": f"{nm}: consumed but never purchased — no price to value it"})
+                avail = onhand_prev.get(iid, 0.0)
+                if q > avail + 1e-6:
+                    flags.append({"severity": "medium", "code": "negative_stock",
+                                  "message": f"{nm}: issued {q:g} {l.get('unit') or ''}".rstrip() + f" but only {avail:g} on hand"})
+
+        # 🟠 Purchase row with qty but ₹0 rate/amount
+        for l in pur_lines:
+            q = float(l.get("qty") or 0)
+            amt = float(l.get("amount") or (q * float(l.get("rate") or 0)))
+            if q > 0 and amt <= 0:
+                flags.append({"severity": "medium", "code": "purchase_zero_rate",
+                              "message": "A purchase line has a quantity but ₹0 rate/amount"})
+                break
+
+        # 🟠 Headcount outlier vs the trailing 28-day average
+        base_start = (date.fromisoformat(d) - timedelta(days=28)).isoformat()
+        hist = await db.meal_daily_counts.find(
+            {"date": {"$gte": base_start, "$lt": d}}, {"_id": 0}).to_list(60)
+        if len(hist) >= 5:
+            for k in _MAIN_MEALS:
+                vals = [int(h.get(k) or 0) for h in hist if int(h.get(k) or 0) > 0]
+                if len(vals) >= 5 and counts.get(k, 0) > 0:
+                    mean = sum(vals) / len(vals)
+                    if mean > 0 and abs(counts[k] - mean) / mean > 0.25:
+                        arrow = "above" if counts[k] > mean else "below"
+                        flags.append({"severity": "medium", "code": "headcount_outlier",
+                                      "message": f"{_MAIN_LABELS[k].title()} count {counts[k]} is {arrow} the recent average (~{round(mean)})"})
+        return flags
+
+    @router.get("/meals/day-flags")
+    async def meal_day_flags(date: str, user: dict = Depends(require_chef_or_admin)):  # noqa: A002
+        """All data red flags for one day — powers the Daily-entry banner."""
+        d = _valid_date(date)
+        flags = await _compute_day_flags(d)
+        return {"date": d, "flags": flags,
+                "high": sum(1 for f in flags if f["severity"] == "high"),
+                "medium": sum(1 for f in flags if f["severity"] == "medium")}
+
+
     @router.get("/meals/overheads")
     async def list_overheads(user: dict = Depends(require_chef_or_admin)):
         """All monthly kitchen-overhead entries (view: chef/admin).
@@ -4996,15 +5104,47 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         # the "…incl wages" cost-per-meal figures.
         totals["wage_cost"] = round(overhead_total_c, 2)
         totals["issue_cost"] = round(sum(icost_by_date.values()), 2)
-        _tm = totals["total"]
-        totals["issue_cost_per_meal"] = round(totals["issue_cost"] / _tm, 2) if _tm else None
-        totals["purchase_cost_per_meal"] = round(totals["purchase_cost"] / _tm, 2) if _tm else None
-        totals["wage_cost_per_meal"] = round(totals["wage_cost"] / _tm, 2) if _tm else None
+        # Cost-per-meal denominator is MAIN meals only — Breakfast +
+        # Lunch + Dinner (Jun 2026 user request). Mid-morning & afternoon
+        # snacks cost far less, so counting them would dilute ₹/meal.
+        _mm = totals["breakfast"] + totals["lunch"] + totals["dinner"]
+        totals["main_meals"] = _mm
+        totals["issue_cost_per_meal"] = round(totals["issue_cost"] / _mm, 2) if _mm else None
+        totals["purchase_cost_per_meal"] = round(totals["purchase_cost"] / _mm, 2) if _mm else None
+        totals["wage_cost_per_meal"] = round(totals["wage_cost"] / _mm, 2) if _mm else None
         # Fully-loaded cost per meal (food + wages), both lenses.
         totals["purchase_cost_incl_wages"] = round(totals["purchase_cost"] + totals["wage_cost"], 2)
         totals["issue_cost_incl_wages"] = round(totals["issue_cost"] + totals["wage_cost"], 2)
-        totals["purchase_cost_per_meal_incl_wages"] = round(totals["purchase_cost_incl_wages"] / _tm, 2) if _tm else None
-        totals["issue_cost_per_meal_incl_wages"] = round(totals["issue_cost_incl_wages"] / _tm, 2) if _tm else None
+        totals["purchase_cost_per_meal_incl_wages"] = round(totals["purchase_cost_incl_wages"] / _mm, 2) if _mm else None
+        totals["issue_cost_per_meal_incl_wages"] = round(totals["issue_cost_incl_wages"] / _mm, 2) if _mm else None
+        # Cost per athlete-day — assumes 3 main meals (BF+L+D) per athlete
+        # per day, so athlete-days = main_meals ÷ 3.
+        _adays = (_mm / 3) if _mm else 0
+        totals["athlete_days"] = round(_adays, 1)
+        totals["cost_per_athlete_day"] = round(totals["issue_cost_incl_wages"] / _adays, 2) if _adays else None
+
+        # ── Per-day data red flags (cheap subset: completeness only) ────
+        # Outlier detection is intentionally NOT run here — day-to-day
+        # headcounts vary enough that it would flag almost every row. It
+        # lives only on the single-day Daily-entry banner instead.
+        for r in out:
+            fl = []
+            main_now = (r.get("breakfast", 0) or 0) + (r.get("lunch", 0) or 0) + (r.get("dinner", 0) or 0)
+            missing_main = [k for k in _MAIN_MEALS if (r.get(k, 0) or 0) <= 0]
+            has_iss = (r.get("issue_cost", 0) or 0) > 0
+            has_pur = (r.get("purchase_cost", 0) or 0) > 0
+            if r["has_data"] or has_iss:
+                if len(missing_main) == 3 and has_iss:
+                    fl.append({"severity": "high", "code": "no_headcount",
+                               "message": "Stock consumed but no meal headcount entered"})
+                elif 0 < len(missing_main) < 3:
+                    names = " / ".join(_MAIN_LABELS[k] for k in missing_main)
+                    fl.append({"severity": "high", "code": "missing_main_meal",
+                               "message": f"No {names} headcount recorded"})
+            if r["has_data"] and main_now > 0 and not has_iss and not has_pur:
+                fl.append({"severity": "medium", "code": "counts_no_consumption",
+                           "message": "Meals recorded but no kitchen consumption entered"})
+            r["flags"] = fl
 
         return {
             "start": s, "end": e,

@@ -16,7 +16,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, ChevronDown, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search, StickyNote, Store, TrendingUp } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Loader2, Check, Boxes, Filter, Printer, X, CalendarRange, Search, StickyNote, Store, TrendingUp, AlertTriangle } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate, fmtQty } from "../../utils";
 import { useRowFocus } from "../../hooks/useRowFocus";
@@ -111,6 +111,7 @@ export default function MealEntryTab({ liveSig }) {
   const [showAddVendor, setShowAddVendor] = useState(null); // {catKey,itemId} on demand
   const [saving, setSaving] = useState({ purch: false, issues: false, wastage: false });
   const [savedAt, setSavedAt] = useState(null); // last successful save timestamp
+  const [dayFlags, setDayFlags] = useState([]);  // data red flags for the day
   // Show only rows where either purch qty OR issue qty is > 0 — handy on
   // busy days when the pantry list is long but the chef only touched a
   // handful of items and wants to verify their entries at a glance.
@@ -256,6 +257,16 @@ export default function MealEntryTab({ liveSig }) {
   const loadToken = useRef(0);
   const dateRef = useRef(dateStr);
   useEffect(() => { dateRef.current = dateStr; }, [dateStr]);
+
+  // Data red flags for the selected day — refetched on day change and
+  // after every save (liveSig bumps), so gaps surface AT ENTRY TIME.
+  useEffect(() => {
+    let alive = true;
+    api.get(`/meals/day-flags?date=${dateStr}`)
+      .then((r) => { if (alive) setDayFlags(r?.flags || []); })
+      .catch(() => { if (alive) setDayFlags([]); });
+    return () => { alive = false; };
+  }, [dateStr, liveSig, savedAt]);
   // Loads one day's purchases / issues / stock / avg-rate. Reused by the
   // dateStr effect AND the live-update signal handler below.
   const loadDay = (d) => {
@@ -883,7 +894,26 @@ export default function MealEntryTab({ liveSig }) {
           </span>
         </div>
 
-        {/* Day totals — laid out as a mini-table that shares the SAME
+        {dayFlags.length > 0 && (
+          <div className="mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2" data-testid="entry-flags-banner">
+            <div className="flex items-center gap-1.5 mb-1">
+              <AlertTriangle size={14} className="text-amber-600" />
+              <span className="text-[12px] font-bold uppercase tracking-wider text-amber-800">
+                {dayFlags.length} data {dayFlags.length === 1 ? "flag" : "flags"} for this day
+              </span>
+              <span className="text-[10px] text-amber-600/80 normal-case tracking-normal">— review, these are warnings only</span>
+            </div>
+            <ul className="space-y-0.5">
+              {dayFlags.map((f, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-[12px]" data-testid={`entry-flag-${f.code}`}>
+                  <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${f.severity === "high" ? "bg-rose-500" : "bg-amber-500"}`} />
+                  <span className={f.severity === "high" ? "text-rose-800 font-semibold" : "text-amber-800"}>{f.message}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
             column widths as the grid below, so each amount sits
             directly above its column's item Amounts. Labels tuck to
             the left of each band, numbers hang on the right rail. */}

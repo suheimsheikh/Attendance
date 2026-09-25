@@ -6,7 +6,7 @@
  * can also type new days here — a single PUT upserts the row.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, Pencil, Check, X as CloseIcon, Upload, BarChart3, ChevronDown, ChevronUp, ChevronRight, IndianRupee, Divide } from "lucide-react";
+import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, Pencil, Check, X as CloseIcon, Upload, BarChart3, ChevronDown, ChevronUp, ChevronRight, IndianRupee, Divide, AlertTriangle, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
 import { formatDate, dayOfWeek } from "../../utils";
@@ -35,6 +35,26 @@ function lastOfMonth(iso) {
 const inr = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN"));
 const money = (n) => (n == null ? "—" : `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`);
 const money2 = (n) => (n == null ? "—" : `₹${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+
+// Cost-per-meal uses MAIN meals only: Breakfast + Lunch + Dinner.
+const mainMeals = (x) => (x?.breakfast || 0) + (x?.lunch || 0) + (x?.dinner || 0);
+const perMeal = (cost, x) => { const m = mainMeals(x); return m ? cost / m : null; };
+// Cost per athlete-day assumes 3 main meals/athlete/day → 3 × ₹/meal.
+const perAthleteDay = (cost, x) => { const m = mainMeals(x); return m ? (cost * 3) / m : null; };
+
+function FlagBadge({ flags }) {
+  if (!flags || flags.length === 0) return null;
+  const high = flags.some((f) => f.severity === "high");
+  return (
+    <span
+      className={`ml-2 inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${high ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-800"}`}
+      title={flags.map((f) => `• ${f.message}`).join("\n")}
+      data-testid="mc-flag-badge"
+    >
+      <AlertTriangle size={10} />{flags.length}
+    </span>
+  );
+}
 
 function KpiPill({ icon: Icon, label, value, tint, title }) {
   return (
@@ -89,6 +109,8 @@ function EditRow({ date, initial, onSave, onCancel }) {
                className="iu-input !h-8 !w-16 text-right tabular-nums" data-testid={`mc-edit-d-${date}`} />
       </td>
       <td className="p-2 text-right font-bold tabular-nums text-slate-700">{total}</td>
+      <td className="p-2 text-right text-slate-300 tabular-nums">—</td>
+      <td className="p-2 text-right text-slate-300 tabular-nums">—</td>
       <td className="p-2 text-right text-slate-300 tabular-nums">—</td>
       <td className="p-2 text-right text-slate-300 tabular-nums">—</td>
       <td className="p-2 text-right text-slate-300 tabular-nums">—</td>
@@ -380,11 +402,12 @@ export default function MealsCalendar() {
         <KpiPill icon={Utensils} label="Total"     value={data?.totals?.total || 0}     tint="bg-slate-100" title="Total meals served across all slots in this range" />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4" data-testid="mc-cost-kpis">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4" data-testid="mc-cost-kpis">
         <KpiPill icon={IndianRupee} label="Purchase ₹" value={money(data?.totals?.purchase_cost)} tint="bg-emerald-50" title="Total purchase spend entered in this range" />
         <KpiPill icon={IndianRupee} label="Wages ₹" value={money(data?.totals?.wage_cost)} tint="bg-violet-50" title="Kitchen staff wage bill apportioned across this range (set per month by Super Admin)" />
         <KpiPill icon={IndianRupee} label="Issue ₹"    value={money(data?.totals?.issue_cost)}    tint="bg-sky-50" title="Total consumption cost — kitchen issues valued at each item's weighted-average purchase rate" />
-        <KpiPill icon={Divide}      label="₹ / Meal (incl. wages)" value={money2(data?.totals?.issue_cost_per_meal_incl_wages)} tint="bg-amber-50" title="Per-meal cost = (consumption/issue cost + apportioned wages) ÷ total meals served" />
+        <KpiPill icon={Divide}      label="₹ / Meal (incl. wages)" value={money2(data?.totals?.issue_cost_per_meal_incl_wages)} tint="bg-amber-50" title="Per-meal cost = (consumption/issue cost + wages) ÷ MAIN meals served (Breakfast + Lunch + Dinner only; snacks excluded)" />
+        <KpiPill icon={UserRound}   label="₹ / Athlete / day" value={money2(data?.totals?.cost_per_athlete_day)} tint="bg-rose-50" title="Cost to feed one athlete for a full day = (food consumed + wages) ÷ athlete-days, assuming 3 main meals per athlete per day" />
       </div>
 
       <div className="iu-card overflow-auto" data-testid="meals-calendar-table-wrap">
@@ -401,15 +424,16 @@ export default function MealsCalendar() {
               <th className="text-right p-2.5 bg-emerald-800" title="Purchase spend for the day">Purchase ₹</th>
               <th className="text-right p-2.5 bg-violet-800" title="Fixed monthly kitchen wage bill, spread across the days meals were served">Wages ₹</th>
               <th className="text-right p-2.5 bg-sky-800" title="Consumption cost — issues valued at weighted-avg purchase rate">Issue ₹</th>
-              <th className="text-right p-2.5 bg-amber-700" title="Per-meal cost = (issue cost + apportioned wages) ÷ meals served">₹/Meal</th>
+              <th className="text-right p-2.5 bg-amber-700" title="Per-meal cost = (issue cost + wages) ÷ MAIN meals (Breakfast + Lunch + Dinner; snacks excluded)">₹/Meal</th>
+              <th className="text-right p-2.5 bg-rose-700" title="Cost per athlete per day = (issue cost + wages) ÷ athlete-days (3 main meals/athlete/day)">₹/Athlete/day</th>
               {canEdit && <th className="text-right p-2.5 w-16"> </th>}
             </tr>
           </thead>
           <tbody data-testid="meals-calendar-tbody">
             {loading ? (
-              <tr><td colSpan={canEdit ? 12 : 11} className="text-center py-10"><Loader2 className="animate-spin inline text-slate-400"/></td></tr>
+              <tr><td colSpan={canEdit ? 13 : 12} className="text-center py-10"><Loader2 className="animate-spin inline text-slate-400"/></td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={canEdit ? 12 : 11} className="text-center py-10 text-slate-400">No data in this window.</td></tr>
+              <tr><td colSpan={canEdit ? 13 : 12} className="text-center py-10 text-slate-400">No data in this window.</td></tr>
             ) : months.map((month) => {
               const collapsed = !openMonths.has(month.key);
               return (
@@ -436,7 +460,8 @@ export default function MealsCalendar() {
                     <td className="p-2.5 text-right font-black tabular-nums text-emerald-800">{money(month.totals.purchase_cost)}</td>
                     <td className="p-2.5 text-right font-black tabular-nums text-violet-800">{money(month.totals.wage_cost)}</td>
                     <td className="p-2.5 text-right font-black tabular-nums text-sky-800">{money(month.totals.issue_cost)}</td>
-                    <td className="p-2.5 text-right font-black tabular-nums text-amber-700">{month.totals.total ? money((month.totals.issue_cost + (month.totals.wage_cost || 0)) / month.totals.total) : <span className="text-slate-300">—</span>}</td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-amber-700">{mainMeals(month.totals) ? money2(perMeal(month.totals.issue_cost + (month.totals.wage_cost || 0), month.totals)) : <span className="text-slate-300">—</span>}</td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-rose-700">{mainMeals(month.totals) ? money2(perAthleteDay(month.totals.issue_cost + (month.totals.wage_cost || 0), month.totals)) : <span className="text-slate-300">—</span>}</td>
                     {canEdit && <td className="p-2.5"/>}
                   </tr>
                   {!collapsed && month.rows.map((d) => {
@@ -448,6 +473,7 @@ export default function MealsCalendar() {
                           data-testid={`mc-row-${d.date}`}>
                         <td className="p-2 pl-8 font-semibold text-slate-800 whitespace-nowrap" data-testid={`mc-date-${d.date}`}>
                           {formatDate(d.date)}
+                          <FlagBadge flags={d.flags} />
                           {d.source === "spreadsheet-jul2026" && (
                             <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded" title="Imported from the July 2026 spreadsheet">Imported</span>
                           )}
@@ -481,7 +507,8 @@ export default function MealsCalendar() {
                             <td className="p-2 text-right tabular-nums text-emerald-800" data-testid={`mc-pcost-${d.date}`}>{d.purchase_cost ? money(d.purchase_cost) : <span className="text-slate-300">—</span>}</td>
                             <td className="p-2 text-right tabular-nums text-violet-800" data-testid={`mc-wage-${d.date}`}>{d.wage_cost ? money(d.wage_cost) : <span className="text-slate-300">—</span>}</td>
                             <td className="p-2 text-right tabular-nums text-sky-800" data-testid={`mc-icost-${d.date}`}>{d.issue_cost ? money(d.issue_cost) : <span className="text-slate-300">—</span>}</td>
-                            <td className="p-2 text-right tabular-nums font-bold text-amber-700" data-testid={`mc-permeal-${d.date}`} title="(Issue cost + apportioned wages) ÷ meals served">{(d.issue_cost || d.wage_cost) && d.total ? money(((d.issue_cost || 0) + (d.wage_cost || 0)) / d.total) : <span className="text-slate-300">—</span>}</td>
+                            <td className="p-2 text-right tabular-nums font-bold text-amber-700" data-testid={`mc-permeal-${d.date}`} title="(Issue cost + wages) ÷ main meals (BF+L+D)">{(d.issue_cost || d.wage_cost) && mainMeals(d) ? money2(perMeal((d.issue_cost || 0) + (d.wage_cost || 0), d)) : <span className="text-slate-300">—</span>}</td>
+                            <td className="p-2 text-right tabular-nums font-bold text-rose-700" data-testid={`mc-perathlete-${d.date}`} title="(Issue cost + wages) ÷ athlete-days (3 main meals/athlete/day)">{(d.issue_cost || d.wage_cost) && mainMeals(d) ? money2(perAthleteDay((d.issue_cost || 0) + (d.wage_cost || 0), d)) : <span className="text-slate-300">—</span>}</td>
                             {canEdit && (
                               <td className="p-2 text-right">
                                 <button
@@ -514,7 +541,8 @@ export default function MealsCalendar() {
                 <td className="p-2.5 text-right font-black tabular-nums text-emerald-300">{money(data.totals.purchase_cost)}</td>
                 <td className="p-2.5 text-right font-black tabular-nums text-violet-300">{money(data.totals.wage_cost)}</td>
                 <td className="p-2.5 text-right font-black tabular-nums text-sky-300">{money(data.totals.issue_cost)}</td>
-                <td className="p-2.5 text-right font-black tabular-nums text-amber-300">{data.totals.total ? money((data.totals.issue_cost + (data.totals.wage_cost || 0)) / data.totals.total) : "—"}</td>
+                <td className="p-2.5 text-right font-black tabular-nums text-amber-300">{money2(data.totals.issue_cost_per_meal_incl_wages)}</td>
+                <td className="p-2.5 text-right font-black tabular-nums text-rose-300">{money2(data.totals.cost_per_athlete_day)}</td>
                 {canEdit && <td/>}
               </tr>
             </tfoot>
