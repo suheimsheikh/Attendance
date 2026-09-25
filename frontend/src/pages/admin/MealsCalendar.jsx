@@ -293,7 +293,7 @@ export default function MealsCalendar() {
 
   const rows = useMemo(() => {
     if (!data?.days) return [];
-    return showEmpty ? data.days : data.days.filter((d) => d.has_data || d.date === today);
+    return showEmpty ? data.days : data.days.filter((d) => d.has_data || d.date === today || (d.flags && d.flags.length));
   }, [data, showEmpty, today]);
 
   // ── Group rows into month buckets (with populated-only totals) ──

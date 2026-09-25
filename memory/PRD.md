@@ -344,3 +344,21 @@ Root causes & fixes:
 Data action: backfilled ₹75,000 for Jun & Jul 2026 (Aug & Sep already present). All four months now show ₹75,000 in Consumption.
 Files: `backend/routes/meals.py` (meal_calendar_list wage block ~L4954; backfill_overheads ~L510), `frontend/src/pages/admin/MealsCalendar.jsx` (Wages ₹ th tooltip).
 Verified via curl (admin=super-admin, mobile 9849002111). NOTE: expense-report endpoint still uses calendar-day apportionment (unchanged) — only the Consumption view was in scope.
+
+---
+## Update 25 Jun 2026 — Cost-per-meal denominator, ₹/Athlete-day, and data red flags (feature, shipped)
+User requests: (1) cost-per-meal should use only Breakfast+Lunch+Dinner (snacks cost far less, shouldn't dilute); (2) add "cost per athlete per day" in Consumption; (3) red-flag incomplete daily data at entry time (warn only, 25% outlier threshold).
+
+Implemented:
+- **₹/Meal denominator = main meals (BF+L+D)** across all figures (per-day, per-month, KPI, incl-wages). Backend adds `totals.main_meals`.
+- **₹/Athlete/day** — new KPI + Consumption table column + footer. `cost_per_athlete_day = issue_cost_incl_wages ÷ (main_meals/3)` (assumes 3 main meals/athlete/day = 3× ₹/meal). Backend adds `athlete_days`, `cost_per_athlete_day`.
+- **Data red flags (warn-only):**
+  - New `GET /api/meals/day-flags?date=` → full single-day set via `_compute_day_flags`: missing_main_meal, no_headcount, counts_no_consumption, issue_no_price, negative_stock, purchase_zero_rate, headcount_outlier (>25% vs trailing 28-day avg).
+  - `meal-calendar` per-day rows now carry a lightweight `flags[]` (completeness only — outliers omitted there to avoid flagging ~every row).
+  - Daily-entry screen (MealEntryTab) shows an `entry-flags-banner` for the selected day (refetched on day change + after each save).
+  - Consumption table shows a `FlagBadge` (⚠️ + count, rose=high/amber=medium) per day; days with flags but no headcount now also surface in the grid (row filter includes `d.flags?.length`).
+- **New helper** `_effective_meal_counts` (manual daily-counts row wins, else muster distinct-users).
+
+Files: `backend/routes/meals.py` (_compute_day_flags, _effective_meal_counts, /meals/day-flags, meal_calendar_list per-meal + flags), `frontend/src/pages/admin/MealsCalendar.jsx` (helpers, FlagBadge, ₹/Athlete column+KPI, row filter), `frontend/src/pages/admin/MealEntryTab.jsx` (dayFlags banner).
+Testing: iteration_76.json — 100% backend + frontend, no issues. Backend tests at `backend/tests/test_meal_flags_and_calendar.py` (4, passing). Verified ₹/Meal=₹85.50, ₹/Athlete/day=₹256.49 (≈3×), all 4 months show ₹75,000 wages, banners + badges render.
+Note: per-day rows use `wage_cost` key (not `wages`).

@@ -1,0 +1,29 @@
+{
+  "summary": "Verified backend + frontend for Consumption red flags, ₹/Meal main-meals-only denominator, new ₹/Athlete/day KPI+column, and ₹75,000 monthly wage backfill. Backend pytest suite (4 tests) all pass. Frontend UI verified end-to-end after normal email login. Consumption page renders ₹/Meal (incl. wages) = ₹85.50 and ₹/Athlete/Day = ₹256.49 (≈3× — matches). All four months Jun/Jul/Aug/Sep 2026 show Wages ₹75,000 in subtotal rows independent of number of meal-days. 26 red-flag badges render on day rows with proper tooltip messages. All five meal columns (BF, MM, L, AS, D, Total) still render along with the new ₹/ATHLETE/DAY column. Daily-entry screen shows entry-flags-banner listing 3 flags for 2026-08-15 (no_headcount, issue_no_price, negative_stock); date field remains editable, flags are warn-only.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_meal_flags_and_calendar.py",
+    "/app/test_reports/pytest/meal_flags_iter76.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Consumption day-rows omit days that have stock-only activity but zero meal headcount (e.g., 2026-08-15 is not rendered as a row even though /meals/day-flags reports issue_no_price + negative_stock for that date). If admins are expected to spot these from the Consumption grid the current filter hides them — consider surfacing such days when they have red flags of severity>=medium. Not blocking.",
+    "Verified 3× ratio via sampled rows (Sep 01: 271.89×3=815.67 vs display 815.68; totals 85.50×3=256.50 vs 256.49) — rounding correct.",
+    "Backend meal-calendar totals cost_per_athlete_day, athlete_days, main_meals, issue_cost_per_meal_incl_wages all present; per-day rows include flags[] array as required.",
+    "Backfill endpoint scope verified indirectly: all four months show ₹75,000 in the UI subtotal."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_meal_flags_and_calendar.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (via /login → 'Admin sign in with email').",
+  "seed_data_creation": "None — used existing preview data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_meal_flags_and_calendar.py (4 tests, all passing against public REACT_APP_BACKEND_URL). Meal-calendar API keys: totals.{main_meals, cost_per_athlete_day, athlete_days, issue_cost_per_meal_incl_wages}; per-day rows use 'wage_cost' (not 'wages') and include 'flags'. Consumption UI testids: mc-cost-kpis, mc-month-header-<YYYY-MM>, mc-perathlete-<YYYY-MM-DD>, mc-flag-badge. Entry tab testids: entry-date, entry-flags-banner. Consumption view filters out fully-empty days, so some dates with only issue/purchase flags (e.g., 2026-08-15) do not appear as day rows even though /meals/day-flags returns flags for them — not treated as a bug this iteration."
+}
