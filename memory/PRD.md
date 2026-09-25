@@ -21,6 +21,17 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 25 Sep 2026 — Wages in the Consumption view (cont.)
+- Answered "where to enter wages": Meals → **Expense report** tab → **Kitchen Overheads** card (Super-Admin only; monthly wage bill + optional incidentals + "Backfill ₹75,000 to all months").
+- Extended the request to the **Consumption** page (main menu → `MealsCalendar.jsx`, `/api/meals/meal-calendar`): wages now sit BETWEEN purchases and issues and are folded into cost/meal.
+  - Backend `meal_calendar_list`: added per-day `wage_cost` (apportioned via `_overhead_daily_map`) and totals `wage_cost`, `wage_cost_per_meal`, `purchase_cost_incl_wages`, `issue_cost_incl_wages`, `purchase_cost_per_meal_incl_wages`, `issue_cost_per_meal_incl_wages`. Raw `purchase_cost_per_meal`/`issue_cost_per_meal` kept for back-compat.
+  - Frontend `MealsCalendar.jsx`: KPI strip now Purchase → **Wages** → Issue → **₹/Meal (incl. wages)**; table gained a violet **Wages ₹** column between Purchase and Issue; per-month + footer ₹/Meal now = (issue + apportioned wages) ÷ meals.
+  - Verified (curl): Sep 2026 issue ₹73.53 + wage ₹58.00 = ₹131.53/meal. Screenshot confirms KPIs + column. Frontend compiles clean.
+  - Minor known nuance: KPI/footer wage totals (backend, apportioned over all calendar days in range) can differ slightly from the sum of visible month sub-rows on ranges with no-data days — the KPI/footer are authoritative. Not chased.
+- ⚠️ Needs REDEPLOY; prod seeded via the Backfill button after deploy.
+
+
+
 ### 25 Sep 2026 — Kitchen Overheads → fully-loaded cost/meal
 - Need: enter monthly kitchen staff wage bill (+ optional incidentals) so cost-per-meal is fully loaded, not food-only. User choices: monthly lump-sum wage bill; incidentals mostly already flow through purchases (Gas/Cleaning are purchase categories); apportion EQUALLY per day across the month; blended across all meals; Super-Admin-only edit; backfill ₹75,000/month.
 - Backend (`routes/meals.py`): new `meal_overheads` collection `{month, staff_wages, incidentals, note, updated_by, updated_at}`. Endpoints: `GET /meals/overheads` (list, chef/admin view + `can_edit`), `GET /meals/overheads/{month}`, `PUT /meals/overheads/{month}` (Super-Admin), `POST /meals/overheads/backfill` (Super-Admin, idempotent, default_wages 75000, fills months present in meal_records lacking an entry). Super-admin gate via `is_super_admin` + require_admin.

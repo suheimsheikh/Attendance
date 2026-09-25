@@ -287,12 +287,13 @@ export default function MealsCalendar() {
           key,
           label: new Date(d.date + "T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
           rows: [],
-          totals: { breakfast: 0, midmorning: 0, lunch: 0, snacks: 0, dinner: 0, total: 0, days: 0, purchase_cost: 0, issue_cost: 0 },
+          totals: { breakfast: 0, midmorning: 0, lunch: 0, snacks: 0, dinner: 0, total: 0, days: 0, purchase_cost: 0, wage_cost: 0, issue_cost: 0 },
         });
       }
       const g = map.get(key);
       g.rows.push(d);
       g.totals.purchase_cost += d.purchase_cost || 0;
+      g.totals.wage_cost += d.wage_cost || 0;
       g.totals.issue_cost += d.issue_cost || 0;
       if (d.has_data) {
         g.totals.breakfast += d.breakfast || 0;
@@ -379,10 +380,11 @@ export default function MealsCalendar() {
         <KpiPill icon={Utensils} label="Total"     value={data?.totals?.total || 0}     tint="bg-slate-100" title="Total meals served across all slots in this range" />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4" data-testid="mc-cost-kpis">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4" data-testid="mc-cost-kpis">
         <KpiPill icon={IndianRupee} label="Purchase ₹" value={money(data?.totals?.purchase_cost)} tint="bg-emerald-50" title="Total purchase spend entered in this range" />
+        <KpiPill icon={IndianRupee} label="Wages ₹" value={money(data?.totals?.wage_cost)} tint="bg-violet-50" title="Kitchen staff wage bill apportioned across this range (set per month by Super Admin)" />
         <KpiPill icon={IndianRupee} label="Issue ₹"    value={money(data?.totals?.issue_cost)}    tint="bg-sky-50" title="Total consumption cost — kitchen issues valued at each item's weighted-average purchase rate" />
-        <KpiPill icon={Divide}      label="Issue ₹ / Meal" value={money2(data?.totals?.issue_cost_per_meal)} tint="bg-amber-50" title="Per-meal consumption cost = total issue cost ÷ total meals served" />
+        <KpiPill icon={Divide}      label="₹ / Meal (incl. wages)" value={money2(data?.totals?.issue_cost_per_meal_incl_wages)} tint="bg-amber-50" title="Per-meal cost = (consumption/issue cost + apportioned wages) ÷ total meals served" />
       </div>
 
       <div className="iu-card overflow-auto" data-testid="meals-calendar-table-wrap">
@@ -397,16 +399,17 @@ export default function MealsCalendar() {
               <th className="text-right p-2.5"><Moon size={12} className="inline mr-1" />D</th>
               <th className="text-right p-2.5 bg-emerald-700">Total</th>
               <th className="text-right p-2.5 bg-emerald-800" title="Purchase spend for the day">Purchase ₹</th>
+              <th className="text-right p-2.5 bg-violet-800" title="Kitchen staff wage bill, apportioned equally per day">Wages ₹</th>
               <th className="text-right p-2.5 bg-sky-800" title="Consumption cost — issues valued at weighted-avg purchase rate">Issue ₹</th>
-              <th className="text-right p-2.5 bg-amber-700" title="Per-meal cost = issue cost ÷ meals served (rounded to whole rupees)">₹/Meal</th>
+              <th className="text-right p-2.5 bg-amber-700" title="Per-meal cost = (issue cost + apportioned wages) ÷ meals served">₹/Meal</th>
               {canEdit && <th className="text-right p-2.5 w-16"> </th>}
             </tr>
           </thead>
           <tbody data-testid="meals-calendar-tbody">
             {loading ? (
-              <tr><td colSpan={canEdit ? 11 : 10} className="text-center py-10"><Loader2 className="animate-spin inline text-slate-400"/></td></tr>
+              <tr><td colSpan={canEdit ? 12 : 11} className="text-center py-10"><Loader2 className="animate-spin inline text-slate-400"/></td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={canEdit ? 11 : 10} className="text-center py-10 text-slate-400">No data in this window.</td></tr>
+              <tr><td colSpan={canEdit ? 12 : 11} className="text-center py-10 text-slate-400">No data in this window.</td></tr>
             ) : months.map((month) => {
               const collapsed = !openMonths.has(month.key);
               return (
@@ -431,8 +434,9 @@ export default function MealsCalendar() {
                     <td className="p-2.5 text-right font-black tabular-nums text-slate-800">{inr(month.totals.dinner)}</td>
                     <td className="p-2.5 text-right font-black tabular-nums text-emerald-700 bg-emerald-50">{inr(month.totals.total)}</td>
                     <td className="p-2.5 text-right font-black tabular-nums text-emerald-800">{money(month.totals.purchase_cost)}</td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-violet-800">{money(month.totals.wage_cost)}</td>
                     <td className="p-2.5 text-right font-black tabular-nums text-sky-800">{money(month.totals.issue_cost)}</td>
-                    <td className="p-2.5 text-right font-black tabular-nums text-amber-700">{month.totals.total ? money(month.totals.issue_cost / month.totals.total) : <span className="text-slate-300">—</span>}</td>
+                    <td className="p-2.5 text-right font-black tabular-nums text-amber-700">{month.totals.total ? money((month.totals.issue_cost + (month.totals.wage_cost || 0)) / month.totals.total) : <span className="text-slate-300">—</span>}</td>
                     {canEdit && <td className="p-2.5"/>}
                   </tr>
                   {!collapsed && month.rows.map((d) => {
@@ -475,8 +479,9 @@ export default function MealsCalendar() {
                               {d.has_data ? d.total : "—"}
                             </td>
                             <td className="p-2 text-right tabular-nums text-emerald-800" data-testid={`mc-pcost-${d.date}`}>{d.purchase_cost ? money(d.purchase_cost) : <span className="text-slate-300">—</span>}</td>
+                            <td className="p-2 text-right tabular-nums text-violet-800" data-testid={`mc-wage-${d.date}`}>{d.wage_cost ? money(d.wage_cost) : <span className="text-slate-300">—</span>}</td>
                             <td className="p-2 text-right tabular-nums text-sky-800" data-testid={`mc-icost-${d.date}`}>{d.issue_cost ? money(d.issue_cost) : <span className="text-slate-300">—</span>}</td>
-                            <td className="p-2 text-right tabular-nums font-bold text-amber-700" data-testid={`mc-permeal-${d.date}`} title="Issue cost ÷ meals served">{d.issue_cost && d.total ? money(d.issue_cost / d.total) : <span className="text-slate-300">—</span>}</td>
+                            <td className="p-2 text-right tabular-nums font-bold text-amber-700" data-testid={`mc-permeal-${d.date}`} title="(Issue cost + apportioned wages) ÷ meals served">{(d.issue_cost || d.wage_cost) && d.total ? money(((d.issue_cost || 0) + (d.wage_cost || 0)) / d.total) : <span className="text-slate-300">—</span>}</td>
                             {canEdit && (
                               <td className="p-2 text-right">
                                 <button
@@ -507,8 +512,9 @@ export default function MealsCalendar() {
                 <td className="p-2.5 text-right font-black tabular-nums">{inr(data.totals.dinner)}</td>
                 <td className="p-2.5 text-right font-black tabular-nums text-emerald-300">{inr(data.totals.total)}</td>
                 <td className="p-2.5 text-right font-black tabular-nums text-emerald-300">{money(data.totals.purchase_cost)}</td>
+                <td className="p-2.5 text-right font-black tabular-nums text-violet-300">{money(data.totals.wage_cost)}</td>
                 <td className="p-2.5 text-right font-black tabular-nums text-sky-300">{money(data.totals.issue_cost)}</td>
-                <td className="p-2.5 text-right font-black tabular-nums text-amber-300">{data.totals.total ? money(data.totals.issue_cost / data.totals.total) : "—"}</td>
+                <td className="p-2.5 text-right font-black tabular-nums text-amber-300">{data.totals.total ? money((data.totals.issue_cost + (data.totals.wage_cost || 0)) / data.totals.total) : "—"}</td>
                 {canEdit && <td/>}
               </tr>
             </tfoot>

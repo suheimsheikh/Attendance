@@ -4951,13 +4951,29 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             c = sum(float(ln.get("qty") or 0) * _rate_c(ln.get("item_id"))
                     for ln in doc.get("lines") or [] if ln.get("item_id"))
             icost_by_date[doc["date"]] = icost_by_date.get(doc["date"], 0.0) + c
+        overhead_map_c = await _overhead_daily_map(s, e)
+        overhead_total_c = 0.0
         for r in out:
             r["purchase_cost"] = round(pcost_by_date.get(r["date"], 0.0), 2)
+            oh = round(overhead_map_c.get(r["date"], 0.0), 2)
+            r["wage_cost"] = oh
+            overhead_total_c += oh
             r["issue_cost"] = round(icost_by_date.get(r["date"], 0.0), 2)
         totals["purchase_cost"] = round(sum(pcost_by_date.values()), 2)
+        # Kitchen staff wage bill (apportioned per day) — sits BETWEEN
+        # purchases and issues in the consumption view, and is folded into
+        # the "…incl wages" cost-per-meal figures.
+        totals["wage_cost"] = round(overhead_total_c, 2)
         totals["issue_cost"] = round(sum(icost_by_date.values()), 2)
-        totals["issue_cost_per_meal"] = round(totals["issue_cost"] / totals["total"], 2) if totals["total"] else None
-        totals["purchase_cost_per_meal"] = round(totals["purchase_cost"] / totals["total"], 2) if totals["total"] else None
+        _tm = totals["total"]
+        totals["issue_cost_per_meal"] = round(totals["issue_cost"] / _tm, 2) if _tm else None
+        totals["purchase_cost_per_meal"] = round(totals["purchase_cost"] / _tm, 2) if _tm else None
+        totals["wage_cost_per_meal"] = round(totals["wage_cost"] / _tm, 2) if _tm else None
+        # Fully-loaded cost per meal (food + wages), both lenses.
+        totals["purchase_cost_incl_wages"] = round(totals["purchase_cost"] + totals["wage_cost"], 2)
+        totals["issue_cost_incl_wages"] = round(totals["issue_cost"] + totals["wage_cost"], 2)
+        totals["purchase_cost_per_meal_incl_wages"] = round(totals["purchase_cost_incl_wages"] / _tm, 2) if _tm else None
+        totals["issue_cost_per_meal_incl_wages"] = round(totals["issue_cost_incl_wages"] / _tm, 2) if _tm else None
 
         return {
             "start": s, "end": e,
