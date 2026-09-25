@@ -5,7 +5,7 @@ import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2, Building2, Sailboat,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, Utensils, CalendarRange, FileText, ListTodo, ScrollText, LineChart
+  ShieldAlert, Gauge, ChefHat, PencilRuler, KeyRound, ChevronDown, ChevronRight, Utensils, CalendarRange, FileText, ListTodo, ScrollText, LineChart, TrendingUp
 } from "lucide-react";
 import RulesGate from "./RulesGate";
 import Avatar from "./Avatar";
@@ -65,6 +65,7 @@ const NAV_COACH_KITCHEN = [
   { to: "/admin/meals-calendar", label: "Consumption", icon: CalendarRange, hint: "Daily headcount log — Breakfast / Midmorning / Lunch / Afternoon Snack / Dinner totals per day" },
   { to: "/admin/meals-report", label: "Purchases & Issues", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, consumption, wastage and stock" },
   { to: "/admin/meals-report?tab=compare", label: "Compare Items", icon: LineChart, hint: "Compare purchases vs issues for any items over time" },
+  { to: "/admin/meals-report?tab=movers", label: "Price Movers", icon: TrendingUp, hint: "Which commodities are getting dearer or cheaper — % price change with sparklines" },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
 ];
 
@@ -99,6 +100,7 @@ const NAV_KITCHEN = [
   { to: "/admin/meals-calendar", label: "Consumption", icon: CalendarRange, hint: "Daily headcount log — Breakfast / Midmorning / Lunch / Afternoon Snack / Dinner totals per day" },
   { to: "/admin/meals-report", label: "Purchases & Issues", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, consumption, wastage and stock" },
   { to: "/admin/meals-report?tab=compare", label: "Compare Items", icon: LineChart, hint: "Compare purchases vs issues for any items over time" },
+  { to: "/admin/meals-report?tab=movers", label: "Price Movers", icon: TrendingUp, hint: "Which commodities are getting dearer or cheaper — % price change with sparklines" },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
 ];
 

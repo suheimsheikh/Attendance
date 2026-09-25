@@ -362,3 +362,14 @@ Implemented:
 Files: `backend/routes/meals.py` (_compute_day_flags, _effective_meal_counts, /meals/day-flags, meal_calendar_list per-meal + flags), `frontend/src/pages/admin/MealsCalendar.jsx` (helpers, FlagBadge, ₹/Athlete column+KPI, row filter), `frontend/src/pages/admin/MealEntryTab.jsx` (dayFlags banner).
 Testing: iteration_76.json — 100% backend + frontend, no issues. Backend tests at `backend/tests/test_meal_flags_and_calendar.py` (4, passing). Verified ₹/Meal=₹85.50, ₹/Athlete/day=₹256.49 (≈3×), all 4 months show ₹75,000 wages, banners + badges render.
 Note: per-day rows use `wage_cost` key (not `wages`).
+
+---
+## Update 25 Jun 2026 — Price Movers (commodity price trend overview) (feature, shipped)
+User request: a graphic to show which commodities are rising vs falling in price (line/price graph), under Analytics.
+
+Implemented a new **"Price Movers"** tab in Purchases & Issues (Kitchen area) + sidebar link (`/admin/meals-report?tab=movers`):
+- **Backend** `GET /api/meals/price-movers?days=&end=` — per item, weighted-avg purchase rate in the current window [end-days+1, end] vs the previous equal-length window; returns change_pct, base/cur rate, cur qty/spend, a per-date rate sparkline, and rising/falling/new counts + avg change. Window 3–365 days, default 30.
+- **Frontend** `MealPriceMoversTab.jsx`: window selector (7/14/30/60/90d) + as-of date; KPIs (getting dearer / cheaper / new / avg change); a diverging horizontal bar chart (red = dearer to the right, green = cheaper to the left) of top 15 movers; two lists (biggest increases / drops) with rate sparklines; a full table. Clicking any item opens the existing `ItemPriceTrendDrawer` for full purchase history.
+Files: `backend/routes/meals.py` (price_movers ~L2203), `frontend/src/pages/admin/MealPriceMoversTab.jsx` (new), `frontend/src/pages/admin/MealsReport.jsx` (tab wired), `frontend/src/components/Layout.jsx` (sidebar link in both kitchen nav arrays).
+Verified: backend curl (32 rising / 21 falling / 43 new over 30d); UI screenshots of chart, lists, and drill-down drawer.
+KNOWN CONSIDERATION: an extreme outlier (e.g., Cucumber +1173% caused by a bad ₹1.29/kg baseline purchase on 2026-08-13) stretches the bar-chart X-axis and compresses other bars. Could optionally clamp the domain / exclude anomalies — deferred. The feature usefully surfaces such data-entry anomalies.

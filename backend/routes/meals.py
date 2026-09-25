@@ -2201,6 +2201,99 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "days": days, "points": points, "summary": summary,
         }
 
+    @router.get("/meals/price-movers")
+    async def price_movers(
+        end: Optional[str] = None,
+        days: int = Query(30, ge=3, le=365),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Which commodities are getting dearer / cheaper (Jun 2026 request).
+
+        Compares each item's weighted-average purchase rate in the CURRENT
+        window [end-days+1, end] against the PREVIOUS equal-length window,
+        returning the % change plus a rate sparkline across both windows so
+        the client can draw an at-a-glance 'price movers' view.
+        """
+        e = _valid_date(end) if end else local_date_str(None)
+        e_d = date.fromisoformat(e)
+        cur_start = (e_d - timedelta(days=days - 1)).isoformat()
+        base_start = (e_d - timedelta(days=2 * days - 1)).isoformat()
+        base_end = (e_d - timedelta(days=days)).isoformat()
+
+        items = await db.meal_items.find(
+            {}, {"_id": 0, "id": 1, "name": 1, "unit": 1, "category_key": 1}).to_list(1000)
+        imeta = {i["id"]: i for i in items}
+        cats = await _purchase_categories()
+        clabel = {c["key"]: c["label"] for c in cats}
+
+        docs = await db.meal_purchases.find(
+            {"date": {"$gte": base_start, "$lte": e}},
+            {"_id": 0, "date": 1, "lines": 1}).to_list(5000)
+
+        cur_q: dict = {}; cur_a: dict = {}
+        base_q: dict = {}; base_a: dict = {}
+        series_q: dict = {}; series_a: dict = {}
+        for doc in docs:
+            d = doc["date"]
+            in_cur = d >= cur_start
+            in_base = base_start <= d <= base_end
+            for ln in doc.get("lines") or []:
+                iid = ln.get("item_id"); q = float(ln.get("qty") or 0)
+                if not iid or q <= 0:
+                    continue
+                amt = float(ln.get("amount") or (q * float(ln.get("rate") or 0)))
+                if in_cur:
+                    cur_q[iid] = cur_q.get(iid, 0) + q; cur_a[iid] = cur_a.get(iid, 0) + amt
+                elif in_base:
+                    base_q[iid] = base_q.get(iid, 0) + q; base_a[iid] = base_a.get(iid, 0) + amt
+                series_q.setdefault(iid, {}); series_a.setdefault(iid, {})
+                series_q[iid][d] = series_q[iid].get(d, 0) + q
+                series_a[iid][d] = series_a[iid].get(d, 0) + amt
+
+        movers: list = []
+        for iid in set(list(cur_q) + list(base_q)):
+            cq = cur_q.get(iid, 0); ca = cur_a.get(iid, 0)
+            bq = base_q.get(iid, 0); ba = base_a.get(iid, 0)
+            cur_rate = round(ca / cq, 2) if cq > 0 else None
+            base_rate = round(ba / bq, 2) if bq > 0 else None
+            if cur_rate is None:
+                continue  # only items bought in the current window are "movers"
+            pct = round((cur_rate - base_rate) / base_rate * 100, 1) if (base_rate and base_rate > 0) else None
+            sq = series_q.get(iid, {}); sa = series_a.get(iid, {})
+            spark = [{"date": dd, "rate": round(sa[dd] / sq[dd], 2)}
+                     for dd in sorted(sq) if sq.get(dd, 0) > 0]
+            m = imeta.get(iid, {})
+            movers.append({
+                "item_id": iid,
+                "name": m.get("name") or "—",
+                "unit": m.get("unit"),
+                "category_key": m.get("category_key"),
+                "category_label": clabel.get(m.get("category_key"), m.get("category_key")),
+                "base_rate": base_rate,
+                "cur_rate": cur_rate,
+                "change_pct": pct,
+                "is_new": base_rate is None,
+                "cur_qty": round(cq, 3),
+                "cur_spend": round(ca, 2),
+                "spark": spark,
+            })
+        movers.sort(key=lambda x: (x["change_pct"] is None, -(x["change_pct"] or 0)))
+        rising = [m for m in movers if m["change_pct"] is not None and m["change_pct"] > 0]
+        falling = [m for m in movers if m["change_pct"] is not None and m["change_pct"] < 0]
+        avg_change = round(sum(m["change_pct"] for m in movers if m["change_pct"] is not None)
+                           / max(1, len(rising) + len(falling)), 1) if (rising or falling) else None
+        return {
+            "end": e, "days": days,
+            "current": {"start": cur_start, "end": e},
+            "baseline": {"start": base_start, "end": base_end},
+            "movers": movers,
+            "rising_count": len(rising),
+            "falling_count": len(falling),
+            "new_count": sum(1 for m in movers if m["is_new"]),
+            "avg_change_pct": avg_change,
+        }
+
+
     @router.post("/meals/vendors")
     async def create_vendor(body: VendorIn, user: dict = Depends(require_chef_or_admin)):
         name = body.name.strip()
