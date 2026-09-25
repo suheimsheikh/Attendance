@@ -2201,6 +2201,40 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "days": days, "points": points, "summary": summary,
         }
 
+    @router.get("/meals/items/last-rates")
+    async def item_last_rates(
+        before: Optional[str] = None,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Most-recent purchase rate per item STRICTLY BEFORE `before`
+        (defaults to today). Powers the price-outlier warning on the
+        purchase-entry screen. Returns {item_id: {rate, date}}.
+
+        A line's rate is taken from its stored `rate`; if missing but an
+        `amount` is present, it's back-computed as amount ÷ qty.
+        """
+        b = _valid_date(before) if before else local_date_str(None)
+        docs = await db.meal_purchases.find(
+            {"date": {"$lt": b}},
+            {"_id": 0, "date": 1, "lines": 1},
+        ).sort("date", 1).to_list(5000)
+        out: dict = {}
+        for doc in docs:  # ascending → a later date overwrites an earlier one
+            d = doc["date"]
+            for ln in doc.get("lines") or []:
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                if not iid or q <= 0:
+                    continue
+                r = float(ln.get("rate") or 0)
+                if r <= 0:
+                    amt = float(ln.get("amount") or 0)
+                    r = (amt / q) if amt > 0 else 0.0
+                if r <= 0:
+                    continue
+                out[iid] = {"rate": round(r, 2), "date": d}
+        return {"before": b, "rates": out}
+
     @router.get("/meals/price-movers")
     async def price_movers(
         end: Optional[str] = None,

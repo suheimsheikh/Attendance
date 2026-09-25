@@ -8,7 +8,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Loader2, Save, Upload, FileDown, Boxes,
+  Loader2, Save, Upload, FileDown, Boxes, AlertTriangle, X as CloseIcon,
 } from "lucide-react";
 import { api, showApiError, uploadFile } from "../../api";
 import { useAuth } from "../../auth";
@@ -35,6 +35,9 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
   const [entries, setEntries] = useState({});       // { item_id: {qty, rate} }
   const [saving, setSaving] = useState(false);
   const [recent, setRecent] = useState([]);
+  const [lastRates, setLastRates] = useState({});   // { item_id: {rate, date} }
+  const [outlierConfirm, setOutlierConfirm] = useState(null); // list of outliers or null
+  const OUTLIER_PCT = 5; // warn if new rate deviates >5% from the previous purchase rate
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
   const fileRef = useRef(null);
@@ -84,7 +87,25 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
         setEntries(next);
       })
       .catch(() => setEntries({}));
+    // Baseline for the outlier warning = each item's most-recent purchase
+    // rate STRICTLY BEFORE the date being entered.
+    api.get(`/meals/items/last-rates?before=${dateStr}`)
+      .then((r) => setLastRates(r.rates || {}))
+      .catch(() => setLastRates({}));
   }, [dateStr]);
+
+  // Per-item price-outlier check: returns {prev, pct} when the entered
+  // rate deviates more than OUTLIER_PCT% from the previous purchase rate,
+  // else null (no previous rate, no entry, or within tolerance).
+  const outlierFor = (itemId) => {
+    const e = entries[itemId];
+    const rate = num(e?.rate);
+    if (rate <= 0) return null;
+    const prev = lastRates[itemId]?.rate;
+    if (!prev || prev <= 0) return null;
+    const pct = ((rate - prev) / prev) * 100;
+    return Math.abs(pct) > OUTLIER_PCT ? { prev, pct, date: lastRates[itemId]?.date } : null;
+  };
 
   // Roll-ups.
   const catTotals = useMemo(() => {
@@ -111,7 +132,7 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
     setEntries((prev) => ({ ...prev, [itemId]: { ...(prev[itemId] || {}), [field]: value } }));
   };
 
-  const save = async () => {
+  const doSave = async () => {
     const lines = items
       .map((it) => {
         const e = entries[it.id];
@@ -126,9 +147,35 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
       await api.put(`/meals/purchases/${dateStr}`, { lines });
       toast.success(`Purchases saved for ${formatDate(dateStr)}`);
       loadRecent();
+      // Refresh baselines so subsequent edits compare against the new rates.
+      api.get(`/meals/items/last-rates?before=${dateStr}`)
+        .then((r) => setLastRates(r.rates || {}))
+        .catch(() => {});
     } catch (err) {
       showApiError(err, "Couldn't save purchases");
     } finally { setSaving(false); }
+  };
+
+  const save = () => {
+    // Collect any rate outliers (>±5% vs the previous purchase rate) and
+    // ask the user to confirm before accepting them.
+    const outliers = items
+      .map((it) => {
+        const o = outlierFor(it.id);
+        if (!o) return null;
+        return { id: it.id, name: it.name, unit: it.unit, rate: num(entries[it.id]?.rate), ...o };
+      })
+      .filter(Boolean);
+    if (outliers.length > 0) {
+      setOutlierConfirm(outliers);
+      return;
+    }
+    doSave();
+  };
+
+  const confirmOutliers = () => {
+    setOutlierConfirm(null);
+    doSave();
   };
 
   const onUpload = async (e) => {
@@ -200,6 +247,7 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
                   {rows.map((it) => {
                     const e = entries[it.id] || {};
                     const amt = num(e.qty) * num(e.rate);
+                    const ol = outlierFor(it.id);
                     return (
                       <tr key={it.id} className="border-t border-slate-100" data-testid={`purchase-row-${it.id}`}>
                         <td className="p-2 font-semibold text-slate-900">{it.name}</td>
@@ -208,7 +256,18 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
                         </td>
                         <td className="p-2 text-slate-500 text-xs">{it.unit}</td>
                         <td className="p-2">
-                          <input type="number" min="0" step="0.01" value={e.rate ?? ""} onChange={(ev) => updateEntry(it.id, "rate", ev.target.value)} className="iu-input !h-8 text-sm w-full text-right tabular-nums" placeholder="0" data-testid={`purchase-rate-${it.id}`} />
+                          <div className="flex items-center justify-end gap-1">
+                            {ol && (
+                              <span
+                                className={`shrink-0 ${ol.pct > 0 ? "text-rose-500" : "text-amber-500"}`}
+                                title={`Unusual price: ${ol.pct > 0 ? "+" : ""}${ol.pct.toFixed(1)}% vs previous ₹${inr(ol.prev)}${ol.date ? ` (on ${formatDate(ol.date)})` : ""}`}
+                                data-testid={`purchase-outlier-${it.id}`}
+                              >
+                                <AlertTriangle size={14} />
+                              </span>
+                            )}
+                            <input type="number" min="0" step="0.01" value={e.rate ?? ""} onChange={(ev) => updateEntry(it.id, "rate", ev.target.value)} className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${ol ? "!ring-2 !ring-amber-300 !border-amber-300" : ""}`} placeholder="0" data-testid={`purchase-rate-${it.id}`} />
+                          </div>
                         </td>
                         <td className="p-2 text-right font-bold tabular-nums" data-testid={`purchase-amount-${it.id}`}>{amt > 0 ? `₹${inr(amt)}` : ""}</td>
                       </tr>
@@ -299,6 +358,65 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
           </table>
         )}
       </div>
+
+      {/* Price-outlier confirmation (Jun 2026) — warns when an entered rate
+          deviates more than ±5% from the item's previous purchase rate. */}
+      {outlierConfirm && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4"
+             onClick={(e) => { if (e.target === e.currentTarget) setOutlierConfirm(null); }}
+             data-testid="purchase-outlier-modal">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 bg-amber-50">
+              <AlertTriangle size={18} className="text-amber-600" />
+              <h3 className="font-black text-slate-900">Unusual prices detected</h3>
+              <button type="button" onClick={() => setOutlierConfirm(null)}
+                      className="ml-auto p-1 rounded-md text-slate-400 hover:bg-slate-100"
+                      data-testid="purchase-outlier-close" aria-label="Close">
+                <CloseIcon size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-slate-600 mb-3">
+                {outlierConfirm.length === 1 ? "1 item is" : `${outlierConfirm.length} items are`} priced more than {OUTLIER_PCT}% away from the last purchase. Please double-check before saving.
+              </p>
+              <div className="max-h-64 overflow-auto rounded-lg border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-[11px] uppercase text-slate-500">
+                    <tr>
+                      <th className="text-left p-2">Item</th>
+                      <th className="text-right p-2">Previous ₹</th>
+                      <th className="text-right p-2">New ₹</th>
+                      <th className="text-right p-2">Change</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {outlierConfirm.map((o) => (
+                      <tr key={o.id} className="border-t border-slate-100" data-testid={`purchase-outlier-row-${o.id}`}>
+                        <td className="p-2 font-semibold text-slate-900">{o.name}<span className="text-slate-400 font-normal"> /{o.unit}</span></td>
+                        <td className="p-2 text-right tabular-nums text-slate-500">₹{inr(o.prev)}</td>
+                        <td className="p-2 text-right tabular-nums font-bold text-slate-900">₹{inr(o.rate)}</td>
+                        <td className={`p-2 text-right tabular-nums font-black ${o.pct > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                          {o.pct > 0 ? "+" : ""}{o.pct.toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
+              <button type="button" onClick={() => setOutlierConfirm(null)}
+                      className="iu-btn-secondary !h-9 !px-4 text-sm" data-testid="purchase-outlier-cancel">
+                Go back &amp; fix
+              </button>
+              <button type="button" onClick={confirmOutliers}
+                      className="iu-btn-primary !h-9 !px-4 text-sm" data-testid="purchase-outlier-confirm">
+                Save anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
