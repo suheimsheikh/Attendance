@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from routes.admin_audit import write_audit
 from services.attendance_calc import compute_late
 from services.permissions import is_super_admin
-from services.time_utils import local_date_str, now_utc, office_tz
+from services.time_utils import now_utc, office_tz
 
 
 def make_router(db, require_admin) -> APIRouter:

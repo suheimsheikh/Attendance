@@ -55,8 +55,11 @@ def test_meal_calendar_wages_hybrid_apportionment(h):
     """Completed months carry the FULL monthly bill; the CURRENT in-progress
     month is prorated to elapsed days (hybrid apportionment, Jun 2026)."""
     import calendar as _cal
-    from datetime import date as _date
-    today = _date.today()
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    # Match the backend, which prorates the current month on Asia/Kolkata
+    # (UTC+5:30) — not the test container's UTC clock (avoids a 1-day drift
+    # near IST midnight).
+    today = (_dt.now(_tz.utc) + _td(hours=5, minutes=30)).date()
     cur_mk = today.strftime("%Y-%m")
     dim = _cal.monthrange(today.year, today.month)[1]
     r = requests.get(f"{API}/meals/meal-calendar", params={"start": "2026-06-01", "end": "2026-09-30"}, headers=h, timeout=60)

@@ -432,3 +432,13 @@ User request: delete the "Monthly grid" tab under Purchases & Issues; remove "Co
 - `Layout.jsx`: removed the two sidebar links "Compare Items" (`?tab=compare`) and "Price Movers" (`?tab=movers`) from both nav arrays; dropped the now-unused `LineChart`/`TrendingUp` icon imports. The "Purchases & Issues" sidebar link is unchanged.
 - Verified via screenshot: tab bar shows Daily entry · Stock Master · Wastage · Stock Take · Cross-check · Daily counts · Expense report · Analytics · Compare items · Price Movers · Procurement plan · Vendors (no Monthly grid); sidebar no longer lists Compare Items / Price Movers. Frontend compiles clean.
 - Backend `/meals/monthly-grid` endpoint left in place (harmless, unreferenced by UI now). ⚠️ Needs REDEPLOY.
+
+---
+## Update 25 Jun 2026 — Dead-code removal + safe cleanup (chore, shipped)
+Read-only lint sweep (pyflakes backend, ESLint frontend) → removed only genuinely-dead code (zero behaviour change):
+- **Backend unused imports/vars**: `routes/reports.py` (unused `datetime`; dead local `from reportlab.lib.pagesizes import A3` inside the hours-export fn — the real A3 import lives in the grid-export fn), `routes/attendance_repair.py` (unused `local_date_str`), `services/scope.py` (unused `Iterable`), `scripts/subcategories_seed.py` (unused local `id_to_name`).
+- **Removed the now-orphaned `GET /meals/monthly-grid` endpoint** (~93 lines) — it only powered the deleted Monthly-grid UI tab; no other frontend/backend/key consumer. Now returns 404.
+- **KEPT** `server.py`'s "unused" imports — they are an INTENTIONAL re-export/compat layer explicitly annotated `# noqa: F401` (`from server import compute_late` etc.). Not dead code.
+- **Frontend**: earlier nav cleanup already removed the only unused imports (`LineChart`/`TrendingUp`/`CalendarDays`/`MEAL_ORDER`/`currentMonth`); ESLint now reports 0 `no-unused-vars`. The lone CRA build warning is a pre-existing `react-hooks/exhaustive-deps` note (left as-is — changing hook deps risks behaviour).
+- **Fixed 2 brittle/stale unit tests**: hybrid-wage test now prorates on Asia/Kolkata (was UTC → 1-day drift near IST midnight); `_kitchen_daily_series` rounding test no longer over-constrains the row shape (helper legitimately carries a per-category `cat` map).
+- Verified: backend restarts clean (health 200, meal-calendar/last-rates 200, monthly-grid 404, no errors); 105/105 local unit tests pass. ⚠️ Needs REDEPLOY.

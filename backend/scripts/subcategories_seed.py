@@ -48,7 +48,6 @@ def _db():
 async def export_setup() -> dict:
     db = _db()
     subs = await db.meal_subcategories.find({"active": {"$ne": False}}, {"_id": 0}).to_list(1000)
-    id_to_name = {}
     items = await db.meal_items.find({}, {"_id": 0, "name": 1, "category_key": 1, "subcategory_key": 1}).to_list(5000)
     groups = []
     by_key = {}

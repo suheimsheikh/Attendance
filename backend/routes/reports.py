@@ -11,7 +11,7 @@ from __future__ import annotations
 import csv
 import io
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
@@ -559,7 +559,6 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         table = [_row(r) for r in rows]
 
         if fmt == "pdf":
-            from reportlab.lib.pagesizes import A3
             office = await db.config.find_one({"id": "office"})
             academy = (office or {}).get("office_name") or "iShowedUp"
             def _ddmmyyyy(iso: str) -> str:

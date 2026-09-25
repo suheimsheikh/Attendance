@@ -79,8 +79,13 @@ def test_daily_series_rounds_amount_2dp_qty_3dp():
     got = _kitchen_daily_series({
         "2026-08-01": {"amount": 12.3456, "qty": 1.23456, "lines": 4},
     })
-    assert got[0] == {"date": "2026-08-01", "amount": 12.35,
-                      "qty": 1.235, "lines": 4}
+    # Assert the fixed-precision contract without over-constraining the
+    # shape (the helper also carries a per-category `cat` map for the
+    # stacked chart, which this rounding test doesn't exercise).
+    assert got[0]["date"] == "2026-08-01"
+    assert got[0]["amount"] == 12.35
+    assert got[0]["qty"] == 1.235
+    assert got[0]["lines"] == 4
 
 
 # ── _kitchen_item_rows ───────────────────────────────────────────────

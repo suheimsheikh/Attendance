@@ -9,8 +9,6 @@ in one place.
 """
 from __future__ import annotations
 
-from typing import Iterable
-
 
 # Default fallback if the categories master collection is empty
 # (fresh install / test env).
