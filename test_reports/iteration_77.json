@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend-only testing of the new InfoTip (ⓘ) rollout across admin pages plus improved chart captions. Logged in as admin (email toggle) and verified info-tip counts, hover-reveal behaviour, the critical no-navigation-on-click behaviour, and no new JS errors. All feature checkpoints from the request pass. No regressions detected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification_matrix": {
+    "/admin/dashboard": {"info_tips_found": 18, "hover_reveals_tooltip": true, "sample_tooltip_text": "A live snapshot of who is on campus and what needs action right now.", "click_does_not_navigate": true, "url_unchanged_after_click": true},
+    "/admin/meals-calendar (Consumption KPI pills)": {"info_tips_found": 11, "layout_ok": true},
+    "/admin/meals-report?tab=movers (Price Movers)": {"info_tips_found": 4, "chart_renders": true},
+    "/admin/meals-report -> Analytics tab (Kitchen Analytics)": {"info_tips_found": 11, "spend_trend_caption_present": true},
+    "/admin/reports (Calendar Grid Legend)": {"info_tips_found": 1, "info-tip-grid-totals_present": true, "grid_renders": true},
+    "/admin/reports?tab=attendance (grouped headers)": {"info_tips_found": 5},
+    "/admin/leave-balances (grouped headers)": {"info_tips_found": 3},
+    "/admin/dar (Missed tab)": {"info-tip-dar-missed_present": true}
+  },
+  "critical_regression_check": "CRITICAL scenario passed: on /admin/dashboard the ⓘ button inside a Link-wrapped stat tile was clicked and page.url remained /admin/dashboard. InfoTip's onClick={preventDefault+stopPropagation} works as designed.",
+  "console_and_errors": "0 pageerrors across all tested pages. Only pre-existing Recharts container-width warnings during transient render (not introduced by this change).",
+  "test_report_links": ["/app/test_reports/tooltip_iter77/dashboard.jpeg", "/app/test_reports/tooltip_iter77/analytics_tab.jpeg", "/app/test_reports/tooltip_iter77/dar_missed_2.jpeg"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "InfoTip.jsx: creates a new TooltipProvider per icon. That is intentional per comment, but if a page has many icons (dashboard has 18) it adds provider overhead; acceptable trade-off but consider a single root provider later.",
+    "Recharts pages emit many 'width(-1) height(-1)' console warnings on first paint (pre-existing, unrelated to this iteration) — worth cleaning up later by giving chart containers a fixed height."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (via 'Admin sign in with email' toggle)",
+  "seed_data_creation": "None (read-only UI testing as instructed).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "InfoTip component lives at frontend/src/components/InfoTip.jsx with data-testid='info-tip' or 'info-tip-<id>'. Radix tooltip opens on hover (desktop) and on focus (touch). Confirmed pattern for testing: query [data-testid^='info-tip'], hover -> [role='tooltip'] appears, click -> URL unchanged. DAR report route is /admin/dar (not /admin/dar-report).",
+  "rca of the issue": "n/a - feature verification, no bugs found."
+}

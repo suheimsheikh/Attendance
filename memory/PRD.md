@@ -396,3 +396,21 @@ Files: `backend/routes/meals.py` (meal_calendar_list wage block), `frontend/src/
 Tests: updated `backend/tests/test_meal_flags_and_calendar.py::test_meal_calendar_wages_hybrid_apportionment` (dynamic: completed months=75k, current month=prorated). All 4 pass.
 ⚠️ Needs REDEPLOY to reach production. Kept as display-metric-only; no stored data mutated.
 NOTE (by-design edge): slicing a PAST completed month partially (e.g. Aug 1–10 only) still shows the full ₹75k across those days — consistent with the "a month sums to its bill" preference; only the current/incomplete month was in scope for the fix.
+
+---
+## Update 25 Jun 2026 — App-wide explanatory tooltips + better graph captions (feature, shipped)
+User request: "Add explanatory tooltips across ALL sections so staff can better understand each figure. IMPROVE the graph captions."
+- **New reusable `InfoTip` component** (`frontend/src/components/InfoTip.jsx`): a small ⓘ icon built on the shadcn Radix tooltip (amber skin). Self-contained TooltipProvider (drop-in anywhere), opens on hover (desktop) + focus (tap on touch), and `onClick` does `preventDefault + stopPropagation` so tapping it inside a `Link`/table row never navigates. testid `info-tip` or `info-tip-<id>`.
+- **Wired into shared components** so coverage is broad with few edits:
+  - Dashboard: `StatTile` (hint), `AttentionRow` (hint), `SectionCard` (titleHint) → every "Now/This week/This month/Attention" tile + section title now has a plain-language explanation.
+  - Consumption `MealsCalendar` `KpiPill` → renders InfoTip from its existing rich `title` text (all 8+ KPI pills).
+  - Price Movers `Kpi` (hint) → all 4 KPIs.
+  - The Grid `CalendarGridTab` → a "Legend" label with an InfoTip explaining every right-hand totals column (P/AB/LP/LV/TR/OT/EO/LT/DAR).
+  - Reports `AttendanceTab` → grouped column headers (Attendance/Leave/Overtime/Comp-Off/Hours).
+  - `LeaveBalances` → grouped headers (Paid Leave/Comp-Off/Tour).
+  - Kitchen Analytics `StatPill`/`BannerStat` (hint) → banner Total/Distinct Items/Line Entries + nutrition Total kcal/Protein/Carbs/Fat/Fibre.
+  - `DarReport` → Missed column header.
+- **Graph captions improved**: `MealsAnalyticsPanel` daily-trend + day-of-week charts now have explanatory captions; `KitchenAnalyticsTab` "Spend trend" chart gained a caption (purchases vs consumption wording).
+- Verified: `testing_agent` iteration_77 — 100% frontend pass, 0 console errors, CRITICAL no-navigation-on-click confirmed on Dashboard, tooltip counts confirmed on every section. Frontend compiles clean.
+- ⚠️ Frontend-only — needs REDEPLOY to reach production.
+- Backlog (optional): a single root `TooltipProvider` instead of one-per-icon (minor perf polish); more sections can adopt `InfoTip` the same way (Presence, Muster, Self Check-in, Meals Report tables) if the user wants deeper coverage.
