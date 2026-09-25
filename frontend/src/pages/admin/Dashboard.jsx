@@ -92,8 +92,8 @@ export default function Dashboard() {
             Admin Dashboard
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {new Date(today + "T00:00:00").toLocaleDateString(undefined, {
-              weekday: "long", day: "2-digit", month: "long", year: "numeric",
+            {new Date(today + "T00:00:00").toLocaleDateString("en-GB", {
+              weekday: "long", day: "2-digit", month: "2-digit", year: "2-digit",
             })}
           </p>
         </div>

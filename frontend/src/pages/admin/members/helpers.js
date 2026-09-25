@@ -35,7 +35,7 @@ export function lastSeenLabel(iso, today) {
   if (diff < 30) return <span className="text-amber-700">{diff} days ago</span>;
   // Absolute date for anything ≥ 30 days — easier to interpret than "127 days ago".
   return <span className="text-red-700 font-semibold">
-    {new Date(iso + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+    {new Date(iso + "T12:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" })}
   </span>;
 }
 

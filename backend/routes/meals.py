@@ -3082,7 +3082,6 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         # between "avg per usage day" and "avg per calendar day".
         # Consumers naturally want per-calendar-day so procurement
         # covers the FULL horizon, not just usage-days.
-        n_days = history_days
         window_dates: list[str] = []
         cur = as_of_date - timedelta(days=history_days - 1)
         while cur <= as_of_date:
@@ -5164,18 +5163,35 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             c = sum(float(ln.get("qty") or 0) * _rate_c(ln.get("item_id"))
                     for ln in doc.get("lines") or [] if ln.get("item_id"))
             icost_by_date[doc["date"]] = icost_by_date.get(doc["date"], 0.0) + c
-        # Kitchen wage bill is a FIXED monthly cost — it must NOT shrink
-        # just because fewer days were logged. So we take each month's full
-        # bill and spread it EQUALLY across that month's days that actually
-        # have meal data within this range. Summing those day-shares gives
-        # back the full monthly bill (75k stays 75k regardless of how many
-        # days were marked), and days with no meals carry ₹0.
+        # Kitchen wage bill is a FIXED monthly cost. A COMPLETED month's
+        # full bill is spread equally across that month's meal-data days in
+        # range (so it sums back to the full bill, e.g. 75k). The CURRENT
+        # in-progress month is prorated to elapsed days (see _effective_bill
+        # below) so ₹/meal doesn't spike early in the month.
         oh_docs_c = await db.meal_overheads.find(
             {"month": {"$gte": s[:7], "$lte": e[:7]}}, {"_id": 0}).to_list(400)
         bill_by_month = {
             d["month"]: float(d.get("staff_wages") or 0) + float(d.get("incidentals") or 0)
             for d in oh_docs_c
         }
+        # Hybrid apportionment: a COMPLETED month carries its FULL monthly
+        # bill (spread across its meal-data days in range → sums to the
+        # bill), but the CURRENT in-progress month is prorated to elapsed
+        # days so ₹/meal stays stable through the month instead of spiking
+        # early. Future months contribute ₹0.
+        _today_iso = local_date_str(None)
+        _cur_mk = _today_iso[:7]
+        _cur_day = int(_today_iso[8:10])
+
+        def _effective_bill(mk: str) -> float:
+            bill = bill_by_month.get(mk, 0.0)
+            if not bill:
+                return 0.0
+            if mk < _cur_mk:
+                return bill
+            if mk == _cur_mk:
+                return bill * _cur_day / _days_in_month(mk)
+            return 0.0
         mealdays_by_month: dict[str, int] = {}
         for r in out:
             if r["has_data"]:
@@ -5185,7 +5201,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         for r in out:
             r["purchase_cost"] = round(pcost_by_date.get(r["date"], 0.0), 2)
             mk = r["date"][:7]
-            bill = bill_by_month.get(mk, 0.0)
+            bill = _effective_bill(mk)
             nd = mealdays_by_month.get(mk, 0)
             oh = round(bill / nd, 2) if (r["has_data"] and bill and nd) else 0.0
             r["wage_cost"] = oh

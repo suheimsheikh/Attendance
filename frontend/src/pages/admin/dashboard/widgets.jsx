@@ -139,7 +139,7 @@ export function Sparkline({ points }) {
 export function fmtShortDate(iso) {
   if (!iso) return "";
   try {
-    return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+    return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
   } catch {
     return iso;
   }

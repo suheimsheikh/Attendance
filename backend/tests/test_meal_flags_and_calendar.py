@@ -51,27 +51,30 @@ def test_meal_calendar_totals_and_flags(h):
     assert "flags" in sample, f"row missing flags: {list(sample.keys())}"
 
 
-def test_meal_calendar_wages_75000_per_month(h):
+def test_meal_calendar_wages_hybrid_apportionment(h):
+    """Completed months carry the FULL monthly bill; the CURRENT in-progress
+    month is prorated to elapsed days (hybrid apportionment, Jun 2026)."""
+    import calendar as _cal
+    from datetime import date as _date
+    today = _date.today()
+    cur_mk = today.strftime("%Y-%m")
+    dim = _cal.monthrange(today.year, today.month)[1]
     r = requests.get(f"{API}/meals/meal-calendar", params={"start": "2026-06-01", "end": "2026-09-30"}, headers=h, timeout=60)
     assert r.status_code == 200
     data = r.json()
-    months = data.get("months") or data.get("month_subtotals") or []
-    # Try to find monthly subtotals - print structure if not matching
-    if not months:
-        # fallback: sum wages per month from rows
-        rows = data.get("rows") or data.get("days") or []
-        from collections import defaultdict
-        wage_by_month = defaultdict(float)
-        for r_ in rows:
-            d = r_.get("date", "")
-            m = d[:7]
-            wage_by_month[m] += float(r_.get("wage_cost", 0) or r_.get("wages", 0) or r_.get("wage", 0) or 0)
-        for month in ["2026-06", "2026-07", "2026-08", "2026-09"]:
-            assert abs(wage_by_month.get(month, 0) - 75000) < 1, f"month {month} wages={wage_by_month.get(month)}"
-    else:
-        got = {m.get("month") or m.get("ym"): float(m.get("wages", 0) or m.get("wage", 0) or 0) for m in months}
-        for mm in ["2026-06", "2026-07", "2026-08", "2026-09"]:
-            assert abs(got.get(mm, 0) - 75000) < 1, f"month {mm} wages={got.get(mm)} all={got}"
+    rows = data.get("rows") or data.get("days") or []
+    from collections import defaultdict
+    wage_by_month = defaultdict(float)
+    for r_ in rows:
+        m = r_.get("date", "")[:7]
+        wage_by_month[m] += float(r_.get("wage_cost", 0) or 0)
+    for month in ["2026-06", "2026-07", "2026-08", "2026-09"]:
+        got = wage_by_month.get(month, 0)
+        if month == cur_mk:
+            expected = 75000 * today.day / dim
+            assert abs(got - expected) < 5, f"current month {month} wages={got}, expected ~{expected:.0f}"
+        elif month < cur_mk:
+            assert abs(got - 75000) < 1, f"completed month {month} wages={got}"
 
 
 def test_cost_per_athlete_day_is_3x_cost_per_meal(h):

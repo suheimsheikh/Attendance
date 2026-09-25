@@ -384,3 +384,15 @@ Verified via screenshots (Masters tabs switch: Members/Fleets/Roles; single Nutr
 OPEN QUESTIONS (awaiting user):
 - Chef's View: keep / merge into Meals Muster / delete (my rec: keep — it's presence-based plate planning, distinct from Meals Muster's manual consumption record).
 - App-wide tooltip/caption pass: which screens to prioritise (Consumption, Grid, Dashboard, DAR, Reports) and whether to add ⓘ info-icon tooltips vs captions only.
+
+---
+## Update 25 Jun 2026 — E2E code review fixes + hybrid wage apportionment (shipped)
+Ran a read-only end-to-end code review (`code_review_agent`). Fixes applied:
+1. **[HIGH → user-approved change] Consumption wage apportionment is now HYBRID.** Previously the full monthly kitchen bill (₹75,000) was spread only over the days-with-data in range, so a PARTIAL month (default "All days" view always includes the incomplete current month; also "Last 30d") loaded the whole month's wages onto the few elapsed days → ₹/meal-incl-wages and ₹/athlete/day spiked early in a month. User chose option (c): a COMPLETED month still shows the full ₹75,000 (spread across its meal-data days in range), but the CURRENT in-progress month is prorated to elapsed days (`bill × today.day ÷ days_in_month`). Future months → ₹0. New `_effective_bill(mk)` helper in `meal_calendar_list`. Verified via curl (today=2026-09-25): Sep=₹62,500 (75k×25/30), Aug=₹75,000, Jun=₹75,000. `local_date_str(None)` used (office-default tz) to match codebase convention.
+2. **[MEDIUM] Price Movers blank screen** — `MealPriceMoversTab.jsx` empty-state gated on `known.length===0` (items with a computable % change), so a window where EVERY item was brand-new (no baseline) hid the KPIs + whole table. Now gated on `data.movers.length===0`; new items render as "NEW".
+3. **[LOW] Duplicate React keys/test-ids** in the MealEntryTab day-flags banner — now keyed by `code+index` (`entry-flag-<code>-<i>`).
+4. **[LOW] Dead code** — removed unused `n_days` in the pantry forecast helper (`meals.py` ~L3085).
+Files: `backend/routes/meals.py` (meal_calendar_list wage block), `frontend/src/pages/admin/MealPriceMoversTab.jsx`, `frontend/src/pages/admin/MealEntryTab.jsx`.
+Tests: updated `backend/tests/test_meal_flags_and_calendar.py::test_meal_calendar_wages_hybrid_apportionment` (dynamic: completed months=75k, current month=prorated). All 4 pass.
+⚠️ Needs REDEPLOY to reach production. Kept as display-metric-only; no stored data mutated.
+NOTE (by-design edge): slicing a PAST completed month partially (e.g. Aug 1–10 only) still shows the full ₹75k across those days — consistent with the "a month sums to its bill" preference; only the current/incomplete month was in scope for the fix.

@@ -23,8 +23,8 @@ export default function DrillDownBubble({ tip }) {
   const pretty = (dates || []).map((d) => {
     try {
       const dt = new Date(d + "T00:00:00");
-      return dt.toLocaleDateString(undefined,
-        { day: "2-digit", month: "short", weekday: "short" });
+      return dt.toLocaleDateString("en-GB",
+        { weekday: "short", day: "2-digit", month: "2-digit", year: "2-digit" });
     } catch { return d; }
   });
   return (

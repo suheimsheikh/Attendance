@@ -78,8 +78,8 @@ function renderDetail(d) {
 
 function prettyDate(iso) {
   try {
-    return new Date(iso + "T00:00:00").toLocaleDateString(undefined,
-      { day: "2-digit", month: "short", year: "numeric" });
+    return new Date(iso + "T00:00:00").toLocaleDateString("en-GB",
+      { day: "2-digit", month: "2-digit", year: "2-digit" });
   } catch { return iso; }
 }
 

@@ -905,7 +905,7 @@ export default function MealEntryTab({ liveSig }) {
             </div>
             <ul className="space-y-0.5">
               {dayFlags.map((f, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-[12px]" data-testid={`entry-flag-${f.code}`}>
+                <li key={`${f.code}-${i}`} className="flex items-start gap-1.5 text-[12px]" data-testid={`entry-flag-${f.code}-${i}`}>
                   <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${f.severity === "high" ? "bg-rose-500" : "bg-amber-500"}`} />
                   <span className={f.severity === "high" ? "text-rose-800 font-semibold" : "text-amber-800"}>{f.message}</span>
                 </li>

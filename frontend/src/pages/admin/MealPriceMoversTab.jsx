@@ -143,9 +143,9 @@ export default function MealPriceMoversTab({ liveSig }) {
 
       {loading ? (
         <div className="text-center py-16"><Loader2 className="animate-spin inline text-slate-400" /></div>
-      ) : !data || known.length === 0 ? (
+      ) : !data || (data.movers || []).length === 0 ? (
         <div className="iu-card p-10 text-center text-slate-400" data-testid="pm-empty">
-          No items were purchased in both windows to compare. Try a wider window or a different end date.
+          No items were purchased in this window. Try a wider window or a different end date.
         </div>
       ) : (
         <>

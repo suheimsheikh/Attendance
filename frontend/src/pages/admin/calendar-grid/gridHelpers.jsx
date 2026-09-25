@@ -117,7 +117,7 @@ export function GridTimeCell({ code, time, dow, onClick, meta, iso, half, half_k
 function fmtDateShort(iso) {
   if (!iso) return "";
   try {
-    return new Date(iso).toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
+    return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 }
 

@@ -355,7 +355,7 @@ function formatVisitDate(iso) {
     if (days === 0) return "Today";
     if (days === 1) return "Yesterday";
     if (days < 7) return `${days}d ago`;
-    return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
   } catch { return iso; }
 }
 
