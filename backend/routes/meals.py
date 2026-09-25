@@ -37,7 +37,7 @@ from pymongo.errors import DuplicateKeyError
 
 from services.time_utils import local_date_str, local_now, now_utc, office_tz
 from services.photo import member_photo_url
-from services.permissions import is_ex_member
+from services.permissions import is_ex_member, is_super_admin
 from services.scope import scoped_user_query as _scoped_user_query_shared
 from services.nutrition_seed import lookup as _nutri_lookup, qty_to_grams as _qty_to_grams
 from config import MAX_USERS
@@ -409,6 +409,19 @@ def _kitchen_cat_pct(cat_agg: dict, cat_label: dict) -> list:
     return rows
 
 
+class OverheadIn(BaseModel):
+    """Monthly kitchen overhead entry — staff wage bill (+ optional
+    incidentals). Folded into cost-per-meal, apportioned equally per day."""
+    staff_wages: float = Field(ge=0)
+    incidentals: float = Field(default=0, ge=0)
+    note: Optional[str] = None
+
+
+class OverheadBackfillIn(BaseModel):
+    default_wages: float = Field(default=75000, ge=0)
+    overwrite: bool = False
+
+
 def make_router(db, require_admin, get_current_user, require_chef_or_admin=None) -> APIRouter:
     router = APIRouter(prefix="/api")
     # Fallback so tests that don't pass the chef dep still work — treat
@@ -416,6 +429,106 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
     # server.py. Added 4 Feb 2026 with the Roles master.
     if require_chef_or_admin is None:
         require_chef_or_admin = require_admin
+
+    async def _require_super_admin(user: dict = Depends(require_admin)):
+        if not is_super_admin(user):
+            raise HTTPException(status_code=403, detail="Super Admin privileges required")
+        return user
+
+    def _valid_month(m: str) -> str:
+        import re as _re
+        if not _re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", m or ""):
+            raise HTTPException(status_code=400, detail="month must be YYYY-MM (e.g. 2026-09)")
+        return m
+
+    def _days_in_month(mk: str) -> int:
+        import calendar as _cal
+        return _cal.monthrange(int(mk[:4]), int(mk[5:7]))[1]
+
+    async def _overhead_daily_map(s: str, e: str) -> dict:
+        """{iso_date: apportioned_overhead_₹} for [s,e]. Each month's total
+        (wages + incidentals) is spread EQUALLY across that month's days,
+        so any date range — daily, weekly, custom — gets a fair share."""
+        docs = await db.meal_overheads.find(
+            {"month": {"$gte": s[:7], "$lte": e[:7]}}, {"_id": 0},
+        ).to_list(400)
+        tot_by_month = {
+            d["month"]: float(d.get("staff_wages") or 0) + float(d.get("incidentals") or 0)
+            for d in docs
+        }
+        out: dict = {}
+        cur, e_d = date.fromisoformat(s), date.fromisoformat(e)
+        while cur <= e_d:
+            mk = cur.isoformat()[:7]
+            total = tot_by_month.get(mk, 0.0)
+            out[cur.isoformat()] = (total / _days_in_month(mk)) if total else 0.0
+            cur += timedelta(days=1)
+        return out
+
+    def _overhead_total_row(d: dict) -> dict:
+        d = {**d}
+        d["total"] = round(float(d.get("staff_wages") or 0) + float(d.get("incidentals") or 0), 2)
+        return d
+
+    @router.get("/meals/overheads")
+    async def list_overheads(user: dict = Depends(require_chef_or_admin)):
+        """All monthly kitchen-overhead entries (view: chef/admin).
+        `can_edit` is True only for Super Admins."""
+        docs = await db.meal_overheads.find({}, {"_id": 0}).sort("month", -1).to_list(400)
+        return {"overheads": [_overhead_total_row(d) for d in docs],
+                "can_edit": is_super_admin(user)}
+
+    @router.get("/meals/overheads/{month}")
+    async def get_overhead(month: str, user: dict = Depends(require_chef_or_admin)):
+        _valid_month(month)
+        d = await db.meal_overheads.find_one({"month": month}, {"_id": 0})
+        if not d:
+            return {"month": month, "staff_wages": 0, "incidentals": 0,
+                    "note": None, "total": 0, "can_edit": is_super_admin(user)}
+        d = _overhead_total_row(d)
+        d["can_edit"] = is_super_admin(user)
+        return d
+
+    @router.put("/meals/overheads/{month}")
+    async def upsert_overhead(month: str, body: OverheadIn,
+                              user: dict = Depends(_require_super_admin)):
+        _valid_month(month)
+        doc = {
+            "month": month,
+            "staff_wages": round(body.staff_wages, 2),
+            "incidentals": round(body.incidentals, 2),
+            "note": (body.note or None),
+            "updated_by": user.get("full_name") or user.get("id"),
+            "updated_at": now_utc().isoformat(),
+        }
+        await db.meal_overheads.update_one({"month": month}, {"$set": doc}, upsert=True)
+        return _overhead_total_row(doc)
+
+    @router.post("/meals/overheads/backfill")
+    async def backfill_overheads(body: OverheadBackfillIn,
+                                 user: dict = Depends(_require_super_admin)):
+        """Seed a default monthly wage bill for every month that already has
+        meal data but no overhead entry. Idempotent — skips months that
+        already have a value unless `overwrite` is set."""
+        month_dates = await db.meal_records.distinct("date")
+        months = sorted({d[:7] for d in month_dates if d})
+        filled: list = []
+        for mk in months:
+            exists = await db.meal_overheads.find_one({"month": mk}, {"_id": 0, "month": 1})
+            if exists and not body.overwrite:
+                continue
+            doc = {
+                "month": mk,
+                "staff_wages": round(body.default_wages, 2),
+                "incidentals": 0.0,
+                "note": "Backfilled default wage bill",
+                "updated_by": user.get("full_name") or user.get("id"),
+                "updated_at": now_utc().isoformat(),
+            }
+            await db.meal_overheads.update_one({"month": mk}, {"$set": doc}, upsert=True)
+            filled.append(mk)
+        return {"filled_months": filled, "default_wages": body.default_wages,
+                "considered_months": months}
 
     # Exposed so the presence router (Feb 2026) can broadcast row-focus
     # events on the same SSE channel without depending on meals.py's
@@ -3833,6 +3946,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             return {**g, "total": sum(g.values())}
 
         days_out = []
+        overhead_map = await _overhead_daily_map(s, e)
+        overhead_total = 0.0
         tot_grp = {"athletes": {k: 0 for k in MEAL_KEYS},
                    "staff":    {k: 0 for k in MEAL_KEYS}}
         tot_purch = {k: 0.0 for k in cat_keys}
@@ -3842,6 +3957,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             a, st = _grp(iso, "athletes"), _grp(iso, "staff")
             amounts = purch_by_date.get(iso, {})
             day_expense = round(sum(float(v or 0) for v in amounts.values()), 2)
+            day_overhead = round(overhead_map.get(iso, 0.0), 2)
+            overhead_total += day_overhead
             days_out.append({
                 "date": iso,
                 "athletes": a,
@@ -3849,6 +3966,9 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "meal_count": a["total"] + st["total"],
                 "purchases": {k: amounts.get(k) for k in cat_keys if amounts.get(k)},
                 "expense_total": day_expense,
+                # Apportioned kitchen wage bill for the day + fully-loaded total.
+                "overhead": day_overhead,
+                "total_expense": round(day_expense + day_overhead, 2),
             })
             for k in MEAL_KEYS:
                 tot_grp["athletes"][k] += a[k]
@@ -3862,6 +3982,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         tot_s = sum(tot_grp["staff"].values())
         total_meals = tot_a + tot_s
         total_expenses = round(sum(tot_purch.values()), 2)
+        overhead_total = round(overhead_total, 2)
+        expenses_with_overhead = round(total_expenses + overhead_total, 2)
 
         # Item-wise breakdown (Feb 2026 user request) — piggy-backs on
         # the same date-range so the accountant can drill from category
@@ -3957,6 +4079,15 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 "purchases": {k: round(v, 2) for k, v in tot_purch.items()},
                 "expenses": total_expenses,
                 "avg_cost_per_meal": round(total_expenses / total_meals, 2) if total_meals else None,
+                # Kitchen wage-bill overhead apportioned into this range, and
+                # the fully-loaded cost per meal (food + overhead). The
+                # existing `avg_cost_per_meal` stays FOOD-ONLY for backward
+                # compatibility; new fields carry the loaded figures.
+                "overhead_total": overhead_total,
+                "expenses_with_overhead": expenses_with_overhead,
+                "food_cost_per_meal": round(total_expenses / total_meals, 2) if total_meals else None,
+                "overhead_cost_per_meal": round(overhead_total / total_meals, 2) if total_meals else None,
+                "total_cost_per_meal": round(expenses_with_overhead / total_meals, 2) if total_meals else None,
             },
         }
 

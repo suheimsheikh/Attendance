@@ -21,6 +21,16 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 25 Sep 2026 — Kitchen Overheads → fully-loaded cost/meal
+- Need: enter monthly kitchen staff wage bill (+ optional incidentals) so cost-per-meal is fully loaded, not food-only. User choices: monthly lump-sum wage bill; incidentals mostly already flow through purchases (Gas/Cleaning are purchase categories); apportion EQUALLY per day across the month; blended across all meals; Super-Admin-only edit; backfill ₹75,000/month.
+- Backend (`routes/meals.py`): new `meal_overheads` collection `{month, staff_wages, incidentals, note, updated_by, updated_at}`. Endpoints: `GET /meals/overheads` (list, chef/admin view + `can_edit`), `GET /meals/overheads/{month}`, `PUT /meals/overheads/{month}` (Super-Admin), `POST /meals/overheads/backfill` (Super-Admin, idempotent, default_wages 75000, fills months present in meal_records lacking an entry). Super-admin gate via `is_super_admin` + require_admin.
+- `meal_expense_report` now apportions each month's overhead equally per day (`_overhead_daily_map`), adds per-day `overhead`/`total_expense`, and totals: `overhead_total`, `expenses_with_overhead`, `food_cost_per_meal`, `overhead_cost_per_meal`, `total_cost_per_meal` (fully-loaded). Existing `avg_cost_per_meal` kept FOOD-ONLY for backward compat.
+- Frontend (`MealExpensesTab.jsx`): Super-Admin `OverheadEditor` card (wage bill + incidentals + Save + "Backfill ₹75,000 to all months"); read-only line for non-super. Summary cards now show Food Expenses, Kitchen Wage Bill (apportioned), Food Cost/Meal, and Fully-loaded Cost/Meal. CSV + print header updated with loaded figures.
+- Verified: backend curl (Sep 2026 → food ₹137,565.65 + overhead ₹75,000 → fully-loaded ₹187.78/meal; food ₹121.52; overhead ₹66.25); super-admin gate (admin OK, non-super rejected); UI screenshot shows editor + all 5 cards. PREVIEW SEEDED via backfill (2026-08, 2026-09 @ ₹75,000). Frontend compiles clean.
+- PROD seeding: super admin clicks "Backfill ₹75,000 to all months" in production after deploy (I can't reach the prod DB from preview). ⚠️ Needs REDEPLOY.
+
+
+
 ### 22 Sep 2026 — External roster API (Athlete Health Dashboard)
 - Added a server-to-server bearer-token path to `GET /api/members` for an external "Athlete Health Dashboard" to pull the roster + parent/guardian phones nightly. Reuses the codebase's existing external-key convention (hmac.compare_digest), NOT a new auth system.
 - New env `MEMBERS_API_TOKEN` (backend/.env). New helpers `valid_members_api_token`, `_bearer_from_header`, `_last10_digits`. Branch sits ABOVE the JWT check (the same Authorization header would otherwise be parsed as a failing JWT), below the `?key=` payroll branch.

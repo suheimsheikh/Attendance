@@ -5,7 +5,7 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Download, Printer, IndianRupee, Utensils, Divide } from "lucide-react";
+import { Loader2, Download, Printer, IndianRupee, Utensils, Divide, Wallet, Save } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { fmtQty as uQty } from "../../utils";
 
@@ -37,12 +37,14 @@ const ddmy = (iso) => {
 
 function SummaryCards({ totals }) {
   const cards = [
-    { id: "expenses", label: "Total Expenses", value: `₹${inr(totals?.expenses || 0)}`, icon: IndianRupee, tint: "bg-emerald-50 text-emerald-700" },
+    { id: "expenses", label: "Food Expenses", value: `₹${inr(totals?.expenses || 0)}`, icon: IndianRupee, tint: "bg-emerald-50 text-emerald-700" },
+    { id: "overhead", label: "Kitchen Wage Bill (apportioned)", value: `₹${inr(totals?.overhead_total || 0)}`, icon: Wallet, tint: "bg-violet-50 text-violet-700" },
     { id: "meals", label: "Total Meals Count", value: inr(totals?.meal_count || 0), icon: Utensils, tint: "bg-sky-50 text-sky-700" },
-    { id: "avg", label: "Avg. Cost per Meal", value: totals?.avg_cost_per_meal != null ? `₹${inr(totals.avg_cost_per_meal)}` : "—", icon: Divide, tint: "bg-amber-50 text-amber-700" },
+    { id: "avg", label: "Food Cost / Meal", value: totals?.food_cost_per_meal != null ? `₹${inr(totals.food_cost_per_meal)}` : "—", icon: Divide, tint: "bg-amber-50 text-amber-700" },
+    { id: "loaded", label: "Fully-loaded Cost / Meal", value: totals?.total_cost_per_meal != null ? `₹${inr(totals.total_cost_per_meal)}` : "—", icon: Divide, tint: "bg-rose-50 text-rose-700" },
   ];
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4" data-testid="meal-expense-summary">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4" data-testid="meal-expense-summary">
       {cards.map((c) => (
         <div key={c.id} className="iu-card p-4 flex items-center gap-3" data-testid={`meal-expense-card-${c.id}`}>
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${c.tint}`}>
@@ -54,6 +56,94 @@ function SummaryCards({ totals }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function OverheadEditor({ month, onSaved }) {
+  const [row, setRow] = useState(null);
+  const [wages, setWages] = useState("");
+  const [incidentals, setIncidentals] = useState("");
+  const [saving, setSaving] = useState(false);
+  const monthLabel = React.useMemo(() => {
+    if (!/^\d{4}-\d{2}$/.test(month || "")) return month;
+    return new Date(`${month}-01T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  }, [month]);
+
+  useEffect(() => {
+    if (!month) return;
+    api.get(`/meals/overheads/${month}`)
+      .then((d) => { setRow(d); setWages(String(d.staff_wages || 0)); setIncidentals(String(d.incidentals || 0)); })
+      .catch(() => setRow(null));
+  }, [month]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/meals/overheads/${month}`, {
+        staff_wages: Number(wages) || 0,
+        incidentals: Number(incidentals) || 0,
+      });
+      onSaved && onSaved();
+      const d = await api.get(`/meals/overheads/${month}`);
+      setRow(d);
+    } catch (err) { showApiError(err, "Couldn't save the wage bill"); }
+    finally { setSaving(false); }
+  };
+
+  const backfill = async () => {
+    if (!window.confirm("Set ₹75,000 as the wage bill for every month that has meal data but no entry yet? Existing entries are kept.")) return;
+    setSaving(true);
+    try {
+      const r = await api.post(`/meals/overheads/backfill`, { default_wages: 75000 });
+      onSaved && onSaved();
+      const d = await api.get(`/meals/overheads/${month}`);
+      setRow(d);
+      window.alert(`Seeded ${r.filled_months.length} month(s): ${r.filled_months.join(", ") || "none (all present)"}`);
+    } catch (err) { showApiError(err, "Backfill failed"); }
+    finally { setSaving(false); }
+  };
+
+  if (!row) return null;
+  if (!row.can_edit) {
+    return (
+      <div className="iu-card p-3 mb-4 flex items-center gap-2 text-sm" data-testid="meal-overhead-readonly">
+        <Wallet size={16} className="text-violet-600" />
+        <span className="text-slate-600">Kitchen wage bill for <b>{monthLabel}</b>:</span>
+        <span className="font-extrabold tabular-nums">₹{inr(row.total || 0)}</span>
+        <span className="text-[11px] text-slate-400 ml-1">(Super Admin edits this)</span>
+      </div>
+    );
+  }
+  return (
+    <div className="iu-card p-4 mb-4" data-testid="meal-overhead-editor">
+      <div className="flex items-center gap-2 mb-3">
+        <Wallet size={16} className="text-violet-600" />
+        <h3 className="font-extrabold text-sm">Kitchen Overheads — {monthLabel}</h3>
+        <span className="text-[11px] text-slate-400">Wage bill is spread equally per day and blended into cost/meal</span>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="text-xs font-semibold text-slate-500 block mb-0.5">Staff wage bill (₹/month)</label>
+          <input type="number" min="0" value={wages} onChange={(e) => setWages(e.target.value)}
+                 className="iu-input !h-9 !w-44 text-sm" data-testid="meal-overhead-wages" />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-slate-500 block mb-0.5">Incidentals (₹/month, optional)</label>
+          <input type="number" min="0" value={incidentals} onChange={(e) => setIncidentals(e.target.value)}
+                 className="iu-input !h-9 !w-44 text-sm" data-testid="meal-overhead-incidentals" />
+        </div>
+        <button onClick={save} disabled={saving} className="iu-btn-primary !h-9 !px-4 text-sm" data-testid="meal-overhead-save">
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
+        </button>
+        <button onClick={backfill} disabled={saving} title="Seed ₹75,000 for every month that has meal data but no wage bill yet"
+                className="iu-btn-secondary !h-9 !px-3 text-sm ml-auto" data-testid="meal-overhead-backfill">
+          Backfill ₹75,000 to all months
+        </button>
+      </div>
+      {row.updated_by && (
+        <p className="text-[11px] text-slate-400 mt-2">Last saved by {row.updated_by}</p>
+      )}
     </div>
   );
 }
@@ -232,9 +322,13 @@ export default function MealExpensesTab({ liveSig }) {
       t.expenses || 0,
     ].join(","));
     lines.push("");
-    lines.push(`Total Expenses,${t.expenses || 0}`);
+    lines.push(`Total Food Expenses,${t.expenses || 0}`);
+    lines.push(`Kitchen Wage Bill (apportioned),${t.overhead_total || 0}`);
+    lines.push(`Total Expenses incl. Overhead,${t.expenses_with_overhead ?? ""}`);
     lines.push(`Total Meals Count,${t.meal_count || 0}`);
-    lines.push(`Avg Cost Per Meal,${t.avg_cost_per_meal ?? ""}`);
+    lines.push(`Food Cost Per Meal,${t.food_cost_per_meal ?? ""}`);
+    lines.push(`Overhead Cost Per Meal,${t.overhead_cost_per_meal ?? ""}`);
+    lines.push(`Fully-loaded Cost Per Meal,${t.total_cost_per_meal ?? ""}`);
     if ((trimmed.item_purchases || []).length) {
       lines.push("");
       lines.push("ITEM-WISE PURCHASES");
@@ -321,6 +415,10 @@ export default function MealExpensesTab({ liveSig }) {
         <div className="text-center py-12"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
       ) : !trimmed ? null : (
         <>
+          <OverheadEditor
+            month={start ? start.slice(0, 7) : month}
+            onSaved={() => { if (start && end) api.get(`/meals/expense-report?start=${start}&end=${end}`).then(setData).catch(() => {}); }}
+          />
           <SummaryCards totals={trimmed.totals} />
           <div className="iu-card overflow-auto" data-testid="meal-expense-table">
             <ReportTable data={trimmed} printable={false} />
@@ -354,8 +452,8 @@ export default function MealExpensesTab({ liveSig }) {
           <div className="border-b-2 border-slate-800 pb-2 mb-3">
             <h1 className="text-xl font-extrabold">Meals Expense Report — {ddmy(start)} to {ddmy(end)}</h1>
             <p className="text-xs text-slate-600 mt-0.5">
-              Total expenses ₹{inr(trimmed.totals?.expenses || 0)} · {inr(trimmed.totals?.meal_count || 0)} meals ·
-              Avg ₹{trimmed.totals?.avg_cost_per_meal != null ? inr(trimmed.totals.avg_cost_per_meal) : "—"}/meal ·
+              Food ₹{inr(trimmed.totals?.expenses || 0)} + Wage bill ₹{inr(trimmed.totals?.overhead_total || 0)} · {inr(trimmed.totals?.meal_count || 0)} meals ·
+              Fully-loaded ₹{trimmed.totals?.total_cost_per_meal != null ? inr(trimmed.totals.total_cost_per_meal) : "—"}/meal (food ₹{trimmed.totals?.food_cost_per_meal != null ? inr(trimmed.totals.food_cost_per_meal) : "—"}) ·
               Printed {new Date().toLocaleString()}
             </p>
           </div>
