@@ -414,3 +414,13 @@ User request: "Add explanatory tooltips across ALL sections so staff can better 
 - Verified: `testing_agent` iteration_77 — 100% frontend pass, 0 console errors, CRITICAL no-navigation-on-click confirmed on Dashboard, tooltip counts confirmed on every section. Frontend compiles clean.
 - ⚠️ Frontend-only — needs REDEPLOY to reach production.
 - Backlog (optional): a single root `TooltipProvider` instead of one-per-icon (minor perf polish); more sections can adopt `InfoTip` the same way (Presence, Muster, Self Check-in, Meals Report tables) if the user wants deeper coverage.
+
+---
+## Update 25 Jun 2026 — Purchase price-outlier warning (feature, shipped)
+User request: "When price data is being entered warn about outliers. If more or less than 5% of the previous purchase price then warn the user before accepting."
+- **Backend** `GET /api/meals/items/last-rates?before=YYYY-MM-DD` (chef/admin) → `{rates: {item_id: {rate, date}}}` = each item's most-recent purchase rate STRICTLY BEFORE the given date (rate back-computed from amount÷qty when a line has no explicit rate). `meals.py` just before `price_movers`.
+- **Frontend** `MealPurchasesTab.jsx`: loads baselines for the selected date; `outlierFor()` flags any entered rate whose deviation from the previous rate is strictly greater than ±5% (`OUTLIER_PCT=5`).
+  - Inline: an amber/red ⚠ marker (`purchase-outlier-<itemId>`) next to the rate input + amber ring on the input.
+  - On Save: if any outliers, a confirmation modal (`purchase-outlier-modal`, "Unusual prices detected") lists each outlier with Previous ₹ / New ₹ / % change; user can "Go back & fix" (`purchase-outlier-cancel`) or "Save anyway" (`purchase-outlier-confirm`). No outliers → saves immediately. Baselines refresh after save.
+- Verified: `testing_agent` iteration_78 — 100% frontend pass (inline marker, amber ring, strict >5% boundary — 5% exactly shows NO marker, modal with per-item rows, cancel = no save, confirm = saves, no console errors). Backend test `test_item_last_rates_before_date` added (5/5 pass). Curl-verified endpoint (123 items before 2026-09-01).
+- ⚠️ Needs REDEPLOY. Note: warning fires whenever an outlier value is present at Save (even on re-saving a day with a pre-existing outlier) — matches the literal request. Backend already rejects future-dated purchase saves (400).

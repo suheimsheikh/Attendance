@@ -85,3 +85,19 @@ def test_cost_per_athlete_day_is_3x_cost_per_meal(h):
     per_ath = float(totals.get("cost_per_athlete_day") or 0)
     if per_meal > 0:
         assert abs(per_ath - 3 * per_meal) < 0.5, f"per_ath={per_ath} per_meal={per_meal}"
+
+
+
+def test_item_last_rates_before_date(h):
+    """Powers the purchase price-outlier warning: previous rate per item
+    strictly before a given date."""
+    r = requests.get(f"{API}/meals/items/last-rates", params={"before": "2026-09-01"}, headers=h, timeout=30)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data.get("before") == "2026-09-01"
+    rates = data.get("rates") or {}
+    assert isinstance(rates, dict) and len(rates) > 0, "expected some prior rates"
+    # each entry carries a positive rate and a date strictly before `before`
+    for iid, info in list(rates.items())[:20]:
+        assert float(info["rate"]) > 0, f"non-positive rate for {iid}: {info}"
+        assert info["date"] < "2026-09-01", f"date not before cutoff for {iid}: {info}"

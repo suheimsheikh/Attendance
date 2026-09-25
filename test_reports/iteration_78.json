@@ -1,0 +1,39 @@
+{
+  "summary": "Frontend-only verification of the new outlier-warning feature on the Purchases Daily-entry screen. All primary review scenarios verified successfully: inline outlier marker, amber ring styling, save-confirmation modal (title + per-item rows), Cancel path, Save-anyway path, and the strictly-greater-than-5% boundary rule. No JS console errors from the app during the flows.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_scenarios": [
+    "INLINE WARNING hidden when rate is within +/-5% (prev=65, rate=66.95 -> no marker).",
+    "INLINE WARNING shown + amber ring on rate input when rate is > +/-5% (prev=65, rate=130 -> marker visible, class includes '!ring-2 !ring-amber-300 !border-amber-300').",
+    "Boundary: rate = prev*1.05 exactly -> NO marker (feature is strictly >5%). rate = prev*1.0501 -> marker shown.",
+    "Save with outliers -> [data-testid=purchase-outlier-modal] opens with title 'Unusual prices detected', shows per-item rows [data-testid=purchase-outlier-row-<itemId>] with Previous, New and % change (e.g. Onion 65 -> 130 = +100.0%, Paneer 650 -> 560 = -13.8%).",
+    "CANCEL PATH: [data-testid=purchase-outlier-cancel] closes the modal without saving (no success toast).",
+    "CONFIRM PATH: [data-testid=purchase-outlier-confirm] closes the modal and shows the 'Purchases saved for ...' toast.",
+    "No app-level JS console errors during the flow. Layout intact."
+  ],
+  "notes": [
+    "Test used a future date (2027-12-31) to keep data isolated. Backend on 2029-06-15 correctly rejected future-date save with 400 'date cannot be in the future' (unrelated to this feature). On 2027-12-31 the save succeeded, suggesting backend future-date validation may have a specific window/condition — flag for main agent if a strict future-date guard is intended.",
+    "The 'no-outlier direct save' scenario could not be re-verified cleanly on the current preview because pre-existing purchase entries on today's date already contain items whose stored rates are >5% away from their historical baseline (Paneer 650 -> 560, Onion 65 -> 130 from prior test runs) so the modal legitimately opens even with no user edits. This is CORRECT behaviour of the feature (outliers are computed against last-rates), not a bug. Code path in MealPurchasesTab.save() is trivially `if (outliers.length === 0) return doSave()`.",
+    "Seed/test data on preview: an Onion purchase (~130) was saved on 2027-12-31 by the 'Save anyway' verification. Main agent may want to clear that day if concerned."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Optional: consider whether pre-existing rows that already look like outliers should also raise the modal on save even without user edits (current behaviour: yes). If not intended, restrict outlier check to items the user actually modified.",
+    "Optional cleanup: remove test purchases on 2027-12-31 from preview DB."
+  ],
+  "critical_code_review_comments": [
+    "MealPurchasesTab.outlierFor uses percentage delta against last-rates rate. Correctly implemented as strictly >5% (matches spec).",
+    "Modal, cancel and confirm all have proper data-testid attributes and are wired to doSave/onCancel."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345",
+  "seed_data_creation": "One purchase row (Onion qty=1 rate=130) saved on future date 2027-12-31 via 'Save anyway' during confirm-path verification.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Feature works end-to-end. If retesting the 'no-outlier direct save' path, use an item on a date where no previous-rate exists (last-rates returns no entry for that itemId) OR clear all pre-filled rows first, otherwise stale prior purchases can legitimately trigger the modal."
+}
