@@ -135,7 +135,7 @@ export function ItemDetailPanel({ itemId, onClose }) {
                 </tr>
               </thead>
               <tbody>
-                {data.events.map((ev, i) => {
+                {data.events.filter(Boolean).map((ev, i) => {
                   const m = TYPE_META[ev.type] || FALLBACK_META;
                   return (
                     <tr key={i} className="border-t border-slate-100">
