@@ -250,8 +250,8 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso}
-                    className={`text-center h-6 w-6 border-b border-r border-slate-200 tabular-nums font-bold ${h.isWeekend ? "bg-slate-100 text-slate-400" : "bg-slate-50 text-slate-700"} ${h.isToday ? "!bg-sky-100 !text-sky-800" : ""}`}
-                    title={`${h.dow} · ${h.iso}`}
+                    className={`text-center h-6 w-6 border-b border-r border-slate-200 tabular-nums font-bold ${h.isWeekend ? "bg-slate-100 text-slate-400" : "bg-slate-50 text-slate-700"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9,inset_0_2px_0_#0ea5e9]" : ""}`}
+                    title={`${h.dow} · ${h.iso}${h.isToday ? " · Today" : ""}`}
                     data-testid={`cal-header-${h.iso}`}
                   >
                     {h.day}
@@ -276,7 +276,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso + "-dow"}
-                    className={`text-center h-4 border-b border-r border-slate-200 text-[9px] uppercase font-semibold ${h.isWeekend ? "bg-slate-100 text-slate-400" : "bg-slate-50 text-slate-500"}`}
+                    className={`text-center h-4 border-b border-r border-slate-200 text-[9px] uppercase font-semibold ${h.isWeekend ? "bg-slate-100 text-slate-400" : "bg-slate-50 text-slate-500"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9]" : ""}`}
                   >
                     {h.dow.slice(0, 2)}
                   </th>
@@ -356,7 +356,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                         entityId: meta?.leave_id,
                       })
                     : undefined;
-                  return { code, iso, meta, onClick, dow: dayHeaders[idx]?.dow };
+                  return { code, iso, meta, onClick, dow: dayHeaders[idx]?.dow, isToday: dayHeaders[idx]?.isToday };
                 });
                 const isAttnCode = (c) => c === "P" || c === "HD" || c === "LT";
 
@@ -406,6 +406,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                               onClick={c.onClick}
                               half="in"
                               half_kind="in"
+                              isToday={c.isToday}
                             />
                           );
                         }
@@ -421,6 +422,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                             meta={c.meta}
                             onClick={c.onClick}
                             rowSpan={isDouble ? 2 : undefined}
+                            isToday={c.isToday}
                           />
                         );
                       })}
@@ -441,6 +443,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                                 onClick={c.onClick}
                                 half="out"
                                 half_kind="out"
+                                isToday={c.isToday}
                               />
                             );
                           }

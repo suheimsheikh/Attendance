@@ -7,6 +7,13 @@
  */
 import React from "react";
 
+// Vertical "Today" column outline. Applied to every cell in today's
+// column (header + body) via inset box-shadows on the left & right
+// edges so the whole column reads as one highlighted strip without
+// disturbing the grid's row/column alignment (borders would). sky-500
+// = #0ea5e9. Added 25 Jun 2026 per user request.
+export const TODAY_COL = "shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9]";
+
 // Cell colour + label registry. Each entry maps a status code to
 // tailwind bg + text classes and the display label (2-letter code).
 export const CELL_STYLE = {
@@ -43,9 +50,10 @@ export const CELL_STYLE = {
  * BK cells, check-in / late-minutes for LT/P/HD, leave reason + range
  * for LV/TR/CO/PS. Kept as a native `title` (no JS popover library) so
  * the whole 31-day grid stays fast when hovering across 100 rows. */
-export function GridCell({ code, dow, onClick, meta, iso, rowSpan }) {
+export function GridCell({ code, dow, onClick, meta, iso, rowSpan, isToday }) {
+  const todayCls = isToday ? ` ${TODAY_COL}` : "";
   if (!code) {
-    return <td rowSpan={rowSpan} className="border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-6">·</td>;
+    return <td rowSpan={rowSpan} className={`border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-6${isToday ? ` bg-sky-50 ${TODAY_COL}` : ""}`}>·</td>;
   }
   const s = CELL_STYLE[code] || CELL_STYLE.AB;
   const clickable = !!onClick;
@@ -53,7 +61,7 @@ export function GridCell({ code, dow, onClick, meta, iso, rowSpan }) {
   return (
     <td
       rowSpan={rowSpan}
-      className={`border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-6 leading-none ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
+      className={`border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-6 leading-none${todayCls} ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
       title={title}
       onClick={onClick}
     >
@@ -96,14 +104,15 @@ function deriveWorked(cin, cout, storedHours) {
  * scannable at a glance, but the label is the HH:MM check-in or
  * check-out time instead of the 2-letter code. Falls back to a dash
  * when the timestamp is missing (open session / no out yet). */
-export function GridTimeCell({ code, time, dow, onClick, meta, iso, half, half_kind }) {
+export function GridTimeCell({ code, time, dow, onClick, meta, iso, half, half_kind, isToday }) {
   const s = CELL_STYLE[code] || CELL_STYLE.AB;
   const clickable = !!onClick;
   const title = buildCellTooltip({ code, dow, meta, iso, clickable });
   const label = time ? fmtHM(time) : "—";
+  const todayCls = isToday ? ` ${TODAY_COL}` : "";
   return (
     <td
-      className={`border border-white text-center text-[9px] font-semibold tabular-nums ${s.bg} ${s.text} h-6 w-9 leading-none px-0.5 ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
+      className={`border border-white text-center text-[9px] font-semibold tabular-nums ${s.bg} ${s.text} h-6 w-9 leading-none px-0.5${todayCls} ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
       title={title}
       onClick={onClick}
       data-testid={`grid-time-${half_kind || "cell"}-${iso}`}
