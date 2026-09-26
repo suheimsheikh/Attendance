@@ -2589,6 +2589,53 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         ).sort("date", 1).to_list(400)
         return {"start": s, "end": e, "issues": rows}
 
+    async def _assert_issue_stock(d: str, lines: list) -> None:
+        """Hard stock guard (Jun 2026, user request): reject issuing more
+        of any item than is on hand as of date `d`. Available =
+        opening + Σpurchases − Σ(other issues) − Σwastage + Σadjustments
+        up to `d`; the day's already-saved issue for the item is added
+        back since this save replaces it. Items with no recorded stock
+        resolve to 0 and are blocked too — the error says where to fix it.
+        """
+        wanted: dict = {}
+        for ln in lines:
+            iid = str(ln.get("item_id") or "").strip()
+            q = _parse_amount(ln.get("qty"))
+            if iid and q and q > 0:
+                wanted[iid] = wanted.get(iid, 0.0) + float(q)
+        if not wanted:
+            return
+        snap_rows, _ = await _stock_snapshot(d, include_inactive=True)
+        on_hand = {r["item_id"]: r["on_hand"] for r in snap_rows}
+        unit_by = {r["item_id"]: (r.get("unit") or "") for r in snap_rows}
+        name_by = {r["item_id"]: r.get("name") for r in snap_rows}
+        existing = await db.meal_issues.find_one({"date": d}, {"_id": 0, "lines": 1})
+        prior: dict = {}
+        for ln in (existing or {}).get("lines") or []:
+            iid = ln.get("item_id")
+            if iid:
+                prior[iid] = prior.get(iid, 0.0) + float(ln.get("qty") or 0)
+        EPS = 1e-4
+        shortages = []
+        for iid, want in wanted.items():
+            avail = round(on_hand.get(iid, 0.0) + prior.get(iid, 0.0), 4)
+            if want - avail > EPS:
+                nm = name_by.get(iid) or "item"
+                u = unit_by.get(iid) or ""
+                shortages.append(
+                    f"{nm} (need {round(want, 3)}{u}, only {round(max(avail, 0.0), 3)}{u} in stock)"
+                )
+        if shortages:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Not enough stock to issue: " + "; ".join(shortages)
+                    + ". Enter opening stock in Purchases & Issues → Stock Master "
+                    "(edit the item → Opening stock), or record a purchase in "
+                    "Purchases & Issues → Daily entry, before issuing."
+                ),
+            )
+
     @router.put("/meals/issues/{date_str}")
     async def upsert_issues(
         date_str: str, body: IssuesUpsertIn,
@@ -2625,6 +2672,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "updated_by": user.get("id"),
             "updated_by_name": user.get("full_name") or user.get("email"),
         }
+        await _assert_issue_stock(d, clean)
         await db.meal_issues.update_one(
             {"date": d},
             {"$set": {"date": d, "lines": clean, **stamp},
@@ -2648,6 +2696,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             {"id": {"$in": item_ids}}, {"_id": 0},
         ).to_list(len(item_ids) or 1)
         by_id = {i["id"]: i for i in items}
+        await _assert_issue_stock(d, list(body.upserts))
         await db.meal_issues.update_one(
             {"date": d},
             {"$setOnInsert": {"id": str(uuid.uuid4()), "date": d, "lines": []}},
