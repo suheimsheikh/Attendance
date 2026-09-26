@@ -34,63 +34,63 @@ export default function GridRowTotals({
     <>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[278px] ${base} !border-l-2 !border-slate-300 text-rose-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        className={`static md:sticky md:right-[278px] ${base} !border-l-2 !border-slate-300 text-rose-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-dar-${memberId}`}
         title={t.dar_missed ? `${t.dar_missed} missed DAR${t.dar_missed === 1 ? "" : "s"} · Double-click to open the DAR report` : "No missed DARs"}
         onDoubleClick={onOpenDar}
       >{t.dar_missed ? `✗${t.dar_missed}` : ""}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[244px] ${base} text-emerald-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        className={`static md:sticky md:right-[244px] ${base} text-emerald-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-p-${memberId}`}
         title={`Present · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
       >{t.present || ""}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[210px] ${base} text-red-600 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        className={`static md:sticky md:right-[210px] ${base} text-red-600 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-ab-${memberId}`}
         title={`Absent · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
       >{t.absent || ""}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[176px] ${base} text-pink-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        className={`static md:sticky md:right-[176px] ${base} text-pink-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-lop-${memberId}`}
         title={t.lop ? `${t.lop} loss-of-pay day${t.lop === 1 ? "" : "s"} (leave beyond paid balance) · ${attnTitle}` : `Loss of pay · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
       >{t.lop || ""}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[142px] ${base} text-amber-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        className={`static md:sticky md:right-[142px] ${base} text-amber-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-lv-${memberId}`}
         title={`Leave + Comp-off · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
       >{t.leave || ""}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[108px] ${base} text-orange-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        className={`static md:sticky md:right-[108px] ${base} text-orange-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-tr-${memberId}`}
         title={`Tour · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
       >{t.tour || ""}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[68px] ${base} text-violet-800 ${rowBg} w-[40px] min-w-[40px] max-w-[40px]`}
+        className={`static md:sticky md:right-[68px] ${base} text-violet-800 ${rowBg} w-[40px] min-w-[40px] max-w-[40px]`}
         data-testid={`cal-total-ot-${memberId}`}
         title={`OT hours · ${otTitle}`}
         onDoubleClick={onOpenOt}
       >{fmtOt(t.ot_minutes)}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-[34px] ${base} text-rose-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        className={`static md:sticky md:right-[34px] ${base} text-rose-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-eo-${memberId}`}
         title={`Early-out days · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
       >{t.early_out || ""}</td>
       <td
         rowSpan={rowSpan}
-        className={`sticky right-0 ${base} text-orange-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        className={`static md:sticky md:right-0 ${base} text-orange-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-lt-${memberId}`}
         title={`Late days · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
