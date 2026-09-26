@@ -20,11 +20,12 @@ Entry point: **`pages/admin/MealsReport.jsx`** (route `/admin/meals-report`). It
 | `crosscheck` | `MealCrossCheckTab.jsx` | expected vs actual (uses `norm_per_serving`) |
 | analytics/price-movers/compare | `KitchenAnalyticsTab.jsx`, `MealPriceMoversTab.jsx`, `MealCompareTab.jsx` | nested tabs, not sidebar |
 
-### `MealEntryTab.jsx` (orchestrator, ~1350 lines) + `pages/admin/meal-entry/`
+### `MealEntryTab.jsx` (orchestrator, ~1140 lines) + `pages/admin/meal-entry/`
 - `helpers.js` — `todayISO`, `addDays`, `num`, `inr`
-- `RowVendorPicker.jsx` — per-row supplier `<select>` + scorecard button
+- `RowVendorPicker.jsx` — per-row supplier `<select>` + scorecard button (used inside EntryItemRow)
 - `AddVendorInlineModal.jsx` — "＋ Add new vendor…" dialog
 - `DailyTotalsHistoryModal.jsx` — date-wise drill-down (dbl-click a totals card), print/PDF
+- `EntryItemRow.jsx` — one item row, split into four internal cell-groups: `LeadCells` (name/unit/on-hand), `PurchaseCells` (supplier/qty/rate/amt), `IssueCells` (qty/rate/amt), `WastageCells` (qty/reason+note/amt). All share one `ctx` bundle passed from the parent (setters, refs, data, focus helpers).
 
 ### `MealMastersTab.jsx` (orchestrator, ~650 lines) + `pages/admin/meal-masters/`
 - `helpers.js` — `fmt`, `fmtRs`, `UNIT_OPTIONS`, `COL_GRID` (shared column-width grid)
