@@ -5,7 +5,7 @@ import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert, Gauge, ChefHat, PencilRuler, ChevronDown, ChevronRight, Utensils, CalendarRange, FileText, ListTodo, ScrollText
+  ShieldAlert, Gauge, ChefHat, PencilRuler, ChevronDown, ChevronRight, Utensils, CalendarRange, FileText, ListTodo, ScrollText, HeartPulse
 } from "lucide-react";
 import RulesGate from "./RulesGate";
 import Avatar from "./Avatar";
@@ -65,6 +65,8 @@ const NAV_COACH_KITCHEN = [
   { to: "/admin/meals-calendar", label: "Consumption", icon: CalendarRange, hint: "Daily headcount log — Breakfast / Midmorning / Lunch / Afternoon Snack / Dinner totals per day" },
   { to: "/admin/meals-report", label: "Purchases & Issues", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, consumption, wastage and stock" },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
+  { to: "/admin/kitchen-audit", label: "Kitchen Audit Log", icon: ScrollText, hint: "Every change to kitchen data — who changed what and when" },
+  { to: "/admin/kitchen-health", label: "Data Health", icon: HeartPulse, hint: "Items needing attention: negative, untracked or low stock" },
 ];
 
 // ATTENDANCE system — one visually-cohesive group for every
@@ -87,6 +89,8 @@ const NAV_KITCHEN = [
   { to: "/admin/meals-calendar", label: "Consumption", icon: CalendarRange, hint: "Daily headcount log — Breakfast / Midmorning / Lunch / Afternoon Snack / Dinner totals per day" },
   { to: "/admin/meals-report", label: "Purchases & Issues", icon: FileBarChart2, hint: "Kitchen inventory: items, purchases, consumption, wastage and stock" },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
+  { to: "/admin/kitchen-audit", label: "Kitchen Audit Log", icon: ScrollText, hint: "Every change to kitchen data — who changed what and when" },
+  { to: "/admin/kitchen-health", label: "Data Health", icon: HeartPulse, hint: "Items needing attention: negative, untracked or low stock" },
 ];
 
 // SYSTEM section — configuration, diagnostics, and safety nets.

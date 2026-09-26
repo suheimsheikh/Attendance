@@ -4718,7 +4718,7 @@ app.include_router(_dashboard_router(db, require_admin))
 
 # Chef's View (GET /api/admin/meals-today) + Categories master read.
 from routes.meals import make_router as _meals_router  # noqa: E402
-_meals = _meals_router(db, require_admin, get_current_user, require_chef_or_admin)
+_meals = _meals_router(db, require_admin, get_current_user, require_chef_or_admin, write_audit)
 app.include_router(_meals)
 
 # Presence + row-focus (Feb 2026). Reuses the meals SSE channel so

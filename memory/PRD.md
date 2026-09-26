@@ -481,3 +481,10 @@ User request: "When issuing any item from the kitchen it should not allow if the
   3. Big-Qty warning toasts now use a stable `id` (`isswarn-<msg>`) so the debounced auto-save re-toast replaces rather than stacks.
   - Left as noted (NOT low-risk): splitting the 5.5k-line `meals.py` / `_grid_impl`; and the rare back-dated `opening_stock_as_of` over-count edge (changing it risks the common path).
 - Verified: fast unit suite 49/49 pass; `test_meal_muster.py` collects clean; frontend compiles. ⚠️ Needs REDEPLOY.
+
+---
+## Update 26 Jun 2026 — Kitchen Audit Log + Kitchen Data Health (features, shipped)
+- **Kitchen Audit Log** (`/admin/kitchen-audit`, sidebar under Kitchen): reuses the shared `write_audit`→`audit_log` system. Meals router now takes `write_audit` (wired from server.py) and logs `meals.*` actions on the transactional saves: issue save/edit, purchase save/edit, wastage save/edit, stock-take. New `GET /api/meals/audit-log` (chef/admin) returns `meals.*` rows newest-first with since/until/action/actor filters. Frontend `KitchenAuditLog.jsx` = filterable table (When/Type/What/By/Details). NOTE: forward-looking — only captures changes made from now on.
+- **Kitchen Data Health** (`/admin/kitchen-health`, sidebar): new `GET /api/meals/data-health` (chef/admin) computes, as-of-today, items with negative stock, no-stock-untracked (no opening + no purchase → issuing blocked) and low stock. Frontend `MealsDataHealth.jsx` = 3 KPI cards + drill-down lists with fix instructions. Verified live: 25 negative / 15 untracked / 61 low.
+- Files: `backend/routes/meals.py` (_audit helper + 7 hooks + 2 endpoints), `backend/server.py` (pass write_audit), `frontend/src/pages/admin/KitchenAuditLog.jsx` + `MealsDataHealth.jsx` (new), `App.js` (routes), `Layout.jsx` (2 sidebar links, both nav arrays).
+- Verified: backend parses/restarts clean, both endpoints 200, audit row captured on a save (then cleaned up), both pages render via screenshot, frontend compiles. Item-master change auditing (create/rename/deactivate/rate) NOT yet wired — fast follow-up. ⚠️ Needs REDEPLOY.

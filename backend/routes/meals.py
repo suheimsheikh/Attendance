@@ -422,13 +422,30 @@ class OverheadBackfillIn(BaseModel):
     overwrite: bool = False
 
 
-def make_router(db, require_admin, get_current_user, require_chef_or_admin=None) -> APIRouter:
+def make_router(db, require_admin, get_current_user, require_chef_or_admin=None, write_audit=None) -> APIRouter:
     router = APIRouter(prefix="/api")
     # Fallback so tests that don't pass the chef dep still work — treat
     # chef-or-admin as admin-only. Production wires the real dep from
     # server.py. Added 4 Feb 2026 with the Roles master.
     if require_chef_or_admin is None:
         require_chef_or_admin = require_admin
+
+    async def _audit(actor, action, entity_type, entity_id,
+                     entity_name=None, before=None, after=None, meta=None):
+        """Kitchen audit trail (Jun 2026). Best-effort passthrough to the
+        shared write_audit → `audit_log` collection; no-op if not wired
+        (e.g. in unit tests). All kitchen actions are namespaced `meals.*`
+        so the Kitchen Audit Log can query them as one stream."""
+        if not write_audit:
+            return
+        try:
+            await write_audit(
+                db, actor=actor or {}, action=action, entity_type=entity_type,
+                entity_id=str(entity_id), entity_name=entity_name,
+                before=before, after=after, meta=meta,
+            )
+        except Exception:
+            pass
 
     async def _require_super_admin(user: dict = Depends(require_admin)):
         if not is_super_admin(user):
@@ -2722,6 +2739,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             upsert=True,
         )
         await _signal_meals("issues", d)
+        await _audit(user, "meals.issue.save", "meal_issue", d, f"Issues {d}")
         return {"date": d, "lines": clean, "warnings": warns}
 
     @router.patch("/meals/issues/{date_str}")
@@ -2787,6 +2805,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "updated_by_name": user.get("full_name") or user.get("email"),
         }})
         await _signal_meals("issues", d)
+        await _audit(user, "meals.issue.edit", "meal_issue", d, f"Issues {d}")
         doc = await db.meal_issues.find_one({"date": d}, {"_id": 0})
         return {"date": d, "lines": (doc or {}).get("lines") or [], "warnings": warns}
 
@@ -2862,6 +2881,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
              "$setOnInsert": {"id": str(uuid.uuid4())}},
             upsert=True,
         )
+        await _audit(user, "meals.wastage.save", "meal_wastage", d, f"Wastage {d}")
         await _signal_meals("wastage", d)
         return {"date": d, "lines": clean}
 
@@ -2924,6 +2944,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "updated_by": user.get("id"),
             "updated_by_name": user.get("full_name") or user.get("email"),
         }})
+        await _audit(user, "meals.wastage.edit", "meal_wastage", d, f"Wastage {d}")
         await _signal_meals("wastage", d)
         doc = await db.meal_wastage.find_one({"date": d}, {"_id": 0})
         return {"date": d, "lines": (doc or {}).get("lines") or []}
@@ -3585,6 +3606,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         if not (after or {}).get("lines"):
             await db.meal_adjustments.delete_one({"date": d})
         await _signal_meals("adjustments", d)
+        await _audit(user, "meals.stocktake.save", "meal_stocktake", d, f"Stock-take {d}",
+                     meta={"counted": counted, "losses": losses})
         return {"date": d, "counted": counted, "losses": losses,
                 "extras": extras, "unchanged": unchanged, "opening_set": opening_set, "lines": result_lines}
 
@@ -3938,6 +3961,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             upsert=True,
         )
         await _signal_meals("purchases", d)
+        await _audit(user, "meals.purchase.save", "meal_purchase", d, f"Purchases {d}")
         return {"date": d, "amounts": amounts,
                 "total": round(sum(amounts.values()), 2)}
 
@@ -4010,6 +4034,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "updated_by_name": user.get("full_name") or user.get("email"),
         }})
         await _signal_meals("purchases", d)
+        await _audit(user, "meals.purchase.edit", "meal_purchase", d, f"Purchases {d}")
         return {"date": d, "lines": doc.get("lines") or [], "amounts": amounts,
                 "total": round(sum(amounts.values()), 2)}
 
@@ -5518,5 +5543,69 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "skipped_dates": [r["date"] for r in overlap][:60] if not overwrite else [],
             "errors": errors,
         }
+
+    @router.get("/meals/audit-log")
+    async def kitchen_audit_log(
+        since: Optional[str] = None,
+        until: Optional[str] = None,
+        action: Optional[str] = None,
+        actor_id: Optional[str] = None,
+        limit: int = 300,
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Kitchen Audit Log — every change to kitchen/pantry data, newest
+        first. Reads the shared `audit_log` collection filtered to the
+        `meals.*` action namespace."""
+        limit = max(1, min(int(limit or 300), 1000))
+        q: dict = {"action": {"$regex": "^meals\\."}}
+        if action:
+            q["action"] = action
+        if actor_id:
+            q["actor_id"] = actor_id
+        if since:
+            q.setdefault("at", {})["$gte"] = since
+        if until:
+            q.setdefault("at", {})["$lte"] = f"{until}T23:59:59.999999+00:00"
+        rows = await db.audit_log.find(q, {"_id": 0}).sort("at", -1).limit(limit).to_list(limit)
+        return {"rows": rows, "count": len(rows)}
+
+    @router.get("/meals/data-health")
+    async def meals_data_health(user: dict = Depends(require_chef_or_admin)):
+        """Kitchen data-health snapshot: items that will block issuing or
+        look mis-configured, so someone can fix them proactively. Uses the
+        as-of-today stock snapshot + purchase history."""
+        today = local_date_str(None)
+        rows, _ = await _stock_snapshot(today, include_inactive=False)
+        purch = await db.meal_purchases.find({}, {"_id": 0, "lines": 1}).to_list(5000)
+        purchased_ids: set = set()
+        for p in purch:
+            for ln in p.get("lines") or []:
+                if ln.get("item_id") and float(ln.get("qty") or 0) > 0:
+                    purchased_ids.add(ln["item_id"])
+
+        def _slim(r):
+            return {"item_id": r["item_id"], "name": r.get("name"),
+                    "category": r.get("category_label") or r.get("category_key"),
+                    "unit": r.get("unit"), "on_hand": r.get("on_hand")}
+
+        negative = [_slim(r) for r in rows if (r.get("on_hand") or 0) < 0]
+        # Untracked & un-purchased → issuing is blocked until stock is entered.
+        no_stock = [_slim(r) for r in rows
+                    if (r.get("on_hand") or 0) <= 0
+                    and r["item_id"] not in purchased_ids
+                    and not (r.get("opening_stock") or 0)]
+        low = [_slim(r) for r in rows if r.get("low")]
+        return {
+            "as_of": today,
+            "counts": {
+                "negative_stock": len(negative),
+                "no_stock_untracked": len(no_stock),
+                "low_stock": len(low),
+            },
+            "negative_stock": negative,
+            "no_stock_untracked": no_stock,
+            "low_stock": low,
+        }
+
 
     return router
