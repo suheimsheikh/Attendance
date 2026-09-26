@@ -2738,6 +2738,13 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             {"id": {"$in": item_ids}}, {"_id": 0},
         ).to_list(len(item_ids) or 1)
         by_id = {i["id"]: i for i in items}
+        # Validate item ids up-front so an unknown id yields a clear error
+        # rather than a confusing "not enough stock" from the guard below.
+        for _u in body.upserts:
+            _iid = str(_u.get("item_id") or "").strip()
+            if not _iid or _iid not in by_id:
+                raise HTTPException(status_code=400,
+                                    detail=f"Unknown item_id: {_iid or '(blank)'}")
         await _assert_issue_stock(d, list(body.upserts))
         _named = [{"item_id": u.get("item_id"), "qty": u.get("qty"),
                    "item_name": (by_id.get(str(u.get("item_id") or "")) or {}).get("name")}

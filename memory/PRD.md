@@ -471,3 +471,13 @@ User request: "When issuing any item from the kitchen it should not allow if the
 4. **Late-count parity (known Issue 2 FIXED)**: `compute_hours_report` now excludes late punches dated before `joining_date` / after `leaving_date` from `late_days`, matching the Grid's NJ/LF exclusion. Verified: payroll late total == grid late total (274==274); `test_grid_late_matches_payroll` passes.
 5. **Big-Qty soft warning (non-blocking)**: new `_issue_qty_warnings(d, lines)` flags any issue qty > 3× the item's avg-per-issuing-day over the prior 30d (needs ≥3 days history). Returned as `warnings[]` from both issue write paths (PUT + PATCH); frontends (`MealIssuesTab`, `MealEntryTab`) show them as `toast.warning`. Save is NOT blocked.
 - Verified: backend parses/restarts clean; fast unit suite 48/48 pass; frontend compiles. ⚠️ Needs REDEPLOY. Big-Qty warning validated by logic/parse (not yet triggered with live data — safe, non-blocking).
+
+---
+## Update 26 Jun 2026 — Regression + code review + low-risk fixes (shipped)
+- **Regression (testing_agent iter79)**: 100% pass — backend 5/5 pytest, frontend all critical UI checks, 0 console errors, no leftover seed data. Covered stock hard-block, big-qty warning, last-rates, Stock Master crash + search, stock-take rates, purchase outlier, grid future-leave + totals parity, late-count parity, removed-endpoint 404s, nav/tooltip audit.
+- **Code review (code_review_agent, app-wide)**: NO confirmed CRITICAL/HIGH/MEDIUM defects — all session changes traced correct (stock-guard add-back math, `_leave_code` LP-tail byte-equivalence, elapsed-only totals, late-parity projection, frontend null-guards). Fixed all actionable LOW findings:
+  1. Removed stale `/meals/monthly-grid` tests from `test_meal_muster.py` (3 cases + docstring/section comments) — the endpoint was intentionally removed and now 404s, so these would have failed CI. Confirmed: no live frontend references `monthly-grid` anywhere; consumers (PayCraft leave-balances, CSV/PDF export) count from `totals` not `cells`, so future-leave display cells never over-count.
+  2. PATCH `/meals/issues` now validates unknown `item_id` BEFORE the stock guard → clear "Unknown item_id" 400 instead of a confusing "not enough stock". Verified via curl.
+  3. Big-Qty warning toasts now use a stable `id` (`isswarn-<msg>`) so the debounced auto-save re-toast replaces rather than stacks.
+  - Left as noted (NOT low-risk): splitting the 5.5k-line `meals.py` / `_grid_impl`; and the rare back-dated `opening_stock_as_of` over-count edge (changing it risks the common path).
+- Verified: fast unit suite 49/49 pass; `test_meal_muster.py` collects clean; frontend compiles. ⚠️ Needs REDEPLOY.

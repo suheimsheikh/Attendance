@@ -1,0 +1,24 @@
+{
+  "summary": "Regression tested iter79 items across kitchen (stock hard-block, big-qty warning, last-rates, masters crash, search, stock-take rates), reports (calendar-grid future leave + totals parity, late count parity), removed endpoints, and general nav/tooltip audits. Backend: 5/5 pytest cases pass. Frontend: all critical UI checks pass — no console errors, no pageerrors, sidebar has no removed links.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_regression_iter79.py",
+    "/app/test_reports/pytest/iter79.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "meals.py is 5516 lines — well over the 700-line guideline. Consider splitting the router by concern (issues/purchases/masters/stocktake/reports) to reduce blast radius on future edits.",
+    "reports.py _grid_impl is >500 lines with deeply nested logic; extract _classify and totals aggregation into pure helpers for testability (partially done via _classify_timeline_day/_leave_code — continue the pattern)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_regression_iter79.py"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% critical checks"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (Admin sign in with email)",
+  "seed_data_creation": "None — hard-block test uses over-stock qty which is rejected at 400 with no write.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression file test_regression_iter79.py covers: stock hard-block (400 with 'Not enough stock' + remediation hint), last-rates GET, monthly-grid returning 404, calendar-grid future LV/TR paint + totals excluding future cells, and grid vs payroll late-day parity. Frontend automation confirmed: /admin/meals-report?tab=masters has data-testid=masters-search + masters-search-clear working, clicking an item (Atta) opens ledger drawer without any 'cls' or pageerror, /admin/meals-report?tab=stocktake shows 101 stocktake-avgrate-<id> testids, Reports > Calendar Grid loads with LV codes, Dashboard has 18 InfoTip icons, and sidebar has NO 'Compare Items' / 'Price Movers' / 'Monthly grid' links. All targeted regressions confirmed working — no fixes applied by testing agent.",
+  "rca of the issue": "N/A — all features under review working as specified."
+}

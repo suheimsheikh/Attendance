@@ -6,7 +6,6 @@ Endpoints under test:
   • POST /api/meals/mark-bulk         (idempotent — unique index on user_id,date,meal)
   • POST /api/meals/unmark-bulk
   • GET  /api/meals/daily-counts
-  • GET  /api/meals/monthly-grid
 
 Uses the shared `base_url` / `admin_token` fixtures from conftest.
 """
@@ -228,7 +227,7 @@ def test_mark_bulk_requires_auth(base_url):
     assert r.status_code in (401, 403)
 
 
-# -------------------- daily-counts / monthly-grid --------------------
+# -------------------- daily-counts --------------------
 def test_daily_counts_shape_and_totals(base_url, admin_token):
     ids = _pick_test_user_ids(base_url, admin_token, 2)
     try:
@@ -268,49 +267,6 @@ def test_daily_counts_bad_date(base_url, admin_token):
     assert r.status_code == 400
 
 
-def test_monthly_grid_shape_and_totals(base_url, admin_token):
-    ids = _pick_test_user_ids(base_url, admin_token, 1)
-    try:
-        requests.post(
-            f"{base_url}/api/meals/mark-bulk",
-            headers=_hdr(admin_token),
-            json={"meal": "dinner", "date": TEST_DATE, "user_ids": ids},
-            timeout=30,
-        )
-        r = requests.get(
-            f"{base_url}/api/meals/monthly-grid",
-            params={"month": TEST_MONTH, "scope": "all"},
-            headers=_hdr(admin_token), timeout=30,
-        )
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert body["month"] == TEST_MONTH
-        assert isinstance(body["days"], list) and len(body["days"]) == 31
-        assert {m["key"] for m in body["meals"]} == MEAL_KEYS
-        # Our TEST_DATE user must be in rows
-        row_ids = {r["id"] for r in body["rows"]}
-        assert ids[0] in row_ids, "marked member missing from monthly grid"
-        row = next(r for r in body["rows"] if r["id"] == ids[0])
-        assert row["totals"]["dinner"] >= 1
-        assert TEST_DATE in row["days"]
-        assert "dinner" in row["days"][TEST_DATE]
-    finally:
-        _cleanup(base_url, admin_token, ids)
-
-
-def test_monthly_grid_bad_month(base_url, admin_token):
-    r = requests.get(
-        f"{base_url}/api/meals/monthly-grid?month=bad",
-        headers=_hdr(admin_token), timeout=30,
-    )
-    assert r.status_code == 400
-
-
 def test_daily_counts_requires_auth(base_url):
     r = requests.get(f"{base_url}/api/meals/daily-counts?date={TEST_DATE}", timeout=30)
-    assert r.status_code in (401, 403)
-
-
-def test_monthly_grid_requires_auth(base_url):
-    r = requests.get(f"{base_url}/api/meals/monthly-grid?month={TEST_MONTH}", timeout=30)
     assert r.status_code in (401, 403)

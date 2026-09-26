@@ -498,7 +498,7 @@ export default function MealEntryTab({ liveSig }) {
         const res = await api.patch(`/meals/issues/${payload.targetDate}`,
           { upserts: payload.upserts, removes: payload.removes });
         setSavedAt(Date.now());
-        (res?.warnings || []).forEach((w) => toast.warning(w, { duration: 8000 }));
+        (res?.warnings || []).forEach((w) => toast.warning(w, { id: `isswarn-${w}`, duration: 8000 }));
       } catch (err) {
         payload.ids.forEach((i) => dirtyIssues.current.add(i));
         showApiError(err, "Couldn't auto-save issues");

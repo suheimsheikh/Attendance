@@ -87,7 +87,7 @@ export default function MealIssuesTab() {
     try {
       const res = await api.put(`/meals/issues/${dateStr}`, { lines });
       toast.success(`Consumption saved for ${formatDate(dateStr)}`);
-      (res?.warnings || []).forEach((w) => toast.warning(w, { duration: 8000 }));
+      (res?.warnings || []).forEach((w) => toast.warning(w, { id: `isswarn-${w}`, duration: 8000 }));
       loadRecent();
       loadStock();
     } catch (err) {
