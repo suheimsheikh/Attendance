@@ -846,6 +846,7 @@ export default function MealEntryTab({ liveSig }) {
           </div>
         )}
 
+        {/* Day totals — laid out as a mini-table that shares the SAME
             column widths as the grid below, so each amount sits
             directly above its column's item Amounts. Labels tuck to
             the left of each band, numbers hang on the right rail. */}

@@ -1,0 +1,50 @@
+{
+  "summary": "Frontend-only regression test of the pure-extraction refactor for CalendarGridTab, MealEntryTab and MealMastersTab. Verified admin login, /admin/reports Calendar Grid, /admin/meals-report (Daily entry) and /admin/meals-report?tab=masters. All three screens load and their extracted sub-components render/behave correctly, EXCEPT one clear regression: an orphaned JSX comment fragment (`column widths as the grid below … */}`) is leaked as visible plain text at the top of the Daily-entry totals area — the opening `{/*` was lost during the refactor of MealEntryTab.jsx.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "MealEntryTab (pages/admin/MealEntryTab.jsx, lines 849-851)",
+        "issue": "Orphaned JSX comment leaks into rendered UI. Lines read `column widths as the grid below, so each amount sits / directly above its column's item Amounts. Labels tuck to / the left of each band, numbers hang on the right rail. */}` with no opening `{/*`. This literal text now shows above the PURCHASES/ISSUES/WASTAGE Day-Total cards on /admin/meals-report (Daily entry). Introduced by the recent extraction refactor.",
+        "selector": "text=/column widths as the grid below/",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_flows": [
+    "Admin email login (admin@attendance.app) succeeds and reaches /.",
+    "/admin/reports → Calendar Grid tab: table renders 49 rows, 47 members, day columns 01..30, right-sticky totals (MSS, P TOTAL, AB DAYS, LP DAYS, LV TOTAL, TR TOTAL, OT SUM, EO DAYS, LT DAYS) present. Today's column (26 SA) shows a sky-blue vertical outline spanning the day-number header, weekday sub-header, and every body cell (visible in screenshot .screenshots/grid_final.png).",
+    "/admin/meals-report (default Daily entry) renders category groups (Fruits, Masalas and Herbs, Vegetables, Protein, Cleaning items, Dairy products, Gas, Fats, Dryfruits and Seeds, Greens, Lentils/Daal/Legumes, Carbs and Sugars) with per-category testids `entry-cat-header-<code>` and totals cards `entry-purchase-total-card`.",
+    "Double-clicking the 'PURCHASES · DAY TOTAL' card opens the Date-wise totals modal — [data-testid='daily-totals-modal'] appears and closes cleanly.",
+    "/admin/meals-report?tab=masters renders the Categories→Items tree with grand total row, category rows (masters-cat-<code>) and per-item rows exposing testids masters-item-unit-<id>, masters-item-opening-<id>, masters-item-min-<id>, masters-item-norm-<id>, masters-item-rename-btn-<id>, masters-item-nutrition-<id>. Search box (`masters-search`) is present.",
+    "Clicking the Nutrition (flame) button on an item opens the nutrition modal ([data-testid^='nutrition-modal-']) as expected."
+  ],
+  "not_fully_verified": [
+    "RowVendorPicker '＋ Add new vendor…' → add-vendor-inline-modal flow: category expansion selector used in the script didn't match the `entry-cat-header-<code>` toggle testid, so vendor picker was not reached. Testids exist (entry-cat-header-*) so this appears to be a script selector gap, not a product bug. Recommend explicit test using entry-cat-header-fruits toggle + row-vendor-picker-<itemId>.",
+    "Inline rename editor on item rows: rename button click did not surface an input matching `input:focus`. Could be that the editor uses a contentEditable/span; visual verification via screenshot did not show an obvious editor. Worth a follow-up manual check.",
+    "Saving a Min-level inline number edit: intentionally NOT executed to avoid mutating live production data (per agent-to-agent note)."
+  ],
+  "test_report_links": [
+    ".screenshots/grid_final.png",
+    ".screenshots/meals_landing.png",
+    ".screenshots/masters_final.png"
+  ],
+  "action_items": [
+    "Fix MealEntryTab.jsx lines 848-851: restore the missing `{/*` opener (or delete the stranded comment) so the totals-bar comment stops leaking as visible text on the Daily-entry page. Suggested minimal patch: replace the blank line above with `{/* Totals bar — mirrors the same` (matching the original comment intent) so lines 848-851 form a valid `{/* … */}` block, or simply delete lines 849-851 and the stray `*/}`."
+  ],
+  "critical_code_review_comments": [
+    "MealEntryTab.jsx (1354 lines) and MealMastersTab.jsx are still >700 lines even after the extraction — consider further splitting per the file-size code-review guideline.",
+    "Console shows an intermittent 503 on a resource load during Daily-entry render; not blocking but worth a look in logs.",
+    "The refactor did not introduce runtime errors (no PAGEERR captured), but the orphan-comment regression proves the need to add a simple lint/CI check (e.g. eslint-plugin-react no-unescaped-entities or a plain grep for `*/}` without matching `{/*`) to catch this class of extraction bug."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (frontend-only)", "frontend": "~85% (1 clear UI regression, 2 flows partially verified)" },
+  "test_credentials": "admin@attendance.app / Admin@12345 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None. No writes performed; live production data untouched per instruction.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent fixes the orphaned JSX comment in MealEntryTab.jsx (~lines 848-851), re-open /admin/meals-report and confirm the leaked text is gone. Then, to complete the vendor-picker path: click `[data-testid='entry-cat-header-fruits']` (or any category header) to expand items, then click any row-vendor-picker (search DOM for `data-testid^='row-vendor-picker'` — pattern likely `row-vendor-picker-<itemId>`), pick '＋ Add new vendor…' and assert `[data-testid='add-vendor-inline-modal']` opens. Also verify inline rename editor and a Min-level number edit round-trip on an obviously-test item (revert immediately).",
+  "rca of the issue": "During the pure-extraction refactor of MealEntryTab, a JSX block comment `{/* … Totals bar column widths … */}` had its opening `{/*` accidentally removed when nearby JSX (likely the flags banner block ending on line 847) was reformatted. Because JSX renders unmatched text as a text node, the tail of the comment — three lines of prose plus `*/}` — is now shown to the user above the totals cards. Reproduction: log in as admin → /admin/meals-report → observe visible text `column widths as the grid below, so each amount sits directly above its column's item Amounts. Labels tuck to the left of each band, numbers hang on the right rail. */}` immediately below the toolbar and above the PURCHASES/ISSUES/WASTAGE totals cards (screenshot .screenshots/meals_landing.png). Mitigation: restore `{/*` before line 849 (or delete lines 849-851 outright). Zero behavior-change goal of the refactor is otherwise upheld — grid highlight, tree render, modals, and testids all work."
+}
