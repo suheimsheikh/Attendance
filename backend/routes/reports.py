@@ -1098,6 +1098,33 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             # `late_days` (Attendance report is the source of truth).
         }
 
+        def _leave_code(uid: str, iso: str) -> Optional[str]:
+            """Approved-leave cell code for a member on a date: LV / TR /
+            PS / CO, or the LP overlay for the loss-of-pay tail (and
+            cancelled→LOP ranges). Returns None when no approved leave
+            covers the date. Shared by the normal (past) branch and the
+            future-date branch so planned leave shows ahead of time."""
+            for L in leaves_by_user.get(uid, []):
+                if L.get("start_date") <= iso <= L.get("end_date"):
+                    # Grid-initiated cancellations flip the whole date
+                    # range to LP so admins see the day counts as
+                    # loss-of-pay without diving into the leave record
+                    # (24 Feb 2026).
+                    if L.get("status") == "cancelled" and L.get("converted_to_lop"):
+                        return "LP"
+                    code = LEAVE_CODE.get((L.get("type") or "").lower(), "LV")
+                    # LOP overlay (20 Feb 2026): an APPROVED `leave` with a
+                    # non-zero `lop_days` stamp paints its trailing days LP
+                    # (balance drains from the front, so LOP falls at the END).
+                    if code == "LV":
+                        lop_d = float(L.get("lop_days") or 0)
+                        if lop_d > 0:
+                            _end = date.fromisoformat(L["end_date"])
+                            if (_end - date.fromisoformat(iso)).days < lop_d:
+                                return "LP"
+                    return code
+            return None
+
         def _classify(uid: str, iso: str, dow_idx: int, weekly_off: str,
                       work_start: str, joining_date: Optional[str] = None,
                       leaving_date: Optional[str] = None) -> str:
@@ -1117,7 +1144,14 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             if leaving_date and iso > leaving_date:
                 return "LF"
             if iso > today_iso:
-                return ""  # future
+                # Future dates are normally blank, BUT an already-approved
+                # leave / tour / posting / comp-off is surfaced ahead of
+                # time so the roster shows planned absences (user request,
+                # Jun 2026). Only leave-type codes appear early; future
+                # weekly-off / holiday / absent stay blank until the day
+                # elapses. NOTE: totals below still count ELAPSED days only,
+                # so these future cells never inflate payroll figures.
+                return _leave_code(uid, iso) or ""
             att = att_by_user.get(uid, {}).get(iso)
             if att and att.get("check_in_at"):
                 # `late` is the canonical field on attendance docs
@@ -1128,36 +1162,9 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
                     return "LT"
                 return "P"
             # No attendance — check approved leaves.
-            for L in leaves_by_user.get(uid, []):
-                if L.get("start_date") <= iso <= L.get("end_date"):
-                    # Grid-initiated cancellations flip the whole date
-                    # range to LP so admins can see the day counts as
-                    # loss-of-pay without diving into the leave record
-                    # (24 Feb 2026). Applies for the ENTIRE range —
-                    # unlike the partial LOP tail below which only
-                    # paints the trailing `lop_days` positions.
-                    if L.get("status") == "cancelled" and L.get("converted_to_lop"):
-                        return "LP"
-                    code = LEAVE_CODE.get((L.get("type") or "").lower(), "LV")
-                    # LOP overlay (20 Feb 2026): if an APPROVED `leave`
-                    # (only `leave` runs the deduction ladder) has a
-                    # non-zero `lop_days` stamp, mark the tail portion
-                    # of the window as "LP" — convention is that
-                    # balance drains from the front (comp-off + paid),
-                    # so any un-covered days fall at the END. This
-                    # lets admins see LOP without diving into payroll.
-                    if code == "LV":
-                        lop_d = float(L.get("lop_days") or 0)
-                        if lop_d > 0:
-                            end_d = date.fromisoformat(L["end_date"])
-                            days_from_end = (end_d - date.fromisoformat(iso)).days
-                            # `days_from_end` is 0 on the last day, 1
-                            # on the second-last, etc. If the current
-                            # day sits in the last `lop_d` positions,
-                            # it's the LOP tail.
-                            if days_from_end < lop_d:
-                                return "LP"
-                    return code
+            lc = _leave_code(uid, iso)
+            if lc:
+                return lc
             # Break for this member (admin-applied via /admin/breaks).
             # Painted with a dedicated BK code so admins can tell it
             # apart from a global HO (15 Feb 2026).
@@ -1349,26 +1356,31 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             early_out_days = sum(
                 1 for iso in days if _is_early_out(att_by_user.get(uid, {}).get(iso))
             )
+            # Totals count ELAPSED days only (iso <= today) so future
+            # planned-leave cells surfaced above never inflate the
+            # month's LV / TR / LP figures (the LP total feeds PayCraft
+            # leave-balances — future LOP must not be docked early).
+            elapsed_cells = [c for c, iso in zip(cells, days) if iso <= today_iso]
             totals = {
-                "present":     sum(1 for c in cells if c in ("P", "HD", "LT")),
-                "absent":      sum(1 for c in cells if c == "AB"),
+                "present":     sum(1 for c in elapsed_cells if c in ("P", "HD", "LT")),
+                "absent":      sum(1 for c in elapsed_cells if c == "AB"),
                 # LP days count toward the "leave" total (backward
                 # compat with pre-20-Feb behaviour where every approved
                 # leave day rolled up into LV). The dedicated `lop`
                 # sub-total below breaks it out for admins who want to
                 # see the split.
-                "leave":       sum(1 for c in cells if c in ("LV", "CO", "LP")),
-                "tour":        sum(1 for c in cells if c == "TR"),
+                "leave":       sum(1 for c in elapsed_cells if c in ("LV", "CO", "LP")),
+                "tour":        sum(1 for c in elapsed_cells if c == "TR"),
                 # Late-count is a subset of Present — surfaced as its
                 # own column at the right of the totals strip so admins
                 # can spot habitual late-comers at a glance (15 Feb 2026).
-                "late":        sum(1 for c in cells if c == "LT"),
+                "late":        sum(1 for c in elapsed_cells if c == "LT"),
                 # LOP-day count (20 Feb 2026) — tail portion of any
                 # approved leave whose requested days exceeded the
                 # comp-off + paid-leave balance. Surfaces alongside
                 # payroll's `lop_days` totals so admins get the same
                 # number from either angle.
-                "lop":         sum(1 for c in cells if c == "LP"),
+                "lop":         sum(1 for c in elapsed_cells if c == "LP"),
                 "ot_minutes":  ot_minutes,
                 # Days with an ≥15-min early departure (subset of
                 # Present; unrelated to Leaves). Sits next to LT in
