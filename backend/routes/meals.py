@@ -2636,6 +2636,47 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
                 ),
             )
 
+    async def _issue_qty_warnings(d: str, lines: list) -> list:
+        """Non-blocking sanity check (Jun 2026, user request): flag issue
+        quantities far above an item's normal daily amount so obvious
+        typos (e.g. 50kg for 5kg) get a warning without blocking the save.
+        Normal = average issued qty per issuing-day over the prior 30 days;
+        a line is flagged when it exceeds 3× that average (and the average
+        is meaningful). Items with no issue history are never flagged."""
+        wanted: dict = {}
+        for ln in lines:
+            iid = str(ln.get("item_id") or "").strip()
+            q = _parse_amount(ln.get("qty"))
+            if iid and q and q > 0:
+                wanted[iid] = max(wanted.get(iid, 0.0), float(q))
+        if not wanted:
+            return []
+        start = (date.fromisoformat(d) - timedelta(days=30)).isoformat()
+        docs = await db.meal_issues.find(
+            {"date": {"$gte": start, "$lt": d}}, {"_id": 0, "date": 1, "lines": 1},
+        ).to_list(400)
+        totals: dict = {}
+        days_seen: dict = {}
+        for doc in docs:
+            for ln in doc.get("lines") or []:
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                if iid and q > 0:
+                    totals[iid] = totals.get(iid, 0.0) + q
+                    days_seen.setdefault(iid, set()).add(doc["date"])
+        warns = []
+        item_names = {ln.get("item_id"): (ln.get("item_name") or ln.get("name"))
+                      for ln in lines if isinstance(ln, dict)}
+        for iid, want in wanted.items():
+            nd = len(days_seen.get(iid, ()))
+            if nd < 3:
+                continue  # too little history to judge "normal"
+            avg = totals[iid] / nd
+            if avg > 0 and want > 3 * avg:
+                nm = item_names.get(iid) or "item"
+                warns.append(f"{nm}: {round(want, 2)} is well above the usual ~{round(avg, 2)}/day — please double-check.")
+        return warns
+
     @router.put("/meals/issues/{date_str}")
     async def upsert_issues(
         date_str: str, body: IssuesUpsertIn,
@@ -2673,6 +2714,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             "updated_by_name": user.get("full_name") or user.get("email"),
         }
         await _assert_issue_stock(d, clean)
+        warns = await _issue_qty_warnings(d, clean)
         await db.meal_issues.update_one(
             {"date": d},
             {"$set": {"date": d, "lines": clean, **stamp},
@@ -2680,7 +2722,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
             upsert=True,
         )
         await _signal_meals("issues", d)
-        return {"date": d, "lines": clean}
+        return {"date": d, "lines": clean, "warnings": warns}
 
     @router.patch("/meals/issues/{date_str}")
     async def patch_issue_lines(
@@ -2697,6 +2739,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         ).to_list(len(item_ids) or 1)
         by_id = {i["id"]: i for i in items}
         await _assert_issue_stock(d, list(body.upserts))
+        _named = [{"item_id": u.get("item_id"), "qty": u.get("qty"),
+                   "item_name": (by_id.get(str(u.get("item_id") or "")) or {}).get("name")}
+                  for u in body.upserts]
+        warns = await _issue_qty_warnings(d, _named)
         await db.meal_issues.update_one(
             {"date": d},
             {"$setOnInsert": {"id": str(uuid.uuid4()), "date": d, "lines": []}},
@@ -2735,7 +2781,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None)
         }})
         await _signal_meals("issues", d)
         doc = await db.meal_issues.find_one({"date": d}, {"_id": 0})
-        return {"date": d, "lines": (doc or {}).get("lines") or []}
+        return {"date": d, "lines": (doc or {}).get("lines") or [], "warnings": warns}
 
     # ------------------------------------------------------------------
     # Wastage & losses — event log with reason + optional notes.

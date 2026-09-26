@@ -4224,7 +4224,7 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
 async def compute_hours_report(start: str, end: str) -> List[dict]:
     """Aggregate hours and days present per member between dates inclusive."""
     users = await db.users.find(
-        {}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "weekly_off": 1, "fleet": 1, "leaving_date": 1, "hourly_wager": 1}
+        {}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "weekly_off": 1, "fleet": 1, "leaving_date": 1, "joining_date": 1, "hourly_wager": 1}
     ).sort("full_name", 1).to_list(2000)
     sd = date.fromisoformat(start)
     ed = date.fromisoformat(end)
@@ -4411,7 +4411,17 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         present_dates = {s["date"] for s in sessions}
         total_hours = round(sum(s.get("hours") or 0 for s in sessions), 2)
         days_present = len(present_dates)
-        late_dates = {s["date"] for s in sessions if s.get("late")}
+        # Late-count parity with the Grid (Jun 2026 fix): the Grid renders
+        # pre-joining days as NJ and post-leaving days as LF and excludes
+        # them from every total. Payroll must do the same, else a stray
+        # late punch dated before a member's joining_date (or after their
+        # leaving_date) made payroll's late_days read one higher than the
+        # Grid. Filter those out so both views agree.
+        _jd = u.get("joining_date")
+        _ld = u.get("leaving_date")
+        late_dates = {s["date"] for s in sessions if s.get("late")
+                      and not (_jd and s["date"] < _jd)
+                      and not (_ld and s["date"] > _ld)}
         late_days = len(late_dates)
         leave_dates = _days_of_type(u["id"], "leave")
         tour_dates = _days_of_type(u["id"], "tour")

@@ -571,6 +571,7 @@ export default function MealMastersTab({ liveSig }) {
   const [expanded, setExpanded] = useState(null);       // null = all expanded initially
   const [showInactive, setShowInactive] = useState(false);
   const [lowOnly, setLowOnly] = useState(false);
+  const [search, setSearch] = useState("");
   const [asOf, setAsOf] = useState("");
   const [renamingCat, setRenamingCat] = useState(null);
   const [addingItemCat, setAddingItemCat] = useState(null);
@@ -626,15 +627,17 @@ export default function MealMastersTab({ liveSig }) {
   };
 
   const itemsByCat = useMemo(() => {
+    const q = search.trim().toLowerCase();
     const m = new Map();
     items.forEach((it) => {
       if (!showInactive && it.active === false) return;
       if (lowOnly && !stockMap[it.id]?.low) return;
+      if (q && !(it.name || "").toLowerCase().includes(q)) return;
       if (!m.has(it.category_key)) m.set(it.category_key, []);
       m.get(it.category_key).push(it);
     });
     return m;
-  }, [items, showInactive, lowOnly, stockMap]);
+  }, [items, showInactive, lowOnly, stockMap, search]);
 
   // Roll up per-category amounts (opening / purchases / issues / closing)
   // from the item-level stock rows. Only amounts are shown at the category
@@ -871,6 +874,25 @@ export default function MealMastersTab({ liveSig }) {
                 ? "Manage categories and items in one tree. Use ↑ ↓ buttons or drag to reorder."
                 : "Read-only view of the pantry masters."}
             </p>
+            <div className="relative">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search item…"
+                className="iu-input !h-7 text-xs !w-48 !pr-6"
+                data-testid="masters-search"
+                title="Filter the tree to items whose name matches"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm leading-none"
+                  title="Clear search"
+                  data-testid="masters-search-clear"
+                >×</button>
+              )}
+            </div>
             <label className="ml-auto inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer" title="Show stock on hand as it stood on a past date">
               Stock as of
               <input
@@ -954,8 +976,8 @@ export default function MealMastersTab({ liveSig }) {
         <div className="p-3 space-y-1">
         {visibleCats.map((cat, catIdx) => {
           const catItems = itemsByCat.get(cat.key) || [];
-          if (lowOnly && catItems.length === 0) return null;
-          const open = isExpanded(cat.key);
+          if ((lowOnly || search.trim()) && catItems.length === 0) return null;
+          const open = search.trim() ? true : isExpanded(cat.key);
           const catInactive = cat.active === false;
           const totals = catTotals.get(cat.key) || { opening_value: 0, purchased_amount: 0, issued_value: 0, on_hand_value: 0 };
           return (

@@ -4,7 +4,7 @@
  * CategoryDetailPanel: per-item totals + spend for one category.
  */
 import React, { useEffect, useState } from "react";
-import { Loader2, X, ShoppingCart, ClipboardList, Flame, AlertTriangle } from "lucide-react";
+import { Loader2, X, ShoppingCart, ClipboardList, Flame, AlertTriangle, Scale } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate, fmtQty as uQty } from "../../utils";
 import { useEscape } from "../../hooks/useEscape";
@@ -23,7 +23,10 @@ const TYPE_META = {
   purchase: { label: "Purchase", cls: "bg-emerald-100 text-emerald-700", Icon: ShoppingCart, sign: "+" },
   issue:    { label: "Issued",   cls: "bg-sky-100 text-sky-700",         Icon: ClipboardList, sign: "−" },
   wastage:  { label: "Wastage",  cls: "bg-amber-100 text-amber-700",     Icon: Flame, sign: "−" },
+  adjustment: { label: "Stock-take", cls: "bg-violet-100 text-violet-700", Icon: Scale, sign: "" },
 };
+// Fallback so an unrecognised event type can never crash the ledger.
+const FALLBACK_META = { label: "Entry", cls: "bg-slate-100 text-slate-600", Icon: ClipboardList, sign: "" };
 
 function Sheet({ title, subtitle, onClose, children, testid }) {
   useEscape(onClose);
@@ -133,7 +136,7 @@ export function ItemDetailPanel({ itemId, onClose }) {
               </thead>
               <tbody>
                 {data.events.map((ev, i) => {
-                  const m = TYPE_META[ev.type];
+                  const m = TYPE_META[ev.type] || FALLBACK_META;
                   return (
                     <tr key={i} className="border-t border-slate-100">
                       <td className="p-2 whitespace-nowrap text-slate-700">{formatDate(ev.date)}</td>

@@ -462,3 +462,12 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Verified (curl + screenshot, office-today 2026-09-26): over-issue Bread 500 vs 12 → 400 with message; issue Atta (on_hand −17) → 400; within-stock Bread 2 → 200; UI shows the block toast; test doc deleted from Mongo (no data left behind). Fast unit suite 38/38 pass on affected files.
 - ⚠️ Needs REDEPLOY.
 - Idiot-proofing roadmap surfaced to user (soft warnings vs hard blocks) — see finish summary; candidates: unusually-large issue qty vs 30-day avg (warn), wastage > stock (warn/block), zero-rate purchase with qty (warn), negative-number guards, extend ±5% price outlier to issues/wastage.
+
+---
+## Update 26 Jun 2026 — Stock Master crash fix + 4 kitchen/payroll improvements (shipped)
+1. **BUG (Stock Master crash on item click)**: `MealNodeDetail.jsx` `TYPE_META` had no entry for the `adjustment` event type (emitted by Stock-take), so `TYPE_META[ev.type].cls` threw "Cannot read properties of undefined (reading 'cls')" for any item with a stock-take adjustment. Added `adjustment → "Stock-take"` + a `FALLBACK_META` so no event type can ever crash the ledger. Verified: ledger drawer opens fine.
+2. **Stock Take last buying rate (read-only)**: `MealStockTakeTab.jsx` now loads `/meals/items/last-rates` and shows each item's most-recent purchase rate (read-only) in the Rate column (fallback to weighted-avg), incl. the printable count sheet. Items with no history keep the editable opening-rate input.
+3. **Stock Master item search**: added a `masters-search` box to `MealMastersTab.jsx` that filters the tree by item name, auto-expands matching categories and hides empty ones. Verified.
+4. **Late-count parity (known Issue 2 FIXED)**: `compute_hours_report` now excludes late punches dated before `joining_date` / after `leaving_date` from `late_days`, matching the Grid's NJ/LF exclusion. Verified: payroll late total == grid late total (274==274); `test_grid_late_matches_payroll` passes.
+5. **Big-Qty soft warning (non-blocking)**: new `_issue_qty_warnings(d, lines)` flags any issue qty > 3× the item's avg-per-issuing-day over the prior 30d (needs ≥3 days history). Returned as `warnings[]` from both issue write paths (PUT + PATCH); frontends (`MealIssuesTab`, `MealEntryTab`) show them as `toast.warning`. Save is NOT blocked.
+- Verified: backend parses/restarts clean; fast unit suite 48/48 pass; frontend compiles. ⚠️ Needs REDEPLOY. Big-Qty warning validated by logic/parse (not yet triggered with live data — safe, non-blocking).

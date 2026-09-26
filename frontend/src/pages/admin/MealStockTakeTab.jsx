@@ -25,6 +25,7 @@ export default function MealStockTakeTab({ liveSig }) {
   const [cats, setCats] = useState([]);
   const [physical, setPhysical] = useState({});   // item_id -> string
   const [rates, setRates] = useState({});         // item_id -> string (₹/unit, first-count only)
+  const [lastRates, setLastRates] = useState({}); // item_id -> {rate, date} last buying rate (read-only)
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -33,10 +34,20 @@ export default function MealStockTakeTab({ liveSig }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get(`/meals/stock-take?date=${dateStr}`)
-      .then((r) => {
+    // "Before" = day AFTER the count date so a purchase made on the
+    // count day still counts as the last buying rate.
+    const nextDay = (() => {
+      const d = new Date(dateStr + "T00:00:00"); d.setDate(d.getDate() + 1);
+      return d.toLocaleDateString("sv-SE");
+    })();
+    Promise.all([
+      api.get(`/meals/stock-take?date=${dateStr}`),
+      api.get(`/meals/items/last-rates?before=${nextDay}`).catch(() => ({ rates: {} })),
+    ])
+      .then(([r, lr]) => {
         setRows(r.rows || []);
         setCats(r.categories || []);
+        setLastRates(lr.rates || {});
         // Prefill any already-recorded physical counts for the day.
         const pre = {};
         (r.rows || []).forEach((x) => { if (x.physical_qty != null) pre[x.item_id] = String(x.physical_qty); });
@@ -230,7 +241,10 @@ export default function MealStockTakeTab({ liveSig }) {
                                          className="iu-input !h-8 !px-2 text-sm w-24 text-right tabular-nums border-amber-300"
                                          data-testid={`stocktake-rate-${r.item_id}`} />
                                 ) : (
-                                  <span className="text-xs text-slate-400 tabular-nums" data-testid={`stocktake-avgrate-${r.item_id}`}>₹{num(r.avg_rate).toFixed(2)}</span>
+                                  <span className="text-xs text-slate-500 tabular-nums" data-testid={`stocktake-avgrate-${r.item_id}`}
+                                        title={lastRates[r.item_id]?.date ? `Last buying rate, from the purchase on ${formatDate(lastRates[r.item_id].date)}` : "Weighted-average purchase rate"}>
+                                    ₹{num(lastRates[r.item_id]?.rate ?? r.avg_rate).toFixed(2)}
+                                  </span>
                                 )}
                               </td>
                               <td className={`p-2.5 text-right tabular-nums font-bold ${loss ? "text-rose-700" : extra ? "text-emerald-700" : "text-slate-300"}`} data-testid={`stocktake-variance-${r.item_id}`}>
@@ -290,7 +304,7 @@ export default function MealStockTakeTab({ liveSig }) {
                       <td className="p-1 text-slate-600">{r.unit}</td>
                       <td className="p-1 text-right tabular-nums text-slate-700">{fmtQty(r.system_qty, r.unit)}</td>
                       <td className="p-1 text-right">______________</td>
-                      <td className="p-1 text-right tabular-nums text-slate-700">{r.needs_rate ? "__________" : `₹${num(r.avg_rate).toFixed(2)}`}</td>
+                      <td className="p-1 text-right tabular-nums text-slate-700">{r.needs_rate ? "__________" : `₹${num(lastRates[r.item_id]?.rate ?? r.avg_rate).toFixed(2)}`}</td>
                     </tr>
                   ))}
                   {[0, 1].map((i) => (
