@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   BookOpen, ChevronRight, ChevronDown, Plus, Pencil, Trash2, Loader2,
   Sparkles, X, UtensilsCrossed, Soup, Carrot, ChevronsDownUp, ChevronsUpDown,
-  Printer, Scale, AlertTriangle, Calendar,
+  Printer, Scale, AlertTriangle, Calendar, Check,
 } from "lucide-react";
 
 const MAC = [
@@ -17,6 +17,17 @@ const MIC = [
   { k: "vitamin_d", label: "VitD", unit: "µg" }, { k: "vitamin_b12", label: "B12", unit: "µg" },
 ];
 const WEIGHT_W = 82, MAC_W = 52, MIC_W = 46;
+
+// mirror backend _norm: lowercase, strip non-alphanumerics
+const normName = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+// unit -> dimension (mass/vol), mirrors backend UNIT_BASE
+const UNIT_DIM = {
+  g: "mass", gram: "mass", grams: "mass", gm: "mass", gms: "mass", kg: "mass", kgs: "mass",
+  kilogram: "mass", kilograms: "mass", mg: "mass",
+  ml: "vol", milliliter: "vol", millilitre: "vol", l: "vol", lt: "vol", ltr: "vol",
+  litre: "vol", liter: "vol", litres: "vol", liters: "vol",
+};
+const unitDim = (u) => UNIT_DIM[String(u || "").toLowerCase()] || null;
 
 const n1 = (v) => (v === null || v === undefined || v === "" || Number(v) === 0 ? "" : Number(v).toFixed(1));
 const w1 = (v) => (!v || Number(v) === 0 ? "" : (Number.isInteger(Number(v)) ? String(Number(v)) : Number(v).toFixed(1)));
@@ -86,6 +97,29 @@ function InlineWeight({ ing, dishId, onSaved }) {
       </div>
       <div style={{ width: MAC.length * MAC_W + MIC.length * MIC_W }} />
     </div>
+  );
+}
+
+// Shows whether a recipe ingredient matches a Stock Master item (by name),
+// and flags a unit-dimension mismatch. Rendered inline on the recipe tree.
+function MatchBadge({ ing, pantryByNorm }) {
+  const it = pantryByNorm.get(normName(ing.name));
+  if (!it) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200 shrink-0"
+        title="No Stock Master item matches this name" data-testid={`recipe-ing-match-${ing.id}`}>
+        <AlertTriangle size={10} /> no stock match
+      </span>
+    );
+  }
+  const iDim = unitDim(ing.unit || "g"), pDim = unitDim(it.unit);
+  const unitOk = pDim && iDim === pDim;
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border shrink-0 ${unitOk ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}
+      title={unitOk ? `Matches Stock Master item “${it.name}” (${it.unit})` : `Name matches “${it.name}” but its unit is ${it.unit || "?"} — not compatible with ${ing.unit || "g"}`}
+      data-testid={`recipe-ing-match-${ing.id}`}>
+      {unitOk ? <Check size={10} /> : <AlertTriangle size={10} />} {it.name}{unitOk ? "" : ` · unit ${it.unit || "?"}`}
+    </span>
   );
 }
 
@@ -295,6 +329,7 @@ function NodeModal({ node, onClose, onSaved }) {
 export default function Recipes() {
   const [tree, setTree] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pantry, setPantry] = useState([]);
   const [openDays, setOpenDays] = useState(() => new Set());
   const [openMeals, setOpenMeals] = useState(() => new Set());
   const [openDishes, setOpenDishes] = useState(() => new Set());
@@ -311,6 +346,15 @@ export default function Recipes() {
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line
   useEffect(() => { load(); }, [load]);
+  const loadPantry = useCallback(() => { api.get("/recipes/pantry-items").then((r) => setPantry(r.items || [])).catch(() => {}); }, []);
+  useEffect(() => { loadPantry(); }, [loadPantry]);
+
+  // normalised-name -> pantry item, mirrors backend _norm (lowercase, strip non-alnum)
+  const pantryByNorm = useMemo(() => {
+    const m = new Map();
+    pantry.forEach((it) => { const k = normName(it.name); if (k && !m.has(k)) m.set(k, it); });
+    return m;
+  }, [pantry]);
 
   const tset = (setter) => (id) => setter((p) => { const s = new Set(p); s.has(id) ? s.delete(id) : s.add(id); return s; });
   const toggleDay = tset(setOpenDays), toggleMeal = tset(setOpenMeals), toggleDish = tset(setOpenDishes);
@@ -522,6 +566,7 @@ export default function Recipes() {
                               <div key={ing.id} className="flex items-center gap-1 pl-24 pr-3 py-1 bg-white hover:bg-slate-50 border-l-4 border-slate-200 group text-sm" data-testid={`recipe-ing-${ing.id}`}>
                                 <Carrot size={11} className="text-emerald-500 shrink-0" />
                                 <span className="text-slate-700">{ing.name}</span>
+                                <MatchBadge ing={ing} pantryByNorm={pantryByNorm} />
                                 {ing.per100 && Object.values(ing.per100).every((v) => v === null) ? (
                                   <span className="text-[10px] text-slate-400 ml-1">· no micros yet</span>
                                 ) : null}

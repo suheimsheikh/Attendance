@@ -104,7 +104,7 @@ export function ItemDetailPanel({ itemId, onClose }) {
         <div className="text-center py-10"><Loader2 className="animate-spin mx-auto text-slate-400"/></div>
       ) : !data ? null : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-5">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-5">
             <div className={`rounded-xl border px-3 py-2 ${low ? "border-rose-300 bg-rose-50" : "border-emerald-200 bg-emerald-50/60"}`}>
               <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
                 On hand now {low && <AlertTriangle size={11} className="text-rose-500"/>}
@@ -117,11 +117,12 @@ export function ItemDetailPanel({ itemId, onClose }) {
             <Chip label="Spend" value={rupee(tot.purchased_amount)}/>
             <Chip label="Issued" value={`${fmt(tot.issued_qty, item.unit)} ${item.unit}`}/>
             <Chip label="Wasted" value={`${fmt(tot.wasted_qty, item.unit)} ${item.unit}`}/>
+            <Chip label="Stock-take" value={`${tot.adjusted_qty > 0 ? "+" : ""}${fmt(tot.adjusted_qty, item.unit)} ${item.unit}`}/>
           </div>
 
           {data.events.length === 0 ? (
             <p className="text-sm text-slate-400 italic text-center py-8" data-testid="item-detail-empty">
-              No purchases, issues or wastage in this range.
+              No purchases, issues, wastage or stock-takes in this range.
             </p>
           ) : (
             <table className="w-full text-sm" data-testid="item-detail-ledger">
@@ -145,16 +146,18 @@ export function ItemDetailPanel({ itemId, onClose }) {
                           <m.Icon size={10}/> {m.label}
                         </span>
                       </td>
-                      <td className={`p-2 text-right tabular-nums font-semibold ${ev.type === "purchase" ? "text-emerald-700" : ev.type === "issue" ? "text-sky-700" : "text-amber-700"}`}>
-                        {m.sign}{fmt(ev.qty, item.unit)} {item.unit}
+                      <td className={`p-2 text-right tabular-nums font-semibold ${ev.type === "purchase" ? "text-emerald-700" : ev.type === "issue" ? "text-sky-700" : ev.type === "adjustment" ? (ev.qty >= 0 ? "text-violet-700" : "text-rose-700") : "text-amber-700"}`}>
+                        {ev.type === "adjustment" ? (ev.qty > 0 ? "+" : ev.qty < 0 ? "−" : "") : m.sign}{fmt(Math.abs(ev.qty), item.unit)} {item.unit}
                       </td>
                       <td className="p-2 text-right tabular-nums text-slate-600">
                         {ev.type === "purchase" ? `${rupee(ev.rate)} → ${rupee(ev.amount)}` : "—"}
                       </td>
                       <td className="p-2 text-xs text-slate-500">
-                        {ev.reason ? <span className="font-semibold text-amber-700">{ev.reason}</span> : null}
+                        {ev.type === "adjustment" && ev.physical != null ? (
+                          <span className="font-semibold text-violet-700">Counted {fmt(ev.physical, item.unit)} vs system {fmt(ev.system, item.unit)}</span>
+                        ) : ev.reason ? <span className="font-semibold text-amber-700">{ev.reason}</span> : null}
                         {ev.notes ? <span> · {ev.notes}</span> : null}
-                        {!ev.reason && !ev.notes ? (ev.by || "—") : null}
+                        {ev.type !== "adjustment" && !ev.reason && !ev.notes ? (ev.by || "—") : (ev.type === "adjustment" && ev.by ? <span> · {ev.by}</span> : null)}
                       </td>
                     </tr>
                   );
