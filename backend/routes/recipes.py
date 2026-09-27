@@ -7,7 +7,7 @@ the dish/meal/day micro totals are computed by scaling per-100g by each
 ingredient's gram weight. A name-keyed cache means each distinct ingredient
 is only sent to the LLM once.
 """
-import os, json, uuid, re, logging
+import os, json, uuid, re, logging, difflib
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
@@ -389,10 +389,12 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin):
 
         items = await db.meal_items.find({}, {"_id": 0, "id": 1, "name": 1, "unit": 1}).to_list(5000)
         item_by_norm = {}
+        item_names = []
         for it in items:
             item_by_norm.setdefault(_norm(it["name"]), it)
+            item_names.append(it["name"])
 
-        planned = {}       # item_id -> {name, unit, planned_base, dim}
+        planned = {}       # item_id -> {name, ing_name, unit, planned_base, dim, count}
         unmatched = {}     # name_norm -> {name, count}
         for row in rows:
             srv = float(row.servings or 0)
@@ -411,9 +413,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin):
                             rec = unmatched.setdefault(nn, {"name": nm, "count": 0})
                             rec["count"] += 1
                             continue
-                        p = planned.setdefault(it["id"], {"item_id": it["id"], "name": it["name"],
-                                                          "unit": it.get("unit") or "", "planned_base": 0.0, "dim": dim})
+                        p = planned.setdefault(it["id"], {"item_id": it["id"], "name": it["name"], "ing_name": nm,
+                                                          "unit": it.get("unit") or "", "planned_base": 0.0, "dim": dim, "count": 0})
                         p["planned_base"] += base
+                        p["count"] += 1
 
         dates = sorted({r.date for r in rows})
         actual = {}
@@ -424,28 +427,81 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin):
                 if iid and q:
                     actual[iid] = actual.get(iid, 0.0) + q
 
+        # names of pantry items grouped by dimension, for compatible-unit suggestions
+        names_by_dim = {"mass": [], "vol": []}
+        for it in items:
+            c = UNIT_BASE.get(str(it.get("unit") or "").lower())
+            if c:
+                names_by_dim[c[0]].append(it["name"])
+
         results = []
+        unit_mismatches = []
         for iid, p in planned.items():
             conv = UNIT_BASE.get(str(p["unit"]).lower())
+            base_unit = "g" if p["dim"] == "mass" else "ml"
+            # unit must match: pantry unit convertible AND same dimension as recipe unit
+            if conv is None or conv[0] != p["dim"]:
+                sugg = difflib.get_close_matches(p["ing_name"], names_by_dim[p["dim"]], n=3, cutoff=0.3)
+                unit_mismatches.append({"name": p["ing_name"], "count": p["count"], "reason": "unit",
+                                        "pantry_name": p["name"], "pantry_unit": p["unit"] or "?",
+                                        "ing_unit": base_unit, "suggestions": sugg})
+                continue
             act_q = actual.get(iid, 0.0)
             planned_base = p["planned_base"]
-            base_unit = "g" if p["dim"] == "mass" else "ml"
-            comparable = conv is not None
-            act_base = act_q * conv[1] if comparable else None
-            diff = (act_base - planned_base) if comparable else None
-            pct = (round((act_base - planned_base) / planned_base * 100, 1)
-                   if comparable and planned_base > 0 else None)
-            status = None
-            if comparable and planned_base > 0:
-                status = "ok" if abs(pct) <= 10 else ("over" if pct > 10 else "under")
+            act_base = act_q * conv[1]
+            diff = act_base - planned_base
+            pct = round(diff / planned_base * 100, 1) if planned_base > 0 else None
+            status = ("ok" if abs(pct) <= 10 else ("over" if pct > 10 else "under")) if pct is not None else None
             results.append({"item_id": iid, "name": p["name"], "item_unit": p["unit"], "base_unit": base_unit,
                             "planned": round(planned_base, 1), "actual_item_qty": round(act_q, 3),
-                            "actual": (round(act_base, 1) if comparable else None), "comparable": comparable,
-                            "diff": (round(diff, 1) if diff is not None else None), "pct": pct, "status": status})
+                            "actual": round(act_base, 1), "comparable": True,
+                            "diff": round(diff, 1), "pct": pct, "status": status})
         order = {"over": 0, "under": 1, "ok": 2, None: 3}
         results.sort(key=lambda r: (order.get(r["status"], 3), -(abs(r["pct"]) if r["pct"] is not None else 0)))
-        unmatched_list = sorted(({"name": v["name"], "count": v["count"]} for v in unmatched.values()),
-                                key=lambda x: x["name"].lower())
-        return {"results": results, "unmatched": unmatched_list, "dates": dates}
+        mismatches = []
+        for v in unmatched.values():
+            sugg = difflib.get_close_matches(v["name"], item_names, n=3, cutoff=0.4)
+            mismatches.append({"name": v["name"], "count": v["count"], "reason": "name",
+                               "pantry_name": None, "pantry_unit": None, "ing_unit": None, "suggestions": sugg})
+        mismatches.extend(unit_mismatches)
+        mismatches.sort(key=lambda x: (x["reason"], x["name"].lower()))
+        return {"results": results, "mismatches": mismatches, "dates": dates}
+
+    @router.get("/pantry-items")
+    async def pantry_items(user=Depends(require_chef_or_admin)):
+        items = await db.meal_items.find({}, {"_id": 0, "id": 1, "name": 1, "unit": 1}).sort("name", 1).to_list(5000)
+        return {"items": items}
+
+    class RenameIng(BaseModel):
+        from_name: str
+        to_name: str
+
+    @router.post("/rename-ingredient")
+    async def rename_ingredient(body: RenameIng, user=Depends(require_admin)):
+        """Rename every recipe ingredient matching `from_name` to the exact
+        pantry item name `to_name` (used to resolve Menu-vs-Actual mismatches)."""
+        fn = _norm(body.from_name)
+        tn = (body.to_name or "").strip()
+        if not tn:
+            raise HTTPException(400, "to_name required")
+        try:
+            per = await _micros_for(tn)
+        except Exception as e:
+            log.warning("micro fetch on rename failed for %s: %s", tn, e)
+            per = {k: None for k in MICROS}
+        dishes = await db.menu_dishes.find({}, {"_id": 0}).to_list(5000)
+        updated = 0
+        for di in dishes:
+            ings = di.get("ingredients", [])
+            changed = False
+            for g in ings:
+                if _norm(g.get("name")) == fn:
+                    g["name"] = tn
+                    g["per100"] = per
+                    changed = True
+                    updated += 1
+            if changed:
+                await db.menu_dishes.update_one({"id": di["id"]}, {"$set": {"ingredients": ings}})
+        return {"updated": updated}
 
     return router

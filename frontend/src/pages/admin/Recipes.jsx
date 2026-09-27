@@ -112,10 +112,21 @@ function Legend() {
 
 // Menu-vs-Actual: map each weekday to a real date + servings, compare planned recipe
 // consumption against actual pantry issues.
-function MvaModal({ days, onClose }) {
+function MvaModal({ days, onClose, onChanged }) {
   const [rows, setRows] = useState(() => days.map((d) => ({ day_id: d.id, name: d.name, date: "", servings: "" })));
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [pantry, setPantry] = useState([]);
+  const [fixVals, setFixVals] = useState({});
+  const [fixing, setFixing] = useState(null);
+  useEffect(() => { api.get("/recipes/pantry-items").then((r) => setPantry(r.items || [])).catch(() => {}); }, []);
+  useEffect(() => {
+    if (res?.mismatches) {
+      const init = {};
+      res.mismatches.forEach((u) => { init[u.name] = u.suggestions?.[0] || ""; });
+      setFixVals(init);
+    }
+  }, [res]);
   const setRow = (i, k, v) => setRows((p) => p.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const run = async () => {
     const payload = { rows: rows.filter((r) => r.date && Number(r.servings) > 0).map((r) => ({ day_id: r.day_id, date: r.date, servings: Number(r.servings) })) };
@@ -123,6 +134,17 @@ function MvaModal({ days, onClose }) {
     setBusy(true);
     try { const r = await api.post("/recipes/menu-vs-actual", payload); setRes(r); }
     catch (e) { showApiError(e); } finally { setBusy(false); }
+  };
+  const applyFix = async (u) => {
+    const to = (fixVals[u.name] || "").trim();
+    if (!to) { toast.error(`Pick the correct pantry name for "${u.name}"`); return; }
+    setFixing(u.name);
+    try {
+      const r = await api.post("/recipes/rename-ingredient", { from_name: u.name, to_name: to });
+      toast.success(`Renamed ${r.updated} "${u.name}" → "${to}"`);
+      onChanged?.();
+      await run();
+    } catch (e) { showApiError(e); } finally { setFixing(null); }
   };
   const badge = (s) => s === "over" ? "bg-rose-100 text-rose-700" : s === "under" ? "bg-amber-100 text-amber-700" : s === "ok" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500";
   return (
@@ -152,14 +174,37 @@ function MvaModal({ days, onClose }) {
 
           {res && (
             <div className="space-y-4" data-testid="recipe-mva-results">
-              {res.unmatched?.length > 0 && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="recipe-mva-unmatched">
-                  <div className="flex items-center gap-2 font-semibold text-amber-800 text-sm mb-1"><AlertTriangle size={15} /> {res.unmatched.length} ingredient name(s) don't match any pantry item</div>
-                  <p className="text-[11px] text-amber-700 mb-2">Rename these in the recipe to match your Stock Master item names so they can be compared:</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {res.unmatched.map((u) => <span key={u.name} className="text-[11px] bg-white border border-amber-200 rounded-full px-2 py-0.5 text-amber-800">{u.name} <span className="text-amber-400">×{u.count}</span></span>)}
+              <datalist id="pantry-item-names">
+                {pantry.map((it) => <option key={it.id} value={it.name} />)}
+              </datalist>
+              {res.mismatches?.length > 0 && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 p-3" data-testid="recipe-mva-unmatched">
+                  <div className="flex items-center gap-2 font-bold text-rose-800 text-sm mb-1"><AlertTriangle size={15} /> {res.mismatches.length} ingredient(s) don't exactly match a pantry item</div>
+                  <p className="text-[11px] text-rose-700 mb-2">Recipe name <b>and</b> unit must match your Stock Master. Pick the correct pantry item for each and click Fix — this renames it everywhere in the recipe. These are <b>excluded</b> from the numbers below until fixed.</p>
+                  <div className="space-y-1.5">
+                    {res.mismatches.map((u) => (
+                      <div key={u.name} className="flex items-center gap-2 bg-white border border-rose-200 rounded-lg px-2.5 py-1.5" data-testid={`mva-fix-row-${u.name}`}>
+                        <div className="min-w-[11rem]">
+                          <div className="text-sm font-semibold text-slate-800 truncate" title={u.name}>{u.name} <span className="text-rose-400 text-[11px] font-normal">×{u.count}</span></div>
+                          {u.reason === "unit"
+                            ? <div className="text-[10px] text-rose-600">unit mismatch — pantry <b>{u.pantry_name}</b> is in <b>{u.pantry_unit}</b>, recipe uses <b>{u.ing_unit}</b></div>
+                            : <div className="text-[10px] text-rose-500">no pantry item with this name</div>}
+                        </div>
+                        <span className="text-slate-300">→</span>
+                        <input list="pantry-item-names" value={fixVals[u.name] ?? ""} placeholder="type / pick exact pantry item…"
+                          onChange={(e) => setFixVals((p) => ({ ...p, [u.name]: e.target.value }))}
+                          className="iu-input !h-8 flex-1 text-xs" data-testid={`mva-fix-input-${u.name}`} />
+                        <button className="iu-btn-primary !h-8 !px-3 text-xs inline-flex items-center gap-1" onClick={() => applyFix(u)} disabled={fixing === u.name} data-testid={`mva-fix-btn-${u.name}`}>
+                          {fixing === u.name ? <Loader2 size={12} className="animate-spin" /> : <Pencil size={12} />} Fix
+                        </button>
+                      </div>
+                    ))}
                   </div>
+                  <p className="text-[10px] text-rose-500 mt-2">For a <b>unit mismatch</b>, either pick a differently-named pantry item that uses g/ml, or change that item's stocking unit in Stock Master.</p>
                 </div>
+              )}
+              {res.mismatches?.length === 0 && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 font-semibold" data-testid="recipe-mva-allmatched">✓ All recipe ingredients match pantry items by name and unit.</div>
               )}
               <div className="overflow-x-auto border border-slate-200 rounded-lg">
                 <table className="w-full text-sm">
@@ -188,7 +233,7 @@ function MvaModal({ days, onClose }) {
                   </tbody>
                 </table>
               </div>
-              <p className="text-[11px] text-slate-400">Over = more issued than planned (&gt;10%); Under = less issued (&gt;10%); OK = within ±10%. "unit?" means the pantry item's unit can't be auto-converted to g/ml.</p>
+              <p className="text-[11px] text-slate-400">Over = more issued than planned (&gt;10%); Under = less issued (&gt;10%); OK = within ±10%.</p>
             </div>
           )}
         </div>
@@ -505,7 +550,7 @@ export default function Recipes() {
       )}
 
       {modal && <NodeModal node={modal} onClose={() => setModal(null)} onSaved={refresh} />}
-      {showMva && <MvaModal days={tree} onClose={() => setShowMva(false)} />}
+      {showMva && <MvaModal days={tree} onClose={() => setShowMva(false)} onChanged={load} />}
     </div>
   );
 }

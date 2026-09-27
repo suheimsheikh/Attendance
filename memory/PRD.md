@@ -554,3 +554,10 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - **Print menu**: per-day printer button (`printDay`) opens a clean printable HTML sheet (meals→dishes→ingredients w/ weights + macros + day total) and triggers window.print().
 - **Menu vs Actual** (`POST /api/recipes/menu-vs-actual`): map each weekday→real date + servings; planned = ingredient amount × servings, matched to `meal_items` by normalised name; actual = summed `meal_issues` qty for those dates. Unit conversion via UNIT_BASE (g/kg/mg, ml/l). Returns per-item planned/actual/diff/% + OVER(>+10%)/UNDER(<-10%)/OK, and a list of unmatched ingredient names to rename in the recipe. Frontend `MvaModal`. Verified: 21 matched / 10 unmatched on 2026-06-20 @ 50 servings.
 - **Colour legend**: inline chip row (Day=emerald, Meal=sky, Dish=amber, Ingredient=slate).
+
+## Update 27 Jun 2026 (cont.) — Menu-vs-Actual: strict name+unit match + guided fix
+- Matching now requires BOTH exact (normalised) name AND compatible unit dimension. Response key renamed `unmatched`→`mismatches`, each {name, count, reason:"name"|"unit", pantry_name, pantry_unit, ing_unit, suggestions}.
+  - reason "name": no pantry item with that normalised name.
+  - reason "unit": name matches but pantry unit is not convertible / wrong dimension vs recipe g/ml (e.g. Banana=dozen, Bread=packet, Oil=L(vol) vs g). Excluded from the comparison table.
+- Help: `difflib` closest-match suggestions (name → any item; unit → items with compatible dimension). New `GET /api/recipes/pantry-items` feeds a datalist. New `POST /api/recipes/rename-ingredient {from_name,to_name}` renames every matching recipe ingredient to the exact pantry name (+ refills micros), used by inline "Fix" controls in the mismatch panel. `onChanged` reloads the tree.
+- Verified: 18 results / 13 mismatches (10 name + 3 unit) on 2026-06-20 @ 50 servings; rename no-op returns updated:0; UI panel shows both reason types with prefilled suggestions + Fix.
