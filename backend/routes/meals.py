@@ -600,6 +600,14 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             onhand_prev = {r["item_id"]: r["on_hand"] for r in snap_prev}
             rate_day = {r["item_id"]: r["avg_rate"] for r in snap_day}
             name_day = {r["item_id"]: r["name"] for r in snap_day}
+            # Same-day purchases add to what's available to issue that day —
+            # buying and consuming an item on the same date is normal (fresh
+            # chicken, veg) and must NOT be flagged as negative stock.
+            purchased_today: dict[str, float] = {}
+            for l in pur_lines:
+                pid = l.get("item_id")
+                if pid:
+                    purchased_today[pid] = purchased_today.get(pid, 0.0) + float(l.get("qty") or 0)
             for l in iss_lines:
                 iid = l.get("item_id"); q = float(l.get("qty") or 0)
                 if not iid:
@@ -608,7 +616,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 if rate_day.get(iid, 0) <= 0:
                     flags.append({"severity": "medium", "code": "issue_no_price",
                                   "message": f"{nm}: consumed but never purchased — no price to value it"})
-                avail = onhand_prev.get(iid, 0.0)
+                avail = onhand_prev.get(iid, 0.0) + purchased_today.get(iid, 0.0)
                 if q > avail + 1e-6:
                     flags.append({"severity": "medium", "code": "negative_stock",
                                   "message": f"{nm}: issued {q:g} {l.get('unit') or ''}".rstrip() + f" but only {avail:g} on hand"})

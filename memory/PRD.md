@@ -569,3 +569,8 @@ User request: "When issuing any item from the kitchen it should not allow if the
 
 ## Update 27 Jun 2026 (cont.) — Stock-take "use last rate" one-tap
 - MealStockTakeTab: for needs_rate items, a "use ₹X" link under the rate input pulls the item's last-purchase rate (from /meals/items/last-rates) into the field with one tap. Shown ONLY when a last rate > 0 exists (blank → no button); never sets zero (guarded, and save already omits rate ≤ 0). Verified: Corn Flour → tap fills 60; 35/55 needs_rate items have a last rate.
+
+## Update 27 Jun 2026 (cont.) — Fix false "negative stock" data flag (Daily Entry)
+- Bug: `_compute_day_flags` negative_stock check (routes/meals.py) compared the day's issue qty against ONLY the previous day's on-hand (`onhand_prev`), ignoring SAME-DAY purchases. Buying and consuming an item the same day (e.g. fresh Chicken) always tripped "issued X but only Y on hand" regardless of entry order.
+- Fix: available = prev-day on-hand + same-day purchases (summed from pur_lines). Genuine oversell (issued > prev + same-day purchases) still flags.
+- Verified: Chicken 2026-07-01 (prior 0, purchased 12, issued 12) now clean; also 07-05, 07-08 clean; day-flags endpoint returns 0 negative_stock.
