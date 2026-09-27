@@ -134,39 +134,53 @@ function PurchaseCells({ it, catKey, e, purchAmt, ctx }) {
   );
 }
 
-function IssueCells({ it, oh, issueQty, rate, issueAmt, over, ctx }) {
+function IssueCells({ it, oh, avail, issueQty, rate, issueAmt, over, ctx }) {
   const { setIssues, dirtyIssues, notifyFocus, notifyBlur, queueIssues, onGridKeyDown } = ctx;
+  const cap = avail != null ? avail : oh;
+  const clearRow = () => {
+    dirtyIssues.current.add(it.id);
+    setIssues((prev) => ({ ...prev, [it.id]: "" }));
+    notifyBlur("issue", it.id);
+    queueIssues();
+    toast.info(`Cleared ${it.name} issue — stock recalculated`, { id: `clr-${it.id}`, duration: 3000 });
+  };
   return (
     <>
       <td className="p-2 border-l-2 border-amber-100">
-        <input
-          type="number" min="0" step="0.01"
-          value={issueQty ?? ""}
-          onChange={(ev) => { const v = ev.target.value; dirtyIssues.current.add(it.id); setIssues((prev) => ({ ...prev, [it.id]: v })); }}
-          onFocus={() => notifyFocus("issue", it.id)}
-          onBlur={() => {
-            notifyBlur("issue", it.id);
-            // Hard toast warning at commit time — cheap fat-finger guard:
-            // if the entered issue by itself already exceeds on-hand
-            // stock, tell the chef before the queued save fires so they
-            // can back out. Kept as a toast (not a block) because a rare
-            // emergency issue on negative stock is still legal — the
-            // entry just needs a same-day purchase to reconcile.
-            const q = num(issueQty);
-            if (oh != null && q > oh + 1e-6) {
-              toast.warning(
-                `Issuing ${fmtQty(q, it.unit)} ${it.unit} of ${it.name} — only ${fmtQty(oh, it.unit)} on hand. Stock will drop to ${fmtQty(oh - q, it.unit)}.`,
-                { duration: 6000 },
-              );
-            }
-            queueIssues();
-          }}
-          onKeyDown={onGridKeyDown("issue-qty", it.id)}
-          className={`iu-input !h-8 !px-2 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`}
-          placeholder="0"
-          data-testid={`entry-issue-qty-${it.id}`}
-          title={over ? "Issues exceed on-hand — will drive stock negative" : ""}
-        />
+        <div className="relative">
+          <input
+            type="number" min="0" step="0.01"
+            value={issueQty ?? ""}
+            onChange={(ev) => { const v = ev.target.value; dirtyIssues.current.add(it.id); setIssues((prev) => ({ ...prev, [it.id]: v })); }}
+            onFocus={() => notifyFocus("issue", it.id)}
+            onBlur={() => {
+              notifyBlur("issue", it.id);
+              // Fat-finger guard at commit: warn if the issue exceeds what's
+              // available today (start-of-day on-hand + today's purchases).
+              // The server hard-blocks a true shortage; this is the heads-up.
+              const q = num(issueQty);
+              if (cap != null && q > cap + 1e-6) {
+                toast.warning(
+                  `Issuing ${fmtQty(q, it.unit)} ${it.unit} of ${it.name} — only ${fmtQty(cap, it.unit)} available (on-hand + today's purchase). Record a purchase first.`,
+                  { duration: 6000 },
+                );
+              }
+              queueIssues();
+            }}
+            onKeyDown={onGridKeyDown("issue-qty", it.id)}
+            className={`iu-input !h-8 !px-2 pr-6 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`}
+            placeholder="0"
+            data-testid={`entry-issue-qty-${it.id}`}
+            title={over ? "Issues exceed what's available (on-hand + today's purchase) — record the purchase first" : ""}
+          />
+          {num(issueQty) > 0 && (
+            <button type="button" onClick={clearRow} tabIndex={-1}
+              className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+              title="Null this issue and recalculate stock" data-testid={`entry-issue-clear-${it.id}`}>
+              <X size={12}/>
+            </button>
+          )}
+        </div>
       </td>
       {/* Issue Rate — weighted-avg purchase cost, read-only. */}
       <td className="p-2 text-right tabular-nums text-slate-500 text-xs" data-testid={`entry-issue-rate-${it.id}`} title="Weighted-average purchase cost across all recorded purchases">
@@ -278,13 +292,15 @@ export default function EntryItemRow({ it, catKey, e, oh, issueQty, rate, w, pee
   const purchAmt = num(e.qty) * num(e.rate);
   const issueAmt = num(issueQty) * rate;
   const wasteAmt = num(w.qty) * rate;
-  // Overshoot on issues + wastage combined (both deplete stock).
-  const over = oh != null && (num(issueQty) + num(w.qty)) > oh + 1e-6;
+  // Available today = on-hand at start of day + what's purchased today
+  // (purchase-before-issue). Overshoot on issues + wastage combined.
+  const avail = oh != null ? oh + num(e.qty) : null;
+  const over = avail != null && (num(issueQty) + num(w.qty)) > avail + 1e-6;
   return (
     <tr className={`border-t border-slate-100 hover:bg-slate-50/70 ${over ? "bg-rose-50/60" : peer ? "bg-sky-50/40" : ""}`} data-testid={`entry-row-${it.id}`}>
       <LeadCells it={it} oh={oh} peer={peer} ctx={ctx} />
       <PurchaseCells it={it} catKey={catKey} e={e} purchAmt={purchAmt} ctx={ctx} />
-      <IssueCells it={it} oh={oh} issueQty={issueQty} rate={rate} issueAmt={issueAmt} over={over} ctx={ctx} />
+      <IssueCells it={it} oh={oh} avail={avail} issueQty={issueQty} rate={rate} issueAmt={issueAmt} over={over} ctx={ctx} />
       <WastageCells it={it} w={w} wasteAmt={wasteAmt} over={over} notesEditor={notesEditor} ctx={ctx} />
     </tr>
   );

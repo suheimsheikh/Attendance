@@ -234,6 +234,7 @@ export default function MealEntryTab({ liveSig }) {
         const lines = r.issues?.[0]?.lines || [];
         const next = {};
         lines.forEach((l) => { next[l.item_id] = l.qty; });
+        savedIssues.current = { ...next };  // server-confirmed baseline
         mergeIssues(next);
       })
       .catch(() => { if (fresh()) mergeIssues({}); });
@@ -327,6 +328,9 @@ export default function MealEntryTab({ liveSig }) {
   const wastageTimer = useRef(null);
   const latestPurch = useRef(purch);
   const latestIssues = useRef(issues);
+  // Last server-confirmed issue quantities per item — the baseline we snap
+  // back to when the server rejects an edit (e.g. issuing more than stock).
+  const savedIssues = useRef({});
   const latestWastage = useRef(wastage);
   useEffect(() => { latestPurch.current = purch; }, [purch]);
   useEffect(() => { latestIssues.current = issues; }, [issues]);
@@ -429,10 +433,34 @@ export default function MealEntryTab({ liveSig }) {
         const res = await api.patch(`/meals/issues/${payload.targetDate}`,
           { upserts: payload.upserts, removes: payload.removes });
         setSavedAt(Date.now());
+        // Update the confirmed baseline for the items we just saved.
+        payload.upserts.forEach((u) => { savedIssues.current[u.item_id] = u.qty; });
+        payload.removes.forEach((id) => { delete savedIssues.current[id]; });
         (res?.warnings || []).forEach((w) => toast.warning(w, { id: `isswarn-${w}`, duration: 8000 }));
       } catch (err) {
-        payload.ids.forEach((i) => dirtyIssues.current.add(i));
-        showApiError(err, "Couldn't auto-save issues");
+        const status = err?.status;
+        if (status === 400 && payload.targetDate === dateRef.current) {
+          // Server rejected these values (e.g. issuing more than stock).
+          // Snap the offending rows back to the last-saved amount so the
+          // grid never shows a quantity the ledger didn't accept, and stop
+          // retrying (a value that always fails must not loop).
+          setIssues((prev) => {
+            const nextS = { ...prev };
+            payload.ids.forEach((iid) => {
+              const base = savedIssues.current[iid];
+              if (base === undefined || base === null || base === "") delete nextS[iid];
+              else nextS[iid] = base;
+            });
+            return nextS;
+          });
+          payload.ids.forEach((i) => dirtyIssues.current.delete(i));
+          toast.error(err?.message || "Not enough stock — record the purchase first, then issue.",
+            { id: "issue-stock-reject", duration: 9000 });
+        } else {
+          // Network / server error: keep the edit and retry on next flush.
+          payload.ids.forEach((i) => dirtyIssues.current.add(i));
+          showApiError(err, "Couldn't auto-save issues");
+        }
       } finally {
         setSaving((s) => ({ ...s, issues: false }));
       }

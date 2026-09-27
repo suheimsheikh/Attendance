@@ -580,3 +580,10 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Hard block at entry already exists (`_assert_issue_stock`, called on POST + PATCH /meals/issues) and is same-day-safe (on-hand as of day d includes same-day purchases). Verified: issuing 999kg chicken → HTTP 400 shortage error.
 - Flags recheck: only negative_stock had the same-day bug (fixed to add same-day purchases). issue_no_price uses the same-day snapshot (safe); other flags don't depend on prior-day stock ordering.
 - All backend-only; needs redeploy for production.
+
+## Update 27 Jun 2026 (cont.) — Daily Entry: resist inconsistent issue entries inline
+- Bug: on a stock-shortage 400 the issue autosave kept the typed value on screen and retried forever, so the grid showed a quantity the ledger never accepted ("app does not resist").
+- Fix (MealEntryTab.jsx flushIssues): on ApiError status 400, snap the offending item(s) back to the last server-confirmed value (savedIssues baseline), stop retrying, and show the server shortage message. Network/5xx still retry. savedIssues baseline set on load + updated on each successful save.
+- Inline consistency (EntryItemRow.jsx): available = start-of-day on-hand + today's purchase qty (purchase-before-issue). Red border + commit-time warning now use this (no false flag when buying+issuing same day). Matches server guard.
+- Null-the-row: added a clear "×" button on the issue cell (shown when qty>0) that nulls the issue, triggers save (removes the line) and recalculates stock, so a wrong entry can be nulled and re-entered.
+- Server hard-block (_assert_issue_stock) already returns 400 for oversell (verified: 999kg chicken → 400). Backend + frontend in preview; needs redeploy for prod.
