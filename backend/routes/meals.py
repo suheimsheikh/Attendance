@@ -447,6 +447,58 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         except Exception:
             pass
 
+    def _round_cmp(v):
+        try:
+            return round(float(v), 4)
+        except (TypeError, ValueError):
+            return v
+
+    def _line_diff(before_lines, after_lines, kind):
+        """Per-item change list between a day's old and new `lines`, so the
+        Kitchen Audit Log can show EXACTLY what changed. Returns
+        [{item, unit, type: added|changed|removed, fields:{f:{before,after}}}].
+        Added Jun 2026."""
+        fields = {
+            "purchase": ["qty", "rate", "amount", "vendor_id"],
+            "issue":    ["qty"],
+            "wastage":  ["qty", "reason", "notes"],
+        }.get(kind, ["qty"])
+
+        def _key(l):
+            return str((l or {}).get("item_id") or (l or {}).get("item_name") or "")
+
+        b = {_key(l): l for l in (before_lines or []) if _key(l)}
+        a = {_key(l): l for l in (after_lines or []) if _key(l)}
+        out = []
+        for k in set(b) | set(a):
+            bl, al = b.get(k), a.get(k)
+            ref = al or bl
+            name = ref.get("item_name") or ref.get("item_id")
+            unit = ref.get("unit") or ""
+            if bl and not al:
+                fld = {f: {"before": bl.get(f), "after": None}
+                       for f in fields if bl.get(f) not in (None, "", 0)}
+                out.append({"item": name, "unit": unit, "type": "removed", "fields": fld})
+            elif al and not bl:
+                fld = {f: {"before": None, "after": al.get(f)}
+                       for f in fields if al.get(f) not in (None, "", 0)}
+                out.append({"item": name, "unit": unit, "type": "added", "fields": fld})
+            else:
+                fld = {}
+                for f in fields:
+                    if _round_cmp(bl.get(f)) != _round_cmp(al.get(f)):
+                        fld[f] = {"before": bl.get(f), "after": al.get(f)}
+                if fld:
+                    out.append({"item": name, "unit": unit, "type": "changed", "fields": fld})
+        out.sort(key=lambda x: (str(x.get("item") or "")).lower())
+        return out
+
+    def _diff_meta(d, diff):
+        counts = {"added": 0, "changed": 0, "removed": 0}
+        for c in diff:
+            counts[c["type"]] = counts.get(c["type"], 0) + 1
+        return {"date": d, "changes": diff, "counts": counts}
+
     async def _require_super_admin(user: dict = Depends(require_admin)):
         if not is_super_admin(user):
             raise HTTPException(status_code=403, detail="Super Admin privileges required")
@@ -2536,9 +2588,21 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             update["updated_at"] = now_utc().isoformat()
             update["updated_by"] = user.get("id")
             update["updated_by_name"] = user.get("full_name") or user.get("email")
+            # Capture before→after per changed field BEFORE mutating `row`.
+            _audit_fields = {
+                k: {"before": row.get(k), "after": v}
+                for k, v in update.items()
+                if k not in ("updated_at", "updated_by", "updated_by_name", "name_norm")
+            }
             await db.meal_items.update_one({"id": item_id}, {"$set": update})
             row.update(update)
             await _signal_meals("items")
+            if _audit_fields:
+                await _audit(user, "meals.item.edit", "meal_item", item_id, row.get("name"),
+                             meta={"date": (row.get("updated_at") or "")[:10],
+                                   "changes": [{"item": row.get("name"), "unit": row.get("unit") or "",
+                                                "type": "changed", "fields": _audit_fields}],
+                                   "counts": {"changed": 1}})
         return row
 
     @router.delete("/meals/items/{item_id}")
@@ -2573,6 +2637,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             )
         await db.meal_items.delete_one({"id": item_id})
         await _signal_meals("items")
+        await _audit(admin, "meals.item.delete", "meal_item", item_id, row.get("name"),
+                     meta={"date": now_utc().isoformat()[:10],
+                           "changes": [{"item": row.get("name"), "unit": row.get("unit") or "",
+                                        "type": "removed", "fields": {}}],
+                           "counts": {"removed": 1}})
         return {"ok": True, "soft_deleted": False}
 
     @router.put("/meals/items/reorder")
@@ -2732,6 +2801,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         }
         await _assert_issue_stock(d, clean)
         warns = await _issue_qty_warnings(d, clean)
+        prev = await db.meal_issues.find_one({"date": d}, {"_id": 0, "lines": 1})
         await db.meal_issues.update_one(
             {"date": d},
             {"$set": {"date": d, "lines": clean, **stamp},
@@ -2739,7 +2809,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             upsert=True,
         )
         await _signal_meals("issues", d)
-        await _audit(user, "meals.issue.save", "meal_issue", d, f"Issues {d}")
+        _diff = _line_diff((prev or {}).get("lines"), clean, "issue")
+        await _audit(user, "meals.issue.save", "meal_issue", d, f"Issues {d}", meta=_diff_meta(d, _diff))
         return {"date": d, "lines": clean, "warnings": warns}
 
     @router.patch("/meals/issues/{date_str}")
@@ -2751,6 +2822,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         item updated atomically (positional $set / $push / $pull) so
         concurrent machines editing different items never clash."""
         d = _not_future(_valid_date(date_str))
+        _prev = await db.meal_issues.find_one({"date": d}, {"_id": 0, "lines": 1})
         item_ids = [str(l.get("item_id") or "") for l in body.upserts if l.get("item_id")]
         items = await db.meal_items.find(
             {"id": {"$in": item_ids}}, {"_id": 0},
@@ -2805,8 +2877,9 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             "updated_by_name": user.get("full_name") or user.get("email"),
         }})
         await _signal_meals("issues", d)
-        await _audit(user, "meals.issue.edit", "meal_issue", d, f"Issues {d}")
         doc = await db.meal_issues.find_one({"date": d}, {"_id": 0})
+        _diff = _line_diff((_prev or {}).get("lines"), (doc or {}).get("lines"), "issue")
+        await _audit(user, "meals.issue.edit", "meal_issue", d, f"Issues {d}", meta=_diff_meta(d, _diff))
         return {"date": d, "lines": (doc or {}).get("lines") or [], "warnings": warns}
 
     # ------------------------------------------------------------------
@@ -2875,13 +2948,15 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             "updated_by": user.get("id"),
             "updated_by_name": user.get("full_name") or user.get("email"),
         }
+        _prev_w = await db.meal_wastage.find_one({"date": d}, {"_id": 0, "lines": 1})
         await db.meal_wastage.update_one(
             {"date": d},
             {"$set": {"date": d, "lines": clean, **stamp},
              "$setOnInsert": {"id": str(uuid.uuid4())}},
             upsert=True,
         )
-        await _audit(user, "meals.wastage.save", "meal_wastage", d, f"Wastage {d}")
+        _diff = _line_diff((_prev_w or {}).get("lines"), clean, "wastage")
+        await _audit(user, "meals.wastage.save", "meal_wastage", d, f"Wastage {d}", meta=_diff_meta(d, _diff))
         await _signal_meals("wastage", d)
         return {"date": d, "lines": clean}
 
@@ -2895,6 +2970,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         concurrent machines editing different items never clash.  Mirrors
         the issues PATCH, but each line carries reason + notes."""
         d = _not_future(_valid_date(date_str))
+        _prev_w = await db.meal_wastage.find_one({"date": d}, {"_id": 0, "lines": 1})
         item_ids = [str(l.get("item_id") or "") for l in body.upserts if l.get("item_id")]
         items = await db.meal_items.find(
             {"id": {"$in": item_ids}}, {"_id": 0},
@@ -2944,9 +3020,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             "updated_by": user.get("id"),
             "updated_by_name": user.get("full_name") or user.get("email"),
         }})
-        await _audit(user, "meals.wastage.edit", "meal_wastage", d, f"Wastage {d}")
         await _signal_meals("wastage", d)
         doc = await db.meal_wastage.find_one({"date": d}, {"_id": 0})
+        _diff = _line_diff((_prev_w or {}).get("lines"), (doc or {}).get("lines"), "wastage")
+        await _audit(user, "meals.wastage.edit", "meal_wastage", d, f"Wastage {d}", meta=_diff_meta(d, _diff))
         return {"date": d, "lines": (doc or {}).get("lines") or []}
 
     # ------------------------------------------------------------------
@@ -3606,8 +3683,20 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         if not (after or {}).get("lines"):
             await db.meal_adjustments.delete_one({"date": d})
         await _signal_meals("adjustments", d)
+        _stk_changes = [
+            {"item": rl.get("name") or rl.get("item_id"), "unit": rl.get("unit") or "",
+             "type": "opening" if rl.get("kind") == "opening" else ("changed" if (rl.get("qty") or 0) else "changed"),
+             "kind": rl.get("kind"),
+             "fields": ({"opening_stock": {"before": None, "after": rl.get("physical")},
+                         "opening_rate": {"before": None, "after": rl.get("rate")}}
+                        if rl.get("kind") == "opening" else
+                        {"on_hand": {"before": rl.get("system"), "after": rl.get("physical")},
+                         "variance": {"before": None, "after": rl.get("qty")}})}
+            for rl in result_lines
+        ]
         await _audit(user, "meals.stocktake.save", "meal_stocktake", d, f"Stock-take {d}",
-                     meta={"counted": counted, "losses": losses})
+                     meta={"date": d, "counted": counted, "losses": losses,
+                           "counts": {"changed": len(_stk_changes)}, "changes": _stk_changes})
         return {"date": d, "counted": counted, "losses": losses,
                 "extras": extras, "unchanged": unchanged, "opening_set": opening_set, "lines": result_lines}
 
@@ -3893,6 +3982,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
 
         if body.lines is not None:
             # Resolve item master once for validation + hydration.
+            _prev_p = await db.meal_purchases.find_one({"date": d}, {"_id": 0, "lines": 1})
             item_ids = [str(l.get("item_id") or "") for l in body.lines if l.get("item_id")]
             items = await db.meal_items.find(
                 {"id": {"$in": item_ids}}, {"_id": 0},
@@ -3941,6 +4031,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 upsert=True,
             )
             await _signal_meals("purchases", d)
+            _diff = _line_diff((_prev_p or {}).get("lines"), clean_lines, "purchase")
+            await _audit(user, "meals.purchase.save", "meal_purchase", d, f"Purchases {d}", meta=_diff_meta(d, _diff))
             return {"date": d, "lines": clean_lines, "amounts": amounts,
                     "total": round(sum(amounts.values()), 2)}
 
@@ -3976,6 +4068,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         derived `amounts` category totals are recomputed from the merged
         doc afterwards so the expense report stays consistent."""
         d = _not_future(_valid_date(date_str))
+        _prev_p = await db.meal_purchases.find_one({"date": d}, {"_id": 0, "lines": 1})
         item_ids = [str(l.get("item_id") or "") for l in body.upserts if l.get("item_id")]
         items = await db.meal_items.find(
             {"id": {"$in": item_ids}}, {"_id": 0},
@@ -4034,7 +4127,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             "updated_by_name": user.get("full_name") or user.get("email"),
         }})
         await _signal_meals("purchases", d)
-        await _audit(user, "meals.purchase.edit", "meal_purchase", d, f"Purchases {d}")
+        _diff = _line_diff((_prev_p or {}).get("lines"), doc.get("lines"), "purchase")
+        await _audit(user, "meals.purchase.edit", "meal_purchase", d, f"Purchases {d}", meta=_diff_meta(d, _diff))
         return {"date": d, "lines": doc.get("lines") or [], "amounts": amounts,
                 "total": round(sum(amounts.values()), 2)}
 

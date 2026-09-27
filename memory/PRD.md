@@ -513,3 +513,15 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - **Bug**: On phones (<768px) The Grid's left-sticky serial+name columns (160px) and the right-sticky 9-column totals strip (~312px) exceeded the viewport and overlapped — the totals painted over member names, leaving them as a single unreadable letter.
 - **Fix**: gated all 27 right-sticky declarations (9 in `calendar-grid/GridRowTotals.jsx`, 18 header `<th>`s in `CalendarGridTab.jsx`) to `md:` — i.e. `sticky right-[Npx]` → `static md:sticky md:right-[Npx]`. Below md the totals scroll with the day cells (name column stays sticky + readable); at md+ behaviour is identical to before. CSS-only, zero JS/behaviour change.
 - Verified: 390px shows full names + scrollable day grid; 1280px totals strip still `position: sticky` (unchanged). Members page (`/admin/members`) checked — already responsive (roster table scrolls horizontally, no page overflow), no change needed.
+
+---
+## Update 25 Jun 2026 (cont.) — Kitchen Audit Log: full before→after detail
+- **Ask**: audit log should show "a lot more fields and exactly what change was made".
+- **Backend** (`routes/meals.py`): added `_line_diff()` + `_diff_meta()` helpers that compute a per-item change list (added / changed / removed with field-level before→after) between a day's old and new `lines`. Wired into ALL kitchen write paths: issue save+edit, wastage save+edit, purchase save (lines PUT — was previously UNAUDITED) + edit, and stock-take (per-item opening/variance). Also NEWLY audit item-master edits (`meals.item.edit` — name/unit/opening/rate/min/norm/category/active/nutrition with before→after) and deletes (`meals.item.delete`). Diff stored in `audit_log.meta.changes` (+ `meta.counts`).
+- **Frontend** (`KitchenAuditLog.jsx`): rows now expandable; each shows a `+added / changed / −removed` summary, and on expand an item-by-item list e.g. "Atta · Min level: ~~999 kg~~ → 0 kg" with struck old value, bold new value, ₹ for money fields, units for qty fields. Added Item edited/deleted to the Type filter.
+- Verified: curl PATCH item → audit `meta.changes` correctly populated; frontend screenshot shows the expanded before→after row. Backend restarts clean.
+- NOTE on tests: `pytest` meal suite has 5 pre-existing/environmental failures (stale soft-delete-200 expectation vs intended 409 hard-refuse; live-preview-DB data state for purchase-categories 409 / low-count / chef-reorder permission) — NOT caused by these changes (no status-code/permission edits).
+
+## Answered (informational)
+- **Nutrition/calorie chart**: lives in Purchases & Issues → **Analytics** sub-tab ("Nutrition of food consumed"). Underlying per-item calorie/macro data entered via the 🔥 flame button on each **Stock Master** item (per-100g editor).
+- **Diet chart & recipes**: NO entry screen exists yet (on-hold P0 feature awaiting the updated diet chart & recipes).
