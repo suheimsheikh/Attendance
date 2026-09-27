@@ -535,3 +535,11 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Backend: `routes/recipes.py` (collections `menu_days`, `menu_meals`, `menu_dishes` [ingredients embedded], `menu_micro_cache`); mounted in server.py after meals. Seed at `backend/seed_recipes.json` (8 days/50 meals/149 dishes/399 ingredients), auto-loaded on first tree GET. Generator: `menu_src/build_seed.py`.
 - Verified: tree render + expand all levels (screenshots), CRUD add/edit/delete via curl (200s, cascade), AI fill returns correct values (Banana K 716mg/200g, Spinach Fe 2.7/Ca 99 per100). 
 - Downloadable combined workbook still at `frontend/public/combined_menu.xlsx` (+ `combined_menu_v3.xlsx`).
+
+## Update 27 Jun 2026 — Recipes header/labels/weights polish [shipped]
+- Column labels: `C/P/F/Fib` → `Carbs / Prot / Fats / Fibre` (kcal kept). Micros keep symbols + units (mg/µg).
+- Two-tier sticky header: group titles row (**Macro Nutrients** amber / **Micro Nutrients** indigo) above the column-label row; entire header block is `sticky top-0`.
+- Colours: macro cells amber-tinted, micro cells indigo-tinted; weight cell emerald(g)/sky(ml).
+- New **Weight** column at start of numeric strip — shows grams and ml separately (stacked), aggregated dish→meal→day (backend `_dish_weight` + `weight_g`/`weight_ml` in tree totals).
+- Removed toolbar **Add day** button AND day-level **Delete day** action (fixed 7-day week); rename-day kept.
+- Verified: curl tree returns weight_g/weight_ml; screenshot confirms grouped sticky header + aligned columns.

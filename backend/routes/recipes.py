@@ -114,6 +114,17 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin):
         except (TypeError, ValueError):
             return 0.0
 
+    def _dish_weight(ings):
+        """Total quantity of a dish split by unit (grams vs millilitres)."""
+        g = ml = 0.0
+        for x in ings:
+            amt = _num(x.get("amount"))
+            if (str(x.get("unit") or "g").lower()) == "ml":
+                ml += amt
+            else:
+                g += amt
+        return round(g, 1), round(ml, 1)
+
     @router.get("/meta")
     async def meta(user=Depends(get_current_user)):
         return {"micros": MICROS, "micro_units": MICRO_UNITS}
@@ -130,26 +141,30 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin):
         for d in dishes:
             dishes_by_meal.setdefault(m["meal_id"] if False else d["meal_id"], []).append(d)
         MAC = ["energy", "carbs", "protein", "fat", "fiber"]
+        WT = ["weight_g", "weight_ml"]
         out_days = []
         for day in days:
             day_meals = []
-            d_tot = {k: 0.0 for k in MAC + MICROS}
+            d_tot = {k: 0.0 for k in MAC + MICROS + WT}
             for m in sorted(meals_by_day.get(day["id"], []), key=lambda x: x.get("order", 0)):
                 m_dishes = []
-                m_tot = {k: 0.0 for k in MAC + MICROS}
+                m_tot = {k: 0.0 for k in MAC + MICROS + WT}
                 for di in sorted(dishes_by_meal.get(m["id"], []), key=lambda x: x.get("order", 0)):
                     micros = _dish_micros(di.get("ingredients", []))
-                    di_out = {**di, "micros": micros}
+                    wg, wml = _dish_weight(di.get("ingredients", []))
+                    di_out = {**di, "micros": micros, "weight_g": wg, "weight_ml": wml}
                     m_dishes.append(di_out)
                     for k in MAC:
                         m_tot[k] += _num(di.get(k))
                     for k in MICROS:
                         if micros.get(k) is not None:
                             m_tot[k] += micros[k]
-                day_meals.append({**m, "dishes": m_dishes, "totals": {k: round(m_tot[k], 2) for k in MAC + MICROS}})
-                for k in MAC + MICROS:
+                    m_tot["weight_g"] += wg
+                    m_tot["weight_ml"] += wml
+                day_meals.append({**m, "dishes": m_dishes, "totals": {k: round(m_tot[k], 2) for k in MAC + MICROS + WT}})
+                for k in MAC + MICROS + WT:
                     d_tot[k] += m_tot[k]
-            out_days.append({**day, "meals": day_meals, "totals": {k: round(d_tot[k], 2) for k in MAC + MICROS}})
+            out_days.append({**day, "meals": day_meals, "totals": {k: round(d_tot[k], 2) for k in MAC + MICROS + WT}})
         return {"days": out_days, "micros": MICROS, "micro_units": MICRO_UNITS}
 
     # ---------------- CRUD: Days ----------------

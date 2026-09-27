@@ -7,27 +7,41 @@ import {
 } from "lucide-react";
 
 const MAC = [
-  { k: "energy", label: "kcal" }, { k: "carbs", label: "C" }, { k: "protein", label: "P" },
-  { k: "fat", label: "F" }, { k: "fiber", label: "Fib" },
+  { k: "energy", label: "kcal" }, { k: "carbs", label: "Carbs" }, { k: "protein", label: "Prot" },
+  { k: "fat", label: "Fats" }, { k: "fiber", label: "Fibre" },
 ];
 const MIC = [
-  { k: "iron", label: "Fe" }, { k: "calcium", label: "Ca" }, { k: "sodium", label: "Na" },
-  { k: "potassium", label: "K" }, { k: "magnesium", label: "Mg" }, { k: "zinc", label: "Zn" },
-  { k: "vitamin_d", label: "VitD" }, { k: "vitamin_b12", label: "B12" },
+  { k: "iron", label: "Fe", unit: "mg" }, { k: "calcium", label: "Ca", unit: "mg" }, { k: "sodium", label: "Na", unit: "mg" },
+  { k: "potassium", label: "K", unit: "mg" }, { k: "magnesium", label: "Mg", unit: "mg" }, { k: "zinc", label: "Zn", unit: "mg" },
+  { k: "vitamin_d", label: "VitD", unit: "µg" }, { k: "vitamin_b12", label: "B12", unit: "µg" },
 ];
-const ALLCOLS = [...MAC, ...MIC];
+const WEIGHT_W = 82, MAC_W = 52, MIC_W = 46;
 
 const n1 = (v) => (v === null || v === undefined || v === "" || Number(v) === 0 ? "" : Number(v).toFixed(1));
+const w1 = (v) => (!v || Number(v) === 0 ? "" : (Number.isInteger(Number(v)) ? String(Number(v)) : Number(v).toFixed(1)));
 
 // numeric strip shared by every row so columns line up across indent levels
 function Stats({ obj, bold }) {
+  const g = obj?.weight_g, ml = obj?.weight_ml;
   return (
-    <div className="hidden md:grid gap-0 text-[11px] tabular-nums shrink-0" style={{ width: 13 * 46, gridTemplateColumns: "repeat(13, 46px)" }} data-testid="recipe-stats">
-      {ALLCOLS.map((c) => (
-        <div key={c.k} className={`text-right px-1.5 py-0.5 ${bold ? "font-bold text-slate-900" : "text-slate-600"}`}>
-          {n1(obj?.[c.k])}
-        </div>
-      ))}
+    <div className="hidden md:flex items-stretch text-[11px] tabular-nums shrink-0" data-testid="recipe-stats">
+      {/* weight */}
+      <div className="flex flex-col items-end justify-center px-1.5 leading-tight border-l border-slate-200" style={{ width: WEIGHT_W }}>
+        {g ? <span className={bold ? "font-bold text-emerald-800" : "text-emerald-700"}>{w1(g)} g</span> : null}
+        {ml ? <span className="text-sky-600">{w1(ml)} ml</span> : null}
+      </div>
+      {/* macro nutrients */}
+      <div className="grid border-l border-amber-200/70" style={{ gridTemplateColumns: `repeat(${MAC.length}, ${MAC_W}px)` }}>
+        {MAC.map((c) => (
+          <div key={c.k} className={`text-right px-1.5 py-0.5 ${bold ? "font-bold text-amber-900" : "text-amber-700/90"}`}>{n1(obj?.[c.k])}</div>
+        ))}
+      </div>
+      {/* micro nutrients */}
+      <div className="grid border-l border-indigo-200/70" style={{ gridTemplateColumns: `repeat(${MIC.length}, ${MIC_W}px)` }}>
+        {MIC.map((c) => (
+          <div key={c.k} className={`text-right px-1.5 py-0.5 ${bold ? "font-bold text-indigo-900" : "text-indigo-600/80"}`}>{n1(obj?.[c.k])}</div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -167,18 +181,35 @@ export default function Recipes() {
       <p className="text-xs text-slate-500 mb-4">Weekly menu tree — <b>Day → Meal → Dish → Ingredients</b>. Macros are per serving; micronutrients (per serving) are computed from each ingredient's per-100g values filled by AI. Click a row to expand.</p>
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <button onClick={() => mDay()} className="iu-btn-secondary !h-9 inline-flex items-center gap-1" data-testid="recipe-add-day"><Plus size={14} /> Add day</button>
         <button onClick={runAI} disabled={aiBusy} className="iu-btn-primary !h-9 inline-flex items-center gap-1" data-testid="recipe-ai-fill">
           {aiBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Fill micronutrients with AI
         </button>
         {aiMsg && <span className="text-xs text-emerald-700" data-testid="recipe-ai-msg">{aiMsg}</span>}
       </div>
 
-      {/* column header */}
-      <div className="hidden md:flex items-center justify-end sticky top-0 bg-slate-50 border border-slate-200 rounded-t-lg px-3 py-1.5 z-10">
-        <div className="flex-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">Day / Meal / Dish / Ingredient</div>
-        <div className="grid gap-0 shrink-0" style={{ width: 13 * 46, gridTemplateColumns: "repeat(13, 46px)" }}>
-          {ALLCOLS.map((c) => <div key={c.k} className="text-right px-1.5 text-[10px] font-bold text-slate-500 uppercase">{c.label}</div>)}
+      {/* sticky two-tier column header */}
+      <div className="hidden md:block sticky top-0 z-20" data-testid="recipe-header">
+        {/* tier 1 — group titles */}
+        <div className="flex items-stretch bg-white border border-slate-200 rounded-t-lg px-3">
+          <div className="flex-1 flex items-end py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Day / Meal / Dish / Ingredient</div>
+          <div className="flex items-center justify-center border-l border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500" style={{ width: WEIGHT_W }}>Weight</div>
+          <div className="flex items-center justify-center border-l border-amber-200 bg-amber-100 text-[11px] font-extrabold uppercase tracking-wide text-amber-800" style={{ width: MAC.length * MAC_W }}>Macro Nutrients</div>
+          <div className="flex items-center justify-center border-l border-indigo-200 bg-indigo-100 text-[11px] font-extrabold uppercase tracking-wide text-indigo-800" style={{ width: MIC.length * MIC_W }}>Micro Nutrients</div>
+        </div>
+        {/* tier 2 — column labels */}
+        <div className="flex items-stretch bg-slate-50/90 backdrop-blur border border-t-0 border-slate-200 px-3">
+          <div className="flex-1" />
+          <div className="flex items-center justify-center border-l border-slate-200 text-[9px] font-semibold text-slate-400" style={{ width: WEIGHT_W }}>g · ml</div>
+          <div className="grid border-l border-amber-200/70 bg-amber-50/70" style={{ gridTemplateColumns: `repeat(${MAC.length}, ${MAC_W}px)` }}>
+            {MAC.map((c) => <div key={c.k} className="text-right px-1.5 py-1 text-[10px] font-bold text-amber-700">{c.label}</div>)}
+          </div>
+          <div className="grid border-l border-indigo-200/70 bg-indigo-50/70" style={{ gridTemplateColumns: `repeat(${MIC.length}, ${MIC_W}px)` }}>
+            {MIC.map((c) => (
+              <div key={c.k} className="text-right px-1.5 py-1 leading-none text-[10px] font-bold text-indigo-700">
+                {c.label}<span className="block text-[8px] font-normal text-indigo-400 mt-0.5">{c.unit}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -198,7 +229,6 @@ export default function Recipes() {
                   <span className="opacity-0 group-hover:opacity-100 flex items-center transition">
                     <IconBtn title="Add meal" onClick={() => mMeal(day.id)} testid={`recipe-add-meal-${day.id}`}><Plus size={14} /></IconBtn>
                     <IconBtn title="Rename day" onClick={() => mDay(day)}><Pencil size={13} /></IconBtn>
-                    <IconBtn title="Delete day" onClick={() => del(`/recipes/days/${day.id}`, day.name)} cls="hover:text-rose-600"><Trash2 size={13} /></IconBtn>
                   </span>
                   <Stats obj={day.totals} bold />
                 </div>
