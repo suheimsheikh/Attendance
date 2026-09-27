@@ -4721,6 +4721,9 @@ from routes.meals import make_router as _meals_router  # noqa: E402
 _meals = _meals_router(db, require_admin, get_current_user, require_chef_or_admin, write_audit)
 app.include_router(_meals)
 
+from routes.recipes import make_router as _recipes_router  # noqa: E402
+app.include_router(_recipes_router(db, require_admin, get_current_user, require_chef_or_admin))
+
 # Presence + row-focus (Feb 2026). Reuses the meals SSE channel so
 # peer tabs learn about focus changes on the same channel they already
 # subscribe to.

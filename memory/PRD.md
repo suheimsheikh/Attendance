@@ -525,3 +525,13 @@ User request: "When issuing any item from the kitchen it should not allow if the
 ## Answered (informational)
 - **Nutrition/calorie chart**: lives in Purchases & Issues → **Analytics** sub-tab ("Nutrition of food consumed"). Underlying per-item calorie/macro data entered via the 🔥 flame button on each **Stock Master** item (per-100g editor).
 - **Diet chart & recipes**: NO entry screen exists yet (on-hold P0 feature awaiting the updated diet chart & recipes).
+
+---
+## Update 26 Jun 2026 — Recipes module (weekly menu tree + AI micronutrients) [shipped]
+- Absorbed the combined menu workbook into MongoDB and built a new **Recipes** page under Kitchen (`/admin/recipes`, sidebar in both NAV_KITCHEN + NAV_COACH_KITCHEN).
+- Collapsible, deeply-indented tree **Day → Meal → Dish → Ingredient** with live macro (kcal/C/P/F/Fib) + micronutrient totals at every level. Micros: Iron, Calcium, Sodium, Potassium, Magnesium, Zinc, Vitamin D, Vitamin B12 — shown per dish serving.
+- Full CRUD at all four levels incl. creating new branches (add day/meal/dish/ingredient, rename, delete with cascade). Generic NodeModal drives all forms.
+- **Claude micro-fill** (`claude-haiku-4-5-20251001` via Emergent LLM key, emergentintegrations): stores per-100g values on each ingredient; dish totals = per100 × grams/100. A name-keyed cache (`menu_micro_cache`) means each distinct ingredient hits the LLM once. Adding/editing an ingredient auto-fills (cache-first); a "Fill micronutrients with AI" button bulk-fills missing ones in repeatable batches (POST /recipes/fill-micros?limit=). 
+- Backend: `routes/recipes.py` (collections `menu_days`, `menu_meals`, `menu_dishes` [ingredients embedded], `menu_micro_cache`); mounted in server.py after meals. Seed at `backend/seed_recipes.json` (8 days/50 meals/149 dishes/399 ingredients), auto-loaded on first tree GET. Generator: `menu_src/build_seed.py`.
+- Verified: tree render + expand all levels (screenshots), CRUD add/edit/delete via curl (200s, cascade), AI fill returns correct values (Banana K 716mg/200g, Spinach Fe 2.7/Ca 99 per100). 
+- Downloadable combined workbook still at `frontend/public/combined_menu.xlsx` (+ `combined_menu_v3.xlsx`).

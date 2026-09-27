@@ -24,6 +24,7 @@ const Meals = lazy(() => import("./pages/Meals"));
 const MealsReport = lazy(() => import("./pages/admin/MealsReport"));
 const KitchenAuditLog = lazy(() => import("./pages/admin/KitchenAuditLog"));
 const MealsDataHealth = lazy(() => import("./pages/admin/MealsDataHealth"));
+const Recipes = lazy(() => import("./pages/admin/Recipes"));
 const MealsCalendar = lazy(() => import("./pages/admin/MealsCalendar"));
 const Members = lazy(() => import("./pages/admin/Members"));
 const Devices = lazy(() => import("./pages/admin/Devices"));
@@ -150,6 +151,7 @@ function App() {
             <Route path="admin/meals-report" element={<RequireChefOrAdmin><MealsReport /></RequireChefOrAdmin>} />
             <Route path="admin/kitchen-audit" element={<RequireChefOrAdmin><KitchenAuditLog /></RequireChefOrAdmin>} />
             <Route path="admin/kitchen-health" element={<RequireChefOrAdmin><MealsDataHealth /></RequireChefOrAdmin>} />
+            <Route path="admin/recipes" element={<RequireChefOrAdmin><Recipes /></RequireChefOrAdmin>} />
             <Route path="admin/meals-calendar" element={<RequireChefOrAdmin><MealsCalendar /></RequireChefOrAdmin>} />
             <Route path="my-leaves" element={<RequireMember><MyLeaves /></RequireMember>} />
             <Route path="my-corrections" element={<RequireMember><MyCorrections /></RequireMember>} />

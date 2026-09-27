@@ -1,0 +1,8524 @@
+{
+ "days": [
+  {
+   "name": "Monday",
+   "order": 0,
+   "meals": [
+    {
+     "name": "Pre-Training",
+     "order": 0,
+     "dishes": [
+      {
+       "name": "Banana",
+       "cooked_qty": "2no",
+       "order": 0,
+       "energy": 210,
+       "carbs": 47.2,
+       "protein": 2.4,
+       "fat": 0.6,
+       "fiber": 3.8,
+       "ingredients": [
+        {
+         "name": "Banana",
+         "amount": 200.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Pre -Breakfast",
+     "order": 1,
+     "dishes": [
+      {
+       "name": "Beet Juice",
+       "cooked_qty": "100ml",
+       "order": 0,
+       "energy": 34,
+       "carbs": 5.9,
+       "protein": 1.7,
+       "fat": 0.1,
+       "fiber": 3.6,
+       "ingredients": [
+        {
+         "name": "Beetroot",
+         "amount": 90.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Amla",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Nuts & seeds mix",
+       "cooked_qty": "30g",
+       "order": 1,
+       "energy": 145,
+       "carbs": 7.7,
+       "protein": 5,
+       "fat": 10.9,
+       "fiber": 3.2,
+       "ingredients": [
+        {
+         "name": "Almonds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "walnuts",
+         "amount": 2.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Dates",
+         "amount": 3.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Pumpkin seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Sunflower seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Flax seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Raisins",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 6,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Breakfast",
+     "order": 2,
+     "dishes": [
+      {
+       "name": "Peanut butter sandwiches",
+       "cooked_qty": "4 slices",
+       "order": 0,
+       "energy": 351,
+       "carbs": 61,
+       "protein": 12.7,
+       "fat": 6.7,
+       "fiber": 1.8,
+       "ingredients": [
+        {
+         "name": "Bread",
+         "amount": 120.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Peanut butter",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Vegetable omlete",
+       "cooked_qty": "150g",
+       "order": 1,
+       "energy": 185,
+       "carbs": 2.7,
+       "protein": 13.9,
+       "fat": 13.1,
+       "fiber": 0.9,
+       "ingredients": [
+        {
+         "name": "Eggs",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Mid morning",
+     "order": 3,
+     "dishes": [
+      {
+       "name": "Fruits",
+       "cooked_qty": "100g (banana as ref)",
+       "order": 0,
+       "energy": 105,
+       "carbs": 23,
+       "protein": 1.2,
+       "fat": 0.3,
+       "fiber": 1.9,
+       "ingredients": []
+      }
+     ]
+    },
+    {
+     "name": "Lunch",
+     "order": 4,
+     "dishes": [
+      {
+       "name": "Raw salad",
+       "cooked_qty": "60g",
+       "order": 0,
+       "energy": 18,
+       "carbs": 3,
+       "protein": 0.7,
+       "fat": 0,
+       "fiber": 1.8,
+       "ingredients": [
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beetroot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Cucumber",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Vegetable pulao",
+       "cooked_qty": "300g",
+       "order": 2,
+       "energy": 471,
+       "carbs": 97.3,
+       "protein": 10.5,
+       "fat": 3.1,
+       "fiber": 2.1,
+       "ingredients": [
+        {
+         "name": "Rice",
+         "amount": 120.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beans",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Chole & soya curry",
+       "cooked_qty": "150g",
+       "order": 3,
+       "energy": 284,
+       "carbs": 32.3,
+       "protein": 25.4,
+       "fat": 5.25,
+       "fiber": 17.4,
+       "ingredients": [
+        {
+         "name": "Chole (channa ref)",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Soya",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ridge gourd curry",
+       "cooked_qty": "100g",
+       "order": 4,
+       "energy": 45,
+       "carbs": 3.6,
+       "protein": 1.2,
+       "fat": 2.6,
+       "fiber": 2.2,
+       "ingredients": [
+        {
+         "name": "Ridge gourd",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Curd",
+       "cooked_qty": "60g",
+       "order": 5,
+       "energy": 36,
+       "carbs": 1.8,
+       "protein": 1.8,
+       "fat": 2.4,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Curd",
+         "amount": 60.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Evenings",
+     "order": 5,
+     "dishes": [
+      {
+       "name": "Boiled Sundal",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 175,
+       "carbs": 21.6,
+       "protein": 9.6,
+       "fat": 5,
+       "fiber": 13,
+       "ingredients": [
+        {
+         "name": "Brown channa",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Banana milkshake",
+       "cooked_qty": "150ml",
+       "order": 1,
+       "energy": 179,
+       "carbs": 25.1,
+       "protein": 4.2,
+       "fat": 6.6,
+       "fiber": 0.9,
+       "ingredients": [
+        {
+         "name": "Banana",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Milk",
+         "amount": 100.0,
+         "unit": "ml",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Honey",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Dinner",
+     "order": 6,
+     "dishes": [
+      {
+       "name": "Steamed veggies",
+       "cooked_qty": "60g",
+       "order": 0,
+       "energy": 19,
+       "carbs": 2.9,
+       "protein": 1.2,
+       "fat": 0,
+       "fiber": 1.5,
+       "ingredients": [
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beans",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Brocolli/beetroot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Plain rice",
+       "cooked_qty": "300g",
+       "order": 2,
+       "energy": 427,
+       "carbs": 93.8,
+       "protein": 9.5,
+       "fat": 0.6,
+       "fiber": 0.7,
+       "ingredients": [
+        {
+         "name": "Rice",
+         "amount": 120.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Gogura chicken curry",
+       "cooked_qty": "200g",
+       "order": 3,
+       "energy": 206,
+       "carbs": 2.7,
+       "protein": 22.3,
+       "fat": 11.6,
+       "fiber": 0.9,
+       "ingredients": [
+        {
+         "name": "Chicken",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ivy gourd curry",
+       "cooked_qty": "60g",
+       "order": 4,
+       "energy": 51,
+       "carbs": 4.3,
+       "protein": 1.5,
+       "fat": 2.7,
+       "fiber": 3.6,
+       "ingredients": [
+        {
+         "name": "Ivy gourd",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Tuesday",
+   "order": 1,
+   "meals": [
+    {
+     "name": "Pre-Training",
+     "order": 0,
+     "dishes": [
+      {
+       "name": "Banana",
+       "cooked_qty": "2no",
+       "order": 0,
+       "energy": 210,
+       "carbs": 47.2,
+       "protein": 2.4,
+       "fat": 0.6,
+       "fiber": 3.8,
+       "ingredients": [
+        {
+         "name": "Banana",
+         "amount": 200.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Pre -Breakfast",
+     "order": 1,
+     "dishes": [
+      {
+       "name": "Beet Juice",
+       "cooked_qty": "100ml",
+       "order": 0,
+       "energy": 34,
+       "carbs": 5.9,
+       "protein": 1.7,
+       "fat": 0.1,
+       "fiber": 3.6,
+       "ingredients": [
+        {
+         "name": "Beetroot",
+         "amount": 90.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Amla",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Nuts & seeds mix",
+       "cooked_qty": "30g",
+       "order": 1,
+       "energy": 145,
+       "carbs": 7.7,
+       "protein": 5,
+       "fat": 10.9,
+       "fiber": 3.2,
+       "ingredients": [
+        {
+         "name": "Almonds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "walnuts",
+         "amount": 2.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Dates",
+         "amount": 3.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Pumpkin seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Sunflower seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Flax seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Raisins",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 6,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Breakfast",
+     "order": 2,
+     "dishes": [
+      {
+       "name": "Vegetable millet upma",
+       "cooked_qty": "200g",
+       "order": 0,
+       "energy": 314,
+       "carbs": 53,
+       "protein": 11,
+       "fat": 6,
+       "fiber": 8.3,
+       "ingredients": [
+        {
+         "name": "Millet",
+         "amount": 80.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beans",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Peanut chutney",
+       "cooked_qty": "30g",
+       "order": 1,
+       "energy": 114,
+       "carbs": 8.3,
+       "protein": 5.7,
+       "fat": 6.4,
+       "fiber": 1.6,
+       "ingredients": [
+        {
+         "name": "Peanuts",
+         "amount": 15.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Putna",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Scrambled eggs",
+       "cooked_qty": "100g",
+       "order": 2,
+       "energy": 170,
+       "carbs": 0,
+       "protein": 13.4,
+       "fat": 13,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Eggs",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Mid morning",
+     "order": 3,
+     "dishes": [
+      {
+       "name": "Fruits",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 105,
+       "carbs": 23,
+       "protein": 1.2,
+       "fat": 0.3,
+       "fiber": 1.9,
+       "ingredients": [
+        {
+         "name": "fruits (banana as ref)",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Lunch",
+     "order": 4,
+     "dishes": [
+      {
+       "name": "Raw salad",
+       "cooked_qty": "60g",
+       "order": 0,
+       "energy": 18,
+       "carbs": 3,
+       "protein": 0.7,
+       "fat": 0,
+       "fiber": 1.8,
+       "ingredients": [
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beetroot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Cucumber",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Multigrain roti",
+       "cooked_qty": "2no",
+       "order": 2,
+       "energy": 198,
+       "carbs": 36.5,
+       "protein": 7.3,
+       "fat": 2.5,
+       "fiber": 4.8,
+       "ingredients": [
+        {
+         "name": "(no ingredients listed)",
+         "amount": null,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Plain rice",
+       "cooked_qty": "180g",
+       "order": 3,
+       "energy": 213,
+       "carbs": 46.9,
+       "protein": 4.7,
+       "fat": 0.3,
+       "fiber": 1.6,
+       "ingredients": [
+        {
+         "name": "(no ingredients listed)",
+         "amount": null,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Spinach & paneer bhurji",
+       "cooked_qty": "150g",
+       "order": 4,
+       "energy": 348,
+       "carbs": 11.8,
+       "protein": 15.8,
+       "fat": 26.1,
+       "fiber": 1.9,
+       "ingredients": [
+        {
+         "name": "Spinach",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Paneer",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Tomato rasam with veggies",
+       "cooked_qty": "150ml",
+       "order": 5,
+       "energy": 54,
+       "carbs": 5.2,
+       "protein": 1.3,
+       "fat": 2.9,
+       "fiber": 2.7,
+       "ingredients": [
+        {
+         "name": "Tomato pulp",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "bottle gourd",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Curd",
+       "cooked_qty": "60g",
+       "order": 6,
+       "energy": 36,
+       "carbs": 1.8,
+       "protein": 1.8,
+       "fat": 2.4,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Curd",
+         "amount": 60.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Evenings",
+     "order": 5,
+     "dishes": [
+      {
+       "name": "Boiled peanuts",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 275,
+       "carbs": 11.3,
+       "protein": 12.3,
+       "fat": 19.9,
+       "fiber": 6.1,
+       "ingredients": [
+        {
+         "name": "Peanuts",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Dates & anjeer milkshake",
+       "cooked_qty": "150ml",
+       "order": 1,
+       "energy": 143,
+       "carbs": 16.7,
+       "protein": 3.9,
+       "fat": 8,
+       "fiber": 1,
+       "ingredients": [
+        {
+         "name": "Dates",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Anjeer",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Milk",
+         "amount": 100.0,
+         "unit": "ml",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Dinner",
+     "order": 6,
+     "dishes": [
+      {
+       "name": "Mix veg soup",
+       "cooked_qty": "150ml",
+       "order": 0,
+       "energy": 37,
+       "carbs": 6.8,
+       "protein": 1.3,
+       "fat": 0.1,
+       "fiber": 1.9,
+       "ingredients": [
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beans",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "ragi flour",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Vegetable rice",
+       "cooked_qty": "300g",
+       "order": 2,
+       "energy": 471,
+       "carbs": 97.3,
+       "protein": 10.5,
+       "fat": 3.1,
+       "fiber": 2.1,
+       "ingredients": []
+      },
+      {
+       "name": "Black channa curry",
+       "cooked_qty": "200g",
+       "order": 3,
+       "energy": 238,
+       "carbs": 30.3,
+       "protein": 13.6,
+       "fat": 6.1,
+       "fiber": 18.5,
+       "ingredients": [
+        {
+         "name": "Black channa",
+         "amount": 70.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ladies finger curry",
+       "cooked_qty": "100g",
+       "order": 4,
+       "energy": 59,
+       "carbs": 5.5,
+       "protein": 2.3,
+       "fat": 2.7,
+       "fiber": 4.4,
+       "ingredients": [
+        {
+         "name": "Ladies finger",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Wednesday",
+   "order": 2,
+   "meals": [
+    {
+     "name": "Pre-Training",
+     "order": 0,
+     "dishes": [
+      {
+       "name": "Banana",
+       "cooked_qty": "2no",
+       "order": 0,
+       "energy": 210,
+       "carbs": 47.2,
+       "protein": 2.4,
+       "fat": 0.6,
+       "fiber": 3.8,
+       "ingredients": [
+        {
+         "name": "Banana",
+         "amount": 200.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Pre -Breakfast",
+     "order": 1,
+     "dishes": [
+      {
+       "name": "Beet Juice",
+       "cooked_qty": "100ml",
+       "order": 0,
+       "energy": 34,
+       "carbs": 5.9,
+       "protein": 1.7,
+       "fat": 0.1,
+       "fiber": 3.6,
+       "ingredients": [
+        {
+         "name": "Beetroot",
+         "amount": 90.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Amla",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Nuts & seeds mix",
+       "cooked_qty": "30g",
+       "order": 1,
+       "energy": 145,
+       "carbs": 7.7,
+       "protein": 5,
+       "fat": 10.9,
+       "fiber": 3.2,
+       "ingredients": [
+        {
+         "name": "Almonds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "walnuts",
+         "amount": 2.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Dates",
+         "amount": 3.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Pumpkin seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Sunflower seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Flax seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Raisins",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 6,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Breakfast",
+     "order": 2,
+     "dishes": [
+      {
+       "name": "Ragi Idly",
+       "cooked_qty": "200g",
+       "order": 0,
+       "energy": 288,
+       "carbs": 56.1,
+       "protein": 10.9,
+       "fat": 1,
+       "fiber": 10.5,
+       "ingredients": [
+        {
+         "name": "Urad dal",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Idly rava",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Ragi flour",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Tomato & corriander chutney",
+       "cooked_qty": "50g",
+       "order": 1,
+       "energy": 122,
+       "carbs": 4.2,
+       "protein": 5.4,
+       "fat": 8.8,
+       "fiber": 4.3,
+       "ingredients": [
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Corriander",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Peanuts",
+         "amount": 15.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Boiled eggs",
+       "cooked_qty": "2no",
+       "order": 2,
+       "energy": 147,
+       "carbs": 0,
+       "protein": 13.4,
+       "fat": 10.5,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Eggs",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Mid morning",
+     "order": 3,
+     "dishes": [
+      {
+       "name": "Fruits",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 105,
+       "carbs": 23,
+       "protein": 1.2,
+       "fat": 0.3,
+       "fiber": 1.9,
+       "ingredients": [
+        {
+         "name": "fruits (banana as ref)",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Lunch",
+     "order": 4,
+     "dishes": [
+      {
+       "name": "Raw salad",
+       "cooked_qty": "60g",
+       "order": 0,
+       "energy": 18,
+       "carbs": 3,
+       "protein": 0.7,
+       "fat": 0,
+       "fiber": 1.8,
+       "ingredients": [
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beetroot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Cucumber",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Pudina rice",
+       "cooked_qty": "300g",
+       "order": 2,
+       "energy": 487,
+       "carbs": 96.1,
+       "protein": 14.1,
+       "fat": 3.1,
+       "fiber": 6.5,
+       "ingredients": [
+        {
+         "name": "Rice",
+         "amount": 120.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Pudina",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Chicken curry",
+       "cooked_qty": "200g",
+       "order": 3,
+       "energy": 232,
+       "carbs": 2.7,
+       "protein": 19,
+       "fat": 15.9,
+       "fiber": 0.9,
+       "ingredients": [
+        {
+         "name": "Chicken",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Vegetable sambar",
+       "cooked_qty": "100g",
+       "order": 4,
+       "energy": 93,
+       "carbs": 12,
+       "protein": 3.9,
+       "fat": 2.8,
+       "fiber": 3.2,
+       "ingredients": [
+        {
+         "name": "Red gram dal",
+         "amount": 15.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Bottle gourd",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Curd",
+       "cooked_qty": "60g",
+       "order": 5,
+       "energy": 36,
+       "carbs": 1.8,
+       "protein": 1.8,
+       "fat": 2.4,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Curd",
+         "amount": 60.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Evenings",
+     "order": 5,
+     "dishes": [
+      {
+       "name": "Boiled corn",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 137,
+       "carbs": 20,
+       "protein": 4.7,
+       "fat": 3.8,
+       "fiber": 4.7,
+       "ingredients": [
+        {
+         "name": "Sweet corn",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "cucumber",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ragi jaggery milkshake",
+       "cooked_qty": "150ml",
+       "order": 1,
+       "energy": 195,
+       "carbs": 28.3,
+       "protein": 4.6,
+       "fat": 6.7,
+       "fiber": 1.6,
+       "ingredients": [
+        {
+         "name": "Ragi flour",
+         "amount": 15.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Milk",
+         "amount": 100.0,
+         "unit": "ml",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Jaggery",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Dinner",
+     "order": 6,
+     "dishes": [
+      {
+       "name": "Steamed veggies",
+       "cooked_qty": "60g",
+       "order": 0,
+       "energy": 19,
+       "carbs": 2.9,
+       "protein": 1.2,
+       "fat": 0,
+       "fiber": 1.5,
+       "ingredients": [
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beans",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Brocolli/beetroot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Multigrain roti",
+       "cooked_qty": "2no",
+       "order": 2,
+       "energy": 198,
+       "carbs": 36.5,
+       "protein": 7.3,
+       "fat": 2.5,
+       "fiber": 4.8,
+       "ingredients": [
+        {
+         "name": "(no ingredients listed)",
+         "amount": null,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Plain rice",
+       "cooked_qty": "180g",
+       "order": 3,
+       "energy": 213,
+       "carbs": 46.9,
+       "protein": 4.7,
+       "fat": 0.3,
+       "fiber": 1.6,
+       "ingredients": [
+        {
+         "name": "(no ingredients listed)",
+         "amount": null,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Boiled eggs curry",
+       "cooked_qty": "200g",
+       "order": 4,
+       "energy": 207,
+       "carbs": 2.7,
+       "protein": 13.9,
+       "fat": 15.6,
+       "fiber": 0.9,
+       "ingredients": [
+        {
+         "name": "Eggs",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Mushroom & peas curry",
+       "cooked_qty": "100g",
+       "order": 5,
+       "energy": 105,
+       "carbs": 10.5,
+       "protein": 7.7,
+       "fat": 3,
+       "fiber": 7.1,
+       "ingredients": [
+        {
+         "name": "Mushroom",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Peas",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Thursday",
+   "order": 3,
+   "meals": [
+    {
+     "name": "Pre-Training",
+     "order": 0,
+     "dishes": [
+      {
+       "name": "Banana",
+       "cooked_qty": "2no",
+       "order": 0,
+       "energy": 210,
+       "carbs": 47.2,
+       "protein": 2.4,
+       "fat": 0.6,
+       "fiber": 3.8,
+       "ingredients": [
+        {
+         "name": "Banana",
+         "amount": 200.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Pre -Breakfast",
+     "order": 1,
+     "dishes": [
+      {
+       "name": "Beet Juice",
+       "cooked_qty": "100ml",
+       "order": 0,
+       "energy": 34,
+       "carbs": 5.9,
+       "protein": 1.7,
+       "fat": 0.1,
+       "fiber": 3.6,
+       "ingredients": [
+        {
+         "name": "Beetroot",
+         "amount": 90.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Amla",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Nuts & seeds mix",
+       "cooked_qty": "30g",
+       "order": 1,
+       "energy": 145,
+       "carbs": 7.7,
+       "protein": 5,
+       "fat": 10.9,
+       "fiber": 3.2,
+       "ingredients": [
+        {
+         "name": "Almonds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "walnuts",
+         "amount": 2.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Dates",
+         "amount": 3.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Pumpkin seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Sunflower seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Flax seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Raisins",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 6,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Breakfast",
+     "order": 2,
+     "dishes": [
+      {
+       "name": "Vegetable Poha",
+       "cooked_qty": "200g",
+       "order": 0,
+       "energy": 403,
+       "carbs": 80.3,
+       "protein": 8.6,
+       "fat": 3.7,
+       "fiber": 5.3,
+       "ingredients": [
+        {
+         "name": "Poha",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beans",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Scrambled eggs",
+       "cooked_qty": "100g",
+       "order": 1,
+       "energy": 170,
+       "carbs": 0,
+       "protein": 13.4,
+       "fat": 13,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Eggs",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Mid morning",
+     "order": 3,
+     "dishes": [
+      {
+       "name": "Fruits",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 105,
+       "carbs": 23,
+       "protein": 1.2,
+       "fat": 0.3,
+       "fiber": 1.9,
+       "ingredients": [
+        {
+         "name": "fruits (banana as ref)",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Lunch",
+     "order": 4,
+     "dishes": [
+      {
+       "name": "Raw salad",
+       "cooked_qty": "60g",
+       "order": 0,
+       "energy": 18,
+       "carbs": 3,
+       "protein": 0.7,
+       "fat": 0,
+       "fiber": 1.8,
+       "ingredients": [
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beetroot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Cucumber",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Vegetable millet",
+       "cooked_qty": "120g",
+       "order": 2,
+       "energy": 210,
+       "carbs": 38.1,
+       "protein": 8,
+       "fat": 2.5,
+       "fiber": 5.8,
+       "ingredients": [
+        {
+         "name": "(no ingredients listed)",
+         "amount": null,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Plain rice",
+       "cooked_qty": "120g",
+       "order": 3,
+       "energy": 213,
+       "carbs": 46.9,
+       "protein": 4.7,
+       "fat": 0.3,
+       "fiber": 1.6,
+       "ingredients": []
+      },
+      {
+       "name": "Whole moong & soya crumble",
+       "cooked_qty": "150g",
+       "order": 4,
+       "energy": 229,
+       "carbs": 26.4,
+       "protein": 22.8,
+       "fat": 3.05,
+       "fiber": 9.9,
+       "ingredients": [
+        {
+         "name": "Moong dal",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Soya",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Palak Aloo",
+       "cooked_qty": "100g",
+       "order": 5,
+       "energy": 81,
+       "carbs": 9.4,
+       "protein": 2.8,
+       "fat": 3.1,
+       "fiber": 3.1,
+       "ingredients": [
+        {
+         "name": "Palak",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Aloo",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Curd",
+       "cooked_qty": "60g",
+       "order": 6,
+       "energy": 36,
+       "carbs": 1.8,
+       "protein": 1.8,
+       "fat": 2.4,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Curd",
+         "amount": 60.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Evenings",
+     "order": 5,
+     "dishes": [
+      {
+       "name": "Boiled Sundal",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 175,
+       "carbs": 21.6,
+       "protein": 9.6,
+       "fat": 5,
+       "fiber": 13,
+       "ingredients": [
+        {
+         "name": "Brown channa",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Banana milkshake",
+       "cooked_qty": "150ml",
+       "order": 1,
+       "energy": 179,
+       "carbs": 25.1,
+       "protein": 4.2,
+       "fat": 6.6,
+       "fiber": 0.9,
+       "ingredients": [
+        {
+         "name": "Banana",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Milk",
+         "amount": 100.0,
+         "unit": "ml",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Honey",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Dinner",
+     "order": 6,
+     "dishes": [
+      {
+       "name": "Tomato soup",
+       "cooked_qty": "150ml",
+       "order": 0,
+       "energy": 44,
+       "carbs": 7.9,
+       "protein": 1.5,
+       "fat": 0.5,
+       "fiber": 2.6,
+       "ingredients": [
+        {
+         "name": "Tomatoes",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Ragi flour",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Vegetable rice",
+       "cooked_qty": "300g",
+       "order": 2,
+       "energy": 471,
+       "carbs": 97.3,
+       "protein": 10.5,
+       "fat": 3.1,
+       "fiber": 2.1,
+       "ingredients": []
+      },
+      {
+       "name": "Mutton curry",
+       "cooked_qty": "200g",
+       "order": 3,
+       "energy": 232,
+       "carbs": 2.7,
+       "protein": 19,
+       "fat": 15.9,
+       "fiber": 0.9,
+       "ingredients": [
+        {
+         "name": "Mutton",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Mutton",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomatoes",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 6,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 7,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Seasonal vegetable curry",
+       "cooked_qty": "100g",
+       "order": 4,
+       "energy": 59,
+       "carbs": 5.9,
+       "protein": 1.8,
+       "fat": 2.7,
+       "fiber": 3.6,
+       "ingredients": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Friday",
+   "order": 4,
+   "meals": [
+    {
+     "name": "Pre-Training",
+     "order": 0,
+     "dishes": [
+      {
+       "name": "Banana",
+       "cooked_qty": "2no",
+       "order": 0,
+       "energy": 210,
+       "carbs": 47.2,
+       "protein": 2.4,
+       "fat": 0.6,
+       "fiber": 3.8,
+       "ingredients": [
+        {
+         "name": "Banana",
+         "amount": 200.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Pre -Breakfast",
+     "order": 1,
+     "dishes": [
+      {
+       "name": "Beet Juice",
+       "cooked_qty": "100ml",
+       "order": 0,
+       "energy": 34,
+       "carbs": 5.9,
+       "protein": 1.7,
+       "fat": 0.1,
+       "fiber": 3.6,
+       "ingredients": [
+        {
+         "name": "Beetroot",
+         "amount": 90.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Amla",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Nuts & seeds mix",
+       "cooked_qty": "30g",
+       "order": 1,
+       "energy": 145,
+       "carbs": 7.7,
+       "protein": 5,
+       "fat": 10.9,
+       "fiber": 3.2,
+       "ingredients": [
+        {
+         "name": "Almonds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "walnuts",
+         "amount": 2.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Dates",
+         "amount": 3.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Pumpkin seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Sunflower seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Flax seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Raisins",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 6,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Breakfast",
+     "order": 2,
+     "dishes": [
+      {
+       "name": "Vegetable Dhalia upma",
+       "cooked_qty": "200g",
+       "order": 0,
+       "energy": 391,
+       "carbs": 73.3,
+       "protein": 12,
+       "fat": 4,
+       "fiber": 10.7,
+       "ingredients": [
+        {
+         "name": "Dhalia",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beans",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Plain omlete",
+       "cooked_qty": "100g",
+       "order": 1,
+       "energy": 170,
+       "carbs": 0,
+       "protein": 13.4,
+       "fat": 13,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Eggs",
+         "amount": 200.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Mid morning",
+     "order": 3,
+     "dishes": [
+      {
+       "name": "Fruits",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 105,
+       "carbs": 23,
+       "protein": 1.2,
+       "fat": 0.3,
+       "fiber": 1.9,
+       "ingredients": [
+        {
+         "name": "fruits (banana as ref)",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Lunch",
+     "order": 4,
+     "dishes": [
+      {
+       "name": "Raw salad",
+       "cooked_qty": "60g",
+       "order": 0,
+       "energy": 18,
+       "carbs": 3,
+       "protein": 0.7,
+       "fat": 0,
+       "fiber": 1.8,
+       "ingredients": [
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beetroot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Cucumber",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Pudina rice",
+       "cooked_qty": "300g",
+       "order": 2,
+       "energy": 487,
+       "carbs": 96.1,
+       "protein": 14.1,
+       "fat": 3.1,
+       "fiber": 6.5,
+       "ingredients": [
+        {
+         "name": "Rice",
+         "amount": 120.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Pudina",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Paneer with Capsicum curry",
+       "cooked_qty": "200g",
+       "order": 3,
+       "energy": 244,
+       "carbs": 8.3,
+       "protein": 10.1,
+       "fat": 18.7,
+       "fiber": 1.4,
+       "ingredients": [
+        {
+         "name": "Paneer",
+         "amount": 70.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Capsicum",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Broad beans curry",
+       "cooked_qty": "100g",
+       "order": 4,
+       "energy": 67,
+       "carbs": 4.8,
+       "protein": 4.3,
+       "fat": 2.7,
+       "fiber": 9.5,
+       "ingredients": [
+        {
+         "name": "Broad beans",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Curd",
+       "cooked_qty": "60g",
+       "order": 5,
+       "energy": 36,
+       "carbs": 1.8,
+       "protein": 1.8,
+       "fat": 2.4,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Curd",
+         "amount": 60.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Evenings",
+     "order": 5,
+     "dishes": [
+      {
+       "name": "Boiled peanuts",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 275,
+       "carbs": 11.3,
+       "protein": 12.3,
+       "fat": 19.9,
+       "fiber": 6.1,
+       "ingredients": [
+        {
+         "name": "Peanuts",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Dates & anjeer milkshake",
+       "cooked_qty": "150ml",
+       "order": 1,
+       "energy": 143,
+       "carbs": 16.7,
+       "protein": 3.9,
+       "fat": 8,
+       "fiber": 1,
+       "ingredients": [
+        {
+         "name": "Dates",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Anjeer",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Milk",
+         "amount": 100.0,
+         "unit": "ml",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Dinner",
+     "order": 6,
+     "dishes": [
+      {
+       "name": "Steamed veggies",
+       "cooked_qty": "60g",
+       "order": 0,
+       "energy": 19,
+       "carbs": 2.9,
+       "protein": 1.2,
+       "fat": 0,
+       "fiber": 1.5,
+       "ingredients": [
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beans",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Brocolli/beetroot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Vegetable millet",
+       "cooked_qty": "120g",
+       "order": 2,
+       "energy": 210,
+       "carbs": 38.1,
+       "protein": 8,
+       "fat": 2.5,
+       "fiber": 5.8,
+       "ingredients": [
+        {
+         "name": "(no ingredients listed)",
+         "amount": null,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Plain rice",
+       "cooked_qty": "120g",
+       "order": 3,
+       "energy": 213,
+       "carbs": 46.9,
+       "protein": 4.7,
+       "fat": 0.3,
+       "fiber": 1.6,
+       "ingredients": []
+      },
+      {
+       "name": "whole moong dal curry",
+       "cooked_qty": "200g",
+       "order": 4,
+       "energy": 243,
+       "carbs": 34.9,
+       "protein": 16.2,
+       "fat": 3.4,
+       "fiber": 12.8,
+       "ingredients": [
+        {
+         "name": "Whole moong dal",
+         "amount": 70.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "GLV Stir fry",
+       "cooked_qty": "100g",
+       "order": 5,
+       "energy": 77,
+       "carbs": 5.3,
+       "protein": 5.2,
+       "fat": 3.4,
+       "fiber": 7,
+       "ingredients": [
+        {
+         "name": "Amarath",
+         "amount": 150.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Saturday",
+   "order": 5,
+   "meals": [
+    {
+     "name": "Pre-Training",
+     "order": 0,
+     "dishes": [
+      {
+       "name": "Banana",
+       "cooked_qty": "2no",
+       "order": 0,
+       "energy": 210,
+       "carbs": 47.2,
+       "protein": 2.4,
+       "fat": 0.6,
+       "fiber": 3.8,
+       "ingredients": [
+        {
+         "name": "Banana",
+         "amount": 200.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Pre -Breakfast",
+     "order": 1,
+     "dishes": [
+      {
+       "name": "Beet Juice",
+       "cooked_qty": "100ml",
+       "order": 0,
+       "energy": 34,
+       "carbs": 5.9,
+       "protein": 1.7,
+       "fat": 0.1,
+       "fiber": 3.6,
+       "ingredients": [
+        {
+         "name": "Beetroot",
+         "amount": 90.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Amla",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Nuts & seeds mix",
+       "cooked_qty": "30g",
+       "order": 1,
+       "energy": 145,
+       "carbs": 7.7,
+       "protein": 5,
+       "fat": 10.9,
+       "fiber": 3.2,
+       "ingredients": [
+        {
+         "name": "Almonds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "walnuts",
+         "amount": 2.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Dates",
+         "amount": 3.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Pumpkin seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Sunflower seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Flax seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Raisins",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 6,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Breakfast",
+     "order": 2,
+     "dishes": [
+      {
+       "name": "Methi & spinach paratha",
+       "cooked_qty": "4no",
+       "order": 0,
+       "energy": 308,
+       "carbs": 53.3,
+       "protein": 11.2,
+       "fat": 4.4,
+       "fiber": 12.5,
+       "ingredients": [
+        {
+         "name": "Methi",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Spinach",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Whole wheat flour",
+         "amount": 80.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Channa curry",
+       "cooked_qty": "100g",
+       "order": 1,
+       "energy": 162,
+       "carbs": 17.2,
+       "protein": 6.6,
+       "fat": 6.7,
+       "fiber": 9.3,
+       "ingredients": [
+        {
+         "name": "Chole",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Boiled eggs",
+       "cooked_qty": "2n0",
+       "order": 2,
+       "energy": 147,
+       "carbs": 0,
+       "protein": 13.4,
+       "fat": 10.5,
+       "fiber": 0,
+       "ingredients": []
+      }
+     ]
+    },
+    {
+     "name": "Mid morning",
+     "order": 3,
+     "dishes": [
+      {
+       "name": "Fruits",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 105,
+       "carbs": 23,
+       "protein": 1.2,
+       "fat": 0.3,
+       "fiber": 1.9,
+       "ingredients": [
+        {
+         "name": "fruits (banana as ref)",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Lunch",
+     "order": 4,
+     "dishes": [
+      {
+       "name": "Raw salad",
+       "cooked_qty": "60g",
+       "order": 0,
+       "energy": 18,
+       "carbs": 3,
+       "protein": 0.7,
+       "fat": 0,
+       "fiber": 1.8,
+       "ingredients": [
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beetroot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Cucumber",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Vegetable millet",
+       "cooked_qty": "120g",
+       "order": 2,
+       "energy": 210,
+       "carbs": 38.1,
+       "protein": 8,
+       "fat": 2.5,
+       "fiber": 5.8,
+       "ingredients": [
+        {
+         "name": "(no ingredients listed)",
+         "amount": null,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Plain rice",
+       "cooked_qty": "120g",
+       "order": 3,
+       "energy": 213,
+       "carbs": 46.9,
+       "protein": 4.7,
+       "fat": 0.3,
+       "fiber": 1.6,
+       "ingredients": []
+      },
+      {
+       "name": "Rajma curry",
+       "cooked_qty": "150g",
+       "order": 4,
+       "energy": 335,
+       "carbs": 51.5,
+       "protein": 20,
+       "fat": 4.2,
+       "fiber": 17.8,
+       "ingredients": [
+        {
+         "name": "Rajma",
+         "amount": 70.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Brinjal & tomato",
+       "cooked_qty": "100g",
+       "order": 5,
+       "energy": 56,
+       "carbs": 4.4,
+       "protein": 2.2,
+       "fat": 2.8,
+       "fiber": 4.5,
+       "ingredients": [
+        {
+         "name": "Brinjal",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Curd",
+       "cooked_qty": "60g",
+       "order": 6,
+       "energy": 36,
+       "carbs": 1.8,
+       "protein": 1.8,
+       "fat": 2.4,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Curd",
+         "amount": 60.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Evenings",
+     "order": 5,
+     "dishes": [
+      {
+       "name": "Boiled corn",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 137,
+       "carbs": 20,
+       "protein": 4.7,
+       "fat": 3.8,
+       "fiber": 4.7,
+       "ingredients": [
+        {
+         "name": "Sweet corn",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "cucumber",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ragi jaggery milkshake",
+       "cooked_qty": "150ml",
+       "order": 1,
+       "energy": 195,
+       "carbs": 28.3,
+       "protein": 4.6,
+       "fat": 6.7,
+       "fiber": 1.6,
+       "ingredients": [
+        {
+         "name": "Ragi flour",
+         "amount": 15.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Milk",
+         "amount": 100.0,
+         "unit": "ml",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Jaggery",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Dinner",
+     "order": 6,
+     "dishes": [
+      {
+       "name": "Carrot & corn soup",
+       "cooked_qty": "150ml",
+       "order": 0,
+       "energy": 80,
+       "carbs": 14.2,
+       "protein": 2.7,
+       "fat": 0.9,
+       "fiber": 4.1,
+       "ingredients": [
+        {
+         "name": "Carrots",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Corn",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Ragi flour",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Plain rice",
+       "cooked_qty": "300g",
+       "order": 2,
+       "energy": 427,
+       "carbs": 93.8,
+       "protein": 9.5,
+       "fat": 0.6,
+       "fiber": 0.7,
+       "ingredients": [
+        {
+         "name": "Rice",
+         "amount": 120.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Palak paneer with soya granules",
+       "cooked_qty": "150g",
+       "order": 3,
+       "energy": 382,
+       "carbs": 20.7,
+       "protein": 25.9,
+       "fat": 21.3,
+       "fiber": 5.6,
+       "ingredients": [
+        {
+         "name": "Paneer",
+         "amount": 70.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Soya granules",
+         "amount": 15.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Seasonal vegetable curry",
+       "cooked_qty": "100g",
+       "order": 4,
+       "energy": 60,
+       "carbs": 4.7,
+       "protein": 2.6,
+       "fat": 0,
+       "fiber": 4.6,
+       "ingredients": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Sunday",
+   "order": 6,
+   "meals": [
+    {
+     "name": "Pre-Training",
+     "order": 0,
+     "dishes": [
+      {
+       "name": "Banana",
+       "cooked_qty": "2no",
+       "order": 0,
+       "energy": 210,
+       "carbs": 47.2,
+       "protein": 2.4,
+       "fat": 0.6,
+       "fiber": 3.8,
+       "ingredients": [
+        {
+         "name": "Banana",
+         "amount": 200.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Pre -Breakfast",
+     "order": 1,
+     "dishes": [
+      {
+       "name": "Beet Juice",
+       "cooked_qty": "100ml",
+       "order": 0,
+       "energy": 34,
+       "carbs": 5.9,
+       "protein": 1.7,
+       "fat": 0.1,
+       "fiber": 3.6,
+       "ingredients": [
+        {
+         "name": "Beetroot",
+         "amount": 90.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Amla",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Nuts & seeds mix",
+       "cooked_qty": "30g",
+       "order": 1,
+       "energy": 145,
+       "carbs": 7.7,
+       "protein": 5,
+       "fat": 10.9,
+       "fiber": 3.2,
+       "ingredients": [
+        {
+         "name": "Almonds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "walnuts",
+         "amount": 2.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Dates",
+         "amount": 3.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Pumpkin seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Sunflower seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Flax seeds",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Raisins",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 6,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Breakfast",
+     "order": 2,
+     "dishes": [
+      {
+       "name": "Moong & millet pongal",
+       "cooked_qty": "200g",
+       "order": 0,
+       "energy": 284,
+       "carbs": 44.5,
+       "protein": 15.5,
+       "fat": 4.3,
+       "fiber": 7,
+       "ingredients": [
+        {
+         "name": "Moong dal",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Millet",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ground nut chutney",
+       "cooked_qty": "60g",
+       "order": 1,
+       "energy": 114,
+       "carbs": 8.3,
+       "protein": 5.7,
+       "fat": 6.4,
+       "fiber": 1.6,
+       "ingredients": [
+        {
+         "name": "Peanuts",
+         "amount": 15.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Putna",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Vegetable omlete",
+       "cooked_qty": "150g",
+       "order": 2,
+       "energy": 185,
+       "carbs": 2.7,
+       "protein": 13.9,
+       "fat": 13.1,
+       "fiber": 0.9,
+       "ingredients": [
+        {
+         "name": "Eggs",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Mid morning",
+     "order": 3,
+     "dishes": [
+      {
+       "name": "Fruits",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 105,
+       "carbs": 23,
+       "protein": 1.2,
+       "fat": 0.3,
+       "fiber": 1.9,
+       "ingredients": [
+        {
+         "name": "fruits (banana as ref)",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Lunch",
+     "order": 4,
+     "dishes": [
+      {
+       "name": "Raw salad",
+       "cooked_qty": "60g",
+       "order": 0,
+       "energy": 18,
+       "carbs": 3,
+       "protein": 0.7,
+       "fat": 0,
+       "fiber": 1.8,
+       "ingredients": [
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beetroot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Cucumber",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Plain rice",
+       "cooked_qty": "300g",
+       "order": 2,
+       "energy": 427,
+       "carbs": 93.8,
+       "protein": 9.5,
+       "fat": 0.6,
+       "fiber": 0.7,
+       "ingredients": [
+        {
+         "name": "Rice",
+         "amount": 120.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Methi chicken curry",
+       "cooked_qty": "200g",
+       "order": 3,
+       "energy": 234,
+       "carbs": 4,
+       "protein": 25.7,
+       "fat": 12.3,
+       "fiber": 5.3,
+       "ingredients": [
+        {
+         "name": "Chicken",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Methi",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Tomato dal",
+       "cooked_qty": "100g",
+       "order": 4,
+       "energy": 87,
+       "carbs": 10.9,
+       "protein": 3.7,
+       "fat": 2.6,
+       "fiber": 2.2,
+       "ingredients": [
+        {
+         "name": "Red gram dal",
+         "amount": 15.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Curd",
+       "cooked_qty": "60g",
+       "order": 5,
+       "energy": 36,
+       "carbs": 1.8,
+       "protein": 1.8,
+       "fat": 2.4,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Curd",
+         "amount": 60.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Evenings",
+     "order": 5,
+     "dishes": [
+      {
+       "name": "Sprouted moong",
+       "cooked_qty": "100g",
+       "order": 0,
+       "energy": 103,
+       "carbs": 16.5,
+       "protein": 7.2,
+       "fat": 0.4,
+       "fiber": 6,
+       "ingredients": [
+        {
+         "name": "Moong dal",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Cocoa milkshake",
+       "cooked_qty": "150ml",
+       "order": 1,
+       "energy": 183,
+       "carbs": 20.9,
+       "protein": 7,
+       "fat": 7.8,
+       "fiber": 4.4,
+       "ingredients": [
+        {
+         "name": "Cocoa",
+         "amount": 15.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Milk",
+         "amount": 100.0,
+         "unit": "ml",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Jaggery",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Dinner",
+     "order": 6,
+     "dishes": [
+      {
+       "name": "Steamed veggies",
+       "cooked_qty": "60g",
+       "order": 0,
+       "energy": 19,
+       "carbs": 2.9,
+       "protein": 1.2,
+       "fat": 0,
+       "fiber": 1.5,
+       "ingredients": [
+        {
+         "name": "Carrot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Beans",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Brocolli/beetroot",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Ghee",
+       "cooked_qty": "2 teaspoon",
+       "order": 1,
+       "energy": 90,
+       "carbs": 0,
+       "protein": 0,
+       "fat": 10,
+       "fiber": 0,
+       "ingredients": [
+        {
+         "name": "Ghee",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Vegetable kichidi with veggies",
+       "cooked_qty": "300g",
+       "order": 2,
+       "energy": 684,
+       "carbs": 117.2,
+       "protein": 23.5,
+       "fat": 11.5,
+       "fiber": 11.8,
+       "ingredients": [
+        {
+         "name": "Rice",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Moong dal",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Carrots",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Chicken fry",
+       "cooked_qty": "200g",
+       "order": 3,
+       "energy": 243,
+       "carbs": 5.5,
+       "protein": 22.7,
+       "fat": 14.1,
+       "fiber": 1.7,
+       "ingredients": [
+        {
+         "name": "Chicken",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Vegetable sambar",
+       "cooked_qty": "100g",
+       "order": 4,
+       "energy": 93,
+       "carbs": 12,
+       "protein": 3.9,
+       "fat": 2.8,
+       "fiber": 3.2,
+       "ingredients": [
+        {
+         "name": "Red gram dal",
+         "amount": 15.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Bottle gourd",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Extras (elite)",
+   "order": 7,
+   "meals": [
+    {
+     "name": "General",
+     "order": 0,
+     "dishes": [
+      {
+       "name": "Granola with Amul protein milk",
+       "cooked_qty": "(40+250ml)",
+       "order": 0,
+       "energy": 390,
+       "carbs": 49,
+       "protein": 38.3,
+       "fat": 4.9,
+       "fiber": null,
+       "ingredients": []
+      },
+      {
+       "name": "PB &jam sandwiches",
+       "cooked_qty": "2slices",
+       "order": 1,
+       "energy": 245,
+       "carbs": 41.599999999999994,
+       "protein": 7.4,
+       "fat": 5.8999999999999995,
+       "fiber": null,
+       "ingredients": [
+        {
+         "name": "Bread",
+         "amount": 60.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Peanut butter",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Jam",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Mutton curry",
+       "cooked_qty": "200g",
+       "order": 2,
+       "energy": 250,
+       "carbs": 6,
+       "protein": 19.599999999999998,
+       "fat": 16,
+       "fiber": null,
+       "ingredients": [
+        {
+         "name": "Mutton",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 20.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomato",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Mutton",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Onion",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 5,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Tomatoes",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 6,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 7,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Green leaves stir fry",
+       "cooked_qty": "150g",
+       "order": 3,
+       "energy": 72,
+       "carbs": 3.8,
+       "protein": 4.5,
+       "fat": 3.6,
+       "fiber": null,
+       "ingredients": [
+        {
+         "name": "Palak",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Methi",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Soya",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 2.5,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Chicken burger",
+       "cooked_qty": "1pc",
+       "order": 4,
+       "energy": 574,
+       "carbs": 65.2,
+       "protein": 36.7,
+       "fat": 17.5,
+       "fiber": null,
+       "ingredients": [
+        {
+         "name": "Bread",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Chicken",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Channa dal",
+         "amount": 30.0,
+         "unit": "g",
+         "order": 2,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Curd",
+         "amount": 50.0,
+         "unit": "g",
+         "order": 3,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 5.0,
+         "unit": "g",
+         "order": 4,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Fried chicken",
+       "cooked_qty": "100g",
+       "order": 5,
+       "energy": 348,
+       "carbs": 0,
+       "protein": 21.8,
+       "fat": 29,
+       "fiber": null,
+       "ingredients": [
+        {
+         "name": "Chicken",
+         "amount": 100.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        },
+        {
+         "name": "Oil",
+         "amount": 10.0,
+         "unit": "g",
+         "order": 1,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      },
+      {
+       "name": "Protein powder",
+       "cooked_qty": "1tablespoon",
+       "order": 6,
+       "energy": 58,
+       "carbs": 0.5,
+       "protein": 13.3,
+       "fat": 0.2,
+       "fiber": null,
+       "ingredients": [
+        {
+         "name": "Protein powder",
+         "amount": 15.0,
+         "unit": "g",
+         "order": 0,
+         "per100": {
+          "iron": null,
+          "calcium": null,
+          "sodium": null,
+          "potassium": null,
+          "magnesium": null,
+          "zinc": null,
+          "vitamin_d": null,
+          "vitamin_b12": null
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "micro_keys": [
+  "iron",
+  "calcium",
+  "sodium",
+  "potassium",
+  "magnesium",
+  "zinc",
+  "vitamin_d",
+  "vitamin_b12"
+ ]
+}
