@@ -234,12 +234,23 @@ export default function MealStockTakeTab({ liveSig }) {
                               </td>
                               <td className="p-2.5 text-right">
                                 {r.needs_rate ? (
-                                  <input type="number" min="0" step="0.01" value={rates[r.item_id] ?? ""}
-                                         onChange={(e) => setRate(r.item_id, e.target.value)}
-                                         placeholder="₹/unit"
-                                         title={`No purchase history for ${r.name} yet — enter its ₹ per ${r.unit || "unit"} to set a valued opening balance`}
-                                         className="iu-input !h-8 !px-2 text-sm w-24 text-right tabular-nums border-amber-300"
-                                         data-testid={`stocktake-rate-${r.item_id}`} />
+                                  <div className="inline-flex flex-col items-end gap-0.5">
+                                    <input type="number" min="0" step="0.01" value={rates[r.item_id] ?? ""}
+                                           onChange={(e) => setRate(r.item_id, e.target.value)}
+                                           placeholder="₹/unit"
+                                           title={`No purchase history for ${r.name} yet — enter its ₹ per ${r.unit || "unit"} to set a valued opening balance`}
+                                           className="iu-input !h-8 !px-2 text-sm w-24 text-right tabular-nums border-amber-300"
+                                           data-testid={`stocktake-rate-${r.item_id}`} />
+                                    {num(lastRates[r.item_id]?.rate) > 0 && (
+                                      <button type="button"
+                                              onClick={() => setRate(r.item_id, String(num(lastRates[r.item_id].rate)))}
+                                              className="text-[10px] font-semibold text-violet-600 hover:text-violet-800 hover:underline"
+                                              title={`Use last purchase rate ₹${num(lastRates[r.item_id].rate).toFixed(2)}${lastRates[r.item_id]?.date ? ` from ${formatDate(lastRates[r.item_id].date)}` : ""}`}
+                                              data-testid={`stocktake-uselastrate-${r.item_id}`}>
+                                        use ₹{num(lastRates[r.item_id].rate).toFixed(2)}
+                                      </button>
+                                    )}
+                                  </div>
                                 ) : (
                                   <span className="text-xs text-slate-500 tabular-nums" data-testid={`stocktake-avgrate-${r.item_id}`}
                                         title={lastRates[r.item_id]?.date ? `Last buying rate, from the purchase on ${formatDate(lastRates[r.item_id].date)}` : "Weighted-average purchase rate"}>
