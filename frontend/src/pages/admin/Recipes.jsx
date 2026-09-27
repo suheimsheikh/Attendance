@@ -188,7 +188,7 @@ export default function Recipes() {
       </div>
 
       {/* sticky two-tier column header */}
-      <div className="hidden md:block sticky top-0 z-20" data-testid="recipe-header">
+      <div className="hidden md:block sticky top-0 z-30 shadow-sm" data-testid="recipe-header">
         {/* tier 1 — group titles */}
         <div className="flex items-stretch bg-white border border-slate-200 rounded-t-lg px-3">
           <div className="flex-1 flex items-end py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Day / Meal / Dish / Ingredient</div>
@@ -197,13 +197,13 @@ export default function Recipes() {
           <div className="flex items-center justify-center border-l border-indigo-200 bg-indigo-100 text-[11px] font-extrabold uppercase tracking-wide text-indigo-800" style={{ width: MIC.length * MIC_W }}>Micro Nutrients</div>
         </div>
         {/* tier 2 — column labels */}
-        <div className="flex items-stretch bg-slate-50/90 backdrop-blur border border-t-0 border-slate-200 px-3">
+        <div className="flex items-stretch bg-slate-100 border border-t-0 border-slate-200 px-3">
           <div className="flex-1" />
           <div className="flex items-center justify-center border-l border-slate-200 text-[9px] font-semibold text-slate-400" style={{ width: WEIGHT_W }}>g · ml</div>
-          <div className="grid border-l border-amber-200/70 bg-amber-50/70" style={{ gridTemplateColumns: `repeat(${MAC.length}, ${MAC_W}px)` }}>
+          <div className="grid border-l border-amber-200/70 bg-amber-50" style={{ gridTemplateColumns: `repeat(${MAC.length}, ${MAC_W}px)` }}>
             {MAC.map((c) => <div key={c.k} className="text-right px-1.5 py-1 text-[10px] font-bold text-amber-700">{c.label}</div>)}
           </div>
-          <div className="grid border-l border-indigo-200/70 bg-indigo-50/70" style={{ gridTemplateColumns: `repeat(${MIC.length}, ${MIC_W}px)` }}>
+          <div className="grid border-l border-indigo-200/70 bg-indigo-50" style={{ gridTemplateColumns: `repeat(${MIC.length}, ${MIC_W}px)` }}>
             {MIC.map((c) => (
               <div key={c.k} className="text-right px-1.5 py-1 leading-none text-[10px] font-bold text-indigo-700">
                 {c.label}<span className="block text-[8px] font-normal text-indigo-400 mt-0.5">{c.unit}</span>
