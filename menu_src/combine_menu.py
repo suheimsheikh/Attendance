@@ -5,7 +5,7 @@ def norm(s):
     return re.sub(r'[^a-z0-9]', '', str(s or '').lower())
 
 # ---------- 1) Parse the weekly diet (calc.xlsx) ----------
-wb = openpyxl.load_workbook('/tmp/calc.xlsx', data_only=True)
+wb = openpyxl.load_workbook('/app/menu_src/calc.xlsx', data_only=True)
 ws = wb['Sheet1']
 rows = list(ws.iter_rows(values_only=True))
 
@@ -37,7 +37,7 @@ for label, c, has_meal, has_fib in blocks:
                      "energy": e, "carbs": ca, "protein": p, "fat": f, "fiber": fib})
 
 # ---------- 2) Parse recipes (recipes.xlsx) ----------
-wb2 = openpyxl.load_workbook('/tmp/recipes.xlsx', data_only=True)
+wb2 = openpyxl.load_workbook('/app/menu_src/recipes.xlsx', data_only=True)
 ws2 = wb2['Sheet3']
 rrows = list(ws2.iter_rows(values_only=True))
 recipes = {}      # norm_name -> {"name":..., "ingredients":[(ing,qty)]}
@@ -95,15 +95,24 @@ orphan = sorted({v["name"] for k,v in recipes.items() if k not in used_full and 
 # ---------- 4) Write combined workbook ----------
 out = openpyxl.Workbook()
 sh = out.active; sh.title = "Combined Menu"
-HEAD = ["Day","Meal","Dish (cooked qty)","Energy (kcal)","Carbs (g)","Protein (g)","Fat (g)","Fiber (g)","Ingredient","Raw Qty"]
+HEAD = ["Day","Meal","Dish","Cooked Qty","Energy (kcal)","Carbs (g)","Protein (g)","Fat (g)","Fiber (g)","Ingredient","Raw Qty"]
 sh.append(HEAD)
 hfill = PatternFill("solid", fgColor="1E3A5F"); hfont = Font(bold=True, color="FFFFFF", size=11)
 thin = Side(style="thin", color="D9D9D9"); border = Border(thin,thin,thin,thin)
 for j,_ in enumerate(HEAD,1):
     ccell = sh.cell(1,j); ccell.fill=hfill; ccell.font=hfont
     ccell.alignment=Alignment(vertical="center", wrap_text=True); ccell.border=border
-day_fills = {}
-palette = ["EAF3FB","FFF4E6","EFFaef".upper() if False else "EAF7EF","FDECEC","F3EEFB","FFF9E6","EAF7F7","F0F0F0"]
+
+def split_qty(name):
+    """Isolate the trailing weight/quantity from a dish name.
+    'Vegetable omlete-150g' -> ('Vegetable omlete','150g'); 'Banana- 2no' -> ('Banana','2no')."""
+    n = str(name or "").strip()
+    if "-" in n:
+        left, right = n.rsplit("-", 1)
+        if any(ch.isdigit() for ch in right):
+            return left.strip(), right.strip()
+    return n, ""
+
 prev_dish=None; band=False
 pd_day=pd_meal=pd_dish=object()  # sentinels for "flatten repeats"
 for d in combined:
@@ -112,18 +121,22 @@ for d in combined:
     # Blank repeated Day / Meal / Dish so each name shows once per group.
     day_v  = "" if d["day"]==pd_day else d["day"]
     meal_v = "" if (d["day"]==pd_day and d["meal"]==pd_meal) else d["meal"]
-    dish_v = "" if (d["day"]==pd_day and d["meal"]==pd_meal and d["dish"]==pd_dish) else d["dish"]
+    is_new_dish = not (d["day"]==pd_day and d["meal"]==pd_meal and d["dish"]==pd_dish)
+    dish_name, cooked_qty = split_qty(d["dish"])
+    dish_v = dish_name if is_new_dish else ""
+    qty_v  = cooked_qty if is_new_dish else ""
     pd_day, pd_meal, pd_dish = d["day"], d["meal"], d["dish"]
-    sh.append([day_v, meal_v, dish_v, d["energy"], d["carbs"], d["protein"], d["fat"], d["fiber"], d["ingredient"], d["raw"]])
+    sh.append([day_v, meal_v, dish_v, qty_v, d["energy"], d["carbs"], d["protein"], d["fat"], d["fiber"], d["ingredient"], d["raw"]])
     rr = sh.max_row
     fill = PatternFill("solid", fgColor="FFFFFF" if band else "F5F8FB")
-    for j in range(1,11):
+    for j in range(1,12):
         cc=sh.cell(rr,j); cc.border=border; cc.fill=fill
-        if j in (4,5,6,7,8): cc.alignment=Alignment(horizontal="right")
+        if j in (5,6,7,8,9): cc.alignment=Alignment(horizontal="right")
+        if j==4: cc.alignment=Alignment(horizontal="right")
         if j==3 and dish_v: cc.font=Font(bold=True)
         if d["ingredient"].startswith("— no recipe"):
             cc.font=Font(color="C0392B", italic=True)
-widths=[16,14,34,12,10,11,9,9,22,10]
+widths=[16,14,30,11,12,10,11,9,9,22,10]
 for i,w in enumerate(widths,1):
     sh.column_dimensions[openpyxl.utils.get_column_letter(i)].width=w
 sh.freeze_panes="A2"
