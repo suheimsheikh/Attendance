@@ -548,3 +548,9 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Per-level row colours with a coloured left rail (border-l-4): Day=emerald, Meal=sky, Dish=amber, Ingredient=white/slate.
 - New toolbar toggle `recipe-toggle-all` — "Expand all" / "Collapse all" (opens/closes every day+meal+dish at once via allIds useMemo).
 - Header sticky made fully opaque (removed translucent/backdrop-blur), z-30 + shadow. VERIFIED sticky under real mouse-wheel scroll with all 149 dishes / 399 ingredients expanded — header stays pinned. If it appears non-sticky for the user it is a stale/cached bundle or the deployed prod build (needs redeploy).
+
+## Update 27 Jun 2026 (cont.) — Recipes: editable weights, Print, Menu-vs-Actual, Legend
+- **Ingredient weight column**: each ingredient's qty moved out of the name text into an inline-editable cell in the Weight column (number input + g/ml select), commits via PUT on blur/Enter and reloads tree totals. Verified persistence (200→77→restore). Component `InlineWeight` in Recipes.jsx.
+- **Print menu**: per-day printer button (`printDay`) opens a clean printable HTML sheet (meals→dishes→ingredients w/ weights + macros + day total) and triggers window.print().
+- **Menu vs Actual** (`POST /api/recipes/menu-vs-actual`): map each weekday→real date + servings; planned = ingredient amount × servings, matched to `meal_items` by normalised name; actual = summed `meal_issues` qty for those dates. Unit conversion via UNIT_BASE (g/kg/mg, ml/l). Returns per-item planned/actual/diff/% + OVER(>+10%)/UNDER(<-10%)/OK, and a list of unmatched ingredient names to rename in the recipe. Frontend `MvaModal`. Verified: 21 matched / 10 unmatched on 2026-06-20 @ 50 servings.
+- **Colour legend**: inline chip row (Day=emerald, Meal=sky, Dish=amber, Ingredient=slate).

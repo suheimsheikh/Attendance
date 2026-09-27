@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   BookOpen, ChevronRight, ChevronDown, Plus, Pencil, Trash2, Loader2,
   Sparkles, X, UtensilsCrossed, Soup, Carrot, ChevronsDownUp, ChevronsUpDown,
+  Printer, Scale, AlertTriangle, Calendar,
 } from "lucide-react";
 
 const MAC = [
@@ -52,6 +53,147 @@ function IconBtn({ title, onClick, children, testid, cls = "" }) {
       className={`p-1 rounded hover:bg-white/70 text-slate-500 hover:text-slate-800 transition ${cls}`}>
       {children}
     </button>
+  );
+}
+
+// Inline-editable weight cell for an ingredient, aligned under the Weight column.
+function InlineWeight({ ing, dishId, onSaved }) {
+  const [amt, setAmt] = useState(ing.amount ?? "");
+  const [unit, setUnit] = useState(ing.unit || "g");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setAmt(ing.amount ?? ""); setUnit(ing.unit || "g"); }, [ing.amount, ing.unit]);
+  const commit = async (aVal, uVal) => {
+    const newAmt = aVal === "" ? null : Number(aVal);
+    if (newAmt === (ing.amount ?? null) && uVal === (ing.unit || "g")) return;
+    setBusy(true);
+    try {
+      await api.put(`/recipes/dishes/${dishId}/ingredients/${ing.id}`, { name: ing.name, amount: newAmt, unit: uVal });
+      onSaved();
+    } catch (e) { showApiError(e); } finally { setBusy(false); }
+  };
+  return (
+    <div className="hidden md:flex items-stretch shrink-0 text-[11px]" data-testid={`recipe-ing-weight-${ing.id}`}>
+      <div className="flex items-center justify-end gap-0.5 px-1.5 border-l border-slate-100" style={{ width: WEIGHT_W }}>
+        {busy ? <Loader2 size={11} className="animate-spin text-slate-400" /> : null}
+        <input value={amt} inputMode="decimal" onChange={(e) => setAmt(e.target.value)}
+          onBlur={() => commit(amt, unit)} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+          className="w-10 text-right bg-transparent border-b border-dashed border-slate-300 focus:border-emerald-500 outline-none tabular-nums text-emerald-800 font-semibold"
+          data-testid={`recipe-ing-amount-${ing.id}`} />
+        <select value={unit} onChange={(e) => { setUnit(e.target.value); commit(amt, e.target.value); }}
+          className="bg-transparent text-[10px] text-slate-500 outline-none cursor-pointer" data-testid={`recipe-ing-unit-${ing.id}`}>
+          <option value="g">g</option><option value="ml">ml</option>
+        </select>
+      </div>
+      <div style={{ width: MAC.length * MAC_W + MIC.length * MIC_W }} />
+    </div>
+  );
+}
+
+const LEVELS = [
+  { label: "Day", cls: "bg-emerald-100 border-emerald-500" },
+  { label: "Meal", cls: "bg-sky-100 border-sky-400" },
+  { label: "Dish", cls: "bg-amber-100 border-amber-400" },
+  { label: "Ingredient", cls: "bg-white border-slate-300" },
+];
+
+function Legend() {
+  return (
+    <div className="flex flex-wrap items-center gap-3 mb-3 text-[11px] text-slate-500" data-testid="recipe-legend">
+      <span className="font-semibold text-slate-600">Levels:</span>
+      {LEVELS.map((l) => (
+        <span key={l.label} className="inline-flex items-center gap-1.5">
+          <span className={`inline-block w-4 h-3 rounded-sm border-l-4 ${l.cls}`} />
+          {l.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Menu-vs-Actual: map each weekday to a real date + servings, compare planned recipe
+// consumption against actual pantry issues.
+function MvaModal({ days, onClose }) {
+  const [rows, setRows] = useState(() => days.map((d) => ({ day_id: d.id, name: d.name, date: "", servings: "" })));
+  const [res, setRes] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const setRow = (i, k, v) => setRows((p) => p.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const run = async () => {
+    const payload = { rows: rows.filter((r) => r.date && Number(r.servings) > 0).map((r) => ({ day_id: r.day_id, date: r.date, servings: Number(r.servings) })) };
+    if (!payload.rows.length) { toast.error("Enter a date and servings for at least one day"); return; }
+    setBusy(true);
+    try { const r = await api.post("/recipes/menu-vs-actual", payload); setRes(r); }
+    catch (e) { showApiError(e); } finally { setBusy(false); }
+  };
+  const badge = (s) => s === "over" ? "bg-rose-100 text-rose-700" : s === "under" ? "bg-amber-100 text-amber-700" : s === "ok" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500";
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" data-testid="recipe-mva-modal">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+          <h3 className="font-extrabold text-slate-900 flex items-center gap-2"><Scale size={18} className="text-indigo-600" /> Menu vs Actual</h3>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100" data-testid="recipe-mva-close"><X size={18} /></button>
+        </div>
+        <div className="p-5 overflow-y-auto space-y-4">
+          <p className="text-xs text-slate-500">Map each day of the weekly plan to a real date, and enter how many servings were prepared. We compare the planned recipe quantities against the actual pantry <b>issues</b> for those dates.</p>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {rows.map((r, i) => (
+              <div key={r.day_id} className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-1.5">
+                <span className="font-semibold text-slate-700 text-sm w-24 shrink-0 truncate">{r.name}</span>
+                <div className="flex items-center gap-1 flex-1">
+                  <Calendar size={13} className="text-slate-400" />
+                  <input type="date" value={r.date} onChange={(e) => setRow(i, "date", e.target.value)} className="iu-input !h-8 !w-full text-xs" data-testid={`mva-date-${i}`} />
+                </div>
+                <input type="number" min="0" placeholder="servings" value={r.servings} onChange={(e) => setRow(i, "servings", e.target.value)} className="iu-input !h-8 !w-24 text-xs" data-testid={`mva-servings-${i}`} />
+              </div>
+            ))}
+          </div>
+          <button className="iu-btn-primary !h-9 inline-flex items-center gap-1.5" onClick={run} disabled={busy} data-testid="recipe-mva-run">
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Scale size={14} />} Compare
+          </button>
+
+          {res && (
+            <div className="space-y-4" data-testid="recipe-mva-results">
+              {res.unmatched?.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="recipe-mva-unmatched">
+                  <div className="flex items-center gap-2 font-semibold text-amber-800 text-sm mb-1"><AlertTriangle size={15} /> {res.unmatched.length} ingredient name(s) don't match any pantry item</div>
+                  <p className="text-[11px] text-amber-700 mb-2">Rename these in the recipe to match your Stock Master item names so they can be compared:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {res.unmatched.map((u) => <span key={u.name} className="text-[11px] bg-white border border-amber-200 rounded-full px-2 py-0.5 text-amber-800">{u.name} <span className="text-amber-400">×{u.count}</span></span>)}
+                  </div>
+                </div>
+              )}
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-[11px] uppercase text-slate-500">
+                    <tr>
+                      <th className="text-left px-3 py-2">Item</th>
+                      <th className="text-right px-3 py-2">Planned</th>
+                      <th className="text-right px-3 py-2">Actual issued</th>
+                      <th className="text-right px-3 py-2">Diff</th>
+                      <th className="text-right px-3 py-2">%</th>
+                      <th className="text-center px-3 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {res.results.map((r) => (
+                      <tr key={r.item_id} className="hover:bg-slate-50" data-testid={`mva-row-${r.item_id}`}>
+                        <td className="px-3 py-1.5 font-medium text-slate-800">{r.name}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">{r.planned} {r.base_unit}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">{r.comparable ? `${r.actual} ${r.base_unit}` : `${r.actual_item_qty} ${r.item_unit}`}</td>
+                        <td className={`px-3 py-1.5 text-right tabular-nums ${r.diff > 0 ? "text-rose-600" : r.diff < 0 ? "text-amber-600" : "text-slate-500"}`}>{r.diff != null ? `${r.diff > 0 ? "+" : ""}${r.diff} ${r.base_unit}` : "—"}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">{r.pct != null ? `${r.pct > 0 ? "+" : ""}${r.pct}%` : "—"}</td>
+                        <td className="px-3 py-1.5 text-center"><span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${badge(r.status)}`}>{r.comparable ? (r.status || "—") : "unit?"}</span></td>
+                      </tr>
+                    ))}
+                    {res.results.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-400">No matching planned items for the selected dates.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[11px] text-slate-400">Over = more issued than planned (&gt;10%); Under = less issued (&gt;10%); OK = within ±10%. "unit?" means the pantry item's unit can't be auto-converted to g/ml.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -112,6 +254,7 @@ export default function Recipes() {
   const [openMeals, setOpenMeals] = useState(() => new Set());
   const [openDishes, setOpenDishes] = useState(() => new Set());
   const [modal, setModal] = useState(null);
+  const [showMva, setShowMva] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMsg, setAiMsg] = useState("");
 
@@ -138,6 +281,47 @@ export default function Recipes() {
   const anyOpen = openDays.size > 0 || openMeals.size > 0 || openDishes.size > 0;
   const expandAll = () => { setOpenDays(new Set(allIds.days)); setOpenMeals(new Set(allIds.meals)); setOpenDishes(new Set(allIds.dishes)); };
   const collapseAll = () => { setOpenDays(new Set()); setOpenMeals(new Set()); setOpenDishes(new Set()); };
+
+  const printDay = (day) => {
+    const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    const wt = (o) => [o?.weight_g ? `${w1(o.weight_g)} g` : "", o?.weight_ml ? `${w1(o.weight_ml)} ml` : ""].filter(Boolean).join(" + ");
+    const body = (day.meals || []).map((m) => {
+      const dishRows = (m.dishes || []).map((di) => {
+        const ings = (di.ingredients || []).map((g) => `${esc(g.name)}${g.amount != null ? ` (${g.amount}${g.unit || "g"})` : ""}`).join(", ");
+        return `<tr><td class="dish"><b>${esc(di.name)}</b>${di.cooked_qty ? ` <span class="cq">— ${esc(di.cooked_qty)}</span>` : ""}${ings ? `<div class="ings">${ings}</div>` : ""}</td>
+          <td>${n1(di.energy)}</td><td>${n1(di.carbs)}</td><td>${n1(di.protein)}</td><td>${n1(di.fat)}</td><td>${n1(di.fiber)}</td><td>${wt(di)}</td></tr>`;
+      }).join("");
+      const t = m.totals || {};
+      return `<tr class="meal"><td>${esc(m.name)}</td><td>${n1(t.energy)}</td><td>${n1(t.carbs)}</td><td>${n1(t.protein)}</td><td>${n1(t.fat)}</td><td>${n1(t.fiber)}</td><td>${wt(t)}</td></tr>${dishRows}`;
+    }).join("");
+    const dt = day.totals || {};
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(day.name)} — Menu</title>
+    <style>
+      *{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;box-sizing:border-box}
+      body{margin:24px;color:#0f172a}
+      h1{font-size:22px;margin:0 0 2px}.sub{color:#64748b;font-size:12px;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th,td{border-bottom:1px solid #e2e8f0;padding:6px 8px;text-align:right}
+      th:first-child,td:first-child{text-align:left}
+      thead th{background:#f1f5f9;text-transform:uppercase;font-size:10px;color:#475569}
+      tr.meal td{background:#e0f2fe;font-weight:700}
+      td.dish{padding-left:18px}.ings{color:#64748b;font-weight:400;font-size:11px;margin-top:2px}
+      .cq{color:#94a3b8;font-weight:400}
+      tr.total td{background:#dcfce7;font-weight:800;border-top:2px solid #86efac}
+      @media print{body{margin:10mm}}
+    </style></head><body>
+      <h1>${esc(day.name)} — Daily Menu</h1>
+      <div class="sub">The Yacht Club of Hyderabad · macros per serving · weights are per dish</div>
+      <table><thead><tr><th>Meal / Dish</th><th>kcal</th><th>Carbs</th><th>Prot</th><th>Fats</th><th>Fibre</th><th>Weight</th></tr></thead>
+      <tbody>${body}
+        <tr class="total"><td>DAY TOTAL</td><td>${n1(dt.energy)}</td><td>${n1(dt.carbs)}</td><td>${n1(dt.protein)}</td><td>${n1(dt.fat)}</td><td>${n1(dt.fiber)}</td><td>${wt(dt)}</td></tr>
+      </tbody></table>
+    </body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) { toast.error("Allow pop-ups to print"); return; }
+    w.document.write(html); w.document.close(); w.focus();
+    setTimeout(() => w.print(), 300);
+  };
 
   const refresh = () => { setModal(null); load(); };
   const del = async (url, label) => {
@@ -196,11 +380,16 @@ export default function Recipes() {
         <button onClick={anyOpen ? collapseAll : expandAll} className="iu-btn-secondary !h-9 inline-flex items-center gap-1.5" data-testid="recipe-toggle-all">
           {anyOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />} {anyOpen ? "Collapse all" : "Expand all"}
         </button>
+        <button onClick={() => setShowMva(true)} className="iu-btn-secondary !h-9 inline-flex items-center gap-1.5" data-testid="recipe-open-mva">
+          <Scale size={14} /> Menu vs Actual
+        </button>
         <button onClick={runAI} disabled={aiBusy} className="iu-btn-primary !h-9 inline-flex items-center gap-1" data-testid="recipe-ai-fill">
           {aiBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Fill micronutrients with AI
         </button>
         {aiMsg && <span className="text-xs text-emerald-700" data-testid="recipe-ai-msg">{aiMsg}</span>}
       </div>
+
+      <Legend />
 
       {/* sticky two-tier column header */}
       <div className="hidden md:block sticky top-0 z-30 shadow-sm" data-testid="recipe-header">
@@ -242,6 +431,7 @@ export default function Recipes() {
                   </button>
                   <span className="font-extrabold text-slate-900 flex-1">{day.name}</span>
                   <span className="opacity-0 group-hover:opacity-100 flex items-center transition">
+                    <IconBtn title="Print this day's menu" onClick={() => printDay(day)} testid={`recipe-print-day-${day.id}`}><Printer size={14} /></IconBtn>
                     <IconBtn title="Add meal" onClick={() => mMeal(day.id)} testid={`recipe-add-meal-${day.id}`}><Plus size={14} /></IconBtn>
                     <IconBtn title="Rename day" onClick={() => mDay(day)}><Pencil size={13} /></IconBtn>
                   </span>
@@ -287,15 +477,15 @@ export default function Recipes() {
                               <div key={ing.id} className="flex items-center gap-1 pl-24 pr-3 py-1 bg-white hover:bg-slate-50 border-l-4 border-slate-200 group text-sm" data-testid={`recipe-ing-${ing.id}`}>
                                 <Carrot size={11} className="text-emerald-500 shrink-0" />
                                 <span className="text-slate-700">{ing.name}</span>
-                                <span className="text-[11px] text-slate-400 ml-1 tabular-nums">
-                                  {ing.amount != null ? `${ing.amount}${ing.unit || "g"}` : ""}
-                                  {ing.per100 && Object.values(ing.per100).every((v) => v === null) ? " · no micros yet" : ""}
-                                </span>
-                                <span className="flex-1" />
-                                <span className="opacity-0 group-hover:opacity-100 flex items-center transition">
+                                {ing.per100 && Object.values(ing.per100).every((v) => v === null) ? (
+                                  <span className="text-[10px] text-slate-400 ml-1">· no micros yet</span>
+                                ) : null}
+                                <span className="opacity-0 group-hover:opacity-100 flex items-center transition ml-1">
                                   <IconBtn title="Edit ingredient" onClick={() => mIng(dish.id, ing)}><Pencil size={12} /></IconBtn>
                                   <IconBtn title="Delete ingredient" onClick={() => del(`/recipes/dishes/${dish.id}/ingredients/${ing.id}`, ing.name)} cls="hover:text-rose-600"><Trash2 size={12} /></IconBtn>
                                 </span>
+                                <span className="flex-1" />
+                                <InlineWeight ing={ing} dishId={dish.id} onSaved={load} />
                               </div>
                             ))}
                             {diOpen && (dish.ingredients || []).length === 0 && (
@@ -315,6 +505,7 @@ export default function Recipes() {
       )}
 
       {modal && <NodeModal node={modal} onClose={() => setModal(null)} onSaved={refresh} />}
+      {showMva && <MvaModal days={tree} onClose={() => setShowMva(false)} />}
     </div>
   );
 }

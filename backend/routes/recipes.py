@@ -18,6 +18,15 @@ log = logging.getLogger("recipes")
 MICROS = ["iron", "calcium", "sodium", "potassium", "magnesium", "zinc", "vitamin_d", "vitamin_b12"]
 MICRO_UNITS = {"iron": "mg", "calcium": "mg", "sodium": "mg", "potassium": "mg",
                "magnesium": "mg", "zinc": "mg", "vitamin_d": "µg", "vitamin_b12": "µg"}
+# unit -> (dimension, factor-to-base) where base is grams (mass) or millilitres (vol)
+UNIT_BASE = {
+    "g": ("mass", 1), "gram": ("mass", 1), "grams": ("mass", 1), "gm": ("mass", 1), "gms": ("mass", 1),
+    "kg": ("mass", 1000), "kgs": ("mass", 1000), "kilogram": ("mass", 1000), "kilograms": ("mass", 1000),
+    "mg": ("mass", 0.001),
+    "ml": ("vol", 1), "milliliter": ("vol", 1), "millilitre": ("vol", 1),
+    "l": ("vol", 1000), "lt": ("vol", 1000), "ltr": ("vol", 1000), "litre": ("vol", 1000),
+    "liter": ("vol", 1000), "litres": ("vol", 1000), "liters": ("vol", 1000),
+}
 SEED_PATH = os.path.join(os.path.dirname(__file__), "..", "seed_recipes.json")
 
 
@@ -355,5 +364,88 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin):
                     {"$set": {"ingredients.$.per100": per}})
             processed += 1
         return {"processed": processed, "remaining": max(0, total_remaining - processed)}
+
+    # ---------------- Menu vs Actual (planned recipe vs pantry issues) ----------------
+    class MvaRow(BaseModel):
+        day_id: str
+        date: str
+        servings: float = 0
+
+    class MvaBody(BaseModel):
+        rows: List[MvaRow]
+
+    @router.post("/menu-vs-actual")
+    async def menu_vs_actual(body: MvaBody, user=Depends(require_chef_or_admin)):
+        rows = [r for r in body.rows if r.date and float(r.servings or 0) > 0]
+        if not rows:
+            raise HTTPException(400, "Provide a date and servings for at least one day")
+        meals = await db.menu_meals.find({}, {"_id": 0}).to_list(1000)
+        dishes = await db.menu_dishes.find({}, {"_id": 0}).to_list(5000)
+        meals_by_day, dishes_by_meal = {}, {}
+        for m in meals:
+            meals_by_day.setdefault(m["day_id"], []).append(m)
+        for d in dishes:
+            dishes_by_meal.setdefault(d["meal_id"], []).append(d)
+
+        items = await db.meal_items.find({}, {"_id": 0, "id": 1, "name": 1, "unit": 1}).to_list(5000)
+        item_by_norm = {}
+        for it in items:
+            item_by_norm.setdefault(_norm(it["name"]), it)
+
+        planned = {}       # item_id -> {name, unit, planned_base, dim}
+        unmatched = {}     # name_norm -> {name, count}
+        for row in rows:
+            srv = float(row.servings or 0)
+            for m in meals_by_day.get(row.day_id, []):
+                for di in dishes_by_meal.get(m["id"], []):
+                    for g in di.get("ingredients", []):
+                        nm = g.get("name")
+                        nn = _norm(nm)
+                        if not nn:
+                            continue
+                        amt = _num(g.get("amount"))
+                        dim, factor = UNIT_BASE.get(str(g.get("unit") or "g").lower(), ("mass", 1))
+                        base = amt * factor * srv
+                        it = item_by_norm.get(nn)
+                        if not it:
+                            rec = unmatched.setdefault(nn, {"name": nm, "count": 0})
+                            rec["count"] += 1
+                            continue
+                        p = planned.setdefault(it["id"], {"item_id": it["id"], "name": it["name"],
+                                                          "unit": it.get("unit") or "", "planned_base": 0.0, "dim": dim})
+                        p["planned_base"] += base
+
+        dates = sorted({r.date for r in rows})
+        actual = {}
+        async for doc in db.meal_issues.find({"date": {"$in": dates}}, {"_id": 0, "lines": 1}):
+            for ln in (doc.get("lines") or []):
+                iid = ln.get("item_id")
+                q = _num(ln.get("qty"))
+                if iid and q:
+                    actual[iid] = actual.get(iid, 0.0) + q
+
+        results = []
+        for iid, p in planned.items():
+            conv = UNIT_BASE.get(str(p["unit"]).lower())
+            act_q = actual.get(iid, 0.0)
+            planned_base = p["planned_base"]
+            base_unit = "g" if p["dim"] == "mass" else "ml"
+            comparable = conv is not None
+            act_base = act_q * conv[1] if comparable else None
+            diff = (act_base - planned_base) if comparable else None
+            pct = (round((act_base - planned_base) / planned_base * 100, 1)
+                   if comparable and planned_base > 0 else None)
+            status = None
+            if comparable and planned_base > 0:
+                status = "ok" if abs(pct) <= 10 else ("over" if pct > 10 else "under")
+            results.append({"item_id": iid, "name": p["name"], "item_unit": p["unit"], "base_unit": base_unit,
+                            "planned": round(planned_base, 1), "actual_item_qty": round(act_q, 3),
+                            "actual": (round(act_base, 1) if comparable else None), "comparable": comparable,
+                            "diff": (round(diff, 1) if diff is not None else None), "pct": pct, "status": status})
+        order = {"over": 0, "under": 1, "ok": 2, None: 3}
+        results.sort(key=lambda r: (order.get(r["status"], 3), -(abs(r["pct"]) if r["pct"] is not None else 0)))
+        unmatched_list = sorted(({"name": v["name"], "count": v["count"]} for v in unmatched.values()),
+                                key=lambda x: x["name"].lower())
+        return {"results": results, "unmatched": unmatched_list, "dates": dates}
 
     return router
