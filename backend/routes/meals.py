@@ -3098,6 +3098,24 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         adj_from = _sum_from(adj_docs)   # signed: +extra / −loss
         purch_amount = _sum_amount_from(purch_docs)
 
+        # Latest purchase rate per item on/before as_of (for conservative
+        # issue valuation: issues are costed at max(WAC, current rate) so a
+        # low historical average can't undervalue today's consumption).
+        latest_rate: dict[str, float] = {}
+        latest_date: dict[str, str] = {}
+        for doc in purch_docs:
+            dt = doc.get("date")
+            for line in doc.get("lines") or []:
+                iid = line.get("item_id")
+                q = float(line.get("qty") or 0)
+                if not iid or not dt or q <= 0:
+                    continue
+                r = line.get("rate")
+                r = float(r) if r not in (None, "") else (float(line.get("amount") or 0) / q)
+                if r > 0 and dt >= latest_date.get(iid, ""):
+                    latest_date[iid] = dt
+                    latest_rate[iid] = round(r, 4)
+
         rows = []
         for it in items:
             iid = it["id"]
@@ -3127,10 +3145,14 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             else:
                 avg_rate = round(purch_amt / p, 4) if p > 0 else 0.0
                 opening_value = round(opening * avg_rate, 2)
-            issued_value = round(iq * avg_rate, 2)
+            # Conservative issue rate = max(WAC, latest purchase rate).
+            issue_rate = round(max(avg_rate, latest_rate.get(iid, 0.0)), 4)
+            issued_cost_wac = round(iq * avg_rate, 2)   # WAC cost, keeps stock value accurate
+            issued_value = round(iq * issue_rate, 2)    # conservative issue valuation
             wasted_value = round(w * avg_rate, 2)
             adj_value = round(adj * avg_rate, 2)   # signed
-            on_hand_value = round(opening_value + purch_amt - issued_value - wasted_value + adj_value, 2)
+            # On-hand value stays at WAC (actual money tied up in stock).
+            on_hand_value = round(opening_value + purch_amt - issued_cost_wac - wasted_value + adj_value, 2)
             rows.append({
                 "item_id": iid,
                 "name": it.get("name"),
@@ -3147,8 +3169,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 "on_hand": on_hand,
                 "min_stock": min_s,
                 "low": low,
-                # Amounts (in ₹). avg_rate is weighted-avg purchase price.
+                # Amounts (in ₹). avg_rate is weighted-avg purchase price;
+                # issue_rate = max(WAC, latest rate) used to value issues.
                 "avg_rate": avg_rate,
+                "issue_rate": issue_rate,
                 "opening_value": opening_value,
                 "purchased_amount": purch_amt,
                 "issued_value": issued_value,

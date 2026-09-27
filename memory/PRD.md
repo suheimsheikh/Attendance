@@ -574,3 +574,9 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Bug: `_compute_day_flags` negative_stock check (routes/meals.py) compared the day's issue qty against ONLY the previous day's on-hand (`onhand_prev`), ignoring SAME-DAY purchases. Buying and consuming an item the same day (e.g. fresh Chicken) always tripped "issued X but only Y on hand" regardless of entry order.
 - Fix: available = prev-day on-hand + same-day purchases (summed from pur_lines). Genuine oversell (issued > prev + same-day purchases) still flags.
 - Verified: Chicken 2026-07-01 (prior 0, purchased 12, issued 12) now clean; also 07-05, 07-08 clean; day-flags endpoint returns 0 negative_stock.
+
+## Update 27 Jun 2026 (cont.) — Issue valuation = max(WAC, latest) + confirm hard block
+- Issue rate change (routes/meals.py _stock_snapshot): added latest-purchase-rate per item; issue_rate = max(avg_rate WAC, latest rate). issued_value = issued_qty × issue_rate (never undervalues issues — e.g. Chicken WAC 192.31 but latest 298 → issues costed at 298). on_hand_value stays WAC-based (issued_cost_wac) so remaining stock value stays accurate. New row field `issue_rate`.
+- Hard block at entry already exists (`_assert_issue_stock`, called on POST + PATCH /meals/issues) and is same-day-safe (on-hand as of day d includes same-day purchases). Verified: issuing 999kg chicken → HTTP 400 shortage error.
+- Flags recheck: only negative_stock had the same-day bug (fixed to add same-day purchases). issue_no_price uses the same-day snapshot (safe); other flags don't depend on prior-day stock ordering.
+- All backend-only; needs redeploy for production.
