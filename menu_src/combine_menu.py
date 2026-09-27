@@ -95,7 +95,7 @@ orphan = sorted({v["name"] for k,v in recipes.items() if k not in used_full and 
 # ---------- 4) Write combined workbook ----------
 out = openpyxl.Workbook()
 sh = out.active; sh.title = "Combined Menu"
-HEAD = ["Day","Meal","Dish","Cooked Qty","Energy (kcal)","Carbs (g)","Protein (g)","Fat (g)","Fiber (g)","Ingredient","Raw Qty","Raw Subtotal","Raw # (helper)"]
+HEAD = ["Day","Meal","Dish","Cooked Qty","Energy (kcal)","Carbs (g)","Protein (g)","Fat (g)","Fiber (g)","Ingredient","Raw Amt","Unit","Subtotal (g)","Subtotal (ml)"]
 sh.append(HEAD)
 hfill = PatternFill("solid", fgColor="1E3A5F"); hfont = Font(bold=True, color="FFFFFF", size=11)
 thin = Side(style="thin", color="D9D9D9"); border = Border(thin,thin,thin,thin)
@@ -113,9 +113,21 @@ def split_qty(name):
             return left.strip(), right.strip()
     return n, ""
 
+def split_raw(raw):
+    """'200g' -> (200,'g'); '2.5g' -> (2.5,'g'); '100ml' -> (100,'ml')."""
+    if not raw:
+        return "", ""
+    m = re.match(r'\s*([0-9]*\.?[0-9]+)\s*(.*)$', str(raw))
+    if not m:
+        return "", str(raw).strip()
+    amt = float(m.group(1)); unit = m.group(2).strip()
+    if amt == int(amt): amt = int(amt)
+    return amt, unit
+
+ZERO_BLANK = '0.###;-0.###;""'   # number format: hide zero, drop trailing zeros
 prev_dish=None; band=False
 pd_day=pd_meal=pd_dish=object()  # sentinels for "flatten repeats"
-groups=[]        # (first_row, last_row) per dish, for the SUM ranges
+groups=[]        # (first_row, last_row) per dish, for the SUMIFS ranges
 grp_start=None
 for d in combined:
     if d["dish"]!=prev_dish:
@@ -127,44 +139,42 @@ for d in combined:
     dish_name, cooked_qty = split_qty(d["dish"])
     dish_v = dish_name if is_new_dish else ""
     qty_v  = cooked_qty if is_new_dish else ""
+    amt_v, unit_v = split_raw(d["raw"])
     pd_day, pd_meal, pd_dish = d["day"], d["meal"], d["dish"]
-    sh.append([day_v, meal_v, dish_v, qty_v, d["energy"], d["carbs"], d["protein"], d["fat"], d["fiber"], d["ingredient"], d["raw"], None, None])
+    sh.append([day_v, meal_v, dish_v, qty_v, d["energy"], d["carbs"], d["protein"], d["fat"], d["fiber"], d["ingredient"], amt_v, unit_v, None, None])
     rr = sh.max_row
-    # Hidden helper (col M): the numeric part of the Raw Qty ("200g"->200,
-    # "2.5g"->2.5, "4 slices"->4), pre-computed so it is correct in ANY
-    # spreadsheet app. The visible subtotal (col L) SUM()s this column, so
-    # the subtotal is a genuine live formula and recalculates if edited.
-    if d["raw"]:
-        mnum = re.match(r'\s*([0-9]*\.?[0-9]+)', str(d["raw"]))
-        if mnum:
-            sh.cell(rr, 13).value = float(mnum.group(1))
     # track dish groups for the subtotal ranges
     if is_new_dish:
         if grp_start is not None:
             groups.append((grp_start, rr-1))
         grp_start = rr
     fill = PatternFill("solid", fgColor="FFFFFF" if band else "F5F8FB")
-    for j in range(1,14):
+    for j in range(1,15):
         cc=sh.cell(rr,j); cc.border=border; cc.fill=fill
-        if j in (5,6,7,8,9,12,13): cc.alignment=Alignment(horizontal="right")
+        if j in (5,6,7,8,9,11,13,14): cc.alignment=Alignment(horizontal="right")
         if j==4: cc.alignment=Alignment(horizontal="right")
+        if j==12: cc.alignment=Alignment(horizontal="center")
         if j==3 and dish_v: cc.font=Font(bold=True)
         if d["ingredient"].startswith("— no recipe"):
             cc.font=Font(color="C0392B", italic=True)
 if grp_start is not None:
     groups.append((grp_start, sh.max_row))
 
-# Write the live per-dish subtotal (col L) on each dish's first row.
+# Live per-dish subtotals on each dish's first row — grams (M) and ml (N)
+# summed SEPARATELY with SUMIFS over the visible Raw Amt + Unit columns.
 for first, last in groups:
-    cell = sh.cell(first, 12)
-    cell.value = f"=SUM(M{first}:M{last})"
-    cell.font = Font(bold=True, color="1E3A5F")
-    cell.alignment = Alignment(horizontal="right")
+    g = sh.cell(first, 13)
+    g.value = f'=SUMIFS(K{first}:K{last},L{first}:L{last},"g")'
+    g.font = Font(bold=True, color="1E3A5F"); g.alignment = Alignment(horizontal="right")
+    g.number_format = ZERO_BLANK
+    ml = sh.cell(first, 14)
+    ml.value = f'=SUMIFS(K{first}:K{last},L{first}:L{last},"ml")'
+    ml.font = Font(bold=True, color="1E3A5F"); ml.alignment = Alignment(horizontal="right")
+    ml.number_format = ZERO_BLANK
 
-widths=[16,14,30,11,12,10,11,9,9,22,10,13,12]
+widths=[16,14,30,11,12,10,11,9,9,22,9,7,12,12]
 for i,w in enumerate(widths,1):
     sh.column_dimensions[openpyxl.utils.get_column_letter(i)].width=w
-sh.column_dimensions["M"].hidden = True   # helper numeric column stays hidden
 sh.freeze_panes="A2"
 
 # Mismatches sheet
