@@ -95,7 +95,7 @@ orphan = sorted({v["name"] for k,v in recipes.items() if k not in used_full and 
 # ---------- 4) Write combined workbook ----------
 out = openpyxl.Workbook()
 sh = out.active; sh.title = "Combined Menu"
-HEAD = ["Day","Meal","Dish","Cooked Qty","Energy (kcal)","Carbs (g)","Protein (g)","Fat (g)","Fiber (g)","Ingredient","Raw Qty"]
+HEAD = ["Day","Meal","Dish","Cooked Qty","Energy (kcal)","Carbs (g)","Protein (g)","Fat (g)","Fiber (g)","Ingredient","Raw Qty","Raw Subtotal","Raw # (helper)"]
 sh.append(HEAD)
 hfill = PatternFill("solid", fgColor="1E3A5F"); hfont = Font(bold=True, color="FFFFFF", size=11)
 thin = Side(style="thin", color="D9D9D9"); border = Border(thin,thin,thin,thin)
@@ -115,6 +115,8 @@ def split_qty(name):
 
 prev_dish=None; band=False
 pd_day=pd_meal=pd_dish=object()  # sentinels for "flatten repeats"
+groups=[]        # (first_row, last_row) per dish, for the SUM ranges
+grp_start=None
 for d in combined:
     if d["dish"]!=prev_dish:
         band = not band; prev_dish=d["dish"]
@@ -126,19 +128,43 @@ for d in combined:
     dish_v = dish_name if is_new_dish else ""
     qty_v  = cooked_qty if is_new_dish else ""
     pd_day, pd_meal, pd_dish = d["day"], d["meal"], d["dish"]
-    sh.append([day_v, meal_v, dish_v, qty_v, d["energy"], d["carbs"], d["protein"], d["fat"], d["fiber"], d["ingredient"], d["raw"]])
+    sh.append([day_v, meal_v, dish_v, qty_v, d["energy"], d["carbs"], d["protein"], d["fat"], d["fiber"], d["ingredient"], d["raw"], None, None])
     rr = sh.max_row
+    # Hidden helper (col M): the numeric part of the Raw Qty ("200g"->200,
+    # "2.5g"->2.5, "4 slices"->4), pre-computed so it is correct in ANY
+    # spreadsheet app. The visible subtotal (col L) SUM()s this column, so
+    # the subtotal is a genuine live formula and recalculates if edited.
+    if d["raw"]:
+        mnum = re.match(r'\s*([0-9]*\.?[0-9]+)', str(d["raw"]))
+        if mnum:
+            sh.cell(rr, 13).value = float(mnum.group(1))
+    # track dish groups for the subtotal ranges
+    if is_new_dish:
+        if grp_start is not None:
+            groups.append((grp_start, rr-1))
+        grp_start = rr
     fill = PatternFill("solid", fgColor="FFFFFF" if band else "F5F8FB")
-    for j in range(1,12):
+    for j in range(1,14):
         cc=sh.cell(rr,j); cc.border=border; cc.fill=fill
-        if j in (5,6,7,8,9): cc.alignment=Alignment(horizontal="right")
+        if j in (5,6,7,8,9,12,13): cc.alignment=Alignment(horizontal="right")
         if j==4: cc.alignment=Alignment(horizontal="right")
         if j==3 and dish_v: cc.font=Font(bold=True)
         if d["ingredient"].startswith("— no recipe"):
             cc.font=Font(color="C0392B", italic=True)
-widths=[16,14,30,11,12,10,11,9,9,22,10]
+if grp_start is not None:
+    groups.append((grp_start, sh.max_row))
+
+# Write the live per-dish subtotal (col L) on each dish's first row.
+for first, last in groups:
+    cell = sh.cell(first, 12)
+    cell.value = f"=SUM(M{first}:M{last})"
+    cell.font = Font(bold=True, color="1E3A5F")
+    cell.alignment = Alignment(horizontal="right")
+
+widths=[16,14,30,11,12,10,11,9,9,22,10,13,12]
 for i,w in enumerate(widths,1):
     sh.column_dimensions[openpyxl.utils.get_column_letter(i)].width=w
+sh.column_dimensions["M"].hidden = True   # helper numeric column stays hidden
 sh.freeze_panes="A2"
 
 # Mismatches sheet
