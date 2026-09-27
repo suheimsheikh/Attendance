@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { api, showApiError } from "../../api";
 import { toast } from "sonner";
 import {
   BookOpen, ChevronRight, ChevronDown, Plus, Pencil, Trash2, Loader2,
-  Sparkles, X, UtensilsCrossed, Soup, Carrot,
+  Sparkles, X, UtensilsCrossed, Soup, Carrot, ChevronsDownUp, ChevronsUpDown,
 } from "lucide-react";
 
 const MAC = [
@@ -127,6 +127,18 @@ export default function Recipes() {
   const tset = (setter) => (id) => setter((p) => { const s = new Set(p); s.has(id) ? s.delete(id) : s.add(id); return s; });
   const toggleDay = tset(setOpenDays), toggleMeal = tset(setOpenMeals), toggleDish = tset(setOpenDishes);
 
+  const allIds = useMemo(() => {
+    const days = [], meals = [], dishes = [];
+    tree.forEach((d) => {
+      days.push(d.id);
+      (d.meals || []).forEach((m) => { meals.push(m.id); (m.dishes || []).forEach((di) => dishes.push(di.id)); });
+    });
+    return { days, meals, dishes };
+  }, [tree]);
+  const anyOpen = openDays.size > 0 || openMeals.size > 0 || openDishes.size > 0;
+  const expandAll = () => { setOpenDays(new Set(allIds.days)); setOpenMeals(new Set(allIds.meals)); setOpenDishes(new Set(allIds.dishes)); };
+  const collapseAll = () => { setOpenDays(new Set()); setOpenMeals(new Set()); setOpenDishes(new Set()); };
+
   const refresh = () => { setModal(null); load(); };
   const del = async (url, label) => {
     if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
@@ -181,6 +193,9 @@ export default function Recipes() {
       <p className="text-xs text-slate-500 mb-4">Weekly menu tree — <b>Day → Meal → Dish → Ingredients</b>. Macros are per serving; micronutrients (per serving) are computed from each ingredient's per-100g values filled by AI. Click a row to expand.</p>
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
+        <button onClick={anyOpen ? collapseAll : expandAll} className="iu-btn-secondary !h-9 inline-flex items-center gap-1.5" data-testid="recipe-toggle-all">
+          {anyOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />} {anyOpen ? "Collapse all" : "Expand all"}
+        </button>
         <button onClick={runAI} disabled={aiBusy} className="iu-btn-primary !h-9 inline-flex items-center gap-1" data-testid="recipe-ai-fill">
           {aiBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Fill micronutrients with AI
         </button>
@@ -221,7 +236,7 @@ export default function Recipes() {
             const dOpen = openDays.has(day.id);
             return (
               <div key={day.id}>
-                <div className="flex items-center gap-1 px-3 py-2 bg-slate-100/80 hover:bg-slate-100 group" data-testid={`recipe-day-${day.id}`}>
+                <div className="flex items-center gap-1 px-3 py-2 bg-emerald-50 hover:bg-emerald-100/70 border-l-4 border-emerald-500 group" data-testid={`recipe-day-${day.id}`}>
                   <button onClick={() => toggleDay(day.id)} className="p-0.5" data-testid={`recipe-day-toggle-${day.id}`}>
                     {dOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   </button>
@@ -237,7 +252,7 @@ export default function Recipes() {
                   const mOpen = openMeals.has(meal.id);
                   return (
                     <div key={meal.id}>
-                      <div className="flex items-center gap-1 pl-8 pr-3 py-1.5 bg-sky-50/50 hover:bg-sky-50 group" data-testid={`recipe-meal-${meal.id}`}>
+                      <div className="flex items-center gap-1 pl-8 pr-3 py-1.5 bg-sky-50 hover:bg-sky-100/70 border-l-4 border-sky-400 group" data-testid={`recipe-meal-${meal.id}`}>
                         <button onClick={() => toggleMeal(meal.id)} className="p-0.5">{mOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
                         <Soup size={13} className="text-sky-600 shrink-0" />
                         <span className="font-bold text-slate-800 flex-1">{meal.name}</span>
@@ -254,7 +269,7 @@ export default function Recipes() {
                         const stat = { ...dish, ...dish.micros };
                         return (
                           <div key={dish.id}>
-                            <div className="flex items-center gap-1 pl-16 pr-3 py-1.5 hover:bg-slate-50 group" data-testid={`recipe-dish-${dish.id}`}>
+                            <div className="flex items-center gap-1 pl-16 pr-3 py-1.5 bg-amber-50/60 hover:bg-amber-100/60 border-l-4 border-amber-400 group" data-testid={`recipe-dish-${dish.id}`}>
                               <button onClick={() => toggleDish(dish.id)} className="p-0.5">{diOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button>
                               <UtensilsCrossed size={12} className="text-amber-600 shrink-0" />
                               <span className="font-semibold text-slate-900">{dish.name}</span>
@@ -269,7 +284,7 @@ export default function Recipes() {
                             </div>
 
                             {diOpen && (dish.ingredients || []).map((ing) => (
-                              <div key={ing.id} className="flex items-center gap-1 pl-24 pr-3 py-1 hover:bg-slate-50/60 group text-sm" data-testid={`recipe-ing-${ing.id}`}>
+                              <div key={ing.id} className="flex items-center gap-1 pl-24 pr-3 py-1 bg-white hover:bg-slate-50 border-l-4 border-slate-200 group text-sm" data-testid={`recipe-ing-${ing.id}`}>
                                 <Carrot size={11} className="text-emerald-500 shrink-0" />
                                 <span className="text-slate-700">{ing.name}</span>
                                 <span className="text-[11px] text-slate-400 ml-1 tabular-nums">

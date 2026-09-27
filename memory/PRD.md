@@ -543,3 +543,8 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - New **Weight** column at start of numeric strip — shows grams and ml separately (stacked), aggregated dish→meal→day (backend `_dish_weight` + `weight_g`/`weight_ml` in tree totals).
 - Removed toolbar **Add day** button AND day-level **Delete day** action (fixed 7-day week); rename-day kept.
 - Verified: curl tree returns weight_g/weight_ml; screenshot confirms grouped sticky header + aligned columns.
+
+## Update 27 Jun 2026 (cont.) — Recipes per-level colours + Expand/Collapse-all
+- Per-level row colours with a coloured left rail (border-l-4): Day=emerald, Meal=sky, Dish=amber, Ingredient=white/slate.
+- New toolbar toggle `recipe-toggle-all` — "Expand all" / "Collapse all" (opens/closes every day+meal+dish at once via allIds useMemo).
+- Header sticky made fully opaque (removed translucent/backdrop-blur), z-30 + shadow. VERIFIED sticky under real mouse-wheel scroll with all 149 dishes / 399 ingredients expanded — header stays pinned. If it appears non-sticky for the user it is a stale/cached bundle or the deployed prod build (needs redeploy).
