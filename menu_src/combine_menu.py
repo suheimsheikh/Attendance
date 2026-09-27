@@ -125,52 +125,85 @@ def split_raw(raw):
     return amt, unit
 
 ZERO_BLANK = '0.###;-0.###;""'   # number format: hide zero, drop trailing zeros
-prev_dish=None; band=False
-pd_day=pd_meal=pd_dish=object()  # sentinels for "flatten repeats"
-groups=[]        # (first_row, last_row) per dish, for the SUMIFS ranges
-grp_start=None
+from collections import OrderedDict
+# Group flat rows into Day -> Meal -> Dish -> [ingredient rows], preserving order.
+structure = OrderedDict()
 for d in combined:
-    if d["dish"]!=prev_dish:
-        band = not band; prev_dish=d["dish"]
-    # Blank repeated Day / Meal / Dish so each name shows once per group.
-    day_v  = "" if d["day"]==pd_day else d["day"]
-    meal_v = "" if (d["day"]==pd_day and d["meal"]==pd_meal) else d["meal"]
-    is_new_dish = not (d["day"]==pd_day and d["meal"]==pd_meal and d["dish"]==pd_dish)
-    dish_name, cooked_qty = split_qty(d["dish"])
-    dish_v = dish_name if is_new_dish else ""
-    qty_v  = cooked_qty if is_new_dish else ""
-    amt_v, unit_v = split_raw(d["raw"])
-    pd_day, pd_meal, pd_dish = d["day"], d["meal"], d["dish"]
-    sh.append([day_v, meal_v, dish_v, qty_v, d["energy"], d["carbs"], d["protein"], d["fat"], d["fiber"], d["ingredient"], amt_v, unit_v, None, None])
-    rr = sh.max_row
-    # track dish groups for the subtotal ranges
-    if is_new_dish:
-        if grp_start is not None:
-            groups.append((grp_start, rr-1))
-        grp_start = rr
-    fill = PatternFill("solid", fgColor="FFFFFF" if band else "F5F8FB")
-    for j in range(1,15):
-        cc=sh.cell(rr,j); cc.border=border; cc.fill=fill
-        if j in (5,6,7,8,9,11,13,14): cc.alignment=Alignment(horizontal="right")
-        if j==4: cc.alignment=Alignment(horizontal="right")
-        if j==12: cc.alignment=Alignment(horizontal="center")
-        if j==3 and dish_v: cc.font=Font(bold=True)
-        if d["ingredient"].startswith("— no recipe"):
-            cc.font=Font(color="C0392B", italic=True)
-if grp_start is not None:
-    groups.append((grp_start, sh.max_row))
+    structure.setdefault(d["day"], OrderedDict()).setdefault(d["meal"], OrderedDict()).setdefault(d["dish"], []).append(d)
 
-# Live per-dish subtotals on each dish's first row — grams (M) and ml (N)
-# summed SEPARATELY with SUMIFS over the visible Raw Amt + Unit columns.
-for first, last in groups:
-    g = sh.cell(first, 13)
-    g.value = f'=SUMIFS(K{first}:K{last},L{first}:L{last},"g")'
-    g.font = Font(bold=True, color="1E3A5F"); g.alignment = Alignment(horizontal="right")
-    g.number_format = ZERO_BLANK
-    ml = sh.cell(first, 14)
-    ml.value = f'=SUMIFS(K{first}:K{last},L{first}:L{last},"ml")'
-    ml.font = Font(bold=True, color="1E3A5F"); ml.alignment = Alignment(horizontal="right")
-    ml.number_format = ZERO_BLANK
+meal_fill = PatternFill("solid", fgColor="E8F0FA")
+day_fill  = PatternFill("solid", fgColor="C9DAF0")
+dish_groups=[]   # (first,last) per dish for per-dish g/ml subtotals
+band=False
+
+def style_row(rr, fill=None, bold=False, color=None):
+    for j in range(1,15):
+        cc=sh.cell(rr,j); cc.border=border
+        if fill: cc.fill=fill
+        if j in (5,6,7,8,9,11,13,14) or j==4: cc.alignment=Alignment(horizontal="right")
+        if j==12: cc.alignment=Alignment(horizontal="center")
+        if bold: cc.font=Font(bold=True, color=color or "1E3A5F")
+
+for day, meals in structure.items():
+    day_started=False
+    day_meal_sub_rows=[]        # meal-subtotal row numbers for this day
+    day_dish_first=None; day_dish_last=None
+    for meal, dishes in meals.items():
+        meal_started=False
+        meal_first=sh.max_row+1
+        for dish, rows in dishes.items():
+            band = not band
+            dish_first=sh.max_row+1
+            for i,d in enumerate(rows):
+                amt_v, unit_v = split_raw(d["raw"])
+                dish_name, cooked_qty = split_qty(d["dish"])
+                day_v  = day  if not day_started  else ""
+                meal_v = meal if not meal_started else ""
+                dish_v = dish_name  if i==0 else ""
+                qty_v  = cooked_qty if i==0 else ""
+                day_started=True; meal_started=True
+                nut = (d["energy"], d["carbs"], d["protein"], d["fat"], d["fiber"]) if i==0 else (None,)*5
+                sh.append([day_v, meal_v, dish_v, qty_v, *nut, d["ingredient"], amt_v, unit_v, None, None])
+                rr=sh.max_row
+                style_row(rr, fill=PatternFill("solid", fgColor="FFFFFF" if band else "F5F8FB"))
+                if i==0 and dish_v: sh.cell(rr,3).font=Font(bold=True)
+                if d["ingredient"].startswith("— no recipe"):
+                    for j in range(1,15): sh.cell(rr,j).font=Font(color="C0392B", italic=True)
+            dish_groups.append((dish_first, sh.max_row))
+        meal_last=sh.max_row
+        if day_dish_first is None: day_dish_first=meal_first
+        day_dish_last=meal_last
+        # Meal subtotal row (skip when meal label is blank, e.g. Extras)
+        if str(meal).strip():
+            sh.append(["","",f"{meal} — subtotal","",
+                       f"=SUM(E{meal_first}:E{meal_last})", f"=SUM(F{meal_first}:F{meal_last})",
+                       f"=SUM(G{meal_first}:G{meal_last})", f"=SUM(H{meal_first}:H{meal_last})",
+                       f"=SUM(I{meal_first}:I{meal_last})", "","","",
+                       f"=SUM(M{meal_first}:M{meal_last})", f"=SUM(N{meal_first}:N{meal_last})"])
+            sr=sh.max_row
+            style_row(sr, fill=meal_fill, bold=True)
+            for c in (13,14): sh.cell(sr,c).number_format=ZERO_BLANK
+            day_meal_sub_rows.append(sr)
+    # Day TOTAL row — sum the meal-subtotal rows (avoids double counting);
+    # for Extras (no meal subtotals) sum the day's dish range directly.
+    if day_meal_sub_rows:
+        mk = lambda col: "=SUM(" + ",".join(f"{col}{r}" for r in day_meal_sub_rows) + ")"
+    else:
+        mk = lambda col: f"=SUM({col}{day_dish_first}:{col}{day_dish_last})"
+    sh.append(["","",f"{day} — DAY TOTAL","", mk("E"),mk("F"),mk("G"),mk("H"),mk("I"),"","","", mk("M"),mk("N")])
+    dr=sh.max_row
+    style_row(dr, fill=day_fill, bold=True, color="0B2545")
+    sh.cell(dr,3).font=Font(bold=True, color="0B2545", size=11)
+    for c in (13,14): sh.cell(dr,c).number_format=ZERO_BLANK
+
+# Live per-dish subtotals on each dish's first row — grams (M) & ml (N)
+# summed SEPARATELY via SUMIFS over the visible Raw Amt + Unit columns.
+for first, last in dish_groups:
+    for col, unit in ((13,"g"), (14,"ml")):
+        c = sh.cell(first, col)
+        c.value = f'=SUMIFS(K{first}:K{last},L{first}:L{last},"{unit}")'
+        c.font = Font(bold=True, color="1E3A5F"); c.alignment = Alignment(horizontal="right")
+        c.number_format = ZERO_BLANK
 
 widths=[16,14,30,11,12,10,11,9,9,22,9,7,12,12]
 for i,w in enumerate(widths,1):
