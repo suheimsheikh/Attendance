@@ -105,9 +105,11 @@ def make_router(db, require_admin) -> APIRouter:
         tf.addfile(info, io.BytesIO(mpayload))
         tf.close()
 
-        # Backup filename timestamped in IST so daily backups don't
-        # collide across timezones. 20 Feb 2026 timezone audit.
-        fname = f"ych-full-{local_now(None).strftime('%Y%m%d-%H%M')}.tar.gz"
+        # Timestamped, sortable, human-readable filename in IST so no two
+        # backups collide — seconds precision means same-minute downloads
+        # stay distinct. e.g. YCH-Attendance-Backup-2026-09-28_1945-30.tar.gz
+        _now = local_now(None)
+        fname = f"YCH-Attendance-Backup-{_now.strftime('%Y-%m-%d_%H%M-%S')}.tar.gz"
         # Stamp last_backup_at so /api/admin/preflight can confirm a recent backup
         # exists without the admin having to remember when they ran it.
         await db.config.update_one(

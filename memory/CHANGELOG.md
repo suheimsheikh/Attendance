@@ -3,6 +3,13 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 28 Sep 2026 — Elegant, collision-proof backup filenames
+
+Backup downloads are now named `YCH-Attendance-Backup-YYYY-MM-DD_HHMM-SS.tar.gz` (IST, seconds precision) instead of the minute-only `ych-full-…`. Sortable and human-readable; two backups can no longer overwrite each other. Frontend fallback name matches. Verified via live `Content-Disposition` header.
+
+---
+
+
 ## 28 Sep 2026 — Backup/restore now fully automatic (no hardcoded list)
 
 Replaced the hand-maintained `BACKUP_COLLECTIONS` list entirely. **Backup** now enumerates every collection at runtime via `db.list_collection_names()` (only MongoDB internal `system.*` excluded — nothing app-side is restricted, `login_attempts` included). **Restore** derives its collection list from the uploaded archive itself, so a full backup restores fully and future modules need zero code changes here.

@@ -32,7 +32,7 @@ export default function BackupRestore() {
       const blob = await res.blob();
       const disp = res.headers.get("Content-Disposition") || "";
       const m = disp.match(/filename="?([^"]+)"?/);
-      const fname = m ? m[1] : `ych-full-${new Date().toISOString().slice(0,10)}.tar.gz`;
+      const fname = m ? m[1] : `YCH-Attendance-Backup-${new Date().toISOString().slice(0,19).replace("T","_").replace(/:/g,"")}.tar.gz`;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = fname;
