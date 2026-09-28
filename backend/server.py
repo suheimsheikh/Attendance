@@ -674,6 +674,7 @@ async def _seed_database() -> None:
     await db.audit_log.create_index("entity_id", sparse=True)
     await db.audit_log.create_index([("entity_type", 1), ("at", -1)])
     await db.feature_usage.create_index("feature_key", unique=True)
+    await db.daily_leave_report_log.create_index("date", unique=True)
     await db.sms_log.create_index([("at", -1)])
     await db.sms_log.create_index("to", sparse=True)
     # Meal muster index — added here in addition to the runtime
@@ -4743,6 +4744,10 @@ app.include_router(_data_quality_router(db, require_admin))
 # super-admin reads. See routes/usage.py.
 from routes.usage import make_router as _usage_router  # noqa: E402
 app.include_router(_usage_router(db, get_current_user, require_admin))
+
+# Daily leave/tour WhatsApp report — once-a-day admin nudge + posted lock.
+from routes.leave_report import make_router as _leave_report_router  # noqa: E402
+app.include_router(_leave_report_router(db, require_admin))
 
 # Attendance dedupe / repair tool (Jun 2026) — one-check-in-per-day cleanup.
 from routes.attendance_repair import make_router as _attendance_repair_router  # noqa: E402

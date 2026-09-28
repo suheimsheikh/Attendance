@@ -3,6 +3,16 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 28 Sep 2026 — Daily Leave/Tour WhatsApp prompt on admin login
+
+When an admin logs in and nobody has posted yet today, a small modal shows everyone on **leave or tour** (name · till date · "N more days") and a **Post to WhatsApp** button that opens WhatsApp pre-filled (manual group share — Meta bans API group-posting). Tapping Post marks the day done so no other admin is prompted; the message comes from the reporter's own WhatsApp account.
+- Backend `routes/leave_report.py`: `GET /api/leave-report/today-status` and `POST /api/leave-report/mark-posted` (idempotent, `$setOnInsert` → first poster wins). Collection `daily_leave_report_log` (unique index on `date`). Registered in `server.py`.
+- Frontend `components/LeaveReportPrompt.jsx` (mounted in `Layout` for `isAdmin && !isEscort`): on mount checks today-status; if unposted, fetches the existing `/muster/daily-roster` and shows the modal (leave+tour only, trimmed names, "ends today"/"N more days"). Once per session; "Later" closes without marking. Reuses `shareToWhatsApp`.
+- Verified: curl (status false → mark-posted → true, idempotent) and screenshot (prompt renders on admin login with correct formatted message + Post/Later).
+
+---
+
+
 ## 28 Sep 2026 — Code-review fixes: Kitchen valuation + Attendance/payroll calc
 
 Targeted functional code review of the two high-stakes calc paths; fixed all findings, verified against the pytest regression suite + live read-only checks.
