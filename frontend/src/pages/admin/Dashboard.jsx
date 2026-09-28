@@ -26,6 +26,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import Avatar from "../../components/Avatar";
 import MonthCorrectionsCard from "./dashboard/MonthCorrectionsCard";
 import TaskProgressCard from "./dashboard/TaskProgressCard";
+import BackupReminderBanner from "../../components/BackupReminderBanner";
 import {
   CATEGORY_COLOR, StatTile, CategoryChips, Sparkline,
   fmtShortDate, fmtRange, SectionCard, AttentionRow, ShortcutBtn,
@@ -85,6 +86,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto" data-testid="admin-dashboard-page">
+      <BackupReminderBanner />
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>

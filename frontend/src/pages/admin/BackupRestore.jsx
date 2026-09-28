@@ -1,7 +1,18 @@
-import React, { useState } from "react";
-import { Download, Upload, Loader2, AlertTriangle, CheckCircle2, Database } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Download, Upload, Loader2, AlertTriangle, CheckCircle2, Database, CalendarClock, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { getToken } from "../../api";
+import { getToken, api } from "../../api";
+
+const fmtBytes = (n) => {
+  if (!n) return "—";
+  const mb = n / (1024 * 1024);
+  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+};
+const fmtWhen = (iso) => {
+  if (!iso) return "never";
+  try { return new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }); }
+  catch { return iso; }
+};
 
 /**
  * Full-database backup & restore. Downloads / uploads a tar.gz containing
@@ -15,6 +26,34 @@ export default function BackupRestore() {
   const [mode, setMode] = useState("merge");
   const [file, setFile] = useState(null);
   const [report, setReport] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [autoBusy, setAutoBusy] = useState(null);
+
+  const loadStatus = useCallback(async () => {
+    try { setStatus(await api.get("/admin/backup-status")); } catch { /* non-blocking */ }
+  }, []);
+  useEffect(() => { loadStatus(); }, [loadStatus]);
+
+  const downloadAuto = async (slot) => {
+    setAutoBusy(slot);
+    try {
+      const token = getToken();
+      const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/backup/auto/${slot}/download`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const disp = res.headers.get("Content-Disposition") || "";
+      const m = disp.match(/filename="?([^"]+)"?/);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = m ? m[1] : `YCH-Attendance-Backup-${slot}.tar.gz`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(a.href);
+      toast.success("Backup downloaded");
+    } catch (err) {
+      toast.error(err?.message || "Download failed");
+    } finally { setAutoBusy(null); }
+  };
 
   // Safety guard: forbid Replace mode on the production host. Replace wipes
   // every collection before loading — a slip of the click here would erase
@@ -41,6 +80,7 @@ export default function BackupRestore() {
       a.remove();
       URL.revokeObjectURL(a.href);
       toast.success("Full backup downloaded");
+      loadStatus();
     } catch (err) {
       toast.error(err?.message || "Backup failed");
     } finally {
@@ -127,6 +167,51 @@ export default function BackupRestore() {
           </div>
         </div>
       </div>
+
+      {/* Automatic daily backups (object storage, last 7 days) */}
+      <div className="iu-card p-5 mb-4 border-2 border-violet-200" style={{ background: "#F5F3FF" }} data-testid="auto-backups-card">
+        <div className="flex items-start gap-3">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-violet-600 text-white shrink-0 shadow-sm">
+            <CalendarClock size={20} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-slate-900 mb-1">Automatic daily backups</div>
+            <p className="text-sm text-slate-600 mb-3">
+              A full snapshot is taken every night at <b>2:00 AM IST</b> and kept in secure cloud
+              storage &mdash; the last <b>7 days</b> are always available here. Download any day's copy below.
+            </p>
+            <div className="flex items-center gap-2 text-xs text-slate-500 mb-3">
+              <Clock size={13} />
+              Last backup: <b className="text-slate-700">{fmtWhen(status?.last_backup_at)}</b>
+              {status?.last_backup_by ? <span>· by {status.last_backup_by}</span> : null}
+            </div>
+            {(!status?.auto_backups || status.auto_backups.length === 0) ? (
+              <div className="text-sm text-slate-500 italic">No automatic backups yet — the first one runs tonight at 2 AM IST.</div>
+            ) : (
+              <ul className="divide-y divide-violet-100 rounded-lg border border-violet-100 bg-white/70">
+                {status.auto_backups.map((a) => (
+                  <li key={a.slot} className="flex items-center justify-between gap-3 px-3 py-2" data-testid={`auto-backup-${a.slot}`}>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-800 truncate">{a.filename}</div>
+                      <div className="text-[11px] text-slate-500">{fmtWhen(a.created_at)} · {fmtBytes(a.size)}</div>
+                    </div>
+                    <button
+                      onClick={() => downloadAuto(a.slot)}
+                      disabled={autoBusy === a.slot}
+                      data-testid={`auto-backup-download-${a.slot}`}
+                      className="iu-btn !bg-violet-600 hover:!bg-violet-700 !text-white shrink-0 !py-1.5 !px-3 text-xs"
+                    >
+                      {autoBusy === a.slot ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+                      Download
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+
 
       <div className="iu-card p-5 mb-4 border-2 border-sky-200" style={{ background: "#F0F9FF" }}>
         <div className="flex items-start gap-3">

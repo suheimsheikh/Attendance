@@ -675,6 +675,7 @@ async def _seed_database() -> None:
     await db.audit_log.create_index([("entity_type", 1), ("at", -1)])
     await db.feature_usage.create_index("feature_key", unique=True)
     await db.daily_leave_report_log.create_index("date", unique=True)
+    await db.cron_runs.create_index([("job", 1), ("run_id", 1)], unique=True)
     await db.sms_log.create_index([("at", -1)])
     await db.sms_log.create_index("to", sparse=True)
     # Meal muster index — added here in addition to the runtime
@@ -4713,7 +4714,11 @@ app.include_router(_notify_router(db, get_current_user, require_admin))
 
 # Admin tooling (wipe / backup / restore / preflight / summary / activity).
 from routes.admin_tools import make_router as _admin_tools_router  # noqa: E402
-app.include_router(_admin_tools_router(db, require_admin))# Admin audit log — one row per admin-mutating action (member edits,
+app.include_router(_admin_tools_router(db, require_admin))
+
+# Platform-cron endpoints (daily auto-backup). Secured by WEBHOOK_CRON_SECRET.
+from routes.cron import make_router as _cron_router  # noqa: E402
+app.include_router(_cron_router(db))# Admin audit log — one row per admin-mutating action (member edits,
 # leave-balance changes, retroactive attendance overrides, etc.).
 # Read endpoint: GET /api/admin/audit-log.
 from routes.admin_audit import make_router as _audit_router, write_audit  # noqa: E402

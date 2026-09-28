@@ -3,6 +3,17 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 28 Sep 2026 — Scheduled daily auto-backup + dashboard backup reminder
+
+**Auto-backup:** a platform cron (`.emergent/crons.yml`, `daily-backup`, 02:00 IST) calls `POST /api/cron/daily-backup` (secured by `WEBHOOK_CRON_SECRET`, constant-time check, idempotent via `X-Webhook-Id`, acks immediately + backgrounds the work). The job builds a full DB snapshot (shared `build_full_backup` helper) and uploads it to **Emergent Object Storage** under one of **7 fixed weekday slots** (`ych-attendance/backups/auto/ych-auto-{mon..sun}.tar.gz`) — since the object store has no delete API, weekday slots overwrite weekly, so storage always holds exactly the last 7 days. Metadata tracked in `auto_backups` (one doc per slot); `stamp_last_backup` updates `config.last_backup_at`.
+- New: `services/object_storage.py` (init/put/get, key auto-refresh), `routes/cron.py`, and in `admin_tools.py`: `build_full_backup`, `run_auto_backup`, `stamp_last_backup`, `GET /admin/backup-status`, `GET /admin/backup/auto/{slot}/download`. Manual `GET /admin/backup` refactored to reuse the shared builder. `WEBHOOK_CRON_SECRET` added to `backend/.env`; `cron_runs` unique index for dedupe.
+- **Frontend:** Backup page shows an "Automatic daily backups" card (last-backup time + the 7 daily snapshots with download buttons). Admin dashboard shows a dismissible amber **"Backup is overdue"** banner when the last backup is >7 days old (`components/BackupReminderBanner.jsx`).
+- Verified: cron auth (401 bad / 200 good), a real run uploaded a 5.7 MB snapshot to slot `mon`, idempotent duplicate delivery returns `{duplicate:true}`, download from storage returns a valid 52-collection tar.gz; both UI pieces screenshot-verified (backdated timestamp to confirm the banner). crons.yml validated.
+- Deploy note: crons sync on deploy from the deployed build's `crons.yml`; redeploy to activate in production.
+
+---
+
+
 ## 28 Sep 2026 — Elegant, collision-proof backup filenames
 
 Backup downloads are now named `YCH-Attendance-Backup-YYYY-MM-DD_HHMM-SS.tar.gz` (IST, seconds precision) instead of the minute-only `ych-full-…`. Sortable and human-readable; two backups can no longer overwrite each other. Frontend fallback name matches. Verified via live `Content-Disposition` header.

@@ -45,6 +45,94 @@ async def _all_backup_collections(db) -> list[str]:
     return sorted(n for n in names if not n.startswith(BACKUP_DENY_PREFIXES))
 
 
+# Automatic daily backups live under 7 fixed weekday slots so storage never
+# grows past the last 7 days (the object store has no delete API — overwriting
+# a fixed path is how we "prune"). Slot = weekday name of the run date.
+AUTO_BACKUP_DIR = "backups/auto"
+_WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+async def build_full_backup(db) -> tuple[bytes, str]:
+    """Build a full-database tar.gz snapshot (every collection). Returns
+    (bytes, friendly IST-timestamped filename). Shared by the manual download
+    and the scheduled auto-backup so both stay identical."""
+    buf = io.BytesIO()
+    tf = tarfile.open(fileobj=buf, mode="w:gz")
+    collections = await _all_backup_collections(db)
+    manifest = {
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "kind": "ych-full",
+        "collections": {},
+    }
+    BATCH = 500
+    for name in collections:
+        chunks: list[bytes] = [b"[\n"]
+        total = 0
+        first = True
+        async for d in db[name].find({}, {"_id": 0}):
+            if not first:
+                chunks.append(b",\n")
+            chunks.append(json.dumps(d, default=str).encode("utf-8"))
+            first = False
+            total += 1
+            if total % BATCH == 0:
+                chunks = [b"".join(chunks)]
+        chunks.append(b"\n]")
+        payload = b"".join(chunks)
+        info = tarfile.TarInfo(f"ych-full/{name}.json")
+        info.size = len(payload)
+        tf.addfile(info, io.BytesIO(payload))
+        manifest["collections"][name] = total
+    mpayload = json.dumps(manifest, indent=2).encode("utf-8")
+    info = tarfile.TarInfo("ych-full/manifest.json")
+    info.size = len(mpayload)
+    tf.addfile(info, io.BytesIO(mpayload))
+    tf.close()
+    fname = f"YCH-Attendance-Backup-{local_now(None).strftime('%Y-%m-%d_%H%M-%S')}.tar.gz"
+    return buf.getvalue(), fname
+
+
+async def stamp_last_backup(db, by: str) -> None:
+    """Record when/who took the most recent backup (manual or auto) so the
+    dashboard reminder and preflight can flag a stale backup."""
+    await db.config.update_one(
+        {"id": "last_backup_at"},
+        {"$set": {"id": "last_backup_at",
+                  "when": datetime.now(timezone.utc).isoformat(),
+                  "by": by}},
+        upsert=True,
+    )
+
+
+async def run_auto_backup(db) -> dict:
+    """Generate a full backup and upload it to this weekday's object-storage
+    slot, keeping exactly the last 7 daily snapshots. Called from the cron
+    endpoint's background task. Raises on failure so the caller can log it."""
+    import asyncio
+
+    from services.object_storage import APP_PREFIX, put_object
+
+    now = local_now(None)
+    slot = _WEEKDAYS[now.weekday()]
+    data, fname = await build_full_backup(db)
+    path = f"{APP_PREFIX}/{AUTO_BACKUP_DIR}/ych-auto-{slot}.tar.gz"
+    result = await asyncio.to_thread(put_object, path, data, "application/gzip")
+    doc = {
+        "id": slot,
+        "slot": slot,
+        "storage_path": result.get("path", path),
+        "filename": fname,
+        "size": result.get("size", len(data)),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_date": now.strftime("%Y-%m-%d"),
+    }
+    await db.auto_backups.update_one({"id": slot}, {"$set": doc}, upsert=True)
+    await stamp_last_backup(db, "Automatic daily backup")
+    logger.info("Auto-backup uploaded: %s (%s bytes)", path, doc["size"])
+    return doc
+
+
+
 def make_router(db, require_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
 
@@ -57,72 +145,63 @@ def make_router(db, require_admin) -> APIRouter:
 
     @router.get("/admin/backup")
     async def admin_backup(admin: dict = Depends(require_admin)):
-        """Download a FULL database snapshot — every collection (users, attendance,
-        leaves, institutions, config, devices, parent_notifications, camps,
-        regattas, guests, daily_content, sms_log) as a single tar.gz. Designed
-        for moving data back and forth between prod ↔ preview environments.
-
-        Streams each collection in batches of 500 docs so memory stays bounded
-        even when attendance grows to tens of thousands of rows.
-        """
-        buf = io.BytesIO()
-        tf = tarfile.open(fileobj=buf, mode="w:gz")
-
-        collections = await _all_backup_collections(db)
-        manifest = {
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "kind": "ych-full",
-            "collections": {},
-        }
-        BATCH = 500
-        for name in collections:
-            # Stream the collection in chunks so we don't hold the whole list
-            # in memory. Each JSON file written to the tar is built incrementally.
-            chunks: list[bytes] = [b"[\n"]
-            total = 0
-            first = True
-            cursor = db[name].find({}, {"_id": 0})
-            async for d in cursor:
-                if not first:
-                    chunks.append(b",\n")
-                chunks.append(json.dumps(d, default=str).encode("utf-8"))
-                first = False
-                total += 1
-                # Periodically flush the chunk list into a single bytes blob to
-                # keep Python list overhead small (still in-memory, but compacted).
-                if total % BATCH == 0:
-                    chunks = [b"".join(chunks)]
-            chunks.append(b"\n]")
-            payload = b"".join(chunks)
-            info = tarfile.TarInfo(f"ych-full/{name}.json")
-            info.size = len(payload)
-            tf.addfile(info, io.BytesIO(payload))
-            manifest["collections"][name] = total
-
-        mpayload = json.dumps(manifest, indent=2).encode("utf-8")
-        info = tarfile.TarInfo("ych-full/manifest.json")
-        info.size = len(mpayload)
-        tf.addfile(info, io.BytesIO(mpayload))
-        tf.close()
-
-        # Timestamped, sortable, human-readable filename in IST so no two
-        # backups collide — seconds precision means same-minute downloads
-        # stay distinct. e.g. YCH-Attendance-Backup-2026-09-28_1945-30.tar.gz
-        _now = local_now(None)
-        fname = f"YCH-Attendance-Backup-{_now.strftime('%Y-%m-%d_%H%M-%S')}.tar.gz"
-        # Stamp last_backup_at so /api/admin/preflight can confirm a recent backup
-        # exists without the admin having to remember when they ran it.
-        await db.config.update_one(
-            {"id": "last_backup_at"},
-            {"$set": {"id": "last_backup_at",
-                      "when": datetime.now(timezone.utc).isoformat(),
-                      "by": admin["full_name"]}},
-            upsert=True,
-        )
+        """Download a FULL database snapshot — every collection as a single
+        tar.gz. Designed for moving data between prod ↔ preview environments.
+        Reuses `build_full_backup` so it's identical to the scheduled backup."""
+        data, fname = await build_full_backup(db)
+        await stamp_last_backup(db, admin["full_name"])
         return Response(
-            content=buf.getvalue(),
+            content=data,
             media_type="application/gzip",
             headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+        )
+
+    @router.get("/admin/backup-status")
+    async def admin_backup_status(admin: dict = Depends(require_admin)):
+        """Last-backup timestamp + staleness flag (for the dashboard reminder)
+        and the list of automatic daily snapshots available to download."""
+        last = await db.config.find_one({"id": "last_backup_at"}, {"_id": 0})
+        days_since = None
+        stale = True
+        when = (last or {}).get("when")
+        if when:
+            try:
+                dt = datetime.fromisoformat(when)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                days_since = (datetime.now(timezone.utc) - dt).days
+                stale = days_since >= 7
+            except (ValueError, TypeError):
+                pass
+        autos = await db.auto_backups.find({}, {"_id": 0}).to_list(20)
+        autos.sort(key=lambda a: a.get("created_at", ""), reverse=True)
+        return {
+            "last_backup_at": when,
+            "last_backup_by": (last or {}).get("by"),
+            "days_since": days_since,
+            "stale": stale,
+            "auto_backups": autos,
+        }
+
+    @router.get("/admin/backup/auto/{slot}/download")
+    async def admin_auto_backup_download(slot: str, admin: dict = Depends(require_admin)):
+        """Stream one automatic daily backup from object storage with its
+        friendly filename."""
+        import asyncio
+
+        from services.object_storage import get_object
+
+        doc = await db.auto_backups.find_one({"id": slot}, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="No automatic backup for that day")
+        try:
+            data, ctype = await asyncio.to_thread(get_object, doc["storage_path"])
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Could not fetch backup from storage: {e}")
+        return Response(
+            content=data,
+            media_type="application/gzip",
+            headers={"Content-Disposition": f'attachment; filename="{doc.get("filename", slot + ".tar.gz")}"'},
         )
 
     @router.post("/admin/restore")
