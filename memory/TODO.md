@@ -32,6 +32,7 @@ unless they tap Cancel. If GPS can't lock (timeout / poor accuracy), auto-fallba
 ---
 
 ## 💡 Future ideas (low priority)
+- **"Who posted today's roster" dashboard chip**: show a small "Leave/Tour posted to WhatsApp by &lt;name&gt; at &lt;time&gt;" indicator on the admin dashboard (reads `GET /api/leave-report/today-status`). Avoids two admins double-posting on days the login prompt was dismissed and re-shown to another admin.
 - Google Phone Number Hint API for one-tap phone entry on Android Chrome
 - Export Daily Sessions table to CSV / PDF
 - "Reset card" endpoint to regenerate a lost member QR
