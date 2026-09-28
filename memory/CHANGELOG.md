@@ -3,6 +3,21 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 28 Sep 2026 — Feature Usage & Ageing dashboard + sidebar hide + "Rectify Data"
+
+**New feature — Feature Usage & Ageing (super-admin only):** a dashboard that tracks which sidebar screens are actually used and when, so dormant screens can be retired.
+- Backend `routes/usage.py` (`make_router(db, get_current_user, require_admin)`): `POST /api/usage/ping` (any signed-in user, throttled client-side) upserts into `feature_usage` (`feature_key`, `count`, `last_used_at`, `last_used_by(_name)`); `GET /api/usage/report` (super-admin, 403 otherwise) enumerates a canonical `FEATURE_REGISTRY` (~35 nav pages) left-joined with live pings + **audit_log backfill** (action-prefix → feature map) so last-used isn't blank on day one. Buckets: Active <30d / Stale 30–90d / Dormant 90d+ / Never. Registered in `server.py`; unique index on `feature_usage.feature_key`.
+- Frontend: `hooks/usePageUsagePing.js` fires a fire-and-forget ping on every route change (throttled 5 min/path/session), called from `Layout.jsx`. New page `pages/admin/FeatureUsage.jsx` (route `/admin/feature-usage`, `RequireAdmin`; nav item `superOnly`, gated by `user.is_super_admin`). Summary strip + sortable worst-first table.
+
+**Sidebar hideable (desktop/tablet):** new `sidebar_hidden` uiPref. A `PanelLeftClose` button in the sidebar header (`hidden md:flex`) hides it; a top header with a `Menu` button appears to reopen. Mobile keeps its existing drawer. Verified: hide collapses the desktop sidebar, reopen restores it.
+
+**Nav reorg:** "Data Quality" renamed to **"Rectify Data"** and moved from the System group into the **Attendance** group (route `/admin/data-quality` unchanged). Registry label/group updated to match.
+
+Testing: backend verified via curl (login → ping → report shows audit backfill: The Grid/Approvals/Masters active); frontend verified via screenshots (page renders 35 screens, Rectify Data under Attendance, hide/reopen toggle works).
+
+---
+
+
 
 ## 20 Sep 2026 — Auto check-in-after-checkout bug + one-check-in-per-day rule + repair tool
 

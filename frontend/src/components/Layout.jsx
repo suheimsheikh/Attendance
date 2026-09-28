@@ -5,7 +5,7 @@ import {
   Users, LayoutDashboard, FileBarChart2, ScanLine, UserCog,
   CalendarCheck2,
   LogOut, Menu, ClipboardCheck, CalendarDays, Settings, MessageSquare, Database, Sparkles, UserCheck, Camera,
-  ShieldAlert, Gauge, ChefHat, PencilRuler, ChevronDown, ChevronRight, Utensils, CalendarRange, FileText, ListTodo, ScrollText, HeartPulse, BookOpen
+  ShieldAlert, Gauge, ChefHat, PencilRuler, ChevronDown, ChevronRight, Utensils, CalendarRange, FileText, ListTodo, ScrollText, HeartPulse, BookOpen, Activity, PanelLeftClose
 } from "lucide-react";
 import RulesGate from "./RulesGate";
 import Avatar from "./Avatar";
@@ -19,6 +19,7 @@ import { api } from "../api";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { useEscape } from "../hooks/useEscape";
+import { usePageUsagePing } from "../hooks/usePageUsagePing";
 import { useQueryClient } from "@tanstack/react-query";
 
 /** Map: route path → [reactQueryKey to prefetch, api-path, params].
@@ -83,6 +84,7 @@ const NAV_ATTENDANCE_LIVE = [
   { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, hint: "All-in-one 31-day attendance grid with drill-downs and exports", adminOnly: true },
   { to: "/admin/dar", label: "DAR Reports", icon: FileText, hint: "Daily Activity Reports filed at check-out — search, filter, missed-DAR payroll list", adminOnly: true },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2, hint: "Paid leave, comp-off and tour balances for every member", adminOnly: true },
+  { to: "/admin/data-quality", label: "Rectify Data", icon: ShieldAlert, hint: "Automatic checks that flag suspicious or missing data — fix it here", adminOnly: true },
 ];
 
 const NAV_KITCHEN = [
@@ -101,12 +103,12 @@ const NAV_KITCHEN = [
 // Office Settings page, not the sidebar.
 const NAV_SYSTEM = [
   { to: "/admin/office", label: "Office Settings", icon: Settings, hint: "Working hours, geofence, training locations and app configuration" },
-  { to: "/admin/data-quality", label: "Data Quality", icon: ShieldAlert, hint: "Automatic checks that flag suspicious or missing data" },
   { to: "/admin/category-health", label: "Category Health", icon: ShieldAlert, hint: "Members whose category setup looks wrong" },
   { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare, hint: "Every OTP and SMS the app has sent" },
   { to: "/admin/notify-log", label: "Parent Notify Log", icon: MessageSquare, hint: "Proof of contact — every WhatsApp parent notification sent from Muster (absent / late), with who sent it and when" },
   { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera, hint: "Review and purge old escort check-in photos" },
   { to: "/admin/audit-log", label: "Audit Log", icon: ScanLine, hint: "Who changed what, when — full history" },
+  { to: "/admin/feature-usage", label: "Feature Usage", icon: Activity, superOnly: true, hint: "Which screens are used and when — spot dormant pages to retire" },
   { to: "/admin/backup", label: "Backup & Restore", icon: Database, hint: "Download backups or restore data" },
 ];
 
@@ -117,6 +119,7 @@ export default function Layout() {
   useEscape(open ? () => setOpen(false) : null);
   const isAdmin = user?.role === "admin";
   const isChef = user?.role === "chef";
+  usePageUsagePing();
   const canMuster = isAdmin || user?.category === "coach" || isChef;
   // Escort sessions get a stripped-down sidebar — only the kiosk link,
   // Muster Roll (institution-scoped server-side), and Sign out. They have
@@ -164,7 +167,10 @@ export default function Layout() {
   // so an admin's collapse choice syncs across devices — laptop and
   // phone remember which sections they hide. Falls back to
   // localStorage-only when offline / unauthenticated.
-  const [uiPrefs, patchUiPrefs] = useUiPrefs({ sidebar_collapsed: [] });
+  const [uiPrefs, patchUiPrefs] = useUiPrefs({ sidebar_collapsed: [], sidebar_hidden: false });
+  const sidebarHidden = !!uiPrefs.sidebar_hidden;
+  const setSidebarHidden = React.useCallback(
+    (v) => patchUiPrefs({ sidebar_hidden: v }), [patchUiPrefs]);
   const collapsed = React.useMemo(
     () => new Set(uiPrefs.sidebar_collapsed || []),
     [uiPrefs.sidebar_collapsed],
@@ -229,6 +235,16 @@ export default function Layout() {
           <div className="font-extrabold tracking-tight text-[15px] leading-none">Yacht Club</div>
           <div className="text-[10px] uppercase tracking-widest text-slate-400 mt-1">of Hyderabad</div>
         </div>
+        {/* Hide sidebar (desktop/tablet). Mobile uses the drawer's tap-out. */}
+        <button
+          type="button"
+          data-testid="hide-sidebar-button"
+          onClick={() => { setSidebarHidden(true); setOpen(false); }}
+          title="Hide menu"
+          className="ml-auto hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
+        >
+          <PanelLeftClose size={18} />
+        </button>
       </div>
 
       <nav className="px-3 py-3 flex-1 overflow-y-auto">
@@ -316,7 +332,7 @@ export default function Layout() {
             <SystemGroup label="System" tone="slate" icon={Settings}
                          count={NAV_SYSTEM.length}
                          open={isOpen("system")} onToggle={() => toggleSection("system")}>
-              {NAV_SYSTEM.map((item) => (
+              {NAV_SYSTEM.filter((item) => !item.superOnly || user?.is_super_admin).map((item) => (
                 <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
               ))}
             </SystemGroup>
@@ -358,8 +374,8 @@ export default function Layout() {
   return (
     <div className="h-screen overflow-hidden flex bg-slate-50">
       <RulesGate enabled={!!user && !isEscort} />
-      {/* Desktop sidebar */}
-      <div className="hidden md:block h-screen">{sidebar}</div>
+      {/* Desktop sidebar — hideable on desktop/tablet via useUiPrefs */}
+      {!sidebarHidden && <div className="hidden md:block h-screen">{sidebar}</div>}
 
       {/* Mobile sidebar drawer */}
       {open && (
@@ -372,9 +388,15 @@ export default function Layout() {
       )}
 
       <div className="flex-1 flex flex-col min-w-0 h-screen">
-        {/* Mobile header */}
-        <header className="md:hidden h-14 bg-white border-b border-slate-200 flex items-center px-4 shrink-0 z-30">
-          <button data-testid="open-sidebar-button" onClick={() => setOpen(true)} className="p-2 -ml-2 rounded-lg hover:bg-slate-100">
+        {/* Top header — always on mobile; also on desktop/tablet when the
+            sidebar is hidden (so the menu can be reopened). */}
+        <header className={`h-14 bg-white border-b border-slate-200 flex items-center px-4 shrink-0 z-30 ${sidebarHidden ? "flex" : "md:hidden"}`}>
+          <button
+            data-testid="open-sidebar-button"
+            onClick={() => { setOpen(true); setSidebarHidden(false); }}
+            title="Show menu"
+            className="p-2 -ml-2 rounded-lg hover:bg-slate-100"
+          >
             <Menu size={22} />
           </button>
           <div className="ml-2 flex items-center gap-2">

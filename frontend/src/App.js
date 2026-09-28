@@ -49,6 +49,7 @@ const EscortCheckIn = lazy(() => import("./pages/EscortCheckIn"));
 const EscortPhotoCleanup = lazy(() => import("./pages/admin/EscortPhotoCleanup"));
 const AuditLog = lazy(() => import("./pages/admin/AuditLog"));
 const DataQuality = lazy(() => import("./pages/admin/DataQuality"));
+const FeatureUsage = lazy(() => import("./pages/admin/FeatureUsage"));
 const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
 const ChefsView = lazy(() => import("./pages/admin/ChefsView"));
 const Categories = lazy(() => import("./pages/admin/Categories"));
@@ -203,6 +204,7 @@ function App() {
             <Route path="admin/escort-photos" element={<RequireAdmin><EscortPhotoCleanup /></RequireAdmin>} />
             <Route path="admin/audit-log" element={<RequireAdmin><AuditLog /></RequireAdmin>} />
             <Route path="admin/data-quality" element={<RequireAdmin><DataQuality /></RequireAdmin>} />
+            <Route path="admin/feature-usage" element={<RequireAdmin><FeatureUsage /></RequireAdmin>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

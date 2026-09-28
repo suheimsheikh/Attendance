@@ -673,6 +673,7 @@ async def _seed_database() -> None:
     await db.audit_log.create_index("actor_id", sparse=True)
     await db.audit_log.create_index("entity_id", sparse=True)
     await db.audit_log.create_index([("entity_type", 1), ("at", -1)])
+    await db.feature_usage.create_index("feature_key", unique=True)
     await db.sms_log.create_index([("at", -1)])
     await db.sms_log.create_index("to", sparse=True)
     # Meal muster index — added here in addition to the runtime
@@ -4706,6 +4707,12 @@ app.include_router(_suggestions_router(db, get_current_user, require_admin, writ
 # fields, and structural inconsistencies.
 from routes.data_quality import make_router as _data_quality_router  # noqa: E402
 app.include_router(_data_quality_router(db, require_admin))
+
+# Feature usage & ageing (Jun 2026) — tracks which sidebar pages are
+# used and when, so admins can retire dormant screens. Any user pings;
+# super-admin reads. See routes/usage.py.
+from routes.usage import make_router as _usage_router  # noqa: E402
+app.include_router(_usage_router(db, get_current_user, require_admin))
 
 # Attendance dedupe / repair tool (Jun 2026) — one-check-in-per-day cleanup.
 from routes.attendance_repair import make_router as _attendance_repair_router  # noqa: E402
