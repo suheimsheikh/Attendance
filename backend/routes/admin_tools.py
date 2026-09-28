@@ -45,6 +45,19 @@ BACKUP_COLLECTIONS = [
     # the pantry masters and every purchase/issue/wastage row.
     "meal_items", "meal_purchases", "meal_issues", "meal_wastage",
     "meal_records", "meal_vendors",
+    # 28 Sep 2026 — audit found these persistent collections were silently
+    # excluded, so a `replace` restore would have wiped them to nothing.
+    # Attendance audit trail + manual grid edits/locks:
+    "attendance_removed", "grid_overrides", "grid_locks",
+    # DARs, rules sign-offs, member suggestions, executive tasks & checklists:
+    "dars", "rules_acceptances", "suggestions",
+    "todos", "todo_comments", "checklists", "checklist_ticks",
+    # Remaining pantry collections + the full Recipes/Menu tree:
+    "meal_adjustments", "meal_daily_counts", "meal_overheads",
+    "meal_subcategories",
+    "menu_days", "menu_meals", "menu_dishes", "menu_micro_cache",
+    # Service tokens + operational logs (feature usage, daily leave-report lock):
+    "service_tokens", "feature_usage", "daily_leave_report_log",
 ]
 
 

@@ -3,6 +3,16 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 28 Sep 2026 — Backup was missing 22 collections (data-loss risk) — fixed
+
+Audit of `BACKUP_COLLECTIONS` (`routes/admin_tools.py`) vs. the live DB found the full backup/restore used a hardcoded list that hadn't kept pace with new modules. **22 collections (~20 with real data) were silently excluded** — a `replace`-mode restore would have wiped them. Added all persistent collections; backup now covers 50 of 51 (only `login_attempts` intentionally excluded as ephemeral).
+- Newly included: entire Recipes/Menu tree (`menu_days/meals/dishes/micro_cache` = 283 docs), `dars`, `grid_overrides`, `grid_locks`, `rules_acceptances`, `suggestions`, `todos`, `todo_comments`, `checklists`, `checklist_ticks`, `meal_adjustments`, `meal_daily_counts`, `meal_overheads`, `meal_subcategories`, `attendance_removed` (455), `service_tokens`, `feature_usage`, `daily_leave_report_log`.
+- Safe for old backups: restore skips any collection absent from the archive (never wipes it), so extending the list can't cause loss when restoring pre-fix archives.
+- Verified by downloading a live backup and inspecting the manifest — all 50 collections present with correct counts, `login_attempts` absent.
+
+---
+
+
 ## 28 Sep 2026 — Daily Leave/Tour WhatsApp prompt on admin login
 
 When an admin logs in and nobody has posted yet today, a small modal shows everyone on **leave or tour** (name · till date · "N more days") and a **Post to WhatsApp** button that opens WhatsApp pre-filled (manual group share — Meta bans API group-posting). Tapping Post marks the day done so no other admin is prompted; the message comes from the reporter's own WhatsApp account.
