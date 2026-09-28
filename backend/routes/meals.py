@@ -2875,7 +2875,14 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             res = await db.meal_issues.update_one(
                 {"date": d, "lines.item_id": iid}, {"$set": {"lines.$": line}})
             if res.matched_count == 0:
-                await db.meal_issues.update_one({"date": d}, {"$push": {"lines": line}})
+                # Guard the push with `item_id $ne iid` so two concurrent
+                # PATCHes for the SAME new item can't both push a duplicate
+                # line (which would double-count the qty in stock). The
+                # doc-level write lock serialises the two; the second push
+                # then no-ops (28 Sep 2026 code-review fix).
+                await db.meal_issues.update_one(
+                    {"date": d, "lines.item_id": {"$ne": iid}},
+                    {"$push": {"lines": line}})
         for iid in removes:
             await db.meal_issues.update_one(
                 {"date": d}, {"$pull": {"lines": {"item_id": iid}}})
@@ -3019,7 +3026,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             res = await db.meal_wastage.update_one(
                 {"date": d, "lines.item_id": iid}, {"$set": {"lines.$": line}})
             if res.matched_count == 0:
-                await db.meal_wastage.update_one({"date": d}, {"$push": {"lines": line}})
+                # `$ne` guard prevents concurrent duplicate pushes — see the
+                # issues PATCH above (28 Sep 2026 code-review fix).
+                await db.meal_wastage.update_one(
+                    {"date": d, "lines.item_id": {"$ne": iid}},
+                    {"$push": {"lines": line}})
         for iid in removes:
             await db.meal_wastage.update_one(
                 {"date": d}, {"$pull": {"lines": {"item_id": iid}}})
@@ -4142,7 +4153,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             res = await db.meal_purchases.update_one(
                 {"date": d, "lines.item_id": iid}, {"$set": {"lines.$": line}})
             if res.matched_count == 0:
-                await db.meal_purchases.update_one({"date": d}, {"$push": {"lines": line}})
+                # `$ne` guard prevents concurrent duplicate pushes — see the
+                # issues PATCH above (28 Sep 2026 code-review fix).
+                await db.meal_purchases.update_one(
+                    {"date": d, "lines.item_id": {"$ne": iid}},
+                    {"$push": {"lines": line}})
         for iid in removes:
             await db.meal_purchases.update_one(
                 {"date": d}, {"$pull": {"lines": {"item_id": iid}}})

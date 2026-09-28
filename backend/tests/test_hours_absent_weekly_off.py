@@ -34,17 +34,21 @@ def test_days_off_field_is_present(admin_client, base_url):
 
 
 def test_absent_plus_off_plus_accounted_equals_span(admin_client, base_url):
-    """The invariant: days_absent + days_off + days_accounted == span_days.
-    Weekly-off days now live in days_off, not days_absent — the three
-    numbers must still sum to the full window without over/under-count."""
+    """The invariant: days_accounted + days_off + days_absent +
+    days_not_employed == span_days. Weekly-off days live in days_off,
+    days outside a member's joining→leaving window live in
+    days_not_employed (28 Sep 2026), and the buckets must still partition
+    the full window without over/under-count."""
     start, end = _pick_a_past_week()
     body = admin_client.get(f"{base_url}/api/reports/hours",
                             params={"start": start, "end": end}, timeout=30).json()
     for row in body["rows"]:
-        s = row["days_accounted"] + row["days_off"] + row["days_absent"]
+        s = (row["days_accounted"] + row["days_off"] + row["days_absent"]
+             + row.get("days_not_employed", 0))
         assert s == row["span_days"], (
             f"{row['member_name']}: accounted={row['days_accounted']} "
-            f"+ off={row['days_off']} + absent={row['days_absent']} != "
+            f"+ off={row['days_off']} + absent={row['days_absent']} "
+            f"+ not_employed={row.get('days_not_employed', 0)} != "
             f"span={row['span_days']}"
         )
 
@@ -66,9 +70,9 @@ def test_weekly_off_days_are_counted_as_off_not_absent(admin_client, base_url):
         # — either they worked it (days_present includes it) or it sits
         # in days_off.
         off_kinds = r["days_leave"] + r["days_tour"] + r.get("days_break", 0) + r.get("comp_off_used", 0)
-        if off_kinds == 0 and r["days_off"] == 0:
-            # Member with no leave/tour/break at all, and yet no day_off —
-            # they must have worked their weekly-off Monday.
+        if off_kinds == 0 and r["days_off"] == 0 and r.get("days_not_employed", 0) == 0:
+            # Member with no leave/tour/break at all, employed all week,
+            # and yet no day_off — they must have worked their Monday.
             assert r["days_present"] >= 1, (
                 f"{r['member_name']}: weekly_off=Monday, no leave/tour/break, "
                 f"days_off=0 — Monday is being (wrongly) treated as absent."
@@ -88,4 +92,5 @@ def test_current_month_absent_excludes_today_when_no_checkin(admin_client, base_
     # least the in-progress-today bump for members who haven't checked in.
     for row in body["rows"]:
         assert (row["days_accounted"] + row["days_off"] + row["days_absent"]
+                + row.get("days_not_employed", 0)
                 == row["span_days"]), row

@@ -24,7 +24,7 @@ Each applier receives (db, correction, admin) and mutates the target row.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -78,6 +78,16 @@ class CorrectionDecision(BaseModel):
 # Each entry is an async function(db, correction, admin) -> dict.
 # Returns a small summary the audit log can quote back.
 
+
+def _wall_to_utc_iso(date_str: str, hm: str, office: Optional[dict]) -> str:
+    """Convert an admin-entered wall-clock (YYYY-MM-DD + HH:MM, office-local)
+    into a UTC ISO string — matching how normal check-ins are stored. Storing
+    naive local strings made `local_hm()` (which does astimezone) shift the
+    displayed time by the office UTC offset (28 Sep 2026 code-review fix)."""
+    local_dt = datetime.fromisoformat(f"{date_str}T{hm}:00").replace(tzinfo=office_tz(office))
+    return local_dt.astimezone(timezone.utc).isoformat()
+
+
 async def _apply_missed_checkin(db, c: dict, admin: dict) -> dict:
     """Materialise a check-in for a date that has no attendance row."""
     p = c["payload"]
@@ -91,13 +101,14 @@ async def _apply_missed_checkin(db, c: dict, admin: dict) -> dict:
     )
     if existing:
         raise HTTPException(status_code=409, detail="Attendance already exists for this date — use time_adjust instead")
+    office = await db.config.find_one({"id": "office"}, {"_id": 0, "timezone": 1})
     row = {
         "id": str(uuid4()),
         "user_id": c["requester_id"],
         "user_name": c["requester_name"],
         "date": c["target_date"],
-        "check_in_at": f"{c['target_date']}T{check_in_time}:00",
-        "check_out_at": f"{c['target_date']}T{check_out_time}:00" if check_out_time else None,
+        "check_in_at": _wall_to_utc_iso(c["target_date"], check_in_time, office),
+        "check_out_at": _wall_to_utc_iso(c["target_date"], check_out_time, office) if check_out_time else None,
         "method": "correction",
         "checked_in_by": admin.get("full_name"),
         "corrected": True,
@@ -112,9 +123,10 @@ async def _apply_missed_checkin(db, c: dict, admin: dict) -> dict:
 async def _apply_time_adjust(db, c: dict, admin: dict) -> dict:
     """Adjust check_in / check_out on an existing attendance row.
 
-    Per admin policy (option 3b), we KEEP the original `late` flag on the
-    row so the audit trail shows the anomaly, but stamp `corrected=True`
-    + `correction_id` so the UI can render a "corrected" badge alongside.
+    Stamps `corrected=True` + `correction_id` so the UI renders a
+    "corrected" badge, and RECOMPUTES `hours` and the `late` flag from the
+    corrected times (a fix that moves arrival to on-time clears a stale
+    `late`; the audit trail preserves the original via `corrected_from`).
     """
     if not c.get("entity_id"):
         raise HTTPException(status_code=400, detail="entity_id (attendance row id) is required")
@@ -122,6 +134,7 @@ async def _apply_time_adjust(db, c: dict, admin: dict) -> dict:
     if not row:
         raise HTTPException(status_code=404, detail="Target attendance row no longer exists")
     p = c["payload"]
+    office_cfg = await db.config.find_one({"id": "office"}, {"_id": 0})
     update: Dict[str, Any] = {
         "corrected": True,
         "corrected_via": c["id"],
@@ -133,9 +146,9 @@ async def _apply_time_adjust(db, c: dict, admin: dict) -> dict:
         },
     }
     if p.get("check_in_time"):
-        update["check_in_at"] = f"{row['date']}T{p['check_in_time']}:00"
+        update["check_in_at"] = _wall_to_utc_iso(row["date"], p["check_in_time"], office_cfg)
     if p.get("check_out_time"):
-        update["check_out_at"] = f"{row['date']}T{p['check_out_time']}:00"
+        update["check_out_at"] = _wall_to_utc_iso(row["date"], p["check_out_time"], office_cfg)
     # Recompute hours from the resulting timestamps and clear any
     # "missing checkout / needs correction" flags (Jun 2026): fixing a
     # forgotten checkout must credit the real hours back into payroll.

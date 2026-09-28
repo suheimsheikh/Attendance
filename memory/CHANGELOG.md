@@ -3,6 +3,20 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 28 Sep 2026 — Code-review fixes: Kitchen valuation + Attendance/payroll calc
+
+Targeted functional code review of the two high-stakes calc paths; fixed all findings, verified against the pytest regression suite + live read-only checks.
+
+- **HIGH — Payroll counted non-employed days as Absent** (`server.py` `compute_hours_report`): days before `joining_date` / after `leaving_date` fell into Absent and the attendance-% denominator, inflating absences for mid-month joiners/leavers and disagreeing with the Grid's NJ/LF cells. Now clamps every member's span to their employment window; added a `days_not_employed` bucket so the partition still sums to the full span. Invariant test updated to `accounted + off + absent + not_employed == span`. Verified: 13 real members corrected, 0 invariant violations across 130.
+- **MEDIUM — Half-day leave ate a full day of balance** (`reports.py`): `leave_balance_taken_ytd` counted every single-day leave as 1, ignoring the `half_day` flag. Now 0.5 for FN/PN, matching the canonical deduction in `leaves.py`.
+- **MEDIUM — Time-correction stored naive local timestamps** (`corrections.py`): corrected check-in/out were written as `YYYY-MM-DDTHH:MM:00` (no tz) while normal check-ins store UTC, so `local_hm()` shifted the displayed time by the office offset. Added `_wall_to_utc_iso()` and applied to both `_apply_missed_checkin` and `_apply_time_adjust`; refreshed the stale "keeps original late flag" docstring (it recomputes).
+- **MEDIUM — Non-atomic pantry PATCH could duplicate a line** (`meals.py` issues/wastage/purchases): two concurrent PATCHes for the same new item could both `$push`, double-counting stock. Guarded the fallback push with `lines.item_id: {$ne: iid}` so the second no-ops (last-writer-wins instead of duplicate corruption).
+- **LOW (noted, not changed)** — `local_date_str(None)` uses `DEFAULT_TZ`; the deployment is a single IST office and `DEFAULT_TZ` is Asia/Kolkata, so it's already correct — not worth churning ~15 call sites on a live app.
+- **Test hygiene**: `test_meals_patch_iter47.py` fixture now selects pantry items eligible on the test date (snapshot ignores purchases before an item's `opening_stock_as_of`) and skips cleanly when none exist, instead of failing against the purchase-before-issue hard block. Two unrelated pre-existing failures left untouched (chef-category 422-vs-403 in `masters.py`; both outside review scope).
+
+---
+
+
 ## 28 Sep 2026 — Feature Usage & Ageing dashboard + sidebar hide + "Rectify Data"
 
 **New feature — Feature Usage & Ageing (super-admin only):** a dashboard that tracks which sidebar screens are actually used and when, so dormant screens can be retired.

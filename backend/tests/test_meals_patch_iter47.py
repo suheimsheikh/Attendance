@@ -53,14 +53,21 @@ def hdr(admin_token):
 
 @pytest.fixture(scope="module")
 def two_items(hdr):
-    r = _req("GET", f"{BASE_URL}/api/meals/items", headers=hdr)
+    # Pick items that can actually hold stock on TEST_DATE. The stock
+    # snapshot ignores purchases dated before an item's
+    # `opening_stock_as_of`, so an item opened after TEST_DATE can never
+    # show stock on it — issuing such an item is (correctly) hard-blocked.
+    # Choose items whose opening date is unset or on/before TEST_DATE.
+    r = _req("GET", f"{BASE_URL}/api/meals/stock", headers=hdr,
+             params={"as_of": TEST_DATE})
     assert r.status_code == 200, r.text
-    data = r.json()
-    items = data["items"] if isinstance(data, dict) else data
-    active = [it for it in items if it.get("id") and it.get("active", True)]
-    if len(active) < 2:
-        pytest.skip("need >=2 pantry items")
-    return active[0]["id"], active[1]["id"]
+    rows = r.json().get("rows", [])
+    eligible = [x for x in rows
+                if not x.get("opening_stock_as_of")
+                or x["opening_stock_as_of"] <= TEST_DATE]
+    if len(eligible) < 2:
+        pytest.skip("need >=2 pantry items eligible on TEST_DATE")
+    return eligible[0]["item_id"], eligible[1]["item_id"]
 
 
 def _clear_day(hdr, date):
@@ -164,6 +171,13 @@ def test_patch_purchases_future_date(hdr):
 
 def test_patch_issues_two_items_coexist(hdr, two_items):
     a, b = two_items
+    # Seed stock first — the purchase-before-issue guard (shipped Sep 2026)
+    # rejects issuing an item with no stock, so record a purchase for both
+    # items on TEST_DATE before exercising the concurrent-issue merge.
+    _req("PATCH", f"{BASE_URL}/api/meals/purchases/{TEST_DATE}",
+                   headers=hdr,
+                   json={"upserts": [{"item_id": a, "qty": 100, "rate": 10},
+                                     {"item_id": b, "qty": 100, "rate": 10}]})
     r1 = _req("PATCH", f"{BASE_URL}/api/meals/issues/{TEST_DATE}",
                         headers=hdr,
                         json={"upserts": [{"item_id": a, "qty": 5}]})

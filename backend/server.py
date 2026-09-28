@@ -4472,29 +4472,54 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             if _breaks_module.break_applies_to(b, u):
                 accounted_dates |= _days_overlap(b["start_date"], b["end_date"])
         days_accounted = len(accounted_dates)
-        # Unworked weekly-off days in span (worked ones are already in
-        # `days_present` and earn comp-off via `_comp_off_earned`).
-        # Skip Mondays already covered by leave/tour/break/comp-off so
-        # we don't double-count them into `days_off`. Default to Monday
-        # when the member has no weekly_off stamped (mirrors both the
-        # API response default and `_comp_off_earned` above).
+        # Clamp the span to the member's employment window (28 Sep 2026
+        # payroll fix): days before joining_date / after leaving_date are
+        # neither worked nor weekly-off, so counting them as Absent — and
+        # in the attendance-% denominator — inflated absences for mid-month
+        # joiners/leavers and disagreed with the Grid's NJ/LF cells (which
+        # already exclude them). `_jd`/`_ld` are set above for the late
+        # filter; reuse them here.
+        m_sd, m_ed = sd, ed
+        if _jd:
+            try:
+                _jdd = date.fromisoformat(_jd)
+                if _jdd > m_sd:
+                    m_sd = _jdd
+            except ValueError:
+                pass
+        if _ld:
+            try:
+                _ldd = date.fromisoformat(_ld)
+                if _ldd < m_ed:
+                    m_ed = _ldd
+            except ValueError:
+                pass
+        m_sd_iso, m_ed_iso = m_sd.isoformat(), m_ed.isoformat()
+        span_days_m = ((m_ed - m_sd).days + 1) if m_sd <= m_ed else 0
+        # Unworked weekly-off days WITHIN the employment window (worked
+        # ones are already in `days_present` and earn comp-off via
+        # `_comp_off_earned`). Skip days already covered by leave/tour/
+        # break/comp-off so we don't double-count them into `days_off`.
+        # Default to Monday when no weekly_off is stamped.
         wo_name = (u.get("weekly_off") or "monday").lower()
         unworked_weekly_offs = 0
         weekly_off_dates: set = set()
-        if wo_name in WEEKDAY_NAME:
+        if wo_name in WEEKDAY_NAME and span_days_m > 0:
             wo_idx = WEEKDAY_NAME.index(wo_name)
-            cur = sd
-            while cur <= ed:
+            cur = m_sd
+            while cur <= m_ed:
                 if cur.weekday() == wo_idx and cur.isoformat() not in accounted_dates:
                     unworked_weekly_offs += 1
                     weekly_off_dates.add(cur.isoformat())
                 cur += timedelta(days=1)
         # In-progress current day — exclude from absent count until the
         # day has ended (avoids "everyone is absent" first-thing-in-the-
-        # morning noise on the running-total view). Skip if today is
-        # already accounted (e.g. on approved leave for today).
+        # morning noise). Only when the window ends today AND today falls
+        # inside the member's employment window AND isn't already accounted.
         in_progress_today = 1 if (
-            end_is_today and today_iso not in accounted_dates
+            end_is_today and span_days_m > 0
+            and m_sd_iso <= today_iso <= m_ed_iso
+            and today_iso not in accounted_dates
         ) else 0
         off_dates = set(weekly_off_dates)
         if in_progress_today:
@@ -4503,25 +4528,29 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         # weekly off (e.g. running the report on a Monday); the set dedupes
         # so days_off always equals len(dates_off).
         days_off = len(off_dates)
-        days_absent = max(0, span_days - days_accounted - days_off)
-        # Absent-date set: enumerate the span and exclude accounted + off.
-        # Used by the drill-down tooltip so admins can see WHICH specific
-        # days landed in the Absent column without hunting through logs.
+        # Accounted days that actually fall inside the employment window,
+        # so a leave that spills past leaving_date can't drive absent < 0
+        # or shrink the workable span incorrectly.
+        accounted_in_window = {d for d in accounted_dates if m_sd_iso <= d <= m_ed_iso}
+        days_absent = max(0, span_days_m - len(accounted_in_window) - days_off)
+        # Absent-date set: enumerate the EMPLOYMENT window and exclude
+        # accounted + off. Feeds the drill-down tooltip.
         absent_dates: set = set()
-        cur = sd
-        while cur <= ed:
-            iso_ = cur.isoformat()
-            if iso_ not in accounted_dates and iso_ not in off_dates:
-                absent_dates.add(iso_)
-            cur += timedelta(days=1)
+        if span_days_m > 0:
+            cur = m_sd
+            while cur <= m_ed:
+                iso_ = cur.isoformat()
+                if iso_ not in accounted_dates and iso_ not in off_dates:
+                    absent_dates.add(iso_)
+                cur += timedelta(days=1)
         # Cap at days_absent — invariant guard should keep them equal
         # but a defensive slice makes UI display predictable.
         absent_dates_list = sorted(absent_dates)[:days_absent]
-        # Attendance-% uses the workable span (excludes weekly-off days
-        # and the in-progress day) so a member who attended every
-        # working day reads 100%, not 100 × (5/7).
-        workable_span = max(1, span_days - days_off)
-        attendance_pct = round((days_present / workable_span) * 100, 1)
+        # Attendance-% uses the workable span within employment (excludes
+        # weekly-off days + the in-progress day). 0% when the member wasn't
+        # employed at all during the window.
+        workable_span = span_days_m - days_off
+        attendance_pct = round((days_present / workable_span) * 100, 1) if workable_span > 0 else 0.0
         rows.append({
             "member_id": u["id"],
             "member_name": u["full_name"],
@@ -4538,7 +4567,8 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
             "days_tour": days_tour,
             "days_break": days_break,
             "days_absent": days_absent,
-            "days_accounted": days_accounted,
+            "days_accounted": len(accounted_in_window),
+            "days_not_employed": max(0, span_days - span_days_m),
             "days_on_leave": days_on_leave,
             "days_off": days_off,
             "overstays": overstays,

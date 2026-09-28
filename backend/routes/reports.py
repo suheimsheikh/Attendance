@@ -416,10 +416,17 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         }, {"_id": 0}).to_list(20000)
         ytd_taken: dict = {}
         for leave in leaves:
-            try:
-                n = (date.fromisoformat(leave["end_date"]) - date.fromisoformat(leave["start_date"])).days + 1
-            except Exception:
-                n = 1
+            # Half-day leaves (FN/PN) cost 0.5, matching the canonical
+            # deduction used everywhere else (leaves.py). Previously every
+            # single-day leave counted as 1, silently eating 0.5 of paid
+            # balance per half-day leave (28 Sep 2026 code-review fix).
+            if leave.get("half_day"):
+                n = 0.5
+            else:
+                try:
+                    n = (date.fromisoformat(leave["end_date"]) - date.fromisoformat(leave["start_date"])).days + 1
+                except Exception:
+                    n = 1
             ytd_taken[leave["user_id"]] = ytd_taken.get(leave["user_id"], 0) + n
         for r in rows:
             opening = opening_map.get(r["member_id"], 0.0)
