@@ -30,35 +30,19 @@ from services.time_utils import (
 
 logger = logging.getLogger(__name__)
 
-# Collections included in the full backup / restore. Keep this list in sync
-# whenever a new persistent collection is introduced. `login_attempts` is
-# intentionally omitted (ephemeral brute-force tracking that shouldn't cross
-# environments).
-BACKUP_COLLECTIONS = [
-    "users", "institutions", "config", "attendance", "leaves",
-    "devices", "parent_notifications", "camps", "regattas",
-    "guests", "daily_content", "sms_log", "breaks", "fleets",
-    "sites", "roles", "categories", "holidays",
-    "escorts", "escort_attendance", "corrections", "audit_log",
-    "notify_log",
-    # Pantry / meals — added 02/2026 after prod->preview restore dropped
-    # the pantry masters and every purchase/issue/wastage row.
-    "meal_items", "meal_purchases", "meal_issues", "meal_wastage",
-    "meal_records", "meal_vendors",
-    # 28 Sep 2026 — audit found these persistent collections were silently
-    # excluded, so a `replace` restore would have wiped them to nothing.
-    # Attendance audit trail + manual grid edits/locks:
-    "attendance_removed", "grid_overrides", "grid_locks",
-    # DARs, rules sign-offs, member suggestions, executive tasks & checklists:
-    "dars", "rules_acceptances", "suggestions",
-    "todos", "todo_comments", "checklists", "checklist_ticks",
-    # Remaining pantry collections + the full Recipes/Menu tree:
-    "meal_adjustments", "meal_daily_counts", "meal_overheads",
-    "meal_subcategories",
-    "menu_days", "menu_meals", "menu_dishes", "menu_micro_cache",
-    # Service tokens + operational logs (feature usage, daily leave-report lock):
-    "service_tokens", "feature_usage", "daily_leave_report_log",
-]
+# Full backup/restore now enumerates collections at RUNTIME so new modules
+# are captured automatically and can never be silently missed again (28 Sep
+# 2026 — replaced the old hand-maintained BACKUP_COLLECTIONS list, which had
+# drifted and was omitting 22 live collections). Nothing in the app database
+# is excluded — only MongoDB's own internal `system.*` collections, which
+# can't be dumped or restored as ordinary data.
+BACKUP_DENY_PREFIXES = ("system.",)
+
+
+async def _all_backup_collections(db) -> list[str]:
+    """Every application collection currently in the database, sorted."""
+    names = await db.list_collection_names()
+    return sorted(n for n in names if not n.startswith(BACKUP_DENY_PREFIXES))
 
 
 def make_router(db, require_admin) -> APIRouter:
@@ -84,7 +68,7 @@ def make_router(db, require_admin) -> APIRouter:
         buf = io.BytesIO()
         tf = tarfile.open(fileobj=buf, mode="w:gz")
 
-        collections = BACKUP_COLLECTIONS
+        collections = await _all_backup_collections(db)
         manifest = {
             "created_at": datetime.now(timezone.utc).isoformat(),
             "kind": "ych-full",
@@ -157,7 +141,17 @@ def make_router(db, require_admin) -> APIRouter:
             raise HTTPException(status_code=400, detail=f"Could not open archive: {e}")
 
         counts: dict = {}
-        collections = BACKUP_COLLECTIONS
+        # Restore EVERY collection present in the archive (except the manifest),
+        # derived from the tar itself rather than a code-side list — so a full
+        # backup restores fully and future modules need no code change here
+        # (28 Sep 2026). Any collection missing from an OLDER archive is simply
+        # not touched (never wiped), keeping legacy restores safe.
+        collections = sorted({
+            base[:-5]
+            for m in tf.getmembers()
+            for base in (m.name.rsplit("/", 1)[-1],)
+            if base.endswith(".json") and base != "manifest.json"
+        })
         from pymongo import InsertOne
         BATCH = 500
         # Preserve the caller's own login across restore. In `replace` mode

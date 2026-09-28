@@ -3,6 +3,16 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 28 Sep 2026 — Backup/restore now fully automatic (no hardcoded list)
+
+Replaced the hand-maintained `BACKUP_COLLECTIONS` list entirely. **Backup** now enumerates every collection at runtime via `db.list_collection_names()` (only MongoDB internal `system.*` excluded — nothing app-side is restricted, `login_attempts` included). **Restore** derives its collection list from the uploaded archive itself, so a full backup restores fully and future modules need zero code changes here.
+- New `_all_backup_collections(db)` helper + `BACKUP_DENY_PREFIXES = ("system.",)`.
+- Verified: live backup captures all **51/51** non-system collections (0 missing); merge-restore of that backup round-tripped every collection with 0 spurious inserts. Legacy archives remain safe — any collection absent from an older archive is skipped, never wiped.
+- Supersedes the earlier same-day fix that had extended the hardcoded list; the list is now gone.
+
+---
+
+
 ## 28 Sep 2026 — Backup was missing 22 collections (data-loss risk) — fixed
 
 Audit of `BACKUP_COLLECTIONS` (`routes/admin_tools.py`) vs. the live DB found the full backup/restore used a hardcoded list that hadn't kept pace with new modules. **22 collections (~20 with real data) were silently excluded** — a `replace`-mode restore would have wiped them. Added all persistent collections; backup now covers 50 of 51 (only `login_attempts` intentionally excluded as ephemeral).
