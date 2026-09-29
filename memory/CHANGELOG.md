@@ -3,6 +3,13 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 29 Sep 2026 — Unified item ledger (Stock Master ↔ Daily Entry)
+
+Clicking an item in **Stock Master** (`MealMastersTab`) now opens the same full passbook `ItemLedgerDrawer` used by the Daily Entry double-click — instead of the lighter flat event-list `ItemDetailPanel`. So both places show an identical ledger: Purchased/Amount/Issued/Wasted/**Stock-take** columns, opening balance, running stock-on-hand, totals footer, and Weekly/Monthly/Daily + date-range controls. Both already hit the same `/meals/items/{id}/ledger` endpoint, so this is purely a component swap (looks up the item's name/unit from the tree). `ItemDetailPanel` left in place but no longer referenced. Verified via screenshot (Ajwain ledger with Stock-take column + running balance).
+
+---
+
+
 ## 28 Sep 2026 — Scheduled daily auto-backup + dashboard backup reminder
 
 **Auto-backup:** a platform cron (`.emergent/crons.yml`, `daily-backup`, 02:00 IST) calls `POST /api/cron/daily-backup` (secured by `WEBHOOK_CRON_SECRET`, constant-time check, idempotent via `X-Webhook-Id`, acks immediately + backgrounds the work). The job builds a full DB snapshot (shared `build_full_backup` helper) and uploads it to **Emergent Object Storage** under one of **7 fixed weekday slots** (`ych-attendance/backups/auto/ych-auto-{mon..sun}.tar.gz`) — since the object store has no delete API, weekday slots overwrite weekly, so storage always holds exactly the last 7 days. Metadata tracked in `auto_backups` (one doc per slot); `stamp_last_backup` updates `config.last_backup_at`.

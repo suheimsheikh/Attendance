@@ -19,7 +19,8 @@ import { toast } from "sonner";
 import { api, showApiError } from "../../api";
 import { isUserEditing } from "../../hooks/useMealsEvents";
 import { useAuth } from "../../auth";
-import { ItemDetailPanel, CategoryDetailPanel } from "./MealNodeDetail";
+import { CategoryDetailPanel } from "./MealNodeDetail";
+import ItemLedgerDrawer from "./ItemLedgerDrawer";
 import ShoppingListPanel from "../../components/ShoppingListPanel";
 import { fmtRs, COL_GRID } from "./meal-masters/helpers";
 import { InlineEdit } from "./meal-masters/InlineEditors";
@@ -637,9 +638,17 @@ export default function MealMastersTab({ liveSig }) {
         </div>
       </div>
 
-      {detail?.type === "item" && (
-        <ItemDetailPanel itemId={detail.id} onClose={() => setDetail(null)}/>
-      )}
+      {detail?.type === "item" && (() => {
+        const it = items.find((x) => x.id === detail.id);
+        return (
+          <ItemLedgerDrawer
+            itemId={detail.id}
+            itemName={it?.name}
+            unit={it?.unit}
+            onClose={() => setDetail(null)}
+          />
+        );
+      })()}
       {detail?.type === "cat" && (
         <CategoryDetailPanel categoryKey={detail.id} stockMap={stockMap} onClose={() => setDetail(null)}/>
       )}
