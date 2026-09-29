@@ -374,6 +374,10 @@ export default function MealEntryTab({ liveSig }) {
       const qty = num(e?.qty);
       const rate = num(e?.rate);
       if (qty <= 0 && rate <= 0) removes.push(iid);
+      // A quantity with no price yet isn't saveable (ledger can't value
+      // it). Skip it until a rate is entered — editing the rate re-marks
+      // the row dirty so it saves then. Avoids a 400 mid-typing.
+      else if (qty > 0 && rate <= 0) return;
       else upserts.push({ item_id: iid, qty, rate, vendor_id: e?.vendor_id || null });
     });
     const seq = ++saveSeq.current.purch;

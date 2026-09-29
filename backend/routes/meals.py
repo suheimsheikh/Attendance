@@ -4046,9 +4046,9 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 rate = _parse_amount(raw.get("rate"))
                 if qty is None or qty <= 0:
                     continue  # blank/zero lines silently dropped
-                if rate is None or rate < 0:
+                if rate is None or rate <= 0:
                     raise HTTPException(status_code=400,
-                                        detail=f"Rate for '{item['name']}' must be ≥ 0")
+                                        detail=f"Rate for '{item['name']}' must be greater than ₹0 — a quantity was entered without a price")
                 amount = round(qty * rate, 2)
                 clean_lines.append({
                     "id": str(raw.get("id") or uuid.uuid4()),
@@ -4137,9 +4137,9 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             if qty is None or qty <= 0:
                 removes.append(iid)
                 continue
-            if rate is None or rate < 0:
+            if rate is None or rate <= 0:
                 raise HTTPException(status_code=400,
-                                    detail=f"Rate for '{item['name']}' must be ≥ 0")
+                                    detail=f"Rate for '{item['name']}' must be greater than ₹0 — a quantity was entered without a price")
             line = {
                 "id": str(uuid.uuid4()),
                 "item_id": iid,

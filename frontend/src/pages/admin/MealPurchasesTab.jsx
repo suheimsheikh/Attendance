@@ -157,6 +157,21 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
   };
 
   const save = () => {
+    // A quantity with no (or ₹0) rate can't be valued — block it up front
+    // so the ledger never carries un-priced stock (Jun 2026).
+    const missingRate = items
+      .map((it) => {
+        const e = entries[it.id];
+        if (num(e?.qty) > 0 && num(e?.rate) <= 0) return it.name;
+        return null;
+      })
+      .filter(Boolean);
+    if (missingRate.length > 0) {
+      toast.error(
+        `Enter a ₹/unit rate for: ${missingRate.slice(0, 4).join(", ")}${missingRate.length > 4 ? ` +${missingRate.length - 4} more` : ""}. A quantity can't be saved without a price.`
+      );
+      return;
+    }
     // Collect any rate outliers (>±5% vs the previous purchase rate) and
     // ask the user to confirm before accepting them.
     const outliers = items
@@ -248,6 +263,7 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
                     const e = entries[it.id] || {};
                     const amt = num(e.qty) * num(e.rate);
                     const ol = outlierFor(it.id);
+                    const rateMissing = num(e.qty) > 0 && num(e.rate) <= 0;
                     return (
                       <tr key={it.id} className="border-t border-slate-100" data-testid={`purchase-row-${it.id}`}>
                         <td className="p-2 font-semibold text-slate-900">{it.name}</td>
@@ -266,7 +282,7 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
                                 <AlertTriangle size={14} />
                               </span>
                             )}
-                            <input type="number" min="0" step="0.01" value={e.rate ?? ""} onChange={(ev) => updateEntry(it.id, "rate", ev.target.value)} className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${ol ? "!ring-2 !ring-amber-300 !border-amber-300" : ""}`} placeholder="0" data-testid={`purchase-rate-${it.id}`} />
+                            <input type="number" min="0" step="0.01" value={e.rate ?? ""} onChange={(ev) => updateEntry(it.id, "rate", ev.target.value)} className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${rateMissing ? "!ring-2 !ring-rose-300 !border-rose-300" : ol ? "!ring-2 !ring-amber-300 !border-amber-300" : ""}`} placeholder="0" title={rateMissing ? "A quantity was entered — a ₹/unit rate is required to save" : undefined} data-testid={`purchase-rate-${it.id}`} />
                           </div>
                         </td>
                         <td className="p-2 text-right font-bold tabular-nums" data-testid={`purchase-amount-${it.id}`}>{amt > 0 ? `₹${inr(amt)}` : ""}</td>

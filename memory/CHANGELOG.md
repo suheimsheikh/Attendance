@@ -2,6 +2,12 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-06 — Block zero-rate purchases
+- meals.py `PUT /meals/purchases/{date}` and `PATCH /meals/purchases/{date}`: a purchase line with qty>0 now REQUIRES rate>0 (was `rate>=0`). Returns 400 "Rate for '<item>' must be greater than ₹0 …". Verified via curl (both paths reject rate=0; valid rate saves). This stops un-priced stock entering the ledger.
+- MealPurchasesTab.jsx: `save()` blocks up front with a toast listing items missing a rate; rate input turns rose when qty>0 & rate≤0.
+- MealEntryTab.jsx auto-save `flushPurch`: qty>0 & rate≤0 rows are skipped (not sent) until a rate is typed — avoids a 400 mid-typing.
+- NOTE (production backfill): items "Puffed Rice" / "Peanut Chikky" show a system qty but ₹0 rate because their quantity came from STOCK-TAKE counts entered without a rate (un-valued adjustments, avg_rate 0), NOT from purchases. They were never purchased. Backfill manually in prod (record a priced purchase, or set an opening rate). Per user: no automated backfill button built.
+
 ---
 ## 29 Sep 2026 — Stock-take: Enter-to-save, dedicated Loss/Gain column, clearer Save
 
