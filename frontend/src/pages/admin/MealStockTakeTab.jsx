@@ -17,6 +17,7 @@ import StockVarianceReport from "./StockVarianceReport";
 
 const todayISO = () => new Date().toLocaleDateString("sv-SE");
 const num = (v) => { const n = Number(v); return isFinite(n) ? n : 0; };
+const rupee = (n) => `₹${Math.abs(Number(n) || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
 export default function MealStockTakeTab({ liveSig }) {
   const [view, setView] = useState("count");   // count | report
@@ -32,8 +33,8 @@ export default function MealStockTakeTab({ liveSig }) {
   const [collapsed, setCollapsed] = useState(new Set());
   const dirty = useRef(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
+  const load = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
     // "Before" = day AFTER the count date so a purchase made on the
     // count day still counts as the last buying rate.
     const nextDay = (() => {
@@ -55,13 +56,15 @@ export default function MealStockTakeTab({ liveSig }) {
         setRates({});
         dirty.current = false;
       })
-      .catch((e) => showApiError(e, "Couldn't load stock-take sheet"))
-      .finally(() => setLoading(false));
+      .catch((e) => { if (!silent) showApiError(e, "Couldn't load stock-take sheet"); })
+      .finally(() => { if (!silent) setLoading(false); });
   }, [dateStr]);
 
   useEffect(() => { load(); }, [load]);
-  // Refetch on live pantry signals (unless the user has unsaved edits).
-  useEffect(() => { if (liveSig && !dirty.current) load(); }, [liveSig, load]);
+  // Refetch on live pantry signals — SILENTLY (no full-page spinner, no
+  // flicker) and only when the user has no unsaved edits, so another
+  // machine's change updates the sheet in place instead of "refreshing".
+  useEffect(() => { if (liveSig && !dirty.current) load(true); }, [liveSig, load]);
 
   const catLabel = useMemo(() => Object.fromEntries((cats || []).map((c) => [c.key, c.label])), [cats]);
 
@@ -80,7 +83,7 @@ export default function MealStockTakeTab({ liveSig }) {
   const isOpening = (r) => r.needs_rate && rates[r.item_id] !== undefined && rates[r.item_id] !== "" && num(rates[r.item_id]) > 0;
 
   const summary = useMemo(() => {
-    let counted = 0, losses = 0, extras = 0, openings = 0;
+    let counted = 0, losses = 0, extras = 0, openings = 0, lossValue = 0, extraValue = 0;
     rows.forEach((r) => {
       const v = physical[r.item_id];
       if (v === undefined || v === "") return;
@@ -88,10 +91,12 @@ export default function MealStockTakeTab({ liveSig }) {
       if (r.needs_rate && num(rates[r.item_id]) > 0) { openings += 1; return; }
       const variance = num(v) - num(r.system_qty);
       if (Math.abs(variance) < 1e-9) return;
-      if (variance > 0) extras += 1; else losses += 1;
+      const rate = num(lastRates[r.item_id]?.rate ?? r.avg_rate);
+      if (variance > 0) { extras += 1; extraValue += variance * rate; }
+      else { losses += 1; lossValue += Math.abs(variance) * rate; }
     });
-    return { counted, losses, extras, openings };
-  }, [rows, physical, rates]);
+    return { counted, losses, extras, openings, lossValue, extraValue };
+  }, [rows, physical, rates, lastRates]);
 
   const setPhys = (id, val) => { dirty.current = true; setPhysical((p) => ({ ...p, [id]: val })); };
   const setRate = (id, val) => { dirty.current = true; setRates((p) => ({ ...p, [id]: val })); };
@@ -160,7 +165,7 @@ export default function MealStockTakeTab({ liveSig }) {
         </div>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-slate-500" data-testid="stocktake-summary">
-            <b>{summary.counted}</b> counted · <span className="text-rose-600 font-semibold">{summary.losses} loss</span> · <span className="text-emerald-600 font-semibold">{summary.extras} extra</span>{summary.openings > 0 && <> · <span className="text-amber-700 font-semibold">{summary.openings} opening</span></>}
+            <b>{summary.counted}</b> counted · <span className="text-rose-600 font-semibold">{summary.losses} loss{summary.lossValue > 0 && <> (−{rupee(summary.lossValue)})</>}</span> · <span className="text-emerald-600 font-semibold">{summary.extras} extra{summary.extraValue > 0 && <> (+{rupee(summary.extraValue)})</>}</span>{summary.openings > 0 && <> · <span className="text-amber-700 font-semibold">{summary.openings} opening</span></>}
           </span>
           <button onClick={handlePrint} data-testid="stocktake-print"
                   className="iu-btn-secondary !h-9 !px-3 text-sm" title="Print a blank count sheet to tick on paper first">
@@ -219,9 +224,18 @@ export default function MealStockTakeTab({ liveSig }) {
                           const variance = has && !opening ? num(v) - num(r.system_qty) : null;
                           const loss = variance != null && variance < -1e-9;
                           const extra = variance != null && variance > 1e-9;
+                          const rate = num(lastRates[r.item_id]?.rate ?? r.avg_rate);
+                          const varValue = variance != null && rate > 0 ? variance * rate : null;
                           return (
                             <tr key={r.item_id} className="border-t border-slate-100 hover:bg-slate-50/60" data-testid={`stocktake-row-${r.item_id}`}>
-                              <td className="p-2.5 font-semibold text-slate-900">{r.name}</td>
+                              <td className="p-2.5 font-semibold text-slate-900">
+                                {r.name}
+                                {r.recorded && r.recorded_by && (
+                                  <span className="block text-[10px] font-normal text-violet-600 mt-0.5" data-testid={`stocktake-by-${r.item_id}`} title={r.recorded_at ? `Counted on ${formatDate(r.recorded_at)}` : ""}>
+                                    ✓ counted by {r.recorded_by}
+                                  </span>
+                                )}
+                              </td>
                               <td className="p-2.5 text-slate-500 text-xs">{r.unit}</td>
                               <td className="p-2.5 text-right tabular-nums text-slate-600" data-testid={`stocktake-system-${r.item_id}`}>{fmtQty(r.system_qty, r.unit)}</td>
                               <td className="p-2.5 text-right">
@@ -264,9 +278,16 @@ export default function MealStockTakeTab({ liveSig }) {
                                 ) : variance == null ? "—" : Math.abs(variance) < 1e-9 ? (
                                   <span className="text-slate-400 font-medium">no change</span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 justify-end">
-                                    {loss ? <TrendingDown size={13} /> : <TrendingUp size={13} />}
-                                    {variance > 0 ? "+" : "−"}{fmtQty(Math.abs(variance), r.unit)}
+                                  <span className="inline-flex flex-col items-end leading-tight">
+                                    <span className="inline-flex items-center gap-1 justify-end">
+                                      {loss ? <TrendingDown size={13} /> : <TrendingUp size={13} />}
+                                      {variance > 0 ? "+" : "−"}{fmtQty(Math.abs(variance), r.unit)}
+                                    </span>
+                                    {varValue != null && (
+                                      <span className={`text-[10px] font-semibold ${loss ? "text-rose-500" : "text-emerald-600"}`} data-testid={`stocktake-varvalue-${r.item_id}`}>
+                                        {loss ? `−${rupee(varValue)} loss` : `+${rupee(varValue)} profit`}
+                                      </span>
+                                    )}
                                   </span>
                                 )}
                               </td>

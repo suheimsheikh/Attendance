@@ -3634,6 +3634,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 "physical_qty": (rec or {}).get("physical"),
                 "variance": (rec or {}).get("qty"),
                 "recorded": rec is not None,
+                "recorded_by": (rec or {}).get("by_name"),
+                "recorded_at": (rec or {}).get("at"),
             })
         return {"date": d, "categories": cats, "rows": rows}
 

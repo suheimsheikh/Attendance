@@ -3,6 +3,17 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 29 Sep 2026 — Stock-take: who counted, ₹ variance, no flicker
+
+Three fixes to the Stock Take count sheet (`MealStockTakeTab`):
+- **Who did the count**: the sheet's GET (`/meals/stock-take`) now returns `recorded_by`/`recorded_at`; each already-counted row shows a "✓ counted by \<name\>" line under the item.
+- **Variance value (loss/profit)**: every variance now shows its ₹ value below the quantity (`−₹X loss` in red / `+₹X profit` in green, using last-purchase or avg rate), and the summary shows net loss/extra totals, e.g. "36 loss (−₹16,187) · 64 extra (+₹63,459)".
+- **"Refreshing continuously" fixed**: the live-signal (SSE) refetch was flipping the full-page loading spinner on every pantry change from any machine, blanking the table. It now refetches **silently in place** (`load(true)` — no spinner, only when the user has no unsaved edits), so another machine's change updates the sheet inline instead of flickering.
+Verified via screenshot on the 15 Sept sheet (100 counted rows) + curl confirming the new fields.
+
+---
+
+
 ## 29 Sep 2026 — Unified item ledger (Stock Master ↔ Daily Entry)
 
 Clicking an item in **Stock Master** (`MealMastersTab`) now opens the same full passbook `ItemLedgerDrawer` used by the Daily Entry double-click — instead of the lighter flat event-list `ItemDetailPanel`. So both places show an identical ledger: Purchased/Amount/Issued/Wasted/**Stock-take** columns, opening balance, running stock-on-hand, totals footer, and Weekly/Monthly/Daily + date-range controls. Both already hit the same `/meals/items/{id}/ledger` endpoint, so this is purely a component swap (looks up the item's name/unit from the tree). `ItemDetailPanel` left in place but no longer referenced. Verified via screenshot (Ajwain ledger with Stock-take column + running balance).
