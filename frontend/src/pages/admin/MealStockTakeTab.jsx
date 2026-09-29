@@ -29,6 +29,7 @@ export default function MealStockTakeTab({ liveSig }) {
   const [lastRates, setLastRates] = useState({}); // item_id -> {rate, date} last buying rate (read-only)
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [rowSaving, setRowSaving] = useState(null);   // item_id currently saving via Enter
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState(new Set());
   const dirty = useRef(false);
@@ -127,6 +128,35 @@ export default function MealStockTakeTab({ liveSig }) {
     }
   };
 
+  // Save a single row immediately (Enter key). Optimistically marks the row
+  // as counted without reloading the whole sheet, so entering item-by-item
+  // feels instant and doesn't disturb other rows being edited.
+  const saveRow = async (r) => {
+    const v = physical[r.item_id];
+    if (v === undefined || v === "") { toast.info(`Enter a count for ${r.name} first.`); return; }
+    const line = { item_id: r.item_id, physical_qty: num(v) };
+    const rt = rates[r.item_id];
+    if (r.needs_rate && rt !== undefined && rt !== "" && num(rt) > 0) line.rate = num(rt);
+    setRowSaving(r.item_id);
+    try {
+      const res = await api.post("/meals/stock-take", { date: dateStr, lines: [line] });
+      const rl = (res.lines || [])[0] || {};
+      setRows((rws) => rws.map((x) => x.item_id === r.item_id ? {
+        ...x,
+        physical_qty: num(v),
+        variance: rl.kind === "opening" ? null : (rl.qty ?? (num(v) - num(x.system_qty))),
+        recorded: true,
+        recorded_by: rl.by_name || "you",
+        recorded_at: rl.at || new Date().toISOString(),
+      } : x));
+      toast.success(`${r.name} saved`);
+    } catch (e) {
+      showApiError(e, `Couldn't save ${r.name}`);
+    } finally {
+      setRowSaving(null);
+    }
+  };
+
   const handlePrint = () => {
     document.body.classList.add("stocktake-print-active");
     const cleanup = () => {
@@ -172,15 +202,16 @@ export default function MealStockTakeTab({ liveSig }) {
             <Printer size={15} /> Print sheet
           </button>
           <button onClick={save} disabled={saving || summary.counted === 0} data-testid="stocktake-save"
-                  className="iu-btn-primary !h-9 !px-4 text-sm disabled:opacity-50">
-            {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save count
+                  className="iu-btn-primary !h-9 !px-4 text-sm disabled:opacity-50"
+                  title="Save every physical count entered on this sheet in one go. (You can also press Enter in any row to save just that item.)">
+            {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save all
           </button>
         </div>
       </div>
 
       <p className="text-xs text-slate-500 mb-3 flex items-start gap-1.5">
         <ClipboardCheck size={14} className="text-violet-500 shrink-0 mt-0.5" />
-        Counts are taken at the <b className="mx-1">start</b> of the chosen day. Any difference vs the system on-hand is posted as a stock-take loss/extra so the ledgers reconcile — untouched items are left as-is.
+        Counts are taken at the <b className="mx-1">start</b> of the chosen day. Any difference vs the system on-hand is posted as a stock-take loss/gain so the ledgers reconcile — untouched items are left as-is. <b className="ml-1">Tip:</b>&nbsp;press <kbd className="px-1 py-0.5 rounded bg-slate-100 border border-slate-300 text-[10px] font-mono">Enter</kbd> in a row to save just that item, or <b>Save all</b> to save the whole sheet at once.
       </p>
       {needsRateCount > 0 && (
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3" data-testid="stocktake-opening-hint">
@@ -213,7 +244,8 @@ export default function MealStockTakeTab({ liveSig }) {
                           <th className="text-right p-2.5 w-32">System on-hand</th>
                           <th className="text-right p-2.5 w-36">Physical count</th>
                           <th className="text-right p-2.5 w-32">Rate ₹/unit</th>
-                          <th className="text-right p-2.5 w-36">Variance</th>
+                          <th className="text-right p-2.5 w-32">Variance</th>
+                          <th className="text-right p-2.5 w-32">Loss / Gain (₹)</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -241,16 +273,19 @@ export default function MealStockTakeTab({ liveSig }) {
                               <td className="p-2.5 text-right">
                                 <input type="number" min="0" step="0.01" value={v ?? ""}
                                        onChange={(e) => setPhys(r.item_id, e.target.value)}
+                                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveRow(r); } }}
                                        placeholder="—"
-                                       title={`Enter the physical quantity of ${r.name} you counted (system shows ${fmtQty(r.system_qty, r.unit)} ${r.unit || ""})`}
+                                       title={`Enter the physical quantity of ${r.name} you counted (system shows ${fmtQty(r.system_qty, r.unit)} ${r.unit || ""}). Press Enter to save this row.`}
                                        className="iu-input !h-8 !px-2 text-sm w-28 text-right tabular-nums"
                                        data-testid={`stocktake-physical-${r.item_id}`} />
+                                {rowSaving === r.item_id && <Loader2 size={12} className="inline animate-spin ml-1 text-violet-500" />}
                               </td>
                               <td className="p-2.5 text-right">
                                 {r.needs_rate ? (
                                   <div className="inline-flex flex-col items-end gap-0.5">
                                     <input type="number" min="0" step="0.01" value={rates[r.item_id] ?? ""}
                                            onChange={(e) => setRate(r.item_id, e.target.value)}
+                                           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveRow(r); } }}
                                            placeholder="₹/unit"
                                            title={`No purchase history for ${r.name} yet — enter its ₹ per ${r.unit || "unit"} to set a valued opening balance`}
                                            className="iu-input !h-8 !px-2 text-sm w-24 text-right tabular-nums border-amber-300"
@@ -278,16 +313,21 @@ export default function MealStockTakeTab({ liveSig }) {
                                 ) : variance == null ? "—" : Math.abs(variance) < 1e-9 ? (
                                   <span className="text-slate-400 font-medium">no change</span>
                                 ) : (
-                                  <span className="inline-flex flex-col items-end leading-tight">
-                                    <span className="inline-flex items-center gap-1 justify-end">
-                                      {loss ? <TrendingDown size={13} /> : <TrendingUp size={13} />}
-                                      {variance > 0 ? "+" : "−"}{fmtQty(Math.abs(variance), r.unit)}
-                                    </span>
-                                    {varValue != null && (
-                                      <span className={`text-[10px] font-semibold ${loss ? "text-rose-500" : "text-emerald-600"}`} data-testid={`stocktake-varvalue-${r.item_id}`}>
-                                        {loss ? `−${rupee(varValue)} loss` : `+${rupee(varValue)} profit`}
-                                      </span>
-                                    )}
+                                  <span className="inline-flex items-center gap-1 justify-end">
+                                    {loss ? <TrendingDown size={13} /> : <TrendingUp size={13} />}
+                                    {variance > 0 ? "+" : "−"}{fmtQty(Math.abs(variance), r.unit)}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-2.5 text-right tabular-nums" data-testid={`stocktake-varvalue-${r.item_id}`}>
+                                {opening || variance == null || Math.abs(variance) < 1e-9 ? (
+                                  <span className="text-slate-300">—</span>
+                                ) : varValue == null ? (
+                                  <span className="text-slate-300 text-xs" title="No rate available to value this variance">no rate</span>
+                                ) : (
+                                  <span className={`font-bold ${loss ? "text-rose-600" : "text-emerald-600"}`}>
+                                    {loss ? `−${rupee(varValue)}` : `+${rupee(varValue)}`}
+                                    <span className="block text-[10px] font-semibold opacity-80">{loss ? "loss" : "gain"}</span>
                                   </span>
                                 )}
                               </td>

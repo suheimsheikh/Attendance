@@ -3,6 +3,18 @@
 Append-only log of feature/bug shipments. PRD.md holds the static
 
 ---
+## 29 Sep 2026 — Stock-take: Enter-to-save, dedicated Loss/Gain column, clearer Save
+
+Follow-ups on the Stock Take count sheet (`MealStockTakeTab`):
+- **No save bug found** — verified via curl that counts persist correctly; the confusion was that a typed count only saves on Save. Fixed the UX instead:
+- **Enter-to-save per row**: pressing Enter in a row's Physical (or Rate) input saves just that item immediately via a single-line POST, optimistically marks it "✓ counted by …" with a small spinner, and does NOT reload the sheet (other in-progress rows untouched). New `saveRow()` + `rowSaving` state.
+- **"Save count" → "Save all"** with a tooltip and an inline tip explaining Enter (one row) vs Save all (whole sheet).
+- **Dedicated "Loss / Gain (₹)" column** after Variance (display-only): shows `+₹X gain` (green) / `−₹X loss` (red) valued at last-purchase/avg rate; "no rate" for items with no cost history, "—" when no change/opening. Variance column reverted to just the signed quantity + trend arrow.
+Verified via screenshot (Loss/Gain column populated, Enter-save toast + counted-by chip). Test writes cleaned up.
+
+---
+
+
 ## 29 Sep 2026 — Stock-take: who counted, ₹ variance, no flicker
 
 Three fixes to the Stock Take count sheet (`MealStockTakeTab`):
