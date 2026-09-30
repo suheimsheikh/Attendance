@@ -2,6 +2,20 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-09-30 — Stock-take history picker + zero/low-risk refactors
+- FEATURE (b): "Past takes" dropdown on the Stock Take count sheet — lists every saved stock-take (date, items counted, losses/extras, net ₹, who recorded), newest first; click to open & edit that day. New endpoint `GET /api/meals/stock-take/list`. Refreshes after each save/saveRow.
+- L3: count-sheet summary now shows a progress chip "X of Y counted" (was just "X counted").
+- Z1 (DRY): extracted two shared helpers in meals.py — `_upsert_line_scoped(coll,d,line)` (atomic per-item array upsert: positional $set else $ne-guarded $push) and `_safe_date_upsert(coll,flt,update)` (upsert tolerant of unique-date insert race). Replaced the 3 duplicated per-item PATCH blocks (issues/wastage/purchases) and all the ensure-doc/PUT/bulk upserts with them. Behaviour-preserving.
+- L2: `date` is now UNIQUE on meal_purchases / meal_issues / meal_wastage / meal_adjustments (server.py `_ensure_unique_date` upgrades legacy non-unique indexes idempotently; created live too). All per-date upserts wrapped with `_safe_date_upsert` so a concurrent first-write of a fresh day can't create duplicate docs or lose a write. No duplicate dates existed pre-migration (verified).
+- L1: `_stock_snapshot` now fetches ALL matching day-docs (`to_list(length=None)`) instead of a silent `to_list(5000)` cap — a busy pantry can't truncate the ledger. (No behaviour change today; ~135/117 docs.)
+- Z2: new regression suite `tests/test_stock_take_persistence.py` (7 tests) — zero-variance persistence, opening-marker recording, report qty==0 exclusion + history, stock-take/list summary, purchase zero-rate 400, concurrent same-item dedup (ThreadPool), auth. All green; existing `test_wastage_patch` still green (exercises the refactored PATCH). Pre-existing data-seed test failures (no "Rice" item, low_count==2, category 409) are unrelated to these changes.
+
+## 2026-09-30 — Code review fixes (stock-take concurrency + entry-grid warning)
+- FIX (MEDIUM): stock_take_save used non-atomic `$pull`-then-`$push` per item → two concurrent saves of the SAME item/date could leave a DUPLICATE adjustment line (double-counted balance). Replaced with the proven atomic pattern: positional `$set` on `lines.item_id`, else `$ne`-guarded `$push` (helper `_upsert_adj_line`). Verified: 8 concurrent same-item saves → exactly 1 line.
+- FIX (fresh-day race): added a UNIQUE index on `meal_adjustments.date` (server.py startup + created live) and wrapped the ensure-doc `$setOnInsert` upsert in try/except DuplicateKeyError. Without it, two concurrent FIRST-writes of a brand-new day could lose one write / create duplicate docs. Verified: 5/5 trials of concurrent different-item first-writes keep BOTH items in one doc.
+- FIX (MEDIUM): EntryItemRow.jsx purchase rate cell now shows a rose ring + tooltip when qty>0 & rate≤0, so a chef sees that an un-priced quantity won't be saved by the auto-save grid (previously silent).
+- All tests run on throwaway date 2026-09-20 and cleaned up; production data untouched.
+
 ## 2026-09-30 — FIX #2: Stock Take also dropped OPENING-balance counts (full skip audit)
 - Following up on the zero-variance fix, audited EVERY skip path in `stock_take_save`. Found a SECOND silent-vanish: the opening-balance branch (needs_rate item counted WITH a ₹/unit rate) set `meal_items.opening_stock` but never wrote to `meal_adjustments` — so the sheet's `recorded` map missed it and the entered count disappeared on reload. Reproduced (Besan + rate 50 → recorded:False) and verified fixed (recorded:True, value retained). Restored Besan's prod opening fields + removed all test docs.
 - FIX: opening branch now also pushes a `kind:"opening"` marker line (qty 0 = no ledger double-count, since opening_stock carries the qty) so the count is recorded/visible.

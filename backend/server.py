@@ -689,12 +689,27 @@ async def _seed_database() -> None:
     # Pantry-stock collections grow one doc per day forever — every stock /
     # expense / drill-down read filters by date (or lines.*), so index them
     # before the scans get slow (code review, Jun 2026).
-    await db.meal_purchases.create_index("date")
+    # One doc per date for these collections — `date` is UNIQUE so concurrent
+    # first-writes of a fresh day can't create duplicate docs. _ensure_unique
+    # upgrades a legacy non-unique index idempotently on boot.
+    async def _ensure_unique_date(coll):
+        try:
+            await coll.create_index("date", unique=True)
+        except Exception:
+            try:
+                await coll.drop_index("date_1")
+            except Exception:
+                pass
+            await coll.create_index("date", unique=True)
+
+    await _ensure_unique_date(db.meal_purchases)
     await db.meal_purchases.create_index("lines.item_id")
     await db.meal_purchases.create_index("lines.vendor_id")
-    await db.meal_issues.create_index("date")
+    await _ensure_unique_date(db.meal_issues)
     await db.meal_issues.create_index("lines.item_id")
-    await db.meal_wastage.create_index("date")
+    await _ensure_unique_date(db.meal_wastage)
+    await _ensure_unique_date(db.meal_adjustments)
+    await db.meal_adjustments.create_index("lines.item_id")
     await db.meal_items.create_index([("category_key", 1), ("sort_order", 1)])
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:

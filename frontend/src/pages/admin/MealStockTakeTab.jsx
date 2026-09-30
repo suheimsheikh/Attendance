@@ -32,7 +32,16 @@ export default function MealStockTakeTab({ liveSig }) {
   const [rowSaving, setRowSaving] = useState(null);   // item_id currently saving via Enter
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState(new Set());
+  const [takes, setTakes] = useState([]);          // past stock-takes (list)
+  const [showTakes, setShowTakes] = useState(false);
   const dirty = useRef(false);
+
+  const loadTakes = useCallback(() => {
+    api.get("/meals/stock-take/list")
+      .then((r) => setTakes(r.takes || []))
+      .catch(() => {});
+  }, []);
+  useEffect(() => { loadTakes(); }, [loadTakes]);
 
   const load = useCallback((silent = false) => {
     if (!silent) setLoading(true);
@@ -121,6 +130,7 @@ export default function MealStockTakeTab({ liveSig }) {
       toast.success(`Stock-take saved · ${res.counted} counted · ${res.losses} loss${res.losses === 1 ? "" : "es"} · ${res.extras} extra${res.extras === 1 ? "" : "s"}${opening}`);
       dirty.current = false;
       load();
+      loadTakes();
     } catch (e) {
       showApiError(e, "Couldn't save stock-take");
     } finally {
@@ -150,6 +160,7 @@ export default function MealStockTakeTab({ liveSig }) {
         recorded_at: rl.at || new Date().toISOString(),
       } : x));
       toast.success(`${r.name} saved`);
+      loadTakes();
     } catch (e) {
       showApiError(e, `Couldn't save ${r.name}`);
     } finally {
@@ -189,13 +200,49 @@ export default function MealStockTakeTab({ liveSig }) {
           <span className="text-xs text-slate-500">{formatDate(dateStr)}</span>
         </div>
         <div className="relative">
+          <button type="button" onClick={() => setShowTakes((s) => !s)} data-testid="stocktake-past-toggle"
+                  className="iu-btn-secondary !h-9 !px-3 text-sm inline-flex items-center gap-1.5"
+                  title="Open a past stock take to review or edit it">
+            <ClipboardList size={15} /> Past takes
+            {takes.length > 0 && <span className="text-[10px] font-bold bg-violet-100 text-violet-700 rounded-full px-1.5 py-0.5">{takes.length}</span>}
+            <ChevronDown size={14} className={`transition-transform ${showTakes ? "rotate-180" : ""}`} />
+          </button>
+          {showTakes && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setShowTakes(false)} data-testid="stocktake-past-overlay" />
+              <div className="absolute left-0 top-full mt-1 z-40 w-80 max-h-96 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl p-1.5" data-testid="stocktake-past-list">
+                <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Saved stock takes · click to open & edit</div>
+                {takes.length === 0 ? (
+                  <div className="px-3 py-4 text-sm text-slate-400 text-center" data-testid="stocktake-past-empty">No stock takes saved yet.</div>
+                ) : takes.map((t) => (
+                  <button key={t.date} type="button"
+                          onClick={() => { setDateStr(t.date); setShowTakes(false); setView("count"); }}
+                          className={`w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-50 flex items-start justify-between gap-2 ${t.date === dateStr ? "bg-violet-50 ring-1 ring-violet-200" : ""}`}
+                          data-testid={`stocktake-past-${t.date}`}>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-slate-800 text-sm">{formatDate(t.date)}</div>
+                      <div className="text-[11px] text-slate-500 truncate">
+                        {t.counted} counted · <span className="text-rose-600">{t.losses} loss</span> · <span className="text-emerald-600">{t.extras} extra</span>
+                        {t.recorded_by && <> · by {t.recorded_by}</>}
+                      </div>
+                    </div>
+                    <div className={`shrink-0 text-xs font-bold tabular-nums ${t.net_value < 0 ? "text-rose-600" : t.net_value > 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                      {t.net_value < 0 ? `−${rupee(t.net_value)}` : t.net_value > 0 ? `+${rupee(t.net_value)}` : "—"}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="relative">
           <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items…"
                  className="iu-input !h-9 text-sm !pl-7 !w-52" data-testid="stocktake-search" />
         </div>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-slate-500" data-testid="stocktake-summary">
-            <b>{summary.counted}</b> counted · <span className="text-rose-600 font-semibold">{summary.losses} loss{summary.lossValue > 0 && <> (−{rupee(summary.lossValue)})</>}</span> · <span className="text-emerald-600 font-semibold">{summary.extras} extra{summary.extraValue > 0 && <> (+{rupee(summary.extraValue)})</>}</span>{summary.openings > 0 && <> · <span className="text-amber-700 font-semibold">{summary.openings} opening</span></>}
+            <b data-testid="stocktake-progress">{summary.counted} of {rows.length}</b> counted · <span className="text-rose-600 font-semibold">{summary.losses} loss{summary.lossValue > 0 && <> (−{rupee(summary.lossValue)})</>}</span> · <span className="text-emerald-600 font-semibold">{summary.extras} extra{summary.extraValue > 0 && <> (+{rupee(summary.extraValue)})</>}</span>{summary.openings > 0 && <> · <span className="text-amber-700 font-semibold">{summary.openings} opening</span></>}
           </span>
           <button onClick={handlePrint} data-testid="stocktake-print"
                   className="iu-btn-secondary !h-9 !px-3 text-sm" title="Print a blank count sheet to tick on paper first">

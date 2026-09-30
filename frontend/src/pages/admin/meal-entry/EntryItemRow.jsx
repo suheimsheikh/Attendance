@@ -63,6 +63,9 @@ function PurchaseCells({ it, catKey, e, purchAmt, ctx }) {
     setRowVendor, setShowAddVendor, setScorecardVendorId, focusCell, focusPicker,
     setPurchField, notifyFocus, notifyBlur, queuePurch, onGridKeyDown,
   } = ctx;
+  // A quantity with no (or ₹0) rate can't be saved (the ledger can't value
+  // it) — flag it so the chef knows it won't persist until a rate is typed.
+  const rateMissing = num(e.qty) > 0 && num(e.rate) <= 0;
   return (
     <>
       <td className="p-2 border-l-2 border-emerald-100">
@@ -122,8 +125,9 @@ function PurchaseCells({ it, catKey, e, purchAmt, ctx }) {
             queuePurch();
           }}
           onKeyDown={onGridKeyDown("purch-rate", it.id)}
-          className="iu-input !h-8 !px-2 text-sm w-full text-right tabular-nums"
+          className={`iu-input !h-8 !px-2 text-sm w-full text-right tabular-nums ${rateMissing ? "!ring-2 !ring-rose-300 !border-rose-300" : ""}`}
           placeholder="0.00"
+          title={rateMissing ? "A quantity was entered — type a ₹/unit rate or this purchase won't be saved" : undefined}
           data-testid={`entry-purch-rate-${it.id}`}
         />
       </td>

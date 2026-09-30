@@ -755,6 +755,29 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             logging.getLogger(__name__).warning("meals signal bump failed", exc_info=True)
     router._signal_meals_ref[0] = _signal_meals  # noqa: SLF001
 
+    async def _safe_date_upsert(coll, flt, update):
+        """upsert=True that tolerates a unique-`date` insert race: if a
+        concurrent request already created the day's doc (DuplicateKeyError),
+        reapply the same update as a plain non-upsert update on the now-
+        existing doc. Used for the one-doc-per-date pantry collections."""
+        try:
+            return await coll.update_one(flt, update, upsert=True)
+        except DuplicateKeyError:
+            return await coll.update_one(flt, update, upsert=False)
+
+    async def _upsert_line_scoped(coll, d, line):
+        """Atomically upsert one array line keyed by item_id in a per-date
+        doc: positional `$set` if the item's line exists, else a `$ne`-guarded
+        `$push`. Prevents duplicate lines when two saves of the SAME item on
+        the SAME date race. The day's doc must already exist."""
+        res = await coll.update_one(
+            {"date": d, "lines.item_id": line["item_id"]},
+            {"$set": {"lines.$": line}})
+        if res.matched_count == 0:
+            await coll.update_one(
+                {"date": d, "lines.item_id": {"$ne": line["item_id"]}},
+                {"$push": {"lines": line}})
+
     @router.get("/meals/events")
     async def meals_events(token: str):
         """SSE stream of pantry-change signals. EventSource cannot set an
@@ -2810,11 +2833,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         await _assert_issue_stock(d, clean)
         warns = await _issue_qty_warnings(d, clean)
         prev = await db.meal_issues.find_one({"date": d}, {"_id": 0, "lines": 1})
-        await db.meal_issues.update_one(
+        await _safe_date_upsert(
+            db.meal_issues,
             {"date": d},
             {"$set": {"date": d, "lines": clean, **stamp},
              "$setOnInsert": {"id": str(uuid.uuid4())}},
-            upsert=True,
         )
         await _signal_meals("issues", d)
         _diff = _line_diff((prev or {}).get("lines"), clean, "issue")
@@ -2848,10 +2871,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                    "item_name": (by_id.get(str(u.get("item_id") or "")) or {}).get("name")}
                   for u in body.upserts]
         warns = await _issue_qty_warnings(d, _named)
-        await db.meal_issues.update_one(
+        await _safe_date_upsert(
+            db.meal_issues,
             {"date": d},
             {"$setOnInsert": {"id": str(uuid.uuid4()), "date": d, "lines": []}},
-            upsert=True,
         )
         removes = [str(r) for r in body.removes]
         for raw in body.upserts:
@@ -2872,17 +2895,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 "qty": round(qty, 4),
                 "unit": item.get("unit"),
             }
-            res = await db.meal_issues.update_one(
-                {"date": d, "lines.item_id": iid}, {"$set": {"lines.$": line}})
-            if res.matched_count == 0:
-                # Guard the push with `item_id $ne iid` so two concurrent
-                # PATCHes for the SAME new item can't both push a duplicate
-                # line (which would double-count the qty in stock). The
-                # doc-level write lock serialises the two; the second push
-                # then no-ops (28 Sep 2026 code-review fix).
-                await db.meal_issues.update_one(
-                    {"date": d, "lines.item_id": {"$ne": iid}},
-                    {"$push": {"lines": line}})
+            await _upsert_line_scoped(db.meal_issues, d, line)
         for iid in removes:
             await db.meal_issues.update_one(
                 {"date": d}, {"$pull": {"lines": {"item_id": iid}}})
@@ -2964,11 +2977,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             "updated_by_name": user.get("full_name") or user.get("email"),
         }
         _prev_w = await db.meal_wastage.find_one({"date": d}, {"_id": 0, "lines": 1})
-        await db.meal_wastage.update_one(
+        await _safe_date_upsert(
+            db.meal_wastage,
             {"date": d},
             {"$set": {"date": d, "lines": clean, **stamp},
              "$setOnInsert": {"id": str(uuid.uuid4())}},
-            upsert=True,
         )
         _diff = _line_diff((_prev_w or {}).get("lines"), clean, "wastage")
         await _audit(user, "meals.wastage.save", "meal_wastage", d, f"Wastage {d}", meta=_diff_meta(d, _diff))
@@ -2991,10 +3004,10 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             {"id": {"$in": item_ids}}, {"_id": 0},
         ).to_list(len(item_ids) or 1)
         by_id = {i["id"]: i for i in items}
-        await db.meal_wastage.update_one(
+        await _safe_date_upsert(
+            db.meal_wastage,
             {"date": d},
             {"$setOnInsert": {"id": str(uuid.uuid4()), "date": d, "lines": []}},
-            upsert=True,
         )
         removes = [str(r) for r in body.removes]
         for raw in body.upserts:
@@ -3023,14 +3036,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 "reason": reason,
                 "notes": notes,
             }
-            res = await db.meal_wastage.update_one(
-                {"date": d, "lines.item_id": iid}, {"$set": {"lines.$": line}})
-            if res.matched_count == 0:
-                # `$ne` guard prevents concurrent duplicate pushes — see the
-                # issues PATCH above (28 Sep 2026 code-review fix).
-                await db.meal_wastage.update_one(
-                    {"date": d, "lines.item_id": {"$ne": iid}},
-                    {"$push": {"lines": line}})
+            await _upsert_line_scoped(db.meal_wastage, d, line)
         for iid in removes:
             await db.meal_wastage.update_one(
                 {"date": d}, {"$pull": {"lines": {"item_id": iid}}})
@@ -3064,18 +3070,21 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         cats = await _purchase_categories()
         cat_label = {c["key"]: c["label"] for c in cats}
 
+        # These are one-doc-per-date collections; fetch ALL matching days
+        # (length=None) so a busy pantry can never silently truncate the
+        # ledger once a collection passes the old 5000-doc cap (code review).
         purch_docs = await db.meal_purchases.find(
             {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
-        ).to_list(5000)
+        ).to_list(length=None)
         iss_docs = await db.meal_issues.find(
             {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
-        ).to_list(5000)
+        ).to_list(length=None)
         wast_docs = await db.meal_wastage.find(
             {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
-        ).to_list(5000)
+        ).to_list(length=None)
         adj_docs = await db.meal_adjustments.find(
             {"date": {"$lte": as_of_iso}}, {"_id": 0, "date": 1, "lines": 1},
-        ).to_list(5000)
+        ).to_list(length=None)
 
         item_opening_as_of = {i["id"]: i.get("opening_stock_as_of") or "1970-01-01"
                               for i in items}
@@ -3656,6 +3665,12 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         by_name = user.get("full_name") or user.get("email") or "Chef"
         counted = losses = extras = unchanged = opening_set = 0
         result_lines = []
+        # Ensure the day's doc exists so per-item atomic writes can target it.
+        # The unique index on `date` + _safe_date_upsert make the concurrent
+        # first-write of a fresh day race-safe.
+        await _safe_date_upsert(
+            db.meal_adjustments, {"date": d}, {"$setOnInsert": {"date": d, "lines": []}})
+
         for ln in body.lines:
             iid = str(ln.get("item_id") or "")
             if iid not in sysmap:
@@ -3671,9 +3686,6 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 continue
             counted += 1
             system = sysmap[iid]
-            # Replace any prior line for this item on this date first.
-            await db.meal_adjustments.update_one(
-                {"date": d}, {"$pull": {"lines": {"item_id": iid}}}, upsert=True)
             # First-count path: an item with no cost history yet can take a
             # ₹/unit rate — the count then becomes its opening balance as of
             # this date (valued), rather than an un-valued adjustment.
@@ -3709,8 +3721,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                     "by": by_id,
                     "by_name": by_name,
                 }
-                await db.meal_adjustments.update_one(
-                    {"date": d}, {"$push": {"lines": oline}}, upsert=True)
+                await _upsert_line_scoped(db.meal_adjustments, d, oline)
                 result_lines.append({**oline, "name": namemap.get(iid, {}).get("name"),
                                      "unit": namemap.get(iid, {}).get("unit")})
                 continue
@@ -3734,13 +3745,13 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 "by": by_id,
                 "by_name": by_name,
             }
-            await db.meal_adjustments.update_one(
-                {"date": d}, {"$push": {"lines": line}}, upsert=True)
+            await _upsert_line_scoped(db.meal_adjustments, d, line)
             result_lines.append({**line, "name": namemap.get(iid, {}).get("name"),
                                  "unit": namemap.get(iid, {}).get("unit")})
-        await db.meal_adjustments.update_one(
-            {"date": d}, {"$set": {"updated_at": now_iso, "updated_by": by_id,
-                                   "updated_by_name": by_name}}, upsert=True)
+        await _safe_date_upsert(
+            db.meal_adjustments, {"date": d},
+            {"$set": {"updated_at": now_iso, "updated_by": by_id,
+                      "updated_by_name": by_name}})
         # Don't leave an empty adjustments doc behind (all-unchanged counts).
         after = await db.meal_adjustments.find_one({"date": d}, {"_id": 0, "lines": 1})
         if not (after or {}).get("lines"):
@@ -3860,6 +3871,53 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             "items": len(rows),
         }
         return {"start": s, "end": e, "rows": rows, "history": history, "totals": totals}
+
+    @router.get("/meals/stock-take/list")
+    async def stock_take_list(user: dict = Depends(require_chef_or_admin)):
+        """List every date that has a saved stock-take, newest first, with a
+        one-line summary (items counted, losses/extras, net ₹ value, who
+        recorded, when). Powers the 'flip between stock takes' picker."""
+        docs = await db.meal_adjustments.find(
+            {}, {"_id": 0, "date": 1, "lines": 1, "updated_at": 1,
+                 "updated_by_name": 1}).to_list(length=None)
+        out = []
+        for d in docs:
+            lines = d.get("lines") or []
+            if not lines:
+                continue
+            counted = len(lines)
+            losses = extras = 0
+            loss_value = extra_value = 0.0
+            counters: dict[str, int] = {}
+            for ln in lines:
+                qty = float(ln.get("qty") or 0)
+                rate = float(ln.get("avg_rate") or ln.get("rate") or 0)
+                if qty < 0:
+                    losses += 1
+                    loss_value += -qty * rate
+                elif qty > 0:
+                    extras += 1
+                    extra_value += qty * rate
+                who = ln.get("by_name")
+                if who:
+                    counters[who] = counters.get(who, 0) + 1
+            recorded_by = (d.get("updated_by_name")
+                           or (max(counters, key=counters.get) if counters else None))
+            out.append({
+                "date": d["date"],
+                "counted": counted,
+                "losses": losses,
+                "extras": extras,
+                "loss_value": round(loss_value, 2),
+                "extra_value": round(extra_value, 2),
+                "net_value": round(extra_value - loss_value, 2),
+                "recorded_by": recorded_by,
+                "recorded_by_all": sorted(counters.keys()),
+                "updated_at": d.get("updated_at"),
+            })
+        out.sort(key=lambda r: r["date"], reverse=True)
+        return {"takes": out}
+
 
 
 
@@ -4088,12 +4146,12 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 cat = item.get("category_key") or "other"
                 amounts[cat] = round(amounts.get(cat, 0.0) + amount, 2)
 
-            await db.meal_purchases.update_one(
+            await _safe_date_upsert(
+                db.meal_purchases,
                 {"date": d},
                 {"$set": {"date": d, "lines": clean_lines,
                           "amounts": amounts, **stamp},
                  "$setOnInsert": {"id": str(uuid.uuid4())}},
-                upsert=True,
             )
             await _signal_meals("purchases", d)
             _diff = _line_diff((_prev_p or {}).get("lines"), clean_lines, "purchase")
@@ -4111,11 +4169,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 raise HTTPException(status_code=400, detail=f"Amount for '{k}' cannot be negative")
             if amt > 0:
                 amounts[str(k)] = round(amt, 2)
-        await db.meal_purchases.update_one(
+        await _safe_date_upsert(
+            db.meal_purchases,
             {"date": d},
             {"$set": {"date": d, "amounts": amounts, **stamp},
              "$setOnInsert": {"id": str(uuid.uuid4())}},
-            upsert=True,
         )
         await _signal_meals("purchases", d)
         await _audit(user, "meals.purchase.save", "meal_purchase", d, f"Purchases {d}")
@@ -4139,11 +4197,11 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             {"id": {"$in": item_ids}}, {"_id": 0},
         ).to_list(len(item_ids) or 1)
         by_id = {i["id"]: i for i in items}
-        await db.meal_purchases.update_one(
+        await _safe_date_upsert(
+            db.meal_purchases,
             {"date": d},
             {"$setOnInsert": {"id": str(uuid.uuid4()), "date": d,
                               "lines": [], "amounts": {}}},
-            upsert=True,
         )
         removes = [str(r) for r in body.removes]
         for raw in body.upserts:
@@ -4172,14 +4230,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 "vendor_id": (str(raw.get("vendor_id")).strip() or None)
                              if raw.get("vendor_id") is not None else None,
             }
-            res = await db.meal_purchases.update_one(
-                {"date": d, "lines.item_id": iid}, {"$set": {"lines.$": line}})
-            if res.matched_count == 0:
-                # `$ne` guard prevents concurrent duplicate pushes — see the
-                # issues PATCH above (28 Sep 2026 code-review fix).
-                await db.meal_purchases.update_one(
-                    {"date": d, "lines.item_id": {"$ne": iid}},
-                    {"$push": {"lines": line}})
+            await _upsert_line_scoped(db.meal_purchases, d, line)
         for iid in removes:
             await db.meal_purchases.update_one(
                 {"date": d}, {"$pull": {"lines": {"item_id": iid}}})
@@ -4311,7 +4362,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             if not sets:
                 skipped += 1
                 continue
-            await db.meal_purchases.update_one(
+            await _safe_date_upsert(
+                db.meal_purchases,
                 {"date": d},
                 {"$set": {**sets, "date": d,
                           "updated_at": now_iso,
@@ -4319,7 +4371,6 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                           "updated_by_name": user.get("full_name") or user.get("email"),
                           "source": "bulk_upload"},
                  "$setOnInsert": {"id": str(uuid.uuid4())}},
-                upsert=True,
             )
             imported_dates.append(d)
 
