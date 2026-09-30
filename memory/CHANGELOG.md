@@ -2,6 +2,12 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-09-30 — FIX: Stock Take dropped zero-variance counts ("saves some items, not others")
+- ROOT CAUSE: `stock_take_save` (meals.py) hit `continue` whenever physical count == system on-hand (variance ≈ 0) — the count was NOT persisted and the item was NOT marked recorded. On reload the typed value vanished, so a full physical count where several items matched the system exactly looked like "it only saved some items." Reproduced on empty date 2026-09-20 (Besan counted at 2.8 == system → recorded:False, physical_qty:None) and verified fixed (recorded:True, value retained). Test data cleaned up.
+- FIX: every entered count now persists as a `stock_take` line (qty 0 = verified no-change). Zero-variance lines show in the audit HISTORY but are excluded from the ranked losses/extras rows + totals in `/meals/stock-take/report`. Audit meta label "verified" for no-change.
+- No frontend change needed (grid already prefills `physical_qty` and shows "✓ counted by …").
+- OBSERVED (not fixed, separate): some items carry NEGATIVE system stock (e.g. Atta −12) and many items have needs_rate=True — data-quality items to revisit.
+
 ## 2026-06 — Block zero-rate purchases
 - meals.py `PUT /meals/purchases/{date}` and `PATCH /meals/purchases/{date}`: a purchase line with qty>0 now REQUIRES rate>0 (was `rate>=0`). Returns 400 "Rate for '<item>' must be greater than ₹0 …". Verified via curl (both paths reject rate=0; valid rate saves). This stops un-priced stock entering the ledger.
 - MealPurchasesTab.jsx: `save()` blocks up front with a toast listing items missing a rate; rate input turns rose when qty>0 & rate≤0.

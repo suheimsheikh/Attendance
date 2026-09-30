@@ -3699,14 +3699,14 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             variance = round(physical - system, 4)
             if abs(variance) < 1e-9:
                 unchanged += 1
-                continue
-            if variance > 0:
+                variance = 0.0           # verified, no change — still recorded
+            elif variance > 0:
                 extras += 1
             else:
                 losses += 1
             line = {
                 "item_id": iid,
-                "qty": variance,               # signed: +extra / −loss
+                "qty": variance,               # signed: +extra / −loss / 0 = verified
                 "physical": round(physical, 4),
                 "system": round(system, 4),
                 "avg_rate": round(float(namemap.get(iid, {}).get("avg_rate") or 0), 4),
@@ -3730,7 +3730,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         await _signal_meals("adjustments", d)
         _stk_changes = [
             {"item": rl.get("name") or rl.get("item_id"), "unit": rl.get("unit") or "",
-             "type": "opening" if rl.get("kind") == "opening" else ("changed" if (rl.get("qty") or 0) else "changed"),
+             "type": "opening" if rl.get("kind") == "opening" else ("changed" if (rl.get("qty") or 0) else "verified"),
              "kind": rl.get("kind"),
              "fields": ({"opening_stock": {"before": None, "after": rl.get("physical")},
                          "opening_rate": {"before": None, "after": rl.get("rate")}}
@@ -3782,14 +3782,16 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                     rate = float((info.get(iid) or {}).get("avg_rate") or 0)
                 rate = float(rate or 0)
                 a = agg.setdefault(iid, {"loss_qty": 0.0, "extra_qty": 0.0,
-                                         "loss_value": 0.0, "extra_value": 0.0, "count": 0})
+                                         "loss_value": 0.0, "extra_value": 0.0, "count": 0}) if qty != 0 else None
                 if qty < 0:
                     a["loss_qty"] += -qty
                     a["loss_value"] += -qty * rate
+                    a["count"] += 1
                 elif qty > 0:
                     a["extra_qty"] += qty
                     a["extra_value"] += qty * rate
-                a["count"] += 1
+                    a["count"] += 1
+                # qty == 0 → verified no-change: shown in history, not ranked.
                 history.append({
                     "date": d["date"], "item_id": iid, "qty": round(qty, 4),
                     "physical": ln.get("physical"), "system": ln.get("system"),
