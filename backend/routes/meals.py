@@ -3692,8 +3692,26 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                     "updated_at": now_iso,
                 }})
                 opening_set += 1
-                result_lines.append({"item_id": iid, "kind": "opening", "physical": round(physical, 4),
-                                     "rate": round(rate, 4), "name": namemap.get(iid, {}).get("name"),
+                # Also record the count in meal_adjustments (qty 0 = no ledger
+                # impact, since the opening_stock above already carries the
+                # quantity) so the sheet marks the item counted and the entered
+                # value persists on reload. Without this line the count vanished.
+                oline = {
+                    "item_id": iid,
+                    "qty": 0.0,
+                    "physical": round(physical, 4),
+                    "system": round(system, 4),
+                    "avg_rate": round(rate, 4),
+                    "kind": "opening",
+                    "rate": round(rate, 4),
+                    "notes": (str(ln.get("notes") or "").strip() or None),
+                    "at": now_iso,
+                    "by": by_id,
+                    "by_name": by_name,
+                }
+                await db.meal_adjustments.update_one(
+                    {"date": d}, {"$push": {"lines": oline}}, upsert=True)
+                result_lines.append({**oline, "name": namemap.get(iid, {}).get("name"),
                                      "unit": namemap.get(iid, {}).get("unit")})
                 continue
             variance = round(physical - system, 4)

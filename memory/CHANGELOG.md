@@ -2,6 +2,16 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-09-30 — FIX #2: Stock Take also dropped OPENING-balance counts (full skip audit)
+- Following up on the zero-variance fix, audited EVERY skip path in `stock_take_save`. Found a SECOND silent-vanish: the opening-balance branch (needs_rate item counted WITH a ₹/unit rate) set `meal_items.opening_stock` but never wrote to `meal_adjustments` — so the sheet's `recorded` map missed it and the entered count disappeared on reload. Reproduced (Besan + rate 50 → recorded:False) and verified fixed (recorded:True, value retained). Restored Besan's prod opening fields + removed all test docs.
+- FIX: opening branch now also pushes a `kind:"opening"` marker line (qty 0 = no ledger double-count, since opening_stock carries the qty) so the count is recorded/visible.
+- Full skip-path audit result — from the UI every valid count now persists:
+  • zero variance → persists (verified) [fix #1]
+  • opening (needs_rate+rate) → persists (marker line) [fix #2]
+  • physical 0 (item emptied) → persists as loss ✓ (already worked)
+  • blank physical → intentionally not counted ✓
+  • non-numeric / negative physical → guard only; unreachable from UI (input min=0, frontend sends Number)
+
 ## 2026-09-30 — FIX: Stock Take dropped zero-variance counts ("saves some items, not others")
 - ROOT CAUSE: `stock_take_save` (meals.py) hit `continue` whenever physical count == system on-hand (variance ≈ 0) — the count was NOT persisted and the item was NOT marked recorded. On reload the typed value vanished, so a full physical count where several items matched the system exactly looked like "it only saved some items." Reproduced on empty date 2026-09-20 (Besan counted at 2.8 == system → recorded:False, physical_qty:None) and verified fixed (recorded:True, value retained). Test data cleaned up.
 - FIX: every entered count now persists as a `stock_take` line (qty 0 = verified no-change). Zero-variance lines show in the audit HISTORY but are excluded from the ranked losses/extras rows + totals in `/meals/stock-take/report`. Audit meta label "verified" for no-change.
