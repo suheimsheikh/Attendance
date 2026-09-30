@@ -2,6 +2,13 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-10-01 — Rate Backfill Helper + Negative Stock Sweep (Kitchen Data Health)
+- Extended `GET /api/meals/data-health`: now also returns a `needs_rate` list (items with on_hand>0 but avg_rate 0 — stock that can't be valued) plus enriched every row with `avg_rate`, `opening_stock`, `opening_rate` and a `suggested_rate` (last purchase rate). Switched its purchase scan to `to_list(length=None)`.
+- MealsDataHealth.jsx (`/admin/kitchen-health`): added a 4th card "Needs a rate" and two INLINE-FIXABLE sections:
+  • Negative Stock Sweep — lists items with negative on-hand; "Fix" opens an editor to set the correct physical count (+ optional rate).
+  • Rate Backfill Helper — lists the 29 items lacking a cost; "Fix" pre-fills the current quantity and a "use ₹X" last-purchase-rate shortcut, admin enters ₹/unit.
+- Both fixes call the existing `PATCH /meals/items/{id}` to set a VALUED OPENING BALANCE as of today (opening_stock + opening_stock_as_of=today + opening_rate). Because `_stock_snapshot` excludes movements dated before `opening_stock_as_of`, this cleanly RESETS the item's baseline — correcting the qty/attaching a rate with NO double-count and non-destructively (old docs kept for audit). Verified end-to-end (set 8kg @ ₹50 → on_hand 8, avg_rate 50); test item cleaned up, production untouched.
+
 ## 2026-09-30 — Stock-take history picker + zero/low-risk refactors
 - FEATURE (b): "Past takes" dropdown on the Stock Take count sheet — lists every saved stock-take (date, items counted, losses/extras, net ₹, who recorded), newest first; click to open & edit that day. New endpoint `GET /api/meals/stock-take/list`. Refreshes after each save/saveRow.
 - L3: count-sheet summary now shows a progress chip "X of Y counted" (was just "X counted").

@@ -5790,17 +5790,27 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         as-of-today stock snapshot + purchase history."""
         today = local_date_str(None)
         rows, _ = await _stock_snapshot(today, include_inactive=False)
-        purch = await db.meal_purchases.find({}, {"_id": 0, "lines": 1}).to_list(5000)
+        purch = await db.meal_purchases.find({}, {"_id": 0, "lines": 1}).to_list(length=None)
         purchased_ids: set = set()
+        last_rate: dict = {}
         for p in purch:
             for ln in p.get("lines") or []:
-                if ln.get("item_id") and float(ln.get("qty") or 0) > 0:
-                    purchased_ids.add(ln["item_id"])
+                iid = ln.get("item_id")
+                q = float(ln.get("qty") or 0)
+                if iid and q > 0:
+                    purchased_ids.add(iid)
+                    r = float(ln.get("rate") or 0) or (float(ln.get("amount") or 0) / q if q else 0)
+                    if r > 0:
+                        last_rate[iid] = round(r, 2)
 
         def _slim(r):
             return {"item_id": r["item_id"], "name": r.get("name"),
                     "category": r.get("category_label") or r.get("category_key"),
-                    "unit": r.get("unit"), "on_hand": r.get("on_hand")}
+                    "unit": r.get("unit"), "on_hand": r.get("on_hand"),
+                    "avg_rate": r.get("avg_rate") or 0,
+                    "opening_stock": r.get("opening_stock") or 0,
+                    "opening_rate": r.get("opening_rate") or 0,
+                    "suggested_rate": last_rate.get(r["item_id"], 0)}
 
         negative = [_slim(r) for r in rows if (r.get("on_hand") or 0) < 0]
         # Untracked & un-purchased → issuing is blocked until stock is entered.
@@ -5809,16 +5819,21 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                     and r["item_id"] not in purchased_ids
                     and not (r.get("opening_stock") or 0)]
         low = [_slim(r) for r in rows if r.get("low")]
+        # Has stock on hand but no cost basis (avg_rate 0) → can't be valued.
+        needs_rate = [_slim(r) for r in rows
+                      if (r.get("on_hand") or 0) > 0 and (r.get("avg_rate") or 0) <= 0]
         return {
             "as_of": today,
             "counts": {
                 "negative_stock": len(negative),
                 "no_stock_untracked": len(no_stock),
                 "low_stock": len(low),
+                "needs_rate": len(needs_rate),
             },
             "negative_stock": negative,
             "no_stock_untracked": no_stock,
             "low_stock": low,
+            "needs_rate": needs_rate,
         }
 
 
