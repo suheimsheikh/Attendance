@@ -2,6 +2,12 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-10-01 — Print ALL kitchen stock ledgers
+- New endpoint `GET /api/meals/stock-ledgers/print?start=&end=`: every ACTIVE item's passbook ledger for a date range in one payload, computed in a single pass over the movement docs (same running-balance math as the single-item ledger). Each ledger carries BOTH quantity AND value: opening qty+value, per-row purch/issue/waste/adjust qty + ₹, running balance qty + value, closing qty+value, avg rate, and in-range totals. Grouped/sorted by category; returns grand total stock value. Verified: 156 items, ₹88,009.90 total.
+- New `StockLedgersPrintButton.jsx` on the Stock Master tab: "Print all ledgers" → modal with From/To (defaults to this month) → "Generate & Print" opens a self-contained, print-friendly page in a new tab (pop-up opened synchronously to avoid blockers; works to PDF via browser "Save as PDF"). Columns show qty + ₹ value throughout; page/category breaks for clean printing.
+- Discoverability: renamed sidebar "Data Health" → "Data Health & Fixes" with a hint mentioning negative-stock correction + rate backfill (both nav groups).
+- NOTE: the LeaveReportPrompt daily modal (z-60) overlays the whole screen until dismissed — it blocked automated clicks during testing but is normal for users (dismiss via "Later"). Not a bug.
+
 ## 2026-10-01 — Rate Backfill Helper + Negative Stock Sweep (Kitchen Data Health)
 - Extended `GET /api/meals/data-health`: now also returns a `needs_rate` list (items with on_hand>0 but avg_rate 0 — stock that can't be valued) plus enriched every row with `avg_rate`, `opening_stock`, `opening_rate` and a `suggested_rate` (last purchase rate). Switched its purchase scan to `to_list(length=None)`.
 - MealsDataHealth.jsx (`/admin/kitchen-health`): added a 4th card "Needs a rate" and two INLINE-FIXABLE sections:

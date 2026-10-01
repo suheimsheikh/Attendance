@@ -26,6 +26,7 @@ import { fmtRs, COL_GRID } from "./meal-masters/helpers";
 import { InlineEdit } from "./meal-masters/InlineEditors";
 import AddItemForm from "./meal-masters/AddItemForm";
 import ItemRow from "./meal-masters/ItemRow";
+import StockLedgersPrintButton from "./StockLedgersPrintButton";
 
 export default function MealMastersTab({ liveSig }) {
   const { user } = useAuth();
@@ -401,6 +402,7 @@ export default function MealMastersTab({ liveSig }) {
               <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} data-testid="masters-show-inactive"/>
               <EyeOff size={12}/> Show inactive
             </label>
+            <StockLedgersPrintButton />
             {isAdmin && (
               <span className="inline-flex items-stretch rounded-lg overflow-hidden border border-sky-200 shadow-sm">
                 <button

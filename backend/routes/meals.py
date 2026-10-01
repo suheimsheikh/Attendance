@@ -3555,6 +3555,132 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 "granularity": granularity,
                 "rows": _group_ledger_rows(rows, granularity)}
 
+    @router.get("/meals/stock-ledgers/print")
+    async def stock_ledgers_print(
+        start: Optional[str] = Query(None),
+        end: Optional[str] = Query(None),
+        user: dict = Depends(require_chef_or_admin),
+    ):
+        """Every ACTIVE item's passbook ledger for a date range, in one
+        payload, for the 'Print all ledgers' page. Same running-balance math
+        as the single-item ledger, computed in one pass over the movement
+        docs."""
+        s, e = _range_or_default(start, end)
+        snap_rows, _ = await _stock_snapshot(e, include_inactive=False)
+        snap = {r["item_id"]: r for r in snap_rows}
+        items = await db.meal_items.find(
+            {"active": {"$ne": False}}, {"_id": 0}).to_list(length=None)
+
+        q = {"date": {"$lte": e}}
+        proj = {"_id": 0, "date": 1, "lines": 1}
+        p_all = await db.meal_purchases.find(q, proj).to_list(length=None)
+        i_all = await db.meal_issues.find(q, proj).to_list(length=None)
+        w_all = await db.meal_wastage.find(q, proj).to_list(length=None)
+        a_all = await db.meal_adjustments.find(q, proj).to_list(length=None)
+
+        # buckets[item_id][date] = movement totals for that day
+        buckets: dict = {}
+
+        def _b(iid, dd):
+            return buckets.setdefault(iid, {}).setdefault(
+                dd, {"purch_qty": 0.0, "purch_amt": 0.0, "issue_qty": 0.0,
+                     "waste_qty": 0.0, "adj_qty": 0.0})
+
+        for doc in p_all:
+            for ln in doc.get("lines") or []:
+                iid = ln.get("item_id")
+                if not iid:
+                    continue
+                qv = float(ln.get("qty") or 0)
+                b = _b(iid, doc["date"])
+                b["purch_qty"] += qv
+                b["purch_amt"] += float(ln.get("amount") or (qv * float(ln.get("rate") or 0)))
+        for doc in i_all:
+            for ln in doc.get("lines") or []:
+                if ln.get("item_id"):
+                    _b(ln["item_id"], doc["date"])["issue_qty"] += float(ln.get("qty") or 0)
+        for doc in w_all:
+            for ln in doc.get("lines") or []:
+                if ln.get("item_id"):
+                    _b(ln["item_id"], doc["date"])["waste_qty"] += float(ln.get("qty") or 0)
+        for doc in a_all:
+            for ln in doc.get("lines") or []:
+                if ln.get("item_id"):
+                    _b(ln["item_id"], doc["date"])["adj_qty"] += float(ln.get("qty") or 0)
+
+        ledgers = []
+        grand_value = 0.0
+        for it in items:
+            iid = it["id"]
+            sr = snap.get(iid)
+            if sr is None:
+                continue
+            opening_stock = float(it.get("opening_stock") or 0)
+            as_of = it.get("opening_stock_as_of") or "1970-01-01"
+            days = buckets.get(iid, {})
+            opening_balance = opening_stock
+            for dd, mv in days.items():
+                if as_of <= dd < s:
+                    opening_balance += mv["purch_qty"] - mv["issue_qty"] - mv["waste_qty"] + mv["adj_qty"]
+            rows = []
+            tot = {"purch_qty": 0.0, "purch_amt": 0.0, "issue_qty": 0.0,
+                   "waste_qty": 0.0, "adj_qty": 0.0}
+            avg_rate = float(sr.get("avg_rate") or 0)
+            bal = opening_balance
+            for dd in sorted(d for d in days if s <= d <= e):
+                mv = days[dd]
+                pre = dd < as_of
+                if not pre:
+                    bal += mv["purch_qty"] - mv["issue_qty"] - mv["waste_qty"] + mv["adj_qty"]
+                for k in tot:
+                    tot[k] += mv[k]
+                rows.append({
+                    "date": dd,
+                    "purch_qty": round(mv["purch_qty"], 4),
+                    "purch_amt": round(mv["purch_amt"], 2),
+                    "issue_qty": round(mv["issue_qty"], 4),
+                    "issue_val": round(mv["issue_qty"] * avg_rate, 2),
+                    "waste_qty": round(mv["waste_qty"], 4),
+                    "waste_val": round(mv["waste_qty"] * avg_rate, 2),
+                    "adj_qty": round(mv["adj_qty"], 4),
+                    "adj_val": round(mv["adj_qty"] * avg_rate, 2),
+                    "pre_opening": pre,
+                    "balance": None if pre else round(bal, 4),
+                    "balance_val": None if pre else round(bal * avg_rate, 2),
+                })
+            closing = round(bal, 4)
+            value = round(closing * avg_rate, 2)
+            grand_value += value
+            ledgers.append({
+                "item_id": iid,
+                "name": it.get("name"),
+                "unit": it.get("unit"),
+                "category": sr.get("category_label") or sr.get("category_key") or "Uncategorised",
+                "category_key": sr.get("category_key"),
+                "opening_balance": round(opening_balance, 4),
+                "opening_value": round(opening_balance * avg_rate, 2),
+                "closing_balance": closing,
+                "avg_rate": round(avg_rate, 2),
+                "value": value,
+                "totals": {
+                    **{k: round(v, 4) for k, v in tot.items()},
+                    "issue_val": round(tot["issue_qty"] * avg_rate, 2),
+                    "waste_val": round(tot["waste_qty"] * avg_rate, 2),
+                    "adj_val": round(tot["adj_qty"] * avg_rate, 2),
+                },
+                "rows": rows,
+            })
+
+        ledgers.sort(key=lambda x: ((x["category"] or "").lower(), (x["name"] or "").lower()))
+        return {
+            "start": s, "end": e, "as_of": e,
+            "generated_at": now_utc().isoformat(),
+            "total_items": len(ledgers),
+            "total_value": round(grand_value, 2),
+            "ledgers": ledgers,
+        }
+
+
     def _group_ledger_rows(rows: list, granularity: str) -> list:
         """Roll daily ledger rows up into week/month periods. Running
         balance for a period = the balance of its last active day (no
