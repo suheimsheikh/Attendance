@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api, showApiError } from "../../api";
 import { Printer, Loader2, X } from "lucide-react";
 
@@ -9,7 +9,7 @@ const monthStart = () => {
 const todayISO = () => new Date().toLocaleDateString("sv-SE");
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-// dd/mm/yy to match the rest of the app (user request Oct 2026).
+// dd/mm/yy to match the rest of the app.
 const ddmmyy = (iso) => {
   if (!iso) return "";
   const [y, m, d] = String(iso).split("-");
@@ -22,16 +22,24 @@ function buildHtml(data) {
   const byCat = {};
   (data.ledgers || []).forEach((l) => { (byCat[l.category] = byCat[l.category] || []).push(l); });
 
+  const stCell = (r) => {
+    if (!r.is_stock_take) return "";
+    const phys = r.st_physical === null || r.st_physical === undefined ? "" : `counted ${nq(r.st_physical)}`;
+    const varTxt = r.adj_qty ? ` (var ${r.adj_qty > 0 ? "+" : ""}${nq(r.adj_qty)})` : " (no change)";
+    const tag = r.st_kind === "opening" ? "OPENING COUNT" : "STOCK TAKE";
+    return `<span class="sttag">${tag}</span> ${phys}${varTxt}`;
+  };
+
   const ledgerBlock = (l) => {
-    const rows = (l.rows || []).map((r) => `
-      <tr class="${r.pre_opening ? "pre" : ""}">
+    const movement = (l.rows || []).map((r) => `
+      <tr class="${r.pre_opening ? "pre" : ""}${r.is_stock_take ? " st" : ""}">
         <td>${ddmmyy(r.date)}</td>
         <td class="num">${r.purch_qty ? nq(r.purch_qty) : ""}</td>
         <td class="num val">${r.purch_amt ? rs(r.purch_amt) : ""}</td>
         <td class="num">${r.issue_qty ? nq(r.issue_qty) : ""}</td>
         <td class="num val">${r.issue_val ? rs(r.issue_val) : ""}</td>
         <td class="num">${r.waste_qty ? nq(r.waste_qty) : ""}</td>
-        <td class="num">${r.adj_qty ? nq(r.adj_qty) : ""}</td>
+        <td class="st">${stCell(r)}</td>
         <td class="num bal">${r.balance === null ? "—" : nq(r.balance)}</td>
         <td class="num bal val">${r.balance_val === null ? "" : rs(r.balance_val)}</td>
       </tr>`).join("");
@@ -41,32 +49,45 @@ function buildHtml(data) {
       <div class="lh">
         <div class="lname">${esc(l.name)} <span class="unit">(${esc(l.unit || "")})</span></div>
         <div class="lmeta">
-          Opening <b>${nq(l.opening_balance)}</b> ${l.opening_value ? `· ${rs(l.opening_value)}` : ""}
-          &nbsp;→&nbsp; Closing <b>${nq(l.closing_balance)}</b> ${l.value ? `· ${rs(l.value)}` : ""}
-          ${l.avg_rate ? `&nbsp;·&nbsp; rate ${rs(l.avg_rate)}/${esc(l.unit || "unit")}` : `<span class="norate">· no rate</span>`}
+          ${l.avg_rate ? `avg rate ${rs(l.avg_rate)}/${esc(l.unit || "unit")}` : `<span class="norate">no cost rate set</span>`}
         </div>
       </div>
-      ${rows ? `
       <table>
         <thead><tr>
           <th>Date</th><th class="num">Purch</th><th class="num">₹</th>
           <th class="num">Issue</th><th class="num">₹</th>
-          <th class="num">Waste</th><th class="num">Adjust</th>
+          <th class="num">Waste</th><th>Stock take</th>
           <th class="num">Balance</th><th class="num">₹ Value</th>
         </tr></thead>
-        <tbody>${rows}</tbody>
-        <tfoot><tr>
-          <td>Totals</td>
-          <td class="num">${t.purch_qty ? nq(t.purch_qty) : ""}</td>
-          <td class="num val">${t.purch_amt ? rs(t.purch_amt) : ""}</td>
-          <td class="num">${t.issue_qty ? nq(t.issue_qty) : ""}</td>
-          <td class="num val">${t.issue_val ? rs(t.issue_val) : ""}</td>
-          <td class="num">${t.waste_qty ? nq(t.waste_qty) : ""}</td>
-          <td class="num">${t.adj_qty ? nq(t.adj_qty) : ""}</td>
-          <td class="num bal">${nq(l.closing_balance)}</td>
-          <td class="num bal val">${rs(l.value)}</td>
-        </tr></tfoot>
-      </table>` : `<div class="empty">No transactions in this period. Closing ${nq(l.closing_balance)} ${l.value ? `(${rs(l.value)})` : ""}.</div>`}
+        <tbody>
+          <tr class="ob">
+            <td>${ddmmyy(l.opening_date)}</td>
+            <td colspan="5" class="lbl">Opening balance</td>
+            <td></td>
+            <td class="num bal">${nq(l.opening_balance)}</td>
+            <td class="num bal val">${rs(l.opening_value)}</td>
+          </tr>
+          ${movement}
+        </tbody>
+        <tfoot>
+          <tr class="tot">
+            <td>Totals</td>
+            <td class="num">${t.purch_qty ? nq(t.purch_qty) : ""}</td>
+            <td class="num val">${t.purch_amt ? rs(t.purch_amt) : ""}</td>
+            <td class="num">${t.issue_qty ? nq(t.issue_qty) : ""}</td>
+            <td class="num val">${t.issue_val ? rs(t.issue_val) : ""}</td>
+            <td class="num">${t.waste_qty ? nq(t.waste_qty) : ""}</td>
+            <td></td><td></td><td></td>
+          </tr>
+          <tr class="cb">
+            <td>${ddmmyy(l.closing_date)}</td>
+            <td colspan="5" class="lbl">Closing balance</td>
+            <td></td>
+            <td class="num bal">${nq(l.closing_balance)}</td>
+            <td class="num bal val">${rs(l.value)}</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>`;
   };
 
@@ -96,15 +117,28 @@ function buildHtml(data) {
     .num { text-align: right; font-variant-numeric: tabular-nums; }
     .val { color: #0369a1; }
     .bal { font-weight: 700; }
+    .lbl { font-weight: 700; color: #334155; }
     tr.pre td { color: #94a3b8; font-style: italic; }
-    tfoot td { font-weight: 700; border-top: 2px solid #cbd5e1; background: #f8fafc; }
+    tr.ob td { background: #f0f9ff; }
+    tr.cb td { background: #ecfdf5; font-weight: 700; border-top: 2px solid #94a3b8; }
+    tr.tot td { background: #f8fafc; font-weight: 700; border-top: 2px solid #cbd5e1; }
+    tr.st td { background: #fffbeb; }
+    td.st { color: #92400e; font-size: 10px; }
+    .sttag { background: #f59e0b; color: #fff; font-weight: 700; padding: 0 4px; border-radius: 3px; font-size: 9px; }
     .empty { font-size: 11px; color: #94a3b8; padding: 2px; }
+    .legend { font-size: 11px; color: #475569; margin: 6px 0 14px; }
+    .legend span { margin-right: 14px; }
     .print-btn { position: fixed; top: 12px; right: 12px; padding: 8px 16px; background: #2563eb; color: #fff; border: 0; border-radius: 6px; font-weight: 700; cursor: pointer; }
     @media print { .print-btn { display: none; } body { margin: 10px; } .cat { break-inside: auto; } }
   </style></head><body>
     <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
     <h1>Kitchen Stock Ledgers</h1>
-    <div class="sub"><b>${ddmmyy(data.start)}</b> to <b>${ddmmyy(data.end)}</b> · ${data.total_items} items · total stock value <b>${rs(data.total_value)}</b> · generated ${new Date(data.generated_at).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" })}</div>
+    <div class="sub"><b>${ddmmyy(data.start)}</b> to <b>${ddmmyy(data.end)}</b>${data.category_label ? ` · ${esc(data.category_label)}` : " · All categories"} · ${data.total_items} items · total stock value <b>${rs(data.total_value)}</b> · generated ${new Date(data.generated_at).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" })}</div>
+    <div class="legend">
+      <span><b style="color:#0369a1">Opening balance</b> = stock on ${ddmmyy(data.start)}</span>
+      <span><b style="color:#047857">Closing balance</b> = stock on ${ddmmyy(data.end)}</span>
+      <span><span class="sttag">STOCK TAKE</span> = a physical count on that date</span>
+    </div>
     ${cats}
   </body></html>`;
 }
@@ -113,16 +147,26 @@ export default function StockLedgersPrintButton() {
   const [open, setOpen] = useState(false);
   const [start, setStart] = useState(monthStart());
   const [end, setEnd] = useState(todayISO());
+  const [cats, setCats] = useState([]);
+  const [categoryKey, setCategoryKey] = useState("all");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    api.get("/meals/purchase-categories")
+      .then((r) => setCats(r.categories || []))
+      .catch(() => {});
+  }, [open]);
 
   const generate = async () => {
     setLoading(true);
-    // Open the window synchronously (inside the click) so pop-up blockers
-    // don't stop it; fill it after the data arrives.
     const w = window.open("", "_blank");
     if (w) w.document.write("<p style='font-family:sans-serif;padding:20px'>Building stock ledgers…</p>");
     try {
-      const data = await api.get(`/meals/stock-ledgers/print?start=${start}&end=${end}`);
+      const data = await api.get(`/meals/stock-ledgers/print?start=${start}&end=${end}&category=${encodeURIComponent(categoryKey)}`);
+      if (categoryKey !== "all") {
+        data.category_label = (cats.find((c) => c.key === categoryKey) || {}).label || "";
+      }
       const html = buildHtml(data);
       if (w) {
         w.document.open();
@@ -152,10 +196,18 @@ export default function StockLedgersPrintButton() {
              onClick={() => !loading && setOpen(false)}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-slate-900 inline-flex items-center gap-2"><Printer size={16} /> Print all stock ledgers</h3>
+              <h3 className="font-bold text-slate-900 inline-flex items-center gap-2"><Printer size={16} /> Print stock ledgers</h3>
               <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-600" data-testid="ledgers-print-close"><X size={18} /></button>
             </div>
-            <p className="text-xs text-slate-500 mb-3">Every active item's passbook (purchases, issues, wastage, stock-take) with a running quantity &amp; value, for the chosen period.</p>
+            <p className="text-xs text-slate-500 mb-3">Each item's passbook (purchases, issues, wastage, stock-takes) with running quantity &amp; value. Opening &amp; closing balances are clearly dated.</p>
+            <div className="mb-3">
+              <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Category</label>
+              <select value={categoryKey} onChange={(e) => setCategoryKey(e.target.value)}
+                      className="iu-input !h-8 text-sm w-full" data-testid="ledgers-print-category">
+                <option value="all">All categories</option>
+                {cats.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
+            </div>
             <div className="flex items-end gap-3 mb-4">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">From</label>

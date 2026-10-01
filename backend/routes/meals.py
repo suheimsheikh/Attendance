@@ -3559,17 +3559,21 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
     async def stock_ledgers_print(
         start: Optional[str] = Query(None),
         end: Optional[str] = Query(None),
+        category: Optional[str] = Query(None),
         user: dict = Depends(require_chef_or_admin),
     ):
         """Every ACTIVE item's passbook ledger for a date range, in one
         payload, for the 'Print all ledgers' page. Same running-balance math
         as the single-item ledger, computed in one pass over the movement
-        docs."""
+        docs. `category` (a category_key) limits to one category; omit/`all`
+        for everything."""
         s, e = _range_or_default(start, end)
         snap_rows, _ = await _stock_snapshot(e, include_inactive=False)
         snap = {r["item_id"]: r for r in snap_rows}
-        items = await db.meal_items.find(
-            {"active": {"$ne": False}}, {"_id": 0}).to_list(length=None)
+        item_q = {"active": {"$ne": False}}
+        if category and category != "all":
+            item_q["category_key"] = category
+        items = await db.meal_items.find(item_q, {"_id": 0}).to_list(length=None)
 
         q = {"date": {"$lte": e}}
         proj = {"_id": 0, "date": 1, "lines": 1}
@@ -3584,7 +3588,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         def _b(iid, dd):
             return buckets.setdefault(iid, {}).setdefault(
                 dd, {"purch_qty": 0.0, "purch_amt": 0.0, "issue_qty": 0.0,
-                     "waste_qty": 0.0, "adj_qty": 0.0})
+                     "waste_qty": 0.0, "adj_qty": 0.0,
+                     "st_kind": None, "st_physical": None})
 
         for doc in p_all:
             for ln in doc.get("lines") or []:
@@ -3605,8 +3610,16 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                     _b(ln["item_id"], doc["date"])["waste_qty"] += float(ln.get("qty") or 0)
         for doc in a_all:
             for ln in doc.get("lines") or []:
-                if ln.get("item_id"):
-                    _b(ln["item_id"], doc["date"])["adj_qty"] += float(ln.get("qty") or 0)
+                iid = ln.get("item_id")
+                if not iid:
+                    continue
+                b = _b(iid, doc["date"])
+                b["adj_qty"] += float(ln.get("qty") or 0)
+                # Tag the day as a physical stock-take / opening count so the
+                # ledger can flag it clearly with its date.
+                b["st_kind"] = ln.get("kind") or "stock_take"
+                if ln.get("physical") is not None:
+                    b["st_physical"] = round(float(ln.get("physical")), 4)
 
         ledgers = []
         grand_value = 0.0
@@ -3644,6 +3657,9 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                     "waste_val": round(mv["waste_qty"] * avg_rate, 2),
                     "adj_qty": round(mv["adj_qty"], 4),
                     "adj_val": round(mv["adj_qty"] * avg_rate, 2),
+                    "is_stock_take": bool(mv.get("st_kind")),
+                    "st_kind": mv.get("st_kind"),
+                    "st_physical": mv.get("st_physical"),
                     "pre_opening": pre,
                     "balance": None if pre else round(bal, 4),
                     "balance_val": None if pre else round(bal * avg_rate, 2),
@@ -3659,7 +3675,9 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
                 "category_key": sr.get("category_key"),
                 "opening_balance": round(opening_balance, 4),
                 "opening_value": round(opening_balance * avg_rate, 2),
+                "opening_date": s,
                 "closing_balance": closing,
+                "closing_date": e,
                 "avg_rate": round(avg_rate, 2),
                 "value": value,
                 "totals": {

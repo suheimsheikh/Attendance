@@ -2,6 +2,12 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-10-01 — Print-ledgers: category filter + clear stock-take/opening/closing labelling
+- `GET /meals/stock-ledgers/print` now accepts `category` (a category_key; omit or `all` for everything) and filters items accordingly. Verified: Fruits → 7 items only.
+- Each movement row now carries stock-take context: `is_stock_take`, `st_kind` (stock_take|opening) and `st_physical` (the counted qty). Ledger header carries `opening_date` (= range start) and `closing_date` (= range end).
+- StockLedgersPrintButton.jsx print layout: added a **Category** dropdown (with "All categories") to the modal; each ledger now shows a dated **Opening balance** row (sky), a dated **Closing balance** footer row (green), a **Totals** row, and a dedicated **Stock take** column that flags physical counts with an amber "STOCK TAKE"/"OPENING COUNT" tag + counted qty + variance (row highlighted). Added a legend explaining the three. All dates dd/mm/yy.
+- Verified end-to-end (Apple 15/09 stock-take: counted 2.0, var −5.455) and frontend modal shows the 14-option category selector.
+
 ## 2026-10-01 — Dates shown as dd/mm/yy everywhere (kill raw ISO leaks)
 - Stock-ledger PRINT: row dates + header range now render dd/mm/yy (added a `ddmmyy` helper in StockLedgersPrintButton.jsx; was emitting raw yyyy-mm-dd).
 - App-wide sweep: routed every remaining raw-ISO (yyyy-mm-dd) date DISPLAY through the shared `formatDate` (dd/mm/yy) helper — DataQuality dedupe table, CompOff & Leave ledger modals, NotifyLog, MyCorrections target date, Member profile picker (leaving date), Member timeline markdown export, Item price-trend drawer, CalendarGrid correction label, Institutions escort dates, Meals analytics event tooltip, ExMember chip tooltip, CorrectionRequest picker labels.
