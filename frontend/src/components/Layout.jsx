@@ -69,7 +69,7 @@ const NAV_COACH_KITCHEN = [
   { to: "/admin/recipes", label: "Recipes", icon: BookOpen, hint: "Weekly menu recipes: Day → Meal → Dish → ingredients, with macros & AI-filled micronutrients" },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
   { to: "/admin/kitchen-audit", label: "Kitchen Audit Log", icon: ScrollText, hint: "Every change to kitchen data — who changed what and when" },
-  { to: "/admin/kitchen-health", label: "Data Health", icon: HeartPulse, hint: "Items needing attention: negative, untracked or low stock" },
+  { to: "/admin/kitchen-health", label: "Data Health & Fixes", icon: HeartPulse, hint: "Fix stock issues here: correct negative stock, backfill missing per-unit cost rates, see untracked & low stock" },
 ];
 
 // ATTENDANCE system — one visually-cohesive group for every
@@ -95,7 +95,7 @@ const NAV_KITCHEN = [
   { to: "/admin/recipes", label: "Recipes", icon: BookOpen, hint: "Weekly menu recipes: Day → Meal → Dish → ingredients, with macros & AI-filled micronutrients" },
   { to: "/admin/chefs-view", label: "Chef's View", icon: ChefHat, hint: "Today's meal headcounts for the kitchen" },
   { to: "/admin/kitchen-audit", label: "Kitchen Audit Log", icon: ScrollText, hint: "Every change to kitchen data — who changed what and when" },
-  { to: "/admin/kitchen-health", label: "Data Health", icon: HeartPulse, hint: "Items needing attention: negative, untracked or low stock" },
+  { to: "/admin/kitchen-health", label: "Data Health & Fixes", icon: HeartPulse, hint: "Fix stock issues here: correct negative stock, backfill missing per-unit cost rates, see untracked & low stock" },
 ];
 
 // SYSTEM section — configuration, diagnostics, and safety nets.
