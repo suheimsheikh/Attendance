@@ -264,7 +264,7 @@ function EscortRow({ escort, onEdit, onChange }) {
           <div className="font-semibold truncate">{escort.name}</div>
           <div className="text-[11px] text-slate-500 truncate">
             {escort.phone || "no phone"} · since {formatDate(escort.start_date)}
-            {escort.ended_at && ` · ended ${escort.ended_at}`}
+            {escort.ended_at && ` · ended ${formatDate(escort.ended_at)}`}
           </div>
           {/* Validity window — added 28 Jun 2026. Surfaces the active
               date range so admins can spot expiring escorts at a glance.

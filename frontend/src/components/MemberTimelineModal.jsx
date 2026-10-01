@@ -114,7 +114,7 @@ export default function MemberTimelineModal({ memberId, start, end, onClose }) {
       "| --- | --- | --- | --- |",
       ...data.days.map((d) => {
         const detail = (d.details || []).map(renderDetail).filter(Boolean).join(" | ") || "—";
-        return `| ${d.date} | ${d.weekday} | ${d.label} | ${detail} |`;
+        return `| ${formatDate(d.date)} | ${d.weekday} | ${d.label} | ${detail} |`;
       }),
     ];
     try {

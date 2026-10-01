@@ -9,6 +9,12 @@ const monthStart = () => {
 const todayISO = () => new Date().toLocaleDateString("sv-SE");
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// dd/mm/yy to match the rest of the app (user request Oct 2026).
+const ddmmyy = (iso) => {
+  if (!iso) return "";
+  const [y, m, d] = String(iso).split("-");
+  return d && m && y ? `${d}/${m}/${String(y).slice(-2)}` : String(iso);
+};
 const nq = (x) => (x === null || x === undefined ? "" : Number(x).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
 const rs = (x) => (x === null || x === undefined ? "" : "₹" + Number(x).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
@@ -19,7 +25,7 @@ function buildHtml(data) {
   const ledgerBlock = (l) => {
     const rows = (l.rows || []).map((r) => `
       <tr class="${r.pre_opening ? "pre" : ""}">
-        <td>${esc(r.date)}</td>
+        <td>${ddmmyy(r.date)}</td>
         <td class="num">${r.purch_qty ? nq(r.purch_qty) : ""}</td>
         <td class="num val">${r.purch_amt ? rs(r.purch_amt) : ""}</td>
         <td class="num">${r.issue_qty ? nq(r.issue_qty) : ""}</td>
@@ -70,7 +76,7 @@ function buildHtml(data) {
       ${byCat[cat].map(ledgerBlock).join("")}
     </div>`).join("");
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Kitchen Stock Ledgers ${esc(data.start)} to ${esc(data.end)}</title>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Kitchen Stock Ledgers ${ddmmyy(data.start)} to ${ddmmyy(data.end)}</title>
   <style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #1e293b; margin: 24px; font-size: 12px; }
@@ -98,7 +104,7 @@ function buildHtml(data) {
   </style></head><body>
     <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
     <h1>Kitchen Stock Ledgers</h1>
-    <div class="sub"><b>${esc(data.start)}</b> to <b>${esc(data.end)}</b> · ${data.total_items} items · total stock value <b>${rs(data.total_value)}</b> · generated ${new Date(data.generated_at).toLocaleString("en-IN")}</div>
+    <div class="sub"><b>${ddmmyy(data.start)}</b> to <b>${ddmmyy(data.end)}</b> · ${data.total_items} items · total stock value <b>${rs(data.total_value)}</b> · generated ${new Date(data.generated_at).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" })}</div>
     ${cats}
   </body></html>`;
 }

@@ -8,6 +8,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Loader2, RefreshCw, Plus } from "lucide-react";
 import { api, showApiError } from "../api";
+import { formatDate } from "../utils";
 import CorrectionRequestModal from "../components/CorrectionRequestModal";
 
 const KIND_LABELS = {
@@ -152,7 +153,7 @@ export default function MyCorrections() {
                 <span className={`inline-flex px-2 h-5 rounded-full text-[10px] font-bold border ${KIND_TINT[row.kind] || "bg-slate-50 text-slate-700 border-slate-200"}`}>
                   {KIND_LABELS[row.kind] || row.kind}
                 </span>
-                <span className="text-xs text-slate-500">Target date <b className="text-slate-800">{row.target_date}</b></span>
+                <span className="text-xs text-slate-500">Target date <b className="text-slate-800">{formatDate(row.target_date)}</b></span>
                 <span className="text-xs text-slate-400 ml-auto">
                   Raised {row.requested_at?.slice(0, 16).replace("T", " ")}
                 </span>

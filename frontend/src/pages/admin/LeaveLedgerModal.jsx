@@ -11,6 +11,7 @@
 import React, { useEffect, useState } from "react";
 import { X, Loader2, Download } from "lucide-react";
 import { api, showApiError, downloadBlob } from "../../api";
+import { formatDate } from "../../utils";
 
 const KIND_TINT = {
   applied:  "bg-amber-100 text-amber-800 border-amber-200",
@@ -109,9 +110,9 @@ export default function LeaveLedgerModal({ open, onClose, memberId, memberName, 
                   return (
                   <tr key={rowKey} className="border-t border-slate-100 hover:bg-slate-50/60"
                       data-testid={`leave-ledger-row-${rowKey}`}>
-                    <td className="py-1.5 font-mono">{r.start_date}</td>
+                    <td className="py-1.5 font-mono">{formatDate(r.start_date)}</td>
                     <td className="py-1.5 font-semibold text-slate-700">{r.dow}</td>
-                    <td className="py-1.5 font-mono text-slate-600">{r.end_date}</td>
+                    <td className="py-1.5 font-mono text-slate-600">{formatDate(r.end_date)}</td>
                     <td className="py-1.5 text-right font-bold">{r.qty}</td>
                     <td className="py-1.5">
                       <span className={`inline-flex px-2 h-5 rounded-full text-[10px] font-bold border capitalize ${KIND_TINT[r.kind] || "bg-slate-50 text-slate-600 border-slate-200"}`}>

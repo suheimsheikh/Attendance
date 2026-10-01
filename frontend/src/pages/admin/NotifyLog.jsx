@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { formatDate } from "../../utils";
 import { Loader2, RefreshCw, Filter, Send, UserX, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
@@ -128,7 +129,7 @@ export default function NotifyLog() {
                   <span className="ml-auto text-[11px] text-slate-400 font-mono">{(r.created_at || "").slice(0, 19).replace("T", " ")}</span>
                 </div>
                 <div className="text-xs text-slate-500">
-                  <span className="font-semibold text-slate-600">{r.date}</span>
+                  <span className="font-semibold text-slate-600">{formatDate(r.date)}</span>
                   {" · sent by "}
                   <span className="font-semibold text-slate-700">{r.sent_by || "—"}</span>
                 </div>

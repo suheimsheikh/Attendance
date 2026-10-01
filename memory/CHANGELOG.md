@@ -2,6 +2,12 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-10-01 — Dates shown as dd/mm/yy everywhere (kill raw ISO leaks)
+- Stock-ledger PRINT: row dates + header range now render dd/mm/yy (added a `ddmmyy` helper in StockLedgersPrintButton.jsx; was emitting raw yyyy-mm-dd).
+- App-wide sweep: routed every remaining raw-ISO (yyyy-mm-dd) date DISPLAY through the shared `formatDate` (dd/mm/yy) helper — DataQuality dedupe table, CompOff & Leave ledger modals, NotifyLog, MyCorrections target date, Member profile picker (leaving date), Member timeline markdown export, Item price-trend drawer, CalendarGrid correction label, Institutions escort dates, Meals analytics event tooltip, ExMember chip tooltip, CorrectionRequest picker labels.
+- Most of the app already used formatDate; these were the stragglers. OT/Attendance ledger modals already show dd/mm (4-digit year) via their own helper — left intact (not ISO).
+- Fixed two duplicate `formatDate` imports (CalendarGridTab, Institutions already imported it) that briefly broke the build. Frontend compiles clean (only a pre-existing exhaustive-deps warning).
+
 ## 2026-10-01 — Print ALL kitchen stock ledgers
 - New endpoint `GET /api/meals/stock-ledgers/print?start=&end=`: every ACTIVE item's passbook ledger for a date range in one payload, computed in a single pass over the movement docs (same running-balance math as the single-item ledger). Each ledger carries BOTH quantity AND value: opening qty+value, per-row purch/issue/waste/adjust qty + ₹, running balance qty + value, closing qty+value, avg rate, and in-range totals. Grouped/sorted by category; returns grand total stock value. Verified: 156 items, ₹88,009.90 total.
 - New `StockLedgersPrintButton.jsx` on the Stock Master tab: "Print all ledgers" → modal with From/To (defaults to this month) → "Generate & Print" opens a self-contained, print-friendly page in a new tab (pop-up opened synchronously to avoid blockers; works to PDF via browser "Save as PDF"). Columns show qty + ₹ value throughout; page/category breaks for clean printing.

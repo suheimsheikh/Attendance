@@ -504,7 +504,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
           initialKind={correction.initialKind}
           targetDate={correction.date}
           onBehalfOfMember={correction.member}
-          entityLabel={`${correction.member.full_name} · ${correction.date}`}
+          entityLabel={`${correction.member.full_name} · ${formatDate(correction.date)}`}
           defaultCheckInTime={correction.member.work_start}
           defaultCheckOutTime={correction.member.work_end}
         />

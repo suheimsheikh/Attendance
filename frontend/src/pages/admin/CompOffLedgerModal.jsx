@@ -10,6 +10,7 @@
 import React, { useEffect, useState } from "react";
 import { X, Loader2, Download } from "lucide-react";
 import { api, showApiError, downloadBlob } from "../../api";
+import { formatDate } from "../../utils";
 
 const KIND_TINT = {
   earned:   "bg-sky-100 text-sky-800 border-sky-200",
@@ -100,7 +101,7 @@ export default function CompOffLedgerModal({ open, onClose, memberId, memberName
                 {rows.map((r, i) => (
                   <tr key={`${r.date}-${r.kind}-${i}`} className="border-t border-slate-100 hover:bg-slate-50/60"
                       data-testid={`comp-off-ledger-row-${r.date}-${r.kind}`}>
-                    <td className="py-1.5 font-mono">{r.date}</td>
+                    <td className="py-1.5 font-mono">{formatDate(r.date)}</td>
                     <td className="py-1.5 font-semibold text-slate-700">{r.dow}</td>
                     <td className="py-1.5">
                       <span className={`inline-flex px-2 h-5 rounded-full text-[10px] font-bold border capitalize ${KIND_TINT[r.kind] || "bg-slate-50 text-slate-600 border-slate-200"}`}>

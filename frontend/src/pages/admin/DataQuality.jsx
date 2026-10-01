@@ -12,6 +12,7 @@ import { Loader2, RefreshCw, ShieldAlert, CheckCircle2, Wrench, Trash2, Clipboar
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
+import { formatDate } from "../../utils";
 
 const SEVERITY_STYLES = {
   high:   { bg: "bg-red-100",     text: "text-red-800",     ring: "ring-red-200",     dot: "bg-red-500" },
@@ -223,7 +224,7 @@ function AttendanceDedupePanel() {
                   {preview.plan.slice(0, 300).map((p) => (
                     <tr key={p.keep_id} className="border-t border-slate-100" data-testid="dedupe-row">
                       <td className="px-3 py-1.5 font-semibold text-slate-800">{p.name}</td>
-                      <td className="px-3 py-1.5 tabular-nums text-slate-600">{p.date}</td>
+                      <td className="px-3 py-1.5 tabular-nums text-slate-600">{formatDate(p.date)}</td>
                       <td className="px-3 py-1.5 tabular-nums text-rose-700 font-bold">{p.remove_count}</td>
                       <td className="px-3 py-1.5">
                         {p.late_was !== p.late_now ? (

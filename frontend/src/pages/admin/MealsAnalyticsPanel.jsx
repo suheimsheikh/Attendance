@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { TrendingUp, Calendar as CalIcon, BarChart3, Flame, Trophy, Maximize2, X as CloseIcon, PieChart as PieIcon, Coffee, Sun as SunIcon, Moon as MoonIcon, Loader2, Users } from "lucide-react";
 import { api, showApiError } from "../../api";
+import { formatDate } from "../../utils";
 
 const SLOT_KEYS = ["Breakfast", "Midmorning", "Lunch", "Snacks", "Dinner"];
 const SLOT_COLORS = { Breakfast: "#F59E0B", Midmorning: "#EAB308", Lunch: "#F97316", Snacks: "#8B5CF6", Dinner: "#6366F1" };
@@ -344,7 +345,7 @@ export default function MealsAnalyticsPanel({ days, events }) {
                     onClick={() => setSelectedEvent({ kind: k, ev: ev.ev_full })}
                     className={`absolute top-0.5 ${barH} rounded flex items-center px-1 font-semibold text-white overflow-hidden whitespace-nowrap cursor-pointer hover:brightness-110 hover:ring-2 hover:ring-white/60`}
                     style={{ left: `${l}%`, width: `${w}%`, background: EVENT_COLORS[k].fill }}
-                    title={`${ev.name} · ${ev.start_date} → ${ev.end_date} · Click for details`}
+                    title={`${ev.name} · ${formatDate(ev.start_date)} → ${formatDate(ev.end_date)} · Click for details`}
                     data-testid={`ma-event-bar-${k}-${i}`}
                   >
                     {isFirst && <span className="truncate">{ev.name}</span>}

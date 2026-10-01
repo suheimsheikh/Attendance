@@ -14,7 +14,7 @@ import {
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import { api, showApiError } from "../api";
-import { fmtQty as uQty } from "../utils";
+import { fmtQty as uQty, formatDate } from "../utils";
 
 const inr = (n) =>
   n == null ? "—" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -159,7 +159,7 @@ export default function ItemPriceTrendDrawer({ itemId, itemName, onClose }) {
                   <tbody>
                     {[...points].reverse().map((p, i) => (
                       <tr key={`${p.date}-${i}`} className="border-t border-slate-100 hover:bg-slate-50/70">
-                        <td className="px-3 py-1.5 tabular-nums text-slate-700">{p.date}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-slate-700">{formatDate(p.date)}</td>
                         <td className="px-2 py-1.5 text-slate-600">{p.vendor_name || <span className="text-slate-400">—</span>}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{fmtQty(p.qty, data?.item?.unit)}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums text-sky-700 font-semibold">₹{inr(p.rate)}</td>

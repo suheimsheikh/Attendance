@@ -16,6 +16,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
+import { formatDate } from "../utils";
 import { useAuth } from "../auth";
 import OnBehalfMemberPicker from "./OnBehalfMemberPicker";
 import {
@@ -132,12 +133,12 @@ export default function CorrectionRequestModal({
       };
       return (candidates.attendance || []).map((r) => ({
         id: r.id, date: r.date,
-        label: `${r.date} · ${_t(r.check_in_at) || "no check-in"}${r.check_out_at ? " → " + _t(r.check_out_at) : ""}`,
+        label: `${formatDate(r.date)} · ${_t(r.check_in_at) || "no check-in"}${r.check_out_at ? " → " + _t(r.check_out_at) : ""}`,
       }));
     }
     return (candidates.leaves || []).map((r) => ({
       id: r.id, date: r.start_date,
-      label: `${r.start_date}${r.end_date && r.end_date !== r.start_date ? " → " + r.end_date : ""} · ${(r.type || "leave").replace("_", "-")}${r.reason ? " · " + r.reason.slice(0, 40) : ""}`,
+      label: `${formatDate(r.start_date)}${r.end_date && r.end_date !== r.start_date ? " → " + formatDate(r.end_date) : ""} · ${(r.type || "leave").replace("_", "-")}${r.reason ? " · " + r.reason.slice(0, 40) : ""}`,
     }));
   }, [needsRow, kind, candidates]);
   // Auto-fill target_date from the picked row (backend enforces the

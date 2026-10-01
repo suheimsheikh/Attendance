@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { api } from "../../api";
-import { categoryLabel } from "../../utils";
+import { categoryLabel, formatDate } from "../../utils";
 import Avatar from "../../components/Avatar";
 
 export const MemberProfilePicker = ({ selfId, targetId, targetName, onPick }) => {
@@ -46,7 +46,7 @@ export const MemberProfilePicker = ({ selfId, targetId, targetName, onPick }) =>
                 className="w-full px-3 py-2.5 flex items-center gap-2 text-left hover:bg-sky-50 focus:bg-sky-50 transition-colors border-b border-slate-100">
                 <Avatar name={m.full_name} photo={m.photo} size={28}/>
                 <span className="min-w-0 flex-1 break-words text-sm"><b>{m.full_name}</b>
-                  <span className="block text-xs text-slate-500">{[categoryLabel(m.category), m.rank, m.institution, m.leaving_date ? `Left ${m.leaving_date}` : null].filter(Boolean).join(" · ")}</span>
+                  <span className="block text-xs text-slate-500">{[categoryLabel(m.category), m.rank, m.institution, m.leaving_date ? `Left ${formatDate(m.leaving_date)}` : null].filter(Boolean).join(" · ")}</span>
                 </span>
               </button>)}
         </div>}

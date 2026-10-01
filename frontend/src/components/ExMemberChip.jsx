@@ -6,13 +6,14 @@
  */
 import React from "react";
 import { isExMember } from "../utils/exMember";
+import { formatDate } from "../utils";
 
 export default function ExMemberChip({ member, className = "" }) {
   if (!isExMember(member)) return null;
   return (
     <span
       className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-slate-200 text-slate-500 border border-slate-300 ${className}`}
-      title={`Left on ${member.leaving_date}`}
+      title={`Left on ${formatDate(member.leaving_date)}`}
       data-testid={`ex-member-chip-${member.id}`}
     >
       LF
