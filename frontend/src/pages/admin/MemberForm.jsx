@@ -144,6 +144,8 @@ export default function MemberForm({ initial, onClose, onSaved }) {
         if (timingsChanged) { setRecalcFor({ id: initial.id, name: form.full_name }); return; }
       } else {
         const body = { ...form, meal_eligible: mealMap[form.meal_eligible] };
+        // Same as edit: drop "" so Literal fields (weekly_off, gender, …) fall back to backend defaults instead of 422.
+        Object.keys(body).forEach((k) => { if (body[k] === "") delete body[k]; });
         await api.post("/members", body);
         toast.success("Member created");
       }

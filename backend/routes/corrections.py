@@ -754,14 +754,28 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
                 status_code=403,
                 detail="Only a Super Admin can approve or reject this change.",
             )
+        # Atomic claim (Oct 2026 review): with the two-admin rule two admins
+        # can click Approve at the same moment — only one may apply the change.
+        claimed = await db.corrections.find_one_and_update(
+            {"id": correction["id"], "status": "pending"},
+            {"$set": {"status": "deciding", "deciding_by_id": admin["id"]}},
+        )
+        if not claimed:
+            raise HTTPException(status_code=409, detail="Correction was just decided by another admin")
         applied: Optional[dict] = None
-        if decision == "approved":
-            await assert_dates_unlocked(db, correction.get("target_date"))
-            applier = APPLIERS.get((correction["entity_type"], correction["kind"]))
-            if not applier:
-                raise HTTPException(status_code=500,
-                                    detail=f"No applier registered for {correction['entity_type']}/{correction['kind']}")
-            applied = await applier(db, correction, admin)
+        try:
+            if decision == "approved":
+                await assert_dates_unlocked(db, correction.get("target_date"))
+                applier = APPLIERS.get((correction["entity_type"], correction["kind"]))
+                if not applier:
+                    raise HTTPException(status_code=500,
+                                        detail=f"No applier registered for {correction['entity_type']}/{correction['kind']}")
+                applied = await applier(db, correction, admin)
+        except Exception:
+            await db.corrections.update_one(
+                {"id": correction["id"], "status": "deciding"},
+                {"$set": {"status": "pending"}, "$unset": {"deciding_by_id": ""}})
+            raise
         now = now_utc().isoformat()
         await db.corrections.update_one({"id": correction["id"]}, {"$set": {
             "status": decision,
@@ -770,7 +784,7 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             "decided_at": now,
             "admin_note": (note or "").strip() or None,
             "applied": applied,
-        }})
+        }, "$unset": {"deciding_by_id": ""}})
         await write_audit(
             db, actor=admin,
             action=f"correction_{decision}",

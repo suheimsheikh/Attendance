@@ -223,19 +223,21 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
         short_notice_force_lop = False
         if body.type == "leave" and user["id"] == target_user["id"] and user.get("role") != "admin":
             notice_days = 3
-            ocfg = await db.config.find_one({"id": "office"}, {"_id": 0, "short_notice_days": 1})
+            ocfg = await db.config.find_one({"id": "office"}, {"_id": 0, "short_notice_days": 1, "timezone": 1})
+            # Office-local "today" (server clock is UTC — before 05:30 IST it is still yesterday).
+            today_local = _date_cls.fromisoformat(local_date_str(ocfg))
             if ocfg and ocfg.get("short_notice_days") is not None:
                 try:
                     notice_days = int(ocfg["short_notice_days"])
                 except (TypeError, ValueError):
                     notice_days = 3
             try:
-                days_off = (_date_cls.fromisoformat(body.start_date) - _date_cls.today()).days
+                days_off = (_date_cls.fromisoformat(body.start_date) - today_local).days
             except Exception:
                 days_off = None
             if days_off is not None and days_off <= notice_days:
                 short_notice_leave = True
-                mstart = _date_cls.today().replace(day=1).isoformat()
+                mstart = today_local.replace(day=1).isoformat()
                 existing_sn = await db.leaves.count_documents({
                     "user_id": target_user["id"],
                     "type": "leave",
