@@ -5029,3 +5029,10 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - EO = Early Out days (checked out ≥15 min before scheduled work_end).
 - User explicitly said: NO salary / amounts / per-day ₹ / OT ₹ — Pay means number of payable days only.
 - Verified: 111 rows payable == recomputed definition (0 mismatches), CSV/PDF 200, screenshot OK.
+
+## 2026-10-06 — Recalc-timings safeguard (Preethi report)
+- Root cause of "recalc didn't reflect in Grid": user applied Recalculate Late with an AUGUST range (14 Aug rows updated, Aug Grid shows 14 LT); Sep/Oct untouched. Endpoint itself works. User will re-run Sep→today for Preethi himself (18 rows pending in dry-run) — do NOT apply for him.
+- Note: recalc-late briefly returned 422 on 06 Oct ~09:12 IST (phase-2 forward-ref regression, fixed same day in iteration_85).
+- POST /api/attendance/recalc-late: new `include_early_out` (default true) re-stamps `early_out_minutes` vs current work_end; change rows carry was_/now_early_out; apply writes an audit row `attendance.recalc_timings`.
+- New `components/RecalcTimingsDialog.jsx`: MemberForm edit that changes work_start/work_end → "Re-apply new timings to past days?" (From = 1st of month → today, Preview, Apply / Only from today). Data Quality panel shows EO in Was/Now.
+- Tested: iteration_87 — 5/5 backend + 7/7 UI.

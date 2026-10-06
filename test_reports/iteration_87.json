@@ -1,0 +1,23 @@
+{
+  "summary": "Iter87 verified the new Recalc-Timings safeguard end-to-end. (1) Backend POST /api/attendance/recalc-late now accepts include_early_out and re-stamps early_out_minutes in addition to late/late_minutes; preview change rows carry was_early_out/now_early_out; apply writes early_out_minutes + late_recalc_at and emits an audit row action='attendance.recalc_timings'. (2) UI: after editing a member's work_start or work_end in MemberForm, the RecalcTimingsDialog opens with From defaulted to the 1st of the current month, Preview lists per-day Was/Now with LT and EO suffix, Apply writes and closes, 'Only from today' skips, and editing an unrelated field (rank) does NOT trigger the dialog. All verified against a throwaway ZZ Test Timings member with 3 seeded attendance days in Oct 2026. Verified Preethi Kongara's 67 attendance rows untouched. 5/5 pytest + 7/7 UI assertions pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter87.py",
+    "/app/test_reports/pytest/iter87.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/routes/attendance_actions.py recalc_late — only writes an audit row when !dry_run AND changes>0 (correct). The audit meta carries {start,end,applied} but NOT the delta list; for a true change-trail you may want to persist the actual before/after per attendance_id in a side collection. Minor.",
+    "frontend/src/components/RecalcTimingsDialog.jsx — EO threshold hard-coded to >=15m in `eo()` (matches the backend helper). If the office grace changes centrally this value will drift; consider sourcing from /api/office.",
+    "MemberForm.jsx submit flow — after mounting <RecalcTimingsDialog/> the parent form is unmounted (early-return) so the user loses the ability to go back and tweak the saved form; onClose fires onSaved which is the correct behaviour, but there's no path to go 'back' to the form. Acceptable product choice but worth documenting."
+  ],
+  "updated_files": ["/app/backend/tests/test_review_iter87.py (NEW)"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (7/7 UI assertions: dialog shows, from-date default = 1st of month, 3 preview rows with correct LT+EO math, apply closes, skip closes, rank-only edit does NOT show dialog, ZZ appears on The Grid)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (super admin). Non-super admin is created/deleted inside the fixture (mobile 9000000001 is not in SUPER_ADMIN_PHONES whitelist).",
+  "seed_data_creation": "Throwaway member 'ZZ Test Timings' (id 162dc84e-bf84-4f5a-9c59-53ee80c672b0) + 3 attendance rows in Oct 2026 (01,02,03) with check-ins 07:10 / 08:00 / 06:00 IST and check-outs 18:10 / 16:00 / 17:00 IST. DELETED at end of test — verified att_count=0, user_exists=False. Preethi Kongara's 67 attendance rows verified unchanged.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Regression file /app/backend/tests/test_review_iter87.py is self-contained: it creates its own ZZ throwaway member, seeds attendance via direct mongo, exercises the dry-run + apply paths, verifies DB state, verifies audit_log row, verifies calendar-grid totals, and creates a throwaway non-super admin to confirm 403 on apply. Clean up is in-fixture. The LT/EO math expectation is: given member work_start=06:00/work_end=17:30 vs seeded times (07:10/18:10, 08:00/16:00, 06:00/17:00) → LT 70/120/0, EO 0/90/30. Grid rows key the member by `member_id` (not user_id/id). Login response field is `access_token` (not `token`).",
+  "rca of the issue": "N/A — iter87 is a safeguard-verification pass, not a bug fix. The ORIGINAL user bug (Preethi's recalc not reflected in Grid) was already RCA-ed to a date-range mismatch (user applied Aug recalc, viewed Sep/Oct). This iteration verifies the NEW UI safeguard that prevents the same mistake going forward by surfacing the recalc dialog immediately after the admin edits timings — eliminating the latent 'late is stamped at check-in' gap."
+}
