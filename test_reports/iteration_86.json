@@ -1,0 +1,34 @@
+{
+  "summary": "Iter86 follow-up to iter85 forward-ref fix. Verified the two additional endpoints that were pre-existing victims of the same bug (Pydantic request-body models declared inside make_router() while the module uses `from __future__ import annotations` → FastAPI's forward-ref resolver can't see function-local classes → body treated as query param → 422). Fixed endpoints: (1) PUT /api/meals/meal-calendar now 200 with full {date,breakfast,midmorning,lunch,snacks,dinner} payload (DailyCountsIn moved to backend/routes/meals/common.py module scope); (2) POST /api/escort-attendance/photos/purge-bulk now 200 with {att_ids:[]} (PurgeBulkIn promoted to module scope in backend/routes/escorts.py). Created new regression file test_review_iter86.py with 12 tests covering: PUT meal-calendar 200/400/403 + GET persistence verification + mongo cleanup, purge-bulk 200/non-admin blocked, iter85 regressions (recalc-late dry_run, resolve-stale body parses with 404 not 422), and basic meals endpoint sweep (meal-calendar GET, events, issues/suggest). ALL 12 iter86 tests PASS. ALL 114 regression tests from iter83/iter84/iter85/early_out_helper also PASS (126/126 combined). Frontend: /admin/meals-calendar renders the Consumption page cleanly after admin email login — no console errors, headcounts and daily grid populated. Throwaway write to 2020-01-06 was verified via GET then DELETE'd directly in mongo meal_daily_counts collection — live data untouched.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter86.py",
+    "/app/test_reports/pytest/iter86.xml",
+    "/app/test_reports/pytest/iter86_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/routes/meals/common.py — DailyCountsIn correctly carries an explanatory docstring linking back to the PEP-563/FastAPI forward-ref caveat. Consider adding a module-scope guard comment at the top of every routes/* file that uses `from __future__ import annotations` AND defines Pydantic request bodies — this is now the 3rd regression of the same class (RecalcLateIn/ResolveStaleIn in iter85, DailyCountsIn/PurgeBulkIn in iter86).",
+    "backend/routes/meals/calendar.py update_meal_calendar — upsert uses `$setOnInsert: {id: uuid}` which is correct; `source: manual` is overwritten on every PUT (desired, since this handler is the manual-edit path). Audit-log side effect is NOT present on this write path — only `updated_by`/`updated_by_name` are stamped. If regulators want a change-trail for daily-counts edits, consider logging to admin_audit like other admin mutations do.",
+    "backend/routes/escorts.py purge_many — handler currently silently iterates att_ids with an empty list returning {ok:true,purged:0}. Fine. For future hardening consider rejecting lists > N items with 413 to prevent accidental mass-purge.",
+    "Convention lint idea: a pre-commit grep like `grep -nE 'async def [a-zA-Z_]+\\([^)]*: [A-Z][A-Za-z_]+In' routes/**/*.py` to flag any BaseModel-typed arg whose class is not module-level in the same file."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter86.py (NEW — 12 regression tests)"
+  ],
+  "success_rate": {"backend": "100% (12/12 iter86 + 114/114 regression = 126/126)", "frontend": "100% (/admin/meals-calendar loads, Consumption rendered, 0 console errors)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (super admin — email toggle on /login). Throwaway member for 403 test is auto-created/deleted in fixture.",
+  "seed_data_creation": "Transient only — PUT writes a single row to meal_daily_counts for date=2020-01-06 which the test suite deletes at the end of the TestMealCalendarUpsert class. A throwaway ZZ Iter86 Member is created solely for the non-admin 403 assertion and deleted on fixture teardown. No real escort photos were purged (empty att_ids only). No audit-trail pollution.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-usable regression: /app/backend/tests/test_review_iter86.py. Three Pydantic-body classes PATTERNS that must stay at module scope in files using `from __future__ import annotations`: DailyCountsIn (routes/meals/common.py), PurgeBulkIn (routes/escorts.py), RecalcLateIn/ResolveStaleIn/GeoToggleIn/MarkMemberIn/ScanCardIn/TempExitIn/TempReturnIn (routes/attendance_actions.py). If any new PUT/POST handler suddenly returns 422 'query.body Field required', the first thing to check is whether its Pydantic input model is module-level. The project now has 361 routes and this scan found 0 remaining violations.",
+  "rca of the issue": "Same RCA as iter85 — PEP-563 (`from __future__ import annotations`) converts type annotations to strings; FastAPI resolves them via `typing.get_type_hints()` which only sees the module's global namespace, not closures. Classes defined inside make_router() (a factory function) are therefore invisible, so FastAPI falls back to treating `body: DailyCountsIn` as a primitive-typed param, defaults to query parsing, and emits 422 with loc=['query','body']. Fix: move DailyCountsIn and PurgeBulkIn to module scope above their respective make_router()s. Verified by: (a) curl PUT /api/meals/meal-calendar with full JSON body → 200; (b) curl POST /api/escort-attendance/photos/purge-bulk {att_ids:[]} → 200; (c) persistence confirmed via GET /api/meals/meal-calendar?start=2020-01-06&end=2020-01-06."
+}
