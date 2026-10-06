@@ -617,3 +617,10 @@ User request: "When issuing any item from the kitchen it should not allow if the
 
 ## Update — Ponytail-style over-engineering audit (report only, no code changed)
 - Ran ponytail-audit rules (ponytail.dev, full level) across backend + frontend. 22 findings, net ~-3,600 lines, -44 deps possible. Awaiting user pick ("fix 1, 3, 5...") before applying anything.
+
+## Update 06 Oct 2026 — Ponytail cleanup + shared format helpers + academy timezone (iteration_91, all pass)
+- Deleted: 44 unused shadcn ui files + hooks/use-toast.js, 44 unused npm deps, AdminOvertimeBanners/BulkEditBar, constants/testIds, formatAbsentParentMessage; backend shadowed /api/version handler, OvertimeDecisionIn, active_leave_for, break_active_on, fetch_regattas_overlapping, _today_str, unused params (is_auto_approve, group_colors, unitemised).
+- utils.js is the single source: todayIso/addDaysIso/isoDaysAgo/monthStartIso/academyToday/academyDateOf use the Office-settings timezone (setAcademyTz in auth.jsx warmStatic + Office save). money(n, dp, empty) / rupees().
+- Rule: Meals/Stock table cells show amounts without ₹; ₹ lives in column headers. KPI cards/tooltips/sentences keep ₹. Empty qty = "—" everywhere.
+- Fixed along the way: UTC-date bugs (toISOString) in MealsAnalyticsPanel segments, Correction modal min/max, Muster/Escort share dates, export filenames.
+- Not changed (out of scope): AbsentDispatchPrompt 10am gate still uses device-local hour. Pre-existing pytest fixture debt: leave tests that self-approve now 403 (2-admin rule).
