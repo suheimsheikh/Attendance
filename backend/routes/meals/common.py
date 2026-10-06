@@ -168,6 +168,7 @@ class ItemPatch(BaseModel):
     subcategory_key: Optional[str] = None       # "" or null clears the grouping
     active: Optional[bool] = None
     nutrition: Optional[dict] = None
+    grams_per_unit: Optional[float] = None      # grams in ONE pantry unit (e.g. 1 dozen = 1440); 0 clears
 
 
 class ItemsReorderIn(BaseModel):

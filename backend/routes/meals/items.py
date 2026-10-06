@@ -226,6 +226,10 @@ def register(router, *, _audit, _purchase_categories, _signal_meals, _valid_date
             update["subcategory_key"] = body.subcategory_key or None
         if body.active is not None:
             update["active"] = bool(body.active)
+        if body.grams_per_unit is not None:
+            if body.grams_per_unit < 0:
+                raise HTTPException(status_code=400, detail="Grams per unit cannot be negative")
+            update["grams_per_unit"] = round(float(body.grams_per_unit), 3) or None
         if update:
             update["updated_at"] = now_utc().isoformat()
             update["updated_by"] = user.get("id")

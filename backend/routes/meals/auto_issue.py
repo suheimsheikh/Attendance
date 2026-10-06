@@ -14,7 +14,7 @@ from typing import Dict, Optional
 from fastapi import Depends
 from pydantic import BaseModel
 
-from routes.meals.common import MEAL_KEYS, MEAL_LABELS
+from routes.meals.common import MEAL_KEYS, MEAL_LABELS, _nutri_lookup
 from routes.recipes import UNIT_BASE, _norm
 
 # Recipe meal name (normalised) -> meals-muster slot whose headcount it uses.
@@ -49,6 +49,34 @@ def _round_up(qty: float, unit_factor: Optional[float]) -> float:
     return float(math.ceil(qty - 1e-9))
 
 
+COUNT_DOZEN = {"dozen", "dz", "doz"}
+
+
+def _grams_per_pantry_unit(item: dict):
+    """(grams in ONE pantry unit, source) for cross-unit conversion, or (None, None).
+    Order: item override → weight/volume unit (1 g ≈ 1 ml) → nutrition seed piece weight."""
+    ov = item.get("grams_per_unit")
+    if ov and ov > 0:
+        return float(ov), "item"
+    unit = str(item.get("unit") or "").strip().lower()
+    ic = UNIT_BASE.get(unit)
+    if ic:
+        return float(ic[1]), "density"
+    seed = _nutri_lookup(item.get("name") or "") or {}
+    gpu = seed.get("grams_per_unit")
+    if gpu:
+        return float(gpu) * (12 if unit in COUNT_DOZEN else 1), "seed"
+    return None, None
+
+
+async def _muster_counts(db, d: str) -> dict:
+    counts = {k: 0 for k in MEAL_KEYS}
+    async for r in db.meal_records.find({"date": d}, {"_id": 0, "meal": 1}):
+        if r.get("meal") in counts:
+            counts[r["meal"]] += 1
+    return counts
+
+
 def register(router, *, db, require_chef_or_admin, _stock_snapshot, _valid_date):
 
     @router.post("/meals/issues/suggest")
@@ -58,13 +86,20 @@ def register(router, *, db, require_chef_or_admin, _stock_snapshot, _valid_date)
         days = await db.menu_days.find({}, {"_id": 0}).to_list(50)
         menu_day = next((x for x in days if _norm(x.get("name")) == _norm(weekday)), None)
 
-        muster = {k: 0 for k in MEAL_KEYS}
-        async for r in db.meal_records.find({"date": d}, {"_id": 0, "meal": 1}):
-            if r.get("meal") in muster:
-                muster[r["meal"]] += 1
+        prev_date = (date.fromisoformat(d) - timedelta(days=1)).isoformat()
+        muster = await _muster_counts(db, d)
+        prev = await _muster_counts(db, prev_date)
         override = {k: max(0, int(v)) for k, v in (body.counts or {}).items() if k in muster and v is not None}
-        used = {k: override.get(k, muster[k]) for k in MEAL_KEYS}
-        headcounts = {k: {"label": MEAL_LABELS[k], "muster": muster[k], "used": used[k]} for k in MEAL_KEYS}
+        used, source = {}, {}
+        for k in MEAL_KEYS:
+            if k in override:
+                used[k], source[k] = override[k], "manual"
+            elif muster[k] > 0:
+                used[k], source[k] = muster[k], "muster"
+            else:
+                used[k], source[k] = prev[k], "prev_day"
+        headcounts = {k: {"label": MEAL_LABELS[k], "muster": muster[k], "prev_day": prev[k],
+                          "used": used[k], "source": source[k]} for k in MEAL_KEYS}
 
         base = {"date": d, "weekday": weekday, "headcounts": headcounts, "meal_slots": [],
                 "lines": [], "unmatched": [], "unit_mismatches": [], "skipped_meals": []}
@@ -116,23 +151,29 @@ def register(router, *, db, require_chef_or_admin, _stock_snapshot, _valid_date)
                     r_unit = str(g.get("unit") or "g").strip().lower()
                     i_unit = str(it.get("unit") or "").strip().lower()
                     rc, ic = UNIT_BASE.get(r_unit), UNIT_BASE.get(i_unit)
+                    conv = None
                     if rc and ic and rc[0] == ic[0]:
                         qty = amt * rc[1] * hc / ic[1]
                     elif not rc and not ic and _norm(r_unit) == _norm(i_unit):
                         qty = amt * hc
                     else:
-                        mm = mismatched.setdefault(it["id"], {"name": nm, "pantry_name": it["name"],
-                                                              "recipe_unit": r_unit, "pantry_unit": it.get("unit") or "?",
-                                                              "count": 0})
-                        mm["count"] += 1
-                        continue
-                    a = acc.setdefault(it["id"], {"item": it, "qty": 0.0, "sources": []})
+                        gpu, src_kind = _grams_per_pantry_unit(it) if rc else (None, None)
+                        if not gpu:
+                            mm = mismatched.setdefault(it["id"], {"item_id": it["id"], "name": nm, "pantry_name": it["name"],
+                                                                  "recipe_unit": r_unit, "pantry_unit": it.get("unit") or "?",
+                                                                  "count": 0})
+                            mm["count"] += 1
+                            continue
+                        qty = amt * rc[1] * hc / gpu
+                        conv = {"grams_per_unit": round(gpu, 3), "source": src_kind}
+                    a = acc.setdefault(it["id"], {"item": it, "qty": 0.0, "sources": [], "conversion": None})
+                    if conv:
+                        a["conversion"] = conv
                     a["qty"] += qty
                     if src not in a["sources"]:
                         a["sources"].append(src)
 
-        as_of = (date.fromisoformat(d) - timedelta(days=1)).isoformat()
-        stock_rows, _ = await _stock_snapshot(as_of)
+        stock_rows, _ = await _stock_snapshot(prev_date)
         on_hand = {r["item_id"]: r.get("on_hand") for r in stock_rows}
 
         lines = []
@@ -144,7 +185,7 @@ def register(router, *, db, require_chef_or_admin, _stock_snapshot, _valid_date)
             lines.append({"item_id": iid, "item_name": it["name"], "category_key": it.get("category_key"),
                           "unit": it.get("unit"), "qty": qty, "raw_qty": round(a["qty"], 4),
                           "on_hand": oh, "short": oh is not None and qty > oh + 1e-6,
-                          "sources": a["sources"]})
+                          "sources": a["sources"], "conversion": a["conversion"]})
         lines.sort(key=lambda x: (x["category_key"] or "", x["item_name"].lower()))
         base["lines"] = lines
         base["unmatched"] = sorted(

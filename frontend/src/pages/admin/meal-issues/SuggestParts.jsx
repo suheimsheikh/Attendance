@@ -14,7 +14,9 @@ export function HeadcountRow({ headcounts, draft, setDraft, onRecalc, busy }) {
             className="iu-input !h-8 text-sm text-right tabular-nums"
             data-testid={`suggest-headcount-${k}`}
           />
-          <span className="mt-0.5">muster: {h.muster}</span>
+          <span className="mt-0.5" data-testid={`suggest-headcount-src-${k}`}>
+            {h.source === "muster" ? `muster: ${h.muster}` : h.source === "prev_day" ? `yesterday: ${h.prev_day}` : `muster ${h.muster} · yday ${h.prev_day}`}
+          </span>
         </label>
       ))}
       <button type="button" onClick={onRecalc} disabled={busy} className="iu-btn-secondary !h-8 text-xs mb-[18px]" data-testid="suggest-recalc">
@@ -49,6 +51,11 @@ export function SuggestLines({ lines, picked, setPicked }) {
             <td className="p-2">
               <div className="font-semibold text-slate-900">{l.item_name}</div>
               <div className="text-[11px] text-slate-500 truncate max-w-[18rem]" title={l.sources.join("\n")}>{l.sources.join(" · ")}</div>
+              {l.conversion && (
+                <div className="text-[10px] text-sky-700" data-testid={`suggest-conv-note-${l.item_id}`}>
+                  ≈ 1 {l.unit} = {l.conversion.grams_per_unit} g{l.conversion.source === "item" ? "" : " (assumed)"}
+                </div>
+              )}
             </td>
             <td className="p-2 text-right tabular-nums font-semibold" data-testid={`suggest-qty-${l.item_id}`}>{fmtQty(l.qty, l.unit)} <span className="text-slate-400 text-xs font-normal">{l.unit}</span></td>
             <td className="p-2 text-right tabular-nums text-slate-600">
