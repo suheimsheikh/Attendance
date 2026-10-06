@@ -614,3 +614,6 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Auto-issue follow-ups (ideas): per-dish 'cooked for' override, 'auto-suggested' marker on saved issues for Menu-vs-Actual adherence, same-weekday-last-week headcount option.
 - P0 Parent Notifications count badge: ON HOLD per user (06 Oct 2026).
 - DONE 06 Oct 2026: Grid 'Pay' = payable days total (first totals column) + EO/Pay in legend. User rule: the app never stores/computes salary amounts (PayCraft does payroll).
+
+## Update — Ponytail-style over-engineering audit (report only, no code changed)
+- Ran ponytail-audit rules (ponytail.dev, full level) across backend + frontend. 22 findings, net ~-3,600 lines, -44 deps possible. Awaiting user pick ("fix 1, 3, 5...") before applying anything.
