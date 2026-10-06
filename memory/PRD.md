@@ -599,3 +599,7 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Inline consistency (EntryItemRow.jsx): available = start-of-day on-hand + today's purchase qty (purchase-before-issue). Red border + commit-time warning now use this (no false flag when buying+issuing same day). Matches server guard.
 - Null-the-row: added a clear "×" button on the issue cell (shown when qty>0) that nulls the issue, triggers save (removes the line) and recalculates stock, so a wrong entry can be nulled and re-entered.
 - Server hard-block (_assert_issue_stock) already returns 400 for oversell (verified: 999kg chicken → 400). Backend + frontend in preview; needs redeploy for prod.
+
+## Update 06 Oct 2026 — SAFE refactor batch S1–S6 shipped (see CHANGELOG)
+- Remaining refactor candidates (medium-safe, need regression run each): M1 members routes out of server.py · M2 attendance routes/service out of server.py · M3 background loops → services/scheduler.py · M4 split meals.py (5,984 lines) by domain · M5 split reports.py per report · M6 MealEntryTab auto-save hook · M7 SelfCheckIn/Office GPS + share hooks.
+- P0 Parent Notifications count badge: ON HOLD per user (06 Oct 2026).

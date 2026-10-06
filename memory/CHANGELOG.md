@@ -4988,3 +4988,12 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - `POST /corrections` validates payload up-front: missed_checkin needs `check_in_time`; time_adjust needs at least one time. Modal validates too. (Fixes "payload.check_in_time is required" seen at approval.)
 - Approvals pending table: "Nd ago" chip beside Submitted (amber ≥3d, red ≥7d); bulk-delete rows show tool + row count; fixed duplicated weekday ("Sat Sat").
 - Test admin `admin2.test@example.com` / `Admin@12345` (non-super, mobile 9000000002).
+
+## 2026-10-06 — SAFE refactor batch S1–S6 (no behaviour change)
+- S1 `frontend/src/utils/dates.js`: shared formatters (fmtDateLong/Wk/WkYY/DM, fmtDDMMYY, fmtStampIst, fmtHmIst, fmtHmLocal) replace 14 copy-pasted local formatters (tasks, Rules, Suggestions, SelfCheckIn, EscortCheckIn, OT/Attendance ledgers, Dar, DarHistorySection, TodayTasksCard, CheckoutTaskNudge). Imported with aliases so call sites are unchanged.
+- S2 BackupRestore.jsx uses `apiUrl()` instead of hand-built REACT_APP_BACKEND_URL strings.
+- S3 `services/time_utils.office_today_str(db)` replaces duplicate `_today()` in routes/dar.py + routes/leave_report.py; daily_content.py `_office_today` now uses `local_now`.
+- S4 ApprovalsUnified.jsx 1478→~650 lines: `pages/admin/approvals/{rowHelpers,ApprovalModals,DecisionHistory}.jsx`.
+- S5 KitchenAnalyticsTab.jsx 1249→~160: `pages/admin/kitchen-analytics/{helpers,charts,Section,nutrition}.jsx`; MealsAnalyticsPanel.jsx 720→~340: `pages/admin/meals-analytics/{helpers,modals}.jsx`.
+- S6 Layout.jsx 577→~350: nav arrays → `components/layout/navConfig.js`; SystemGroup/SectionHeader/NavItem → `components/layout/NavParts.jsx`.
+- Tested: iteration_82 — 100% frontend + backend, 0 console errors.
