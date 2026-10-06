@@ -2,6 +2,12 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-10-06 — Recalculate-late admin tool
+- New `POST /api/attendance/recalc-late` (super-admin only): re-runs `compute_late()` against the CURRENT schedule + office/camp grace for existing attendance rows over a date range (optional single member, else all). `dry_run=true` (default) previews before/after; `dry_run=false` applies and stamps `late_recalc_at`/`late_recalc_by`. Uses the same `_active_camp_for` overlay as the check-in path for fidelity.
+- Frontend: "Recalculate late arrivals" panel on Rectify Data (DataQuality.jsx) with member picker (All + list), From/To (defaults this month), Preview (shows scanned/changed + a was→now table) and a Super-Admin Apply button. Mirrors the existing dedupe panel.
+- Why: `late` is stamped at check-in and never auto-recomputed; changing a member's work_start/grace previously left historical rows stale. This gives a safe, previewable backfill.
+- Verified: dry-run over Sept (1179 scanned, 30 would change) and a single-row apply (SACHIN 01/09) then reverted — production untouched. Frontend preview confirmed live.
+
 ## 2026-10-01 — Print-ledgers: category filter + clear stock-take/opening/closing labelling
 - `GET /meals/stock-ledgers/print` now accepts `category` (a category_key; omit or `all` for everything) and filters items accordingly. Verified: Fruits → 7 items only.
 - Each movement row now carries stock-take context: `is_stock_take`, `st_kind` (stock_take|opening) and `st_physical` (the counted qty). Ledger header carries `opening_date` (= range start) and `closing_date` (= range end).

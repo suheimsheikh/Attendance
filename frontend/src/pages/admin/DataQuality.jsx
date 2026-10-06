@@ -253,6 +253,124 @@ function AttendanceDedupePanel() {
   );
 }
 
+function RecalcLatePanel() {
+  const monthStart = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toLocaleDateString("sv-SE"); };
+  const today = () => new Date().toLocaleDateString("sv-SE");
+  const [start, setStart] = useState(monthStart());
+  const [end, setEnd] = useState(today());
+  const [members, setMembers] = useState([]);
+  const [userId, setUserId] = useState("all");
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [done, setDone] = useState(null);
+
+  useEffect(() => {
+    api.get("/members").then((r) => setMembers((r.members || r || []).map((m) => ({ id: m.id, name: m.full_name })))).catch(() => {});
+  }, []);
+
+  const body = () => ({ start, end, user_id: userId === "all" ? null : userId });
+
+  const runPreview = async () => {
+    setLoading(true); setDone(null);
+    try {
+      const r = await api.post("/attendance/recalc-late", { ...body(), dry_run: true });
+      setPreview(r);
+    } catch (e) {
+      toast.error(/403/.test(e?.message || "") ? "Super Admin only" : (e?.message || "Preview failed"));
+    } finally { setLoading(false); }
+  };
+
+  const runApply = async () => {
+    if (!preview || preview.changed === 0) return;
+    if (!window.confirm(`Update the late flag on ${preview.changed} attendance row(s) using the current schedule & grace?\n\nThis is reversible only by recalculating again. Super Admin only.`)) return;
+    setApplying(true);
+    try {
+      const r = await api.post("/attendance/recalc-late", { ...body(), dry_run: false });
+      setDone(r);
+      toast.success(`Recalculated — ${r.applied} row(s) updated.`);
+      await runPreview();
+    } catch (e) {
+      toast.error(/403/.test(e?.message || "") ? "Super Admin only — ask the Super Admin to run this." : (e?.message || "Apply failed"));
+    } finally { setApplying(false); }
+  };
+
+  return (
+    <div className="iu-card p-4 md:p-5 mb-6 border-2 border-sky-200 bg-sky-50/40" data-testid="recalc-late-panel">
+      <div className="flex items-start gap-2 mb-2">
+        <RefreshCw size={18} className="text-sky-600 mt-0.5 shrink-0" />
+        <div>
+          <h2 className="text-base md:text-lg font-extrabold tracking-tight text-slate-800">Recalculate late arrivals</h2>
+          <p className="text-sm text-slate-600 mt-0.5">
+            Re-evaluate the stored <b>late</b> flag on existing attendance against the <b>current</b> schedule &amp; grace (and camp overlay). Use after changing a member's timings — late is stamped at check-in and isn't auto-recomputed. <span className="font-semibold">Preview is safe; Apply is Super-Admin only.</span>
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-end gap-3 mt-3">
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Member</label>
+          <select value={userId} onChange={(e) => setUserId(e.target.value)} className="iu-input !h-9 text-sm w-48" data-testid="recalc-late-member">
+            <option value="all">All members</option>
+            {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">From</label>
+          <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className="iu-input !h-9 text-sm" data-testid="recalc-late-start" />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">To</label>
+          <input type="date" value={end} min={start} max={today()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-9 text-sm" data-testid="recalc-late-end" />
+        </div>
+        <button type="button" onClick={runPreview} disabled={loading || applying} data-testid="recalc-late-preview-btn"
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-white border border-slate-300 text-slate-800 text-sm font-bold hover:bg-slate-100 transition disabled:opacity-60">
+          {loading ? <Loader2 size={15} className="animate-spin" /> : <ClipboardList size={15} />} Preview
+        </button>
+        {preview && preview.changed > 0 && (
+          <button type="button" onClick={runApply} disabled={applying || loading} data-testid="recalc-late-apply-btn"
+                  className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-sky-600 text-white text-sm font-bold hover:bg-sky-700 transition disabled:opacity-60">
+            {applying ? <Loader2 size={15} className="animate-spin" /> : <Wrench size={15} />} Apply to {preview.changed}
+          </button>
+        )}
+      </div>
+
+      {preview && (
+        <div className="mt-4" data-testid="recalc-late-summary">
+          <div className="text-sm text-slate-600 mb-2">Scanned <b>{preview.scanned}</b> rows · <b className="text-sky-700">{preview.changed}</b> would change{done ? ` · applied ${done.applied}` : ""}.</div>
+          {preview.changed === 0 ? (
+            <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700"><CheckCircle2 size={15} /> All in sync — no late flags need updating.</p>
+          ) : (
+            <div className="max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 text-slate-500 sticky top-0">
+                  <tr className="text-left">
+                    <th className="px-3 py-2 font-bold">Member</th>
+                    <th className="px-3 py-2 font-bold">Date</th>
+                    <th className="px-3 py-2 font-bold">Was</th>
+                    <th className="px-3 py-2 font-bold">Now</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.changes.map((c) => (
+                    <tr key={c.attendance_id} className="border-t border-slate-100" data-testid="recalc-late-row">
+                      <td className="px-3 py-1.5 font-semibold text-slate-800">{c.name}</td>
+                      <td className="px-3 py-1.5 tabular-nums text-slate-600">{formatDate(c.date)}</td>
+                      <td className="px-3 py-1.5 text-slate-500">{c.was_late ? `LT ${c.was_minutes}m` : "on-time"}</td>
+                      <td className="px-3 py-1.5 font-semibold text-sky-700">{c.now_late ? `LT ${c.now_minutes}m` : "on-time"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {preview.truncated && <div className="px-3 py-2 text-[11px] text-slate-500">Showing first 500 changes.</div>}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export default function DataQuality() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -296,6 +414,7 @@ export default function DataQuality() {
       </div>
 
       <AttendanceDedupePanel />
+      <RecalcLatePanel />
 
       {/* Summary strip */}
       {data && (

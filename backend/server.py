@@ -3024,6 +3024,78 @@ async def mark_member(body: MarkMemberIn, admin: dict = Depends(require_admin)):
     return await _geo_toggle(target, office, body.latitude, body.longitude, body.reason, admin["id"])
 
 
+class RecalcLateIn(BaseModel):
+    user_id: Optional[str] = None       # None → everyone
+    start: str                           # YYYY-MM-DD inclusive
+    end: str                             # YYYY-MM-DD inclusive
+    dry_run: bool = True                 # preview by default
+
+
+@api_router.post("/attendance/recalc-late")
+async def recalc_late(body: RecalcLateIn, admin: dict = Depends(require_admin)):
+    """Re-evaluate the stored `late` flag/minutes for existing attendance rows
+    against the CURRENT schedule + grace (and any camp overlay), over a date
+    range. Use after changing a member's work_start or the office grace, since
+    `late` is stamped at check-in and never auto-recomputed. Super-admin only;
+    defaults to a dry-run preview — pass dry_run=false to apply."""
+    if not is_super_admin(admin):
+        raise HTTPException(status_code=403, detail="Super-admin only")
+    office = await db.config.find_one({"id": "office"}, {"_id": 0})
+    if not office:
+        raise HTTPException(status_code=500, detail="Office not configured")
+    tz = office_tz(office)
+    q = {"date": {"$gte": body.start, "$lte": body.end},
+         "check_in_at": {"$ne": None}}
+    if body.user_id:
+        q["user_id"] = body.user_id
+    rows = await db.attendance.find(
+        q, {"_id": 0, "id": 1, "user_id": 1, "date": 1, "check_in_at": 1,
+            "late": 1, "late_minutes": 1}).to_list(length=None)
+    umap: Dict[str, dict] = {}
+    changes = []
+    for r in rows:
+        uid = r.get("user_id")
+        if uid not in umap:
+            umap[uid] = await db.users.find_one({"id": uid}, {"_id": 0}) or {}
+        member = umap[uid]
+        ci = r.get("check_in_at")
+        if not ci:
+            continue
+        try:
+            ts = datetime.fromisoformat(ci)
+        except Exception:
+            continue
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=tz)
+        camp = await _active_camp_for(member, ts, office)
+        is_late, late_min = compute_late(office, member, ts, camp=camp)
+        was_late = bool(r.get("late"))
+        was_min = int(r.get("late_minutes") or 0)
+        if was_late != bool(is_late) or was_min != int(late_min):
+            changes.append({
+                "attendance_id": r["id"], "user_id": uid,
+                "name": member.get("full_name") or uid, "date": r["date"],
+                "was_late": was_late, "was_minutes": was_min,
+                "now_late": bool(is_late), "now_minutes": int(late_min),
+            })
+    applied = 0
+    if not body.dry_run and changes:
+        stamp = now_utc().isoformat()
+        for ch in changes:
+            await db.attendance.update_one({"id": ch["attendance_id"]}, {"$set": {
+                "late": ch["now_late"], "late_minutes": ch["now_minutes"],
+                "late_recalc_at": stamp, "late_recalc_by": admin.get("full_name"),
+            }})
+            applied += 1
+    changes.sort(key=lambda c: (c["date"], c["name"]))
+    return {
+        "scanned": len(rows), "changed": len(changes), "applied": applied,
+        "dry_run": body.dry_run, "start": body.start, "end": body.end,
+        "changes": changes[:500], "truncated": len(changes) > 500,
+    }
+
+
+
 @api_router.post("/attendance/scan-card")
 async def scan_card(body: ScanCardIn, admin: dict = Depends(require_admin)):
     """Proxy check-in/out for a person without a phone, via their personal QR card.
