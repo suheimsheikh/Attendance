@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 
 from services.time_utils import now_utc, local_date_str, office_tz
 from services.permissions import is_super_admin
+from services.live_signal import bump as live_bump
 from services.attendance_bulk import apply_bulk_delete
 from services.attendance_calc import compute_late
 
@@ -635,6 +636,7 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
                 after={"status": "approved", "applied": applied},
                 reason=doc["reason"],
             )
+            await live_bump(db, "corrections")
             return {"ok": True, "id": doc["id"], "auto_approved": True, "applied": applied}
 
         await db.corrections.insert_one(doc)
@@ -653,6 +655,7 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
                        "payload": doc["payload"], "entity_id": doc["entity_id"]},
                 reason=doc["reason"],
             )
+        await live_bump(db, "corrections")
         return {"ok": True, "id": doc["id"], "auto_approved": False,
                 "needs_second_admin": attendance_needs_super}
 
@@ -778,7 +781,27 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             after={"status": decision, "applied": applied, "admin_note": note},
             reason=note or f"{decision} by admin",
         )
+        await live_bump(db, "corrections")
         return applied
+
+    @router.get("/admin/corrections/pending-for-me")
+    async def corrections_pending_for_me(admin: dict = Depends(require_admin)):
+        """Pending corrections THIS admin can decide (drives the waiting banner):
+        excludes two-admin rows they filed and Super-Admin-only rows for non-supers."""
+        rows = await db.corrections.find({"status": "pending"}, {"_id": 0}).sort("requested_at", 1).to_list(2000)
+        sup = is_super_admin(admin)
+        mine = []
+        for c in rows:
+            if _needs_second_admin(c):
+                if admin["id"] == _filer_id(c):
+                    continue
+            elif c.get("needs_super_admin") and not sup:
+                continue
+            mine.append({"id": c["id"], "kind": c.get("kind"), "entity_type": c.get("entity_type"),
+                         "requester_name": c.get("requester_name"), "target_date": c.get("target_date"),
+                         "requested_at": c.get("requested_at"),
+                         "filed_by": c.get("filed_by_admin_name") or c.get("requester_name")})
+        return {"count": len(mine), "oldest_at": mine[0]["requested_at"] if mine else None, "items": mine[:20]}
 
     @router.post("/admin/corrections/{cid}/decide")
     async def decide_correction(cid: str, body: CorrectionDecision, admin: dict = Depends(require_admin)):

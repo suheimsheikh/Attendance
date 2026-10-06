@@ -151,7 +151,8 @@ def register(router, *, _athlete_like_keys, db, require_admin):
                  # historical rows are computed on-the-fly from
                  # check_out_at + user.work_end so the Grid tally is
                  # correct for pre-feature data too.
-                 "early_out_minutes": 1, "missing_checkout": 1, "auto_checkout": 1},
+                 "early_out_minutes": 1, "missing_checkout": 1, "auto_checkout": 1,
+                 "corrected_via": 1},
             ).to_list(20000),
             db.leaves.find(
                 # Also pull leaves that were cancelled + converted to LOP
@@ -188,6 +189,21 @@ def register(router, *, _athlete_like_keys, db, require_admin):
         att_by_user: dict = {}
         for a in att_docs:
             att_by_user.setdefault(a["user_id"], {})[a["date"]] = a
+        # Who filed / approved each corrected day (Oct 2026) — surfaced in the cell tooltip.
+        _corr_ids = list({a["corrected_via"] for a in att_docs if a.get("corrected_via")})
+        corr_by_id: dict = {}
+        if _corr_ids:
+            async for c in db.corrections.find(
+                    {"id": {"$in": _corr_ids}},
+                    {"_id": 0, "id": 1, "kind": 1, "requester_name": 1, "filed_by_admin_name": 1,
+                     "decided_by_name": 1, "decided_at": 1, "admin_note": 1}):
+                corr_by_id[c["id"]] = {
+                    "kind": c.get("kind"),
+                    "filed_by": c.get("filed_by_admin_name") or c.get("requester_name"),
+                    "approved_by": c.get("decided_by_name"),
+                    "approved_at": c.get("decided_at"),
+                    "auto": (c.get("admin_note") or "").startswith("Auto-approved"),
+                }
         leaves_by_user: dict = {}
         for L in leave_docs:
             leaves_by_user.setdefault(L["user_id"], []).append(L)
@@ -489,6 +505,8 @@ def register(router, *, _athlete_like_keys, db, require_admin):
                         _ot = session_ot_minutes(u, att)
                         if _ot:
                             m["ot_minutes"] = _ot
+                        if att.get("corrected_via") in corr_by_id:
+                            m["correction"] = corr_by_id[att["corrected_via"]]
                     if m:
                         cell_meta[iso] = m
             if with_punch_times:

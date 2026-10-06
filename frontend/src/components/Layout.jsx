@@ -20,6 +20,8 @@ import { useApiQuery } from "../hooks/useApiQuery";
 import { useEscape } from "../hooks/useEscape";
 import { usePageUsagePing } from "../hooks/usePageUsagePing";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAppEvents } from "../hooks/useAppEvents";
+import CorrectionsWaitingBanner from "./CorrectionsWaitingBanner";
 import {
   PREFETCH_MAP, NAV_MEMBER, NAV_COACH_ATTENDANCE, NAV_COACH_KITCHEN, NAV_ATTENDANCE_LIVE, NAV_KITCHEN, NAV_SYSTEM,
 } from "./layout/navConfig";
@@ -70,7 +72,7 @@ export default function Layout() {
     {
       enabled: !!isAdmin && !isEscort,
       staleTime: 30_000,
-      refetchInterval: 60_000,
+      refetchInterval: 5 * 60_000,  // fallback only — live updates arrive via /api/events SSE
       refetchIntervalInBackground: false,
     },
   );
@@ -102,10 +104,11 @@ export default function Layout() {
     {
       enabled: !isEscort,
       staleTime: 30_000,
-      refetchInterval: 60_000,
+      refetchInterval: 5 * 60_000,  // fallback only — live updates arrive via /api/events SSE
       refetchIntervalInBackground: false,
     },
   );
+  useAppEvents(!isEscort);
   const myPendingCorrections = Array.isArray(myCorrectionsQuery.data)
     ? myCorrectionsQuery.data.length
     : 0;
@@ -333,6 +336,7 @@ export default function Layout() {
         </header>
         <main className="flex-1 overflow-y-auto">
           <LeaveDecisionBanner />
+          <CorrectionsWaitingBanner enabled={!!isAdmin && !isEscort} />
           <Outlet />
         </main>
       </div>

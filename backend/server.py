@@ -2879,6 +2879,8 @@ app.include_router(_members_router(
 # Attendance read-only routes (phase 1 of the attendance split).
 from routes.attendance import make_router as _attendance_router  # noqa: E402
 app.include_router(_attendance_router(db, get_current_user, require_admin))
+from routes.live_events import make_router as _live_events_router  # noqa: E402
+app.include_router(_live_events_router(db, JWT_SECRET, JWT_ALGO))
 from routes.attendance_actions import make_router as _attendance_actions_router  # noqa: E402
 app.include_router(_attendance_actions_router(
     db, get_current_user, require_admin, open_session_for, _late_days_in_month,

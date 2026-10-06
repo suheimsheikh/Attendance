@@ -61,11 +61,15 @@ export function GridCell({ code, dow, onClick, meta, iso, rowSpan, isToday }) {
   return (
     <td
       rowSpan={rowSpan}
-      className={`border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-6 leading-none${todayCls} ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
+      className={`relative border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-6 leading-none${todayCls} ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
       title={title}
       onClick={onClick}
+      data-corrected={meta?.correction ? "1" : undefined}
     >
       {s.label}
+      {meta?.correction && (
+        <span className="absolute top-0 right-0 w-0 h-0 border-t-[6px] border-l-[6px] border-t-violet-600 border-l-transparent" data-testid={`grid-corrected-mark-${iso}`} />
+      )}
     </td>
   );
 }
@@ -164,6 +168,11 @@ export function buildCellTooltip({ code, dow, meta, iso, clickable }) {
     }
     if (m.late_minutes)  lines.push(`Late by ${m.late_minutes}m`);
     if (m.ot_minutes)    lines.push(`OT: ${Math.floor(m.ot_minutes / 60)}h ${m.ot_minutes % 60}m`);
+    if (m.correction) {
+      const c = m.correction;
+      lines.push(`Corrected (${(c.kind || "").replace(/_/g, " ")}) · filed by ${c.filed_by || "?"}`);
+      lines.push(c.auto ? `Auto-approved (${c.approved_by || "admin"})` : `Approved by ${c.approved_by || "?"}${c.approved_at ? " on " + fmtDateShort(c.approved_at) : ""}`);
+    }
   }
   if (clickable) lines.push("Click to file correction");
   return lines.join("\n");
