@@ -1,0 +1,41 @@
+{
+  "summary": "Frontend-only testing of iteration-78 scope (Members Archive, Leave short-notice warning, Approvals rendering, Self Check-in share buttons, 10 AM AbsentDispatchPrompt). Executed as admin + throwaway member. Backend was pre-verified by main agent via curl. Live-prod safe: all throwaway members were cleanly deleted; 121-member baseline restored.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "MemberForm (Add member)", "issue": "Default weekly_off is empty ('— None —'), but backend rejects empty with 422 literal_error. New-member creation fails until a weekday is explicitly chosen. UX bug — either default to 'sunday' / 'monday' or add a required-field hint.", "selector": "data-testid='mf-weekly-off'", "priority": "MEDIUM"},
+      {"component": "MemberForm — error surfacing", "issue": "On 422 the modal only shows a tiny red 'Request failed' pill with a Request-ID; the field-level reason (e.g. weekly_off / email domain reserved) is not surfaced to the user. Admin cannot self-recover without devtools.", "selector": "[class*='FormError']", "priority": "MEDIUM"},
+      {"component": "MemberForm — email domain validation", "issue": "Backend uses email-validator with deliverability/reserved-TLD check; emails like foo@zz.local, foo@zz.test are rejected 422 while existing seed data (e.g. ajay-kanne@sailors.local) is in DB. If this is intentional, the UI should show the message; if not, the backend check should be relaxed.", "selector": "data-testid='mf-email'", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_passing": [
+    "Members master: ACTIONS column is first and sticky-left; headers = [ACTIONS, Member, OT/Meal, Category, Role, Rank, Gender, Mobile, Institution, Fleet, Last seen, Leave balance, Hours, Weekly off, DOB, PARENTS/GUARDIAN, STATUS]. 'Del' far-right column removed.",
+    "data-testid='archived-view-toggle' present; default view hides archived; toggle flips to show only archived with 'Archived (N)' indicator and 'Showing archived members only — use the restore icon to unarchive.' helper text.",
+    "Archive flow (super admin, direct): create → archive-member-<id> → confirm dialog → member disappears from default list. Toggle Archived ON → row shown with unarchive-member-<id>. Unarchive → returns to default list. Delete-member-<id> cleans up. All testids resolve.",
+    "MyLeaves apply form: leave-short-notice-warning renders ONLY when start-date is today or backdated (leave type). It is NOT rendered for a far-future start. leave-submit button is NEVER disabled by the warning (only disabled while busy). Hard advance-notice block confirmed removed.",
+    "Approvals (/admin/approvals): tabs render — All, Leaves, Check-ins, Corrections, Access Requests — with pending counts. Decision history LEAVES table renders with totals (359/328/31) and columns incl. T/A, DECIDED, REASON. 'Apply break' / 'Apply on behalf' / 'Refresh' controls visible. Queue was empty at test time so filed-by/short-notice tags and 'Archive member' / 'Delete member' corrections could not be observed live, but backend path is curl-verified.",
+    "AbsentDispatchPrompt (data-testid='absent-dispatch-prompt'): correctly does NOT render on home/members because today has 0 absent + 0 on-leave + 0 on-tour (early-return branch). This matches the spec's 'if no absentees exist it correctly does NOT appear' expectation.",
+    "A separate daily reminder modal (title: 'Post today's Leave/Tour to WhatsApp', testids leave-report-later / leave-report-dismiss / leave-report-post-btn) IS displayed for admins — functions independently of AbsentDispatchPrompt.",
+    "Self Check-in (/checkin): page renders with self-checkin-button; off-site users see 'Off-site check-in — quick selfie' prompt. share-whatsapp-btn / share-stepout-btn are present in source (SelfCheckIn.jsx) and gated on check-in state; could not exercise them in Playwright because off-site selfie requires camera. No JS errors."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Fix the Add-member form: default weekly_off to a weekday OR validate client-side (today the backend 422 is silent to the admin).",
+    "Surface Pydantic field errors on the member form (map 422 details to field-level messages) instead of a bare 'Request failed · Request ID'.",
+    "Consider relaxing or documenting the email-domain deliverability check on POST /api/members (reserved TLDs .local/.test are rejected)."
+  ],
+  "critical_code_review_comments": [
+    "MyLeaves.jsx L647-654: submit is correctly `disabled={busy}` only — advance-notice block fully removed. Good.",
+    "AbsentDispatchPrompt.jsx L44-46 early-returns when no absentees → explains why the prompt was absent today; behavior matches spec.",
+    "MemberForm has an empty `weekly_off` option but server-side it's a strict Literal — client should align or default."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "95%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (super admin). Throwaway members used: ZZ Test/Leave ... @gmail-throwaway.com password ZZTest@12345 / ZZLeave@12345 — ALL deleted after the run.",
+  "seed_data_creation": "Created 3 throwaway members during the run; all deleted. 121-member baseline restored. No archived members remain. No leaves submitted.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Admin login requires the collapsible 'Admin sign in with email' toggle (data-testid='toggle-admin-login') then login-submit-button. The 'Later' button of the leave-report popup frequently overlays Admin pages; dismiss it before interacting. For MemberForm success you MUST set mf-gender AND mf-weekly-off AND use a non-reserved TLD (.local/.test rejected). Member leave route is /my-leaves (NOT /leaves). Approvals pending queues were empty on 06-Oct-2026, so Corrections 'Archive/Delete member' labels and leave 'filed by' tag need the main agent to seed a pending request if visual verification is required."
+}
