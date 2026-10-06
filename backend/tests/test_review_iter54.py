@@ -16,8 +16,6 @@ BASE = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 
 ADMIN_EMAIL = "admin@attendance.app"
 ADMIN_PW = "Admin@12345"
-STAFF_EMAIL = "dar.test@example.com"
-STAFF_PW = "Dar@12345"
 
 
 def _login(email, pw):
@@ -32,8 +30,9 @@ def admin_token():
 
 
 @pytest.fixture(scope="module")
-def staff_token():
-    return _login(STAFF_EMAIL, STAFF_PW)
+def staff_token(make_member):
+    m = make_member("staff")  # throwaway staff member
+    return _login(m["email"], m["password"])
 
 
 @pytest.fixture(scope="module")

@@ -89,8 +89,9 @@ def test_issue_stock_hard_block(admin_session):
     # Pick first item — attempt to issue 999999 units on a past date
     item = items[0]
     past = (date.today() - timedelta(days=1)).isoformat()
-    payload = {"lines": [{"item_id": item["id"], "qty": 999999}]}
-    r = admin_session.put(f"{BASE_URL}/api/meals/issues/{past}", json=payload)
+    # PATCH (single-line merge) — a PUT would replace yesterday's real issues if the guard ever let it through.
+    payload = {"upserts": [{"item_id": item["id"], "qty": 999999}]}
+    r = admin_session.patch(f"{BASE_URL}/api/meals/issues/{past}", json=payload)
     assert r.status_code == 400, f"expected 400, got {r.status_code}: {r.text[:300]}"
     detail = r.json().get("detail", "")
     assert "Not enough stock" in detail

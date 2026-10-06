@@ -190,33 +190,13 @@ class TestPresenceEscortsPresent:
 # ════════════════════════════════════════════════════════════════
 # Muster /api/muster/athletes
 # ════════════════════════════════════════════════════════════════
-@pytest.fixture(scope="module")
-def two_athletes(admin_client, api):
-    """Two athletes used to exercise the muster grey-out branch.
+@pytest.fixture
+def two_athletes(make_member):
+    """Two fresh throwaway athletes PER TEST (one check-in per day each).
        Athlete A: will be checked in (already_in case).
        Athlete B: kept eligible (clean state).
     """
-    listing = admin_client.get(f"{api}/members").json()
-    athletes = [m for m in listing if m.get("category") == "athlete"][:2]
-    created = []
-    while len(athletes) < 2:
-        body = {
-            "email": f"TEST_iter11-{uuid.uuid4().hex[:6]}@athletes.local",
-            "password": "Smoke@1234",
-            "full_name": f"TEST_Iter11Ath_{uuid.uuid4().hex[:4]}",
-            "role": "member",
-            "category": "athlete",
-        }
-        r = admin_client.post(f"{api}/members", json=body)
-        assert r.status_code == 200, r.text
-        athletes.append(r.json())
-        created.append(r.json())
-    yield athletes[0], athletes[1]
-    for a in created:
-        try:
-            admin_client.delete(f"{api}/members/{a['id']}")
-        except Exception:
-            pass
+    return make_member("athlete"), make_member("athlete")
 
 
 def _ensure_athlete_not_checked_in(admin_client, api, athlete_id):

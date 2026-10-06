@@ -228,8 +228,9 @@ def test_14_admin_list_and_approve_leave(admin_client, base_url, shared_state):
     assert shared_state["leave_id"] in ids
 
     lid = shared_state["leave_id"]
+    # Throwaway member has no paid balance → approving needs an override reason.
     r2 = admin_client.patch(f"{base_url}/api/leaves/{lid}",
-                            json={"status": "approved"}, timeout=30)
+                            json={"status": "approved", "override_reason": "test"}, timeout=30)
     assert r2.status_code == 200, r2.text
     assert r2.json()["status"] == "approved"
 

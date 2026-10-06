@@ -20,7 +20,7 @@ BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 ADMIN_EMAIL = "admin@attendance.app"
 ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@12345")
 
-TEST_DATE = "2026-08-02"  # per review request: use past dates only
+TEST_DATE = "2020-08-02"  # synthetic past date — _clear_day PUTs replace the whole day
 
 _NO_KEEP = {"Connection": "close", "Accept-Encoding": "identity"}
 
@@ -53,21 +53,20 @@ def hdr(admin_token):
 
 @pytest.fixture(scope="module")
 def two_items(hdr):
-    # Pick items that can actually hold stock on TEST_DATE. The stock
-    # snapshot ignores purchases dated before an item's
-    # `opening_stock_as_of`, so an item opened after TEST_DATE can never
-    # show stock on it — issuing such an item is (correctly) hard-blocked.
-    # Choose items whose opening date is unset or on/before TEST_DATE.
-    r = _req("GET", f"{BASE_URL}/api/meals/stock", headers=hdr,
-             params={"as_of": TEST_DATE})
-    assert r.status_code == 200, r.text
-    rows = r.json().get("rows", [])
-    eligible = [x for x in rows
-                if not x.get("opening_stock_as_of")
-                or x["opening_stock_as_of"] <= TEST_DATE]
-    if len(eligible) < 2:
-        pytest.skip("need >=2 pantry items eligible on TEST_DATE")
-    return eligible[0]["item_id"], eligible[1]["item_id"]
+    """Two TEST grocery items with opening stock as of the day before
+    TEST_DATE (never real items); removed at module end."""
+    import uuid
+    ids = []
+    for _ in range(2):
+        r = _req("POST", f"{BASE_URL}/api/meals/items", headers=hdr, json={
+            "category_key": "grocery", "name": f"TEST_Patch47_{uuid.uuid4().hex[:6]}",
+            "unit": "kg", "opening_stock": 100, "opening_stock_as_of": "2020-08-01"})
+        assert r.status_code == 200, r.text
+        ids.append(r.json()["id"])
+    yield ids[0], ids[1]
+    _clear_day(hdr, TEST_DATE)
+    for iid in ids:
+        _req("DELETE", f"{BASE_URL}/api/meals/items/{iid}", headers=hdr)
 
 
 def _clear_day(hdr, date):

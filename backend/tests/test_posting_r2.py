@@ -120,7 +120,7 @@ class TestPostingApply:
 
 
 class TestPostingOverlapAndReports:
-    def test_overlap_includes_posting(self, admin_client, staff_member, api):
+    def test_overlap_includes_posting(self, admin_client, staff_member, api, second_admin_client):
         future_start = (dt.date.today() + dt.timedelta(days=60)).isoformat()
         future_end = (dt.date.today() + dt.timedelta(days=75)).isoformat()
         r = admin_client.post(
@@ -141,10 +141,10 @@ class TestPostingOverlapAndReports:
             assert match is not None, "posting row missing from overlap response"
             assert match["start_date"] == future_start
         finally:
-            admin_client.patch(f"{api}/leaves/{leave_id}", json={"status": "rejected"})
+            second_admin_client.patch(f"{api}/leaves/{leave_id}", json={"status": "rejected", "denial_reason": "test cleanup"})
 
     def test_daily_report_bundles_posting_under_on_tour(
-            self, admin_client, staff_member, api):
+            self, admin_client, staff_member, api, second_admin_client):
         # Apply for today so the daily report picks it up.
         today_iso = dt.date.today().isoformat()
         r = admin_client.post(
@@ -154,7 +154,7 @@ class TestPostingOverlapAndReports:
         assert r.status_code == 200, r.text
         leave_id = r.json()["id"]
         # Approve so it shows in the report.
-        admin_client.patch(f"{api}/leaves/{leave_id}", json={"status": "approved"})
+        assert second_admin_client.patch(f"{api}/leaves/{leave_id}", json={"status": "approved"}).status_code == 200  # 2-admin rule
         try:
             rep = admin_client.get(f"{api}/reports/daily", params={"on": today_iso})
             assert rep.status_code == 200, rep.text
@@ -164,12 +164,12 @@ class TestPostingOverlapAndReports:
             assert staff_member["id"] in on_tour_ids, "posting row should be in on_tour bundle"
             assert staff_member["id"] not in on_leave_ids, "posting row should NOT be in on_leave bundle"
         finally:
-            admin_client.patch(f"{api}/leaves/{leave_id}", json={"status": "rejected"})
+            second_admin_client.patch(f"{api}/leaves/{leave_id}", json={"status": "rejected", "denial_reason": "test cleanup"})
 
 
 class TestPostingOnPresenceBoard:
     def test_presence_labels_posting_as_on_tour_with_leave_kind(
-            self, admin_client, staff_member, api):
+            self, admin_client, staff_member, api, second_admin_client):
         today_iso = dt.date.today().isoformat()
         r = admin_client.post(
             f"{api}/leaves?target_user_id={staff_member['id']}",
@@ -177,7 +177,7 @@ class TestPostingOnPresenceBoard:
                   "end_date": today_iso, "location": "Today host"})
         assert r.status_code == 200, r.text
         leave_id = r.json()["id"]
-        admin_client.patch(f"{api}/leaves/{leave_id}", json={"status": "approved"})
+        assert second_admin_client.patch(f"{api}/leaves/{leave_id}", json={"status": "approved"}).status_code == 200  # 2-admin rule
         try:
             pr = admin_client.get(f"{api}/presence")
             assert pr.status_code == 200, pr.text
@@ -190,4 +190,4 @@ class TestPostingOnPresenceBoard:
             # Detail copy starts with POSTED so the column row reads correctly.
             assert "POSTED" in (row.get("detail") or "")
         finally:
-            admin_client.patch(f"{api}/leaves/{leave_id}", json={"status": "rejected"})
+            second_admin_client.patch(f"{api}/leaves/{leave_id}", json={"status": "rejected", "denial_reason": "test cleanup"})

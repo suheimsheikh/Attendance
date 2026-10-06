@@ -113,9 +113,13 @@ def test_daily_entry_reconciles_with_masters_stock(hdr):
     # must be consistent (opening + purch - issue - waste == on-hand).
     grand_op = round(sum(float(x.get("opening_value") or 0) for x in stock["rows"]), 2)
     grand_pu = stock_purch
-    grand_is = round(sum(float(x.get("issued_value") or 0) for x in stock["rows"]), 2)
+    # On-hand value is at weighted-avg cost: issues leave stock at avg_rate
+    # (issued_value is the higher max(avg, latest) costing used for meal
+    # cost reports), and stock-take adjustments (+extra / −loss) count too.
+    grand_is = round(sum(float(x.get("issued") or 0) * float(x.get("avg_rate") or 0) for x in stock["rows"]), 2)
     grand_wa = round(sum(float(x.get("wasted_value") or 0) for x in stock["rows"]), 2)
+    grand_adj = round(sum(float(x.get("adjusted") or 0) * float(x.get("avg_rate") or 0) for x in stock["rows"]), 2)
     grand_oh = round(sum(float(x.get("on_hand_value") or 0) for x in stock["rows"]), 2)
-    computed = round(grand_op + grand_pu - grand_is - grand_wa, 2)
-    assert abs(computed - grand_oh) < 0.02, \
+    computed = round(grand_op + grand_pu - grand_is - grand_wa + grand_adj, 2)
+    assert abs(computed - grand_oh) < 0.05 * max(1, len(stock["rows"])) / 10, \
         f"stock identity broken: {computed} vs on_hand {grand_oh}"

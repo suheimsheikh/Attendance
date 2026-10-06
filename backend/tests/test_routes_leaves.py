@@ -157,7 +157,7 @@ def test_all_leaves_requires_admin(base_url):
 
 
 # ------------------ decide_leave ------------------
-def test_admin_can_approve_then_reject(admin_client, base_url, athlete):
+def test_admin_can_approve_then_reject(admin_client, second_admin_client, base_url, athlete):
     # Create a fresh leave, approve it, then reject it.
     today = date.today().isoformat()
     body = {"type": "leave", "start_date": today, "end_date": today, "reason": "Decide flow"}
@@ -165,11 +165,16 @@ def test_admin_can_approve_then_reject(admin_client, base_url, athlete):
         f"{base_url}/api/leaves?target_user_id={athlete['id']}", json=body, timeout=30,
     ).json()
     try:
+        # 2-admin rule: the filer can't decide; a second admin does.
         r = admin_client.patch(f"{base_url}/api/leaves/{leave['id']}", json={"status": "approved"}, timeout=30)
-        assert r.status_code == 200
+        assert r.status_code == 403
+        r = second_admin_client.patch(f"{base_url}/api/leaves/{leave['id']}",
+                                      json={"status": "approved", "override_reason": "test"}, timeout=30)
+        assert r.status_code == 200, r.text
         assert r.json()["status"] == "approved"
-        r = admin_client.patch(f"{base_url}/api/leaves/{leave['id']}", json={"status": "rejected"}, timeout=30)
-        assert r.status_code == 200
+        r = second_admin_client.patch(f"{base_url}/api/leaves/{leave['id']}",
+                                      json={"status": "rejected", "denial_reason": "test"}, timeout=30)
+        assert r.status_code == 200, r.text
         assert r.json()["status"] == "rejected"
     finally:
         _cleanup_leave(admin_client, base_url, leave["id"])

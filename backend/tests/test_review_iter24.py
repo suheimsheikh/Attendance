@@ -90,9 +90,10 @@ def test_calendar_grid_cell_meta_shapes(admin_client, base_url):
             iso = days[idx]
             meta = cell_meta.get(iso)
             if not meta:
-                # Only P/HD/LT/LV/TR/CO/PS/BK cells carry meta — WO/HO/AB/LF do not.
+                # Only P/HD/LT/LV/TR/CO/PS/BK cells carry meta — WO/HO/AB/LF/NJ do not.
+                # (NJ = Not Joined yet, LP = LOP tail of a leave, EO = early out.)
                 assert code in ("", "WO", "HO", "AB", "P", "HD", "LT",
-                                "LV", "TR", "CO", "PS", "BK", "LF"), code
+                                "LV", "TR", "CO", "PS", "BK", "LF", "NJ", "LP", "EO"), code
                 continue
             if code in ("P", "HD", "LT"):
                 # Presence rows should surface check_in_at (may be missing on

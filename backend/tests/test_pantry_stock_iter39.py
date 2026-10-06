@@ -49,7 +49,10 @@ def pantry_item(admin_client, base_url):
     assert doc["unit"] == "kg"
     assert "id" in doc
     yield doc
-    # cleanup (soft-delete OK since we may have history)
+    # Remove only this item's lines (PATCH removes), then hard-delete it.
+    for kind in ("purchases", "issues", "wastage"):
+        admin_client.patch(f"{base_url}/api/meals/{kind}/{_today()}",
+                           json={"removes": [doc["id"]]}, timeout=30)
     admin_client.delete(f"{base_url}/api/meals/items/{doc['id']}", timeout=30)
 
 
@@ -88,8 +91,9 @@ class TestItemsMaster:
 class TestPantryFlow:
     def test_purchase_upsert_and_get(self, admin_client, base_url, pantry_item):
         d = _today()
-        body = {"lines": [{"item_id": pantry_item["id"], "qty": 5, "rate": 40}]}
-        r = admin_client.put(f"{base_url}/api/meals/purchases/{d}", json=body, timeout=30)
+        # PATCH merges just this line (PUT would replace the whole day's real entries).
+        body = {"upserts": [{"item_id": pantry_item["id"], "qty": 5, "rate": 40}]}
+        r = admin_client.patch(f"{base_url}/api/meals/purchases/{d}", json=body, timeout=30)
         assert r.status_code == 200, r.text
         payload = r.json()
         line = next(l for l in payload["lines"] if l["item_id"] == pantry_item["id"])
@@ -111,8 +115,8 @@ class TestPantryFlow:
 
     def test_issues_upsert_and_get(self, admin_client, base_url, pantry_item):
         d = _today()
-        body = {"lines": [{"item_id": pantry_item["id"], "qty": 2}]}
-        r = admin_client.put(f"{base_url}/api/meals/issues/{d}", json=body, timeout=30)
+        body = {"upserts": [{"item_id": pantry_item["id"], "qty": 2}]}
+        r = admin_client.patch(f"{base_url}/api/meals/issues/{d}", json=body, timeout=30)
         assert r.status_code == 200, r.text
         line = next(l for l in r.json()["lines"] if l["item_id"] == pantry_item["id"])
         assert line["qty"] == 2 and line["unit"] == "kg"
@@ -126,9 +130,9 @@ class TestPantryFlow:
 
     def test_wastage_upsert_and_get(self, admin_client, base_url, pantry_item):
         d = _today()
-        body = {"lines": [{"item_id": pantry_item["id"], "qty": 1,
-                           "reason": "rotten", "notes": "TEST_note left in sun"}]}
-        r = admin_client.put(f"{base_url}/api/meals/wastage/{d}", json=body, timeout=30)
+        body = {"upserts": [{"item_id": pantry_item["id"], "qty": 1,
+                             "reason": "rotten", "notes": "TEST_note left in sun"}]}
+        r = admin_client.patch(f"{base_url}/api/meals/wastage/{d}", json=body, timeout=30)
         assert r.status_code == 200, r.text
         line = next(l for l in r.json()["lines"] if l["item_id"] == pantry_item["id"])
         assert line["qty"] == 1
@@ -142,8 +146,8 @@ class TestPantryFlow:
 
     def test_wastage_rejects_bad_reason(self, admin_client, base_url, pantry_item):
         d = _today()
-        r = admin_client.put(f"{base_url}/api/meals/wastage/{d}", json={
-            "lines": [{"item_id": pantry_item["id"], "qty": 1, "reason": "nuked"}],
+        r = admin_client.patch(f"{base_url}/api/meals/wastage/{d}", json={
+            "upserts": [{"item_id": pantry_item["id"], "qty": 1, "reason": "nuked"}],
         }, timeout=30)
         assert r.status_code == 400
 

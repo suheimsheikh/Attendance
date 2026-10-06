@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import calendar
-import os
 import uuid
 from datetime import date
-from pathlib import Path
 
-from dotenv import load_dotenv
 
 import pytest
 import requests
@@ -49,15 +46,14 @@ def sample_members(roster: list[dict]) -> dict:
 
 
 @pytest.fixture(scope="session")
-def non_admin_client(base_url: str) -> requests.Session:
-    load_dotenv(Path(__file__).resolve().parents[1] / ".env.profile-test")
-    r = requests.post(f"{base_url}/api/auth/login", json={
-        "email": os.environ["PROFILE_TEST_EMAIL"], "password": os.environ["PROFILE_TEST_PASSWORD"],
-    }, timeout=30)
-    assert r.status_code == 200, r.text
-    s = requests.Session()
-    s.headers.update({"Authorization": f"Bearer {r.json()['access_token']}", "Content-Type": "application/json"})
-    return s
+def qa_member(make_member) -> dict:
+    """Isolated throwaway staff member (replaces the rotated profile.qa account)."""
+    return make_member("staff", login=True)
+
+
+@pytest.fixture(scope="session")
+def non_admin_client(qa_member) -> requests.Session:
+    return qa_member["client"]
 
 
 # Modules/features: member discovery + category coverage for admin picker sources.
@@ -167,7 +163,9 @@ def _assert_grid_parity(admin_client: requests.Session, base_url: str, month: st
 
     row = next((r for r in grid["rows"] if r.get("member_id") == member_id), None)
     assert row is not None, f"Grid row missing for {member_id} @ {month}"
-    assert profile["totals"] == row["totals"]
+    # `payable` (Pay column) is Grid-only by design — the profile doesn't show it.
+    grid_totals = {k: v for k, v in row["totals"].items() if k != "payable"}
+    assert profile["totals"] == grid_totals
     assert [d["date"] for d in profile["days"]] == grid["days"]
     assert [d["code"] for d in profile["days"]] == row["cells"]
 
@@ -212,12 +210,13 @@ def test_former_member_scoped_profile_supported(
     base_url: str,
     non_admin_client: requests.Session,
     mongo_db,
+    qa_member,
 ):
     # Only alter the isolated QA fixture, never a real academy member.
     member = non_admin_client.get(f"{base_url}/api/auth/me", timeout=30).json()
     uid = member["id"]
     original = mongo_db.users.find_one({"id": uid}, {"_id": 0})
-    assert original["email"] == os.environ["PROFILE_TEST_EMAIL"]
+    assert original["email"] == qa_member["email"]
     month = date.today().strftime("%Y-%m")
     try:
         mongo_db.users.update_one({"id": uid}, {"$set": {"status": "left", "leaving_date": "2026-01-01"}})
@@ -242,9 +241,9 @@ def test_non_admin_self_spoof_ignored(non_admin_client, admin_client, base_url):
     assert r.json()["member_id"] == me["id"] != admin_id
 
 
-def test_detailed_fixture_sessions_leaves_and_overrides(non_admin_client, admin_client, base_url, mongo_db):
+def test_detailed_fixture_sessions_leaves_and_overrides(non_admin_client, admin_client, base_url, mongo_db, qa_member):
     uid = non_admin_client.get(f"{base_url}/api/auth/me", timeout=30).json()["id"]
-    assert mongo_db.users.find_one({"id": uid})["email"] == os.environ["PROFILE_TEST_EMAIL"]
+    assert mongo_db.users.find_one({"id": uid})["email"] == qa_member["email"]
     prefix = "profile-qa-" + uuid.uuid4().hex
     sessions = [
         {"id": prefix + "-closed", "user_id": uid, "date": "2026-08-03", "check_in_at": "2026-08-03T04:30:00+00:00", "check_out_at": "2026-08-03T10:30:00+00:00", "hours": 6, "late": True, "late_minutes": 30, "early_out_minutes": 120, "early_out_reason": "QA appointment", "overtime_total_min": 45, "overtime_reason": "QA early setup", "site_name": "QA Site", "method": "geo", "excursions": [{"out_at": "2026-08-03T06:00:00+00:00", "in_at": "2026-08-03T06:30:00+00:00", "reason": "QA step out"}]},

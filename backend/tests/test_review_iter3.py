@@ -181,11 +181,8 @@ def test_09_leaves_filter(admin_s, filt):
     assert isinstance(r.json(), list)
 
 
-def test_10_leave_create_and_approve(admin_s, state):
-    members = admin_s.get(f"{BASE_URL}/api/members", timeout=30).json()
-    target = next((m for m in members if m.get("role") == "member"), None)
-    if not target:
-        pytest.skip("no member to file leave for")
+def test_10_leave_create_and_approve(admin_s, state, make_member, second_admin_client):
+    target = make_member("staff")
     state["leave_target_id"] = target["id"]
 
     # target_user_id is a QUERY param; body uses type/start_date/end_date
@@ -207,8 +204,10 @@ def test_10_leave_create_and_approve(admin_s, state):
     assert leave["filed_by_admin"], "filed_by_admin should be set"
 
     # Approve via PATCH /api/leaves/{id}
-    rp = admin_s.patch(f"{BASE_URL}/api/leaves/{lid}",
-                       json={"status": "approved"}, timeout=30)
+    # 2-admin rule: the filer can't approve their own on-behalf filing.
+    assert admin_s.patch(f"{BASE_URL}/api/leaves/{lid}", json={"status": "approved"}, timeout=30).status_code == 403
+    rp = second_admin_client.patch(f"{BASE_URL}/api/leaves/{lid}",
+                                   json={"status": "approved", "override_reason": "test"}, timeout=30)
     assert rp.status_code in (200, 204), f"approve: {rp.status_code} {rp.text[:300]}"
     assert rp.json()["status"] == "approved"
 

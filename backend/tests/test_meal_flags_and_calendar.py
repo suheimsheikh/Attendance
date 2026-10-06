@@ -71,13 +71,22 @@ def test_meal_calendar_wages_hybrid_apportionment(h):
     for r_ in rows:
         m = r_.get("date", "")[:7]
         wage_by_month[m] += float(r_.get("wage_cost", 0) or 0)
+    # Each month's bill comes from the Overheads master (wages + incidentals),
+    # not a hard-coded 75k — the bill can change month to month.
+    oh = requests.get(f"{API}/meals/overheads", headers=h, timeout=30).json()["overheads"]
+    bill = {d["month"]: float(d.get("staff_wages") or 0) + float(d.get("incidentals") or 0) for d in oh}
+    data_days = defaultdict(int)
+    for r_ in rows:
+        if r_.get("has_data"):
+            data_days[r_["date"][:7]] += 1
     for month in ["2026-06", "2026-07", "2026-08", "2026-09"]:
         got = wage_by_month.get(month, 0)
+        full = bill.get(month, 0) if data_days[month] else 0
         if month == cur_mk:
-            expected = 75000 * today.day / dim
+            expected = full * today.day / dim
             assert abs(got - expected) < 5, f"current month {month} wages={got}, expected ~{expected:.0f}"
         elif month < cur_mk:
-            assert abs(got - 75000) < 1, f"completed month {month} wages={got}"
+            assert abs(got - full) < 1, f"completed month {month} wages={got}, bill={full}"
 
 
 def test_cost_per_athlete_day_is_3x_cost_per_meal(h):

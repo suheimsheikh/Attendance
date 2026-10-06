@@ -83,16 +83,13 @@ def test_admin_scope_all_returns_mixed_categories(base_url):
         assert "category" in a
 
 
-def test_admin_bulk_checkin_staff_member(base_url):
+def test_admin_bulk_checkin_staff_member(base_url, make_member):
     """Admin can bulk-check-in a staff member via the muster endpoint —
     the check-in is recorded (payroll tracking use-case)."""
     token = _login(base_url)
-    # Find a staff member not currently checked in
+    sid = make_member("staff")["id"]  # throwaway — never a real employee
     data = _list(base_url, token, "staff", mode="checkin")
-    target = next((a for a in data["athletes"] if not a.get("already_checked_in")), None)
-    if not target:
-        return  # no eligible staff to test with
-    sid = target["id"]
+    assert any(a["id"] == sid for a in data["athletes"]), "new staff missing from staff scope"
     try:
         r = requests.post(
             f"{base_url}/api/muster/checkin-bulk",
@@ -109,14 +106,11 @@ def test_admin_bulk_checkin_staff_member(base_url):
         _cleanup_checkout(base_url, token, sid)
 
 
-def test_admin_bulk_checkout_staff_member(base_url):
+def test_admin_bulk_checkout_staff_member(base_url, make_member):
     """Round-trip: check in a staff member then check them out."""
     token = _login(base_url)
-    data = _list(base_url, token, "staff", mode="checkin")
-    target = next((a for a in data["athletes"] if not a.get("already_checked_in")), None)
-    if not target:
-        return
-    sid = target["id"]
+    m = make_member("staff", login=True)  # throwaway — never a real employee
+    sid = m["id"]
     # Check in
     r = requests.post(
         f"{base_url}/api/muster/checkin-bulk",
@@ -125,6 +119,13 @@ def test_admin_bulk_checkout_staff_member(base_url):
         timeout=30,
     )
     assert r.status_code == 200
+    # Staff need today's DAR before any check-out (muster skips with "DAR not filed").
+    r = requests.post(f"{base_url}/api/muster/checkout-bulk",
+                      headers={"Authorization": f"Bearer {token}"},
+                      json={"athlete_ids": [sid]}, timeout=30)
+    assert r.json()["skipped"][0]["reason"] == "DAR not filed", r.text
+    d = m["client"].post(f"{base_url}/api/dar", json={"text": "Automated test — daily activity report text."}, timeout=30)
+    assert d.status_code == 200, d.text
     # Check out
     r = requests.post(
         f"{base_url}/api/muster/checkout-bulk",

@@ -339,6 +339,9 @@ def test_14_admin_restore_merge_zero_inserted(admin_s, state):
 
 # ---------- 14. /api/sms/test non-blocking + sane response when Twilio off ----------
 def test_15_sms_test_endpoint_sane_when_disabled(admin_s):
+    tw = (admin_s.get(f"{BASE_URL}/api/office", timeout=20).json() or {}).get("twilio") or {}
+    if tw.get("enabled"):
+        pytest.skip("Twilio is live in this environment — this would send a real SMS")
     r = admin_s.post(f"{BASE_URL}/api/sms/test",
                      json={"to": "+919999999999", "body": "iter2 test"}, timeout=20)
     # Either 200 with a "twilio not configured" payload, OR a 4xx with that error.

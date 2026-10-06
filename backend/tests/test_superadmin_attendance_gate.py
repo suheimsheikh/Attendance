@@ -6,10 +6,10 @@ Leave."
 
 Behaviour under test:
   1. A NON-super admin filing an attendance correction does NOT auto-apply
-     — it lands pending with needs_super_admin=True.
-  2. A non-super admin cannot approve/reject that row (403).
-  3. A Super Admin (admin_client — phone on SUPER_ADMIN_PHONES) can approve
-     it and the change applies.
+     — it lands pending with needs_second_admin=True (Oct 2026 2-admin rule;
+     needs_super_admin is no longer set).
+  2. The filer cannot approve/reject their own row (403).
+  3. A different admin (here the Super Admin) approves it and it applies.
   4. A non-super admin filing a LEAVE correction still auto-applies
      (scope is attendance-only).
 
@@ -100,17 +100,20 @@ def test_attendance_correction_needs_super_admin_end_to_end(
             cid = body["id"]
             break
     assert cid, "could not file an attendance correction on a clean date"
+    # Oct 2026: replaced by the 2-admin rule — it waits for ANY other admin
+    # (no longer Super-Admin-only), so needs_super_admin is False.
     assert body.get("auto_approved") is False
-    assert body.get("needs_super_admin") is True
+    assert not body.get("needs_super_admin")
+    assert body.get("needs_second_admin") is True
 
     # Persisted row is pending with the flag set.
     pend = admin_client.get(f"{base_url}/api/admin/corrections?status=pending",
                             timeout=15).json()
     row = next((x for x in pend if x["id"] == cid), None)
     assert row and row["status"] == "pending"
-    assert row.get("needs_super_admin") is True
+    assert not row.get("needs_super_admin")
 
-    # 2. Non-super admin cannot decide it.
+    # 2. The filer cannot decide their own correction.
     r = plain_admin_session.post(
         f"{base_url}/api/admin/corrections/{cid}/decide",
         json={"status": "approved"}, timeout=15)

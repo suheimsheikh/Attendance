@@ -4,8 +4,7 @@
  * GET /api/meals/items/{id}/ledger — merged events + totals + on_hand
  * GET /api/meals/categories/{key}/summary — per-item totals + spend
 
-Existing live items are NOT modified destructively — we snapshot Rice's
-min_stock and restore at end of the module. TEST_ items are cleaned up.
+Uses a self-made TEST item (no dependency on seeded data); TEST_ items are cleaned up.
 """
 from __future__ import annotations
 import uuid
@@ -15,14 +14,40 @@ from datetime import date
 
 
 # ---------- helpers ----------
+def _ist_today():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("Asia/Kolkata")).date()
+
+
 @pytest.fixture(scope="module")
 def rice_item(admin_client, base_url):
-    r = admin_client.get(f"{base_url}/api/meals/items",
-                         params={"category_key": "grocery"}, timeout=30)
+    """Self-made TEST grocery item with a known history (replaces the old
+    dependency on a seeded 'Rice'): opening 50 (as of 10 days ago),
+    purchase 20 @ 60 three days ago, issue 8 two days ago → on hand 62,
+    min_stock 70 → low. Lines + item are removed at module end."""
+    from datetime import timedelta
+    today = _ist_today()
+    as_of, p_day, i_day = (today - timedelta(days=d) for d in (10, 3, 2))
+    it = admin_client.post(f"{base_url}/api/meals/items", json={
+        "category_key": "grocery", "name": f"TEST_Rice_{uuid.uuid4().hex[:6]}", "unit": "kg",
+        "opening_stock": 50, "opening_stock_as_of": as_of.isoformat(), "min_stock": 70,
+    }, timeout=30)
+    assert it.status_code == 200, it.text
+    item = it.json()
+    r = admin_client.patch(f"{base_url}/api/meals/purchases/{p_day.isoformat()}", json={
+        "upserts": [{"item_id": item["id"], "qty": 20, "rate": 60}]}, timeout=30)
     assert r.status_code == 200, r.text
-    rice = next((it for it in r.json()["items"] if it["name"].lower() == "rice"), None)
-    assert rice is not None, "Rice item missing from grocery — seed expected"
-    return rice
+    r = admin_client.patch(f"{base_url}/api/meals/issues/{i_day.isoformat()}", json={
+        "upserts": [{"item_id": item["id"], "qty": 8}]}, timeout=30)
+    assert r.status_code == 200, r.text
+    item["_range"] = {"start": as_of.isoformat(), "end": today.isoformat()}
+    yield item
+    admin_client.patch(f"{base_url}/api/meals/issues/{i_day.isoformat()}",
+                       json={"removes": [item["id"]]}, timeout=30)
+    admin_client.patch(f"{base_url}/api/meals/purchases/{p_day.isoformat()}",
+                       json={"removes": [item["id"]]}, timeout=30)
+    admin_client.delete(f"{base_url}/api/meals/items/{item['id']}", timeout=30)
 
 
 @pytest.fixture(scope="module")
@@ -105,7 +130,7 @@ class TestStockLowCount:
 class TestItemLedger:
     def test_ledger_totals_and_on_hand_rice(self, admin_client, base_url, rice_item):
         r = admin_client.get(f"{base_url}/api/meals/items/{rice_item['id']}/ledger",
-                             params={"start": "2026-08-01", "end": "2026-08-31"},
+                             params=rice_item["_range"],
                              timeout=30)
         assert r.status_code == 200, r.text
         j = r.json()
@@ -148,7 +173,7 @@ class TestItemLedger:
 class TestCategorySummary:
     def test_grocery_summary_range(self, admin_client, base_url, rice_item):
         r = admin_client.get(f"{base_url}/api/meals/categories/grocery/summary",
-                             params={"start": "2026-08-01", "end": "2026-08-31"},
+                             params=rice_item["_range"],
                              timeout=30)
         assert r.status_code == 200, r.text
         j = r.json()

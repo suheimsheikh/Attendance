@@ -33,7 +33,7 @@ def _current_month() -> str:
 
 
 @pytest.fixture
-def seeded_lop_member(base_url):
+def seeded_lop_member(base_url, second_admin_client):
     """Seed a staff member with an approved 5-day leave stamped
     `paid_leave_used=3, lop_days=2` — the last 2 days should render as
     `LP` on the Grid, the first 3 as `LV`.
@@ -89,10 +89,10 @@ def seeded_lop_member(base_url):
     )
     assert leave.status_code in (200, 201), leave.text
     leave_id = leave.json()["id"]
-    approve = requests.patch(
+    # 2-admin rule + 5 days > 3-day balance → second admin approves with override.
+    approve = second_admin_client.patch(
         f"{base_url}/api/leaves/{leave_id}",
-        headers=hdr,
-        json={"status": "approved"},
+        json={"status": "approved", "override_reason": "LOP overlay test"},
         timeout=30,
     )
     assert approve.status_code == 200, approve.text
@@ -142,10 +142,17 @@ def test_totals_include_lop_subcount(seeded_lop_member, base_url):
     )
     row = next(x for x in r.json()["rows"] if x["member_id"] == seeded_lop_member["member_id"])
     totals = row["totals"]
+    # Totals only count days up to today, so expect just the elapsed part
+    # of the window (days 1-3 LV, days 4-5 LP).
+    from zoneinfo import ZoneInfo
+    from datetime import datetime
+    today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+    d0 = date.fromisoformat(seeded_lop_member["start"])
+    elapsed = [d0 + timedelta(days=i) <= today for i in range(5)]
     # LOP sub-count matches what payroll would deduct.
-    assert totals.get("lop") == 2, totals
+    assert totals.get("lop") == sum(elapsed[3:]), totals
     # LP still rolls into the leave total (backward compat).
-    assert totals.get("leave") >= 5, totals
+    assert totals.get("leave") >= sum(elapsed), totals
 
 
 def test_cell_meta_carries_balance_split(seeded_lop_member, base_url):

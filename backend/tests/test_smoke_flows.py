@@ -102,7 +102,7 @@ def test_muster_bulk_checkin_then_checkout(admin_client, base_url, athlete):
 
 
 # ---------- 4. Leave filing ----------
-def test_admin_can_file_and_approve_leave_on_behalf(admin_client, base_url, athlete):
+def test_admin_can_file_and_approve_leave_on_behalf(admin_client, second_admin_client, base_url, athlete):
     today = date.today().isoformat()
     tomorrow = (date.today() + timedelta(days=1)).isoformat()
     body = {
@@ -126,19 +126,19 @@ def test_admin_can_file_and_approve_leave_on_behalf(admin_client, base_url, athl
         assert found["member_name"]  # populated by enrich_leaves
         assert found["status"] == "pending"
 
-        # Approve it.
-        r = admin_client.patch(
+        # Approve it — 2-admin rule: a different admin than the filer.
+        r = second_admin_client.patch(
             f"{base_url}/api/leaves/{leave_id}",
-            json={"status": "approved"}, timeout=30,
+            json={"status": "approved", "override_reason": "test"}, timeout=30,
         )
-        assert r.status_code == 200
+        assert r.status_code == 200, r.text
         assert r.json()["status"] == "approved"
     finally:
         # Clean up so we don't pollute the user's leave balance.
         # No delete-leave endpoint, so we mark it rejected to be visually quiet.
-        admin_client.patch(
+        second_admin_client.patch(
             f"{base_url}/api/leaves/{leave_id}",
-            json={"status": "rejected"}, timeout=30,
+            json={"status": "rejected", "denial_reason": "test cleanup"}, timeout=30,
         )
 
 

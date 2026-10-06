@@ -197,6 +197,9 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 # On leave or tour → skip entirely (they're not eligible at all).
                 if sid in on_leave_ids:
                     continue
+                # Ex-members can't be checked in (checkin-bulk skips them) — don't list them.
+                if is_ex_member(s, today):
+                    continue
                 # Already on campus → keep them in the response but mark them
                 # so the frontend can render the row in a disabled / greyed
                 # state. Prevents double check-in while still giving the

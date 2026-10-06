@@ -53,26 +53,60 @@ def admin_client(base_url: str, admin_token: str) -> requests.Session:
     return s
 
 
-@pytest.fixture(scope="session")
-def athlete(admin_client: requests.Session, base_url: str) -> dict:
-    """Pick an existing athlete (or create one) to drive muster + leave tests.
-    Re-used across all flows so we don't litter the DB."""
-    import uuid
-    listing = admin_client.get(f"{base_url}/api/members", timeout=30).json()
-    target = next((m for m in listing if m.get("category") == "athlete"), None)
-    if target:
-        return target
+def login_session(base_url: str, email: str, password: str) -> requests.Session:
+    r = requests.post(f"{base_url}/api/auth/login",
+                      json={"email": email, "password": password}, timeout=30)
+    assert r.status_code == 200, f"login {email}: {r.status_code} {r.text}"
+    s = requests.Session()
+    s.headers.update({"Authorization": f"Bearer {r.json()['access_token']}",
+                      "Content-Type": "application/json"})
+    return s
 
-    body = {
-        "email": f"smoke-{uuid.uuid4().hex[:6]}@athletes.local",
-        "password": "Smoke@1234",
-        "full_name": "Smoke Test Athlete",
-        "role": "member",
-        "category": "athlete",
-    }
-    r = admin_client.post(f"{base_url}/api/members", json=body, timeout=30)
-    assert r.status_code == 200, r.text
-    return r.json()
+
+@pytest.fixture(scope="session")
+def make_member():
+    """Factory for throwaway members; all are deleted at session end.
+    make_member(category="staff", role="executive", login=True) → dict with
+    `password` and (when login=True) an authenticated `client` session."""
+    import uuid
+    # Own login + URL so modules that override admin_client/base_url don't clash.
+    base_url = BASE_URL
+    admin_client = login_session(BASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD)
+    created = []
+
+    def _make(category: str = "athlete", role: str = "member", login: bool = False, **extra) -> dict:
+        sfx = uuid.uuid4().hex[:8]
+        body = {"email": f"test_{sfx}@ishowedup-test.example.com", "password": "Test@12345",
+                "full_name": f"TEST {category.title()} {sfx}", "role": role,
+                "category": category, **extra}
+        r = admin_client.post(f"{base_url}/api/members", json=body, timeout=30)
+        assert r.status_code == 200, r.text
+        m = r.json()
+        created.append(m["id"])
+        m["password"] = body["password"]
+        if login:
+            m["client"] = login_session(base_url, body["email"], body["password"])
+        return m
+
+    yield _make
+    for mid in created:
+        admin_client.delete(f"{base_url}/api/members/{mid}",
+                            params={"reason": "test cleanup"}, timeout=30)
+
+
+@pytest.fixture(scope="session")
+def athlete(make_member) -> dict:
+    """Throwaway athlete for muster + leave tests (never a real member)."""
+    return make_member("athlete")
+
+
+@pytest.fixture(scope="session")
+def second_admin_client(make_member) -> requests.Session:
+    """A different (non-super) admin — the 2-admin rule blocks the filer
+    from approving their own on-behalf leave / correction."""
+    import random
+    return make_member("staff", role="admin", login=True,
+                       mobile=f"90{random.randint(10**7, 10**8 - 1)}")["client"]
 
 
 @pytest.fixture(scope="session")

@@ -11,8 +11,6 @@ if not BASE_URL:
                 BASE_URL = line.split("=", 1)[1].strip().rstrip("/")
                 break
 
-EXEC = ("exec.test@example.com", "Exec@12345")
-STAFF = ("dar.test@example.com", "Dar@12345")
 ADMIN = ("admin@attendance.app", "Admin@12345")
 
 
@@ -29,13 +27,13 @@ def _client(token):
 
 
 @pytest.fixture(scope="module")
-def exec_client():
-    return _client(_login(*EXEC))
+def exec_client(make_member):
+    return make_member("executive", login=True)["client"]  # throwaway executive
 
 
 @pytest.fixture(scope="module")
-def staff_client():
-    return _client(_login(*STAFF))
+def staff_client(make_member):
+    return make_member("staff", login=True)["client"]  # throwaway non-executive
 
 
 @pytest.fixture(scope="module")
@@ -76,11 +74,18 @@ def test_todo_assign_to_non_executive_400(exec_client, staff_client):
 
 # --- exec flows ---
 def test_dar_prefill_exec(exec_client):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    today = datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
+    t = exec_client.post(f"{BASE_URL}/api/todos",
+                         json={"title": "TEST_prefill_todo", "due_date": today}, timeout=30)
+    assert t.status_code == 200, t.text
     r = exec_client.get(f"{BASE_URL}/api/tasks/dar-prefill", timeout=30)
     assert r.status_code == 200
     text = r.json().get("text", "")
-    # exec test user has ticked/pending items seeded; expect at least one marker
-    assert ("✅" in text) or ("⏳" in text), f"expected ✅/⏳ in prefill, got: {text!r}"
+    # A to-do due today shows up as pending (⏳) in the prefill.
+    assert "⏳" in text and "TEST_prefill_todo" in text, f"expected pending to-do in prefill, got: {text!r}"
+    exec_client.delete(f"{BASE_URL}/api/todos/{t.json()['id']}", timeout=30)
 
 
 def test_admin_overview_ok(admin_client):

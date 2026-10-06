@@ -21,6 +21,19 @@ CSV_HEADER = ["Date", "FRUITS", "GROCERY", "VEGETABLES", "CHICKEN/ MUTTON", "PAN
 
 # ---------- helpers ----------------------------------------------------------
 
+# All dates in this module are synthetic (2020) so tests never overwrite real
+# kitchen entries; their docs are removed at module end.
+SYNTHETIC_DATES = ["2020-08-13", "2020-08-14", "2020-08-15", "2020-09-01", "2020-09-02", "2020-09-03"]
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _purge_synthetic_dates(mongo_db):
+    yield
+    if mongo_db is not None:
+        for coll in ("meal_purchases", "meal_expenses", "meal_issues", "meal_wastage"):
+            mongo_db[coll].delete_many({"date": {"$in": SYNTHETIC_DATES}})
+
+
 @pytest.fixture(scope="module")
 def chef_user(admin_client, base_url):
     """Create a chef user + return {email,password,token,id}."""
@@ -120,7 +133,7 @@ class TestPurchaseCategories:
 # ---------- 2. purchases upsert + list --------------------------------------
 
 class TestPurchasesUpsertAndList:
-    TEST_DATE = "2026-08-14"  # test range in-scope
+    TEST_DATE = "2020-08-14"  # synthetic past date — never real kitchen data
 
     def test_upsert_parses_strings_and_commas(self, admin_client, base_url):
         body = {"amounts": {"fruits": "1,600.00", "grocery": 250,
@@ -144,30 +157,30 @@ class TestPurchasesUpsertAndList:
 
     def test_list_returns_sorted(self, admin_client, base_url):
         # Ensure two dates exist
-        admin_client.put(f"{base_url}/api/meals/purchases/2026-08-13",
+        admin_client.put(f"{base_url}/api/meals/purchases/2020-08-13",
                          json={"amounts": {"fruits": 100}}, timeout=30)
-        admin_client.put(f"{base_url}/api/meals/purchases/2026-08-14",
+        admin_client.put(f"{base_url}/api/meals/purchases/2020-08-14",
                          json={"amounts": {"fruits": 200}}, timeout=30)
         r = admin_client.get(
             f"{base_url}/api/meals/purchases",
-            params={"start": "2026-08-13", "end": "2026-08-14"}, timeout=30,
+            params={"start": "2020-08-13", "end": "2020-08-14"}, timeout=30,
         )
         assert r.status_code == 200
         rows = r.json()["purchases"]
         dates = [row["date"] for row in rows]
         assert dates == sorted(dates)
-        assert "2026-08-13" in dates and "2026-08-14" in dates
+        assert "2020-08-13" in dates and "2020-08-14" in dates
         # Ensure no _id leaked
         for row in rows:
             assert "_id" not in row
 
     def test_chef_can_put(self, chef_client, base_url):
-        r = chef_client.put(f"{base_url}/api/meals/purchases/2026-08-15",
+        r = chef_client.put(f"{base_url}/api/meals/purchases/2020-08-15",
                             json={"amounts": {"fruits": 50}}, timeout=30)
         assert r.status_code == 200
 
     def test_member_forbidden(self, base_url, member_headers):
-        r = requests.put(f"{base_url}/api/meals/purchases/2026-08-15",
+        r = requests.put(f"{base_url}/api/meals/purchases/2020-08-15",
                          json={"amounts": {"fruits": 50}},
                          headers={**member_headers, "Content-Type": "application/json"},
                          timeout=30)
@@ -180,8 +193,8 @@ def _build_csv_bytes() -> bytes:
     buf = io.StringIO()
     w = _csv.writer(buf)
     w.writerow(CSV_HEADER)
-    w.writerow(["1/9/2026", "1,600.00", "500", "300", "1,200", "250"])
-    w.writerow(["2/9/2026", "700", "900", "400", "0", ""])
+    w.writerow(["1/9/2020", "1,600.00", "500", "300", "1,200", "250"])
+    w.writerow(["2/9/2020", "700", "900", "400", "0", ""])
     w.writerow(["TOTAL", "2,300", "1,400", "700", "1,200", "250"])
     return buf.getvalue().encode("utf-8")
 
@@ -191,7 +204,7 @@ def _build_xlsx_bytes() -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.append(CSV_HEADER + ["OTHER_UNMATCHED"])
-    ws.append(["3/9/2026", 500, 400, 300, 200, 100, 999])
+    ws.append(["3/9/2020", 500, 400, 300, 200, 100, 999])
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -209,20 +222,20 @@ class TestBulkUpload:
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["imported_days"] == 2
-        assert "2026-09-01" in body["dates"] and "2026-09-02" in body["dates"]
+        assert "2020-09-01" in body["dates"] and "2020-09-02" in body["dates"]
         # TOTAL row must not fail import; may/should be silent
         assert body["errors"] == [] or all("Row skipped" not in e for e in body["errors"])
         # Verify persistence via GET
         gr = requests.get(f"{base_url}/api/meals/purchases",
-                          params={"start": "2026-09-01", "end": "2026-09-02"},
+                          params={"start": "2020-09-01", "end": "2020-09-02"},
                           headers=self._auth(admin_token), timeout=30).json()
         by_date = {p["date"]: p["amounts"] for p in gr["purchases"]}
-        assert by_date["2026-09-01"]["fruits"] == 1600.0
-        assert by_date["2026-09-01"]["chicken_mutton"] == 1200.0
+        assert by_date["2020-09-01"]["fruits"] == 1600.0
+        assert by_date["2020-09-01"]["chicken_mutton"] == 1200.0
         # NOTE: bulk-upload currently STORES 0.0 (unlike PUT which drops zeros)
         # — recorded as a minor consistency issue in test report.
-        assert by_date["2026-09-02"].get("chicken_mutton", 0) in (0, 0.0)
-        assert "paneer" not in by_date["2026-09-02"]
+        assert by_date["2020-09-02"].get("chicken_mutton", 0) in (0, 0.0)
+        assert "paneer" not in by_date["2020-09-02"]
 
     def test_xlsx_import_reports_unmatched(self, admin_token, base_url):
         files = {"file": ("purchases.xlsx", _build_xlsx_bytes(),
@@ -232,7 +245,7 @@ class TestBulkUpload:
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["imported_days"] >= 1
-        assert "2026-09-03" in body["dates"]
+        assert "2020-09-03" in body["dates"]
         assert any("OTHER" in u.upper() or "UNMATCHED" in u.upper()
                    for u in body["unmatched_columns"]), body
 
@@ -254,7 +267,7 @@ class TestBulkUpload:
 # ---------- 4. expense report -----------------------------------------------
 
 class TestExpenseReport:
-    DATE = "2026-08-14"
+    DATE = "2020-08-14"
 
     @pytest.fixture(scope="class")
     def marked_meals(self, admin_client, base_url):
@@ -295,7 +308,7 @@ class TestExpenseReport:
 
     def test_invalid_range_400(self, admin_client, base_url):
         r = admin_client.get(f"{base_url}/api/meals/expense-report",
-                             params={"start": "2026-08-14", "end": "2026-08-13"}, timeout=30)
+                             params={"start": "2020-08-14", "end": "2020-08-13"}, timeout=30)
         assert r.status_code == 400
 
     def test_range_too_large_400(self, admin_client, base_url):
@@ -305,12 +318,12 @@ class TestExpenseReport:
 
     def test_chef_can_read(self, chef_client, base_url):
         r = chef_client.get(f"{base_url}/api/meals/expense-report",
-                            params={"start": "2026-08-13", "end": "2026-08-15"}, timeout=30)
+                            params={"start": "2020-08-13", "end": "2020-08-15"}, timeout=30)
         assert r.status_code == 200
 
     def test_member_forbidden(self, base_url, member_headers):
         r = requests.get(f"{base_url}/api/meals/expense-report",
-                         params={"start": "2026-08-13", "end": "2026-08-15"},
+                         params={"start": "2020-08-13", "end": "2020-08-15"},
                          headers=member_headers, timeout=30)
         assert r.status_code == 403
 

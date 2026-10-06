@@ -53,55 +53,10 @@ def admin_headers(admin_token):
 
 
 @pytest.fixture(scope="module")
-def member_token(admin_headers):
-    """Find a non-admin member token. Strategy: pick any athlete with a
-    mobile, then approve a freshly-created device for them via the
-    admin/devices flow so we can drive /auth/phone/status to get a token.
-    Fallback: skip member-gate tests if we can't synthesize one.
-    """
-    # Quickest path: find a member with an existing approved device — call
-    # /auth/phone with their mobile + a fresh device_id; trusted-phone cinch
-    # auto-approves and returns an access_token.
-    r = requests.get(f"{BASE_URL}/api/members", headers=admin_headers, timeout=20)
-    if r.status_code != 200:
-        pytest.skip(f"/api/members returned {r.status_code}; cannot synthesize member token")
-    members = r.json()
-    candidate = None
-    for m in members:
-        if (m.get("role") != "admin") and (m.get("mobile") or "").strip() and m.get("mobile") != ADMIN_BYPASS_PHONE:
-            candidate = m
-            break
-    if not candidate:
-        pytest.skip("no non-admin member with mobile to synthesize token")
-
-    # First check if this mobile already has an approved device — that
-    # enables the trusted-phone cinch.
-    dev_id = f"itest-iter16-{uuid.uuid4().hex[:10]}"
-    payload = {"phone": candidate["mobile"], "device_id": dev_id,
-               "device_name": "iter16-test"}
-    r = requests.post(f"{BASE_URL}/api/auth/phone", json=payload, timeout=20)
-    if r.status_code != 200:
-        pytest.skip(f"/auth/phone for member failed: {r.status_code} {r.text}")
-    body = r.json()
-    if body.get("status") == "approved" and body.get("access_token"):
-        return body["access_token"]
-    # If the cinch didn't fire (no prior approved device), admin-approve it
-    # and then call status.
-    devices = requests.get(f"{BASE_URL}/api/admin/devices",
-                           headers=admin_headers, timeout=20).json()
-    target = next((d for d in devices if d.get("device_id") == dev_id), None)
-    if not target:
-        pytest.skip("device not enqueued after /auth/phone")
-    requests.post(f"{BASE_URL}/api/admin/devices/{target['id']}/approve",
-                  headers=admin_headers,
-                  json={"full_name": candidate.get("full_name") or "Test",
-                        "role": "member", "category": candidate.get("category") or "athlete"},
-                  timeout=20)
-    s = requests.get(f"{BASE_URL}/api/auth/phone/status",
-                     params={"device_id": dev_id}, timeout=20).json()
-    if s.get("status") == "approved" and s.get("access_token"):
-        return s["access_token"]
-    pytest.skip(f"could not synthesize member token: {s}")
+def member_token(make_member):
+    """Token for a throwaway non-admin member (never a real person's phone/device)."""
+    m = make_member("athlete", login=True)
+    return m["client"].headers["Authorization"].split(" ", 1)[1]
 
 
 @pytest.fixture(scope="module")
@@ -210,13 +165,8 @@ class TestOfficeRoutes:
             requests.put(f"{BASE_URL}/api/office",
                          headers=admin_headers, json=restore, timeout=20)
 
-    def test_checkout_reminder_send_now_admin(self, admin_headers):
-        r = requests.post(f"{BASE_URL}/api/admin/checkout-reminder/send-now",
-                          headers=admin_headers, timeout=30)
-        assert r.status_code == 200
-        data = r.json()
-        assert "sent" in data
-        assert isinstance(data["sent"], int)
+    # No admin "send now" test on purpose: it texts every real member with an
+    # open session. Only the permission gate is checked below.
 
     def test_checkout_reminder_member_rejected(self, member_headers):
         r = requests.post(f"{BASE_URL}/api/admin/checkout-reminder/send-now",
@@ -372,15 +322,8 @@ class TestMusterRoutes:
                          headers=admin_headers, timeout=20)
         assert r.status_code == 400
 
-    def test_muster_checkin_bulk_double_skipped(self, admin_headers):
-        # Pick the first eligible (not already_checked_in) athlete
-        eligible = requests.get(f"{BASE_URL}/api/muster/athletes",
-                                params={"mode": "checkin"},
-                                headers=admin_headers, timeout=20).json()
-        athletes = [a for a in eligible["athletes"] if not a["already_checked_in"]]
-        if not athletes:
-            pytest.skip("no eligible athlete for checkin-bulk test")
-        target = athletes[0]
+    def test_muster_checkin_bulk_double_skipped(self, admin_headers, make_member):
+        target = make_member("athlete")  # throwaway — never a real athlete
         # First checkin
         r1 = requests.post(f"{BASE_URL}/api/muster/checkin-bulk",
                            headers=admin_headers,
@@ -410,29 +353,11 @@ class TestMusterRoutes:
                       json={"athlete_ids": [target["id"]]},
                       timeout=20)
 
-    def test_muster_checkout_bulk_returns_hours(self, admin_headers):
-        # find an athlete with open session, or create one
-        co = requests.get(f"{BASE_URL}/api/muster/athletes",
-                          params={"mode": "checkout"},
-                          headers=admin_headers, timeout=20).json()
-        if not co["athletes"]:
-            # try to checkin one first
-            ci = requests.get(f"{BASE_URL}/api/muster/athletes",
-                              params={"mode": "checkin"},
-                              headers=admin_headers, timeout=20).json()
-            elig = [a for a in ci["athletes"] if not a["already_checked_in"]]
-            if not elig:
-                pytest.skip("nobody to checkin/out")
-            requests.post(f"{BASE_URL}/api/muster/checkin-bulk",
-                          headers=admin_headers,
-                          json={"athlete_ids": [elig[0]["id"]]},
-                          timeout=20)
-            co = requests.get(f"{BASE_URL}/api/muster/athletes",
-                              params={"mode": "checkout"},
-                              headers=admin_headers, timeout=20).json()
-        if not co["athletes"]:
-            pytest.skip("no open sessions after attempted checkin")
-        target_id = co["athletes"][0]["id"]
+    def test_muster_checkout_bulk_returns_hours(self, admin_headers, make_member):
+        target_id = make_member("athlete")["id"]  # throwaway — never a real athlete
+        r = requests.post(f"{BASE_URL}/api/muster/checkin-bulk", headers=admin_headers,
+                          json={"athlete_ids": [target_id]}, timeout=20)
+        assert r.status_code == 200 and r.json()["checked_in_count"] == 1, r.text
         r = requests.post(f"{BASE_URL}/api/muster/checkout-bulk",
                           headers=admin_headers,
                           json={"athlete_ids": [target_id]},

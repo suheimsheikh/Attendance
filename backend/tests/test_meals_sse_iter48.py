@@ -10,7 +10,7 @@ import os, time, threading, requests, pytest
 BASE = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 EMAIL = "admin@attendance.app"
 PW = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@12345")
-DATE = "2026-08-01"
+DATE = "2020-08-01"  # synthetic past date — the PUTs below replace the whole day
 
 
 @pytest.fixture(scope="module")

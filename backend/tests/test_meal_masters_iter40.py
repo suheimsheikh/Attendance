@@ -80,11 +80,11 @@ class TestPurchaseCategoriesActive:
         by_key = {c["key"]: c for c in g.json()["categories"]}
         assert test_key in by_key
         assert by_key[test_key]["active"] is False
-        # Also verify existing categories all still carry active:true
+        # Existing categories keep their own active flag.
         for c in existing_categories:
             k = c.get("key")
             if k:
-                assert by_key.get(k, {}).get("active") is True
+                assert by_key.get(k, {}).get("active") is (c.get("active") is not False)
 
     def test_duplicate_key_rejected(self, admin_client, base_url, existing_categories):
         cats = [
@@ -148,34 +148,37 @@ class TestItemsReorder:
 
 
 class TestItemLifecycle:
-    def test_soft_delete_when_history_exists(self, admin_client, base_url):
-        """An item with a purchase line must be soft-deleted (active=false)
-        rather than hard-deleted."""
+    def test_delete_refused_when_history_exists(self, admin_client, base_url):
+        """An item with a purchase line can't be deleted (409 → deactivate
+        instead); deactivating keeps it in the include_inactive listing."""
         item = admin_client.post(f"{base_url}/api/meals/items", json={
             "category_key": "grocery",
             "name": f"TEST_SoftDel_{uuid.uuid4().hex[:6]}",
             "unit": "kg",
             "opening_stock": 0,
         }, timeout=30).json()
-
         from datetime import date
         d = date.today().isoformat()
-        pr = admin_client.put(f"{base_url}/api/meals/purchases/{d}",
-                              json={"lines": [{"item_id": item["id"], "qty": 1, "rate": 5}]},
-                              timeout=30)
+        # PATCH adds just this line (PUT would wipe the day's real entries).
+        pr = admin_client.patch(f"{base_url}/api/meals/purchases/{d}",
+                                json={"upserts": [{"item_id": item["id"], "qty": 1, "rate": 5}]},
+                                timeout=30)
         assert pr.status_code == 200, pr.text
-
-        dr = admin_client.delete(f"{base_url}/api/meals/items/{item['id']}", timeout=30)
-        assert dr.status_code == 200
-        assert dr.json().get("soft_deleted") is True
-
-        # Item should still exist in include_inactive listing, active=false
-        g = admin_client.get(f"{base_url}/api/meals/items",
-                             params={"include_inactive": "true"}, timeout=30)
-        assert g.status_code == 200
-        row = next((it for it in g.json()["items"] if it["id"] == item["id"]), None)
-        assert row is not None
-        assert row["active"] is False
+        try:
+            dr = admin_client.delete(f"{base_url}/api/meals/items/{item['id']}", timeout=30)
+            assert dr.status_code == 409, dr.text
+            assert "Deactivate" in dr.json()["detail"]
+            pa = admin_client.patch(f"{base_url}/api/meals/items/{item['id']}",
+                                    json={"active": False}, timeout=30)
+            assert pa.status_code == 200, pa.text
+            g = admin_client.get(f"{base_url}/api/meals/items",
+                                 params={"include_inactive": "true"}, timeout=30)
+            row = next((it for it in g.json()["items"] if it["id"] == item["id"]), None)
+            assert row is not None and row["active"] is False
+        finally:
+            admin_client.patch(f"{base_url}/api/meals/purchases/{d}",
+                               json={"removes": [item["id"]]}, timeout=30)
+            admin_client.delete(f"{base_url}/api/meals/items/{item['id']}", timeout=30)
 
     def test_hard_delete_when_no_history(self, admin_client, base_url):
         item = admin_client.post(f"{base_url}/api/meals/items", json={

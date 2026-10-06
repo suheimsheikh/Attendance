@@ -14,7 +14,6 @@ import requests
 from services.grid_punches import _punch_hm, grid_punch_meta
 
 
-QA_MEMBER_ID = "e72dd7c0-9319-41ca-ad00-dafe3a141993"
 
 
 def _grid_key() -> str:
@@ -330,9 +329,10 @@ def test_grid_punch_meta_null_omit_and_override_rules():
 
 
 # Modules/features: external /api/grid DB projection + alias/exclude_unset with synthetic QA fixtures.
-def test_grid_api_synthetic_projection_and_alias_exclude_unset(base_url: str, mongo_db):
+def test_grid_api_synthetic_projection_and_alias_exclude_unset(base_url: str, mongo_db, make_member):
     if mongo_db is None:
         pytest.skip("mongo_db fixture unavailable")
+    QA_MEMBER_ID = make_member("staff")["id"]  # throwaway (the old profile.qa account is gone)
 
     key = _grid_key()
     if not key:

@@ -49,10 +49,10 @@ def _cleanup_checkout(base_url, token, athlete_id, lat=None, lng=None):
     )
 
 
-def test_muster_checkin_backward_compat_no_gps(base_url):
+def test_muster_checkin_backward_compat_no_gps(base_url, make_member):
     """No lat/lng in payload → checkin still succeeds, site fields null."""
     token = _login(base_url)
-    aid = _get_checkin_candidate(base_url, token)
+    aid = make_member("athlete")["id"]  # throwaway — never a real athlete
     if not aid:
         return   # nothing to test on a fully-checked-in day
     try:
@@ -72,11 +72,11 @@ def test_muster_checkin_backward_compat_no_gps(base_url):
         _cleanup_checkout(base_url, token, aid)
 
 
-def test_muster_checkin_with_far_gps_marks_off_geofence(base_url):
+def test_muster_checkin_with_far_gps_marks_off_geofence(base_url, make_member):
     """GPS coords far from any configured site → out_of_geofence=True in
     the response and (verifiably) stamped on the attendance row."""
     token = _login(base_url)
-    aid = _get_checkin_candidate(base_url, token)
+    aid = make_member("athlete")["id"]  # throwaway — never a real athlete
     if not aid:
         return
     try:
@@ -99,10 +99,10 @@ def test_muster_checkin_with_far_gps_marks_off_geofence(base_url):
         _cleanup_checkout(base_url, token, aid)
 
 
-def test_muster_checkout_accepts_gps(base_url):
+def test_muster_checkout_accepts_gps(base_url, make_member):
     """Checkout endpoint also accepts optional GPS + echoes it back."""
     token = _login(base_url)
-    aid = _get_checkin_candidate(base_url, token)
+    aid = make_member("athlete")["id"]  # throwaway — never a real athlete
     if not aid:
         return
     # First check them in
@@ -127,11 +127,11 @@ def test_muster_checkout_accepts_gps(base_url):
     assert body["out_of_geofence"] is True
 
 
-def test_muster_checkin_zero_zero_is_geo_unavailable(base_url):
+def test_muster_checkin_zero_zero_is_geo_unavailable(base_url, make_member):
     """(0, 0) is our sentinel for 'GPS not obtained' — must NOT be
     treated as a real location."""
     token = _login(base_url)
-    aid = _get_checkin_candidate(base_url, token)
+    aid = make_member("athlete")["id"]  # throwaway — never a real athlete
     if not aid:
         return
     try:
