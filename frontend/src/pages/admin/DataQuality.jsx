@@ -302,7 +302,7 @@ function RecalcLatePanel() {
         <div>
           <h2 className="text-base md:text-lg font-extrabold tracking-tight text-slate-800">Recalculate late arrivals</h2>
           <p className="text-sm text-slate-600 mt-0.5">
-            Re-evaluate the stored <b>late</b> flag on existing attendance against the <b>current</b> schedule &amp; grace (and camp overlay). Use after changing a member's timings — late is stamped at check-in and isn't auto-recomputed. <span className="font-semibold">Preview is safe; Apply is Super-Admin only.</span>
+            Re-evaluate the stored <b>late</b> and <b>early-out</b> on existing attendance against the <b>current</b> schedule &amp; grace (and camp overlay). Use after changing a member's timings — late is stamped at check-in and isn't auto-recomputed. <span className="font-semibold">Preview is safe; Apply is Super-Admin only.</span>
           </p>
         </div>
       </div>
@@ -355,8 +355,8 @@ function RecalcLatePanel() {
                     <tr key={c.attendance_id} className="border-t border-slate-100" data-testid="recalc-late-row">
                       <td className="px-3 py-1.5 font-semibold text-slate-800">{c.name}</td>
                       <td className="px-3 py-1.5 tabular-nums text-slate-600">{formatDate(c.date)}</td>
-                      <td className="px-3 py-1.5 text-slate-500">{c.was_late ? `LT ${c.was_minutes}m` : "on-time"}</td>
-                      <td className="px-3 py-1.5 font-semibold text-sky-700">{c.now_late ? `LT ${c.now_minutes}m` : "on-time"}</td>
+                      <td className="px-3 py-1.5 text-slate-500">{c.was_late ? `LT ${c.was_minutes}m` : "on-time"}{c.was_early_out >= 15 ? ` · EO ${c.was_early_out}m` : ""}</td>
+                      <td className="px-3 py-1.5 font-semibold text-sky-700">{c.now_late ? `LT ${c.now_minutes}m` : "on-time"}{c.now_early_out >= 15 ? ` · EO ${c.now_early_out}m` : ""}</td>
                     </tr>
                   ))}
                 </tbody>

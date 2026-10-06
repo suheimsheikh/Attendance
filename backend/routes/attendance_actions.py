@@ -82,6 +82,7 @@ class RecalcLateIn(BaseModel):
     start: str                           # YYYY-MM-DD inclusive
     end: str                             # YYYY-MM-DD inclusive
     dry_run: bool = True                 # preview by default
+    include_early_out: bool = True       # also re-stamp early_out_minutes vs current work_end
 
 
 def make_router(db, get_current_user, require_admin, open_session_for, _late_days_in_month,
@@ -614,8 +615,8 @@ def make_router(db, get_current_user, require_admin, open_session_for, _late_day
         if body.user_id:
             q["user_id"] = body.user_id
         rows = await db.attendance.find(
-            q, {"_id": 0, "id": 1, "user_id": 1, "date": 1, "check_in_at": 1,
-                "late": 1, "late_minutes": 1}).to_list(length=None)
+            q, {"_id": 0, "id": 1, "user_id": 1, "date": 1, "check_in_at": 1, "check_out_at": 1,
+                "late": 1, "late_minutes": 1, "early_out_minutes": 1}).to_list(length=None)
         umap: Dict[str, dict] = {}
         changes = []
         for r in rows:
@@ -636,12 +637,24 @@ def make_router(db, get_current_user, require_admin, open_session_for, _late_day
             is_late, late_min = compute_late(office, member, ts, camp=camp)
             was_late = bool(r.get("late"))
             was_min = int(r.get("late_minutes") or 0)
-            if was_late != bool(is_late) or was_min != int(late_min):
+            was_eo = int(r.get("early_out_minutes") or 0)
+            now_eo = was_eo
+            co = r.get("check_out_at")
+            if body.include_early_out and co:
+                try:
+                    co_ts = datetime.fromisoformat(co)
+                    if co_ts.tzinfo is None:
+                        co_ts = co_ts.replace(tzinfo=tz)
+                    now_eo = _compute_early_out_at_checkout(co_ts, member, office)
+                except (ValueError, TypeError):
+                    now_eo = was_eo
+            if was_late != bool(is_late) or was_min != int(late_min) or was_eo != now_eo:
                 changes.append({
                     "attendance_id": r["id"], "user_id": uid,
                     "name": member.get("full_name") or uid, "date": r["date"],
                     "was_late": was_late, "was_minutes": was_min,
                     "now_late": bool(is_late), "now_minutes": int(late_min),
+                    "was_early_out": was_eo, "now_early_out": now_eo,
                 })
         applied = 0
         if not body.dry_run and changes:
@@ -649,9 +662,16 @@ def make_router(db, get_current_user, require_admin, open_session_for, _late_day
             for ch in changes:
                 await db.attendance.update_one({"id": ch["attendance_id"]}, {"$set": {
                     "late": ch["now_late"], "late_minutes": ch["now_minutes"],
+                    "early_out_minutes": ch["now_early_out"],
                     "late_recalc_at": stamp, "late_recalc_by": admin.get("full_name"),
                 }})
                 applied += 1
+            await write_audit(
+                db, actor=admin, action="attendance.recalc_timings",
+                entity_type="attendance", entity_id=body.user_id or "all",
+                entity_name=changes[0]["name"] if body.user_id else "All members",
+                meta={"start": body.start, "end": body.end, "applied": applied},
+            )
         changes.sort(key=lambda c: (c["date"], c["name"]))
         return {
             "scanned": len(rows), "changed": len(changes), "applied": applied,

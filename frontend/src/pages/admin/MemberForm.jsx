@@ -8,9 +8,11 @@ import { fileToResizedDataUrl } from "../../utils";
 import Avatar from "../../components/Avatar";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
+import RecalcTimingsDialog from "../../components/RecalcTimingsDialog";
 
 export default function MemberForm({ initial, onClose, onSaved }) {
   const isEdit = !!initial;
+  const [recalcFor, setRecalcFor] = useState(null);
   const [form, setForm] = useState({
     full_name: initial?.full_name || "",
     email: initial?.email || "",
@@ -137,6 +139,9 @@ export default function MemberForm({ initial, onClose, onSaved }) {
         });
         await api.patch(`/members/${initial.id}`, body);
         toast.success("Member updated");
+        const timingsChanged = (form.work_start || "") !== (initial.work_start || "")
+          || (form.work_end || "") !== (initial.work_end || "");
+        if (timingsChanged) { setRecalcFor({ id: initial.id, name: form.full_name }); return; }
       } else {
         const body = { ...form, meal_eligible: mealMap[form.meal_eligible] };
         await api.post("/members", body);
@@ -149,6 +154,10 @@ export default function MemberForm({ initial, onClose, onSaved }) {
       setBusy(false);
     }
   };
+
+  if (recalcFor) {
+    return <RecalcTimingsDialog member={recalcFor} onClose={() => { setRecalcFor(null); onSaved(); }} />;
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={guard.close}>
