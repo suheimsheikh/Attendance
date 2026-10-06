@@ -138,12 +138,13 @@ class TestItemsReorder:
                                    "item_ids": ["not-a-real-id-xxx"]}, timeout=30)
         assert r.status_code == 400
 
-    def test_reorder_forbidden_for_chef(self, chef_client, base_url, two_items):
+    def test_reorder_allowed_for_chef(self, chef_client, base_url, two_items):
+        # Product decision (Oct 2026): chefs may reorder pantry items.
         a, b = two_items
         r = chef_client.put(f"{base_url}/api/meals/items/reorder",
                             json={"category_key": "grocery",
                                   "item_ids": [a["id"], b["id"]]}, timeout=30)
-        assert r.status_code == 403
+        assert r.status_code == 200, r.text
 
 
 class TestItemLifecycle:

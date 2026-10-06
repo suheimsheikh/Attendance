@@ -90,12 +90,14 @@ class TestPurchaseCategories:
                          headers=member_headers, timeout=30)
         assert r.status_code == 403
 
-    def test_chef_cannot_put(self, chef_client, base_url):
+    def test_chef_can_put(self, chef_client, base_url):
+        # Product decision (Oct 2026): chefs may edit purchase categories.
+        # Empty list → 400 proves the chef passed auth without changing data.
         r = chef_client.put(
             f"{base_url}/api/meals/purchase-categories",
-            json={"categories": [{"label": "Fruits"}]}, timeout=30,
+            json={"categories": []}, timeout=30,
         )
-        assert r.status_code == 403
+        assert r.status_code == 400, r.text
 
     def test_admin_can_add_and_restore(self, admin_client, base_url):
         # Snapshot original

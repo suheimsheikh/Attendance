@@ -624,3 +624,9 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Rule: Meals/Stock table cells show amounts without ₹; ₹ lives in column headers. KPI cards/tooltips/sentences keep ₹. Empty qty = "—" everywhere.
 - Fixed along the way: UTC-date bugs (toISOString) in MealsAnalyticsPanel segments, Correction modal min/max, Muster/Escort share dates, export filenames.
 - Not changed (out of scope): AbsentDispatchPrompt 10am gate still uses device-local hour. Pre-existing pytest fixture debt: leave tests that self-approve now 403 (2-admin rule).
+
+## Update 06 Oct 2026 — Test-suite triage + D-items investigation (no app code changed)
+- Full pytest: 69 fail/err of ~1,070. All 68 (excl. log-noise test) ALSO fail on pre-cleanup commit ccc978c (verified by running old code side-by-side on :8002) → not caused by cleanup. Buckets: outdated vs approved rules (~23), rotated test logins dar.test/exec.test/profile.qa (12), preview-data drift (~30). User chose NOT to repair suite yet.
+- D1: chefs MAY edit purchase categories + reorder items (user decision). Tests updated: test_reorder_allowed_for_chef, test_chef_can_put.
+- D2: Masters stock "₹47k gap" is the test formula, not the app: gap = issue premium (issues valued at max(WAC, latest rate)) ₹37,452 + stock-take adjustments ₹9,717. App identity op+purch−WAC issues−waste+adj = on_hand_value holds to ₹0.01. Test not yet updated.
+- D3: scheduler.send_checkout_reminders logs Twilio rejections with logger.exception (traceback noise). Bigger: preview office config has LIVE Twilio creds (AC790b…, enabled) + real +91 numbers; tests (test_review_iter16 send-now) + preview reminder loop try to text real people. All 122 attempts today failed with Twilio 429 "50 daily messages limit"; preview sms_log has only 1 success ever → cap likely used by PRODUCTION on same account (unconfirmed). Pending user decision: disable Twilio in preview, change log level, check prod SMS failures.
