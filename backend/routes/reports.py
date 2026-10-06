@@ -930,7 +930,7 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
 
         # --- Roster (same filter pills as Attendance report). ---
         users = await db.users.find(
-            {"id": member_id} if member_id else {"status": {"$ne": "left"}},
+            {"id": member_id} if member_id else {"status": {"$ne": "left"}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1,
              "fleet": 1, "institution": 1, "weekly_off": 1,
              "work_start": 1, "work_end": 1,
@@ -1188,10 +1188,43 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
             # past. Option B, user-confirmed 30 Jun 2026.
             if iso == today_iso:
                 return ""
-            return "AB"
+            return _absent_or_blank(uid, iso)
 
         # Precompute day-of-week per iso for the month.
         dow_by_iso = {iso: date.fromisoformat(iso).weekday() for iso in days}
+
+        # Phase C (Jun 2026, user request): an athlete is marked "AB"
+        # (absent) ONLY on days they're expected at a camp/regatta —
+        # i.e. they're an enrolled participant of a camp covering that
+        # date. On every other day their grid cell stays BLANK (and is
+        # excluded from totals), so athletes who merely aren't at a camp
+        # are never counted absent. Employees (staff/coach/exec) are
+        # unaffected. Build the set of expected ISO dates per athlete.
+        from camps import camp_active_on as _camp_active_on, camp_applies_to as _camp_applies_to
+        _WK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        _athlete_like_absent = await _athlete_like_keys(db)
+        _cat_by_uid = {u["id"]: (u.get("category") or "") for u in users}
+        _camps_range = await db.camps.find(
+            {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}}, {"_id": 0},
+        ).to_list(500)
+        _expected_dates: dict = {}
+        if _camps_range:
+            _athletes = [u for u in users if (u.get("category") or "") in _athlete_like_absent]
+            for iso in days:
+                wk = _WK[dow_by_iso[iso]]
+                active = [c for c in _camps_range if _camp_active_on(c, iso, wk)]
+                if not active:
+                    continue
+                for u in _athletes:
+                    if any(_camp_applies_to(c, u) for c in active):
+                        _expected_dates.setdefault(u["id"], set()).add(iso)
+
+        def _absent_or_blank(uid: str, iso: str) -> str:
+            """Athletes are AB only when expected at a camp that day;
+            otherwise blank. Employees are always AB on a missed day."""
+            if _cat_by_uid.get(uid, "") in _athlete_like_absent:
+                return "AB" if iso in _expected_dates.get(uid, set()) else ""
+            return "AB"
 
         # Athlete-like categories are tracked via Breaks, not payroll
         # absence — the weekly-off "sandwich" rule below is an EMPLOYEE

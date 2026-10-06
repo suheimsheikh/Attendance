@@ -1175,6 +1175,7 @@ async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)
 
 @api_router.get("/members")
 async def list_members(key: str = "", category: Optional[str] = None,
+                       include_archived: bool = False,
                        authorization: Optional[str] = Header(default=None),
                        user: Optional[dict] = Depends(optional_user)):
     """List all members. For bandwidth reasons we emit a small photo URL
@@ -1198,7 +1199,7 @@ async def list_members(key: str = "", category: Optional[str] = None,
             raise HTTPException(status_code=401, detail="Invalid key")
         office = await db.config.find_one(
             {"id": "office"}, {"_id": 0, "default_work_start": 1, "default_work_end": 1}) or {}
-        roster = await db.users.find({"status": {"$ne": "left"}}, {"_id": 0}).to_list(5000)
+        roster = await db.users.find({"status": {"$ne": "left"}, "archived": {"$ne": True}}, {"_id": 0}).to_list(5000)
         roster = _payroll_bucket(roster, category)
         rows = [{
             "member_id": u.get("id"),
@@ -1221,7 +1222,7 @@ async def list_members(key: str = "", category: Optional[str] = None,
     _svc_tok = _bearer_from_header(authorization)
     if _svc_tok and valid_members_api_token(_svc_tok):
         roster = await db.users.find(
-            {"status": {"$ne": "left"}},
+            {"status": {"$ne": "left"}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "mobile": 1,
              "guardian_name": 1, "guardian_mobile": 1,
              "mother_name": 1, "mother_mobile": 1,
@@ -1257,7 +1258,9 @@ async def list_members(key: str = "", category: Optional[str] = None,
         return {"members": members}
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    users = await db.users.find({}, {"_id": 0, "hashed_password": 0}).sort("full_name", 1).to_list(2000)
+    users = await db.users.find(
+        {} if include_archived else {"archived": {"$ne": True}},
+        {"_id": 0, "hashed_password": 0}).sort("full_name", 1).to_list(2000)
 
     # Bulk: latest check-in date per user. $sort+$first rides the existing
     # {user_id:1, date:-1} index (DISTINCT_SCAN) — O(#users), not O(#rows).
@@ -1597,14 +1600,100 @@ async def get_member(member_id: str, admin: dict = Depends(require_admin)):
     return UserPublic(**{k: u.get(k) for k in UserPublic.model_fields})
 
 
-@api_router.delete("/members/{member_id}")
-async def delete_member(member_id: str, admin: dict = Depends(require_admin)):
-    if member_id == admin["id"]:
-        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+async def _queue_member_action(member_id: str, kind: str, admin: dict, reason: str) -> dict:
+    """Queue a member delete/archive for Super-Admin approval (non-super
+    admins). Inserts a pending correction row that shows up in the
+    unified Approvals screen; a Super Admin applies it there."""
+    target = await db.users.find_one({"id": member_id}, {"_id": 0, "id": 1, "full_name": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    office = await db.config.find_one({"id": "office"})
+    today = local_date_str(office)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "entity_type": "member",
+        "kind": kind,
+        "entity_id": member_id,
+        "target_date": today,
+        "payload": {"member_name": target.get("full_name")},
+        "reason": (reason or "").strip() or f"Request to {'delete' if kind == 'member_delete' else 'archive'} {target.get('full_name')}",
+        "status": "pending",
+        "requester_id": member_id,
+        "requester_name": target.get("full_name"),
+        "requested_at": now_utc().isoformat(),
+        "decided_by_id": None, "decided_by_name": None, "decided_at": None,
+        "admin_note": None,
+        "filed_by_admin_id": admin["id"],
+        "filed_by_admin_name": admin["full_name"],
+        "needs_super_admin": True,
+    }
+    await db.corrections.insert_one(doc)
+    await write_audit(
+        db, actor=admin, action="member_action_requested",
+        entity_type="correction", entity_id=doc["id"],
+        entity_name=f"member/{kind} · {target.get('full_name')}",
+        before=None, after={"status": "pending", "needs_super_admin": True, "kind": kind},
+        reason=doc["reason"],
+    )
+    return {"ok": True, "queued": True, "needs_super_admin": True, "id": doc["id"]}
+
+
+async def _do_delete_member(member_id: str) -> None:
     await db.users.delete_one({"id": member_id})
     await db.attendance.delete_many({"user_id": member_id})
     await db.leaves.delete_many({"user_id": member_id})
-    return {"ok": True}
+
+
+@api_router.delete("/members/{member_id}")
+async def delete_member(member_id: str, reason: str = "", admin: dict = Depends(require_admin)):
+    if member_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    # Super Admins delete directly; regular admins queue for Super-Admin
+    # sign-off in the Approvals screen (Jun 2026, user request).
+    if not is_super_admin(admin):
+        return await _queue_member_action(member_id, "member_delete", admin, reason)
+    await _do_delete_member(member_id)
+    await write_audit(
+        db, actor=admin, action="member_deleted", entity_type="member",
+        entity_id=member_id, entity_name=member_id, before=None, after=None,
+        reason=reason or "Deleted by Super Admin",
+    )
+    return {"ok": True, "deleted": True}
+
+
+@api_router.post("/members/{member_id}/archive")
+async def archive_member(member_id: str, reason: str = "", admin: dict = Depends(require_admin)):
+    if member_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="Cannot archive yourself")
+    target = await db.users.find_one({"id": member_id}, {"_id": 0, "id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    if not is_super_admin(admin):
+        return await _queue_member_action(member_id, "member_archive", admin, reason)
+    await db.users.update_one({"id": member_id}, {"$set": {
+        "archived": True, "archived_at": now_utc().isoformat(), "archived_by": admin["full_name"],
+    }})
+    await write_audit(
+        db, actor=admin, action="member_archived", entity_type="member",
+        entity_id=member_id, entity_name=member_id, before={"archived": False},
+        after={"archived": True}, reason=reason or "Archived by Super Admin",
+    )
+    return {"ok": True, "archived": True}
+
+
+@api_router.post("/members/{member_id}/unarchive")
+async def unarchive_member(member_id: str, admin: dict = Depends(require_admin)):
+    res = await db.users.update_one({"id": member_id}, {"$set": {
+        "archived": False, "archived_at": None, "archived_by": None,
+    }})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Member not found")
+    await write_audit(
+        db, actor=admin, action="member_unarchived", entity_type="member",
+        entity_id=member_id, entity_name=member_id, before={"archived": True},
+        after={"archived": False}, reason="Unarchived",
+    )
+    return {"ok": True, "archived": False}
 
 
 
@@ -1642,7 +1731,7 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
             raise HTTPException(status_code=400, detail="month must be in YYYY-MM format (e.g. 2026-09)")
         import calendar as _cal
         month_label = f"{_cal.month_name[int(lop_month[5:7])]} {lop_month[:4]}"
-        roster = await db.users.find({}, {"_id": 0}).to_list(5000)
+        roster = await db.users.find({"archived": {"$ne": True}}, {"_id": 0}).to_list(5000)
         roster = _payroll_bucket(roster, category or "rest")
         # Compute the month grid (for LOP) and every member's balances
         # CONCURRENTLY. The per-member balance summaries are independent,
@@ -1684,7 +1773,7 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
     if not user or user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin privileges required")
     users = await db.users.find(
-        {"category": {"$nin": list(ATHLETE_CATEGORIES)}},
+        {"category": {"$nin": list(ATHLETE_CATEGORIES)}, "archived": {"$ne": True}},
         {"_id": 0, "id": 1, "full_name": 1, "category": 1,
          "rank": 1, "institution": 1,
          "leave_balance_opening": 1, "comp_off_opening": 1, "weekly_off": 1},
@@ -1913,7 +2002,7 @@ async def member_card(member_id: str, admin: dict = Depends(require_admin)):
 async def all_cards(admin: dict = Depends(require_admin)):
     """Every member's personal QR — for batch printing of member ID cards."""
     users = await db.users.find(
-        {}, {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1, "personal_qr": 1}
+        {"archived": {"$ne": True}}, {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1, "personal_qr": 1}
     ).sort("full_name", 1).to_list(2000)
     return {
         "members": [
@@ -3331,7 +3420,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
     # that date, not today's; live views use today.
     today_d = date.fromisoformat(target_date)
     users = await db.users.find(
-        {}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1,
+        {"archived": {"$ne": True}}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1,
              "photo_thumb": 1, "work_start": 1, "work_end": 1, "institution": 1,
              "fleet": 1,  # NOTE: needed by break_applies_to() for scope=fleet breaks
              "leaving_date": 1,  # 24 Feb 2026 — feeds the ex-member filter/chip on the Presence Board
@@ -4314,7 +4403,7 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
 async def compute_hours_report(start: str, end: str) -> List[dict]:
     """Aggregate hours and days present per member between dates inclusive."""
     users = await db.users.find(
-        {}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "weekly_off": 1, "fleet": 1, "leaving_date": 1, "joining_date": 1, "hourly_wager": 1}
+        {"archived": {"$ne": True}}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "weekly_off": 1, "fleet": 1, "leaving_date": 1, "joining_date": 1, "hourly_wager": 1}
     ).sort("full_name", 1).to_list(2000)
     sd = date.fromisoformat(start)
     ed = date.fromisoformat(end)

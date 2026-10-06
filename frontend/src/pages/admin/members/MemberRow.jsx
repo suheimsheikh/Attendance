@@ -1,5 +1,5 @@
 import React from "react";
-import { Edit3, LogIn, LogOut as LogOutIcon, Loader2, Trash2, ShieldCheck, PencilRuler, ChefHat } from "lucide-react";
+import { Edit3, LogIn, LogOut as LogOutIcon, Loader2, Trash2, ShieldCheck, PencilRuler, ChefHat, Archive, ArchiveRestore } from "lucide-react";
 import InlinePhotoAvatar from "../../../components/InlinePhotoAvatar";
 import ParentContact from "../../../components/ParentContact";
 import StatusBadge from "../../../components/StatusBadge";
@@ -38,6 +38,7 @@ export default React.memo(function MemberRow({
   onEdit, onDelete, onToggleAttendance, onPatchField,
   onPhotoUpdated,
   onFileCorrection,
+  onArchive, onUnarchive,
   highlighted,
 }) {
   const p = presenceRow;
@@ -65,32 +66,63 @@ export default React.memo(function MemberRow({
       onDoubleClick={(e) => { if (!isInteractive(e.target)) onEdit(m); }}
       title="Double-click to edit"
     >
-      {/* Edit pencil + File-correction — extreme left, always visible */}
+      {/* All action controls — extreme left, always visible (Jun 2026). */}
       <td className={`iu-table-td text-center relative pl-2 pr-1 sticky left-0 z-10 ${frozenBg}`}>
         <span className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r ${b.stripe}`} aria-hidden="true" />
         <div className="flex items-center justify-center gap-0.5">
           <button
             data-testid={`edit-member-${m.id}`}
             onClick={() => onEdit(m)}
-            className="p-2 rounded-lg hover:bg-slate-100 text-slate-700"
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-700"
             title="Edit member"
           >
-            <Edit3 size={16} />
+            <Edit3 size={15} />
           </button>
           {onFileCorrection && (
             <button
               data-testid={`file-correction-${m.id}`}
               onClick={() => onFileCorrection(m)}
-              className="p-2 rounded-lg hover:bg-sky-50 text-sky-700"
+              className="p-1.5 rounded-lg hover:bg-sky-50 text-sky-700"
               title={`File correction on behalf of ${m.full_name}`}
             >
-              <PencilRuler size={16} />
+              <PencilRuler size={15} />
             </button>
           )}
+          {m.archived ? (
+            onUnarchive && (
+              <button
+                data-testid={`unarchive-member-${m.id}`}
+                onClick={() => onUnarchive(m)}
+                className="p-1.5 rounded-lg hover:bg-emerald-50 text-emerald-700"
+                title="Unarchive member (restore to all reports)"
+              >
+                <ArchiveRestore size={15} />
+              </button>
+            )
+          ) : (
+            onArchive && (
+              <button
+                data-testid={`archive-member-${m.id}`}
+                onClick={() => onArchive(m)}
+                className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-700"
+                title="Archive member (hide from all reports until unarchived)"
+              >
+                <Archive size={15} />
+              </button>
+            )
+          )}
+          <button
+            data-testid={`delete-member-${m.id}`}
+            onClick={() => onDelete(m)}
+            className="p-1.5 rounded-lg hover:bg-red-50 text-red-600"
+            title="Delete member"
+          >
+            <Trash2 size={15} />
+          </button>
         </div>
       </td>
       {/* Member: photo + name + email + parent-contact icon */}
-      <td className={`iu-table-td sticky left-16 z-10 ${frozenBg} shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]`}>
+      <td className={`iu-table-td sticky left-28 z-10 ${frozenBg} shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]`}>
         <div className="flex items-center gap-3">
           <InlinePhotoAvatar
             member={m}
@@ -371,13 +403,6 @@ export default React.memo(function MemberRow({
             {busyId === m.id ? <Loader2 className="animate-spin" size={14}/> : (p?.status === "on_campus" ? <LogOutIcon size={14}/> : <LogIn size={14}/>)}
           </button>
           {p ? <StatusBadge status={p.status} /> : <span className="text-xs text-slate-400">—</span>}
-        </div>
-      </td>
-      <td className="iu-table-td text-center">
-        <div className="flex items-center justify-center gap-1">
-          <button data-testid={`delete-member-${m.id}`} onClick={() => onDelete(m)} className="p-2 rounded-lg hover:bg-red-50 text-red-600" title="Delete member">
-            <Trash2 size={16} />
-          </button>
         </div>
       </td>
     </tr>

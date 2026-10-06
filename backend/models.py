@@ -50,6 +50,13 @@ class UserPublic(BaseModel):
     # the Grid "LF" (Left) cell — days after this date don't count
     # as absent. Optional.
     leaving_date: Optional[str] = None
+    # Archive flag (Jun 2026). A reversible soft-hide distinct from
+    # `leaving_date` (ex-member). Archived members are excluded from
+    # every roster / report / grid / parent-notify / payroll surface
+    # until unarchived. History is preserved.
+    archived: Optional[bool] = None
+    archived_at: Optional[str] = None
+    archived_by: Optional[str] = None
     # OT eligibility (7 Jul 2026). Explicit False disables OT accrual;
     # None/True → category-based defaults apply.
     ot_eligible: Optional[bool] = None

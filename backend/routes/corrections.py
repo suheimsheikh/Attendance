@@ -46,6 +46,10 @@ CORRECTION_WINDOW_DAYS: int = 31
 VALID_ENTITY_KINDS: Dict[str, set] = {
     "attendance": {"missed_checkin", "time_adjust", "bulk_delete"},
     "leave": {"leave_date_change", "leave_cancel", "leave_type_change"},
+    # Member delete/archive requested by a regular admin — applied only
+    # on Super-Admin approval (Jun 2026, user request). Never filed
+    # directly via POST /corrections; raised by the member endpoints.
+    "member": {"member_delete", "member_archive"},
 }
 VALID_STATUSES = {"pending", "approved", "rejected"}
 
@@ -278,6 +282,30 @@ async def _apply_leave_type_change(db, c: dict, admin: dict) -> dict:
     return {"leave_id": c["entity_id"], "new_type": new_type}
 
 
+async def _apply_member_archive(db, c: dict, admin: dict) -> dict:
+    mid = c.get("entity_id")
+    if not mid:
+        raise HTTPException(status_code=400, detail="entity_id (member id) is required")
+    res = await db.users.update_one({"id": mid}, {"$set": {
+        "archived": True,
+        "archived_at": now_utc().isoformat(),
+        "archived_by": admin["full_name"],
+    }})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Member no longer exists")
+    return {"member_id": mid, "archived": True}
+
+
+async def _apply_member_delete(db, c: dict, admin: dict) -> dict:
+    mid = c.get("entity_id")
+    if not mid:
+        raise HTTPException(status_code=400, detail="entity_id (member id) is required")
+    await db.users.delete_one({"id": mid})
+    await db.attendance.delete_many({"user_id": mid})
+    await db.leaves.delete_many({"user_id": mid})
+    return {"member_id": mid, "deleted": True}
+
+
 APPLIERS: Dict[tuple, Any] = {
     ("attendance", "missed_checkin"):    _apply_missed_checkin,
     ("attendance", "bulk_delete"):       apply_bulk_delete,
@@ -285,6 +313,8 @@ APPLIERS: Dict[tuple, Any] = {
     ("leave",      "leave_date_change"): _apply_leave_date_change,
     ("leave",      "leave_cancel"):      _apply_leave_cancel,
     ("leave",      "leave_type_change"): _apply_leave_type_change,
+    ("member",     "member_archive"):    _apply_member_archive,
+    ("member",     "member_delete"):     _apply_member_delete,
 }
 
 

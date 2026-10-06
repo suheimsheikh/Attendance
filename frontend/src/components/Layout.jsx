@@ -11,6 +11,7 @@ import RulesGate from "./RulesGate";
 import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
 import LeaveReportPrompt from "./LeaveReportPrompt";
+import AbsentDispatchPrompt from "./AbsentDispatchPrompt";
 import InstallPrompt from "./InstallPrompt";
 import OfflineBanner from "./OfflineBanner";
 import HelpChat from "./HelpChat";
@@ -427,6 +428,7 @@ export default function Layout() {
       <UserCredsChip />
       <StaleSessionPrompt />
       {isAdmin && !isEscort && <LeaveReportPrompt />}
+      {isAdmin && !isEscort && <AbsentDispatchPrompt />}
       <InstallPrompt />
       <OfflineBanner />
       <HelpChat />

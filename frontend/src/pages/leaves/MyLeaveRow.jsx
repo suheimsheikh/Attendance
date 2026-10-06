@@ -53,6 +53,18 @@ export default function MyLeaveRow({ l }) {
               {l.reason}
             </div>
           )}
+          {l.filed_by_admin_name && (
+            <div className="text-[11px] text-slate-500 mt-1.5" data-testid={`myleave-filed-${l.id}`}>
+              Applied by <span className="font-semibold text-slate-700">{l.filed_by_admin_name}</span> on your behalf
+            </div>
+          )}
+          {l.short_notice && (
+            <div className="text-[11px] mt-1" data-testid={`myleave-shortnotice-${l.id}`}>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${l.short_notice_lop ? "bg-rose-100 text-rose-800 border-rose-200" : "bg-amber-100 text-amber-800 border-amber-200"}`}>
+                {l.short_notice_lop ? "Short notice → LOP" : "Short notice"}
+              </span>
+            </div>
+          )}
           {(l.status === "approved" || l.status === "rejected") && l.decided_by && (
             <div className="text-[11px] text-slate-500 mt-1.5" data-testid={`myleave-decided-${l.id}`}>
               {l.status === "approved" ? "Approved" : "Rejected"} by <span className="font-semibold text-slate-700">{l.decided_by}</span>

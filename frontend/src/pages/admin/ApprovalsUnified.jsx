@@ -89,6 +89,8 @@ function normLeave(row) {
     details: [
       (row.type || "leave").toUpperCase(),
       days ? `${days}d` : null,
+      row.short_notice ? (row.short_notice_lop ? "⚠ short-notice → LOP" : "short notice") : null,
+      row.filed_by_admin_name ? `filed by ${row.filed_by_admin_name}` : null,
       row.reason,
     ].filter(Boolean).join(" · "),
     // Raw dates + user_id so the expandable LeaveContextPanel can fetch
@@ -155,7 +157,7 @@ function normCorrection(row) {
     details: isBulk
       ? [p.label || p.tool, p.affected_rows != null ? `${p.affected_rows} row${p.affected_rows === 1 ? "" : "s"} will be deleted` : null, row.reason].filter(Boolean).join(" · ")
       : [
-        (row.kind || "").replace(/_/g, " "),
+        ({ member_delete: "Delete member", member_archive: "Archive member" }[row.kind]) || (row.kind || "").replace(/_/g, " "),
         p.check_in_time ? `in ${p.check_in_time}` : null,
         p.check_out_time ? `out ${p.check_out_time}` : null,
         row.filed_by_admin_name ? `filed by ${row.filed_by_admin_name}` : null,

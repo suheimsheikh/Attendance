@@ -211,43 +211,40 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
                 raise HTTPException(status_code=403, detail="Posting can only be filed by an admin on behalf of a member")
             if not target_user_id or target_user_id == user["id"]:
                 raise HTTPException(status_code=400, detail="Posting must target another member (apply-on-behalf only)")
-        # R3 (30 Jun 2026, per-category 30 Jun 2026 afternoon): N-day
-        # notice rule on self-applied leaves. Tours/postings/late-comings
-        # are exempt — those are by nature short-notice. Admins filing on
-        # behalf bypass the gate so last-minute family emergencies can
-        # still be recorded. Threshold comes from Office Settings
-        # (`leave_notice_days`, now a per-category dict — falls back to
-        # 3 when a category is missing). 0 = gate disabled for that
-        # category.
+        # R3 superseded (Jun 2026, user request): the hard "N-day advance
+        # notice" BLOCK is removed — anyone may apply for leave at any
+        # time, including backdated (after the effective date). Instead a
+        # soft policy applies: a SHORT-NOTICE leave (applied 3 or fewer
+        # days before the start date, incl. backdated) is allowed as PAID
+        # leave only twice per calendar month; every short-notice leave
+        # beyond those two is auto-converted to LOP (loss of pay). Admins
+        # filing on behalf bypass this (emergencies/corrections).
+        short_notice_leave = False
+        short_notice_force_lop = False
         if body.type == "leave" and user["id"] == target_user["id"] and user.get("role") != "admin":
-            office = await db.config.find_one({"id": "office"}, {"_id": 0, "leave_notice_days": 1})
-            raw = (office or {}).get("leave_notice_days", 3)
-            target_cat = (target_user.get("category") or "").lower()
-            # Legacy single-int payload still in mongo is treated as a
-            # uniform value across categories.
-            if isinstance(raw, dict):
-                notice_days = int(raw.get(target_cat, 3) or 0)
-            else:
+            notice_days = 3
+            ocfg = await db.config.find_one({"id": "office"}, {"_id": 0, "short_notice_days": 1})
+            if ocfg and ocfg.get("short_notice_days") is not None:
                 try:
-                    notice_days = int(raw or 0)
+                    notice_days = int(ocfg["short_notice_days"])
                 except (TypeError, ValueError):
                     notice_days = 3
-            if notice_days > 0:
-                try:
-                    today_d = _date_cls.today()
-                    start_d = _date_cls.fromisoformat(body.start_date)
-                    days_off = (start_d - today_d).days
-                except Exception:
-                    days_off = None
-                if days_off is not None and days_off < notice_days:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=(
-                            f"Leave requires at least {notice_days} day"
-                            f"{'' if notice_days == 1 else 's'} of advance notice. "
-                            f"Please ask an admin to file this on your behalf."
-                        ),
-                    )
+            try:
+                days_off = (_date_cls.fromisoformat(body.start_date) - _date_cls.today()).days
+            except Exception:
+                days_off = None
+            if days_off is not None and days_off <= notice_days:
+                short_notice_leave = True
+                mstart = _date_cls.today().replace(day=1).isoformat()
+                existing_sn = await db.leaves.count_documents({
+                    "user_id": target_user["id"],
+                    "type": "leave",
+                    "short_notice": True,
+                    "status": {"$ne": "rejected"},
+                    "created_at": {"$gte": mstart + "T00:00:00"},
+                })
+                if existing_sn >= 2:
+                    short_notice_force_lop = True
         # Comp-off: enforce balance ceiling before persisting the row.
         if body.type == "comp_off":
             # Legacy guard kept for direct API hits — the UI no longer
@@ -280,6 +277,13 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
             "half_day": body.half_day,  # None | "FN" | "PN"
             "status": "pending",
             "late_application": late_application,
+            # Short-notice policy stamps (Jun 2026). `short_notice` marks a
+            # leave applied ≤3 days before start (or backdated);
+            # `short_notice_lop` marks the auto-LOP conversion when the
+            # member already used their 2 free short-notice leaves this
+            # month.
+            "short_notice": short_notice_leave,
+            "short_notice_lop": short_notice_force_lop,
             "filed_by_admin": user["id"] if target_user["id"] != user["id"] else None,
             "filed_by_admin_name": user["full_name"] if target_user["id"] != user["id"] else None,
             "created_at": now_utc().isoformat(),
@@ -292,11 +296,15 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
         if body.type == "leave" and compute_balance_summary and split_leave_days:
             summary = await compute_balance_summary(db, target_user)
             requested = 0.5 if body.half_day else _days_inclusive(body.start_date, body.end_date)
-            split = split_leave_days(
-                requested,
-                summary["comp_off"]["available"],
-                summary["paid_leave"]["available"],
-            )
+            if short_notice_force_lop:
+                # 3rd+ short-notice leave this month → entire leave is LOP.
+                split = {"comp_off_used": 0, "paid_leave_used": 0.0, "lop_days": requested}
+            else:
+                split = split_leave_days(
+                    requested,
+                    summary["comp_off"]["available"],
+                    summary["paid_leave"]["available"],
+                )
             doc.update(split)
         await db.leaves.insert_one(doc)
         # Personal reason bank (7 Jul 2026): if the member supplied a
@@ -534,6 +542,14 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
         leave = await db.leaves.find_one({"id": leave_id}, {"_id": 0})
         if not leave:
             raise HTTPException(status_code=404, detail="Leave not found")
+        # Four-eyes (Jun 2026, user request): when a leave was filed by an
+        # admin ON BEHALF of a member, a DIFFERENT admin must approve /
+        # reject it — the filer can't rubber-stamp their own filing.
+        if leave.get("filed_by_admin") and leave.get("filed_by_admin") == admin["id"]:
+            raise HTTPException(
+                status_code=403,
+                detail="You filed this leave on behalf of the member — another admin must approve or reject it.",
+            )
         # Reject requires a reason so we always have something to show
         # the applicant when they check back on their own list.
         if body.status == "rejected":

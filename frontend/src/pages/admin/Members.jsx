@@ -46,6 +46,9 @@ export default function Members() {
   // exited). Toggle persists per-page via localStorage so an admin can
   // pin their preference. 24 Feb 2026.
   const [showEx, setShowEx] = useExMemberToggle("members");
+  // Archived view — default OFF (archived members hidden). When ON the
+  // table shows ONLY archived members, each with an Unarchive control.
+  const [showArchived, setShowArchived] = useState(false);
   // Fleet master — used to render the inline Fleet dropdown. Falls back to
   // free-text + any distinct fleets actually assigned (defensive: handles
   // historic athletes whose fleet label was deleted from the master).
@@ -106,7 +109,7 @@ export default function Members() {
   const load = useCallback(async () => {
     try {
       const [m, p, i, f] = await Promise.all([
-        api.get("/members"),
+        api.get("/members?include_archived=true"),
         api.get("/presence"),
         api.get("/institutions"),
         api.get("/fleets"),
@@ -136,7 +139,7 @@ export default function Members() {
     // roster shrinking. Stable counts make the pills act like a
     // table of contents: always visible, always the same, and only
     // the row list narrows on click.
-    const active = filterEx(members, showEx);
+    const active = filterEx(members, showEx).filter((m) => !m.archived);
     const c = { all: active.length, coach: 0, staff: 0, executive: 0, athlete: 0, elite: 0 };
     let adminCount = 0;
     let chefCount = 0;
@@ -154,6 +157,8 @@ export default function Members() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = filterEx(members, showEx);
+    // Archived view toggle: ON → only archived; OFF → hide archived.
+    list = list.filter((m) => (showArchived ? !!m.archived : !m.archived));
     if (bucket !== "all") list = list.filter((m) => bucketOf(m) === bucket);
     // Role toggles OR-combine — a member with EITHER selected role
     // shows. AND-combining was the review's Low finding: enabling both
@@ -172,9 +177,10 @@ export default function Members() {
       (m.mobile || "").includes(q) ||
       (m.institution || "").toLowerCase().includes(q)
     );
-  }, [members, showEx, search, bucket, onlyAdmins, onlyChefs, instFilter]);
+  }, [members, showEx, showArchived, search, bucket, onlyAdmins, onlyChefs, instFilter]);
 
   const exCount = useMemo(() => members.filter((m) => isExMember(m)).length, [members]);
+  const archivedCount = useMemo(() => members.filter((m) => m.archived).length, [members]);
 
   // Any filter beyond the defaults?  Search box + admin/chef/institution
   // toggles + bucket. Used to show/hide the "Clear filters" reset button.
@@ -264,8 +270,25 @@ export default function Members() {
   const remove = useCallback(async (m) => {
     if (!window.confirm(`Delete ${m.full_name}? This also removes their attendance & leaves.`)) return;
     try {
-      await api.del(`/members/${m.id}`);
-      toast.success("Member deleted");
+      const res = await api.del(`/members/${m.id}`);
+      toast.success(res?.queued ? "Deletion request sent to Super Admin for approval" : "Member deleted");
+      load();
+    } catch (err) { showApiError(err, "Failed"); }
+  }, [load]);
+
+  const archive = useCallback(async (m) => {
+    if (!window.confirm(`Archive ${m.full_name}? They'll be hidden from every report, grid and parent-notification until unarchived. History is preserved.`)) return;
+    try {
+      const res = await api.post(`/members/${m.id}/archive`, {});
+      toast.success(res?.queued ? "Archive request sent to Super Admin for approval" : "Member archived");
+      load();
+    } catch (err) { showApiError(err, "Failed"); }
+  }, [load]);
+
+  const unarchive = useCallback(async (m) => {
+    try {
+      await api.post(`/members/${m.id}/unarchive`, {});
+      toast.success(`${m.full_name} unarchived`);
       load();
     } catch (err) { showApiError(err, "Failed"); }
   }, [load]);
@@ -410,7 +433,7 @@ export default function Members() {
         onClearFilters={clearFilters}
       />
 
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
         <ExMemberToggle showEx={showEx} onChange={setShowEx} exCount={exCount} />
         <span className="text-[11px] text-slate-400">
           {exCount === 0
@@ -418,6 +441,26 @@ export default function Members() {
             : showEx
               ? `Showing all members including ${exCount} who have left.`
               : `${exCount} ex-member${exCount === 1 ? "" : "s"} hidden — click to include.`}
+        </span>
+        <span className="mx-1 h-4 w-px bg-slate-200" aria-hidden="true" />
+        <button
+          data-testid="archived-view-toggle"
+          onClick={() => setShowArchived((v) => !v)}
+          className={`inline-flex items-center gap-1.5 px-3 h-8 rounded-full text-xs font-semibold border transition ${
+            showArchived
+              ? "bg-amber-500 text-white border-amber-500"
+              : "bg-white text-amber-700 border-amber-300 hover:bg-amber-50"
+          }`}
+          title="Show archived members (hidden from all reports until unarchived)"
+        >
+          Archived{archivedCount ? ` (${archivedCount})` : ""}
+        </button>
+        <span className="text-[11px] text-slate-400">
+          {showArchived
+            ? "Showing archived members only — use the restore icon to unarchive."
+            : archivedCount
+              ? `${archivedCount} archived member${archivedCount === 1 ? "" : "s"} hidden.`
+              : "No archived members."}
         </span>
       </div>
 
@@ -428,8 +471,8 @@ export default function Members() {
           <div className="overflow-auto max-h-[75vh]">
             <table className="w-full text-sm iu-table-compact"><thead className="bg-slate-50 sticky top-0 z-20">
                 <tr>
-                  <th className="iu-table-th w-16 text-center sticky left-0 z-30 bg-slate-50 !text-slate-700 !font-bold" title={COL_HELP.edit}>Edit</th>
-                  <SortableTh k="full_name" className="sticky left-16 z-30 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Member</SortableTh>
+                  <th className="iu-table-th w-28 text-center sticky left-0 z-30 bg-slate-50 !text-slate-700 !font-bold" title="Edit · file correction · archive · delete">Actions</th>
+                  <SortableTh k="full_name" className="sticky left-28 z-30 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Member</SortableTh>
                   <SortableTh k="ot_eligible" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="center">OT / Meal</SortableTh>
                   <SortableTh k="category" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Category</SortableTh>
                   <SortableTh k="role" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Role</SortableTh>
@@ -445,7 +488,6 @@ export default function Members() {
                   <SortableTh k="date_of_birth" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>DOB</SortableTh>
                   <th className="iu-table-th !text-slate-700 !font-bold" title={COL_HELP.parents}>Parents / Guardian</th>
                   <th className="iu-table-th !text-slate-700 !font-bold" title={COL_HELP.status}>Status</th>
-                  <th className="iu-table-th text-center w-12 !text-slate-700 !font-bold" title={COL_HELP.del}>Del</th>
                 </tr>
               </thead>
               <tbody data-testid="members-table">
@@ -460,6 +502,8 @@ export default function Members() {
                     options={rowOptions}
                     onEdit={setEditing}
                     onDelete={remove}
+                    onArchive={archive}
+                    onUnarchive={unarchive}
                     onToggleAttendance={toggleAttendance}
                     onPatchField={patchMember}
                     onPhotoUpdated={onPhotoUpdated(m.id)}

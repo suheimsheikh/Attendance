@@ -55,6 +55,9 @@ export default function SelfCheckIn() {
   // one-tap "Share to WhatsApp" button. Cleared when the member acts again.
   // { action: "checkin"|"checkout", name, siteName, at: Date }
   const [lastAction, setLastAction] = useState(null);
+  // Admin-only day summary (leave/tour/absent) appended to the admin's
+  // own check-in WhatsApp share (Jun 2026 user request).
+  const [adminDaySummary, setAdminDaySummary] = useState("");
   // Freshly-captured selfie from THIS session (data URL). Used to attach
   // the photo to the WhatsApp share when the member's stored profile
   // photo hasn't propagated yet. Cleared on next toggle.
@@ -157,17 +160,50 @@ export default function SelfCheckIn() {
     if (!status?.checked_in) shareScrolledRef.current = false;
   }, [status?.checked_in]);
 
+  // Admin day summary — fetch who's on leave / tour / absent so the
+  // admin's own check-in share carries the roster (user request Jun 2026).
+  useEffect(() => {
+    if (user?.role !== "admin" || !status?.checked_in) { setAdminDaySummary(""); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [roster, absentRep] = await Promise.all([
+          api.get("/muster/daily-roster").catch(() => null),
+          api.get("/muster/absent-report").catch(() => null),
+        ]);
+        const names = (arr) => (arr || []).map((x) => x.name).filter(Boolean).join(", ");
+        const lines = [];
+        if (roster?.on_leave?.length) lines.push(`📝 On leave: ${names(roster.on_leave)}`);
+        if (roster?.on_tour?.length) lines.push(`✈️ On tour: ${names(roster.on_tour)}`);
+        if (roster?.on_lop?.length) lines.push(`🔴 LOP: ${names(roster.on_lop)}`);
+        const staffAbsent = names(roster?.absent);
+        const athAbsent = (absentRep?.athletes || []).join(", ");
+        const allAbsent = [staffAbsent, athAbsent].filter(Boolean).join(", ");
+        if (allAbsent) lines.push(`❗ Absent (no info): ${allAbsent}`);
+        if (!cancelled) {
+          setAdminDaySummary(lines.length ? `*Today's attendance summary*\n${lines.join("\n")}` : "");
+        }
+      } catch {
+        if (!cancelled) setAdminDaySummary("");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.role, status?.checked_in]);
+
   // Share the current check-in / check-out to WhatsApp. Works from either
   // the transient `lastAction` (right after a toggle) OR the persistent
   // `status.session` (so a checked-in member who reopened the app can still
   // forward their check-in — the green button no longer vanishes on reload).
   // Prefers a fresh selfie captured this session, else the stored profile
   // photo, else shares text-only.
-  const shareCheckinToWhatsApp = async () => {
+  const shareCheckinToWhatsApp = async (opts = {}) => {
+    // Guard: when used directly as an onClick handler the first arg is a
+    // DOM event — ignore it so `noPhoto`/`extra` default correctly.
+    const { noPhoto = false, extra = "" } = (opts && opts.nativeEvent) ? {} : opts;
     let imageBlob = null;
-    if (freshSelfie) {
+    if (!noPhoto && freshSelfie) {
       imageBlob = await dataUrlToBlob(freshSelfie);
-    } else if (user?.photo) {
+    } else if (!noPhoto && user?.photo) {
       try {
         const r = await fetch(user.photo, { credentials: "include" });
         if (r.ok) imageBlob = await r.blob();
@@ -185,22 +221,41 @@ export default function SelfCheckIn() {
       late: !!sess?.late,
       lateMinutes: sess?.late_minutes ?? null,
     };
+    let text = formatCheckinCaption({
+      action: src.action,
+      name: src.name,
+      siteName: src.siteName,
+      when: src.at,
+      distanceM: src.distanceM,
+      offSite: src.offSite,
+      geoUnavailable: src.geoUnavailable,
+      placeName: src.placeName,
+      late: src.late,
+      lateMinutes: src.lateMinutes,
+    });
+    // Admin check-in (user request, Jun 2026): append today's attendance
+    // summary — who's on leave, on tour, and any absents detected — so
+    // the attendance group gets the roster the moment an admin arrives.
+    if (src.action === "checkin" && adminDaySummary) text += "\n\n" + adminDaySummary;
+    if (extra) text += "\n\n" + extra;
     shareToWhatsApp({
-      text: formatCheckinCaption({
-        action: src.action,
-        name: src.name,
-        siteName: src.siteName,
-        when: src.at,
-        distanceM: src.distanceM,
-        offSite: src.offSite,
-        geoUnavailable: src.geoUnavailable,
-        placeName: src.placeName,
-        late: src.late,
-        lateMinutes: src.lateMinutes,
-      }),
-      imageBlob,
+      text,
+      imageBlob: noPhoto ? null : imageBlob,
       filename: `${(src.name || "member").replace(/\s+/g, "_")}_${src.action}.jpg`,
     });
+  };
+
+  // Step-out (temp-exit) WhatsApp share — text only, no photo. "Asked to
+  // tap" (user request): a prominent button appears while stepped out.
+  const shareStepOutToWhatsApp = () => {
+    const ex = currentExcursion || {};
+    const whenRaw = ex.out_at || ex.started_at || ex.left_at;
+    const when = whenRaw ? new Date(whenRaw) : new Date();
+    const hhmm = when.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
+    const parts = [`⤴️ ${user?.full_name || "Member"} · STEPPED OUT: ${hhmm}`];
+    if (ex.reason) parts.push(ex.reason);
+    if (ex.expected_return) parts.push(`back by ${ex.expected_return}`);
+    shareToWhatsApp({ text: parts.join(" · ") });
   };
 
 
@@ -605,6 +660,18 @@ export default function SelfCheckIn() {
           >
             {working ? <Loader2 className="animate-spin" size={16} /> : <ArrowLeftRight size={16} />} I&apos;m back
           </button>
+          {/* Post the step-out to the WhatsApp attendance group — text
+              only, no photo (user request Jun 2026). One tap. */}
+          <button
+            type="button"
+            data-testid="share-stepout-btn"
+            onClick={shareStepOutToWhatsApp}
+            title="Post your step-out to the WhatsApp attendance group (text only)"
+            className="mt-3 mx-auto inline-flex items-center gap-2 px-4 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition"
+          >
+            <Share2 size={15} />
+            Share step-out to WhatsApp
+          </button>
         </div>
       )}
 
@@ -845,8 +912,8 @@ export default function SelfCheckIn() {
             <button
               type="button"
               data-testid="share-whatsapp-btn"
-              onClick={shareCheckinToWhatsApp}
-              title="Share this check-out to a WhatsApp chat or group"
+              onClick={() => shareCheckinToWhatsApp({ noPhoto: true })}
+              title="Share this check-out to the WhatsApp attendance group (text only)"
               className="mt-5 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition"
             >
               <Share2 size={15} />

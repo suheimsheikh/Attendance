@@ -139,6 +139,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         # Escorts can only muster athletes from their own institution. Coaches
         # see the full athlete roster. Admins can widen scope via ?scope=.
         athlete_query: dict = await _scoped_user_query(user, scope)
+        athlete_query["archived"] = {"$ne": True}
         if user.get("is_escort"):
             inst = (user.get("institution") or "").strip()
             if not inst:
@@ -242,11 +243,23 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         athlete_keys = await _athlete_like_keys()
         cats = list({*athlete_keys, "coach"})
         members = await db.users.find(
-            {"active": {"$ne": False}, "category": {"$in": cats}},
+            {"active": {"$ne": False}, "category": {"$in": cats}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1,
-             "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1},
+             "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1,
+             "institution": 1},
         ).to_list(2000)
         members = [m for m in members if not is_ex_member(m, today)]
+        # Phase C (Jun 2026): athletes are "absent" only when expected at
+        # a camp/regatta today (enrolled participant). Non-expected
+        # athletes are never flagged absent and never parent-notified.
+        from camps import fetch_camps_active_on, camp_active_on, camp_applies_to
+        _WK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        _camps_today = await fetch_camps_active_on(db, today)
+        _wk_today = _WK[date.fromisoformat(today).weekday()]
+
+        def _athlete_expected(m: dict) -> bool:
+            return any(camp_active_on(c, today, _wk_today) and camp_applies_to(c, m)
+                       for c in _camps_today)
         present_ids = set(await db.attendance.distinct("user_id", {"date": today}))
         on_leave_ids = set(await db.leaves.distinct("user_id", {
             "status": "approved", "type": {"$in": ["leave", "tour"]},
@@ -263,6 +276,10 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         total_athletes = total_coaches = 0
         for m in members:
             is_coach = m.get("category") == "coach"
+            # Athletes count toward the absentee roster only on camp days
+            # they're enrolled for; otherwise skip them entirely (blank).
+            if not is_coach and not _athlete_expected(m):
+                continue
             if is_coach:
                 total_coaches += 1
             else:
@@ -334,7 +351,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 by_user[uid] = a
         athlete_keys = await _athlete_like_keys()
         members = await db.users.find(
-            {"id": {"$in": list(by_user.keys())}, "category": {"$in": athlete_keys}},
+            {"id": {"$in": list(by_user.keys())}, "category": {"$in": athlete_keys}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "full_name": 1, "leaving_date": 1,
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1},
         ).to_list(5000)
@@ -381,7 +398,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         today = local_date_str(office)
 
         members = await db.users.find(
-            {"active": {"$ne": False}, "category": {"$in": ["staff", "coach"]}},
+            {"active": {"$ne": False}, "category": {"$in": ["staff", "coach"]}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1},
         ).to_list(2000)
         members = [m for m in members if not is_ex_member(m, today)]

@@ -292,13 +292,15 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
       return null;
     }
   }, [start]);
-  // The gate fires only for self-applied Leaves below the threshold.
-  // Tours, postings, late-coming and the admin on-behalf path bypass it.
-  const noticeBlocked = !asAdmin
+  // Short-notice policy (Jun 2026, user request): the hard advance-notice
+  // BLOCK is removed — anyone may apply any time, even backdated. A
+  // short-notice leave (≤3 days before start) is a soft warning only:
+  // the first two per month are paid; further ones auto-convert to LOP.
+  const SHORT_NOTICE_DAYS = 3;
+  const isShortNotice = !asAdmin
     && type === "leave"
-    && noticeDays > 0
     && daysOfNotice != null
-    && daysOfNotice < noticeDays;
+    && daysOfNotice <= SHORT_NOTICE_DAYS;
 
   // Build the per-member row(s) the notice expects. Self path = 1 row from
   // /auth/me. Admin path = one row per picked member from /members.
@@ -357,7 +359,6 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   const submit = async (e) => {
     e.preventDefault();
     formErr.clear();
-    if (noticeBlocked) { formErr.setMessage(`Leaves need at least ${noticeDays} day${noticeDays === 1 ? "" : "s"} of advance notice — ask an admin to file on your behalf.`); return; }
     if (asAdmin && picked.size === 0) { formErr.setMessage("Pick at least one member"); return; }
     if (!reason.trim()) { formErr.setMessage("Enter a reason"); return; }
     if (type === "late_coming" && !expectedArrival) { formErr.setMessage("Tell us when you'll arrive"); return; }
@@ -624,30 +625,30 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
             onDismiss={formErr.clear}
             testId="leave-submit-error"
           />
-          {/* R3: 3-day notice rule for self-applied Leaves. Tours,
-              postings, late-coming and the admin on-behalf path are all
-              exempt. */}
-          {noticeBlocked && (
+          {/* Short-notice soft warning (Jun 2026). Applying ≤3 days before
+              the start date is allowed, but only the first two such
+              leaves per month are paid — the rest become Loss of Pay. */}
+          {isShortNotice && (
             <div
               className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2"
-              data-testid="leave-notice-blocked"
+              data-testid="leave-short-notice-warning"
             >
               <AlertTriangle size={14} className="text-amber-700 mt-0.5 shrink-0" />
               <div className="text-xs text-amber-900 leading-snug">
-                Leave needs at least <strong>{noticeDays} day{noticeDays === 1 ? "" : "s"}</strong> of notice
+                <strong>Short notice.</strong>{" "}
                 {daysOfNotice >= 0
-                  ? <> — your start date is only <strong>{daysOfNotice} day{daysOfNotice === 1 ? "" : "s"}</strong> away.</>
-                  : <> — your start date is in the past.</>}
-                {" "}Please ask your admin to file this on your behalf.
+                  ? <>Your start date is only <strong>{daysOfNotice} day{daysOfNotice === 1 ? "" : "s"}</strong> away.</>
+                  : <>Your start date is in the past (backdated).</>}
+                {" "}You may apply, but only your first <strong>two</strong> short-notice leaves
+                each month are paid — beyond that it is automatically marked <strong>Loss of Pay (LOP)</strong>.
               </div>
             </div>
           )}
           <button
             data-testid="leave-submit"
             type="submit"
-            disabled={busy || noticeBlocked}
+            disabled={busy}
             className="iu-btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
-            title={noticeBlocked ? `Leaves need at least ${noticeDays} day${noticeDays === 1 ? "" : "s"} of advance notice — ask an admin to file on your behalf.` : undefined}
           >
             {busy ? <Loader2 className="animate-spin" size={16}/> : "Submit"}
           </button>
