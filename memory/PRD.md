@@ -602,6 +602,7 @@ User request: "When issuing any item from the kitchen it should not allow if the
 
 ## Update 06 Oct 2026 — SAFE refactor batch S1–S6 shipped (see CHANGELOG)
 - DONE 06 Oct 2026: M1 members routes, M3 scheduler, M4 meals package split (see CHANGELOG).
-- Remaining refactor candidates (medium-safe, need regression run each): M2 attendance routes/service out of server.py · M5 split reports.py per report · M6 MealEntryTab auto-save hook · M7 SelfCheckIn/Office GPS + share hooks.
-- Small bug to fix: /api/meals/meal-calendar without ?end= returns 500.
+- DONE 06 Oct 2026: meal-calendar end-date fix, Roster Status Chip, Reports package split (M5), Attendance split phase 1, Auto-issue suggestions from Recipes × Muster (see CHANGELOG).
+- Remaining refactor candidates: Attendance split phase 2 (check-in/out/temp-exit writes — needs approval) · M6 MealEntryTab auto-save hook · M7 SelfCheckIn/Office GPS + share hooks.
+- Auto-issue follow-ups (ideas): oil g→L density handling, per-dish 'cooked for' override, 'auto-suggested' marker on saved issues for Menu-vs-Actual adherence.
 - P0 Parent Notifications count badge: ON HOLD per user (06 Oct 2026).

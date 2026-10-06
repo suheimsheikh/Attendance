@@ -1,0 +1,41 @@
+{
+  "summary": "Full regression for iter84 batch (A meal-calendar bounds fix, B roster-status chip, C reports/*.py → reports/ package split, D attendance split phase 1 moving helpers to services/attendance_helpers.py + read-only routes to routes/attendance.py, E new POST /api/meals/issues/suggest + SuggestIssuesDialog UI). 45/45 backend regression + unit tests PASS (includes 11 test_early_out_helper tests). Frontend admin flows verified: roster chip renders with correct state/text; Suggest-from-menu dialog opens with correct subtitle, headcount inputs, Recalculate, lines table (18 rows for 2026-10-01 Thursday menu), unmatched block with 'suggest-map-*' chips visible for admin, unit-mismatch block, pick toggles decrement apply count; The Grid (/admin/reports) loads; Self Check-in (/) loads. No DB writes performed (no Post now, no Save, no map chip clicks, no grid cell posts).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter84.py",
+    "/app/backend/tests/test_early_out_helper.py",
+    "/app/test_reports/pytest/iter84.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/meals/auto_issue.py: _round_up uses UNIT_BASE[unit][1] convention (1000 → kg/L base, 1 → g/ml base). Logic is clean and the subtle `-1e-9` guards edge-of-step float noise correctly. Verified via test_round_up_pure.",
+    "RECIPE_MEAL_SLOT mapping includes both 'evening' and 'evenings' keys as the task spec requires; _norm strips punctuation+case so 'Pre -Breakfast' and 'Pre-Training' both normalise through to 'breakfast' slot. Good.",
+    "Suggest endpoint uses `_stock_snapshot(as_of = date-1)` for on-hand — matches the 'end of previous day' pantry convention already shown on the Issues page. Consistent with existing stock_take semantics.",
+    "routes/reports/__init__.py is a thin registrar across common/hours/timeline/grid/grid_api/ledgers — same registrar pattern as routes/meals/__init__.py (iter83). Route order preserved; all 15 public report GETs regression-tested here return 200.",
+    "routes/attendance.py (phase 1): status + stale-session + /admin/overtime[/needs-review] moved behind thin wrappers; server.py still mounts them after members router so relative ordering is preserved — all four endpoints return 200.",
+    "Known pre-existing / already fixed (A): calendar.py + analytics.py now call local_date_str(office=None) with a None guard; GET /api/meals/meal-calendar?start=2026-10-01 (no end) returns 200 (previously 500) and /meal-calendar/bounds + /kitchen-analytics/bounds return 200 — confirmed.",
+    "RosterStatusChip: pending state renders amber chip with 'Roster not posted yet · Post now' and exposes data-testid=roster-status-post-now; data-state attribute correctly reflects state. Verified in live run.",
+    "Suggest dialog subtitle format matches spec: 'Thu, 01 Oct 2026 · Thursday menu · recipe grams × headcount...' — Weekday and date both present.",
+    "Admin sees suggest-map-* chips (28 chips for the 10 unmatched items on 2026-10-01). Chef-side (no map chips for chef) could NOT be exercised because the current DB has 0 members with role=chef — flagging so main agent can seed a chef account or trust the role-gate code review.",
+    "Suggest endpoint: with lunch counts override=40, used headcount for lunch flips to 40 while other meals remain at their muster baseline — verified in test_counts_override_scales_quantities.",
+    "Date validation: POST /api/meals/issues/suggest with date='not-a-date' returns 400 as spec required."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter84.py (NEW — 34 regression + 1 unit test covering A/C/D/E)"
+  ],
+  "success_rate": {"backend": "100% (45/45: 34 iter84 regression + 11 early-out helper unit)", "frontend": "100% core flows (roster chip, suggest dialog with 18 lines + map chips + unit mismatch + pick toggle, reports Grid heading, check-in page)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (super admin). admin2.test@example.com / Admin@12345 (non-super admin). dar.test@example.com and coach.test@example.com no longer authenticate in the current preview DB (dar.test fails, coach.test fails). chef account absent from `users` collection — main agent should seed a chef member if chef-side UI gating needs to be independently verified at runtime.",
+  "seed_data_creation": "None — strictly read-only run. No Post now, no Save on issues, no map-chip clicks, no PayCraft grid writes. Suggest endpoint is pure compute and writes nothing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-usable regression file: /app/backend/tests/test_review_iter84.py. Covers: meal-calendar bounds (A), 15 report GETs + 6 ledger GETs + 4 PayCraft key GETs + embed/auth (C), 4 attendance read-only routes (D), suggest endpoint shape + counts override + invalid-date + no-menu day + _round_up unit (E). Run with TEST_ADMIN_PASSWORD=Admin@12345 REACT_APP_BACKEND_URL=<preview url>. Important param quirks captured for future runs: /reports/attendance-ledger needs start+end (not month), /reports/{ot,comp-off,leave}-ledger need member_id + month (not start/end), /api/leave-requests + /api/corrections need month=, /api/embed/auth is GET with X-Embed-Key header. Chef-UI gating (no map chips) still untested on live preview — DB has no chef user.",
+  "rca of the issue": "No defects found. Pure refactor + feature-add batch verified behaviour-preserving."
+}
