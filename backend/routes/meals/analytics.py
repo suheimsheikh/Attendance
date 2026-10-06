@@ -699,12 +699,5 @@ def register(router, *, _purchase_categories, _stock_snapshot, _valid_date, db, 
     # Backfilled from the Jul-2026 spreadsheet Sailors + Staff +
     # MJPTBC-WRES combined. Future entries can be typed in directly
     # or auto-derived once per-person meal_records catch up.
-    class DailyCountsIn(BaseModel):
-        date: str
-        breakfast: int = 0
-        midmorning: int = 0
-        lunch: int = 0
-        snacks: int = 0
-        dinner: int = 0
-
-    return {"DailyCountsIn": DailyCountsIn}
+    # DailyCountsIn lives in routes/meals/common.py (module scope so FastAPI resolves the body model).
+    return {}

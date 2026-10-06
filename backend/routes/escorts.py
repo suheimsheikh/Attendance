@@ -142,6 +142,11 @@ def _strip_selfies(att: dict) -> dict:
     return out
 
 
+
+class PurgeBulkIn(BaseModel):
+    att_ids: List[str]
+
+
 def make_router(db, require_admin, get_current_user, require_coach_or_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
 
@@ -531,9 +536,6 @@ def make_router(db, require_admin, get_current_user, require_coach_or_admin) -> 
                       "photos_purged_by": admin.get("full_name") or admin.get("email")}},
         )
         return {"ok": True}
-
-    class PurgeBulkIn(BaseModel):
-        att_ids: List[str]
 
     @router.post("/escort-attendance/photos/purge-bulk")
     async def purge_many(body: PurgeBulkIn, admin: dict = Depends(require_admin)):

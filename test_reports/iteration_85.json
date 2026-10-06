@@ -1,0 +1,42 @@
+{
+  "summary": "Iter85 batch review: (1) Attendance phase 2 split (routes/attendance_actions.py), (2) grams_per_unit unit-conversions on PATCH /api/meals/items + conversion object in POST /api/meals/issues/suggest, (3) default headcount prefill (muster | prev_day | manual). Caught & FIXED a critical bug introduced by phase 2: both `/api/attendance/recalc-late` and `/api/attendance/resolve-stale` returned 422 (body treated as query param) because their Pydantic request models (RecalcLateIn, ResolveStaleIn) were defined inside make_router() while the module uses `from __future__ import annotations` — FastAPI's forward-ref resolution falls back to module globals and could not find the local classes. Fix: moved both classes to module scope alongside GeoToggleIn/TempExitIn/etc. After fix, 20/20 iter85 tests pass; combined with iter83+iter84 regression suites and test_early_out_helper the full battery is 114/114 PASS. Frontend Suggest dialog verified: issues-suggest-btn opens, date=2026-10-02 shows subtitle 'Fri, 02 Oct 2026 · Friday menu', 5x suggest-headcount-src-<meal> testids with 'yesterday: N' labels (Breakfast 13, Lunch 21 matching spec), suggest-conversions box present with 2 conv-notes/inputs/saves (Oil at 1 L = [1000 placeholder] g with 'assumed 1 g ≈ 1 ml', plus Banana), Save disabled when empty and enabled after typing positive number. Self Check-in page (/) renders Check-In card + 'I showed up' button + 'Forgot to punch in earlier?' correction link. No DB writes to real data — all throwaway resources (ZZ Test staff + attendance/temp_exits/audit rows + ZZ Test Oil item) were deleted during fixture teardown.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/attendance/recalc-late AND /api/attendance/resolve-stale", "issue": "Phase 2 split regression — RecalcLateIn/ResolveStaleIn were declared inside make_router(); with `from __future__ import annotations` FastAPI could not resolve the forward refs so the `body` param was treated as a query parameter → every call returned 422 {loc:[query,body], msg:Field required}. FIXED in this run by promoting both models to module scope.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter85.py",
+    "/app/backend/tests/test_review_iter84.py",
+    "/app/backend/tests/test_regression_refactor_iter83.py",
+    "/app/backend/tests/test_early_out_helper.py",
+    "/app/test_reports/pytest/iter85.xml"
+  ],
+  "action_items": [
+    "No action — all critical and feature behaviours pass after the forward-ref fix. Main agent should pull in the moved Pydantic class definitions (RecalcLateIn, ResolveStaleIn) in future phases of the split to avoid the same pitfall when stacking `from __future__ import annotations` with locally-scoped BaseModel request bodies."
+  ],
+  "critical_code_review_comments": [
+    "routes/attendance_actions.py — Request Pydantic models MUST live at module scope when `from __future__ import annotations` is active; FastAPI's forward-ref resolver cannot see function-local classes and silently degrades to query-param parsing. Both affected endpoints (recalc-late, resolve-stale) were broken on arrival; they are now fixed. Consider enforcing this with a lint rule or module-scope convention comment.",
+    "routes/attendance_actions.py — perform_toggle vs _geo_toggle share almost identical check-in/check-out bodies (two large near-duplicate blocks). Future refactor opportunity to extract a shared `_close_session` / `_open_session` helper to kill ~80 lines of DRY violation.",
+    "routes/meals/auto_issue.py `_grams_per_pantry_unit` — correctly layers item.override → UNIT_BASE density → nutrition seed (seed×12 for dozen). The dozen multiplier is hard-coded to 12; works for the current `COUNT_DOZEN` set but any future count unit (e.g. 'ream', 'score') would need a lookup table. Fine for now.",
+    "routes/meals/items.py update_item — `update['grams_per_unit'] = round(...) or None` correctly clears to None when 0 is sent (verified via mongo doc). Negative is rejected with 400 (verified).",
+    "Headcount prefill in auto_issue.py — three-way source (manual > muster > prev_day) with explicit {label, muster, prev_day, used, source} output is clean and future-proof. Verified against spec dates 2026-10-01 (muster) and 2026-10-02 (prev_day/manual)."
+  ],
+  "updated_files": [
+    "/app/backend/routes/attendance_actions.py (moved RecalcLateIn & ResolveStaleIn to module scope to fix FastAPI forward-ref failure)",
+    "/app/backend/tests/test_review_iter85.py (NEW — 20 regression tests covering attendance phase 2 + unit conversions + headcount prefill)"
+  ],
+  "success_rate": {"backend": "100% (20/20 iter85; 114/114 combined with iter83+iter84+early_out_helper)", "frontend": "100% (Suggest dialog + Self Check-in page both verified; all specified data-testids present and behaving per spec)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (super admin). Throwaway ZZ test staff member and ZZ Test Oil item are auto-created and deleted by fixtures.",
+  "seed_data_creation": "Transient only — a ZZ Test Staff member (role=member, category=staff, dar_exempt=true, work_end=23:00) and a ZZ Test Oil item (unit L) are created, exercised, then fully deleted (including their attendance/temp_exits/dars/audit rows) in fixture teardown. No live production data was touched (no Post now, no issues-save, no map chip clicks, no PATCH on real items).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-usable regression file: /app/backend/tests/test_review_iter85.py. Run with REACT_APP_BACKEND_URL=<preview> TEST_ADMIN_PASSWORD=Admin@12345 pytest. The test file connects to local Mongo (MONGO_URL from backend/.env) for stale-session seeding and cleanup. Important fixes to remember: (a) Pydantic request bodies MUST be module-level in files that use `from __future__ import annotations`; (b) members used for check-out tests must set dar_exempt=true unless you want to also post a DAR; (c) stale-session returns {stale:{session_id, check_in_at, date, work_end}} not {session:{...}}; (d) /api/meals/categories doesn't exist — borrow a category_key from GET /api/meals/items. All 114 combined tests from iter83/84/85+early-out helper pass as of 06 Oct 2026.",
+  "rca of the issue": "RCA: Phase 2 attendance split moved classes GeoToggleIn/MarkMemberIn/ScanCardIn/TempExitIn/TempReturnIn to module scope at the top of routes/attendance_actions.py, but RecalcLateIn and ResolveStaleIn were authored INSIDE the make_router() factory. The module declares `from __future__ import annotations`, which turns every type annotation into a string. FastAPI resolves those strings via `typing.get_type_hints()`, which can only see the module's global namespace — not local variables of enclosing functions. When resolution fails, FastAPI treats the parameter as a query/body-form primitive rather than a Pydantic model, producing 422 'Field required' for the parameter name itself. Reproduction: `curl -X POST /api/attendance/recalc-late -H 'Authorization: Bearer ...' -H 'Content-Type: application/json' -d '{\"start\":\"2026-10-01\",\"end\":\"2026-10-01\"}'` → 422. Mitigation: moved the two offending classes to module scope. Prevention: lint/enforce that all BaseModel request-body classes live at module level when PEP-563 is active."
+}

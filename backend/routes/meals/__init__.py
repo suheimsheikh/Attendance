@@ -19,6 +19,7 @@ lunch/dinner variations.
 from __future__ import annotations
 
 from routes.meals.common import (  # noqa: F401
+    DailyCountsIn,
     asyncio,
     json,
     logging,
@@ -534,9 +535,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
     _ns = _reg_purchases(router, _audit=_audit, _diff_meta=_diff_meta, _line_diff=_line_diff, _not_future=_not_future, _overhead_daily_map=_overhead_daily_map, _purchase_categories=_purchase_categories, _safe_date_upsert=_safe_date_upsert, _signal_meals=_signal_meals, _stock_snapshot=_stock_snapshot, _upsert_line_scoped=_upsert_line_scoped, _valid_date=_valid_date, db=db, require_chef_or_admin=require_chef_or_admin)
 
     _ns = _reg_analytics(router, _purchase_categories=_purchase_categories, _stock_snapshot=_stock_snapshot, _valid_date=_valid_date, db=db, require_chef_or_admin=require_chef_or_admin)
-    DailyCountsIn = _ns["DailyCountsIn"]
 
-    _ns = _reg_calendar(router, DailyCountsIn=DailyCountsIn, _MAIN_LABELS=_MAIN_LABELS, _MAIN_MEALS=_MAIN_MEALS, _days_in_month=_days_in_month, _stock_snapshot=_stock_snapshot, _valid_date=_valid_date, db=db, require_admin=require_admin, require_chef_or_admin=require_chef_or_admin)
+    _ns = _reg_calendar(router, _MAIN_LABELS=_MAIN_LABELS, _MAIN_MEALS=_MAIN_MEALS, _days_in_month=_days_in_month, _stock_snapshot=_stock_snapshot, _valid_date=_valid_date, db=db, require_admin=require_admin, require_chef_or_admin=require_chef_or_admin)
 
 
     _reg_auto_issue(router, db=db, require_chef_or_admin=require_chef_or_admin,

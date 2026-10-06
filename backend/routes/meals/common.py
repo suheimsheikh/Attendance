@@ -404,3 +404,15 @@ class OverheadIn(BaseModel):
 class OverheadBackfillIn(BaseModel):
     default_wages: float = Field(default=75000, ge=0)
     overwrite: bool = False
+
+
+class DailyCountsIn(BaseModel):
+    """Body for PUT /api/meals/meal-calendar (daily meal-count aggregate).
+    Module scope: with `from __future__ import annotations`, FastAPI can only
+    resolve body models that are module globals."""
+    date: str
+    breakfast: int = 0
+    midmorning: int = 0
+    lunch: int = 0
+    snacks: int = 0
+    dinner: int = 0

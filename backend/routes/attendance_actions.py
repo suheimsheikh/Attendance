@@ -70,16 +70,24 @@ class TempReturnIn(BaseModel):
     longitude: Optional[float] = None
 
 
+class ResolveStaleIn(BaseModel):
+    session_id: str
+    # One of: ISO datetime (close at this time) | "work_end" | "skip"
+    action: str
+    dar_text: Optional[str] = None
+
+
+class RecalcLateIn(BaseModel):
+    user_id: Optional[str] = None       # None → everyone
+    start: str                           # YYYY-MM-DD inclusive
+    end: str                             # YYYY-MM-DD inclusive
+    dry_run: bool = True                 # preview by default
+
+
 def make_router(db, get_current_user, require_admin, open_session_for, _late_days_in_month,
                 _resolve_site_for, _cancel_stale_missed_checkin, _has_checkin_today,
                 _active_camp_for, _ensure_reason_in_bank) -> APIRouter:
     router = APIRouter(prefix="/api")
-
-    class ResolveStaleIn(BaseModel):
-        session_id: str
-        # One of: ISO datetime (close at this time) | "work_end" | "skip"
-        action: str
-        dar_text: Optional[str] = None
 
 
     @router.post("/attendance/resolve-stale")
@@ -586,13 +594,6 @@ def make_router(db, get_current_user, require_admin, open_session_for, _late_day
         if not target:
             raise HTTPException(status_code=404, detail="Member not found")
         return await _geo_toggle(target, office, body.latitude, body.longitude, body.reason, admin["id"])
-
-
-    class RecalcLateIn(BaseModel):
-        user_id: Optional[str] = None       # None → everyone
-        start: str                           # YYYY-MM-DD inclusive
-        end: str                             # YYYY-MM-DD inclusive
-        dry_run: bool = True                 # preview by default
 
 
     @router.post("/attendance/recalc-late")

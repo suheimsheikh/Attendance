@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from routes.meals.common import (  # noqa: F401
+    DailyCountsIn,
     Depends,
     File,
     HTTPException,
@@ -16,7 +17,7 @@ from routes.meals.common import (  # noqa: F401
 )
 
 
-def register(router, *, DailyCountsIn, _MAIN_LABELS, _MAIN_MEALS, _days_in_month, _stock_snapshot, _valid_date, db, require_admin, require_chef_or_admin):
+def register(router, *, _MAIN_LABELS, _MAIN_MEALS, _days_in_month, _stock_snapshot, _valid_date, db, require_admin, require_chef_or_admin):
     def _valid_int(v) -> int:
         try:
             n = int(v)
