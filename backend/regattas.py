@@ -56,16 +56,6 @@ class RegattaPatch(BaseModel):
     notes: Optional[str] = None
 
 
-async def fetch_regattas_overlapping(db, range_start: str, range_end: str) -> List[dict]:
-    """Return regattas whose [start_date, end_date] overlaps [range_start, range_end].
-    Used by the Calendar view to fetch a single month at a time."""
-    cursor = db.regattas.find(
-        {"start_date": {"$lte": range_end}, "end_date": {"$gte": range_start}},
-        {"_id": 0},
-    )
-    return await cursor.to_list(500)
-
-
 def make_router(db, require_admin) -> APIRouter:
     @router.get("/regattas")
     async def list_regattas(admin: dict = Depends(require_admin)):

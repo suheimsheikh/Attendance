@@ -22,6 +22,7 @@ import { LocationFilterRow } from "../components/presence/LocationFilterRow";
 import MissingPhotoStrip from "../components/presence/MissingPhotoStrip";
 import ExMemberToggle, { useExMemberToggle } from "../components/ExMemberToggle";
 import { isExMember } from "../utils/exMember";
+import { todayIso, addDaysIso } from "../utils";
 
 export default function Presence() {
   const { user: currentUser } = useAuth();
@@ -55,15 +56,9 @@ export default function Presence() {
   // the board to a read-only historical view (no auto-refresh, no notify).
   // Use LOCAL date — `toISOString()` would give UTC and trip the next-day
   // logic across IST midnight (off-by-one between UTC and Asia/Kolkata).
-  const todayIso = useCallback(() => new Date().toLocaleDateString("sv-SE"), []);
   // Add `delta` days to a YYYY-MM-DD string, returning a YYYY-MM-DD string
   // in the *local* calendar (toISOString would silently convert to UTC and
   // break the right-arrow advance in IST).
-  const shiftIso = useCallback((iso, delta) => {
-    const d = new Date(iso + "T12:00:00");  // noon avoids DST edge cases
-    d.setDate(d.getDate() + delta);
-    return d.toLocaleDateString("sv-SE");
-  }, []);
   const [viewDate, setViewDate] = useState("");
   const [expandedRows, setExpandedRows] = useState(() => new Set());
   // Compact / detailed density (7 Jul 2026 — user request). Persisted
@@ -340,7 +335,7 @@ export default function Presence() {
         isHistorical={isHistorical}
         today={today}
         viewDate={viewDate}
-        shiftIso={shiftIso}
+        shiftIso={addDaysIso}
         onViewDateChange={(next) => { setViewDate(next); setExpandedRows(new Set()); }}
         lateOnly={lateOnly}
         onToggleLateOnly={() => setLateOnly((v) => !v)}

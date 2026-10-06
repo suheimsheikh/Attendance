@@ -6,19 +6,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Save, Boxes, Wand2 } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate, fmtQty as uQty } from "../../utils";
+import { formatDate, fmtQty as uQty, todayIso, isoDaysAgo } from "../../utils";
 import SuggestIssuesDialog from "./meal-issues/SuggestIssuesDialog";
 
-function todayISO() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
 const num = (v) => (v === "" || v == null ? 0 : Number(v) || 0);
-const fmtQty = (n, unit) => (n == null ? "0" : uQty(n, unit));
 
 export default function MealIssuesTab() {
-  const [dateStr, setDateStr] = useState(todayISO());
+  const [dateStr, setDateStr] = useState(todayIso());
   const [cats, setCats] = useState([]);
   const [items, setItems] = useState([]);
   const [stock, setStock] = useState({});      // item_id → on_hand
@@ -64,11 +58,8 @@ export default function MealIssuesTab() {
   }, [dateStr]);
 
   const loadRecent = () => {
-    const end = todayISO();
-    const startD = new Date();
-    startD.setDate(startD.getDate() - 14);
-    const p = (n) => String(n).padStart(2, "0");
-    const start = `${startD.getFullYear()}-${p(startD.getMonth() + 1)}-${p(startD.getDate())}`;
+    const end = todayIso();
+    const start = isoDaysAgo(14);
     api.get(`/meals/issues?start=${start}&end=${end}`)
       .then((r) => setRecent((r.issues || []).slice().reverse()))
       .catch(() => {});
@@ -113,7 +104,7 @@ export default function MealIssuesTab() {
   return (
     <div data-testid="meal-issues-tab">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <input type="date" value={dateStr} max={todayISO()} onChange={(e) => setDateStr(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="issues-date" />
+        <input type="date" value={dateStr} max={todayIso()} onChange={(e) => setDateStr(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="issues-date" />
         <span className="text-xs text-slate-500">{formatDate(dateStr)}</span>
         <button type="button" onClick={() => setSuggestOpen(true)} disabled={items.length === 0}
           title="Draft today's issue lines from the weekday's recipe menu × the meals muster headcount"
@@ -152,7 +143,7 @@ export default function MealIssuesTab() {
                     return (
                       <tr key={it.id} className={`border-t border-slate-100 ${over ? "bg-rose-50/60" : ""}`} data-testid={`issues-row-${it.id}`}>
                         <td className="p-2 font-semibold text-slate-900">{it.name}</td>
-                        <td className="p-2 text-right tabular-nums text-slate-600" data-testid={`issues-onhand-${it.id}`}>{oh != null ? fmtQty(oh, it.unit) : "—"}</td>
+                        <td className="p-2 text-right tabular-nums text-slate-600" data-testid={`issues-onhand-${it.id}`}>{oh != null ? uQty(oh, it.unit) : "—"}</td>
                         <td className="p-2">
                           <input type="number" min="0" step="0.01" value={entries[it.id] ?? ""} onChange={(e) => setEntries({ ...entries, [it.id]: e.target.value })} className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`} placeholder="0" data-testid={`issues-qty-${it.id}`} />
                         </td>

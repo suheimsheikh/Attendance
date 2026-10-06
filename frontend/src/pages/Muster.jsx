@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { api, showApiError } from "../api";
 import { useAuth } from "../auth";
 import SelfieCapture from "../components/SelfieCapture";
-import { formatDate, getLocation, resolveNearestSite } from "../utils";
+import { formatDate, getLocation, resolveNearestSite, todayIso, academyToday } from "../utils";
 import { useGeoPermission } from "../hooks/useGeoPermission";
 import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import MusterRow from "./muster/MusterRow";
@@ -160,7 +160,7 @@ export default function Muster() {
         if (justCheckedIn.length) {
           const now = new Date();
           const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-          const dayStr = now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+          const dayStr = academyToday().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
           const title = `✅ Checked in · ${timeStr}`;
           const subtitle = `${justCheckedIn.length} athlete${justCheckedIn.length > 1 ? "s" : ""} · ${dayStr}${office?.name ? " · " + office.name : ""}`;
           const namesList = justCheckedIn.slice(0, 40).map((m, i) => `${i + 1}. ${m.full_name}`);
@@ -169,7 +169,7 @@ export default function Muster() {
           const header = buildWhatsappHeader({
             audience: "athletes",
             groups: whatsappGroups,
-            dateIso: new Date().toISOString().slice(0, 10),
+            dateIso: todayIso(),
           });
           try {
             const imageBlob = await buildPhotoMosaicBlob(justCheckedIn, title, subtitle);

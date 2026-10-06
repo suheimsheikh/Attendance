@@ -1,7 +1,18 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { api, setToken, clearToken, getToken, clearStaticCache } from "./api";
+import { setAcademyTz } from "./utils";
 
 const AuthCtx = createContext(null);
+
+// Warm the static-config cache (fire-and-forget) and adopt the academy timezone.
+function warmStatic() {
+  api.getCached("/office").then((o) => setAcademyTz(o?.timezone)).catch(() => {});
+  Promise.allSettled([
+    api.getCached("/sites"),
+    api.getCached("/meals/config"),
+    api.getCached("/masters/categories"),
+  ]);
+}
 
 // Tiny localStorage cache of the last-logged-in member on this device so the
 // Login page can greet them with their photo and name. Only full_name + photo
@@ -53,12 +64,7 @@ export function AuthProvider({ children }) {
       // Muster / Meals navigation doesn't wait for /office /sites
       // /meals/config /masters/categories. Fire-and-forget — failures
       // just mean the page fetches them itself on demand.
-      Promise.allSettled([
-        api.getCached("/office"),
-        api.getCached("/sites"),
-        api.getCached("/meals/config"),
-        api.getCached("/masters/categories"),
-      ]);
+      warmStatic();
     } catch {
       clearToken();
       setUser(null);
@@ -79,12 +85,7 @@ export function AuthProvider({ children }) {
     // (safety net; today the cached endpoints are org-global).
     clearStaticCache();
     // Warm static-config cache in background — same as loadMe.
-    Promise.allSettled([
-      api.getCached("/office"),
-      api.getCached("/sites"),
-      api.getCached("/meals/config"),
-      api.getCached("/masters/categories"),
-    ]);
+    warmStatic();
     return res.user;
   }, []);
 
@@ -93,12 +94,7 @@ export function AuthProvider({ children }) {
     setUser(user);
     rememberLastUser(user);
     clearStaticCache();
-    Promise.allSettled([
-      api.getCached("/office"),
-      api.getCached("/sites"),
-      api.getCached("/meals/config"),
-      api.getCached("/masters/categories"),
-    ]);
+    warmStatic();
   }, []);
 
   const logout = useCallback(() => {

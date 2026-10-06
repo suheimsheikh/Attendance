@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from "react";
 import { Boxes } from "lucide-react";
 import { api } from "../../api";
-import { formatDate, fmtQty as uQty } from "../../utils";
+import { formatDate, fmtQty as uQty, todayIso, isoDaysAgo } from "../../utils";
 
 const REASONS = [
   { key: "wasted",   label: "Wasted" },
@@ -18,22 +18,13 @@ const REASONS = [
 ];
 const REASON_LABEL = Object.fromEntries(REASONS.map((r) => [r.key, r.label]));
 
-function todayISO() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-const fmtQty = (n, unit) => (n == null ? "0" : uQty(n, unit));
 
 export default function MealWastageTab({ liveSig }) {
   const [recent, setRecent] = useState([]);
 
   const loadRecent = () => {
-    const end = todayISO();
-    const startD = new Date();
-    startD.setDate(startD.getDate() - 30);
-    const p = (n) => String(n).padStart(2, "0");
-    const start = `${startD.getFullYear()}-${p(startD.getMonth() + 1)}-${p(startD.getDate())}`;
+    const end = todayIso();
+    const start = isoDaysAgo(30);
     api.get(`/meals/wastage?start=${start}&end=${end}`)
       .then((r) => setRecent((r.wastage || []).slice().reverse()))
       .catch(() => {});
@@ -83,7 +74,7 @@ export default function MealWastageTab({ liveSig }) {
               {recent.map((r) => {
                 const lineList = r.lines || [];
                 const reasonTags = Array.from(new Set(lineList.map((l) => l.reason))).map((k) => REASON_LABEL[k] || k);
-                const preview = lineList.slice(0, 3).map((l) => `${l.item_name} (${fmtQty(l.qty, l.unit)} ${l.unit})`).join(", ");
+                const preview = lineList.slice(0, 3).map((l) => `${l.item_name} (${uQty(l.qty, l.unit)} ${l.unit})`).join(", ");
                 return (
                   <tr key={r.date} className="border-t border-slate-100 hover:bg-slate-50/70" data-testid={`wastage-recent-row-${r.date}`}>
                     <td className="px-3 py-1.5 font-semibold whitespace-nowrap">{formatDate(r.date)}</td>

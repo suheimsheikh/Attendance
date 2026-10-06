@@ -15,9 +15,8 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate } from "../../utils";
+import { formatDate, todayIso } from "../../utils";
 import { Section } from "./kitchen-analytics/Section";
-import { todayIso } from "./kitchen-analytics/helpers";
 
 
 function firstOfMonthIso(iso) {

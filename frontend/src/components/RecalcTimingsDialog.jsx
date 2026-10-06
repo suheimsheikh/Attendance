@@ -2,21 +2,19 @@ import React, { useState } from "react";
 import { ClipboardList, Loader2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
-import { formatDate } from "../utils";
+import { formatDate, todayIso, monthStartIso } from "../utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 
-const monthStart = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toLocaleDateString("sv-SE"); };
-const today = () => new Date().toLocaleDateString("sv-SE");
 const lt = (late, m) => (late ? `LT ${m}m` : "on-time");
 const eo = (m) => (m >= 15 ? `EO ${m}m` : "—");
 
 /** After a member's start/end time changes: preview + re-apply late & early-out to past days. */
 export default function RecalcTimingsDialog({ member, onClose }) {
-  const [start, setStart] = useState(monthStart());
+  const [start, setStart] = useState(monthStartIso());
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  const call = (dry_run) => api.post("/attendance/recalc-late", { user_id: member.id, start, end: today(), dry_run });
+  const call = (dry_run) => api.post("/attendance/recalc-late", { user_id: member.id, start, end: todayIso(), dry_run });
   const err = (e) => toast.error(/403|Super/.test(e?.message || "") ? "Super Admin only — ask the Super Admin to apply this from Data Quality." : (e?.message || "Failed"));
 
   const runPreview = async () => {
@@ -43,7 +41,7 @@ export default function RecalcTimingsDialog({ member, onClose }) {
         </DialogHeader>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">From
-            <input type="date" value={start} max={today()} onChange={(e) => { setStart(e.target.value); setPreview(null); }}
+            <input type="date" value={start} max={todayIso()} onChange={(e) => { setStart(e.target.value); setPreview(null); }}
               className="iu-input !h-9 text-sm block mt-1" data-testid="recalc-timings-start" />
           </label>
           <span className="text-sm text-slate-500 mb-2">→ today</span>

@@ -8,17 +8,14 @@
 import React, { useEffect, useState } from "react";
 import { Loader2, X, BookOpen, AlertTriangle } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate, fmtQty as uQty } from "../../utils";
+import { formatDate, fmtQty as uQty, todayIso, isoDaysAgo, money } from "../../utils";
 import { useEscape } from "../../hooks/useEscape";
 
-const fmt = (n, unit) => (n == null ? "—" : uQty(n, unit));
-const rupee = (n) => (!n ? "—" : `₹${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-const isoDaysAgo = (days) => { const d = new Date(); d.setDate(d.getDate() - days); return d.toLocaleDateString("sv-SE"); };
-const todayISO = () => new Date().toLocaleDateString("sv-SE");
+const fmt = uQty;
 
 export default function ItemLedgerDrawer({ itemId, itemName, unit, onClose }) {
   const [start, setStart] = useState(isoDaysAgo(89));
-  const [end, setEnd] = useState(todayISO());
+  const [end, setEnd] = useState(todayIso());
   const [gran, setGran] = useState("week");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -85,9 +82,9 @@ export default function ItemLedgerDrawer({ itemId, itemName, unit, onClose }) {
             <span className="w-px h-6 bg-slate-200 mx-1" />
             <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="ledger-range-start" title="Ledger start date" />
             <span className="text-xs text-slate-400">to</span>
-            <input type="date" value={end} min={start} max={todayISO()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="ledger-range-end" title="Ledger end date" />
+            <input type="date" value={end} min={start} max={todayIso()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="ledger-range-end" title="Ledger end date" />
             {[["30d", 29], ["90d", 89], ["1y", 364]].map(([lbl, days]) => (
-              <button key={lbl} onClick={() => { setStart(isoDaysAgo(days)); setEnd(todayISO()); }}
+              <button key={lbl} onClick={() => { setStart(isoDaysAgo(days)); setEnd(todayIso()); }}
                       title={`Show the last ${lbl.replace("d", " days").replace("1y", "year")}`}
                       className="text-[11px] font-bold text-slate-500 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 rounded-full px-2.5 py-1">
                 {lbl}
@@ -109,7 +106,7 @@ export default function ItemLedgerDrawer({ itemId, itemName, unit, onClose }) {
                   <tr>
                     <th className="text-left p-2.5">{gran === "day" ? "Date" : "Period"}</th>
                     <th className="text-right p-2.5 border-l border-emerald-100">Purchased</th>
-                    <th className="text-right p-2.5">Amount</th>
+                    <th className="text-right p-2.5">Amount ₹</th>
                     <th className="text-right p-2.5 border-l border-sky-100">Issued</th>
                     <th className="text-right p-2.5 border-l border-amber-100">Wasted</th>
                     <th className="text-right p-2.5 border-l border-violet-100">Stock-take</th>
@@ -130,7 +127,7 @@ export default function ItemLedgerDrawer({ itemId, itemName, unit, onClose }) {
                     <tr key={r.date} className="border-t border-slate-100 hover:bg-slate-50/70" data-testid={`ledger-row-${r.date}`}>
                       <td className="p-2.5 whitespace-nowrap text-slate-700">{periodLabel(r)}</td>
                       <td className="p-2.5 text-right tabular-nums font-semibold text-emerald-700">{r.purch_qty ? `+${fmt(r.purch_qty, u)}` : ""}</td>
-                      <td className="p-2.5 text-right tabular-nums text-slate-600">{r.purch_amt ? rupee(r.purch_amt) : ""}</td>
+                      <td className="p-2.5 text-right tabular-nums text-slate-600">{r.purch_amt ? money(r.purch_amt) : ""}</td>
                       <td className="p-2.5 text-right tabular-nums font-semibold text-sky-700 border-l border-slate-50">{r.issue_qty ? `−${fmt(r.issue_qty, u)}` : ""}</td>
                       <td className="p-2.5 text-right tabular-nums font-semibold text-amber-700 border-l border-slate-50">{r.waste_qty ? `−${fmt(r.waste_qty, u)}` : ""}</td>
                       <td className={`p-2.5 text-right tabular-nums font-semibold border-l border-slate-50 ${r.adj_qty > 0 ? "text-emerald-700" : r.adj_qty < 0 ? "text-rose-700" : "text-slate-400"}`} title={adjTitle(r)}>
@@ -144,7 +141,7 @@ export default function ItemLedgerDrawer({ itemId, itemName, unit, onClose }) {
                   <tr className="border-t-2 border-slate-300 bg-slate-100 font-bold text-slate-900" data-testid="item-ledger-totals">
                     <td className="p-2.5 uppercase text-[11px] tracking-wider text-slate-600">Totals</td>
                     <td className="p-2.5 text-right tabular-nums text-emerald-800" data-testid="ledger-total-purchased">{fmt(tot.purchased_qty, u)}</td>
-                    <td className="p-2.5 text-right tabular-nums text-slate-700" data-testid="ledger-total-amount">{rupee(tot.purchased_amount)}</td>
+                    <td className="p-2.5 text-right tabular-nums text-slate-700" data-testid="ledger-total-amount">{tot.purchased_amount ? money(tot.purchased_amount) : "—"}</td>
                     <td className="p-2.5 text-right tabular-nums text-sky-800" data-testid="ledger-total-issued">{fmt(tot.issued_qty, u)}</td>
                     <td className="p-2.5 text-right tabular-nums text-amber-800" data-testid="ledger-total-wasted">{fmt(tot.wasted_qty, u)}</td>
                     <td className={`p-2.5 text-right tabular-nums ${(tot.adjusted_qty || 0) > 0 ? "text-emerald-800" : (tot.adjusted_qty || 0) < 0 ? "text-rose-700" : "text-slate-500"}`} data-testid="ledger-total-adjusted">

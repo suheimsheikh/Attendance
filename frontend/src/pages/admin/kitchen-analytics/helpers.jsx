@@ -1,5 +1,5 @@
 import { InfoTip } from "../../../components/InfoTip";
-import { fmtQty as uQty } from "../../../utils";
+import { fmtQty as uQty, money } from "../../../utils";
 
 // Same palette + a deterministic (item_id → colour) mapping so the
 // same item paints in the same colour across ALL charts on this
@@ -21,18 +21,9 @@ export function colorForItem(id) {
   return CHART_COLORS[h % CHART_COLORS.length];
 }
 
-export const inr = (n) =>
-  n == null ? "—" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-export const inr2 = (n) =>
-  n == null ? "—" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-export const fmtQty = (n, unit) =>
-  n == null ? "—" : uQty(n, unit);
-
-export function todayIso() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+export const inr = (n) => money(n, 0);
+export const inr2 = (n) => money(n);
+export const fmtQty = uQty;
 
 export function StatPill({ icon: Icon, label, value, tint, hint }) {
   return (

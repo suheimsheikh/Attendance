@@ -12,7 +12,7 @@ import { Loader2, RefreshCw, ShieldAlert, CheckCircle2, Wrench, Trash2, Clipboar
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
-import { formatDate } from "../../utils";
+import { formatDate, todayIso, monthStartIso } from "../../utils";
 
 const SEVERITY_STYLES = {
   high:   { bg: "bg-red-100",     text: "text-red-800",     ring: "ring-red-200",     dot: "bg-red-500" },
@@ -254,10 +254,8 @@ function AttendanceDedupePanel() {
 }
 
 function RecalcLatePanel() {
-  const monthStart = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toLocaleDateString("sv-SE"); };
-  const today = () => new Date().toLocaleDateString("sv-SE");
-  const [start, setStart] = useState(monthStart());
-  const [end, setEnd] = useState(today());
+  const [start, setStart] = useState(monthStartIso());
+  const [end, setEnd] = useState(todayIso());
   const [members, setMembers] = useState([]);
   const [userId, setUserId] = useState("all");
   const [preview, setPreview] = useState(null);
@@ -320,7 +318,7 @@ function RecalcLatePanel() {
         </div>
         <div>
           <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">To</label>
-          <input type="date" value={end} min={start} max={today()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-9 text-sm" data-testid="recalc-late-end" />
+          <input type="date" value={end} min={start} max={todayIso()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-9 text-sm" data-testid="recalc-late-end" />
         </div>
         <button type="button" onClick={runPreview} disabled={loading || applying} data-testid="recalc-late-preview-btn"
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-white border border-slate-300 text-slate-800 text-sm font-bold hover:bg-slate-100 transition disabled:opacity-60">

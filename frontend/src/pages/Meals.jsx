@@ -16,7 +16,7 @@ import { Loader2, Search, RefreshCw, CheckSquare, Square, Utensils, Users, Copy 
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
 import { useAuth } from "../auth";
-import { formatDate } from "../utils";
+import { formatDate, todayIso } from "../utils";
 import MusterRow from "./muster/MusterRow";
 import { MusterScopeChips, MusterInstitutionChips } from "./muster/MusterFilters";
 import ExMemberToggle, { useExMemberToggle } from "../components/ExMemberToggle";
@@ -40,21 +40,12 @@ const MEAL_COLOR = {
   dinner:    "#2563EB",  // blue
 };
 
-function todayISO() {
-  // Office-local date is the source of truth on the backend, but for
-  // the picker default we use the browser's local date — same TZ in
-  // practice (IST) and avoids a round-trip.
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
 export default function Meals() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [meals, setMeals] = useState([]);       // [{key,label,short}]
   const [meal, setMeal] = useState("breakfast");
-  const [dateStr, setDateStr] = useState(todayISO());
+  const [dateStr, setDateStr] = useState(todayIso());
   const [scope, setScope] = useState("all");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -268,7 +259,7 @@ export default function Meals() {
           type="date"
           value={dateStr}
           onChange={(e) => setDateStr(e.target.value)}
-          max={todayISO()}
+          max={todayIso()}
           className="iu-input !h-9 !w-auto text-sm"
         />
         <div className="text-xs text-slate-500">

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { api } from "../../api";
 import { useDirtyForm } from "../../hooks/useDirtyForm";
 import TopSaveButton from "../../components/TopSaveButton";
-import { formatDate } from "../../utils";
+import { formatDate, todayIso } from "../../utils";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
 import { useAthleteLikeKeys } from "../../hooks/useAthleteLikeKeys";
@@ -14,8 +14,6 @@ const WEEKDAYS = [
   { key: "thu", label: "Thu" }, { key: "fri", label: "Fri" }, { key: "sat", label: "Sat" },
   { key: "sun", label: "Sun" },
 ];
-
-const TODAY_ISO = new Date().toLocaleDateString("sv-SE");
 
 export default function Camps() {
   const [rows, setRows] = useState([]);
@@ -35,7 +33,7 @@ export default function Camps() {
     catch (err) { toast.error(err?.message || "Failed"); }
   };
 
-  const isLive = (c) => c.start_date <= TODAY_ISO && c.end_date >= TODAY_ISO;
+  const isLive = (c) => c.start_date <= todayIso() && c.end_date >= todayIso();
 
   return (
     <div className="max-w-6xl mx-auto p-6">
@@ -145,8 +143,8 @@ export function CampForm({ initial, onClose, onSaved }) {
   const [form, setForm] = useState({
     name:            initial?.name || "",
     institution:     initial?.institution || "",
-    start_date:      initial?.start_date || TODAY_ISO,
-    end_date:        initial?.end_date || TODAY_ISO,
+    start_date:      initial?.start_date || todayIso(),
+    end_date:        initial?.end_date || todayIso(),
     start_time:      initial?.start_time || "06:00",
     end_time:        initial?.end_time || "08:30",
     days_of_week:    initial?.days_of_week || [],

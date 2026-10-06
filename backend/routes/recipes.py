@@ -148,7 +148,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin):
         for m in meals:
             meals_by_day.setdefault(m["day_id"], []).append(m)
         for d in dishes:
-            dishes_by_meal.setdefault(m["meal_id"] if False else d["meal_id"], []).append(d)
+            dishes_by_meal.setdefault(d["meal_id"], []).append(d)
         MAC = ["energy", "carbs", "protein", "fat", "fiber"]
         WT = ["weight_g", "weight_ml"]
         out_days = []

@@ -5,7 +5,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import Avatar from "../components/Avatar";
 import SelfieCapture from "../components/SelfieCapture";
-import { fileToResizedDataUrl } from "../utils";
+import { fileToResizedDataUrl, todayIso, academyDateOf } from "../utils";
 import { useEscape } from "../hooks/useEscape";
 import { shareToWhatsApp, formatCheckinCaption, dataUrlToBlob } from "../utils/shareWhatsApp";
 import useWhatsappGroups, { buildWhatsappHeader } from "../hooks/useWhatsappGroups";
@@ -357,7 +357,7 @@ function OnCampusActions({ escort, att, athletes, openExcursion, localInSelfie, 
         text: `${buildWhatsappHeader({
           audience: "athletes",
           groups: whatsappGroups,
-          dateIso: (att.check_in_at ? new Date(att.check_in_at) : new Date()).toISOString().slice(0, 10),
+          dateIso: att.check_in_at ? academyDateOf(att.check_in_at) : todayIso(),
         })}\n${formatCheckinCaption({
           action: "checkin",
           name: escort.name,

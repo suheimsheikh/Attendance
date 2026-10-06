@@ -6,14 +6,13 @@ import TaskDarPanel from "./TaskDarPanel";
 import HeatStrip from "./HeatStrip";
 import TodoRow from "./TodoRow";
 import { fmtDateLong as fmtLong } from "../../utils/dates";
+import { todayIso, addDaysIso } from "../../utils";
 
-const todayISO = () => new Date().toLocaleDateString("en-CA");
-const shiftISO = (iso, delta) => { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + delta); return d.toLocaleDateString("en-CA"); };
 
 export default function TodosTab({ user, group }) {
   const [scope, setScope] = useState("all");
   const [status, setStatus] = useState("open");
-  const [viewDate, setViewDate] = useState(todayISO);
+  const [viewDate, setViewDate] = useState(todayIso);
   const [rows, setRows] = useState(null);
   const [today, setToday] = useState("");
   const [heat, setHeat] = useState(null);
@@ -102,14 +101,14 @@ export default function TodosTab({ user, group }) {
       <HeatStrip heat={heat} viewDate={viewDate} scope={scope} onPick={setViewDate} />
 
       <div className="flex items-center justify-between gap-2 mb-3 rounded-xl bg-slate-50 ring-1 ring-slate-100 px-2 py-1.5" data-testid="todo-date-bar">
-        <button onClick={() => setViewDate((d) => shiftISO(d, -1))} className="h-8 w-8 grid place-items-center rounded-full hover:bg-slate-200 text-slate-600" title="Previous day" data-testid="todo-date-prev"><ChevronLeft size={18} /></button>
+        <button onClick={() => setViewDate((d) => addDaysIso(d, -1))} className="h-8 w-8 grid place-items-center rounded-full hover:bg-slate-200 text-slate-600" title="Previous day" data-testid="todo-date-prev"><ChevronLeft size={18} /></button>
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-slate-800" data-testid="todo-date-label">{fmtLong(viewDate)}</span>
           {viewDate === today && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-700">Today</span>}
           {viewDate !== today && today && <button onClick={() => setViewDate(today)} className="text-[11px] font-semibold text-indigo-600 hover:underline" data-testid="todo-date-today">Jump to today</button>}
           <input type="date" value={viewDate} onChange={(e) => e.target.value && setViewDate(e.target.value)} className="iu-input !h-7 !w-auto text-xs" data-testid="todo-date-input" title="Pick a day" />
         </div>
-        <button onClick={() => setViewDate((d) => shiftISO(d, 1))} className="h-8 w-8 grid place-items-center rounded-full hover:bg-slate-200 text-slate-600" title="Next day" data-testid="todo-date-next"><ChevronRight size={18} /></button>
+        <button onClick={() => setViewDate((d) => addDaysIso(d, 1))} className="h-8 w-8 grid place-items-center rounded-full hover:bg-slate-200 text-slate-600" title="Next day" data-testid="todo-date-next"><ChevronRight size={18} /></button>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-3 text-xs">

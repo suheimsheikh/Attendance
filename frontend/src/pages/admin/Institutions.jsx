@@ -7,7 +7,7 @@ import { useFormError } from "../../hooks/useFormError";
 import { useEscape } from "../../hooks/useEscape";
 import { useDirtyForm } from "../../hooks/useDirtyForm";
 import TopSaveButton from "../../components/TopSaveButton";
-import { formatDate } from "../../utils";
+import { formatDate, todayIso, academyToday } from "../../utils";
 
 // Feature flag for the (currently hidden) per-institution Twilio "SMS/Voice
 // from" number chips shown on each institution card. All notifications
@@ -350,7 +350,7 @@ function formatVisitDate(iso) {
   if (!iso) return "—";
   try {
     const d = new Date(iso + "T00:00:00");
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = academyToday();
     const days = Math.round((today - d) / 86400000);
     if (days === 0) return "Today";
     if (days === 1) return "Yesterday";
@@ -363,12 +363,12 @@ function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSave
   const isEdit = !!initial;
   const [name, setName] = useState(initial?.name || "");
   const [phone, setPhone] = useState(initial?.phone || "");
-  const [startDate, setStartDate] = useState(initial?.start_date || new Date().toLocaleDateString("sv-SE"));
+  const [startDate, setStartDate] = useState(initial?.start_date || todayIso());
   // Validity window (added 28 Jun 2026). `valid_from` defaults to the
   // start date when missing on a legacy row; `valid_until` is required
   // on create and when next editing a backfilled escort with null.
   const [validFrom, setValidFrom] = useState(
-    initial?.valid_from || initial?.start_date || new Date().toLocaleDateString("sv-SE")
+    initial?.valid_from || initial?.start_date || todayIso()
   );
   const [validUntil, setValidUntil] = useState(initial?.valid_until || "");
   const [status, setStatus] = useState(initial?.status || "active");

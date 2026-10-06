@@ -10,7 +10,7 @@
 import React, { useMemo } from "react";
 import { BarChart3, Calendar as CalIcon, X as CloseIcon, Flame, Maximize2, PieChart as PieIcon, TrendingUp, Trophy } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { formatDate } from "../../utils";
+import { formatDate, addDaysIso } from "../../utils";
 import { EVENT_COLORS, SLOT_COLORS, SLOT_KEYS, StatPill, TrendTooltip, fmt, inr, renderTotalDot, slotMix, useMetrics } from "./meals-analytics/helpers";
 import { DayAttendeesModal, EventDetailsModal } from "./meals-analytics/modals";
 
@@ -63,20 +63,15 @@ export default function MealsAnalyticsPanel({ days, events }) {
         // becomes ~2-day slivers separated by 5-day gaps.
         let segStart = null;
         let idx = 0;
-        const cur = new Date(s + "T00:00:00");
-        const endD = new Date(e + "T00:00:00");
-        while (cur <= endD) {
-          const iso = cur.toISOString().slice(0, 10);
-          const key = DOW_KEYS[cur.getDay()];
+        for (let iso = s; iso <= e; iso = addDaysIso(iso, 1)) {
+          const key = DOW_KEYS[new Date(iso + "T00:00:00").getDay()];
           if (dows.includes(key)) {
             if (!segStart) segStart = iso;
           } else if (segStart) {
-            const prev = new Date(cur); prev.setDate(prev.getDate() - 1);
             out.push({ kind: k, name: ev.name, start_date: segStart,
-                       end_date: prev.toISOString().slice(0, 10), segment: idx++, ev_full: ev });
+                       end_date: addDaysIso(iso, -1), segment: idx++, ev_full: ev });
             segStart = null;
           }
-          cur.setDate(cur.getDate() + 1);
         }
         if (segStart) {
           out.push({ kind: k, name: ev.name, start_date: segStart, end_date: e, segment: idx, ev_full: ev });

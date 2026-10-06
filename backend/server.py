@@ -436,8 +436,6 @@ class OfficeConfig(BaseModel):
     twilio: TwilioConfig = Field(default_factory=TwilioConfig)
 
 
-
-
 # Geo helpers — see services/geo.py (re-exported above).
 # (PIL bomb guard is set in services/photo.py at import time.)
 
@@ -1289,8 +1287,6 @@ async def _late_days_in_month(user_id: str, date_iso: str) -> int:
     return await _att.late_days_in_month(db, user_id, date_iso)
 
 
-
-
 async def _resolve_site_for(office: dict, lat: float, lng: float):
     return await _att.resolve_site_for(db, office, lat, lng)
 
@@ -1301,28 +1297,6 @@ async def _cancel_stale_missed_checkin(user_id: str, date_iso: str) -> int:
 
 async def _has_checkin_today(user_id: str, date_str: str) -> bool:
     return await _att.has_checkin_today(db, user_id, date_str)
-
-
-
-
-# ----------------------------------------------------------------------------
-# Overtime — staff only, 30+ minutes outside their work_start/work_end window
-# ----------------------------------------------------------------------------
-class OvertimeDecisionIn(BaseModel):
-    status: Literal["approved", "rejected"]
-    admin_note: Optional[str] = None
-
-
-# ----------------------------------------------------------------------------
-# Presence board
-# ----------------------------------------------------------------------------
-async def active_leave_for(user_id: str, on: str) -> Optional[dict]:
-    return await db.leaves.find_one({
-        "user_id": user_id,
-        "status": "approved",
-        "start_date": {"$lte": on},
-        "end_date": {"$gte": on},
-    }, {"_id": 0})
 
 
 _WEEKDAY_KEY = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
@@ -3085,40 +3059,6 @@ app.include_router(_external_router(db))
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "service": "i-showed-up"}
-
-
-# Build / version probe — read once at module import so the value doesn't
-# drift if the working tree changes after deploy (the deployed container is
-# immutable anyway). Useful to answer "what's actually live right now?" and
-# to confirm a Deploy click actually rolled out.
-_STARTED_AT_ISO = now_utc().isoformat()
-try:
-    import subprocess as _sp  # noqa: E402
-    _GIT_SHA = _sp.check_output(["git", "rev-parse", "--short", "HEAD"],
-                                cwd=ROOT_DIR, stderr=_sp.DEVNULL, timeout=2).decode().strip()
-except Exception:
-    _GIT_SHA = "unknown"
-try:
-    _GIT_BRANCH = _sp.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                                   cwd=ROOT_DIR, stderr=_sp.DEVNULL, timeout=2).decode().strip()
-except Exception:
-    _GIT_BRANCH = "unknown"
-
-
-@app.get("/api/version")
-async def version():
-    """Build + runtime identity. Safe for unauthenticated calls — no secrets."""
-    now = now_utc()
-    started = datetime.fromisoformat(_STARTED_AT_ISO)
-    uptime_seconds = int((now - started).total_seconds())
-    return {
-        "service": "i-showed-up",
-        "git_sha": _GIT_SHA,
-        "git_branch": _GIT_BRANCH,
-        "started_at": _STARTED_AT_ISO,
-        "uptime_seconds": uptime_seconds,
-        "now": now.isoformat(),
-    }
 
 
 # ----------------------------------------------------------------------------

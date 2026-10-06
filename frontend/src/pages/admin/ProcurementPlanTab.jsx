@@ -24,12 +24,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ClipboardList, Loader2, Download, RefreshCw, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
-import { fmtQty as uQty } from "../../utils";
+import { fmtQty as uQty, money } from "../../utils";
 
 // Indian-format rupee amount (matches KitchenAnalyticsTab's local
 // `inr` helper — kept local to avoid a shared-utils PR).
-const inr = (n) =>
-  Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const inr = (n) => money(n || 0, 0);
 
 // Small utility — the API returns qty to 3 dp. Trim trailing zeros
 // for display so "0.500" prints as "0.5" but "6" prints as "6".
@@ -287,7 +286,7 @@ export default function ProcurementPlanTab({ liveSig }) {
                         {r.to_buy > 0 ? fmtQty(r.to_buy, r.unit) : "—"}
                       </td>
                       <td className="py-1.5 px-3 text-right tabular-nums text-slate-700 text-xs">
-                        {r.est_amount > 0 ? `₹${inr(r.est_amount)}` : "—"}
+                        {r.est_amount > 0 ? inr(r.est_amount) : "—"}
                       </td>
                       <td className="py-1.5 px-3 text-center">
                         {cover == null ? (

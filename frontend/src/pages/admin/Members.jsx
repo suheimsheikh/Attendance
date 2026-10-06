@@ -11,6 +11,7 @@ import SortableTh, { COL_HELP } from "./members/SortableTh";
 import { bucketOf } from "./members/helpers";
 import ExMemberToggle, { useExMemberToggle } from "../../components/ExMemberToggle";
 import { filterEx, isExMember } from "../../utils/exMember";
+import { todayIso } from "../../utils";
 
 /**
  * Members admin page — table view with inline editing, bulk-edit toolbar,
@@ -56,7 +57,7 @@ export default function Members() {
   // Today in local YYYY-MM-DD — used by the Last-seen column to compute
   // "Today / Yesterday / N days ago". Memoised so the date string is stable
   // across re-renders within the same calendar day.
-  const today = useMemo(() => new Date().toLocaleDateString("sv-SE"), []);
+  const today = useMemo(() => todayIso(), []);
 
   // Static option lists for the inline selects. Keep these in sync with the
   // backend `MemberUpdate` Literal types — out-of-list values would be
@@ -371,7 +372,7 @@ export default function Members() {
             data-testid="export-staff-roster"
             onClick={async () => {
               try {
-                await downloadBlob("/staff-roster/export", `staff_roster_${new Date().toISOString().slice(0,10)}.xlsx`);
+                await downloadBlob("/staff-roster/export", `staff_roster_${todayIso()}.xlsx`);
                 toast.success("Staff roster downloaded");
               } catch (err) {
                 showApiError(err, "Couldn't export staff roster");

@@ -8,6 +8,7 @@ import DailyTab from "./reports/DailyTab";
 import MonthNav from "./reports/MonthNav";
 import { VALID_TABS } from "./reports/constants";
 import { pad2, monthWindow } from "./reports/utils";
+import { academyToday } from "../../utils";
 
 /**
  * Reports page — 3 tabs: Calendar Grid, Attendance (big monthly
@@ -19,7 +20,7 @@ export default function Reports() {
   // Month-navigator state (30 Jun 2026): admins think in months, not
   // arbitrary date ranges. Shared between Calendar + Attendance tabs
   // so switching tabs preserves the picked month.
-  const _now = new Date();
+  const _now = academyToday();
   const [year, setYear] = useState(_now.getFullYear());
   const [monthIdx, setMonthIdx] = useState(_now.getMonth());
   const win = useMemo(() => monthWindow(year, monthIdx), [year, monthIdx]);

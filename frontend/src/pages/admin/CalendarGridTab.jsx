@@ -5,7 +5,7 @@ import { Loader2, FileDown, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob, showApiError } from "../../api";
 import { useApiQuery } from "../../hooks/useApiQuery";
-import { formatDate } from "../../utils";
+import { formatDate, todayIso as academyTodayIso } from "../../utils";
 import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 import AttendanceLedgerModal from "./AttendanceLedgerModal";
 import { InfoTip } from "../../components/InfoTip";
@@ -483,7 +483,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
              future dates (empty rows) don't pad the modal — user
              request 20 Feb 2026. Historical months keep the full
              month-end so past data displays completely. */
-          end={isCurrent ? (data?.today || new Date().toISOString().slice(0, 10)) : data?.end}
+          end={isCurrent ? (data?.today || academyTodayIso()) : data?.end}
         />
       )}
 

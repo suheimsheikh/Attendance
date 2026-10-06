@@ -70,7 +70,7 @@ class LeaveDecision(BaseModel):
 def make_router(db, require_admin, get_current_user, compute_comp_off_balance=None, compute_balance_summary=None, split_leave_days=None) -> APIRouter:
     router = APIRouter(prefix="/api")
 
-    async def _comp_off_guard(target_user: dict, start_date: str, end_date: str, is_auto_approve: bool = False) -> None:
+    async def _comp_off_guard(target_user: dict, start_date: str, end_date: str) -> None:
         """Hard-block comp-off applications that exceed the member's available
         balance. Admins filing on behalf with `auto_approve=true` are also
         gated — the user decision was explicit: NO silent over-draw. If an

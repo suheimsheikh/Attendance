@@ -132,7 +132,7 @@ function PurchaseCells({ it, catKey, e, purchAmt, ctx }) {
         />
       </td>
       <td className="p-2 text-right font-semibold tabular-nums text-emerald-700" data-testid={`entry-purch-amt-${it.id}`}>
-        {purchAmt > 0 ? `₹${inr(purchAmt)}` : ""}
+        {purchAmt > 0 ? inr(purchAmt) : ""}
       </td>
     </>
   );
@@ -188,10 +188,10 @@ function IssueCells({ it, oh, avail, issueQty, rate, issueAmt, over, ctx }) {
       </td>
       {/* Issue Rate — weighted-avg purchase cost, read-only. */}
       <td className="p-2 text-right tabular-nums text-slate-500 text-xs" data-testid={`entry-issue-rate-${it.id}`} title="Weighted-average purchase cost across all recorded purchases">
-        {rate > 0 ? `₹${inr(rate)}` : "—"}
+        {rate > 0 ? inr(rate) : "—"}
       </td>
       <td className="p-2 text-right font-semibold tabular-nums text-amber-700" data-testid={`entry-issue-amt-${it.id}`}>
-        {issueAmt > 0 ? `₹${inr(issueAmt)}` : ""}
+        {issueAmt > 0 ? inr(issueAmt) : ""}
       </td>
     </>
   );
@@ -286,7 +286,7 @@ function WastageCells({ it, w, wasteAmt, over, notesEditor, ctx }) {
         )}
       </td>
       <td className="p-2 text-right font-semibold tabular-nums text-rose-700" data-testid={`entry-wastage-amt-${it.id}`}>
-        {wasteAmt > 0 ? `₹${inr(wasteAmt)}` : ""}
+        {wasteAmt > 0 ? inr(wasteAmt) : ""}
       </td>
     </>
   );

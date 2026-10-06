@@ -7,11 +7,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Loader2, TrendingDown, TrendingUp, History, AlertTriangle } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate, fmtQty } from "../../utils";
+import { formatDate, fmtQty, todayIso, isoDaysAgo, money, rupees } from "../../utils";
 
-const isoDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toLocaleDateString("sv-SE"); };
-const todayISO = () => new Date().toLocaleDateString("sv-SE");
-const rupee = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const rupee = (n) => rupees(n || 0);
 const stamp = (iso) => iso ? new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }) : "";
 
 function Stat({ label, value, tone }) {
@@ -30,7 +28,7 @@ function Stat({ label, value, tone }) {
 
 export default function StockVarianceReport({ liveSig }) {
   const [start, setStart] = useState(isoDaysAgo(29));
-  const [end, setEnd] = useState(todayISO());
+  const [end, setEnd] = useState(todayIso());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -54,9 +52,9 @@ export default function StockVarianceReport({ liveSig }) {
       <div className="flex items-center gap-2 flex-wrap mb-4">
         <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="variance-start" title="Report start date" />
         <span className="text-xs text-slate-400">to</span>
-        <input type="date" value={end} min={start} max={todayISO()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="variance-end" title="Report end date" />
+        <input type="date" value={end} min={start} max={todayIso()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="variance-end" title="Report end date" />
         {[["30d", 29], ["90d", 89], ["1y", 364]].map(([lbl, days]) => (
-          <button key={lbl} onClick={() => { setStart(isoDaysAgo(days)); setEnd(todayISO()); }}
+          <button key={lbl} onClick={() => { setStart(isoDaysAgo(days)); setEnd(todayIso()); }}
                   title={`Show the last ${lbl.replace("d", " days").replace("1y", "year")}`}
                   className="text-[11px] font-bold text-slate-500 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 rounded-full px-2.5 py-1">{lbl}</button>
         ))}
@@ -89,7 +87,7 @@ export default function StockVarianceReport({ liveSig }) {
                     <th className="text-right p-2.5">Loss</th>
                     <th className="text-right p-2.5">Extra</th>
                     <th className="text-right p-2.5">Net</th>
-                    <th className="text-right p-2.5 bg-slate-100">Value impact</th>
+                    <th className="text-right p-2.5 bg-slate-100">Value impact ₹</th>
                     <th className="text-right p-2.5">Counts</th>
                   </tr>
                 </thead>
@@ -103,7 +101,7 @@ export default function StockVarianceReport({ liveSig }) {
                       <td className={`p-2.5 text-right tabular-nums font-bold ${r.net_qty < 0 ? "text-rose-700" : r.net_qty > 0 ? "text-emerald-700" : "text-slate-400"}`}>
                         {r.net_qty ? `${r.net_qty > 0 ? "+" : "−"}${fmtQty(Math.abs(r.net_qty), r.unit)}` : "0"}
                       </td>
-                      <td className="p-2.5 text-right tabular-nums font-bold bg-slate-50/70 text-slate-900">{rupee(r.loss_value + r.extra_value)}</td>
+                      <td className="p-2.5 text-right tabular-nums font-bold bg-slate-50/70 text-slate-900">{money(r.loss_value + r.extra_value)}</td>
                       <td className="p-2.5 text-right tabular-nums text-slate-500">{r.count}</td>
                     </tr>
                   ))}

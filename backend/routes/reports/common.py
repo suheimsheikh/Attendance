@@ -92,7 +92,6 @@ def _pdf_from_table(
     col_widths: Optional[List[float]] = None,
     meta: Optional[dict] = None,
     grouped_headers: Optional[List[tuple]] = None,
-    group_colors: Optional[List[str]] = None,
     pagesize_override=None,
     font_size: int = 8,
 ) -> bytes:
@@ -109,7 +108,6 @@ def _pdf_from_table(
     column headers (e.g. Attendance / Leave / Overtime / Comp-Off /
     Hours) matching the on-screen grouped table. Format: list of
     (label, span, tint_hex) tuples. Span sums must equal len(headers).
-    ``group_colors`` optionally tints the column headers row per group.
 
     ``pagesize_override`` lets the caller pass an explicit ReportLab
     pagesize (e.g. A3 in landscape when the table is very wide). If

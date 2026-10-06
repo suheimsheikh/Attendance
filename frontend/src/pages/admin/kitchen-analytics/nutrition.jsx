@@ -212,8 +212,8 @@ export function PantryDayModal({ date, kind, accent, onClose }) {
                     <th className="text-left px-2 py-2">Category</th>
                     {isPurchase && <th className="text-left px-2 py-2">Vendor</th>}
                     <th className="text-right px-2 py-2">Qty</th>
-                    <th className="text-right px-2 py-2">Rate</th>
-                    <th className="text-right px-2 py-2">Amount</th>
+                    <th className="text-right px-2 py-2">Rate ₹</th>
+                    <th className="text-right px-2 py-2">Amount ₹</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -223,8 +223,8 @@ export function PantryDayModal({ date, kind, accent, onClose }) {
                       <td className="px-2 py-1.5 text-slate-500 text-xs">{r.category_label || "—"}</td>
                       {isPurchase && <td className="px-2 py-1.5 text-slate-500 text-xs">{r.vendor || "—"}</td>}
                       <td className="px-2 py-1.5 text-right tabular-nums">{fmtQty(r.qty)}</td>
-                      <td className="px-2 py-1.5 text-right tabular-nums">{r.rate ? `₹${inr2(r.rate)}` : "—"}</td>
-                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold">₹{inr2(r.amount)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{r.rate ? inr2(r.rate) : "—"}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{inr2(r.amount)}</td>
                     </tr>
                   ))}
                   {data.unitemised.map((u, i) => (
@@ -232,7 +232,7 @@ export function PantryDayModal({ date, kind, accent, onClose }) {
                       <td className="px-4 py-1.5 italic text-amber-900" colSpan={isPurchase ? 5 : 4}>
                         Bulk-uploaded (no per-item detail) · <b>{u.category_label}</b>
                       </td>
-                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-amber-900">₹{inr2(u.amount)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-amber-900">{inr2(u.amount)}</td>
                     </tr>
                   ))}
                 </tbody>

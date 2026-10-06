@@ -6,18 +6,11 @@
 import React, { useEffect, useState } from "react";
 import { Loader2, X, ShoppingCart, ClipboardList, Flame, AlertTriangle, Scale } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate, fmtQty as uQty } from "../../utils";
+import { formatDate, fmtQty as uQty, todayIso, isoDaysAgo, money, rupees } from "../../utils";
 import { useEscape } from "../../hooks/useEscape";
 
-const fmt = (n, unit) => (n == null ? "—" : uQty(n, unit));
-const rupee = (n) => (n == null ? "—" : `₹${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+const fmt = uQty;
 
-function isoDaysAgo(days) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toLocaleDateString("sv-SE");
-}
-const todayISO = () => new Date().toLocaleDateString("sv-SE");
 
 const TYPE_META = {
   purchase: { label: "Purchase", cls: "bg-emerald-100 text-emerald-700", Icon: ShoppingCart, sign: "+" },
@@ -55,9 +48,9 @@ function RangePicker({ start, end, setStart, setEnd }) {
     <div className="flex items-center gap-2 flex-wrap mb-4">
       <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="detail-range-start"/>
       <span className="text-xs text-slate-400">to</span>
-      <input type="date" value={end} min={start} max={todayISO()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="detail-range-end"/>
+      <input type="date" value={end} min={start} max={todayIso()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="detail-range-end"/>
       {[["30d", 29], ["90d", 89], ["1y", 364]].map(([lbl, days]) => (
-        <button key={lbl} onClick={() => { setStart(isoDaysAgo(days)); setEnd(todayISO()); }}
+        <button key={lbl} onClick={() => { setStart(isoDaysAgo(days)); setEnd(todayIso()); }}
                 className="text-[11px] font-bold text-slate-500 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 rounded-full px-2.5 py-1">
           {lbl}
         </button>
@@ -77,7 +70,7 @@ function Chip({ label, value }) {
 
 export function ItemDetailPanel({ itemId, onClose }) {
   const [start, setStart] = useState(isoDaysAgo(29));
-  const [end, setEnd] = useState(todayISO());
+  const [end, setEnd] = useState(todayIso());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -114,7 +107,7 @@ export function ItemDetailPanel({ itemId, onClose }) {
               </p>
             </div>
             <Chip label="Purchased" value={`${fmt(tot.purchased_qty, item.unit)} ${item.unit}`}/>
-            <Chip label="Spend" value={rupee(tot.purchased_amount)}/>
+            <Chip label="Spend" value={rupees(tot.purchased_amount)}/>
             <Chip label="Issued" value={`${fmt(tot.issued_qty, item.unit)} ${item.unit}`}/>
             <Chip label="Wasted" value={`${fmt(tot.wasted_qty, item.unit)} ${item.unit}`}/>
             <Chip label="Stock-take" value={`${tot.adjusted_qty > 0 ? "+" : ""}${fmt(tot.adjusted_qty, item.unit)} ${item.unit}`}/>
@@ -131,7 +124,7 @@ export function ItemDetailPanel({ itemId, onClose }) {
                   <th className="text-left p-2">Date</th>
                   <th className="text-left p-2">Type</th>
                   <th className="text-right p-2">Qty</th>
-                  <th className="text-right p-2">Rate / Amount</th>
+                  <th className="text-right p-2">Rate / Amount ₹</th>
                   <th className="text-left p-2">Reason / By</th>
                 </tr>
               </thead>
@@ -150,7 +143,7 @@ export function ItemDetailPanel({ itemId, onClose }) {
                         {ev.type === "adjustment" ? (ev.qty > 0 ? "+" : ev.qty < 0 ? "−" : "") : m.sign}{fmt(Math.abs(ev.qty), item.unit)} {item.unit}
                       </td>
                       <td className="p-2 text-right tabular-nums text-slate-600">
-                        {ev.type === "purchase" ? `${rupee(ev.rate)} → ${rupee(ev.amount)}` : "—"}
+                        {ev.type === "purchase" ? `${money(ev.rate)} → ${money(ev.amount)}` : "—"}
                       </td>
                       <td className="p-2 text-xs text-slate-500">
                         {ev.type === "adjustment" && ev.physical != null ? (
@@ -173,7 +166,7 @@ export function ItemDetailPanel({ itemId, onClose }) {
 
 export function CategoryDetailPanel({ categoryKey, stockMap, onClose }) {
   const [start, setStart] = useState(isoDaysAgo(29));
-  const [end, setEnd] = useState(todayISO());
+  const [end, setEnd] = useState(todayIso());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -199,7 +192,7 @@ export function CategoryDetailPanel({ categoryKey, stockMap, onClose }) {
       ) : !data ? null : (
         <>
           <div className="grid grid-cols-2 gap-2 mb-5 max-w-xs">
-            <Chip label="Spend in range" value={rupee(data.spend)}/>
+            <Chip label="Spend in range" value={rupees(data.spend)}/>
             <Chip label="Items" value={rows.length}/>
           </div>
           {rows.length === 0 ? (
@@ -210,7 +203,7 @@ export function CategoryDetailPanel({ categoryKey, stockMap, onClose }) {
                 <tr>
                   <th className="text-left p-2">Item</th>
                   <th className="text-right p-2">Purchased</th>
-                  <th className="text-right p-2">Amount</th>
+                  <th className="text-right p-2">Amount ₹</th>
                   <th className="text-right p-2">Issued</th>
                   <th className="text-right p-2">Wasted</th>
                   <th className="text-right p-2 bg-slate-100">On hand</th>
@@ -223,7 +216,7 @@ export function CategoryDetailPanel({ categoryKey, stockMap, onClose }) {
                     <tr key={r.item_id} className="border-t border-slate-100">
                       <td className="p-2 font-semibold text-slate-900">{r.name} <span className="text-[10px] text-slate-400 uppercase">{r.unit}</span></td>
                       <td className="p-2 text-right tabular-nums text-emerald-700">{r.purchased_qty ? `+${fmt(r.purchased_qty, r.unit)}` : "0"}</td>
-                      <td className="p-2 text-right tabular-nums text-slate-600">{r.purchased_amount ? rupee(r.purchased_amount) : "—"}</td>
+                      <td className="p-2 text-right tabular-nums text-slate-600">{r.purchased_amount ? money(r.purchased_amount) : "—"}</td>
                       <td className="p-2 text-right tabular-nums text-sky-700">{r.issued_qty ? `−${fmt(r.issued_qty, r.unit)}` : "0"}</td>
                       <td className="p-2 text-right tabular-nums text-amber-700">{r.wasted_qty ? `−${fmt(r.wasted_qty, r.unit)}` : "0"}</td>
                       <td className={`p-2 text-right tabular-nums font-bold bg-slate-50/70 ${st?.low ? "text-rose-700" : "text-slate-900"}`}>

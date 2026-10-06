@@ -1,5 +1,5 @@
 // Reports date helpers — split out of Reports.jsx (17 Feb 2026 refactor).
-import { todayIso } from "../../../utils";
+import { todayIso, academyToday } from "../../../utils";
 
 export function pad2(n) { return String(n).padStart(2, "0"); }
 export function isoDate(y, m0, d) { return `${y}-${pad2(m0 + 1)}-${pad2(d)}`; }
@@ -8,7 +8,7 @@ export function isoDate(y, m0, d) { return `${y}-${pad2(m0 + 1)}-${pad2(d)}`; }
  * containing (year, monthIdx). If the month is the current one, `end`
  * clamps to today; otherwise it's the last of the month. */
 export function monthWindow(year, monthIdx) {
-  const today = new Date();
+  const today = academyToday();
   const isCurrent = today.getFullYear() === year && today.getMonth() === monthIdx;
   const start = isoDate(year, monthIdx, 1);
   const lastDay = new Date(year, monthIdx + 1, 0).getDate();

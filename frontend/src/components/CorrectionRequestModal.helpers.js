@@ -1,3 +1,4 @@
+import { todayIso, isoDaysAgo } from "../utils";
 /**
  * Static helpers extracted from CorrectionRequestModal so the main
  * component stays under the code-review complexity ceiling. Pure
@@ -27,17 +28,11 @@ export const KINDS_BY_ENTITY = {
 
 /** Latest date a correction can target — corrections are capped at
  * "today" (future dates are never valid). */
-export function windowMaxDate() {
-  return new Date().toISOString().slice(0, 10);
-}
+export const windowMaxDate = todayIso;
 
 /** Earliest date a correction can target — 31-day retro window (was 7,
  * expanded 9 Feb 2026 per user request so admins can fix late-reported
  * check-in times / missed punches for an entire month). Non-admin
  * self-filed requests are still capped at 7 days by the backend
  * `_enforce_window` guard; admins bypass that check server-side. */
-export function windowMinDate() {
-  const d = new Date();
-  d.setDate(d.getDate() - 31);
-  return d.toISOString().slice(0, 10);
-}
+export const windowMinDate = () => isoDaysAgo(31);

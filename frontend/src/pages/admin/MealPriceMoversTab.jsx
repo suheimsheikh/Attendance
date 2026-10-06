@@ -19,20 +19,14 @@ import {
 } from "recharts";
 import { Loader2, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Sparkles, IndianRupee } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate } from "../../utils";
+import { formatDate, todayIso, money, rupees } from "../../utils";
 import ItemPriceTrendDrawer from "../../components/ItemPriceTrendDrawer";
 import { InfoTip } from "../../components/InfoTip";
 
 const UP = "#EF4444";
 const DOWN = "#10B981";
-const rupee = (n) => (n == null ? "—" : `₹${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const pctStr = (n) => (n == null ? "—" : `${n > 0 ? "+" : ""}${n}%`);
 
-function todayIso() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
 
 const WINDOWS = [7, 14, 30, 60, 90];
 
@@ -78,7 +72,7 @@ function MoverRow({ m, onOpen }) {
       <div className="min-w-0 flex-1">
         <div className="font-semibold text-slate-800 truncate">{m.name}</div>
         <div className="text-[11px] text-slate-500 tabular-nums">
-          {rupee(m.base_rate)} <span className="mx-1">→</span> <b className="text-slate-700">{rupee(m.cur_rate)}</b>
+          {rupees(m.base_rate)} <span className="mx-1">→</span> <b className="text-slate-700">{rupees(m.cur_rate)}</b>
           <span className="text-slate-400"> /{m.unit || "unit"}</span>
         </div>
       </div>
@@ -174,7 +168,7 @@ export default function MealPriceMoversTab({ liveSig }) {
                   <XAxis type="number" tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
                   <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} interval={0} />
                   <Tooltip
-                    formatter={(v, _n, p) => [`${v > 0 ? "+" : ""}${v}%  (${rupee(p.payload.base_rate)} → ${rupee(p.payload.cur_rate)})`, "Change"]}
+                    formatter={(v, _n, p) => [`${v > 0 ? "+" : ""}${v}%  (${rupees(p.payload.base_rate)} → ${rupees(p.payload.cur_rate)})`, "Change"]}
                     labelFormatter={() => ""}
                   />
                   <ReferenceLine x={0} stroke="#94a3b8" />
@@ -218,8 +212,8 @@ export default function MealPriceMoversTab({ liveSig }) {
                 <tr>
                   <th className="text-left p-2.5">Item</th>
                   <th className="text-left p-2.5">Category</th>
-                  <th className="text-right p-2.5">Prev rate</th>
-                  <th className="text-right p-2.5">Now</th>
+                  <th className="text-right p-2.5">Prev rate ₹</th>
+                  <th className="text-right p-2.5">Now ₹</th>
                   <th className="text-center p-2.5">Trend</th>
                   <th className="text-right p-2.5">Change</th>
                 </tr>
@@ -232,8 +226,8 @@ export default function MealPriceMoversTab({ liveSig }) {
                         onClick={() => openItem(m)} data-testid={`pm-row-${m.item_id}`}>
                       <td className="p-2 font-semibold text-slate-800">{m.name}</td>
                       <td className="p-2 text-slate-500">{m.category_label || "—"}</td>
-                      <td className="p-2 text-right tabular-nums text-slate-500">{rupee(m.base_rate)}</td>
-                      <td className="p-2 text-right tabular-nums font-bold text-slate-800">{rupee(m.cur_rate)}</td>
+                      <td className="p-2 text-right tabular-nums text-slate-500">{money(m.base_rate)}</td>
+                      <td className="p-2 text-right tabular-nums font-bold text-slate-800">{money(m.cur_rate)}</td>
                       <td className="p-2"><div className="flex justify-center"><Sparkline points={m.spark} color={up ? UP : DOWN} /></div></td>
                       <td className={`p-2 text-right font-black tabular-nums ${m.is_new ? "text-sky-600" : up ? "text-rose-600" : "text-emerald-600"}`}>
                         {m.is_new ? "NEW" : pctStr(m.change_pct)}

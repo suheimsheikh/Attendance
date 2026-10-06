@@ -74,14 +74,6 @@ class BreakPatch(BaseModel):
 # ---------------------------------------------------------------------------
 # Helpers (importable from server.py for use in presence)
 # ---------------------------------------------------------------------------
-def break_active_on(brk: dict, today_str: str) -> bool:
-    if not brk:
-        return False
-    if brk.get("start_date") and brk["start_date"] > today_str:
-        return False
-    if brk.get("end_date") and brk["end_date"] < today_str:
-        return False
-    return True
 
 
 def break_applies_to(brk: dict, member: dict) -> bool:

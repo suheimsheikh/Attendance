@@ -12,16 +12,15 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { Loader2, ClipboardCheck, Save, Search, ChevronDown, ChevronRight, TrendingDown, TrendingUp, Printer, ClipboardList, BarChart3 } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate, fmtQty } from "../../utils";
+import { formatDate, fmtQty, todayIso, addDaysIso, money, rupees } from "../../utils";
 import StockVarianceReport from "./StockVarianceReport";
 
-const todayISO = () => new Date().toLocaleDateString("sv-SE");
 const num = (v) => { const n = Number(v); return isFinite(n) ? n : 0; };
-const rupee = (n) => `₹${Math.abs(Number(n) || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+const rupee = (n) => rupees(Math.abs(Number(n) || 0), 0);
 
 export default function MealStockTakeTab({ liveSig }) {
   const [view, setView] = useState("count");   // count | report
-  const [dateStr, setDateStr] = useState(todayISO());
+  const [dateStr, setDateStr] = useState(todayIso());
   const [rows, setRows] = useState([]);
   const [cats, setCats] = useState([]);
   const [physical, setPhysical] = useState({});   // item_id -> string
@@ -47,10 +46,7 @@ export default function MealStockTakeTab({ liveSig }) {
     if (!silent) setLoading(true);
     // "Before" = day AFTER the count date so a purchase made on the
     // count day still counts as the last buying rate.
-    const nextDay = (() => {
-      const d = new Date(dateStr + "T00:00:00"); d.setDate(d.getDate() + 1);
-      return d.toLocaleDateString("sv-SE");
-    })();
+    const nextDay = addDaysIso(dateStr, 1);
     Promise.all([
       api.get(`/meals/stock-take?date=${dateStr}`),
       api.get(`/meals/items/last-rates?before=${nextDay}`).catch(() => ({ rates: {} })),
@@ -195,7 +191,7 @@ export default function MealStockTakeTab({ liveSig }) {
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="flex items-center gap-2">
           <label className="text-xs font-semibold text-slate-600" htmlFor="stocktake-date">Count date</label>
-          <input id="stocktake-date" data-testid="stocktake-date" type="date" value={dateStr} max={todayISO()}
+          <input id="stocktake-date" data-testid="stocktake-date" type="date" value={dateStr} max={todayIso()}
                  onChange={(e) => setDateStr(e.target.value)} className="iu-input !h-9 !w-auto text-sm" />
           <span className="text-xs text-slate-500">{formatDate(dateStr)}</span>
         </div>
@@ -350,7 +346,7 @@ export default function MealStockTakeTab({ liveSig }) {
                                 ) : (
                                   <span className="text-xs text-slate-500 tabular-nums" data-testid={`stocktake-avgrate-${r.item_id}`}
                                         title={lastRates[r.item_id]?.date ? `Last buying rate, from the purchase on ${formatDate(lastRates[r.item_id].date)}` : "Weighted-average purchase rate"}>
-                                    ₹{num(lastRates[r.item_id]?.rate ?? r.avg_rate).toFixed(2)}
+                                    {num(lastRates[r.item_id]?.rate ?? r.avg_rate).toFixed(2)}
                                   </span>
                                 )}
                               </td>
@@ -373,7 +369,7 @@ export default function MealStockTakeTab({ liveSig }) {
                                   <span className="text-slate-300 text-xs" title="No rate available to value this variance">no rate</span>
                                 ) : (
                                   <span className={`font-bold ${loss ? "text-rose-600" : "text-emerald-600"}`}>
-                                    {loss ? `−${rupee(varValue)}` : `+${rupee(varValue)}`}
+                                    {loss ? "−" : "+"}{money(Math.abs(Number(varValue) || 0), 0)}
                                     <span className="block text-[10px] font-semibold opacity-80">{loss ? "loss" : "gain"}</span>
                                   </span>
                                 )}
@@ -423,7 +419,7 @@ export default function MealStockTakeTab({ liveSig }) {
                       <td className="p-1 text-slate-600">{r.unit}</td>
                       <td className="p-1 text-right tabular-nums text-slate-700">{fmtQty(r.system_qty, r.unit)}</td>
                       <td className="p-1 text-right">______________</td>
-                      <td className="p-1 text-right tabular-nums text-slate-700">{r.needs_rate ? "__________" : `₹${num(lastRates[r.item_id]?.rate ?? r.avg_rate).toFixed(2)}`}</td>
+                      <td className="p-1 text-right tabular-nums text-slate-700">{r.needs_rate ? "__________" : num(lastRates[r.item_id]?.rate ?? r.avg_rate).toFixed(2)}</td>
                     </tr>
                   ))}
                   {[0, 1].map((i) => (

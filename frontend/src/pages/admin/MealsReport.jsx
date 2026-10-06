@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { Loader2, Utensils, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale, Store, PieChart, LineChart, ClipboardCheck, TrendingUp } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate } from "../../utils";
+import { formatDate, todayIso } from "../../utils";
 import { useMealsEvents } from "../../hooks/useMealsEvents";
 import PresenceChip from "../../components/PresenceChip";
 import MealExpensesTab from "./MealExpensesTab";
@@ -48,11 +48,6 @@ const MEAL_COLOR = {
   dinner:     "#2563EB",
 };
 
-function todayISO() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
 
 function DailyDetailsModal({ dateStr, meal, mealLabel, onClose }) {
   const [data, setData] = useState(null);
@@ -232,7 +227,7 @@ function DailyDetailsModal({ dateStr, meal, mealLabel, onClose }) {
 }
 
 function DailyTab() {
-  const [dateStr, setDateStr] = useState(todayISO());
+  const [dateStr, setDateStr] = useState(todayIso());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [detailsMeal, setDetailsMeal] = useState(null);   // e.g. "breakfast"
@@ -262,7 +257,7 @@ function DailyTab() {
           type="date"
           value={dateStr}
           onChange={(e) => setDateStr(e.target.value)}
-          max={todayISO()}
+          max={todayIso()}
           className="iu-input !h-9 !w-auto text-sm"
         />
         <span className="text-xs text-slate-500">{formatDate(dateStr)}</span>

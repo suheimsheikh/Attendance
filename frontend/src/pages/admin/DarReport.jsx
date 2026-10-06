@@ -6,25 +6,24 @@ import { api, downloadBlob, showApiError } from "../../api";
 import { Highlight, fmtDate, fmtHM } from "../../components/DarHistorySection";
 import { DarShareButton } from "../../components/Dar";
 import { InfoTip } from "../../components/InfoTip";
+import { todayIso, monthStartIso } from "../../utils";
 
-const todayISO = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 const monthOf = (iso) => iso.slice(0, 7);
-const firstOfMonth = (iso) => `${monthOf(iso)}-01`;
 const CATS = [["", "All"], ["staff", "Staff"], ["coach", "Coaches"], ["executive", "Executives"], ["elite", "Elite athletes"]];
 
 export default function DarReport() {
   const [params] = useSearchParams();
   const highlightMember = params.get("member") || "";
   const [tab, setTab] = useState(params.get("tab") === "missed" ? "missed" : "reports");
-  const [from, setFrom] = useState(firstOfMonth(todayISO()));
-  const [to, setTo] = useState(todayISO());
+  const [from, setFrom] = useState(monthStartIso(todayIso()));
+  const [to, setTo] = useState(todayIso());
   const [category, setCategory] = useState("");
   const [memberId, setMemberId] = useState(highlightMember);
   const [q, setQ] = useState("");
   const [members, setMembers] = useState([]);
   const [rows, setRows] = useState(null);
   const [missed, setMissed] = useState(null);
-  const [month, setMonth] = useState(params.get("month") || monthOf(todayISO()));
+  const [month, setMonth] = useState(params.get("month") || monthOf(todayIso()));
   const [groupName, setGroupName] = useState("");
   const [loading, setLoading] = useState(false);
   const highlightRef = useRef(null);
@@ -102,7 +101,7 @@ export default function DarReport() {
           <div className="iu-card p-3 md:p-4 mb-4 flex flex-wrap items-center gap-2" data-testid="dar-filters">
             <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="dar-from" />
             <span className="text-xs text-slate-400">to</span>
-            <input type="date" value={to} min={from} max={todayISO()} onChange={(e) => setTo(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="dar-to" />
+            <input type="date" value={to} min={from} max={todayIso()} onChange={(e) => setTo(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="dar-to" />
             <select value={category} onChange={(e) => setCategory(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="dar-category">
               {CATS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
@@ -147,7 +146,7 @@ export default function DarReport() {
       {tab === "missed" && (
         <>
           <div className="iu-card p-3 md:p-4 mb-4 flex flex-wrap items-center gap-3">
-            <input type="month" value={month} max={monthOf(todayISO())} onChange={(e) => setMonth(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="dar-missed-month" />
+            <input type="month" value={month} max={monthOf(todayIso())} onChange={(e) => setMonth(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="dar-missed-month" />
             <span className="text-xs text-slate-500">
               A miss = a worked day (checked in) with no DAR, from the policy effective date, excluding today. Payroll deducts one day per miss.
             </span>

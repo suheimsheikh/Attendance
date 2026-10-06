@@ -47,10 +47,37 @@ export function getDeviceInfo() {
   return { device_name, model, platform: "web" };
 }
 
-// Force IST across every time/date render so the UI stays consistent
-// regardless of the browser's local timezone (matches the backend which
-// uses office_tz = Asia/Kolkata). 20 Feb 2026 timezone audit.
-const OFFICE_TZ = "Asia/Kolkata";
+// Academy timezone (Office settings) for every date/time render and every "today".
+// Starts as IST; setAcademyTz() swaps in the saved Office value once /office loads.
+let OFFICE_TZ = "Asia/Kolkata";
+export const setAcademyTz = (tz) => { if (tz) OFFICE_TZ = tz; };
+
+// YYYY-MM-DD in the academy timezone, whatever zone the device is set to.
+export const academyDateOf = (ts) => new Date(ts).toLocaleDateString("en-CA", { timeZone: OFFICE_TZ });
+export const todayIso = () => academyDateOf(Date.now());
+
+// Calendar-day arithmetic on YYYY-MM-DD strings (timezone-free).
+export function addDaysIso(iso, n) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+export const tomorrowIso = () => addDaysIso(todayIso(), 1);
+export const isoDaysAgo = (n) => addDaysIso(todayIso(), -n);
+export const monthStartIso = (iso = todayIso()) => `${iso.slice(0, 7)}-01`;
+// Local-midnight Date for the academy's today — for code that needs a Date (month pickers).
+export const academyToday = () => new Date(`${todayIso()}T00:00:00`);
+
+// en-IN grouped amount without the ₹ sign (the column header carries it).
+// dp = fixed decimals, or null for up-to-3 decimals.
+export function money(n, dp = 2, empty = "—") {
+  if (n == null || n === "") return empty;
+  const v = Number(n);
+  if (!Number.isFinite(v)) return empty;
+  return dp == null ? v.toLocaleString("en-IN") : v.toLocaleString("en-IN", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+}
+// Same, with ₹ — for KPI cards, tooltips and sentences (not table cells).
+export const rupees = (n, dp = 2, empty = "—") => (n == null || n === "" ? empty : `₹${money(n, dp, empty)}`);
 
 export function formatTime(iso) {
   if (!iso) return "";
@@ -276,26 +303,6 @@ export function resolveNearestSite(lat, lng, office, sites) {
   };
 }
 
-
-export function todayIso() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/** ISO date string (YYYY-MM-DD) for tomorrow in the browser's local
- * timezone. Used by the Late-Coming apply form (added 7 Jul 2026 —
- * user-requested since most late-comings are filed the previous night). */
-export function tomorrowIso() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 export function categoryLabel(cat) {
   return { athlete: "Athlete", staff: "Staff", coach: "Coach", executive: "Executive" }[cat] || cat;

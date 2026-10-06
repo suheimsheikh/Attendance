@@ -14,6 +14,7 @@ import { Loader2, RefreshCw, Printer, Search, ChefHat, CalendarDays } from "luci
 import { toast } from "sonner";
 import { api } from "../../api";
 import Avatar from "../../components/Avatar";
+import { todayIso } from "../../utils";
 
 // Tailwind can't compile arbitrary class names built via string concat, so
 // we map the color key (from the categories master) to fully-spelled-out
@@ -36,10 +37,6 @@ const CATEGORY_BADGE = {
   violet:  "bg-violet-100 text-violet-800 border-violet-200",
   slate:   "bg-slate-100 text-slate-800 border-slate-200",
 };
-
-function todayIso() {
-  return new Date().toLocaleDateString("sv-SE");   // YYYY-MM-DD, local
-}
 
 function fmtCheckIn(iso) {
   if (!iso) return "—";

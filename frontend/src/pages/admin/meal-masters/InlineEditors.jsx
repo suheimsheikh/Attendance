@@ -85,7 +85,7 @@ export function InlineRate({ value, unit, onSave, testid }) {
         data-testid={testid}
         title="Opening rate (₹ per unit) — click to edit. Used to value opening stock before the first purchase."
       >
-        {Number(value) > 0 ? `@${fmtRs(value)}/${unit}` : "@₹—"}
+        {Number(value) > 0 ? `@${fmtRs(value)}/${unit}` : "@—"}
       </button>
     );
   }

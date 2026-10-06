@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Loader2, LogOut as LogOutIcon, CheckCircle2, MapPin, Coffee, ArrowLeftRight, Clock, Camera, Share2, AlertTriangle, Volume2 } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import { getLocation, speakLateMessage, resolveNearestSite } from "../utils";
+import { getLocation, speakLateMessage, resolveNearestSite, todayIso } from "../utils";
 import { useGeoPermission } from "../hooks/useGeoPermission";
 import SelfieCapture from "../components/SelfieCapture";
 import DailyContent from "../components/DailyContent";
@@ -1021,7 +1021,7 @@ function Greeting({ user, checkedIn }) {
   // Birthday check — compare MM-DD only so the year is irrelevant.
   const dob = user?.date_of_birth || "";
   const now = new Date();
-  const todayMD = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const todayMD = todayIso().slice(5);
   const isBirthday = /^\d{4}-\d{2}-\d{2}$/.test(dob) && dob.slice(5) === todayMD;
 
   if (isBirthday) {

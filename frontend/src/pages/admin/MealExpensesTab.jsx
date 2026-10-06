@@ -7,27 +7,18 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Download, Printer, IndianRupee, Utensils, Divide, Wallet, Save } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { fmtQty as uQty } from "../../utils";
+import { fmtQty as uQty, todayIso, money } from "../../utils";
 
 const MEAL_ORDER = ["breakfast", "midmorning", "lunch", "snacks", "dinner"];
 const MEAL_HDR = { breakfast: "B/F", midmorning: "MM", lunch: "L", snacks: "AS", dinner: "D" };
 
-function currentMonth() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-function todayISO() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+const currentMonth = () => todayIso().slice(0, 7);
 function monthRange(month) {
   const [y, m] = month.split("-").map(Number);
   const last = new Date(y, m, 0).getDate();
   return [`${month}-01`, `${month}-${String(last).padStart(2, "0")}`];
 }
-const inr = (n) =>
-  n == null ? "" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const inr = (n) => money(n, 2, "");
 const ddmy = (iso) => {
   if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
   const [y, m, d] = iso.split("-");
@@ -268,7 +259,7 @@ export default function MealExpensesTab({ liveSig }) {
   const [mode, setMode] = useState("month");
   const [month, setMonth] = useState(currentMonth());
   const [from, setFrom] = useState(() => monthRange(currentMonth())[0]);
-  const [to, setTo] = useState(todayISO());
+  const [to, setTo] = useState(todayIso());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -289,7 +280,7 @@ export default function MealExpensesTab({ liveSig }) {
   // Hide trailing future days (they're all zeros) but keep past zeros.
   const trimmed = useMemo(() => {
     if (!data) return null;
-    const today = todayISO();
+    const today = todayIso();
     return { ...data, days: (data.days || []).filter((d) => d.date <= today) };
   }, [data]);
 

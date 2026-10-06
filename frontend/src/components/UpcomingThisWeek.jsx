@@ -2,14 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarDays, ChevronDown, ChevronUp, Tent, Sailboat, Coffee } from "lucide-react";
 import { api } from "../api";
+import { todayIso, addDaysIso } from "../utils";
 
-// Local YYYY-MM-DD (not UTC) — comparison must match what backend stores.
-function ymd(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-}
 function shortDate(s) {
   if (!s) return "";
   const [y, m, d] = s.split("-");
@@ -47,10 +41,8 @@ export default function UpcomingThisWeek() {
   }, []);
 
   const upcoming = useMemo(() => {
-    const today = ymd(new Date());
-    const horizon = new Date();
-    horizon.setDate(horizon.getDate() + 7);
-    const horizonStr = ymd(horizon);
+    const today = todayIso();
+    const horizonStr = addDaysIso(today, 7);
     const inWindow = (start, end) =>
       (start <= today && end >= today) ||
       (start > today && start <= horizonStr);
@@ -103,7 +95,7 @@ export default function UpcomingThisWeek() {
 
 function UpcomingChip({ entry }) {
   const { kind, name, start, end, raw } = entry;
-  const today = ymd(new Date());
+  const today = todayIso();
   const isLive = start <= today && end >= today;
   const rangeLabel = start === end ? shortDate(start) : `${shortDate(start)} → ${shortDate(end)}`;
 

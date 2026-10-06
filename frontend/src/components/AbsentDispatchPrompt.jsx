@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { AlertTriangle, Send, X } from "lucide-react";
 import { api } from "../api";
 import { shareToWhatsApp } from "../utils/shareWhatsApp";
+import { todayIso } from "../utils";
 
 /**
  * AbsentDispatchPrompt — admin-only nudge (user request, Jun 2026).
@@ -14,9 +15,7 @@ import { shareToWhatsApp } from "../utils/shareWhatsApp";
  */
 const DISPATCH_HOUR = 10;
 
-function todayKey() {
-  return new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD local
-}
+const todayKey = todayIso;
 
 export default function AbsentDispatchPrompt() {
   const [data, setData] = useState(null); // { absent:[], onLeave:[], onTour:[], onLop:[], office }

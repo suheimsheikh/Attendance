@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 import { Loader2, Undo2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../../api";
+import { todayIso } from "../../../utils";
 
 const KIND_LABEL = {
   missed_checkin:    "Missed check-in",
@@ -28,10 +29,7 @@ const STATUS_STYLE = {
   cancelled: "bg-slate-200 text-slate-600",
 };
 
-function currentMonthIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
+const currentMonthIso = () => todayIso().slice(0, 7);
 
 function fmtDate(iso) {
   if (!iso) return "";

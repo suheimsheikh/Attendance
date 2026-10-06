@@ -12,15 +12,9 @@ import {
 } from "lucide-react";
 import { api, showApiError, uploadFile } from "../../api";
 import { useAuth } from "../../auth";
-import { formatDate } from "../../utils";
+import { formatDate, todayIso, isoDaysAgo, money } from "../../utils";
 
-function todayISO() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-const inr = (n) =>
-  n == null ? "0.00" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const inr = (n) => money(n, 2, "0.00");
 const num = (v) => (v === "" || v == null ? 0 : Number(v) || 0);
 
 // ---------------------------------------------------------------------------
@@ -31,7 +25,7 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
   const isAdmin = user?.role === "admin";
   const [cats, setCats] = useState([]);
   const [items, setItems] = useState([]);
-  const [dateStr, setDateStr] = useState(todayISO());
+  const [dateStr, setDateStr] = useState(todayIso());
   const [entries, setEntries] = useState({});       // { item_id: {qty, rate} }
   const [saving, setSaving] = useState(false);
   const [recent, setRecent] = useState([]);
@@ -64,11 +58,8 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
   }, [liveSig]);
 
   const loadRecent = () => {
-    const end = todayISO();
-    const startD = new Date();
-    startD.setDate(startD.getDate() - 30);
-    const p = (n) => String(n).padStart(2, "0");
-    const start = `${startD.getFullYear()}-${p(startD.getMonth() + 1)}-${p(startD.getDate())}`;
+    const end = todayIso();
+    const start = isoDaysAgo(30);
     api.get(`/meals/purchases?start=${start}&end=${end}`)
       .then((r) => setRecent((r.purchases || []).slice().reverse()))
       .catch(() => {});
@@ -211,7 +202,7 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
 
   const downloadTemplate = () => {
     const head = ["Date", ...cats.map((c) => c.label)].join(",");
-    const sample = [todayISO(), ...cats.map(() => "")].join(",");
+    const sample = [todayIso(), ...cats.map(() => "")].join(",");
     const blob = new Blob([`${head}\n${sample}\n`], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -223,7 +214,7 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
   return (
     <div data-testid="meal-purchases-tab">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <input type="date" value={dateStr} max={todayISO()} onChange={(e) => setDateStr(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="purchase-date" />
+        <input type="date" value={dateStr} max={todayIso()} onChange={(e) => setDateStr(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="purchase-date" />
         <span className="text-xs text-slate-500">{formatDate(dateStr)}</span>
         <span className="ml-auto flex items-center gap-2 flex-wrap">
           {isAdmin && onGoMasters && (
@@ -285,14 +276,14 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
                             <input type="number" min="0" step="0.01" value={e.rate ?? ""} onChange={(ev) => updateEntry(it.id, "rate", ev.target.value)} className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${rateMissing ? "!ring-2 !ring-rose-300 !border-rose-300" : ol ? "!ring-2 !ring-amber-300 !border-amber-300" : ""}`} placeholder="0" title={rateMissing ? "A quantity was entered — a ₹/unit rate is required to save" : undefined} data-testid={`purchase-rate-${it.id}`} />
                           </div>
                         </td>
-                        <td className="p-2 text-right font-bold tabular-nums" data-testid={`purchase-amount-${it.id}`}>{amt > 0 ? `₹${inr(amt)}` : ""}</td>
+                        <td className="p-2 text-right font-bold tabular-nums" data-testid={`purchase-amount-${it.id}`}>{amt > 0 ? inr(amt) : ""}</td>
                       </tr>
                     );
                   })}
                   <tr className="border-t border-slate-100 bg-slate-50/40">
                     <td colSpan={4} className="p-2 text-right text-xs text-slate-500">Subtotal · {cat.label}</td>
                     <td className="p-2 text-right font-bold tabular-nums" data-testid={`purchase-cat-total-${cat.key}`}>
-                      {catTotals[cat.key] ? `₹${inr(catTotals[cat.key])}` : "—"}
+                      {catTotals[cat.key] ? inr(catTotals[cat.key]) : "—"}
                     </td>
                   </tr>
                 </React.Fragment>
@@ -301,7 +292,7 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
             <tfoot className="bg-slate-50 border-t-2 border-slate-200">
               <tr>
                 <td colSpan={4} className="p-3 text-right font-bold">Day total</td>
-                <td className="p-3 text-right text-lg font-extrabold tabular-nums" data-testid="purchase-day-total">₹{inr(dayTotal)}</td>
+                <td className="p-3 text-right text-lg font-extrabold tabular-nums" data-testid="purchase-day-total">{inr(dayTotal)}</td>
               </tr>
             </tfoot>
           </table>
@@ -365,7 +356,7 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
                       data-testid={`purchase-recent-row-${p.date}`}>
                     <td className="px-3 py-1.5 font-semibold whitespace-nowrap">{formatDate(p.date)}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums">{(p.lines || []).length || "—"}</td>
-                    <td className="px-3 py-1.5 text-right font-bold tabular-nums">₹{inr(tot)}</td>
+                    <td className="px-3 py-1.5 text-right font-bold tabular-nums">{inr(tot)}</td>
                     <td className="px-3 py-1.5 text-slate-500 truncate max-w-[120px]">{p.updated_by_name || ""}</td>
                   </tr>
                 );
@@ -409,8 +400,8 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
                     {outlierConfirm.map((o) => (
                       <tr key={o.id} className="border-t border-slate-100" data-testid={`purchase-outlier-row-${o.id}`}>
                         <td className="p-2 font-semibold text-slate-900">{o.name}<span className="text-slate-400 font-normal"> /{o.unit}</span></td>
-                        <td className="p-2 text-right tabular-nums text-slate-500">₹{inr(o.prev)}</td>
-                        <td className="p-2 text-right tabular-nums font-bold text-slate-900">₹{inr(o.rate)}</td>
+                        <td className="p-2 text-right tabular-nums text-slate-500">{inr(o.prev)}</td>
+                        <td className="p-2 text-right tabular-nums font-bold text-slate-900">{inr(o.rate)}</td>
                         <td className={`p-2 text-right tabular-nums font-black ${o.pct > 0 ? "text-rose-600" : "text-emerald-600"}`}>
                           {o.pct > 0 ? "+" : ""}{o.pct.toFixed(1)}%
                         </td>

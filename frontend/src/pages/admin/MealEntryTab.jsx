@@ -18,18 +18,18 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, ChevronDown, Loader2, Check, Boxes, Filter, X, Search, TrendingUp, AlertTriangle } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate, fmtQty } from "../../utils";
+import { formatDate, fmtQty, todayIso, addDaysIso } from "../../utils";
 import { useRowFocus } from "../../hooks/useRowFocus";
 import VendorScorecardDrawer from "../../components/VendorScorecardDrawer";
 import ItemPriceTrendDrawer from "../../components/ItemPriceTrendDrawer";
 import ItemLedgerDrawer from "./ItemLedgerDrawer";
-import { todayISO, addDays, num, inr } from "./meal-entry/helpers";
+import { num, inr } from "./meal-entry/helpers";
 import AddVendorInlineModal from "./meal-entry/AddVendorInlineModal";
 import DailyTotalsHistoryModal from "./meal-entry/DailyTotalsHistoryModal";
 import EntryItemRow from "./meal-entry/EntryItemRow";
 
 export default function MealEntryTab({ liveSig }) {
-  const [dateStr, setDateStr] = useState(todayISO());
+  const [dateStr, setDateStr] = useState(todayIso());
   const [cats, setCats] = useState([]);
   const [items, setItems] = useState([]);
   const [stock, setStock] = useState({});      // item_id → on_hand (end of prev day)
@@ -253,7 +253,7 @@ export default function MealEntryTab({ liveSig }) {
     // On-hand at end of previous day = what the chef physically has at
     // the start of today's cooking (used only as a sanity check on the
     // Issue column).
-    api.get(`/meals/stock?as_of=${addDays(d, -1)}`)
+    api.get(`/meals/stock?as_of=${addDaysIso(d, -1)}`)
       .then((r) => { if (fresh()) setStock(Object.fromEntries((r.rows || []).map((x) => [x.item_id, x.on_hand]))); })
       .catch(() => { if (fresh()) setStock({}); });
     // Weighted-average purchase cost — as of the day so a purchase entered
@@ -780,8 +780,8 @@ export default function MealEntryTab({ liveSig }) {
     return s;
   }, [items, wastage, avgRate]);
 
-  const nextDate = addDays(dateStr, +1);
-  const canGoForward = nextDate <= todayISO();
+  const nextDate = addDaysIso(dateStr, +1);
+  const canGoForward = nextDate <= todayIso();
 
   // Shared bundle handed to every EntryItemRow so the row's four
   // cell-groups can reach the parent's setters, refs, data and focus
@@ -806,7 +806,7 @@ export default function MealEntryTab({ liveSig }) {
       <div className="sticky top-[104px] z-30 bg-slate-50 pb-3 -mx-4 md:-mx-8 px-4 md:px-8" data-testid="entry-sticky-top">
         <div className="flex items-center gap-2 pt-1 pb-2 flex-wrap">
           <button
-            onClick={() => setDateStr(addDays(dateStr, -1))}
+            onClick={() => setDateStr(addDaysIso(dateStr, -1))}
             className="group h-10 w-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-700 text-white shadow-md ring-1 ring-slate-900/10 hover:from-slate-900 hover:to-slate-800 hover:shadow-lg hover:-translate-x-0.5 active:translate-x-0 active:scale-95 transition-all inline-flex items-center justify-center"
             title="Previous day"
             data-testid="entry-prev-day"
@@ -814,7 +814,7 @@ export default function MealEntryTab({ liveSig }) {
           <input
             type="date"
             value={dateStr}
-            max={todayISO()}
+            max={todayIso()}
             onChange={(e) => setDateStr(e.target.value)}
             className="iu-input !h-10 !w-auto text-sm font-semibold"
             data-testid="entry-date"
@@ -1076,7 +1076,7 @@ export default function MealEntryTab({ liveSig }) {
                         Amount cells so the eye reads the column as one
                         continuous currency stream. */}
                     <td className="p-2 text-right font-semibold tabular-nums text-emerald-700" data-testid={`entry-cat-purch-total-${cat.key}`}>
-                      {purchAmt > 0 ? `₹${inr(purchAmt)}` : <span className="text-emerald-700/40">—</span>}
+                      {purchAmt > 0 ? inr(purchAmt) : <span className="text-emerald-700/40">—</span>}
                     </td>
                     {/* Issue qty subtotal under Issues Qty col. */}
                     <td className="p-2 text-right font-semibold tabular-nums text-amber-800/80 text-xs border-l-2 border-amber-500" data-testid={`entry-cat-issue-qty-${cat.key}`}>
@@ -1085,7 +1085,7 @@ export default function MealEntryTab({ liveSig }) {
                     {/* Spacer over Issues Rate. */}
                     <td/>
                     <td className="p-2 text-right font-semibold tabular-nums text-amber-700" data-testid={`entry-cat-issue-total-${cat.key}`}>
-                      {issueAmt > 0 ? `₹${inr(issueAmt)}` : <span className="text-amber-700/40">—</span>}
+                      {issueAmt > 0 ? inr(issueAmt) : <span className="text-amber-700/40">—</span>}
                     </td>
                     {/* Wastage qty subtotal under Wastage Qty col. */}
                     <td className="p-2 text-right font-semibold tabular-nums text-rose-800/80 text-xs border-l-2 border-rose-500" data-testid={`entry-cat-wastage-qty-${cat.key}`}>
@@ -1094,7 +1094,7 @@ export default function MealEntryTab({ liveSig }) {
                     {/* Spacer over Wastage Reason. */}
                     <td/>
                     <td className="p-2 text-right font-semibold tabular-nums text-rose-700" data-testid={`entry-cat-wastage-total-${cat.key}`}>
-                      {wastageAmt > 0 ? `₹${inr(wastageAmt)}` : <span className="text-rose-700/40">—</span>}
+                      {wastageAmt > 0 ? inr(wastageAmt) : <span className="text-rose-700/40">—</span>}
                     </td>
                   </tr>
                   {!isCollapsed && rows.map((it) => {

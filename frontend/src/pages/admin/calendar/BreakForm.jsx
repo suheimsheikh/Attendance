@@ -6,7 +6,8 @@ import { useDirtyForm } from "../../../hooks/useDirtyForm";
 import TopSaveButton from "../../../components/TopSaveButton";
 import { useFormError } from "../../../hooks/useFormError";
 import FormErrorBanner from "../../../components/FormErrorBanner";
-import { SCOPES, ymd } from "./helpers";
+import { SCOPES } from "./helpers";
+import { todayIso } from "../../../utils";
 
 /**
  * BreakForm — modal for marking a holiday / rest day / fleet pause.
@@ -20,7 +21,7 @@ import { SCOPES, ymd } from "./helpers";
  */
 export default function BreakForm({ initial, members, institutions, fleets, onClose, onSaved }) {
   const isEdit = !!initial?.id;
-  const today = ymd(new Date());
+  const today = todayIso();
   const [form, setForm] = useState({
     name:        initial?.name || "",
     scope:       initial?.scope || "all",

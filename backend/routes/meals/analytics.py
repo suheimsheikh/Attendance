@@ -382,7 +382,6 @@ def register(router, *, _purchase_categories, _stock_snapshot, _valid_date, db, 
         iss_items: dict[str, dict] = {}
         purch_cat: dict[str, float] = {}
         iss_cat: dict[str, float] = {}
-        unitemised_total = 0.0
         # Vendor roll-up (Feb 2026 user request): per-vendor total spend
         # across all purchases in the window, so we can render a
         # "Top vendors by ₹" chart in Kitchen Analytics.
@@ -447,7 +446,6 @@ def register(router, *, _purchase_categories, _stock_snapshot, _valid_date, db, 
             slot["amount"] += eff_day_total
             slot["itemised_amount"] += itemised_from_lines
             slot["unitemised_amount"] += max(0.0, eff_day_total - itemised_from_lines)
-            unitemised_total += max(0.0, eff_day_total - itemised_from_lines)
             # Vendor rollup: distribute this doc's spend across the
             # vendors that showed up on its lines. Line-level vendors
             # give per-vendor accuracy for docs that span multiple
@@ -663,7 +661,7 @@ def register(router, *, _purchase_categories, _stock_snapshot, _valid_date, db, 
         purch_nut = _nutrition_rollup(purch_items, purch_daily_lines)
         iss_nut = _nutrition_rollup(iss_items, iss_daily_lines)
 
-        def _pack(daily, items_rows, cat_rows, nutrition, unitemised=0.0) -> dict:
+        def _pack(daily, items_rows, cat_rows, nutrition) -> dict:
             total_amount = round(sum(d["amount"] for d in daily), 2)
             total_qty_lines = sum(d["lines"] for d in daily)
             itemised_amount = round(sum(r["amount"] for r in items_rows), 2)
@@ -688,7 +686,7 @@ def register(router, *, _purchase_categories, _stock_snapshot, _valid_date, db, 
         return {
             "start": s, "end": e,
             "purchases": {
-                **_pack(_daily_series(purch_daily), purch_item_rows, _cat_pct(purch_cat), purch_nut, unitemised_total),
+                **_pack(_daily_series(purch_daily), purch_item_rows, _cat_pct(purch_cat), purch_nut),
                 "top_vendors": top_vendors_rows,
             },
             "issues":    _pack(_daily_series(iss_daily),   iss_item_rows,   _cat_pct(iss_cat),    iss_nut),

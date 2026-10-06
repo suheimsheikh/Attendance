@@ -2,7 +2,7 @@ import React from "react";
 import { Shield, Coffee, Users, AlertTriangle } from "lucide-react";
 import Avatar from "../Avatar";
 import { ExpectedReturnPill } from "./ExpectedReturnPill";
-import { formatDate } from "../../utils";
+import { formatDate, academyToday } from "../../utils";
 
 /**
  * Days between today (local) and a YYYY-MM-DD ISO date string.
@@ -15,8 +15,7 @@ function daysUntil(isoDate) {
     const [y, m, d] = isoDate.split("-").map(Number);
     if (!y || !m || !d) return null;
     const target = new Date(y, m - 1, d);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = academyToday();
     return Math.floor((target - today) / 86400000);
   } catch {
     return null;

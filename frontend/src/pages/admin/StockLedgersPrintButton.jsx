@@ -1,12 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { api, showApiError } from "../../api";
 import { Printer, Loader2, X } from "lucide-react";
+import { todayIso, monthStartIso, money } from "../../utils";
 
-const monthStart = () => {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toLocaleDateString("sv-SE");
-};
-const todayISO = () => new Date().toLocaleDateString("sv-SE");
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 // dd/mm/yy to match the rest of the app.
@@ -16,7 +12,7 @@ const ddmmyy = (iso) => {
   return d && m && y ? `${d}/${m}/${String(y).slice(-2)}` : String(iso);
 };
 const nq = (x) => (x === null || x === undefined ? "" : Number(x).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
-const rs = (x) => (x === null || x === undefined ? "" : "₹" + Number(x).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const rs = (x) => money(x, 2, "");
 
 function buildHtml(data) {
   const byCat = {};
@@ -49,7 +45,7 @@ function buildHtml(data) {
       <div class="lh">
         <div class="lname">${esc(l.name)} <span class="unit">(${esc(l.unit || "")})</span></div>
         <div class="lmeta">
-          ${l.avg_rate ? `avg rate ${rs(l.avg_rate)}/${esc(l.unit || "unit")}` : `<span class="norate">no cost rate set</span>`}
+          ${l.avg_rate ? `avg rate ₹${rs(l.avg_rate)}/${esc(l.unit || "unit")}` : `<span class="norate">no cost rate set</span>`}
         </div>
       </div>
       <table>
@@ -133,7 +129,7 @@ function buildHtml(data) {
   </style></head><body>
     <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
     <h1>Kitchen Stock Ledgers</h1>
-    <div class="sub"><b>${ddmmyy(data.start)}</b> to <b>${ddmmyy(data.end)}</b>${data.category_label ? ` · ${esc(data.category_label)}` : " · All categories"} · ${data.total_items} items · total stock value <b>${rs(data.total_value)}</b> · generated ${new Date(data.generated_at).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" })}</div>
+    <div class="sub"><b>${ddmmyy(data.start)}</b> to <b>${ddmmyy(data.end)}</b>${data.category_label ? ` · ${esc(data.category_label)}` : " · All categories"} · ${data.total_items} items · total stock value <b>₹${rs(data.total_value)}</b> · generated ${new Date(data.generated_at).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" })}</div>
     <div class="legend">
       <span><b style="color:#0369a1">Opening balance</b> = stock on ${ddmmyy(data.start)}</span>
       <span><b style="color:#047857">Closing balance</b> = stock on ${ddmmyy(data.end)}</span>
@@ -145,8 +141,8 @@ function buildHtml(data) {
 
 export default function StockLedgersPrintButton() {
   const [open, setOpen] = useState(false);
-  const [start, setStart] = useState(monthStart());
-  const [end, setEnd] = useState(todayISO());
+  const [start, setStart] = useState(monthStartIso());
+  const [end, setEnd] = useState(todayIso());
   const [cats, setCats] = useState([]);
   const [categoryKey, setCategoryKey] = useState("all");
   const [loading, setLoading] = useState(false);
@@ -216,7 +212,7 @@ export default function StockLedgersPrintButton() {
               </div>
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">To</label>
-                <input type="date" value={end} min={start} max={todayISO()} onChange={(e) => setEnd(e.target.value)}
+                <input type="date" value={end} min={start} max={todayIso()} onChange={(e) => setEnd(e.target.value)}
                        className="iu-input !h-8 text-sm" data-testid="ledgers-print-end" />
               </div>
             </div>

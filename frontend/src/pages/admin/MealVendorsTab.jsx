@@ -4,9 +4,9 @@ import { Plus, Trash2, Pencil, Save, X, Store, Phone, TrendingUp } from "lucide-
 import { api, showApiError } from "../../api";
 import VendorScorecardDrawer from "../../components/VendorScorecardDrawer";
 import ItemPriceTrendDrawer from "../../components/ItemPriceTrendDrawer";
+import { money } from "../../utils";
 
-const inr = (n) =>
-  n == null ? "0.00" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const inr = (n) => money(n, 2, "0.00");
 
 /**
  * Sparkline — tiny inline SVG showing a vendor's monthly spend trend

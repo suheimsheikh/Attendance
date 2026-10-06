@@ -14,12 +14,10 @@ import {
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import { api, showApiError } from "../api";
-import { fmtQty as uQty, formatDate } from "../utils";
+import { fmtQty as uQty, formatDate, money } from "../utils";
 
-const inr = (n) =>
-  n == null ? "—" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtQty = (n, unit) =>
-  n == null ? "—" : uQty(n, unit);
+const inr = (n) => money(n);
+const fmtQty = uQty;
 
 export default function ItemPriceTrendDrawer({ itemId, itemName, onClose }) {
   const [data, setData] = useState(null);
@@ -153,7 +151,7 @@ export default function ItemPriceTrendDrawer({ itemId, itemName, onClose }) {
                       <th className="text-left px-2 py-2">Vendor</th>
                       <th className="text-right px-2 py-2">Qty</th>
                       <th className="text-right px-2 py-2">₹/unit</th>
-                      <th className="text-right pr-3 pl-2 py-2">Amount</th>
+                      <th className="text-right pr-3 pl-2 py-2">Amount ₹</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -162,8 +160,8 @@ export default function ItemPriceTrendDrawer({ itemId, itemName, onClose }) {
                         <td className="px-3 py-1.5 tabular-nums text-slate-700">{formatDate(p.date)}</td>
                         <td className="px-2 py-1.5 text-slate-600">{p.vendor_name || <span className="text-slate-400">—</span>}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{fmtQty(p.qty, data?.item?.unit)}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-sky-700 font-semibold">₹{inr(p.rate)}</td>
-                        <td className="pr-3 pl-2 py-1.5 text-right tabular-nums font-semibold text-emerald-700">₹{inr(p.amount)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-sky-700 font-semibold">{inr(p.rate)}</td>
+                        <td className="pr-3 pl-2 py-1.5 text-right tabular-nums font-semibold text-emerald-700">{inr(p.amount)}</td>
                       </tr>
                     ))}
                   </tbody>

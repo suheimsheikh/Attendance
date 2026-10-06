@@ -2,11 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, LineChart as LineIcon, Search, X, ShoppingCart, Utensils } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine } from "recharts";
 import { api, showApiError } from "../../api";
-import { fmtQty } from "../../utils";
+import { fmtQty, todayIso, isoDaysAgo, money } from "../../utils";
 
-const todayIso = () => new Date().toLocaleDateString("en-CA");
-const isoDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - (n - 1)); return d.toLocaleDateString("en-CA"); };
-const inr = (n) => Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const lastNDaysStart = (n) => isoDaysAgo(n - 1);
+const inr = (n) => money(n || 0);
 const shortDate = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 
 function eachDay(start, end) {
@@ -21,7 +20,7 @@ export default function MealCompareTab() {
   const [picked, setPicked] = useState(() => new Set());
   const [q, setQ] = useState("");
   const [preset, setPreset] = useState("90");
-  const [from, setFrom] = useState(isoDaysAgo(90));
+  const [from, setFrom] = useState(lastNDaysStart(90));
   const [to, setTo] = useState(todayIso());
   const [metric, setMetric] = useState("qty");
   const [data, setData] = useState(null);
@@ -35,7 +34,7 @@ export default function MealCompareTab() {
 
   useEffect(() => {
     if (preset === "custom") return;
-    setFrom(isoDaysAgo(parseInt(preset, 10))); setTo(todayIso());
+    setFrom(lastNDaysStart(parseInt(preset, 10))); setTo(todayIso());
   }, [preset]);
 
   useEffect(() => {

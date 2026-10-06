@@ -1,5 +1,5 @@
 import { History } from "lucide-react";
-import { formatDate, formatTime, shortDate } from "../../../utils";
+import { formatDate, formatTime, shortDate, todayIso } from "../../../utils";
 import { round1 } from "../../leaves/utils";
 import { daysBetween } from "./rowHelpers";
 
@@ -85,7 +85,7 @@ function downloadDecisionHistoryCsv(rows) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `leave-decisions-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `leave-decisions-${todayIso()}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

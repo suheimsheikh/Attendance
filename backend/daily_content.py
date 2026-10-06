@@ -39,7 +39,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["daily-content"])
 
 
-
 # ---------------------------------------------------------------------------
 # Static fallback pool — used when LLM is unreachable or rate-limited.
 # Keeps the UI useful even if the AI service is down.
@@ -104,10 +103,6 @@ def _office_today(office: Optional[dict]) -> date:
     """Calendar date in the office's local timezone — so the daily content
     flips at office midnight (not at server-host UTC midnight)."""
     return local_now(office).date()
-
-
-def _today_str(office: Optional[dict] = None) -> str:
-    return _office_today(office).isoformat()
 
 
 def _kind_for(d: date) -> str:

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Loader2, X, CalendarRange, Printer } from "lucide-react";
 import { api, showApiError } from "../../../api";
-import { formatDate } from "../../../utils";
-import { addDays, todayISO, inr } from "./helpers";
+import { formatDate, todayIso, addDaysIso } from "../../../utils";
+import { inr } from "./helpers";
 
 /**
  * DailyTotalsHistoryModal — date-wise drill-down (Aug 2026 user
@@ -17,7 +17,7 @@ import { addDays, todayISO, inr } from "./helpers";
  */
 export default function DailyTotalsHistoryModal({ kind, selectedDate, onClose }) {
   // Sensible default: 7-day trailing window ending on the selected day.
-  const [start, setStart] = useState(() => addDays(selectedDate, -6));
+  const [start, setStart] = useState(() => addDaysIso(selectedDate, -6));
   const [end, setEnd] = useState(selectedDate);
   const [rows, setRows] = useState([]);
   const [totals, setTotals] = useState({ grand_purchase_amt: 0, grand_issue_amt: 0 });
@@ -93,7 +93,7 @@ export default function DailyTotalsHistoryModal({ kind, selectedDate, onClose })
               type="date"
               value={end}
               min={start}
-              max={todayISO()}
+              max={todayIso()}
               onChange={(e) => setEnd(e.target.value)}
               className="iu-input !h-9 !w-auto text-sm"
               data-testid="daily-totals-end"
@@ -141,11 +141,11 @@ export default function DailyTotalsHistoryModal({ kind, selectedDate, onClose })
                   <tr key={r.date} className="border-t border-slate-100 hover:bg-slate-50/70" data-testid={`daily-totals-row-${r.date}`}>
                     <td className="p-2 font-semibold text-slate-800 whitespace-nowrap">{formatDate(r.date)}</td>
                     <td className={`p-2 text-right tabular-nums font-semibold ${isPurch ? "text-emerald-800" : "text-slate-700"}`}>
-                      ₹{inr(r.purchase_amt)}
+                      {inr(r.purchase_amt)}
                     </td>
                     <td className="p-2 text-right text-slate-500 hidden sm:table-cell tabular-nums">{r.purchase_lines}</td>
                     <td className={`p-2 text-right tabular-nums font-semibold ${!isPurch ? "text-amber-800" : "text-slate-700"}`}>
-                      ₹{inr(r.issue_amt)}
+                      {inr(r.issue_amt)}
                     </td>
                     <td className="p-2 text-right text-slate-500 hidden sm:table-cell tabular-nums">{r.issue_lines}</td>
                   </tr>
@@ -155,11 +155,11 @@ export default function DailyTotalsHistoryModal({ kind, selectedDate, onClose })
                 <tr className="border-t-2 border-slate-300 bg-slate-100">
                   <td className="p-2 font-extrabold text-slate-900">Grand Total</td>
                   <td className={`p-2 text-right tabular-nums font-extrabold ${isPurch ? `text-${accent}-900` : "text-slate-900"}`} data-testid="daily-totals-grand-purch">
-                    ₹{inr(totals.grand_purchase_amt)}
+                    {inr(totals.grand_purchase_amt)}
                   </td>
                   <td className="p-2 hidden sm:table-cell"/>
                   <td className={`p-2 text-right tabular-nums font-extrabold ${!isPurch ? `text-${accent}-900` : "text-slate-900"}`} data-testid="daily-totals-grand-issue">
-                    ₹{inr(totals.grand_issue_amt)}
+                    {inr(totals.grand_issue_amt)}
                   </td>
                   <td className="p-2 hidden sm:table-cell"/>
                 </tr>

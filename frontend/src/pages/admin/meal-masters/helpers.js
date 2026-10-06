@@ -1,12 +1,12 @@
 /**
  * MealMastersTab shared helpers — extracted 25 Jun 2026 (pure move).
  */
-import { fmtQty as uQty } from "../../../utils";
+import { fmtQty as uQty, money } from "../../../utils";
 
 export const fmt = (n, unit) => (n == null ? "—" : uQty(n, unit));
 
 export const fmtRs = (n) =>
-  n == null || !Number(n) ? "₹0.00" : `₹${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  (!Number(n) ? "0.00" : money(n));
 
 export const UNIT_OPTIONS = ["kg", "g", "L", "mL", "pcs", "dozen", "packet"];
 

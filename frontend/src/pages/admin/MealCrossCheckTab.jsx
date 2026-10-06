@@ -6,16 +6,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, Scale, AlertTriangle, ArrowUp, ArrowDown, Check } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate, fmtQty as uQty } from "../../utils";
+import { formatDate, fmtQty as uQty, todayIso, isoDaysAgo } from "../../utils";
 
-const fmt = (n, unit) => (n == null ? "—" : uQty(n, unit));
+const fmt = uQty;
 
-function isoDaysAgo(days) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toLocaleDateString("sv-SE");
-}
-const todayISO = () => new Date().toLocaleDateString("sv-SE");
 
 const FLAG = {
   over:  { label: "Over",  cls: "bg-rose-100 text-rose-700",     Icon: ArrowUp },
@@ -25,7 +19,7 @@ const FLAG = {
 
 export default function MealCrossCheckTab({ onGoMasters, liveSig }) {
   const [start, setStart] = useState(isoDaysAgo(13));
-  const [end, setEnd] = useState(todayISO());
+  const [end, setEnd] = useState(todayIso());
   const [tolPct, setTolPct] = useState(20);
   const [flaggedOnly, setFlaggedOnly] = useState(true);
   const [data, setData] = useState(null);
@@ -56,7 +50,7 @@ export default function MealCrossCheckTab({ onGoMasters, liveSig }) {
       <div className="flex items-center gap-3 flex-wrap pt-1">
         <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="crosscheck-start" title="Start of the range to check"/>
         <span className="text-xs text-slate-400">to</span>
-        <input type="date" value={end} min={start} max={todayISO()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="crosscheck-end" title="End of the range to check"/>
+        <input type="date" value={end} min={start} max={todayIso()} onChange={(e) => setEnd(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="crosscheck-end" title="End of the range to check"/>
         <label className="inline-flex items-center gap-1.5 text-xs text-slate-600" title="How far issued can drift from expected before a day is flagged">
           Tolerance ±
           <input type="number" min="1" max="100" value={tolPct} onChange={(e) => setTolPct(e.target.value)} className="iu-input !h-9 !w-16 text-sm" data-testid="crosscheck-tolerance"/>%

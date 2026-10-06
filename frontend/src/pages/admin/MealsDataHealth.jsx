@@ -89,8 +89,8 @@ function FixRow({ it, mode, asOf, onSaved }) {
         <td className={`p-2 text-right tabular-nums font-bold ${(it.on_hand || 0) < 0 ? "text-rose-600" : "text-slate-700"}`}>{it.on_hand}{it.unit}</td>
         <td className="p-2 text-right tabular-nums text-slate-500">
           {mode === "rate"
-            ? (it.suggested_rate > 0 ? <span title="Last purchase rate">₹{it.suggested_rate}</span> : <span className="text-rose-500">no rate</span>)
-            : (it.opening_rate > 0 ? `₹${it.opening_rate}` : "—")}
+            ? (it.suggested_rate > 0 ? <span title="Last purchase rate">{it.suggested_rate}</span> : <span className="text-rose-500">no rate</span>)
+            : (it.opening_rate > 0 ? it.opening_rate : "—")}
         </td>
         <td className="p-2 text-right">
           {!open && (
@@ -152,7 +152,7 @@ function FixableList({ title, items, note, testid, mode, asOf, onSaved }) {
             <th className="text-left p-2">Item</th>
             <th className="text-left p-2">Category</th>
             <th className="text-right p-2">On hand</th>
-            <th className="text-right p-2">{mode === "rate" ? "Suggested ₹" : "Rate"}</th>
+            <th className="text-right p-2">{mode === "rate" ? "Suggested ₹" : "Rate ₹"}</th>
             <th className="text-right p-2"></th>
           </tr>
         </thead>

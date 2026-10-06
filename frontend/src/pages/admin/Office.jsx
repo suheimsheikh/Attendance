@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Loader2, Save, MapPin, MessageSquare, Phone, KeyRound, RefreshCw, ArrowRight, Share2, Copy, Trash2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
-import { getLocation } from "../../utils";
+import { getLocation, setAcademyTz } from "../../utils";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import DarPolicyPanel from "./DarPolicyPanel";
 import { useFormError } from "../../hooks/useFormError";
@@ -112,6 +112,7 @@ export default function OfficeSettings() {
       };
       const updated = await api.put("/office", body);
       setForm(updated);
+      setAcademyTz(updated.timezone);
       toast.success("Office settings saved");
     } catch (err) { formErr.setFromApi(err, "Failed to save office settings"); }
     finally { setSaving(false); }

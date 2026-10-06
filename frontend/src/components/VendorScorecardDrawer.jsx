@@ -12,12 +12,10 @@
 import React, { useEffect, useState } from "react";
 import { X, TrendingUp, TrendingDown, Minus, Phone, Loader2, Store } from "lucide-react";
 import { api, showApiError } from "../api";
-import { fmtQty as uQty } from "../utils";
+import { fmtQty as uQty, money } from "../utils";
 
-const inr = (n) =>
-  n == null ? "—" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtQty = (n, unit) =>
-  n == null ? "—" : uQty(n, unit);
+const inr = (n) => money(n);
+const fmtQty = uQty;
 
 export default function VendorScorecardDrawer({ vendorId, days = 30, onClose, onOpenItem }) {
   const [data, setData] = useState(null);
@@ -97,7 +95,7 @@ export default function VendorScorecardDrawer({ vendorId, days = 30, onClose, on
                     <tr className="text-[11px] uppercase tracking-wider text-slate-500 bg-slate-50/50 border-b border-slate-100">
                       <th className="text-left px-3 py-2">Item</th>
                       <th className="text-right px-2 py-2">Qty</th>
-                      <th className="text-right px-2 py-2">Spend</th>
+                      <th className="text-right px-2 py-2">Spend ₹</th>
                       <th className="text-right px-2 py-2" title="Vendor's average rate over the window">Avg ₹</th>
                       <th className="text-right px-2 py-2" title="Vendor's latest rate">Latest ₹</th>
                       <th className="text-right px-2 py-2" title="Market average across ALL vendors for this item">Market ₹</th>
@@ -122,7 +120,7 @@ export default function VendorScorecardDrawer({ vendorId, days = 30, onClose, on
                           {fmtQty(it.qty, it.unit)} <span className="text-[10px] text-slate-400">{it.unit}</span>
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums font-semibold text-emerald-700">
-                          ₹{inr(it.spend)}
+                          {inr(it.spend)}
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums text-slate-700">
                           {inr(it.avg_rate)}

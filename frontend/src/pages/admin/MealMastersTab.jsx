@@ -27,6 +27,7 @@ import { InlineEdit } from "./meal-masters/InlineEditors";
 import AddItemForm from "./meal-masters/AddItemForm";
 import ItemRow from "./meal-masters/ItemRow";
 import StockLedgersPrintButton from "./StockLedgersPrintButton";
+import { todayIso } from "../../utils";
 
 export default function MealMastersTab({ liveSig }) {
   const { user } = useAuth();
@@ -385,7 +386,7 @@ export default function MealMastersTab({ liveSig }) {
               <input
                 type="date"
                 value={asOf}
-                max={new Date().toLocaleDateString("sv-SE")}
+                max={todayIso()}
                 onChange={(e) => setAsOf(e.target.value)}
                 className="iu-input !h-7 !w-auto text-xs"
                 data-testid="masters-as-of"
@@ -432,7 +433,7 @@ export default function MealMastersTab({ liveSig }) {
             <span className="flex-1">Item / Category</span>
             <span className={`${COL_GRID} items-center`}>
               <span className="text-center">Unit</span>
-              <span className="text-right" title="Opening stock — click any item's value to edit">Opening</span>
+              <span className="text-right" title="Opening stock — click any item's value to edit">Opening <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>
               <span className="text-right" title="Low-stock alert level — click any item's value to edit">Min</span>
               <span className="text-right" title="Norm per serving — expected qty per meal (used by Cross-check). Click any item's value to edit">Norm</span>
               <span className="text-right text-emerald-600">Purch <span className="text-slate-400 font-normal normal-case">(qty · ₹)</span></span>

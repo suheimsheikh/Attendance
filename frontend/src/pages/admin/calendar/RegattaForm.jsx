@@ -6,7 +6,8 @@ import { useDirtyForm } from "../../../hooks/useDirtyForm";
 import TopSaveButton from "../../../components/TopSaveButton";
 import { useFormError } from "../../../hooks/useFormError";
 import FormErrorBanner from "../../../components/FormErrorBanner";
-import { LEVEL_STYLE, LEVELS, ymd } from "./helpers";
+import { LEVEL_STYLE, LEVELS } from "./helpers";
+import { todayIso } from "../../../utils";
 
 /**
  * RegattaForm — modal for creating or editing a regatta (event for which
@@ -14,7 +15,7 @@ import { LEVEL_STYLE, LEVELS, ymd } from "./helpers";
  */
 export default function RegattaForm({ initial, onClose, onSaved }) {
   const isEdit = !!initial?.id;
-  const today = ymd(new Date());
+  const today = todayIso();
   const [form, setForm] = useState({
     name:        initial?.name || "",
     level:       initial?.level || "national",

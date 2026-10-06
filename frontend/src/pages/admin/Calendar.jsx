@@ -3,7 +3,7 @@ import { Loader2, ChevronLeft, ChevronRight, Plus, Trash2, Edit3, Tent, Sailboat
 import { toast } from "sonner";
 import { api } from "../../api";
 import { CampForm } from "./Camps";
-import { formatDate } from "../../utils";
+import { formatDate, todayIso, academyToday } from "../../utils";
 import {
   LEVEL_STYLE, LEVELS, DOW_KEYS,
   ymd, startOfMonth, endOfMonth, addMonths, scopeLabel,
@@ -26,7 +26,7 @@ export const BreakForm = BreakFormImpl;
  * Net: was 997 lines pre-extraction → ~250 lines parent + 4 leaf files.
  */
 export default function Calendar() {
-  const [cursor, setCursor] = useState(startOfMonth(new Date()));
+  const [cursor, setCursor] = useState(startOfMonth(academyToday()));
   const [camps, setCamps] = useState([]);
   const [regattas, setRegattas] = useState([]);
   const [breaks, setBreaks] = useState([]);
@@ -113,7 +113,7 @@ export default function Calendar() {
   }, [monthStart]);
 
   const monthLabel = cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  const todayKey = ymd(new Date());
+  const todayKey = todayIso();
 
   const removeRegatta = async (r) => {
     if (!window.confirm(`Delete regatta "${r.name}"?`)) return;
