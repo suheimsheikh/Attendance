@@ -1,5 +1,11 @@
 # I-showed-up — Product Requirements & Session Log
 
+## USER PREFERENCES (PERMANENT — apply to EVERY reply)
+- When done with any task, end with a short bullet summary: "What you asked → What I changed" (one bullet per ask; flag anything not done or done differently).
+- Respond in English. Pay = number of payable days only — never add salary/amount figures.
+- Live data: never modify real members/attendance/issues without explicit approval.
+
+
 ## Original problem statement
 Port the "Attendance" mobile app for the youth competitive sailing academy (Yacht Club of Hyderabad) to a web-based app called "I-showed-up". Smooth operation for staff payroll tracking and sailor attendance. Requires audit logging, geolocation check-ins, single-glance admin dashboard, Muster Roll, self-check-ins, leaves, camps/regattas tracking, Meals/Pantry Stock tracking (Vendors, WAC pricing, drill-downs), and WhatsApp roster reporting.
 
