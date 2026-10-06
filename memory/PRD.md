@@ -607,3 +607,4 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Remaining refactor candidates: M6 MealEntryTab auto-save hook · M7 SelfCheckIn/Office GPS + share hooks.
 - Auto-issue follow-ups (ideas): per-dish 'cooked for' override, 'auto-suggested' marker on saved issues for Menu-vs-Actual adherence, same-weekday-last-week headcount option.
 - P0 Parent Notifications count badge: ON HOLD per user (06 Oct 2026).
+- DONE 06 Oct 2026: Grid 'Pay' = payable days total (first totals column) + EO/Pay in legend. User rule: the app never stores/computes salary amounts (PayCraft does payroll).

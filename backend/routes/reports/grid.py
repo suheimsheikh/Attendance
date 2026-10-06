@@ -15,6 +15,9 @@ from routes.reports.common import (  # noqa: F401
     timedelta,
 )
 
+# Grid cell codes that count as a payable day (Pay total).
+PAYABLE_CODES = frozenset({"P", "HD", "LT", "LV", "CO", "TR", "PS", "WO", "HO", "BK"})
+
 
 def register(router, *, _athlete_like_keys, db, require_admin):
     async def _grid_impl(
@@ -543,6 +546,10 @@ def register(router, *, _athlete_like_keys, db, require_admin):
             # leave-balances — future LOP must not be docked early).
             elapsed_cells = [c for c, iso in zip(cells, days) if iso <= today_iso]
             totals = {
+                # Payable days (Oct 2026): every elapsed day that is paid —
+                # worked (P/HD/LT), paid time-off (LV/CO), duty (TR/PS) and
+                # off-days (WO/HO/BK). Excludes AB, LP, NJ, LF and future days.
+                "payable":     sum(1 for c in elapsed_cells if c in PAYABLE_CODES),
                 "present":     sum(1 for c in elapsed_cells if c in ("P", "HD", "LT")),
                 "absent":      sum(1 for c in elapsed_cells if c == "AB"),
                 # LP days count toward the "leave" total (backward

@@ -5022,3 +5022,10 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Auto-issue unit conversions: new item field `grams_per_unit` (PATCH /meals/items/{id}, 0 clears). Cross-unit lines use item override → weight/volume density (1 g ≈ 1 ml) → nutrition-seed piece weight (×12 for dozen). Lines carry `conversion {grams_per_unit, source}`; dialog "Unit conversions" box lets chef/admin set exact grams per pantry unit.
 - Headcount prefill: meals with 0 muster marks use the previous day's muster count (`headcounts[meal].source` = muster | prev_day | manual).
 - Tested: iteration_85 (20/20 + 114 regression) and iteration_86 (12/12 + 114 regression = 126/126), frontend 0 console errors.
+
+## 2026-10-06 — Grid "Pay" (payable days) column + EO/Pay legend
+- `routes/reports/grid.py`: new `totals.payable` = elapsed days with codes in PAYABLE_CODES {P, HD(=1 day), LT, LV, CO, TR, PS, WO, HO, BK}; excludes AB, LP, NJ, LF, blank and future days. Also in PayCraft grid API payload (additive).
+- Grid UI: "Pay / Days" is now the FIRST (leftmost) totals column (sticky right-[312px]); legend shows Pay + EO chips; InfoTip text updated. CSV/PDF export has a "Pay" column before Present (PDF widths adjusted, legend line extended).
+- EO = Early Out days (checked out ≥15 min before scheduled work_end).
+- User explicitly said: NO salary / amounts / per-day ₹ / OT ₹ — Pay means number of payable days only.
+- Verified: 111 rows payable == recomputed definition (0 mismatches), CSV/PDF 200, screenshot OK.

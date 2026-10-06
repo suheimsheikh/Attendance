@@ -34,7 +34,14 @@ export default function GridRowTotals({
     <>
       <td
         rowSpan={rowSpan}
-        className={`static md:sticky md:right-[278px] ${base} !border-l-2 !border-slate-300 text-rose-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        className={`static md:sticky md:right-[312px] ${base} !border-l-2 !border-slate-300 text-sky-800 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        data-testid={`cal-total-pay-${memberId}`}
+        title={`Payable days (all days except AB, LP, before joining / after leaving) · ${attnTitle}`}
+        onDoubleClick={onOpenAttn}
+      >{t.payable ?? ""}</td>
+      <td
+        rowSpan={rowSpan}
+        className={`static md:sticky md:right-[278px] ${base} text-rose-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-dar-${memberId}`}
         title={t.dar_missed ? `${t.dar_missed} missed DAR${t.dar_missed === 1 ? "" : "s"} · Double-click to open the DAR report` : "No missed DARs"}
         onDoubleClick={onOpenDar}
