@@ -12,7 +12,7 @@ import jwt
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 
-BACKEND_URL = os.environ.get("TEST_BACKEND_URL", "https://attendance-portal-56.preview.emergentagent.com").rstrip("/")
+BACKEND_URL = os.environ.get("TEST_BACKEND_URL", "https://youth-regatta-app.preview.emergentagent.com").rstrip("/")
 API = f"{BACKEND_URL}/api"
 ADMIN_EMAIL = "admin@attendance.app"
 ADMIN_PASSWORD = "Admin@12345"

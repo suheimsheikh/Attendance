@@ -19,7 +19,7 @@
     "/app/backend/tests/test_iter45_review.py (new pytest file — 6 cases covering daily-totals + muster roster + issue-valuation cross-check)"
   ],
   "success_rate": {"backend": "100% (6/6)", "frontend": "100% (all P0 + regressions pass)"},
-  "test_credentials": "admin@attendance.app / Admin@12345 (via 'Admin sign in with email' toggle on /login). Backend pytest needs env TEST_ADMIN_PASSWORD='Admin@12345' + REACT_APP_BACKEND_URL='https://attendance-portal-56.preview.emergentagent.com'.",
+  "test_credentials": "admin@attendance.app / Admin@12345 (via 'Admin sign in with email' toggle on /login). Backend pytest needs env TEST_ADMIN_PASSWORD='Admin@12345' + REACT_APP_BACKEND_URL='https://youth-regatta-app.preview.emergentagent.com'.",
   "seed_data_creation": "Temporarily entered purchase qty=7 rate=22 (Apple), qty=3 (Banana), qty=9 (Guava), issues qty=2 (Apple) & qty=1 (Banana) on 2026-08-01 during testing. ALL cleaned to 0 at end. Verified 2026-08-02 has zero residual (no wrong-date leak).",
   "retest_needed": false,
   "main_agent_can_self_test": true,

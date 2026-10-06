@@ -16,7 +16,7 @@
   },
   "regression_tests": {
     "dblclick_P_total_cell": "PASS — Double-click on cal-total-p-<memberId> opens the 'Attendance ledger — <Member>' modal with date-wise ledger rows.",
-    "dblclick_DAR_missed_cell": "PASS — Double-click on cal-total-dar-e6e43926-... (text '✗1') navigates to /admin/dar?tab=missed&member=e6e43926-d069-4bb7-95fa-26b3272735d3&month=2026-09 and the Missed tab loads showing Campus Administrator with 1 miss on 09.",
+    "dblclick_DAR_missed_cell": "PASS — Double-click on cal-total-dar-e6e43926-... (text '✗1') navigates to /admin/dar?tab=missed&member=regatta-admin-1&month=2026-09 and the Missed tab loads showing Campus Administrator with 1 miss on 09.",
     "day_cell_readability": "PASS — 2-letter codes (P, WO, LV, TR, LT, AB) render inside the narrower 24px day columns without truncation."
   },
   "backend_issues": {"critical": [], "minor": []},

@@ -41,3 +41,9 @@ def local_hm(office: Optional[dict], iso_str: Optional[str]) -> str:
     if not iso_str:
         return ""
     return datetime.fromisoformat(iso_str).astimezone(office_tz(office)).strftime("%H:%M")
+
+
+async def office_today_str(db) -> str:
+    """Today's date (YYYY-MM-DD) in the configured office timezone."""
+    office = await db.config.find_one({"id": "office"}, {"_id": 0, "timezone": 1})
+    return local_date_str(office)

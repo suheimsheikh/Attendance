@@ -13,19 +13,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from services.time_utils import now_utc, local_date_str
+from services.time_utils import now_utc, office_today_str
 
 
 def make_router(db, require_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
 
-    async def _today(office=None) -> str:
-        office = office or await db.config.find_one({"id": "office"}, {"_id": 0, "timezone": 1})
-        return local_date_str(office)
-
     @router.get("/leave-report/today-status")
     async def today_status(admin: dict = Depends(require_admin)):
-        d = await _today()
+        d = await office_today_str(db)
         doc = await db.daily_leave_report_log.find_one({"date": d}, {"_id": 0})
         return {
             "date": d,
@@ -39,7 +35,7 @@ def make_router(db, require_admin) -> APIRouter:
         """Mark today's leave/tour report as posted. Idempotent — the first
         admin to call it wins ($setOnInsert), so a later admin's call never
         overwrites who actually posted it."""
-        d = await _today()
+        d = await office_today_str(db)
         await db.daily_leave_report_log.update_one(
             {"date": d},
             {"$setOnInsert": {

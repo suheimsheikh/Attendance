@@ -4,8 +4,8 @@ import { CheckSquare, Square, ListTodo, Loader2, Share2, Bell, AlertTriangle } f
 import { toast } from "sonner";
 import { api } from "../api";
 import { shareToWhatsApp } from "../utils/shareWhatsApp";
+import { fmtDateWk as fmtDay } from "../utils/dates";
 
-const fmtDay = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" });
 
 export function buildMyDayText({ name, date, checklist, todosDue, todosDoneToday }) {
   const lines = [`🗓️ *My day — ${name}* · ${fmtDay(date)}`];

@@ -37,6 +37,6 @@
   "seed_data_creation": "None. Existing preview DB leave rows were sufficient; no synthetic user or leave was inserted.",
   "retest_needed": false,
   "should_main_agent_self_test": false,
-  "context_for_next_testing_agent": "Focused verification only. API tested locally against http://localhost:8001 with real MongoDB test_database and admin token. UI tested on https://attendance-portal-56.preview.emergentagent.com/presence using admin@attendance.app. No MOCKED APIs used.",
+  "context_for_next_testing_agent": "Focused verification only. API tested locally against http://localhost:8001 with real MongoDB test_database and admin token. UI tested on https://youth-regatta-app.preview.emergentagent.com/presence using admin@attendance.app. No MOCKED APIs used.",
   "rca_of_the_issue": "Previously, days_remaining calculation referenced today_d inside /api/presence without defining it in the function scope, so the try/except swallowed NameError and returned null. The fix anchors today_d to target_date, so live and historical presence views compute remaining leave days relative to the requested date. Regression coverage included required presence member keys for all 141 live members."
 }

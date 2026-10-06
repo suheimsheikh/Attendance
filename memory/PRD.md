@@ -4,7 +4,7 @@
 Port the "Attendance" mobile app for the youth competitive sailing academy (Yacht Club of Hyderabad) to a web-based app called "I-showed-up". Smooth operation for staff payroll tracking and sailor attendance. Requires audit logging, geolocation check-ins, single-glance admin dashboard, Muster Roll, self-check-ins, leaves, camps/regattas tracking, Meals/Pantry Stock tracking (Vendors, WAC pricing, drill-downs), and WhatsApp roster reporting.
 
 ## Live app
-- Preview: https://attendance-portal-56.preview.emergentagent.com
+- Preview: https://youth-regatta-app.preview.emergentagent.com
 - Production: https://i-showed-up.ychyderabad.com  ⚠️ **live prod — no auth/schema changes without explicit user approval**
 
 ## Tech stack

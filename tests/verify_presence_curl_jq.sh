@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="${TEST_BACKEND_URL:-https://attendance-portal-56.preview.emergentagent.com}"
+BASE_URL="${TEST_BACKEND_URL:-https://youth-regatta-app.preview.emergentagent.com}"
 API="${BASE_URL%/}/api"
 STATE_FILE="/app/test_reports/ex_member_ui_seed_state.json"
 

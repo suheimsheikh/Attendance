@@ -14,6 +14,7 @@
 import React, { useEffect, useState } from "react";
 import { X, Loader2, Download } from "lucide-react";
 import { api, showApiError, downloadBlob } from "../../api";
+import { fmtDDMMYY as fmtDDMMYYYY } from "../../utils/dates";
 
 function fmtMin(m) {
   if (!m) return "—";
@@ -33,17 +34,6 @@ function timeOnly(iso) {
     return iso.slice(11, 16);
   }
 }
-// dd/mm/yy — matches the format used across the rest of the reports
-// (see reports.py `_ddmmyy`). Falls back to the raw string if the
-// date isn't in ISO shape.
-function fmtDDMMYYYY(iso) {
-  if (!iso) return "—";
-  const parts = String(iso).split("-");
-  if (parts.length !== 3) return iso;
-  const [y, m, d] = parts;
-  return `${d}/${m}/${y.slice(-2)}`;
-}
-
 export default function OTLedgerModal({ open, onClose, memberId, memberName, year, month }) {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({});

@@ -1,14 +1,7 @@
 import React from "react";
 import { FileText, Share2 } from "lucide-react";
 import { shareToWhatsApp } from "../utils/shareWhatsApp";
-
-const fmtHM = (iso) => iso
-  ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" })
-  : "";
-
-const fmtDay = (iso) => iso
-  ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "2-digit" })
-  : "";
+import { fmtHmIst as fmtHM, fmtDateWkYY as fmtDay } from "../utils/dates";
 
 export function formatDarCaption({ groupName, name, date, checkIn, checkOut, text, siteName }) {
   const times = [fmtHM(checkIn), fmtHM(checkOut)].filter(Boolean).join("–");

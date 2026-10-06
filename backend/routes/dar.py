@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from services.dar import (
     DAR_CATEGORIES, DAR_USER_FILTER, compute_missed_by_user, dar_required_for, get_dar_policy, validate_dar_text,
 )
-from services.time_utils import local_date_str, now_utc
+from services.time_utils import office_today_str, now_utc
 
 
 class DarIn(BaseModel):
@@ -52,17 +52,13 @@ def _pack(d: dict) -> dict:
 def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["dar"])
 
-    async def _today() -> str:
-        office = await db.config.find_one({"id": "office"}, {"_id": 0, "timezone": 1})
-        return local_date_str(office)
-
     async def _upsert_dar(user: dict, iso: str, text: str, source: str) -> dict:
         att = await db.attendance.find_one(
             {"user_id": user["id"], "date": iso}, {"_id": 0, "id": 1, "check_in_at": 1, "check_out_at": 1},
             sort=[("check_in_at", 1)],
         )
         now = now_utc().isoformat()
-        today = await _today()
+        today = await office_today_str(db)
         existing = await db.dars.find_one({"user_id": user["id"], "date": iso}, {"_id": 0})
         doc = {
             "user_id": user["id"],
@@ -88,7 +84,7 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
     # ── Member ────────────────────────────────────────────────────────
     @router.get("/dar/status")
     async def dar_status(user: dict = Depends(get_current_user)):
-        today = await _today()
+        today = await office_today_str(db)
         policy = await get_dar_policy(db, today)
         required = dar_required_for(user) and policy.get("enabled", True) and today >= policy["effective_from"]
         today_dar = await db.dars.find_one({"user_id": user["id"], "date": today}, {"_id": 0})
@@ -106,7 +102,7 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
 
     @router.post("/dar")
     async def submit_dar(body: DarIn, user: dict = Depends(get_current_user)):
-        today = await _today()
+        today = await office_today_str(db)
         policy = await get_dar_policy(db, today)
         text = validate_dar_text(body.text, policy["min_chars"])
         iso = body.date or today
@@ -172,7 +168,7 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
     @router.get("/admin/dar/missed")
     async def admin_dars_missed(month: str, admin: dict = Depends(require_admin)):
         start, end = _month_window(month)
-        today = await _today()
+        today = await office_today_str(db)
         users = await db.users.find(
             dict(DAR_USER_FILTER),
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "rank": 1, "dar_exempt": 1, "dar_required": 1, "status": 1},
@@ -191,11 +187,11 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
 
     @router.get("/config/dar-policy")
     async def get_policy(user: dict = Depends(get_current_user)):
-        return await get_dar_policy(db, await _today())
+        return await get_dar_policy(db, await office_today_str(db))
 
     @router.put("/config/dar-policy")
     async def put_policy(body: DarPolicyIn, admin: dict = Depends(require_admin)):
-        before = await get_dar_policy(db, await _today())
+        before = await get_dar_policy(db, await office_today_str(db))
         upd = {}
         if body.enabled is not None:
             upd["enabled"] = body.enabled
@@ -214,7 +210,7 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
             await write_audit(db, actor=admin, action="dar_policy_update", entity_type="config",
                               entity_id="dar_policy", entity_name="DAR policy", before=before,
                               after={**before, **upd}, reason="Office Settings")
-        return await get_dar_policy(db, await _today())
+        return await get_dar_policy(db, await office_today_str(db))
 
     # ── PayCraft pull (same gate as /api/grid) ────────────────────────
     @router.get("/dar/report")
@@ -222,7 +218,7 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
         if not valid_grid_key(key):
             raise HTTPException(status_code=401, detail="Invalid key")
         start, end = _month_window(month)
-        today = await _today()
+        today = await office_today_str(db)
         users = await db.users.find(
             dict(DAR_USER_FILTER),
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "dar_exempt": 1, "dar_required": 1, "status": 1},

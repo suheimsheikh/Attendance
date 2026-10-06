@@ -2,8 +2,8 @@ import React from "react";
 import { Trash2, Loader2, CheckSquare, Square, CalendarClock, Edit3, Save, X, Flame, Repeat, CalendarPlus, UserMinus, History, MessageSquare } from "lucide-react";
 import { recurrenceLabel } from "./ChecklistsTab";
 import TodoComments from "./TodoComments";
+import { fmtDateDM as fmtDay } from "../../utils/dates";
 
-const fmtDay = (iso) => iso ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "";
 const fmtStamp = (iso) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }) : "";
 const daysSince = (iso) => { if (!iso) return null; const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000); return diff < 0 ? 0 : diff; };
 const elapsedLabel = (n) => n === null ? "" : n === 0 ? "today" : n === 1 ? "1 day ago" : `${n} days ago`;

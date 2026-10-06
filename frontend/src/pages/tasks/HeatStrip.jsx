@@ -1,7 +1,7 @@
 import React from "react";
 import { Flame } from "lucide-react";
+import { fmtDateLong as fmtLong } from "../../utils/dates";
 
-const fmtLong = (iso) => iso ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) : "";
 const fmtWeekday = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" });
 const fmtDayNum = (iso) => new Date(iso + "T00:00:00").getDate();
 const heatIntensity = (total) => total === 0 ? "bg-slate-50 text-slate-400 hover:bg-slate-100"

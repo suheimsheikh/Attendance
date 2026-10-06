@@ -3,8 +3,8 @@ import { Link } from "react-router-dom";
 import { AlarmClock, Flame, Share2, ListTodo } from "lucide-react";
 import { api } from "../api";
 import { shareToWhatsApp } from "../utils/shareWhatsApp";
+import { fmtDateDM as fmtDay } from "../utils/dates";
 
-const fmtDay = (iso) => iso ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "";
 
 const statusLabel = (t, today) => {
   if (t.due_date && t.due_date < today) return `overdue ${fmtDay(t.due_date)}`;

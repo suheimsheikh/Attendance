@@ -9,6 +9,7 @@ import { fileToResizedDataUrl } from "../utils";
 import { useEscape } from "../hooks/useEscape";
 import { shareToWhatsApp, formatCheckinCaption, dataUrlToBlob } from "../utils/shareWhatsApp";
 import useWhatsappGroups, { buildWhatsappHeader } from "../hooks/useWhatsappGroups";
+import { fmtHmLocal } from "../utils/dates";
 
 /**
  * EscortCheckIn — kiosk-style page used by both escorts themselves
@@ -563,12 +564,6 @@ const STEP_OUT_DURATIONS = [
   { min: 60,  label: "1 hour" },
   { min: 120, label: "2 hours" },
 ];
-
-function fmtHmLocal(d) {
-  const h = d.getHours().toString().padStart(2, "0");
-  const m = d.getMinutes().toString().padStart(2, "0");
-  return `${h}:${m}`;
-}
 
 function EscortStepOutForm({ escort, onClose, onDone }) {
   const [reason, setReason] = useState("");

@@ -16,7 +16,7 @@ import requests
 from pymongo import MongoClient
 
 
-BASE = os.environ.get("TEST_BASE_URL", "https://attendance-portal-56.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("TEST_BASE_URL", "https://youth-regatta-app.preview.emergentagent.com").rstrip("/")
 ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@attendance.app")
 ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@12345")
 OUT_PATH = "/app/test_reports/bug_verification_leave_cancel_grid_api_results.json"

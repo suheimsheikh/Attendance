@@ -18,9 +18,10 @@ import logging
 import os
 from datetime import date, datetime, timezone
 from typing import Any, Dict, Optional
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter
+
+from services.time_utils import local_now
 
 try:
     # Top-level import keeps the LLM SDK out of the request hot-path. Falling
@@ -37,9 +38,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["daily-content"])
 
-# Default office tz — matches server.py's DEFAULT_TZ. We read the real timezone
-# from the office config doc per-request so academies in other cities work too.
-DEFAULT_TZ = "Asia/Kolkata"
 
 
 # ---------------------------------------------------------------------------
@@ -105,12 +103,7 @@ FALLBACK_WORDS = [
 def _office_today(office: Optional[dict]) -> date:
     """Calendar date in the office's local timezone — so the daily content
     flips at office midnight (not at server-host UTC midnight)."""
-    tz_name = (office or {}).get("timezone") or DEFAULT_TZ
-    try:
-        tz = ZoneInfo(tz_name)
-    except Exception:
-        tz = ZoneInfo(DEFAULT_TZ)
-    return datetime.now(tz).date()
+    return local_now(office).date()
 
 
 def _today_str(office: Optional[dict] = None) -> str:

@@ -3,8 +3,8 @@ import { Loader2, FileText, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { DarTextarea, DarShareButton } from "../../components/Dar";
+import { fmtDateWk as fmtDay } from "../../utils/dates";
 
-const fmtDay = (iso) => iso ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" }) : "";
 
 /** My DAR for the selected day, shown in the Task Manager when scope = "Mine".
  *  Editable/fileable inline. Future dates are read-only (no future DARs). */

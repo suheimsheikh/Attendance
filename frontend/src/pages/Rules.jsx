@@ -3,8 +3,8 @@ import { ScrollText, CheckCircle2, Loader2, ShieldCheck, Pencil, Plus, Trash2, X
 import { toast } from "sonner";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import { fmtStampIst as fmt } from "../utils/dates";
 
-const fmt = (iso) => iso ? new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }) : "";
 
 export default function Rules() {
   const { user } = useAuth();

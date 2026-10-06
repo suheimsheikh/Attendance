@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, FileText, Search } from "lucide-react";
 import { api } from "../api";
 import { DarShareButton } from "./Dar";
+import { fmtDateWkYY, fmtHmIst } from "../utils/dates";
+
+export const fmtDate = fmtDateWkYY;
+export const fmtHM = (iso) => fmtHmIst(iso, "—");
 
 export function Highlight({ text, q }) {
   if (!q?.trim()) return <>{text}</>;
@@ -10,12 +14,6 @@ export function Highlight({ text, q }) {
     ? <mark key={i} className="bg-amber-200 rounded px-0.5">{p}</mark> : p)}</>;
 }
 
-export const fmtDate = (iso) => iso
-  ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "2-digit" })
-  : "";
-export const fmtHM = (iso) => iso
-  ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" })
-  : "—";
 
 /** Profile section: a member's DAR history with keyword search. */
 export default function DarHistorySection({ memberId, memberName }) {

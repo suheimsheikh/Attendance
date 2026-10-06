@@ -13,7 +13,7 @@
     "49 per-row cells matching [data-testid^='cal-total-dar-'] render — one per member — sitting between the row date-cells and the P column (correctly at right-[244px] before P at 210). Header order visible: DAR | P | AB | LV | TR | OT h | EO | LT (8 sticky totals columns, no overlap).",
     "Campus Administrator row (id e6e43926-d069-4bb7-95fa-26b3272735d3) is present under default 'Staff & Coaches' filter and its cell data-testid='cal-total-dar-e6e43926-d069-4bb7-95fa-26b3272735d3' shows text '✗1'. Computed color of the count span is rgb(190,18,60) (rose-700 red).",
     "Members with 0 missed DARs (e.g. Ainul Haque) render an empty cell — no '✗0'.",
-    "Double-clicking the Campus Administrator DAR cell navigates to /admin/dar?tab=missed&member=e6e43926-d069-4bb7-95fa-26b3272735d3&month=2026-09.",
+    "Double-clicking the Campus Administrator DAR cell navigates to /admin/dar?tab=missed&member=regatta-admin-1&month=2026-09.",
     "On the DAR report: data-testid=dar-tab-missed is active (styled bg-slate-900 text-white), the month input value is '2026-09', and the row data-testid='dar-missed-row-e6e43926-d069-4bb7-95fa-26b3272735d3' has classes 'bg-sky-50 ring-2 ring-inset ring-sky-300' and is scrolled into view / visible.",
     "Regression: Double-clicking a P total cell (cal-total-p-<id>) opens data-testid='attendance-ledger-modal'. Double-clicking an OT total cell (cal-total-ot-<id>) opens data-testid='ot-ledger-modal'. No visual gap / overlap in the totals strip."
   ],

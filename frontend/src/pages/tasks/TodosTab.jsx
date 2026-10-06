@@ -5,10 +5,10 @@ import { api } from "../../api";
 import TaskDarPanel from "./TaskDarPanel";
 import HeatStrip from "./HeatStrip";
 import TodoRow from "./TodoRow";
+import { fmtDateLong as fmtLong } from "../../utils/dates";
 
 const todayISO = () => new Date().toLocaleDateString("en-CA");
 const shiftISO = (iso, delta) => { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + delta); return d.toLocaleDateString("en-CA"); };
-const fmtLong = (iso) => iso ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) : "";
 
 export default function TodosTab({ user, group }) {
   const [scope, setScope] = useState("all");

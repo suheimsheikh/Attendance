@@ -10,7 +10,7 @@ import requests
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 
-BACKEND_URL = os.environ.get("TEST_BACKEND_URL", "https://attendance-portal-56.preview.emergentagent.com").rstrip("/")
+BACKEND_URL = os.environ.get("TEST_BACKEND_URL", "https://youth-regatta-app.preview.emergentagent.com").rstrip("/")
 API = f"{BACKEND_URL}/api"
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / "backend" / ".env")

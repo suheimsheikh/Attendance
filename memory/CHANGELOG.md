@@ -4573,7 +4573,7 @@ green**. Mongo unique index confirmed via index_information().
 - Added ALLOWED_EMBED_ORIGINS env (comma-separated). Wired into CORS
   (unioned with CORS_ORIGINS) and a new _embed_frame_headers middleware
   that emits Content-Security-Policy: frame-ancestors and strips
-  X-Frame-Options. Set to https://payroll-hub-21.preview.emergentagent.com.
+  X-Frame-Options. Set to https://youth-regatta-app.preview.emergentagent.com.
 - Added hyphen path aliases (/api/grid-status, /api/grid-cell,
   /api/grid-lock) alongside existing slash paths — non-breaking.
 - No hardcoded preview/localhost URLs in backend or frontend source

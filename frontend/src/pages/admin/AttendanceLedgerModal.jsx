@@ -18,6 +18,7 @@
 import React, { useEffect, useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import { api, showApiError } from "../../api";
+import { fmtDDMMYY as fmtDDMMYYYY } from "../../utils/dates";
 
 // Colour-code each classification so the daily table scans quickly.
 const STATUS_TINT = {
@@ -36,14 +37,6 @@ const STATUS_TINT = {
 // Order in which the summary counts are shown at the top of the modal.
 const COUNT_ORDER = ["Present", "Late", "Half day", "Leave", "Tour", "Posting",
                      "Comp-off", "Weekly off", "Holiday", "Absent"];
-
-function fmtDDMMYYYY(iso) {
-  if (!iso) return "—";
-  const parts = String(iso).split("-");
-  if (parts.length !== 3) return iso;
-  const [y, m, d] = parts;
-  return `${d}/${m}/${y.slice(-2)}`;
-}
 
 export default function AttendanceLedgerModal({
   open, onClose, memberId, memberName, start, end,

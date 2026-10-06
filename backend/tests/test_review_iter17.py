@@ -17,7 +17,7 @@ import time
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://attendance-portal-56.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://youth-regatta-app.preview.emergentagent.com").rstrip("/")
 # Test credentials come from /app/memory/test_credentials.md and the env so we
 # never commit secrets to source. Fall back to the documented seed values so
 # the suite still runs locally without extra env wiring.

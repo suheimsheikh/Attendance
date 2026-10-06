@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Download, Upload, Loader2, AlertTriangle, CheckCircle2, Database, CalendarClock, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { getToken, api } from "../../api";
+import { getToken, api, apiUrl } from "../../api";
 
 const fmtBytes = (n) => {
   if (!n) return "—";
@@ -38,7 +38,7 @@ export default function BackupRestore() {
     setAutoBusy(slot);
     try {
       const token = getToken();
-      const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/backup/auto/${slot}/download`;
+      const url = apiUrl(`/admin/backup/auto/${slot}/download`);
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
@@ -65,7 +65,7 @@ export default function BackupRestore() {
     setDownloading(true);
     try {
       const token = getToken();
-      const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/backup`;
+      const url = apiUrl("/admin/backup");
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
@@ -101,7 +101,7 @@ export default function BackupRestore() {
       const token = getToken();
       const fd = new FormData();
       fd.append("file", file);
-      const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/restore?mode=${mode}`;
+      const url = apiUrl(`/admin/restore?mode=${mode}`);
       const res = await fetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },

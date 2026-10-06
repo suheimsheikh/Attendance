@@ -53,6 +53,6 @@
   "seed_data_creation": "none",
   "retest_needed": true,
   "should_main_agent_self_test": true,
-  "context_for_next_testing_agent": "Admin UI flow validated on https://attendance-portal-56.preview.emergentagent.com/profile with sampled IDs staff=5d8d0722-fbd4-449b-a71f-4eba264ce5da and athlete=d1b5798e-55a0-49ac-832a-2df9efd290b6. Deep-link /profile?member=d1b5798e-55a0-49ac-832a-2df9efd290b6&month=2026-08 and reload both rendered correct member/month. Responsive overflow checks passed at 390, 768, 1024, 1440 widths. Non-admin login attempts returned 401, so spoof-proof UI behavior remains unverified.",
+  "context_for_next_testing_agent": "Admin UI flow validated on https://youth-regatta-app.preview.emergentagent.com/profile with sampled IDs staff=regatta-admin-1 and athlete=regatta-admin-1. Deep-link /profile?member=regatta-admin-1&month=2026-08 and reload both rendered correct member/month. Responsive overflow checks passed at 390, 768, 1024, 1440 widths. Non-admin login attempts returned 401, so spoof-proof UI behavior remains unverified.",
   "rca of the issue": "Primary blockers were environment/test-fixture related, not feature regressions: (1) documented non-admin credentials do not authenticate in this preview, so role-gated checks skip/fail at login boundary; (2) no former-member row available to test scoped historical access path. Core implementation under test (admin picker + monthly register + grid parity) behaved consistently across backend and frontend validations."
 }

@@ -3,8 +3,8 @@ import { Lightbulb, Loader2, Send, Sparkles, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import { fmtStampIst as fmt } from "../utils/dates";
 
-const fmt = (iso) => iso ? new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }) : "";
 
 const STATUS_META = {
   new:         { label: "New", cls: "bg-sky-100 text-sky-700" },

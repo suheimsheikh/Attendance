@@ -17,6 +17,7 @@ import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import OutOfGeofenceModal from "../components/OutOfGeofenceModal";
 import CorrectionRequestModal from "../components/CorrectionRequestModal";
 import { shareToWhatsApp, formatCheckinCaption, dataUrlToBlob } from "../utils/shareWhatsApp";
+import { fmtHmLocal } from "../utils/dates";
 
 function hmNow() {
   const d = new Date();
@@ -1003,12 +1004,6 @@ const STEP_OUT_DURATIONS = [
   { min: 60,  label: "1 hour" },   // default
   { min: 120, label: "2 hours" },
 ];
-
-function fmtHmLocal(d) {
-  const h = d.getHours().toString().padStart(2, "0");
-  const m = d.getMinutes().toString().padStart(2, "0");
-  return `${h}:${m}`;
-}
 
 /** Personalised greeting shown above the check-in button —
  * "Good morning, ARUNA 👋". Time-of-day slot follows local hour:
