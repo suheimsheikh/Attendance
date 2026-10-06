@@ -181,7 +181,7 @@ def register(router, *, _purchase_categories, _stock_snapshot, _valid_date, db, 
             if lo: dates.append(lo[0]["date"])
             if hi: dates.append(hi[0]["date"])
         if not dates:
-            today = local_date_str()
+            today = local_date_str(None)
             return {"min_date": today, "max_date": today, "has_data": False}
         return {"min_date": min(dates), "max_date": max(dates), "has_data": True}
 

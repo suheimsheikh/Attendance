@@ -334,8 +334,6 @@ from models import UserPublic  # shared model (moved to backend/models.py 06/202
 from services.dar import dar_required_for, dar_missing_for_session, get_dar_policy, validate_dar_text
 
 
-
-
 class LeaveBalanceBulkRow(BaseModel):
     member_id: str
     # Either or both may be sent — only the supplied fields are written so
@@ -346,7 +344,6 @@ class LeaveBalanceBulkRow(BaseModel):
 
 class LeaveBalanceBulkIn(BaseModel):
     rows: List[LeaveBalanceBulkRow]
-
 
 
 class TwilioConfig(BaseModel):
@@ -478,7 +475,6 @@ class TempExitIn(BaseModel):
 class TempReturnIn(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-
 
 
 # Geo helpers — see services/geo.py (re-exported above).
@@ -836,7 +832,6 @@ async def _send_checkout_reminders() -> int:
     return await _send_reminders_impl(db)
 
 
-
 @asynccontextmanager
 async def _lifespan(_app):
     """Startup: seed + catch-up + spawn background loops.
@@ -866,15 +861,12 @@ async def _lifespan(_app):
         client.close()
 
 
-
-
 # ----------------------------------------------------------------------------
 # Auth + device-approval routes moved to routes/auth.py — see app.include_router
 # call near the bottom of this file. Helpers (create_token, hash_password,
 # verify_password) come from services/auth_utils and are passed into the
 # factory.
 # ----------------------------------------------------------------------------
-
 
 
 # ----------------------------------------------------------------------------
@@ -1320,64 +1312,20 @@ async def delete_my_reason(reason: str, user: dict = Depends(get_current_user)):
     return {"reasons": kept}
 
 
-
 # ----------------------------------------------------------------------------
 # Attendance: check-in / check-out
 # ----------------------------------------------------------------------------
+# Attendance helpers live in services/attendance_helpers.py (thin db-bound wrappers below).
+import services.attendance_helpers as _att  # noqa: E402
+from services.attendance_helpers import geo_check, _compute_early_out_at_checkout  # noqa: E402,F401
+
+
 async def open_session_for(user_id: str) -> Optional[dict]:
-    return await db.attendance.find_one({"user_id": user_id, "check_out_at": None}, {"_id": 0})
+    return await _att.open_session_for(db, user_id)
 
 
 async def _late_days_in_month(user_id: str, date_iso: str) -> int:
-    """Distinct late days for the member in the calendar month of `date_iso`."""
-    rows = await db.attendance.find(
-        {"user_id": user_id, "late": True, "date": {"$gte": date_iso[:7] + "-01", "$lte": date_iso[:7] + "-31"}},
-        {"_id": 0, "date": 1},
-    ).to_list(200)
-    return len({r["date"] for r in rows})
-
-
-@api_router.get("/attendance/status")
-async def my_attendance_status(user: dict = Depends(get_current_user)):
-    sess = await open_session_for(user["id"])
-    open_exc = _open_excursion(sess) if sess else None
-    late_days = await _late_days_in_month(user["id"], sess["date"]) if sess and sess.get("late") else 0
-    # One-check-in-per-day: when the member has no open session but already
-    # has a row for today, they've completed their day — the UI shows a
-    # "Checked out for the day" state instead of offering check-in again.
-    done_for_today = False
-    if sess is None:
-        office = await db.config.find_one({"id": "office"})
-        row = await db.attendance.find_one(
-            {"user_id": user["id"], "date": local_date_str(office)}, {"_id": 0, "id": 1})
-        done_for_today = row is not None
-    return {
-        "checked_in": sess is not None,
-        "on_temp_exit": open_exc is not None,
-        "current_excursion": open_exc,
-        "session": sess,
-        "late_days_this_month": late_days,
-        "done_for_today": done_for_today,
-    }
-
-
-@api_router.get("/attendance/stale-session")
-async def stale_session(user: dict = Depends(get_current_user)):
-    """If the user has an open session from a previous office-local day,
-    surface it so the UI can prompt them to retroactively check out."""
-    sess = await open_session_for(user["id"])
-    if not sess or sess.get("forgot_checkout_skipped"):
-        return {"stale": None}
-    office = await db.config.find_one({"id": "office"})
-    today = local_date_str(office)
-    if sess.get("date") and sess["date"] >= today:
-        return {"stale": None}
-    return {"stale": {
-        "session_id": sess["id"],
-        "check_in_at": sess["check_in_at"],
-        "date": sess.get("date"),
-        "work_end": user.get("work_end") or "18:00",
-    }}
+    return await _att.late_days_in_month(db, user_id, date_iso)
 
 
 class ResolveStaleIn(BaseModel):
@@ -1531,58 +1479,16 @@ async def temp_return(body: TempReturnIn, user: dict = Depends(get_current_user)
     return {"ok": True, "excursion": target}
 
 
-def geo_check(office: dict, lat: float, lng: float, reason: Optional[str]):
-    """Returns (distance_m, out_of_geofence). Raises if out and no reason given."""
-    dist = round(haversine_m(lat, lng, office["latitude"], office["longitude"]), 1)
-    out = dist > office["radius_m"]
-    if out and not (reason and reason.strip()):
-        raise HTTPException(status_code=400, detail=f"OUT_OF_GEOFENCE:{int(dist)}")
-    return dist, out
-
-
 async def _resolve_site_for(office: dict, lat: float, lng: float):
-    """Wrap services.geo.resolve_site by pulling the active satellite sites
-    from the DB. Returns (site_id, site_name, distance_m, out_of_geofence,
-    nearest_label). Off-fence check-ins are stamped as the "Off-site"
-    bucket (never a real site's name — that misled the Presence board when
-    a far-away check-in happened to be nearest e.g. Rowing Academy); the
-    nearest fence's label is returned separately for "X m from …" copy."""
-    sites = await db.sites.find({"active": True}, {"_id": 0}).to_list(200)
-    site_id, site_name, dist, out = resolve_site(office, lat, lng, sites)
-    nearest_label = site_name or office.get("name") or "Office"
-    if out:
-        site_id, site_name = "offsite", "Off-site"
-    return site_id, site_name, dist, out, nearest_label
+    return await _att.resolve_site_for(db, office, lat, lng)
 
 
 async def _cancel_stale_missed_checkin(user_id: str, date_iso: str) -> int:
-    """When a real attendance row is created for a member+date, auto-cancel
-    any still-pending 'missed check-in' correction for that same member+date.
-    Once a row exists the correction can never be applied (it would duplicate
-    the day), so we resolve it here instead of letting it 409 at approval
-    time. Covers both: (a) member files a missed check-in then actually
-    checks in that day, and (b) a duplicate correction whose earlier twin
-    already produced the row."""
-    res = await db.corrections.update_many(
-        {"entity_type": "attendance", "kind": "missed_checkin", "status": "pending",
-         "requester_id": user_id, "target_date": date_iso},
-        {"$set": {"status": "rejected", "decided_at": now_utc().isoformat(),
-                  "decided_by_name": "System (auto)",
-                  "admin_note": "Auto-resolved — member now has an attendance record for this date, so no missed check-in to create."}},
-    )
-    return res.modified_count
+    return await _att.cancel_stale_missed_checkin(db, user_id, date_iso)
 
 
 async def _has_checkin_today(user_id: str, date_str: str) -> bool:
-    """One-check-in-per-day rule (Jun 2026, user-confirmed, no exceptions).
-    Once a member has ANY attendance row for the office-local day, a fresh
-    check-in is refused across every surface (self GPS, QR/console, muster).
-    Intra-day breaks use Step Out (excursions, same row); a check-out ends
-    the day. This structurally prevents the auto-checkin-after-checkout bug
-    from ever creating a second session again."""
-    row = await db.attendance.find_one(
-        {"user_id": user_id, "date": date_str}, {"_id": 0, "id": 1})
-    return row is not None
+    return await _att.has_checkin_today(db, user_id, date_str)
 
 
 async def perform_toggle(target, office, lat, lng, photo, reason, method, scanned_by):
@@ -1690,31 +1596,6 @@ async def perform_toggle(target, office, lat, lng, photo, reason, method, scanne
             "out_of_geofence": out, "distance_m": dist,
             "site_id": site_id, "site_name": site_name, "site_label": nearest_label,
             "late": late, "late_minutes": late_minutes}
-
-
-def _compute_early_out_at_checkout(ts: datetime, target: dict, office: dict) -> int:
-    """Return the number of minutes a checkout is happening BEFORE the
-    member's scheduled `work_end`, only when that gap is ≥ 15 min
-    (matching the /me/profile-details grace-window). Returns 0 when the
-    member has no `work_end` set, when the checkout is on-time or later,
-    or on any parsing failure — the callers depend on 0 to mean "no
-    early-out stamp needed". Extracted 14 Feb 2026 (item E of the
-    medium-risk refactor pass) so this arithmetic can be unit-tested in
-    isolation of the DB write path.
-    """
-    work_end_hm = target.get("work_end")
-    if not work_end_hm or ":" not in (work_end_hm or ""):
-        return 0
-    try:
-        from services.time_utils import office_tz
-        _out_local = ts.astimezone(office_tz(office))
-        _out_min = _out_local.hour * 60 + _out_local.minute
-        _we_parts = work_end_hm.split(":")[:2]
-        _we_min = int(_we_parts[0]) * 60 + int(_we_parts[1])
-        _early_by = _we_min - _out_min
-        return _early_by if _early_by >= 15 else 0
-    except (ValueError, TypeError, AttributeError):
-        return 0
 
 
 async def _geo_toggle(target: dict, office: dict, lat: float, lng: float,
@@ -2043,7 +1924,6 @@ async def recalc_late(body: RecalcLateIn, admin: dict = Depends(require_admin)):
     }
 
 
-
 @api_router.post("/attendance/scan-card")
 async def scan_card(body: ScanCardIn, admin: dict = Depends(require_admin)):
     """Proxy check-in/out for a person without a phone, via their personal QR card.
@@ -2123,40 +2003,6 @@ async def admin_remove_open_session(member_id: str, admin: dict = Depends(requir
 class OvertimeDecisionIn(BaseModel):
     status: Literal["approved", "rejected"]
     admin_note: Optional[str] = None
-
-
-@api_router.get("/admin/overtime/needs-review")
-async def overtime_needs_review(admin: dict = Depends(require_admin)):
-    """DEPRECATED (15 Feb 2026) — OT no longer needs approval. Kept as
-    a stub returning zeros so any older cached client that still polls
-    this endpoint doesn't 404. Safe to remove once all clients are
-    known to be updated."""
-    office = await db.config.find_one({"id": "office"})
-    today = local_date_str(office)
-    yesterday = (date.fromisoformat(today) - timedelta(days=1)).isoformat()
-    comp_off_pending = await db.leaves.count_documents({
-        "type": "comp_off", "status": "pending",
-    })
-    return {"yesterday": yesterday, "yesterday_count": 0,
-            "total_pending": 0,
-            "comp_off_pending": comp_off_pending}
-
-
-@api_router.get("/admin/overtime")
-async def overtime_list(
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
-    status_filter: Optional[str] = Query(None, alias="status"),  # noqa: ARG001 (kept for URL compat)
-    admin: dict = Depends(require_admin),
-):
-    """DEPRECATED (15 Feb 2026) — OT no longer has an approval queue.
-    Returns an empty rows list so any older client that still polls
-    /api/admin/overtime doesn't 404. New clients should read OT
-    minutes directly off the attendance rows (see the OT ledger /
-    The Grid's OT column)."""
-    return {"date_from": date_from, "date_to": date_to, "rows": []}
-
-
 
 
 # ----------------------------------------------------------------------------
@@ -3133,8 +2979,6 @@ async def admin_member_profile_details(
     return payload
 
 
-
-
 # ----------------------------------------------------------------------------
 
 
@@ -3245,8 +3089,6 @@ async def admin_sessions(on: Optional[str] = None, admin: dict = Depends(require
         "total_excursions": sum(r["excursion_count"] for r in rows),
     }
     return {"date": on, "timezone": (office or {}).get("timezone") or DEFAULT_TZ, "rows": rows, "counts": counts}
-
-
 
 
 # ----------------------------------------------------------------------------
@@ -3725,6 +3567,10 @@ app.include_router(_members_router(
     valid_members_api_token, _bearer_from_header, _last10_digits,
     _payroll_bucket, _iso_week_key,
 ))
+
+# Attendance read-only routes (phase 1 of the attendance split).
+from routes.attendance import make_router as _attendance_router  # noqa: E402
+app.include_router(_attendance_router(db, get_current_user, require_admin))
 
 # Auth + device-approval — split out 06/2026 during the server.py refactor.
 from routes.auth import make_router as _auth_router  # noqa: E402

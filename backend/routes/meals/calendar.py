@@ -43,7 +43,7 @@ def register(router, *, DailyCountsIn, _MAIN_LABELS, _MAIN_MEALS, _days_in_month
              reflects live Muster data even before anyone types it
              into the Calendar.
         """
-        e = _valid_date(end) if end else local_date_str()
+        e = _valid_date(end) if end else local_date_str(None)
         e_d = date.fromisoformat(e)
         s = _valid_date(start) if start else (e_d - timedelta(days=90)).isoformat()
         s_d = date.fromisoformat(s)
@@ -357,7 +357,7 @@ def register(router, *, DailyCountsIn, _MAIN_LABELS, _MAIN_MEALS, _days_in_month
             if lo: dates.append(lo[0]["date"])
             if hi: dates.append(hi[0]["date"])
         if not dates:
-            today = local_date_str()
+            today = local_date_str(None)
             return {"min_date": today, "max_date": today, "has_data": False}
         return {"min_date": min(dates), "max_date": max(dates), "has_data": True}
 

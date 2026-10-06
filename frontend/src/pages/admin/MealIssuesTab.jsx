@@ -4,9 +4,10 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Save, Boxes } from "lucide-react";
+import { Loader2, Save, Boxes, Wand2 } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate, fmtQty as uQty } from "../../utils";
+import SuggestIssuesDialog from "./meal-issues/SuggestIssuesDialog";
 
 function todayISO() {
   const d = new Date();
@@ -24,6 +25,7 @@ export default function MealIssuesTab() {
   const [entries, setEntries] = useState({});  // item_id → qty
   const [saving, setSaving] = useState(false);
   const [recent, setRecent] = useState([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
 
   const loadMasters = async () => {
     try {
@@ -79,6 +81,19 @@ export default function MealIssuesTab() {
     return Array.from(m.values()).filter((g) => g.rows.length > 0);
   }, [items, cats]);
 
+  // Fill only empty rows — never overwrite a qty the chef already typed.
+  const applySuggestion = (lines) => {
+    const next = { ...entries };
+    let filled = 0, kept = 0;
+    lines.forEach((l) => {
+      if (num(next[l.item_id]) > 0) { kept += 1; return; }
+      next[l.item_id] = l.qty;
+      filled += 1;
+    });
+    setEntries(next);
+    toast.success(`Filled ${filled} item${filled === 1 ? "" : "s"}${kept ? ` · kept ${kept} you'd already entered` : ""}. Review and Save.`);
+  };
+
   const save = async () => {
     const lines = items
       .filter((it) => num(entries[it.id]) > 0)
@@ -100,8 +115,14 @@ export default function MealIssuesTab() {
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <input type="date" value={dateStr} max={todayISO()} onChange={(e) => setDateStr(e.target.value)} className="iu-input !h-9 !w-auto text-sm" data-testid="issues-date" />
         <span className="text-xs text-slate-500">{formatDate(dateStr)}</span>
+        <button type="button" onClick={() => setSuggestOpen(true)} disabled={items.length === 0}
+          title="Draft today's issue lines from the weekday's recipe menu × the meals muster headcount"
+          className="iu-btn-secondary !h-9 text-sm !border-emerald-300 !text-emerald-800 hover:!bg-emerald-50" data-testid="issues-suggest-btn">
+          <Wand2 size={14} /> Suggest from menu
+        </button>
         <span className="ml-auto text-xs text-slate-500">On-hand shown = end of previous day</span>
       </div>
+      <SuggestIssuesDialog open={suggestOpen} onOpenChange={setSuggestOpen} dateStr={dateStr} onApply={applySuggestion} />
 
       {grouped.length === 0 ? (
         <div className="iu-card p-8 text-center" data-testid="issues-no-items">

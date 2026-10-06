@@ -107,6 +107,7 @@ from routes.meals.stock_take import register as _reg_stock_take
 from routes.meals.purchases import register as _reg_purchases
 from routes.meals.analytics import register as _reg_analytics
 from routes.meals.calendar import register as _reg_calendar
+from routes.meals.auto_issue import register as _reg_auto_issue
 
 
 def make_router(db, require_admin, get_current_user, require_chef_or_admin=None, write_audit=None) -> APIRouter:
@@ -537,5 +538,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
 
     _ns = _reg_calendar(router, DailyCountsIn=DailyCountsIn, _MAIN_LABELS=_MAIN_LABELS, _MAIN_MEALS=_MAIN_MEALS, _days_in_month=_days_in_month, _stock_snapshot=_stock_snapshot, _valid_date=_valid_date, db=db, require_admin=require_admin, require_chef_or_admin=require_chef_or_admin)
 
+
+    _reg_auto_issue(router, db=db, require_chef_or_admin=require_chef_or_admin,
+                    _stock_snapshot=_stock_snapshot, _valid_date=_valid_date)
 
     return router

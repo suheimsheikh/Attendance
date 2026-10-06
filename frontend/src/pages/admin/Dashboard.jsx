@@ -26,6 +26,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import Avatar from "../../components/Avatar";
 import MonthCorrectionsCard from "./dashboard/MonthCorrectionsCard";
 import TaskProgressCard from "./dashboard/TaskProgressCard";
+import RosterStatusChip from "./dashboard/RosterStatusChip";
 import BackupReminderBanner from "../../components/BackupReminderBanner";
 import {
   CATEGORY_COLOR, StatTile, CategoryChips, Sparkline,
@@ -93,11 +94,14 @@ export default function Dashboard() {
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900" data-testid="dashboard-heading">
             Admin Dashboard
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {new Date(today + "T00:00:00").toLocaleDateString("en-GB", {
-              weekday: "long", day: "2-digit", month: "2-digit", year: "2-digit",
-            })}
-          </p>
+          <div className="flex flex-wrap items-center gap-2 mt-0.5">
+            <p className="text-sm text-slate-500">
+              {new Date(today + "T00:00:00").toLocaleDateString("en-GB", {
+                weekday: "long", day: "2-digit", month: "2-digit", year: "2-digit",
+              })}
+            </p>
+            <RosterStatusChip />
+          </div>
         </div>
         <button
           type="button"
