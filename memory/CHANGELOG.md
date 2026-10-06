@@ -5036,3 +5036,10 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - POST /api/attendance/recalc-late: new `include_early_out` (default true) re-stamps `early_out_minutes` vs current work_end; change rows carry was_/now_early_out; apply writes an audit row `attendance.recalc_timings`.
 - New `components/RecalcTimingsDialog.jsx`: MemberForm edit that changes work_start/work_end → "Re-apply new timings to past days?" (From = 1st of month → today, Preview, Apply / Only from today). Data Quality panel shows EO in Was/Now.
 - Tested: iteration_87 — 5/5 backend + 7/7 UI.
+
+## 2026-10-06 — Two-admin approval for admin-filed attendance corrections
+- Replaces the Jun 2026 "Super Admin only" gate for a non-super admin's attendance correction (missed_checkin / time_adjust): ANY OTHER admin or a Super Admin can approve/reject; the filer never can (403 "You filed this attendance change — another admin must approve or reject it"; approve-all skips it).
+- New doc fields: `needs_second_admin`, `filed_by_id` (needs_super_admin=False on new rows). Legacy pending rows (needs_super_admin + attendance + not bulk_delete) follow the same two-admin rule.
+- Unchanged: member archive/delete and attendance bulk_delete stay Super Admin only; Super Admin's own corrections auto-apply.
+- UI: Approvals row badge "2nd admin" + filer sees "Another admin approves" lock; toast "another admin must approve it".
+- Tested: iteration_88 — 9/9 backend, 4/4 frontend.
