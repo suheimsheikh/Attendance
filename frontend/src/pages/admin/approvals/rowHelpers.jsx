@@ -128,7 +128,12 @@ export function normCorrection(row) {
     member_name: isBulk ? "⚠ Bulk deletion" : (row.requester_name || "—"),
     submitted_at: row.requested_at,
     when: isBulk ? `${formatDate(row.target_date)} · raised by ${row.requester_name || "admin"}` : formatDate(row.target_date),
-    // Attendance change filed by an admin — awaiting Super Admin sign-off.
+    // Admin-filed attendance change — needs a SECOND admin (never the filer).
+    // Bulk deletions + member archive/delete stay Super Admin only.
+    two_person: !!row.needs_second_admin
+      || (!!row.needs_super_admin && row.entity_type === "attendance" && !isBulk),
+    filer_id: row.filed_by_id || row.filed_by_admin_id || row.requester_id,
+    filer_name: row.filed_by_admin_name || row.requester_name,
     needs_super_admin: !!row.needs_super_admin,
     details: isBulk
       ? [p.label || p.tool, p.affected_rows != null ? `${p.affected_rows} row${p.affected_rows === 1 ? "" : "s"} will be deleted` : null, row.reason].filter(Boolean).join(" · ")

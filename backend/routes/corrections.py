@@ -443,6 +443,18 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
                 detail=f"Corrections can only be requested for the last {CORRECTION_WINDOW_DAYS} days",
             )
 
+    def _filer_id(c: dict) -> Optional[str]:
+        return c.get("filed_by_id") or c.get("filed_by_admin_id") or c.get("requester_id")
+
+    def _needs_second_admin(c: dict) -> bool:
+        # New rows carry the flag; legacy pending rows were stamped
+        # needs_super_admin for the same admin-filed attendance case.
+        # Bulk deletions and member archive/delete stay Super Admin only.
+        if c.get("needs_second_admin"):
+            return True
+        return bool(c.get("needs_super_admin")) and c.get("entity_type") == "attendance" \
+            and c.get("kind") != "bulk_delete"
+
     @router.post("/corrections")
     async def create_correction(body: CorrectionCreate, user: dict = Depends(get_current_user)):
         """Member raises a correction request. Members' requests go into
@@ -579,12 +591,17 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
         # queue and only a Super Admin can approve it. This flag drives
         # both the auto-apply skip below and the approval gate in
         # `_decide_one`.
+        # Two-person rule (Oct 2026, user request) replaces the Super-Admin-only
+        # gate: a non-super admin's attendance correction waits for ANY OTHER
+        # admin (or a Super Admin) — never the admin who filed it.
         is_admin = user.get("role") == "admin"
         is_super = is_super_admin(user)
         attendance_needs_super = (
             is_admin and not is_super and body.entity_type == "attendance"
         )
-        doc["needs_super_admin"] = attendance_needs_super
+        doc["needs_super_admin"] = False
+        doc["needs_second_admin"] = attendance_needs_super
+        doc["filed_by_id"] = user["id"]
 
         # Admin auto-apply (9 Feb 2026, narrowed Jun 2026). Applies when
         # the requester is an admin AND this isn't a non-super-admin
@@ -632,12 +649,12 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
                 entity_id=doc["id"],
                 entity_name=f"{doc['entity_type']}/{doc['kind']} · {doc['requester_name']} · {doc['target_date']}",
                 before=None,
-                after={"status": "pending", "needs_super_admin": True,
+                after={"status": "pending", "needs_second_admin": True,
                        "payload": doc["payload"], "entity_id": doc["entity_id"]},
                 reason=doc["reason"],
             )
         return {"ok": True, "id": doc["id"], "auto_approved": False,
-                "needs_super_admin": attendance_needs_super}
+                "needs_second_admin": attendance_needs_super}
 
     @router.get("/me/corrections")
     async def my_corrections(user: dict = Depends(get_current_user), status: Optional[str] = None):
@@ -723,10 +740,16 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
         # non-super admin are flagged `needs_super_admin` and can only be
         # decided by a Super Admin. Applies to both approve AND reject so
         # a regular admin can't quietly clear the queue either way.
-        if correction.get("needs_super_admin") and not is_super_admin(admin):
+        if _needs_second_admin(correction):
+            if admin["id"] == _filer_id(correction):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You filed this attendance change — another admin must approve or reject it.",
+                )
+        elif correction.get("needs_super_admin") and not is_super_admin(admin):
             raise HTTPException(
                 status_code=403,
-                detail="Only a Super Admin can approve or reject this attendance change.",
+                detail="Only a Super Admin can approve or reject this change.",
             )
         applied: Optional[dict] = None
         if decision == "approved":

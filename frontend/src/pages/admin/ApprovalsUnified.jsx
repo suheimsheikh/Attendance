@@ -521,10 +521,18 @@ export default function ApprovalsUnified() {
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${meta.tone || "bg-slate-100 text-slate-600"}`}>
                         {Icon && <Icon size={11}/>} {meta.label || r.kind}
                       </span>
-                      {r.needs_super_admin && (
+                      {r.two_person ? (
+                        <span
+                          className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-sky-100 text-sky-700"
+                          title={`Attendance change filed by ${r.filer_name || "an admin"} — any other admin can approve`}
+                          data-testid={`approvals-second-admin-badge-${r.id}`}
+                        >
+                          <ShieldAlert size={9}/> 2nd admin
+                        </span>
+                      ) : r.needs_super_admin && (
                         <span
                           className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-700"
-                          title="Attendance change filed by an admin — needs Super Admin approval"
+                          title="Needs Super Admin approval"
                           data-testid={`approvals-superadmin-badge-${r.id}`}
                         >
                           <ShieldAlert size={9}/> Super Admin
@@ -538,10 +546,18 @@ export default function ApprovalsUnified() {
                     <td className="py-2 px-3 text-slate-700 tabular-nums whitespace-nowrap">{r.when}</td>
                     <td className="py-2 px-3 text-slate-600 text-xs">{r.details || "—"}</td>
                     <td className="py-2 px-3 text-center">
-                      {r.needs_super_admin && !isSuper ? (
+                      {r.two_person && r.filer_id === user?.id ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-2 py-1"
+                          title="You filed this attendance change — another admin must approve or reject it"
+                          data-testid={`approvals-own-lock-${r.id}`}
+                        >
+                          <ShieldAlert size={12}/> Another admin approves
+                        </span>
+                      ) : r.needs_super_admin && !r.two_person && !isSuper ? (
                         <span
                           className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-1"
-                          title="Only a Super Admin can approve or reject attendance changes"
+                          title="Only a Super Admin can approve or reject this change"
                           data-testid={`approvals-superadmin-lock-${r.id}`}
                         >
                           <ShieldAlert size={12}/> Super Admin only
