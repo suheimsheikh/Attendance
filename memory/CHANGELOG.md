@@ -4997,3 +4997,12 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - S5 KitchenAnalyticsTab.jsx 1249→~160: `pages/admin/kitchen-analytics/{helpers,charts,Section,nutrition}.jsx`; MealsAnalyticsPanel.jsx 720→~340: `pages/admin/meals-analytics/{helpers,modals}.jsx`.
 - S6 Layout.jsx 577→~350: nav arrays → `components/layout/navConfig.js`; SystemGroup/SectionHeader/NavItem → `components/layout/NavParts.jsx`.
 - Tested: iteration_82 — 100% frontend + backend, 0 console errors.
+
+## 2026-10-06 — Backend refactors M1 / M3 / M4 (no behaviour change)
+- M1 `routes/members.py`: member CRUD, list, staff-roster export, photo get/set, bulk-update, import-template, archive/unarchive/delete (+ super-admin queue), cards, xlsx import, parents import. Included immediately after `api_router` so route priority is unchanged. server.py keeps a `member_photo_url` shim (used by presence/profile).
+- M3 `services/scheduler.py`: `close_stale_open_sessions(db, reason)`, `schedule_daily`, `midnight_auto_checkout_loop(db)`, `send_checkout_reminders(db)`, `checkout_reminder_loop(db)`. server.py keeps `_close_stale_open_sessions` / `_send_checkout_reminders` thin wrappers (office router + startup catch-up use them).
+- M4 `routes/meals.py` → package `routes/meals/`: `common.py` (models/constants/pure helpers, re-exported from `__init__` so `from routes.meals import _kitchen_*` still works), core closure helpers + overheads/day-flags/SSE in `__init__.make_router`, areas registered in original order via `register(router, **deps)` returning shared helpers: muster, vendors (also holds `_stock_snapshot`, `_purchase_categories`), items, stock, stock_take, purchases, analytics, calendar.
+- Fixed path for `/meals/menu-master-download` after package move (`Path(__file__).parents[2]`).
+- server.py 5,234 → ~4,150 lines; meals `__init__` 5,984 → 541.
+- Verified: identical ORDERED route table (360 routes), ruff F821 clean, iteration_83 — 49/49 regression + 50/50 unit tests, frontend 0 console errors.
+- Known PRE-EXISTING bug (untouched): GET /api/meals/meal-calendar without `?end=` → 500 (`local_date_str()` called without office). Frontend always sends start & end.

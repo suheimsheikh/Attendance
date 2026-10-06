@@ -1,0 +1,36 @@
+{
+  "summary": "Full regression for refactor batch M1/M3/M4 (members → routes/members.py, scheduler loops → services/scheduler.py, meals.py split → routes/meals/ package). 49/49 refactor regression tests PASS; 50/50 requested unit tests PASS; backend err log clean; frontend admin pages all load with 0 console errors. Pure refactor, no behavioral regressions detected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/meals/meal-calendar", "issue": "PRE-EXISTING (not from refactor, confirmed by E1): without ?end= returns 500 via local_date_str(office=None). Frontend always passes start&end so no user impact. Still worth guarding with a 422 instead of 500."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_regression_refactor_iter83.py",
+    "/app/test_reports/pytest/iter83_refactor.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/meals/__init__.py is a thin registrar that calls _reg_<area>(router, ctx) for each area — preserves the exact pre-refactor route order. Good pattern.",
+    "services/scheduler.py cleanly exposes close_stale_open_sessions / send_checkout_reminders / schedule_daily; server.py's lifespan shim just delegates. No functional drift.",
+    "routes/members.py: DELETE path correctly branches on is_super_admin — non-super admins get a queued correction, verified via admin2.test@example.com.",
+    "Suggest adding a smoke check in CI that imports routes/meals/__init__.py and asserts the 360-route table equals the pre-refactor snapshot to catch any future accidental reordering.",
+    "Known pre-existing: GET /api/meals/meal-calendar without ?end= returns 500 — should return 422; low priority, not in refactor scope."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_regression_refactor_iter83.py (NEW — 49 regression tests covering M1+M3+M4)"
+  ],
+  "success_rate": {"backend": "100% (49/49 refactor regression + 50/50 requested unit tests)", "frontend": "100% (5/5 admin pages load, 0 console errors)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (super admin). admin2.test@example.com / Admin@12345 (non-super admin — created during this run via super admin's POST /api/members with role=admin; preserved for future runs since the test_credentials.md references it).",
+  "seed_data_creation": "Created admin2.test@example.com (role=admin, is_super_admin=false, mobile=9000000002) via POST /api/members since login failed before. ZZ Test throwaway members and vendor+item were created via fixtures and cleaned up at teardown — final /api/members scan shows 0 ZZ Test leaks.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Refactor iter83 is fully regression-tested. The new test file /app/backend/tests/test_regression_refactor_iter83.py is reusable for future refactor rounds — run with REACT_APP_BACKEND_URL env var. SSE endpoint /api/meals/events requires ?token=... query param (EventSource can't send Authorization header). Admin2 user is now provisioned in the DB; if a future test needs a non-super-admin account, use admin2.test@example.com / Admin@12345. The meal-calendar 500-without-end bug is pre-existing (filed by E1), do not count as regression.",
+  "rca of the issue": "No regressions found. All three refactors (M1 members routes, M3 scheduler loops, M4 meals package split) are behaviour-preserving. Verified via: (a) 49 endpoint-level regression tests covering GETs across every meals area + members CRUD + archive hide/unhide + non-super-admin DELETE correction queue + vendor/item CRUD + SSE open; (b) 50 pure-function unit tests (kitchen_analytics_helpers, meals_today_pickers, weekly_photo_refresh, early_out_helper); (c) backend.err.log tail post-startup contains 0 tracebacks; (d) frontend smoke on /admin/masters, /meals, /admin/meals-calendar, /admin/meals-report, /admin/chefs-view all load with heading rendered and 0 console errors."
+}

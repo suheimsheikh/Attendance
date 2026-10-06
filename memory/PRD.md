@@ -601,5 +601,7 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Server hard-block (_assert_issue_stock) already returns 400 for oversell (verified: 999kg chicken → 400). Backend + frontend in preview; needs redeploy for prod.
 
 ## Update 06 Oct 2026 — SAFE refactor batch S1–S6 shipped (see CHANGELOG)
-- Remaining refactor candidates (medium-safe, need regression run each): M1 members routes out of server.py · M2 attendance routes/service out of server.py · M3 background loops → services/scheduler.py · M4 split meals.py (5,984 lines) by domain · M5 split reports.py per report · M6 MealEntryTab auto-save hook · M7 SelfCheckIn/Office GPS + share hooks.
+- DONE 06 Oct 2026: M1 members routes, M3 scheduler, M4 meals package split (see CHANGELOG).
+- Remaining refactor candidates (medium-safe, need regression run each): M2 attendance routes/service out of server.py · M5 split reports.py per report · M6 MealEntryTab auto-save hook · M7 SelfCheckIn/Office GPS + share hooks.
+- Small bug to fix: /api/meals/meal-calendar without ?end= returns 500.
 - P0 Parent Notifications count badge: ON HOLD per user (06 Oct 2026).
