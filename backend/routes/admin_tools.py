@@ -132,6 +132,58 @@ async def run_auto_backup(db) -> dict:
     return doc
 
 
+# Safety backup taken automatically right before every restore (merge or
+# replace), so a bad restore can be undone. 5 rotating slots — the oldest is
+# overwritten. Its list is environment-local: restore never overwrites it.
+PRE_RESTORE_DIR = "backups/pre-restore"
+PRE_RESTORE_SLOTS = ["1", "2", "3", "4", "5"]
+PRE_RESTORE_COLLECTION = "pre_restore_backups"
+
+
+async def run_pre_restore_backup(db, by: str, source_file: str, mode: str) -> dict:
+    """Snapshot the CURRENT database into the next pre-restore slot. Raises on
+    failure so the caller can abort the restore before anything is changed."""
+    import asyncio
+
+    from services.object_storage import APP_PREFIX, put_object
+
+    taken = {d["slot"]: d.get("created_at", "") async for d in
+             db[PRE_RESTORE_COLLECTION].find({}, {"_id": 0, "slot": 1, "created_at": 1})}
+    free = [s for s in PRE_RESTORE_SLOTS if s not in taken]
+    slot = free[0] if free else min(taken, key=taken.get)
+    data, fname = await build_full_backup(db)
+    fname = fname.replace("YCH-Attendance-Backup-", "YCH-Attendance-BeforeRestore-")
+    path = f"{APP_PREFIX}/{PRE_RESTORE_DIR}/ych-pre-restore-{slot}.tar.gz"
+    result = await asyncio.to_thread(put_object, path, data, "application/gzip")
+    doc = {
+        "id": slot, "slot": slot,
+        "storage_path": result.get("path", path),
+        "filename": fname,
+        "size": result.get("size", len(data)),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "by": by, "source_file": source_file, "mode": mode,
+    }
+    await db[PRE_RESTORE_COLLECTION].update_one({"id": slot}, {"$set": doc}, upsert=True)
+    logger.info("Pre-restore safety backup uploaded: %s (%s bytes)", path, doc["size"])
+    return doc
+
+
+async def _stored_backup_response(doc: dict) -> Response:
+    """Stream a backup file kept in object storage with its friendly filename."""
+    import asyncio
+
+    from services.object_storage import get_object
+
+    try:
+        data, _ctype = await asyncio.to_thread(get_object, doc["storage_path"])
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not fetch backup from storage: {e}")
+    return Response(
+        content=data,
+        media_type="application/gzip",
+        headers={"Content-Disposition": f'attachment; filename="{doc.get("filename", doc["slot"] + ".tar.gz")}"'},
+    )
+
 
 def make_router(db, require_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
@@ -175,7 +227,10 @@ def make_router(db, require_admin) -> APIRouter:
                 pass
         autos = await db.auto_backups.find({}, {"_id": 0}).to_list(20)
         autos.sort(key=lambda a: a.get("created_at", ""), reverse=True)
+        pre = await db[PRE_RESTORE_COLLECTION].find({}, {"_id": 0}).to_list(20)
+        pre.sort(key=lambda a: a.get("created_at", ""), reverse=True)
         return {
+            "pre_restore_backups": pre,
             "last_backup_at": when,
             "last_backup_by": (last or {}).get("by"),
             "days_since": days_since,
@@ -187,22 +242,18 @@ def make_router(db, require_admin) -> APIRouter:
     async def admin_auto_backup_download(slot: str, admin: dict = Depends(require_admin)):
         """Stream one automatic daily backup from object storage with its
         friendly filename."""
-        import asyncio
-
-        from services.object_storage import get_object
-
         doc = await db.auto_backups.find_one({"id": slot}, {"_id": 0})
         if not doc:
             raise HTTPException(status_code=404, detail="No automatic backup for that day")
-        try:
-            data, ctype = await asyncio.to_thread(get_object, doc["storage_path"])
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"Could not fetch backup from storage: {e}")
-        return Response(
-            content=data,
-            media_type="application/gzip",
-            headers={"Content-Disposition": f'attachment; filename="{doc.get("filename", slot + ".tar.gz")}"'},
-        )
+        return await _stored_backup_response(doc)
+
+    @router.get("/admin/backup/pre-restore/{slot}/download")
+    async def admin_pre_restore_backup_download(slot: str, admin: dict = Depends(require_admin)):
+        """Stream one before-restore safety backup (to undo a bad restore)."""
+        doc = await db[PRE_RESTORE_COLLECTION].find_one({"id": slot}, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="No safety backup in that slot")
+        return await _stored_backup_response(doc)
 
     @router.post("/admin/restore")
     async def admin_restore(
@@ -232,6 +283,8 @@ def make_router(db, require_admin) -> APIRouter:
             for m in tf.getmembers()
             for base in (m.name.rsplit("/", 1)[-1],)
             if base.endswith(".json") and base != "manifest.json"
+            # This environment's own safety-backup list must survive the restore.
+            and base != f"{PRE_RESTORE_COLLECTION}.json"
         })
         from pymongo import InsertOne
         BATCH = 500
@@ -267,6 +320,14 @@ def make_router(db, require_admin) -> APIRouter:
             if not isinstance(docs, list):
                 raise HTTPException(status_code=400, detail=f"{tname}.json must be a JSON list")
             parsed[tname] = docs
+        # Archive is valid — snapshot the CURRENT data before touching anything.
+        # If that fails, abort: nothing has been changed yet.
+        try:
+            safety = await run_pre_restore_backup(db, admin["full_name"], file.filename or "upload", mode)
+        except Exception as e:
+            logger.exception("Pre-restore safety backup failed — restore aborted")
+            raise HTTPException(status_code=503,
+                                detail=f"Safety backup failed, so nothing was restored or changed: {e}")
         for tname in collections:
             docs = parsed[tname]
             if docs is None:
@@ -352,7 +413,7 @@ def make_router(db, require_admin) -> APIRouter:
                 {"$set": payload},
                 upsert=True,
             )
-        return {"mode": mode, "inserted": counts}
+        return {"mode": mode, "inserted": counts, "safety_backup": safety}
 
     @router.get("/admin/preflight")
     async def admin_preflight(admin: dict = Depends(require_admin)):

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Download, Upload, Loader2, AlertTriangle, CheckCircle2, Database, CalendarClock, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { getToken, api, apiUrl } from "../../api";
+import { SafetyBackupsCard } from "./backup/SafetyBackupsCard";
 
 const fmtBytes = (n) => {
   if (!n) return "—";
@@ -34,11 +35,13 @@ export default function BackupRestore() {
   }, []);
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
-  const downloadAuto = async (slot) => {
-    setAutoBusy(slot);
+  const [preBusy, setPreBusy] = useState(null);
+
+  const downloadStored = async (kind, slot, setBusy) => {
+    setBusy(slot);
     try {
       const token = getToken();
-      const url = apiUrl(`/admin/backup/auto/${slot}/download`);
+      const url = apiUrl(`/admin/backup/${kind}/${slot}/download`);
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
@@ -52,8 +55,10 @@ export default function BackupRestore() {
       toast.success("Backup downloaded");
     } catch (err) {
       toast.error(err?.message || "Download failed");
-    } finally { setAutoBusy(null); }
+    } finally { setBusy(null); }
   };
+  const downloadAuto = (slot) => downloadStored("auto", slot, setAutoBusy);
+  const downloadPre = (slot) => downloadStored("pre-restore", slot, setPreBusy);
 
   // Safety guard: forbid Replace mode on the production host. Replace wipes
   // every collection before loading — a slip of the click here would erase
@@ -94,7 +99,7 @@ export default function BackupRestore() {
       toast.error("Replace mode is disabled on production. Use Merge, or run Replace on the preview environment.");
       return;
     }
-    if (mode === "replace" && !window.confirm("REPLACE mode wipes EVERY collection (users, attendance, leaves, devices, settings, …) before loading the backup. This includes admin accounts. Are you absolutely sure?")) return;
+    if (mode === "replace" && !window.confirm("REPLACE mode wipes EVERY collection (users, attendance, leaves, devices, settings, …) before loading the backup. This includes admin accounts. A safety copy of the current data is saved first. Are you absolutely sure?")) return;
     setUploading(true);
     setReport(null);
     try {
@@ -127,6 +132,7 @@ export default function BackupRestore() {
       toast.error(err?.message || "Restore failed");
     } finally {
       setUploading(false);
+      loadStatus();
     }
   };
 
@@ -213,6 +219,8 @@ export default function BackupRestore() {
       </div>
 
 
+      <SafetyBackupsCard items={status?.pre_restore_backups} busy={preBusy} onDownload={downloadPre} />
+
       <div className="iu-card p-5 mb-4 border-2 border-sky-200" style={{ background: "#F0F9FF" }}>
         <div className="flex items-start gap-3">
           <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-sky-600 text-white shrink-0 shadow-sm">
@@ -224,6 +232,7 @@ export default function BackupRestore() {
               Upload a <code className="text-xs bg-white px-1.5 py-0.5 rounded border">.tar.gz</code> created by this page.
               Use <b>Merge</b> on a live deployment (safest &mdash; only new docs are added).
               Use <b>Replace</b> to make this environment an exact mirror of the source (wipes every collection first).
+              Either way, a safety copy of the current data is saved first so the restore can be undone.
             </p>
             <div className="space-y-3">
               <input
@@ -285,6 +294,11 @@ export default function BackupRestore() {
             <CheckCircle2 size={18} className="text-emerald-600" />
             <span className="font-bold">Restore complete · {report.mode} mode</span>
           </div>
+          {report.safety_backup && (
+            <div className="text-xs text-slate-600 mb-3" data-testid="br-report-safety">
+              Safety copy of the data before this restore: <b>{report.safety_backup.filename}</b> (see “Before-restore safety backups” above).
+            </div>
+          )}
           <ul className="text-sm space-y-1">
             {Object.entries(report.inserted || {}).map(([name, n]) => (
               <li key={name} className="flex justify-between border-b border-slate-100 pb-1">

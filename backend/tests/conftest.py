@@ -94,6 +94,33 @@ def make_member():
                             params={"reason": "test cleanup"}, timeout=30)
 
 
+# Throwaway accounts other test modules create with their own fixtures. Any
+# created DURING this session are deleted at the end so they never show up in
+# preview's real lists (absentee prompt, muster, grid). Fixed, reused fixture
+# accounts (admin2.test@…, coach.test@…) don't match and are kept.
+_TEST_EMAIL_RE = (r"(@ishowedup-test\.example\.com|@meals\.example\.com|^smoke-[^@]*@example\.com"
+                  r"|^lop-[^@]*@attendance\.app|^smoke-[^@]*@athletes\.local)$")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _sweep_session_test_members():
+    from datetime import datetime, timezone
+    started = datetime.now(timezone.utc).isoformat()
+    yield
+    mongo_url, db_name = os.environ.get("MONGO_URL"), os.environ.get("DB_NAME")
+    if not (mongo_url and db_name):
+        return
+    from pymongo import MongoClient
+    users = MongoClient(mongo_url)[db_name].users
+    ids = [u["id"] for u in users.find(
+        {"created_at": {"$gte": started}, "email": {"$regex": _TEST_EMAIL_RE}}, {"_id": 0, "id": 1})]
+    if not ids:
+        return
+    s = login_session(BASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD)
+    for uid in ids:
+        s.delete(f"{BASE_URL}/api/members/{uid}", params={"reason": "test cleanup"}, timeout=30)
+
+
 @pytest.fixture(scope="session")
 def athlete(make_member) -> dict:
     """Throwaway athlete for muster + leave tests (never a real member)."""
