@@ -5051,3 +5051,12 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - "App refreshing regularly": in PREVIEW the CRA dev server hot-reloads open tabs whenever code is edited (not in deployed build). In-app data refreshes were already inline; now event-driven.
 - Tested: iteration_89 — 8/8 backend + full frontend (inline banner in ~0.5 s, no page reload).
 - Future: extend live_bump to leaves, check-in approvals, attendance toggles, tasks; then relax remaining 60 s polls (dashboard, tasks/today, roster chip).
+
+## 2026-10-06 — App-wide code review (play-safe, real bugs only)
+- Scans: ruff bug rules (F821/F811/F823/F841/B0xx/E722…) on backend → only false-positive B023 (helpers called inside the same loop) + 1 harmless unused var; ESLint (no-undef, jsx-no-undef, rules-of-hooks, no-unreachable, no-dupe-keys) on frontend → 0 errors; FastAPI unresolved body-annotation scan → 0. Swallowed `except Exception: pass` (13) reviewed — all wrap optional parsing, OK. Archived-member exclusion in grid/payroll/muster confirmed.
+- FIX leaves.py: short-notice rule used server UTC date for "today" (00:00–05:30 IST a day behind → could dodge the ≤3-day / 2-per-month LOP rule); now office-local date.
+- FIX corrections.py `_decide_one`: atomic claim (pending→deciding via find_one_and_update) so two admins approving simultaneously can't apply a correction twice; loser gets 409; applier failure reverts to pending; `deciding_by_id` unset on finish.
+- FIX MemberForm.jsx create path strips "" fields (weekly_off/gender Literal 422 — known handoff quirk).
+- Earlier same day: 3 body-model 422s (recalc-late, resolve-stale, meal-calendar PUT, escort purge-bulk), meal-calendar end-date 500.
+- Tested: iteration_90 — 200/200 regression + 7/7 new, frontend 0 console errors. Orphan test correction cleaned.
+- Recommended, NOT changed: JWT in localStorage → HttpOnly cookies (logs everyone out); partial unique index for one open session per user (needs a duplicate audit first); short-notice monthly count uses created_at UTC vs local month start (5.5 h edge on the 1st); deploy to production so users get today's fixes.

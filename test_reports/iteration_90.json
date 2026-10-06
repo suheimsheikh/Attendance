@@ -1,0 +1,30 @@
+{
+  "summary": "Iter90 verified three app-wide code-review fixes end-to-end: (1) Leave short-notice uses office-local date — a throwaway member filing a leave at (office-local today + 2 days) is stamped short_notice=true, (today + 10) is short_notice=false, and the 3rd short-notice leave in the same month flips short_notice_lop=true with lop_days=1 (requested) and zero paid_leave_used/comp_off_used; (2) Correction approve race — two concurrent decide calls (super admin + throwaway non-super admin, synchronised via threading.Barrier) on an admin2-filed missed_checkin produce EXACTLY one 200 + one 409 'Correction was just decided by another admin', with EXACTLY one attendance row created, correction.status='approved', decided_by_id stamped, and deciding_by_id fully removed via $unset; a second decide on the already-approved row returns 409 as 'Correction already approved'; single approve and single reject still work and leave no deciding_by_id behind; (3) Add-member UI — Members → Add member → fill only mf-name, mf-email, mf-mobile, mf-password (weekly-off/gender/role/category/etc left at their defaults, select values empty strings) → Save shows 'Member created' toast, backend persists with weekly_off defaulted to 'monday' and gender=null (empty strings were stripped client-side so Pydantic Literal validators didn't 422). Frontend smoke on /admin, /admin/approvals, /admin/grid, /admin/members, /admin/meals: all five pages load with 0 console errors and the corrections waiting banner is visible on the shell ('1 correction waiting for your approval — oldest: ZZ Test b7d88456 (2026-10-06) filed by Admin Two Test'). Pytest regression: 200/200 passed across iter89, iter88, iter87, iter86, iter85, iter84, regression_refactor_iter83, early_out_helper, kitchen_analytics_helpers, meals_today_pickers, timeline_classifier, and the new iter90 suite in 118.84 s.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter90.py",
+    "/app/test_reports/pytest/iter90.xml",
+    "/app/test_reports/pytest/iter90_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/corrections.py:_decide_one — the atomic claim writes status='deciding' which transiently makes the row invisible to GET /admin/corrections (status filter default='pending'). On a crash BETWEEN the find_one_and_update and the revert try/except (e.g. SIGKILL / connection drop) the row would be stuck as 'deciding' and effectively orphaned. Consider a janitor sweep (periodic reset of status='deciding' AND deciding_at older than N minutes back to 'pending') or a short claim TTL — not a bug today but a durability gap worth noting.",
+  "routes/corrections.py:_decide_one — the atomic claim stamps 'deciding_by_id' but NOT a 'deciding_at' timestamp; without it the janitor idea above is harder to implement safely. Trivially add 'deciding_at': now_utc().isoformat() alongside status.",
+    "routes/leaves.py:create_leave — the two short-notice reads (ocfg lookup + today_local parse) are done BEFORE the `office = await db.config.find_one(...)` call four lines later for the same {'id':'office'} doc. One find_one would be fine. Minor perf.",
+    "routes/leaves.py:create_leave — the short-notice counter query `created_at >= mstart + 'T00:00:00'` compares an ISO datetime stored in UTC against an office-local midnight boundary. For a member filing between 00:00–05:30 IST on the 1st of a month the counter would still bucket by UTC month, not office month. Not the fix in scope today (that fix was for the `today_local` basis), but worth tracking.",
+    "frontend/src/pages/admin/MemberForm.jsx — the two empty-string-strip loops (edit path @ L137-139 and create path @ L148) are literally identical and could be a single helper 'stripEmpty(body)' at the top of submit. Minor DRY.",
+    "frontend form inputs use data-testid='mf-name' (not 'mf-full-name' as implied by the field label 'FULL NAME'). Harmless but worth aligning for grep-ability — several previous test agents guessed 'mf-full-name' first and had to retry."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter90.py (NEW)",
+    "/app/test_reports/iteration_90.json (NEW)"
+  ],
+  "success_rate": {"backend": "100% (200/200 regression + 7/7 iter90)", "frontend": "100% (5/5 pages 0 console errors; add-member happy path PASS; waiting banner visible)"},
+  "test_credentials": "Super admin admin@attendance.app / Admin@12345; non-super admin2.test@example.com / Admin@12345. Token key in localStorage is 'ishowedup_token'.",
+  "seed_data_creation": "Each test seeds its own throwaway TEST_* member + attendance + correction and tears everything down. Final mongo scan after iter90 run shows zero residual TEST_iter90_* rows.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Members form field selectors are data-testid='mf-name' (NOT mf-full-name), mf-email, mf-mobile, mf-password, mf-weekly-off, mf-gender, mf-role, mf-category. Add-member button is data-testid='new-member-button'. UI login via form breaks under automation because the /login page has BOTH a phone input (default) and an email form behind 'Admin sign in with email' toggle — the generic input[type='email'] selector matches both; use token-injection (localStorage.setItem('ishowedup_token', <jwt from POST /api/auth/login>)) to avoid the 30 s timeout. The frontend uses networkidle poorly because of the long-lived SSE connection on /api/events; always use wait_until='domcontentloaded' + an explicit wait_for_timeout. The 'Dispatch today's absentees' morning modal auto-opens on dashboard after 10 AM IST — dismiss via button:has-text('Not now').",
+  "rca of the issue": "N/A — iter90 is a verification pass for E1's three fixes (short-notice office-local date, correction atomic claim, add-member empty-string strip). All three fixes behave exactly as described."
+}
