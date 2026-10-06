@@ -1,0 +1,27 @@
+{
+  "summary": "Iter89 verified (a) Approver-on-Grid tooltip + corner marker, (b) Correction Waiting Banner API + UI (waiting/overdue), and (c) SSE live inline refresh end-to-end. Backend pytest 8/8 pass (/app/backend/tests/test_review_iter89.py): pending-for-me correctly excludes rows the admin filed and super-only rows for non-supers (super sees admin2-filed cid, admin2 does NOT, throwaway non-super admin does); GET /api/events rejects bad token with 401; first SSE frame is a {seq,scope,client} payload; app_signal.seq bumps on BOTH correction create and decide (scope='corrections'); calendar-grid cell_meta[iso].correction returns {kind,filed_by,approved_by,approved_at,auto} after approve; Sep 2026 real data has corrected marks. Frontend verified live: Grid Sep 2026 renders 131 corner markers (data-testid grid-corrected-mark-<iso>) with parent td[data-corrected=1]; the Ainul Haque 2026-09-09 cell is present and its title tooltip reads 'Present · Wed · 09/09/26 ... Corrected (missed checkin) · filed by GANDHINATHAN P / Auto-approved (GANDHINATHAN P)'. 1885 non-corrected tds in view carry zero markers (perfect isolation). Banner: with a super-admin tab open on /admin and admin2 filing a correction from another session via API, the amber waiting banner appears inline in ~0.5 s (count='1 correction waiting for your approval'), review link href='/admin/approvals'; approving from the super session makes the banner vanish in ~1.0 s. window.__noReload=1 marker survives, performance navigation count stays at 1 throughout. Overdue path: backdating requested_at to -25 h flipped data-state to 'overdue', added rose styling, and rendered the 'OVER 24 H' badge (data-testid corrections-waiting-overdue). admin2 (filer) pending-for-me count correctly stays 0 for the row they filed. SSE EventSource connects through the k8s ingress and delivers data frames the moment config.app_signal updates.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter89.py",
+    "/app/test_reports/pytest/iter89.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/routes/live_events.py: the SSE loop polls db.config.find_one every 1 s per open connection. With many admin tabs this becomes O(tabs*rps) extra Mongo reads. Consider a change-stream watcher or an in-process asyncio.Event bumped by services.live_signal.bump to fan out to all local subscribers.",
+    "backend/routes/live_events.py: the initial frame is a 2 KB comment pad to defeat proxy buffering — fine, but the subsequent empty-seq keep-alive could also set a `Last-Event-ID` so clients can resume (currently a reconnect replays only the latest seq, which is usually enough but not strictly idempotent).",
+    "frontend/src/hooks/useAppEvents.js: EventSource does not retry on 401. If the JWT expires mid-session the stream silently dies and we fall back to the 5-min polling. Consider listening to es.onerror and reconnecting with a fresh token (or on route change).",
+    "frontend/src/components/CorrectionsWaitingBanner.jsx: `oldest_at` is parsed as new Date(string). If the backend ever drops the timezone suffix the overdue flip will be off by the server offset — the API currently returns ISO with offset so OK, but worth asserting.",
+    "backend/routes/corrections.py:_filer_id helper (not shown) and _needs_second_admin are both re-evaluated for every pending correction in pending-for-me. Could be fed into the Mongo query ($match on {$or:[{needs_second_admin:true, filed_by_id:{$ne: me}}, {needs_super_admin:true}, ...]}) to shrink in-memory filtering at scale."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_review_iter89.py (NEW)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% — Grid markers + tooltip, waiting banner, overdue banner, live inline refresh on create & decide, no-reload invariant, SSE first-frame, review link all verified"},
+  "test_credentials": "Super admin admin@attendance.app / Admin@12345; non-super admin2.test@example.com / Admin@12345. Token key in localStorage is 'ishowedup_token' (via api.js TOKEN_KEY).",
+  "seed_data_creation": "Each test seeds its own throwaway TEST_* member + attendance row + correction and tears everything down. Final db scan after cleanup: TEST_users left=0, residual TEST corrections=0.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Regression file /app/backend/tests/test_review_iter89.py is self-contained — creates admin2 if missing, probes SSE through the external URL, backdates requested_at only via mongo for the overdue banner. For UI live-refresh verification use direct localStorage token injection (localStorage.setItem('ishowedup_token', <jwt>)) rather than form login to avoid the 30 s automation timeout. Idle-stability (3 min no-reload) was NOT run end-to-end for time reasons, but the no-reload invariant was proven across two mutation+decide cycles — the only remaining risk is a React Query cadence we didn't observe inside 60 s.",
+  "rca of the issue": "N/A — iter89 is a feature-verification pass. The CRA dev-server hot-reload that the problem statement calls out is a preview-env artefact and not a product bug; verified by (a) absence of performance.navigation increments during live mutations and (b) persistence of window.__noReload sentinel across SSE-driven banner updates."
+}

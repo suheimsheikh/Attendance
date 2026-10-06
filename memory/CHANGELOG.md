@@ -5043,3 +5043,11 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Unchanged: member archive/delete and attendance bulk_delete stay Super Admin only; Super Admin's own corrections auto-apply.
 - UI: Approvals row badge "2nd admin" + filer sees "Another admin approves" lock; toast "another admin must approve it".
 - Tested: iteration_88 — 9/9 backend, 4/4 frontend.
+
+## 2026-10-06 — Approver on Grid, Corrections waiting banner, SSE live refresh
+- Grid: corrected attendance days (attendance.corrected_via) get `cell_meta[iso].correction {kind, filed_by, approved_by, approved_at, auto}`; violet corner marker + tooltip "Corrected (...) · filed by X / Approved by Y on dd/mm/yy" (or Auto-approved).
+- GET /api/admin/corrections/pending-for-me — only rows THIS admin can decide (two-admin rule + super-only). `components/CorrectionsWaitingBanner.jsx` in Layout: persistent (no dismiss) amber banner, red "over 24 h" when oldest waiting > 24 h, Review → /admin/approvals.
+- Live refresh: `services/live_signal.bump(db, scope)` (Mongo seq on config.app_signal) + SSE `GET /api/events?token=` (`routes/live_events.py`). Bumped on correction create/decide. `hooks/useAppEvents.js` (Layout) invalidates approvals-summary, me/corrections, admin/corrections, pending-for-me. Layout polling for approvals-summary + me/corrections relaxed 60 s → 5 min fallback.
+- "App refreshing regularly": in PREVIEW the CRA dev server hot-reloads open tabs whenever code is edited (not in deployed build). In-app data refreshes were already inline; now event-driven.
+- Tested: iteration_89 — 8/8 backend + full frontend (inline banner in ~0.5 s, no page reload).
+- Future: extend live_bump to leaves, check-in approvals, attendance toggles, tasks; then relax remaining 60 s polls (dashboard, tasks/today, roster chip).
