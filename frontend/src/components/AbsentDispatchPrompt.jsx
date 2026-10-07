@@ -17,6 +17,17 @@ const DISPATCH_HOUR = 10;
 
 const todayKey = todayIso;
 
+// Same A–Z, one-per-line shape as the WhatsApp message.
+const PreviewList = ({ testid, label, tone, names }) =>
+  names?.length ? (
+    <div data-testid={testid}>
+      <div className={`font-bold ${tone}`}>{label} ({names.length}):</div>
+      <ul className="text-slate-700">
+        {sortByName(names).map((n, i) => <li key={`${n}-${i}`}>• {n}</li>)}
+      </ul>
+    </div>
+  ) : null;
+
 export default function AbsentDispatchPrompt() {
   const [data, setData] = useState(null); // { absent:[], onLeave:[], onTour:[], onLop:[], office }
   const [open, setOpen] = useState(false);
@@ -110,21 +121,10 @@ export default function AbsentDispatchPrompt() {
           </button>
         </div>
         <div className="p-4 space-y-2 text-sm max-h-[40vh] overflow-y-auto">
-          {data.allAbsent?.length > 0 && (
-            <div data-testid="dispatch-absent">
-              <span className="font-bold text-rose-700">Absent (no info):</span>{" "}
-              <span className="text-slate-700">{data.allAbsent.join(", ")}</span>
-            </div>
-          )}
-          {data.onLeave?.length > 0 && (
-            <div><span className="font-bold text-amber-700">On leave:</span> <span className="text-slate-700">{data.onLeave.join(", ")}</span></div>
-          )}
-          {data.onTour?.length > 0 && (
-            <div><span className="font-bold text-sky-700">On tour:</span> <span className="text-slate-700">{data.onTour.join(", ")}</span></div>
-          )}
-          {data.onLop?.length > 0 && (
-            <div><span className="font-bold text-red-700">LOP:</span> <span className="text-slate-700">{data.onLop.join(", ")}</span></div>
-          )}
+          <PreviewList testid="dispatch-absent" label="Absent (no info)" tone="text-rose-700" names={data.allAbsent} />
+          <PreviewList testid="dispatch-on-leave" label="On leave" tone="text-amber-700" names={data.onLeave} />
+          <PreviewList testid="dispatch-on-tour" label="On tour" tone="text-sky-700" names={data.onTour} />
+          <PreviewList testid="dispatch-lop" label="LOP" tone="text-red-700" names={data.onLop} />
         </div>
         <div className="flex gap-2 p-4 border-t border-slate-100">
           <button data-testid="absent-dispatch-dismiss" onClick={dismiss} className="iu-btn-secondary flex-1">Not now</button>

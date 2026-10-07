@@ -646,3 +646,10 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Frontend: pages/admin/backup/SafetyBackupsCard.jsx on /admin/backup + note in restore report.
 - Proof script memory/scripts/safety_backup_check.py (scratch DB): 8/8 incl. exact undo of a bad Replace.
 - tests/conftest.py: session-end sweep deletes throwaway members other test modules create (email patterns) — suite 1073 pass / 10 skip. 53 leftovers from earlier runs today still in preview (awaiting OK to delete).
+
+## Update 07 Oct 2026 — Hourly wagers: hours only, max 8 h/day, never late/absent + A–Z WhatsApp lists
+- services/attendance_calc.py: compute_late → never late for hourly; session_ot_minutes = half-hour rounding then cap HOURLY_DAILY_CAP_MIN=480.
+- services/attendance_helpers.py: no early-out for hourly; clear_hourly_timing_marks() wipes late/early-out from current month onward, skipping locked months (runs at startup + when PATCH /members sets hourly_wager true).
+- grid.py: hourly never AB (blank); totals payable/absent/lop/late/early_out/dar_missed = 0, ot_minutes = capped hours. /api/leave-balances: hourly balances 0. muster absent-report + daily-roster exclude hourly. Checkout-reminder SMS skips hourly. SelfCheckIn: no early-out/OT prompt for hourly.
+- WhatsApp: Dispatch prompt, Muster absent share, Daily roster share → A–Z one "• Name" per line (utils.sortByName); dispatch modal preview matches.
+- Tests: tests/test_hourly_wager_rules.py (6). Full suite 1078 pass; only fail = iter83 log-clean test tripped by pre-existing "No response returned" middleware noise on client disconnects (44 in log history). iteration_92 frontend 100%.
