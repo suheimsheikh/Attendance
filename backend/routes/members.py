@@ -509,6 +509,11 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
         u = await db.users.find_one({"id": member_id}, {"_id": 0})
         if not u:
             raise HTTPException(status_code=404, detail="Member not found")
+        if body.hourly_wager:
+            # Switched to hourly → no timings: clear Late / Early-out marks
+            # from the current open month onward.
+            from services.attendance_helpers import clear_hourly_timing_marks
+            await clear_hourly_timing_marks(db, await db.config.find_one({"id": "office"}), [member_id])
         # Auto-revoke devices when leaving_date crosses into the past.
         # 24 Feb 2026 user request: an admin sets `leaving_date` to
         # off-board someone → their existing sessions on personal devices

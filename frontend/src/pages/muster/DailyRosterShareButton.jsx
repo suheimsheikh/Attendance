@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ClipboardList, Share2 } from "lucide-react";
 import { api } from "../../api";
 import { shareToWhatsApp } from "../../utils/shareWhatsApp";
+import { sortByName } from "../../utils";
 
 // Human-friendly "Fri 22 Aug" for the till-date line.
 const fmtTill = (iso) => {
@@ -25,7 +26,7 @@ export function buildRosterMessage(r) {
   const section = (label, arr, emoji) => {
     if (!arr || !arr.length) return;
     lines.push("", `${emoji} ${label} (${arr.length}):`);
-    arr.forEach((p) => {
+    sortByName(arr, (p) => p.name).forEach((p) => {
       lines.push(p.till ? `• ${p.name} — till ${fmtTill(p.till)}` : `• ${p.name}`);
     });
   };

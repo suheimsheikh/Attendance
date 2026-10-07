@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { AlertTriangle, Send, X } from "lucide-react";
 import { api } from "../api";
 import { shareToWhatsApp } from "../utils/shareWhatsApp";
-import { todayIso } from "../utils";
+import { todayIso, sortByName } from "../utils";
 
 /**
  * AbsentDispatchPrompt — admin-only nudge (user request, Jun 2026).
@@ -73,10 +73,15 @@ export default function AbsentDispatchPrompt() {
       weekday: "long", day: "numeric", month: "long",
     });
     const lines = [`📋 *Attendance — ${d.office || "Academy"}* · ${day}`];
-    if (d.allAbsent?.length) lines.push(`\n❗ *Absent (no info):* ${d.allAbsent.join(", ")}`);
-    if (d.onLeave?.length) lines.push(`📝 *On leave:* ${d.onLeave.join(", ")}`);
-    if (d.onTour?.length) lines.push(`✈️ *On tour:* ${d.onTour.join(", ")}`);
-    if (d.onLop?.length) lines.push(`🔴 *LOP:* ${d.onLop.join(", ")}`);
+    // A–Z, one person per line (user request, Oct 2026).
+    const section = (label, names) => {
+      if (!names?.length) return;
+      lines.push("", `${label} (${names.length}):`, ...sortByName(names).map((n) => `• ${n}`));
+    };
+    section("❗ *Absent (no info)*", d.allAbsent);
+    section("📝 *On leave*", d.onLeave);
+    section("✈️ *On tour*", d.onTour);
+    section("🔴 *LOP*", d.onLop);
     return lines.join("\n");
   };
 

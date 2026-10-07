@@ -4,6 +4,7 @@ import { api } from "../../api";
 import { shareToWhatsApp } from "../../utils/shareWhatsApp";
 import useNotifyTemplates from "../../hooks/useNotifyTemplates";
 import ParentNotifyList from "../../components/ParentNotifyList";
+import { sortByName } from "../../utils";
 
 const fmtDay = (iso) =>
   new Date(iso + "T00:00:00").toLocaleDateString("en-GB", {
@@ -14,11 +15,11 @@ export function buildAbsentMessage(r) {
   const lines = [`❌ Absent without information — ${fmtDay(r.date)}`];
   if (r.athletes.length) {
     lines.push("", `Athletes (${r.athletes.length} of ${r.total_athletes}):`);
-    r.athletes.forEach((n) => lines.push(`• ${n}`));
+    sortByName(r.athletes).forEach((n) => lines.push(`• ${n}`));
   }
   if (r.coaches.length) {
     lines.push("", `Coaches (${r.coaches.length} of ${r.total_coaches}):`);
-    r.coaches.forEach((n) => lines.push(`• ${n}`));
+    sortByName(r.coaches).forEach((n) => lines.push(`• ${n}`));
   }
   if (r.office_name) lines.push("", `— ${r.office_name}`);
   return lines.join("\n");

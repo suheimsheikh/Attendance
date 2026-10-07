@@ -379,9 +379,14 @@ def register(router, *, _athlete_like_keys, db, require_admin):
                     if any(_camp_applies_to(c, u) for c in active):
                         _expected_dates.setdefault(u["id"], set()).add(iso)
 
+        _hourly_uids = {u["id"] for u in users if u.get("hourly_wager")}
+
         def _absent_or_blank(uid: str, iso: str) -> str:
             """Athletes are AB only when expected at a camp that day;
-            otherwise blank. Employees are always AB on a missed day."""
+            otherwise blank. Hourly wagers are never absent (blank).
+            Other employees are always AB on a missed day."""
+            if uid in _hourly_uids:
+                return ""
             if _cat_by_uid.get(uid, "") in _athlete_like_absent:
                 return "AB" if iso in _expected_dates.get(uid, set()) else ""
             return "AB"
@@ -596,6 +601,10 @@ def register(router, *, _athlete_like_keys, db, require_admin):
                 # only, from the DAR policy effective date, excludes today).
                 "dar_missed":  len(dar_missed_by_user.get(uid, [])),
             }
+            if uid in _hourly_uids:
+                # Hourly wagers are paid on hours only (ot_minutes, ≤8 h/day):
+                # no payable days, absences, LOP, late, early-out or DAR cuts.
+                totals.update(payable=0, absent=0, lop=0, late=0, early_out=0, dar_missed=0)
             rows.append({
                 "member_id": uid,
                 "member_name": u.get("full_name"),

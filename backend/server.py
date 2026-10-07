@@ -798,6 +798,13 @@ async def _lifespan(_app):
     import asyncio
     await _seed_database()
     try:
+        from services.attendance_helpers import clear_hourly_timing_marks
+        n = await clear_hourly_timing_marks(db, await db.config.find_one({"id": "office"}))
+        if n:
+            logger.info("hourly wagers: cleared late/early-out marks on %d row(s)", n)
+    except Exception:
+        logger.exception("hourly timing-mark cleanup failed")
+    try:
         n = await _close_stale_open_sessions("startup_catchup")
         if n:
             logger.info("startup catch-up auto-checkout: closed %d stale session(s)", n)
@@ -899,9 +906,10 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
                 # no number changes) — the consumer decides based on pay_basis.
                 "hourly_wager": bool(u.get("hourly_wager")),
                 "pay_basis": "hourly" if u.get("hourly_wager") else "salaried",
+                # Hourly wagers: hours only — leave / comp-off sent as 0.
                 "balances": {
-                    "leave": b["paid_available"],
-                    "comp_off": b["comp_available"],
+                    "leave": 0 if u.get("hourly_wager") else b["paid_available"],
+                    "comp_off": 0 if u.get("hourly_wager") else b["comp_available"],
                 },
                 # Per-row month stamp so each LOP value is self-describing
                 # even after PayCraft flattens rows into a payroll sheet.

@@ -249,9 +249,10 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             {"active": {"$ne": False}, "category": {"$in": cats}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1,
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1,
-             "institution": 1},
+             "institution": 1, "hourly_wager": 1},
         ).to_list(2000)
-        members = [m for m in members if not is_ex_member(m, today)]
+        # Hourly wagers have no set days → never "absent".
+        members = [m for m in members if not is_ex_member(m, today) and not m.get("hourly_wager")]
         # Phase C (Jun 2026): athletes are "absent" only when expected at
         # a camp/regatta today (enrolled participant). Non-expected
         # athletes are never flagged absent and never parent-notified.
@@ -402,7 +403,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
 
         members = await db.users.find(
             {"active": {"$ne": False}, "category": {"$in": ["staff", "coach"]}, "archived": {"$ne": True}},
-            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1},
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1, "hourly_wager": 1},
         ).to_list(2000)
         members = [m for m in members if not is_ex_member(m, today)]
         member_ids = [m["id"] for m in members]
@@ -469,8 +470,8 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 else:
                     on_leave.append(item)
                 continue
-            if m["id"] in present_ids:
-                continue
+            if m["id"] in present_ids or m.get("hourly_wager"):
+                continue  # hourly wagers have no set days → never "absent"
             absent.append({"name": m["full_name"], "category": m.get("category")})
 
         for lst in (on_leave, on_tour, on_lop, absent):

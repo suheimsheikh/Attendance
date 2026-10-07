@@ -134,7 +134,9 @@ async def send_checkout_reminders(db) -> int:
 
     user_ids = [s["user_id"] for s in open_sessions]
     users = await db.users.find(
-        {"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "full_name": 1, "mobile": 1, "institution": 1},
+        # Hourly wagers have no set end time → no "still checked in" nudges.
+        {"id": {"$in": user_ids}, "hourly_wager": {"$ne": True}},
+        {"_id": 0, "id": 1, "full_name": 1, "mobile": 1, "institution": 1},
     ).to_list(2000)
     umap = {u["id"]: u for u in users}
 

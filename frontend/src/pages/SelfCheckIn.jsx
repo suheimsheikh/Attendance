@@ -296,7 +296,7 @@ export default function SelfCheckIn() {
 
   // Overtime detection (staff only).
   const otInfo = useMemo(() => {
-    if (user?.category !== "staff") return null;
+    if (user?.category !== "staff" || user?.hourly_wager) return null;
     const wsMin = hmParse(user?.work_start);
     const weMin = hmParse(user?.work_end);
     const now = hmNow();
@@ -324,7 +324,8 @@ export default function SelfCheckIn() {
   // and executives should also be able to note "leaving early for a
   // medical appt" so admins can review the ledger with full context.
   const earlyOutInfo = useMemo(() => {
-    if (!status?.checked_in) return null;
+    // Hourly wagers have no set end time → no early-out prompt.
+    if (!status?.checked_in || user?.hourly_wager) return null;
     const weMin = hmParse(user?.work_end);
     if (weMin == null) return null;
     const now = hmNow();

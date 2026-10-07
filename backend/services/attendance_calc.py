@@ -31,7 +31,9 @@ def compute_late(office: dict, target: dict, ts: datetime, camp: Optional[dict] 
     against the effective work_start + grace. If `camp` is provided, its
     `start_time` and (optional) `late_grace_minutes` override the member's
     defaults — this is how institutional camps replace a member's normal
-    schedule."""
+    schedule. Hourly wagers have no set timings, so they're never late."""
+    if is_hourly_wager(target):
+        return False, 0
     if camp:
         ws = camp.get("start_time") or "09:00"
         cg = camp.get("late_grace_minutes")
@@ -68,6 +70,10 @@ def round_half_hour_minutes(minutes: float) -> int:
     return int((minutes + 15) // 30) * 30
 
 
+# Hourly wagers are paid for at most 8 hours a day (user rule, Oct 2026).
+HOURLY_DAILY_CAP_MIN = 8 * 60
+
+
 def is_hourly_wager(member: Optional[dict]) -> bool:
     """True when a member is paid purely for hours actually worked
     (per-member "Hourly wager" toggle). Such members get no leave /
@@ -81,7 +87,8 @@ def session_ot_minutes(member: Optional[dict], session: Optional[dict]) -> int:
 
     Hourly-wager members are paid for the hours they were actually present
     (check-in → check-out, i.e. the stored `hours` field), expressed as
-    overtime rounded to the nearest half hour, and never accrue the
+    overtime rounded to the nearest half hour and capped at 8 h a day
+    (one session per day), and never accrue the
     standard early-in/late-out OT. Everyone else keeps their stamped
     `overtime_total_min`.
 
@@ -95,7 +102,7 @@ def session_ot_minutes(member: Optional[dict], session: Optional[dict]) -> int:
             worked_min = float(hrs) * 60.0 if hrs else 0.0
         except (TypeError, ValueError):
             worked_min = 0.0
-        return round_half_hour_minutes(worked_min)
+        return min(round_half_hour_minutes(worked_min), HOURLY_DAILY_CAP_MIN)
     return int(session.get("overtime_total_min") or 0)
 
 

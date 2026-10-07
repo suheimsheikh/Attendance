@@ -88,6 +88,8 @@ def _compute_early_out_at_checkout(ts: datetime, target: dict, office: dict) -> 
     medium-risk refactor pass) so this arithmetic can be unit-tested in
     isolation of the DB write path.
     """
+    if target.get("hourly_wager"):
+        return 0  # no set timings for hourly wagers → never an early-out
     work_end_hm = target.get("work_end")
     if not work_end_hm or ":" not in (work_end_hm or ""):
         return 0
@@ -101,3 +103,32 @@ def _compute_early_out_at_checkout(ts: datetime, target: dict, office: dict) -> 
         return _early_by if _early_by >= 15 else 0
     except (ValueError, TypeError, AttributeError):
         return 0
+
+
+async def clear_hourly_timing_marks(db, office: dict, user_ids: list | None = None) -> int:
+    """Hourly wagers have no timings: wipe Late / Early-out stamps on their
+    attendance from the current month onward, skipping payroll-locked months.
+    Idempotent — runs at startup and when a member is switched to hourly."""
+    from services.grid_lock import get_month_lock
+    from services.time_utils import local_date_str
+    if user_ids is None:
+        user_ids = [u["id"] async for u in db.users.find({"hourly_wager": True}, {"_id": 0, "id": 1})]
+    if not user_ids:
+        return 0
+    month = local_date_str(office)[:7]
+    q = {"user_id": {"$in": user_ids}, "date": {"$gte": f"{month}-01"},
+         "$or": [{"late": True}, {"is_late": True}, {"late_minutes": {"$gt": 0}}, {"early_out_minutes": {"$gt": 0}}]}
+    rows = await db.attendance.find(q, {"_id": 0, "id": 1, "date": 1}).to_list(20000)
+    locked = {}
+    ids = []
+    for r in rows:
+        m = (r.get("date") or "")[:7]
+        if m not in locked:
+            locked[m] = bool((await get_month_lock(db, m)).get("locked"))
+        if not locked[m]:
+            ids.append(r["id"])
+    if ids:
+        await db.attendance.update_many({"id": {"$in": ids}}, {"$set": {
+            "late": False, "is_late": False, "late_minutes": 0,
+            "early_out_minutes": 0, "early_out_reason": None}})
+    return len(ids)

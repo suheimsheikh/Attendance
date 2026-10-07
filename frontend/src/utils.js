@@ -68,6 +68,10 @@ export const monthStartIso = (iso = todayIso()) => `${iso.slice(0, 7)}-01`;
 // Local-midnight Date for the academy's today — for code that needs a Date (month pickers).
 export const academyToday = () => new Date(`${todayIso()}T00:00:00`);
 
+// A–Z by name (case-insensitive) — every WhatsApp name list uses this.
+export const sortByName = (arr, get = (x) => x) =>
+  [...(arr || [])].sort((a, b) => String(get(a) || "").localeCompare(String(get(b) || ""), "en", { sensitivity: "base" }));
+
 // en-IN grouped amount without the ₹ sign (the column header carries it).
 // dp = fixed decimals, or null for up-to-3 decimals.
 export function money(n, dp = 2, empty = "—") {
