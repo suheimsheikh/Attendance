@@ -74,3 +74,18 @@ def test_malformed_work_end_returns_zero(bad_value):
     assert _compute_early_out_at_checkout(
         _utc(12, 0), {"work_end": bad_value}, IST_OFFICE
     ) == 0
+
+
+def test_late_exact_second_boundary():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from services.attendance_calc import compute_late
+    office = {"timezone": "Asia/Kolkata", "late_grace_minutes": 0}
+    member = {"work_start": "09:30"}
+    at = lambda s, us=0: datetime(2026, 10, 8, 9, 30, s, us, tzinfo=ZoneInfo("Asia/Kolkata"))
+    assert compute_late(office, member, at(0)) == (False, 0)
+    assert compute_late(office, member, at(0, 900000)) == (False, 0)
+    assert compute_late(office, member, at(1)) == (True, 1)
+    assert compute_late(office, member, at(59)) == (True, 1)
+    assert compute_late(office, member, datetime(2026, 10, 8, 9, 31, 0, tzinfo=ZoneInfo("Asia/Kolkata"))) == (True, 1)
+    assert compute_late(office, member, datetime(2026, 10, 8, 9, 31, 1, tzinfo=ZoneInfo("Asia/Kolkata"))) == (True, 2)

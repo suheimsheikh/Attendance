@@ -30,9 +30,6 @@ export const KINDS_BY_ENTITY = {
  * "today" (future dates are never valid). */
 export const windowMaxDate = todayIso;
 
-/** Earliest date a correction can target — 31-day retro window (was 7,
- * expanded 9 Feb 2026 per user request so admins can fix late-reported
- * check-in times / missed punches for an entire month). Non-admin
- * self-filed requests are still capped at 7 days by the backend
- * `_enforce_window` guard; admins bypass that check server-side. */
-export const windowMinDate = () => isoDaysAgo(31);
+/** Earliest date a correction can target — members: 31-day window;
+ * admins: no limit (payroll-locked months are still refused server-side). */
+export const windowMinDate = (isAdmin) => (isAdmin ? undefined : isoDaysAgo(31));

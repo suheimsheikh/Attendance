@@ -260,7 +260,7 @@ export default function CorrectionRequestModal({
                 <label className="iu-label">Which entry are you correcting?</label>
                 {pickerRows.length === 0 ? (
                   <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5" data-testid="correction-row-hint">
-                    You don&rsquo;t have any {kind === "time_adjust" ? "attendance rows in the last 31 days" : "approved leave/tour rows overlapping the window"} to correct. Log a check-in first, or contact your admin.
+                    You don&rsquo;t have any {kind === "time_adjust" ? (isAdmin ? "attendance rows" : "attendance rows in the last 31 days") : "approved leave/tour rows overlapping the window"} to correct. Log a check-in first, or contact your admin.
                   </p>
                 ) : (
                   <select
@@ -283,13 +283,15 @@ export default function CorrectionRequestModal({
             <label className="iu-label">Which date does this apply to?</label>
             <input
               type="date" value={date}
-              min={windowMinDate()} max={windowMaxDate()}
+              min={windowMinDate(isAdmin)} max={windowMaxDate()}
               onChange={(e) => setDate(e.target.value)}
               className="iu-input" required
               data-testid="correction-date"
             />
             <p className="text-[11px] text-slate-500 mt-1">
-              Corrections can only be requested for the last 31 days.
+              {isAdmin
+                ? "Admins can correct any date, except in months locked for payroll."
+                : "Corrections can only be requested for the last 31 days."}
             </p>
           </div>
           {(kind === "missed_checkin" || kind === "time_adjust") && (

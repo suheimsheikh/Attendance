@@ -658,3 +658,8 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - New shared flag `absent_dispatch_log` (keyed by office-local date). GET/POST `/api/muster/absent-dispatch` (admin only); first sender wins via $setOnInsert.
 - Popup hidden for every admin once anyone taps "Send to WhatsApp"; "Not now"/X hides only for that browser. Open popups on other admins close on focus/5-min recheck with toast "Already sent by X at HH:MM".
 - Tests: backend/tests/test_absent_dispatch_once.py; iteration_93 all pass.
+
+### Oct 2026 — Admin corrections: no look-back limit + exact-second late rule
+- Admins can raise/file corrections for any past date (date picker has no min; candidates endpoint returns up to 400 rows for admins). Members keep the 31-day window. Payroll-locked months still refused.
+- compute_late: compares whole seconds — 09:30:00 on time, 09:30:01 late; late minutes now rounded UP (1s late = 1 min). Existing stored late marks not recalculated.
+- Test: tests/test_early_out_helper.py::test_late_exact_second_boundary.

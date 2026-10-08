@@ -694,12 +694,15 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
                 raise HTTPException(status_code=403,
                                     detail="Only admins may look up other members' correction candidates.")
             target_id = on_behalf_of
-        cutoff = (date.fromisoformat(local_date_str(None)) - timedelta(days=CORRECTION_WINDOW_DAYS - 1)).isoformat()
+        # Admins have no look-back limit (user rule, Oct 2026); payroll locks still apply on submit.
+        is_admin = user.get("role") == "admin"
+        cutoff = "0000-00-00" if is_admin else (
+            date.fromisoformat(local_date_str(None)) - timedelta(days=CORRECTION_WINDOW_DAYS - 1)).isoformat()
         atts = await db.attendance.find(
             {"user_id": target_id, "date": {"$gte": cutoff}},
             {"_id": 0, "id": 1, "date": 1,
              "check_in_at": 1, "check_out_at": 1},
-        ).sort("date", -1).to_list(30)
+        ).sort("date", -1).to_list(400 if is_admin else 30)
         leaves = await db.leaves.find(
             {"user_id": target_id, "status": "approved",
              "end_date": {"$gte": cutoff}},

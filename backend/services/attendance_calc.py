@@ -45,10 +45,11 @@ def compute_late(office: dict, target: dict, ts: datetime, camp: Optional[dict] 
         h, m = (int(x) for x in ws.split(":")[:2])
     except Exception:
         return False, 0
-    local = ts.astimezone(office_tz(office))
-    threshold = local.replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(minutes=grace)
+    # Whole seconds: 09:30:00 is on time, 09:30:01 is late (user rule, Oct 2026).
+    local = ts.astimezone(office_tz(office)).replace(microsecond=0)
+    threshold = local.replace(hour=h, minute=m, second=0) + timedelta(minutes=grace)
     if local > threshold:
-        return True, int((local - threshold).total_seconds() // 60)
+        return True, -(-int((local - threshold).total_seconds()) // 60)
     return False, 0
 
 
