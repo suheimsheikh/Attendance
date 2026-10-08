@@ -593,13 +593,10 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
         # both the auto-apply skip below and the approval gate in
         # `_decide_one`.
         # Two-person rule (Oct 2026, user request) replaces the Super-Admin-only
-        # gate: a non-super admin's attendance correction waits for ANY OTHER
-        # admin (or a Super Admin) — never the admin who filed it.
+        # gate: an admin's attendance correction waits for ANY OTHER admin —
+        # never the admin who filed it. Super Admins too (user rule, Oct 2026).
         is_admin = user.get("role") == "admin"
-        is_super = is_super_admin(user)
-        attendance_needs_super = (
-            is_admin and not is_super and body.entity_type == "attendance"
-        )
+        attendance_needs_super = is_admin and body.entity_type == "attendance"
         doc["needs_super_admin"] = False
         doc["needs_second_admin"] = attendance_needs_super
         doc["filed_by_id"] = user["id"]

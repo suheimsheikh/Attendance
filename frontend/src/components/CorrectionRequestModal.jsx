@@ -188,8 +188,8 @@ export default function CorrectionRequestModal({
         on_behalf_of: isAdmin && onBehalfMember ? onBehalfMember.id : undefined,
       });
       // Backend auto-approves admin-filed corrections (9 Feb 2026). Since
-      // Oct 2026 a non-super admin's ATTENDANCE correction waits for a
-      // second admin (never the filer) — `needs_second_admin`.
+      // Oct 2026 every admin's ATTENDANCE correction (Super Admin too) waits
+      // for a second admin (never the filer) — `needs_second_admin`.
       const autoApproved = !!res?.auto_approved;
       const needsSecond = !!res?.needs_second_admin;
       toast.success(

@@ -177,44 +177,33 @@ def test_chef_cannot_create_role(chef_session, base_url):
 # ---------------------------------------------------------------- 4. admin-onbehalf
 
 
-def test_admin_files_correction_on_behalf_of_member(admin_client, base_url, athlete):
-    """Admin files a missed_checkin correction on behalf of an athlete.
-    9 Feb 2026: admin-filed rows auto-approve — response carries
-    `auto_approved: true` and the persisted row is status='approved'
-    with filed_by_admin fields populated."""
-    # The missed_checkin applier fails with 409 if an attendance row
-    # already exists for that date, so retry across older dates until
-    # we hit a clean slot.
-    cid = None
-    body = None
-    for delta in range(2, 25):
+def _file_missed_checkin(admin_client, base_url, athlete, reason):
+    """Admin files a missed_checkin on behalf of an athlete on a clean date."""
+    for delta in range(2, 30):
         d = (date.today() - timedelta(days=delta)).isoformat()
         r = admin_client.post(f"{base_url}/api/corrections", json={
-            "entity_type": "attendance",
-            "kind": "missed_checkin",
-            "target_date": d,
+            "entity_type": "attendance", "kind": "missed_checkin", "target_date": d,
             "payload": {"check_in_time": "09:00", "check_out_time": "18:00"},
-            "reason": "Admin-on-behalf regression test",
-            "on_behalf_of": athlete["id"],
+            "reason": reason, "on_behalf_of": athlete["id"],
         }, timeout=15)
         if r.status_code == 200:
-            body = r.json()
-            cid = body["id"]
-            break
-    assert cid, "couldn't find a clean date within the 25-day retro window"
-    # Auto-approval contract: admins skip the pending queue.
-    assert body.get("auto_approved") is True
-    assert body.get("applied"), "applied payload should be present"
+            return r.json()
+    raise AssertionError("couldn't find a clean date within the 30-day window")
 
-    # Persisted row must be status='approved' with filed_by fields set.
-    rows = admin_client.get(f"{base_url}/api/admin/corrections?status=approved",
-                            timeout=15).json()
-    row = next((x for x in rows if x["id"] == cid), None)
-    assert row, "correction not returned by /admin/corrections"
-    assert row["status"] == "approved"
+
+def test_admin_files_correction_on_behalf_of_member(admin_client, second_admin_client, base_url, athlete):
+    """Oct 2026: every admin's attendance correction (Super Admin included)
+    waits for a different admin; filed_by_admin fields are populated."""
+    body = _file_missed_checkin(admin_client, base_url, athlete, "Admin-on-behalf regression test")
+    assert body.get("auto_approved") is False and body.get("needs_second_admin") is True
+    rows = admin_client.get(f"{base_url}/api/admin/corrections?status=pending", timeout=15).json()
+    row = next((x for x in rows if x["id"] == body["id"]), None)
+    assert row and row["status"] == "pending"
     assert row["requester_id"] == athlete["id"]
-    assert row["filed_by_admin_id"], "filed_by_admin_id must be set"
-    assert row["filed_by_admin_name"], "filed_by_admin_name must be set"
+    assert row["filed_by_admin_id"] and row["filed_by_admin_name"]
+    r = second_admin_client.post(f"{base_url}/api/admin/corrections/{body['id']}/decide",
+                                 json={"status": "approved"}, timeout=15)
+    assert r.status_code == 200, r.text
 
 
 def test_non_admin_cannot_use_on_behalf_of(chef_session, base_url, athlete):
@@ -234,27 +223,11 @@ def test_non_admin_cannot_use_on_behalf_of(chef_session, base_url, athlete):
 # ---------------------------------------------------------------- 5. admin auto-apply
 
 
-def test_admin_correction_auto_applies_and_writes_audit(
-    admin_client, base_url, athlete,
-):
-    """9 Feb 2026: admin-filed corrections apply instantly — no second
-    admin required. This replaces the older 'filer ≠ approver' rule
-    which was dropped per user request."""
-    # Search backwards until we find a date without existing attendance.
-    cid = None
-    for delta in range(2, 30):
-        d = (date.today() - timedelta(days=delta)).isoformat()
-        r = admin_client.post(f"{base_url}/api/corrections", json={
-            "entity_type": "attendance",
-            "kind": "missed_checkin",
-            "target_date": d,
-            "payload": {"check_in_time": "09:00"},
-            "reason": "Admin auto-apply regression",
-            "on_behalf_of": athlete["id"],
-        }, timeout=15)
-        if r.status_code == 200:
-            body = r.json()
-            assert body.get("auto_approved") is True
-            cid = body["id"]
-            break
-    assert cid, "couldn't find a clean date within the 30-day window"
+def test_super_admin_cannot_approve_own_attendance_correction(admin_client, second_admin_client, base_url, athlete):
+    body = _file_missed_checkin(admin_client, base_url, athlete, "Super admin self-approve block")
+    r = admin_client.post(f"{base_url}/api/admin/corrections/{body['id']}/decide",
+                          json={"status": "approved"}, timeout=15)
+    assert r.status_code == 403, r.text
+    r = second_admin_client.post(f"{base_url}/api/admin/corrections/{body['id']}/decide",
+                                 json={"status": "rejected", "admin_note": "test cleanup"}, timeout=15)
+    assert r.status_code == 200, r.text

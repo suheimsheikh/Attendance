@@ -250,22 +250,30 @@ def test_06_super_admin_can_approve_admin2_filed(super_client, admin2_client, th
     assert mongo.corrections.find_one({"id": cid})["status"] == "approved"
 
 
-def test_07_super_admin_own_correction_autoapplies(super_client, throwaway, mongo):
+def test_07_super_admin_correction_needs_second_admin(super_client, admin2_client, throwaway, mongo):
+    """Oct 2026 rule: a Super Admin's attendance correction also waits for
+    another admin; the Super Admin can't decide it, a different admin can."""
     att = throwaway["att_rows"][3]
     body = {
         "entity_type": "attendance", "kind": "time_adjust",
         "entity_id": att["id"], "target_date": att["date"],
         "on_behalf_of": throwaway["member"]["id"],
         "payload": {"check_in_time": "09:00"},
-        "reason": "Iter88 super auto",
+        "reason": "Iter88 super needs second",
     }
     r = super_client.post(f"{BASE_URL}/api/corrections", json=body, timeout=30)
     assert r.status_code == 200, r.text
     j = r.json()
-    assert j["auto_approved"] is True
+    assert j["auto_approved"] is False and j["needs_second_admin"] is True
     doc = mongo.corrections.find_one({"id": j["id"]}, {"_id": 0})
-    assert doc["status"] == "approved"
-    assert doc.get("needs_second_admin") is False
+    assert doc["status"] == "pending"
+    r = super_client.post(f"{BASE_URL}/api/admin/corrections/{j['id']}/decide",
+                          json={"status": "approved"}, timeout=30)
+    assert r.status_code == 403, r.text
+    r = admin2_client.post(f"{BASE_URL}/api/admin/corrections/{j['id']}/decide",
+                           json={"status": "approved"}, timeout=30)
+    assert r.status_code == 200, r.text
+    assert mongo.corrections.find_one({"id": j["id"]})["status"] == "approved"
 
 
 def test_08_legacy_pending_doc_two_admin_rule(mongo, admin2_client, throwaway_admin, throwaway, me_admin2):

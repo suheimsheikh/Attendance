@@ -504,7 +504,9 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
           onSaved={(res) => {
             const msg = res?.auto_approved
               ? "Correction applied"
-              : "Correction filed — pending admin approval";
+              : res?.needs_second_admin
+                ? "Attendance change submitted — another admin must approve it"
+                : "Correction filed — pending admin approval";
             toast.success(msg);
             setCorrection(null);
             loadReport();

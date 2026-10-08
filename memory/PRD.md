@@ -663,3 +663,7 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Admins can raise/file corrections for any past date (date picker has no min; candidates endpoint returns up to 400 rows for admins). Members keep the 31-day window. Payroll-locked months still refused.
 - compute_late: compares whole seconds — 09:30:00 on time, 09:30:01 late; late minutes now rounded UP (1s late = 1 min). Existing stored late marks not recalculated.
 - Test: tests/test_early_out_helper.py::test_late_exact_second_boundary.
+
+### Oct 2026 — Super Admin attendance corrections need a second admin too
+- create_correction: any admin's ATTENDANCE correction (missed check-in / time adjust) → pending + needs_second_admin; filer (incl. Super Admin) can't decide it; any other admin can. Leave/tour corrections still auto-apply.
+- Grid toast now says "another admin must approve it". Tests updated: test_review_iter88::test_07, test_roles_and_admin_corrections (77 corrections tests pass).
