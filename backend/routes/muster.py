@@ -230,6 +230,35 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         out.sort(key=lambda x: (x["full_name"] or "").lower())
         return {"mode": mode, "date": today, "athletes": out, "count": len(out)}
 
+    def _require_admin(user: dict) -> None:
+        if user.get("role") != "admin" or user.get("is_escort"):
+            raise HTTPException(status_code=403, detail="Admins only")
+
+    async def _dispatch_status(today: str) -> dict:
+        row = await db.absent_dispatch_log.find_one({"date": today}, {"_id": 0})
+        return {"date": today, "sent": bool(row), **(row or {})}
+
+    # Shared "absentees sent to WhatsApp today" flag — first admin wins.
+    @router.get("/muster/absent-dispatch")
+    async def absent_dispatch_status(user: dict = Depends(get_current_user)):
+        _require_admin(user)
+        office = await db.config.find_one({"id": "office"}) or {}
+        return await _dispatch_status(local_date_str(office))
+
+    @router.post("/muster/absent-dispatch")
+    async def absent_dispatch_mark_sent(user: dict = Depends(get_current_user)):
+        _require_admin(user)
+        office = await db.config.find_one({"id": "office"}) or {}
+        today = local_date_str(office)
+        res = await db.absent_dispatch_log.update_one(
+            {"date": today},
+            {"$setOnInsert": {"date": today, "sent_by_id": user.get("id"),
+                              "sent_by_name": user.get("full_name") or user.get("email"),
+                              "sent_at": now_utc().isoformat()}},
+            upsert=True,
+        )
+        return {**await _dispatch_status(today), "first": res.upserted_id is not None}
+
     @router.get("/muster/absent-report")
     async def muster_absent_report(user: dict = Depends(get_current_user)):
         """'Absent without information' list for today — active athletes and

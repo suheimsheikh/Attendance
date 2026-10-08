@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { AlertTriangle, Send, X } from "lucide-react";
 import { api } from "../api";
 import { shareToWhatsApp } from "../utils/shareWhatsApp";
+import { toast } from "sonner";
 import { todayIso, sortByName } from "../utils";
 
 /**
@@ -10,14 +11,20 @@ import { todayIso, sortByName } from "../utils";
  * Since this is a web app (no server push to phones), the first time an
  * admin opens/uses the app at or after 10:00 AM local on a day with
  * detected absentees, we pop a dismissible reminder to dispatch the
- * absentee list to the WhatsApp attendance group. Shown once per day
- * (localStorage-gated). One tap builds the message and opens WhatsApp.
+ * absentee list to the WhatsApp attendance group. Once any admin taps
+ * Send, a shared server flag hides it for every admin that day; "Not now"
+ * only hides it for this browser.
  */
 const DISPATCH_HOUR = 10;
 
 const todayKey = todayIso;
 
 // Same A–Z, one-per-line shape as the WhatsApp message.
+const sentTime = (iso) =>
+  iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+
+const sentNote = (st) => `Already sent by ${st.sent_by_name || "an admin"} at ${sentTime(st.sent_at)}`;
+
 const PreviewList = ({ testid, label, tone, names }) =>
   names?.length ? (
     <div data-testid={testid}>
@@ -41,6 +48,14 @@ export default function AbsentDispatchPrompt() {
     if (dismissedToday()) return;
     if (new Date().getHours() < DISPATCH_HOUR) return;
     try {
+      const status = await api.get("/muster/absent-dispatch");
+      if (status?.sent) {
+        setOpen((wasOpen) => {
+          if (wasOpen) toast.info(sentNote(status));
+          return false;
+        });
+        return;
+      }
       const [absentRep, roster] = await Promise.all([
         api.get("/muster/absent-report").catch(() => null),
         api.get("/muster/daily-roster").catch(() => null),
@@ -70,7 +85,8 @@ export default function AbsentDispatchPrompt() {
     // Re-check periodically so an admin who had the app open before 10 AM
     // still gets the nudge once the hour passes.
     const t = setInterval(evaluate, 5 * 60 * 1000);
-    return () => clearInterval(t);
+    window.addEventListener("focus", evaluate);
+    return () => { clearInterval(t); window.removeEventListener("focus", evaluate); };
   }, [evaluate]);
 
   const dismiss = () => {
@@ -96,9 +112,14 @@ export default function AbsentDispatchPrompt() {
     return lines.join("\n");
   };
 
+  // Share must start synchronously in the tap (mobile share-sheet rule).
   const dispatch = () => {
     shareToWhatsApp({ text: buildMessage() });
     dismiss();
+    api.post("/muster/absent-dispatch").then((res) => {
+      if (res.first) toast.success(`Marked as sent at ${sentTime(res.sent_at)} — other admins won't be prompted today`);
+      else toast.info(sentNote(res));
+    }).catch(() => {});
   };
 
   if (!open || !data) return null;
