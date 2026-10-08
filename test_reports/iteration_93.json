@@ -1,0 +1,22 @@
+{
+  "summary": "Verified new 'first-admin-to-dispatch wins' absentee-WhatsApp prompt end-to-end against https://youth-regatta-app.preview.emergentagent.com. Backend pytest /app/backend/tests/test_absent_dispatch_once.py: 2/2 passing (test_first_admin_wins, test_non_admin_forbidden). Frontend Playwright (Date.getHours stubbed to 12, window.open stubbed to capture wa.me URLs): (S1) Admin A @admin → data-testid='absent-dispatch-prompt' appears; clicking data-testid='absent-dispatch-send' pushes exactly 1 wa.me URL containing '📋 *Attendance — Campus Office* · Thursday 8 October\\n\\n❗ *Absent (no info)* (93):\\n• Admin Two Test\\n• AINUL HAQUE…' (A-Z one-per-line) and shows toast \"Marked as sent at 04:23 AM — other admins won't be prompted today\"; prompt closes. GET /api/muster/absent-dispatch after returns sent=true, sent_by_name='Campus Administrator'. (S2) Admin B (fresh browser context, throwaway admin test_dispatch2@ishowedup-test.example.com) opening /admin does NOT see the popup — confirmed by is_visible=False. (S3) After DB cleanup of dispatch log: Admin A fresh ctx sees popup → clicks data-testid='absent-dispatch-dismiss' (Not now) → popup closes locally; GET /muster/absent-dispatch still returns sent=false (dismiss is localStorage-only); Admin B fresh ctx STILL sees the popup — correct. (S4) B's popup open; Admin A triggers POST server-side (first=true); window.dispatchEvent('focus') on B's page → popup auto-closes AND sonner toast 'Already sent by Campus Administrator at 04:24 AM' appears — focus listener re-eval works. Non-admin 403: covered by pytest test_non_admin_forbidden (coach client gets 403 on GET & POST). All 5 reviewer requirements PASS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_absent_dispatch_once.py",
+    "/app/test_reports/pytest/absent_dispatch.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/routes/muster.py — absent_dispatch_mark_sent uses $setOnInsert so the first admin wins atomically; _dispatch_status reads back the stored row; _require_admin blocks is_escort tokens too. Looks correct.",
+    "frontend/src/components/AbsentDispatchPrompt.jsx — evaluate() checks server status FIRST then falls back to localStorage dismiss; focus listener and 5-min interval re-eval both work; dispatch() calls shareToWhatsApp synchronously (tap context preserved) then POSTs. Note: the component shows the popup regardless of whether there are absents when both roster buckets and allAbsent are empty it short-circuits (line 70). OK."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (2/2 pytest)", "frontend": "100% (4/4 scenarios)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (seeded super admin). Throwaway 2nd admin test_dispatch2@ishowedup-test.example.com created via POST /api/members and DELETED after the run (DELETE /api/members/{id} → 200).",
+  "seed_data_creation": "Created and deleted one throwaway admin (test_dispatch2@ishowedup-test.example.com, id=38ae7ab2-653e-4fb8-bfc8-811dd356d784). Also deleted absent_dispatch_log row for 2026-10-08 at the end so the real feature stays armed for the next admin tomorrow.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "To force the AbsentDispatchPrompt to render regardless of current UTC time, use page.context.add_init_script to monkey-patch Date.prototype.getHours to return a value >=10 BEFORE any script runs, AND stub window.open so the wa.me URL ends up in window.__waUrls (parse ?text=). Token key in localStorage is 'ishowedup_token'. Login API: POST /api/auth/login returns {access_token, user}. For multi-admin tests use playwright browser.new_context() per admin so localStorage is fully isolated. ALWAYS end a run by (a) DELETE /api/members/{throwaway_admin_id} and (b) db.absent_dispatch_log.delete_one({'date': <today_office_tz>}).",
+  "rca of the issue": "N/A — verification pass, no bugs found."
+}

@@ -653,3 +653,8 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - grid.py: hourly never AB (blank); totals payable/absent/lop/late/early_out/dar_missed = 0, ot_minutes = capped hours. /api/leave-balances: hourly balances 0. muster absent-report + daily-roster exclude hourly. Checkout-reminder SMS skips hourly. SelfCheckIn: no early-out/OT prompt for hourly.
 - WhatsApp: Dispatch prompt, Muster absent share, Daily roster share → A–Z one "• Name" per line (utils.sortByName); dispatch modal preview matches.
 - Tests: tests/test_hourly_wager_rules.py (6). Full suite 1078 pass; only fail = iter83 log-clean test tripped by pre-existing "No response returned" middleware noise on client disconnects (44 in log history). iteration_92 frontend 100%.
+
+### Jun 2026 — Absentee WhatsApp prompt: once per day across all admins
+- New shared flag `absent_dispatch_log` (keyed by office-local date). GET/POST `/api/muster/absent-dispatch` (admin only); first sender wins via $setOnInsert.
+- Popup hidden for every admin once anyone taps "Send to WhatsApp"; "Not now"/X hides only for that browser. Open popups on other admins close on focus/5-min recheck with toast "Already sent by X at HH:MM".
+- Tests: backend/tests/test_absent_dispatch_once.py; iteration_93 all pass.
