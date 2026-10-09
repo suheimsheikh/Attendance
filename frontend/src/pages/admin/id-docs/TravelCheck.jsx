@@ -31,7 +31,7 @@ export default function TravelCheck() {
         <Plane className="text-sky-600" size={18} />
         <select value={data.regatta.id} onChange={(e) => setRegattaId(e.target.value)} className="iu-input !w-auto" data-testid="travel-regatta"
           title="Upcoming regattas outside India">
-          {data.regattas.map((r) => <option key={r.id} value={r.id}>{r.name} · {r.country} · {r.start_date}</option>)}
+          {data.regattas.map((r) => <option key={r.id} value={r.id}>{`${r.name} · ${r.country} · ${r.start_date}`}</option>)}
         </select>
         <span className="text-xs text-slate-600" data-testid="travel-needed" title="Most countries need 6 months' validity after you leave">
           Passport must be valid until <b>{data.valid_until_needed}</b>

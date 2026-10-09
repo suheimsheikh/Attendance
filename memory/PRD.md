@@ -726,3 +726,7 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Travel check: GET /api/id-docs/travel-check — upcoming regattas with country ≠ India; all active athlete-like + coach members; issue missing / no_expiry / expiring (expiry < regatta end + 6 months). Tab in ID Documents. "Who is selected" deferred by user.
 - Tests: 18 in test_id_docs_and_tuition.py; iteration_100 all pass.
 - Design note from tester: 3 login popups stack (absent-dispatch overlay blocks clicks) — possible future toast-stack.
+
+### Oct 2026 — Regatta Team Picker
+- regattas.team_ids (any active member). Picker (calendar/TeamPicker.jsx) in RegattaForm + "Edit team" modal on Travel Check tab.
+- travel-check: team picked → only those members (any category); none → all athletes+coaches + "No team picked yet" banner; returns team_picked. Tested iter 101.

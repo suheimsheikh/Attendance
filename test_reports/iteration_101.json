@@ -1,0 +1,29 @@
+{
+  "summary": "iter 101 — verified Regatta Team Picker feature end-to-end. Backend pytest (10/10 passing): POST /api/regattas with no team_ids defaults to [], with team_ids persists the list; PATCH team_ids sets/replaces/clears AND de-dupes (confirmed with [a,b,a,b] -> [a,b]); PATCH with only {notes:...} leaves team_ids intact (regression). GET /api/id-docs/travel-check?regatta_id=TEST-Overseas-Cup: when team_ids=[] returns team_picked=false and ALL active athletes+coaches; when team_ids=[A,B] returns team_picked=true and rows == {A,B}; when team_ids=[staff_id] returns ONLY that staff member (confirms custom/staff categories pass through when team is picked). Frontend Playwright: (1) /admin/id-documents → id-docs-tab-travel: with empty team the amber banner data-testid=travel-no-team is visible and the edit-team button reads ' Edit team'. Clicking travel-edit-team opens travel-team-modal containing team-picker + team-search. Cancel (travel-team-cancel) closes the modal with NO team persisted (banner still present after cancel). Reopening and picking 2 members via team-check-{id} sets team-count='2 selected', clicking travel-team-save shows 'Team saved' toast, banner disappears, button text becomes ' Edit team (2)'. With travel-show-ok checked, the member table lists ONLY the 2 picked member ids (travel-row-{id} count == 2). Removing both chips via team-chip-remove-{id} + save returns banner. (2) /admin/calendar → regatta-edit-{id} opens regatta-form (modal 'Edit regatta') containing 'Selected athletes & coaches' TeamPicker — all testids present. Checking a team-check-{id} shows team-count='1 selected'; rf-save persists; reopening via regatta-edit-{id} shows the member still checked AND rendered as a chip; removing via team-chip-remove and rf-save brings team-count back to '0 selected'. All cleanup done — TEST Overseas Cup regatta reset to team_ids=[] in both pytest teardown and manual curl.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin/id-documents (Travel check)", "issues": ["React hydration warning in console: `<span>` cannot be a child of `<option>` — originates from TravelCheck.jsx line ~34 where the regatta select renders each option label via a wrapper span. Non-blocking but spams the browser console on every render and is a known React hydration anti-pattern. Fix: render plain text inside <option>."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_regatta_team_picker.py", "/app/test_reports/pytest/iter101_regatta_team.xml"],
+  "action_items": [
+    "Cosmetic: TravelCheck.jsx <option> contains <span> child, triggers hydration warning in console. Replace with plain text."
+  ],
+  "critical_code_review_comments": [
+    "backend/regattas.py patch_regatta correctly dedupes team_ids via list(dict.fromkeys(...)) preserving insertion order, and the `payload = {k: v for k, v in body.model_dump().items() if v is not None}` filter means team_ids=[] IS honoured (empty list is not None) — good. Note: this also means callers cannot clear-by-omission, only by passing []; fine for current UI.",
+    "backend/routes/id_docs.py travel_check filters by `r.person != 'self'` so parent passports aren't in the overseas table — matches the problem spec (only the traveller's passport matters). Row filter `if team and r.member_id not in team` then `if not team and cats.get() not in athlete|coach` correctly implements 'if team picked → ONLY those (any category); else → everyone (athletes+coaches)'. Verified live with staff member case.",
+    "frontend/TeamPicker.jsx re-fetches /members on every mount — because the modal unmounts on cancel/save, this is a small avoidable fetch on each open (165 members in payload). Fine for current size but worth memoising at parent level if member list grows.",
+    "frontend/TravelCheck.jsx renders a <span data-ve-dynamic> inside each <option>, which React warns about as an invalid HTML nesting (visible in console). No functional impact but should be cleaned up — the span likely slipped in via a code-formatting / dev-only wrapper."
+  ],
+  "updated_files": ["/app/backend/tests/test_regatta_team_picker.py"],
+  "success_rate": {"backend": "100% (10/10 pytest)", "frontend": "100% (7/7 scenarios: no-team banner, modal open, cancel-no-persist, pick-save-filters-rows, chip-remove-reclears, regatta-form has TeamPicker, selection persists after reopen)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (toggle-admin-login + login-submit-button)",
+  "seed_data_creation": "No new seed. Reused existing TEST Overseas Cup regatta (id 43837a5e-3833-4e69-a4aa-c791a38a6bc5). Pytest creates/deletes two throwaway regattas (TEST iter101 *) in the suite. All test teams cleared back to [] at teardown.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Regatta edit testid pattern is `regatta-edit-{id}` (NOT edit-regatta-*). TeamPicker fetches /members on every modal mount — ALWAYS wait_for_selector('[data-testid^=team-check-]') before counting options or you'll see 0. Travel-check modal and regatta-form modal both contain nested TeamPickers; scope selectors with the parent testid (e.g. '[data-testid=travel-team-modal] [data-testid^=team-check-]') since team-* ids repeat if both are open. The AbsentDispatchPrompt / passport-week-later / leave-report overlays all still appear on fresh login — dismiss them before any admin test. TEST Overseas Cup regatta id is 43837a5e-3833-4e69-a4aa-c791a38a6bc5 (Japan, 2027-03-01..05) — left with team_ids=[].",
+  "rca of the issue": "N/A — no bugs. Only cosmetic hydration warning in TravelCheck.jsx (<span> inside <option>)."
+}
