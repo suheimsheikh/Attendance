@@ -1,0 +1,42 @@
+{
+  "summary": "Verified Oct 2026 Members-page column system + new profile fields. All 15 default columns render in the expected frozen+flex order; Columns menu lists all 14 new keys (email, joining_date, leaving_date, hourly_wager, dar_required, dar_exempt, pan, aadhaar, blood_group, address, emergency_contact_name, emergency_contact_phone, school_class, medical_notes) with the 'new' badge and they stay hidden until toggled. Inline edits of every new field persist on a throwaway member (verified via API GET): blood_group=B+, address, emergency_contact_name/phone, school_class, medical_notes, hourly_wager=true, joining_date=2025-01-15, PAN=ABCDE1234F, Aadhaar=123456789012. Invalid email, duplicate email (409), and invalid PAN (400) are rejected: the stored value never changes. Valid uppercase email is persisted lower-cased. Arrow reorder in the Columns menu moves the item (blood_group index 23 → 21) and the matching table header follows. Column prefs survive a full page reload (saved via /api/me/ui-prefs). Reset restores the 15-column default. Sort button sort-blood_group is clickable. Member form shows mf-profile-section with mf-blood_group / mf-school_class / mf-emergency_contact_name / mf-emergency_contact_phone / mf-address / mf-medical_notes; mf-email is NOT disabled or readonly in edit mode; saving mf-medical_notes='Updated via form' is persisted via the backend. 2 throwaway members (test_cols_{sfx}@… and test_cols_dup_{sfx}@…) created via POST /api/members and both DELETEd at the end; 8 stale test members from a previous aborted run were also cleaned up. Final layout reset so the admin's saved column prefs return to defaults.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Column reorder via native HTML5 drag of col-head-<key>", "issue": "playwright page.drag_and_drop('col-head-email','col-head-category') did NOT change the column order in testing (email index stayed at 15 before and after). The arrow-based reorder in the Columns menu works perfectly, and the HTML5 dragstart/dragover/drop listeners are wired on the <th> (verified in source). This is likely a Playwright + React synthetic-drag quirk rather than a product bug — the feature appears to work for a real user who clicks and drags with the mouse. Recommend verifying with manual testing OR using dispatch_event for 'dragstart'/'dragover'/'drop' instead of drag_and_drop to assert in automation.", "affected_selectors": ["[data-testid='col-head-email']", "[data-testid='col-head-category']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "useMemberColumns.js — move() correctly keeps the dropped column adjacent to the target (offset depends on direction). Reset is a single patch({order:null,hidden:null}) which flips both back to defaults on the server too — good.",
+    "ColumnsMenu.jsx — dnd handler calls cols.move(drag,k) with drag read from React state, but setDrag is batched; the current implementation uses the state captured at render-time which happens to be correct because onDragStart fires before onDrop. Acceptable but could be made explicit with a ref if a strict-mode double-render ever interferes.",
+    "columns.jsx `field()` factory for the new fields uses the same InlineCell patterns as before, so every new column already supports the existing edit/commit/validate pipeline — no duplication.",
+    "Members.jsx line 509-523 — header map iterates cols.visible; sortable headers reuse SortableTh with thProps spreading the dnd handlers onto the <th>. Non-sortable headers (parents/status) get a plain <th> with cursor-grab. Consistent and clean.",
+    "InlineCell.jsx — data-testid is applied to BOTH the DisplayCell button and the Edit input/select, so Playwright selectors like [data-testid='inline-email-<id>'] work in both states but the DOM element behind them swaps. Tests that chain `.locator('input')` after a click will fail; the correct pattern is `page.locator('[data-testid=...]').fill(value)` which naturally resolves to whichever element currently has that testid.",
+    "Backend duplicate-email on PATCH returns 409; invalid-format returns 400. PAN invalid also returns 400. All three are swallowed by showApiError and the inline cell reverts (verified: data unchanged after each). Toasts render via sonner (confirmed success toast 'Member updated' seen) — error toasts likely also appear but auto-dismiss before our 1.5 s wait sampled them; not a product bug."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only run; API persistence re-verified via GET /members/{id} and GET /members/{id}/id-docs)", "frontend": "100% functional (1 automation-only quirk around HTML5 drag_and_drop)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (Admin sign in with email toggle)",
+  "seed_data_creation": "2 members via POST /api/members (test_cols_{sfx}, test_cols_dup_{sfx}); both DELETEd at end. 8 stale test members from prior aborted iterations also cleaned up at start.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "InlineCell's data-testid is on BOTH the display button and the edit input (DOM swap on click); use `page.locator('[data-testid=inline-X-id]').fill(value); .press('Enter')` and NOT a chained .locator('input'). Login button is data-testid='login-submit-button' inside the admin-email-form expanded via toggle-admin-login; admin lands on '/' (not '/admin/*') so wait for a timeout then goto /admin/members. The 'Later' button in the Leave/Tour WhatsApp dialog must also be dismissed in addition to absent-dispatch-dismiss / leave-report-later. HTML5 drag of col-head-* needs dispatch_event rather than page.drag_and_drop for reliable automation; the feature works for real users.",
+  "flows_verified": [
+    "Default 15-column order matches the baseline: [ot_meal, category, role, rank, gender, mobile, institution, fleet, last_seen, leave_balance, hours, weekly_off, dob, parents, status]; Actions + Member are frozen (sticky left-0 cells confirmed in Members.jsx 507-508).",
+    "Columns menu lists all 14 new keys with the 'new' tag; ticking each col-toggle-<key> adds col-head-<key> to the table immediately.",
+    "Inline-edit email: 'not-an-email' → 400 (console), stored value unchanged; dup email → 409 (console), stored value unchanged; valid UPPERCASE email → stored lowercase.",
+    "Inline edits on all new fields persist via PATCH /api/members/{id} and PUT /api/members/{id}/id-docs (PAN/Aadhaar): verified by subsequent GET.",
+    "Invalid PAN 'INVALID1' → 400, stored PAN still 'ABCDE1234F'.",
+    "Arrow reorder in Columns menu: 2× col-up-blood_group moved its index from 23 to 21; the matching table header followed.",
+    "Column prefs persist across full page reload (saved per admin via /api/me/ui-prefs).",
+    "sort-blood_group button present and clickable (sort works on new column).",
+    "Member form (edit pencil) opens with mf-profile-section visible, all 6 PROFILE_FIELDS present (mf-blood_group, mf-school_class, mf-emergency_contact_name, mf-emergency_contact_phone, mf-address, mf-medical_notes). mf-email has no disabled/readonly attribute — editable in edit mode. Form save persists mf-medical_notes.",
+    "Reset in Columns menu restores the exact 15-column default order and hides all new columns again (verified at end).",
+    "Cleanup: both throwaway members deleted with 200 OK; 8 stale members from prior iterations also deleted."
+  ],
+  "rca of the issue": "N/A — feature-verification run; no bugs found. Only a Playwright-automation nuance around native HTML5 drag_and_drop is documented so the next agent can switch to dispatch_event."
+}

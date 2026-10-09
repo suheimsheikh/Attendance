@@ -708,3 +708,9 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - id_ocr: one retry on transient Gemini errors. Middleware logs "client-gone" instead of 0.
 - tests/test_http_middleware.py (3 unit tests). iteration_97: 6/6 pass.
 - Preethi late investigation: prod DB late=true (202 min); her WhatsApp caption lacks " · 🔴 LATE … ·" incl. one separator → no app version ever produced that → most likely edited in WhatsApp before sending. Offered: LATE first in caption, "Late today" list in admin post, server-side record of shared caption. Awaiting user choice.
+
+### Oct 2026 — Members table: more fields, movable/hideable columns, inline edit everywhere
+- New member fields (everyone): blood_group, address, emergency_contact_name/phone, school_class, medical_notes (MemberCreate/MemberUpdate/UserPublic + MemberForm "Profile & emergency" section). Email now editable (form + inline; validated, lower-cased, 409 on duplicate).
+- members/columns.jsx: MEMBER_COLUMNS column defs (15 existing + 14 new, new hidden by default); useMemberColumns.js saves order/hidden per admin in ui-prefs (members_col_order / members_col_hidden); ColumnsMenu.jsx (tick, arrows, drag, reset); header drag via HTML5 DnD (dataTransfer set for Firefox/Safari). PAN/Aadhaar columns inline-save via PUT /members/{id}/id-docs.
+- Tests: tests/test_member_profile_fields.py (2); iteration_98 all pass; header drag verified with real DragEvents.
+- New-field set chosen by agent (user didn't list) — confirm with user.

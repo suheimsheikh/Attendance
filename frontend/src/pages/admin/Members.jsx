@@ -509,9 +509,9 @@ export default function Members() {
                   {cols.visible.map((c) => {
                     const dnd = {
                       draggable: true,
-                      onDragStart: () => { dragCol.current = c.key; },
+                      onDragStart: (e) => { dragCol.current = c.key; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", c.key); },
                       onDragOver: (e) => e.preventDefault(),
-                      onDrop: () => { cols.move(dragCol.current, c.key); dragCol.current = null; },
+                      onDrop: (e) => { e.preventDefault(); cols.move(dragCol.current || e.dataTransfer.getData("text/plain"), c.key); dragCol.current = null; },
                       "data-testid": `col-head-${c.key}`,
                     };
                     return c.sortKey ? (

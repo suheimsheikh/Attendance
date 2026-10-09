@@ -31,8 +31,8 @@ export default function ColumnsMenu({ cols }) {
         {cols.order.map((k, i) => {
           const c = COLUMN_BY_KEY[k];
           return (
-            <div key={k} draggable onDragStart={() => setDrag(k)} onDragOver={(e) => e.preventDefault()}
-              onDrop={() => { cols.move(drag, k); setDrag(null); }} data-testid={`col-item-${k}`}
+            <div key={k} draggable onDragStart={(e) => { setDrag(k); e.dataTransfer.setData("text/plain", k); }} onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); cols.move(drag || e.dataTransfer.getData("text/plain"), k); setDrag(null); }} data-testid={`col-item-${k}`}
               className={`flex items-center gap-1.5 px-1 py-1 rounded hover:bg-slate-50 ${drag === k ? "opacity-40" : ""}`}>
               <GripVertical size={13} className="text-slate-300 cursor-grab" aria-label="Drag to reorder" />
               <label className="flex items-center gap-2 flex-1 text-xs cursor-pointer" title={c.help && c.help.includes(" ") ? c.help : undefined}>

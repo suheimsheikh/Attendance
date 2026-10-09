@@ -16,7 +16,7 @@ export function useMemberColumns() {
   const visible = useMemo(() => order.filter((k) => !hidden.has(k)).map((k) => COLUMN_BY_KEY[k]), [order, hidden]);
 
   const move = useCallback((from, to) => {
-    if (from === to) return;
+    if (!from || !to || from === to) return;
     const next = order.filter((k) => k !== from);
     next.splice(next.indexOf(to) + (order.indexOf(from) < order.indexOf(to) ? 1 : 0), 0, from);
     patch({ members_col_order: next });
