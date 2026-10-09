@@ -62,13 +62,12 @@ export default function Members() {
   // Static option lists for the inline selects. Keep these in sync with the
   // backend `MemberUpdate` Literal types — out-of-list values would be
   // rejected with a 422.
-  const CATEGORY_OPTS = useMemo(() => [
-    { value: "athlete",   label: "Athlete" },
-    { value: "elite",     label: "Elite" },
-    { value: "coach",     label: "Coach" },
-    { value: "staff",     label: "Staff" },
-    { value: "executive", label: "Executive" },
-  ], []);
+  // From the Categories master so custom categories (e.g. Tuition Teacher) are pickable.
+  const [catMaster, setCatMaster] = useState([]);
+  const CATEGORY_OPTS = useMemo(() => (catMaster.length ? catMaster : [
+    { key: "athlete", label: "Athlete" }, { key: "elite", label: "Elite" }, { key: "coach", label: "Coach" },
+    { key: "staff", label: "Staff" }, { key: "executive", label: "Executive" },
+  ]).map((c) => ({ value: c.key, label: c.label })), [catMaster]);
   const ROLE_OPTS = useMemo(() => [
     { value: "member", label: "Member" },
     { value: "admin",  label: "Admin" },
@@ -109,12 +108,14 @@ export default function Members() {
 
   const load = useCallback(async () => {
     try {
-      const [m, p, i, f] = await Promise.all([
+      const [m, p, i, f, c] = await Promise.all([
         api.get("/members?include_archived=true"),
         api.get("/presence"),
         api.get("/institutions"),
         api.get("/fleets"),
+        api.get("/masters/categories").catch(() => []),
       ]);
+      setCatMaster(c || []);
       setMembers(m);
       const map = {};
       (p.members || []).forEach((x) => { map[x.id] = x; });
@@ -322,7 +323,12 @@ export default function Members() {
       return next;
     }));
     try {
-      await api.patch(`/members/${memberId}`, { [field]: normalised });
+      const saved = await api.patch(`/members/${memberId}`, { [field]: normalised });
+      // Category picks resolve server-side into rule bucket + custom category.
+      if (field === "category" && saved) {
+        setMembers((prev) => prev.map((m) => (m.id === memberId
+          ? { ...m, category: saved.category, custom_category: saved.custom_category } : m)));
+      }
     } catch (err) {
       showApiError(err, "Save failed");
       // Re-load to get back to canonical server state.

@@ -58,6 +58,7 @@ export const api = {
   patch: (path, body) => unwrap(client.patch(path, body)),
   put: (path, body) => unwrap(client.put(path, body)),
   del: (path) => unwrap(client.delete(path)),
+  getBlob: (path) => unwrap(client.get(path, { responseType: "blob" })),
 };
 
 // -------------------------------------------------------------------------

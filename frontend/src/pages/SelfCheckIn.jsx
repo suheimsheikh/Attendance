@@ -238,6 +238,8 @@ export default function SelfCheckIn() {
     // summary — who's on leave, on tour, and any absents detected — so
     // the attendance group gets the roster the moment an admin arrives.
     if (src.action === "checkin" && adminDaySummary) text += "\n\n" + adminDaySummary;
+    // Tuition Teachers post to their own group (Oct 2026).
+    if (darStatus?.checkin_group_name) text = `👥 ${darStatus.checkin_group_name}\n` + text;
     if (extra) text += "\n\n" + extra;
     shareToWhatsApp({
       text,
@@ -735,8 +737,13 @@ export default function SelfCheckIn() {
                 className="wa-attention mt-3 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition"
               >
                 <Share2 size={15} />
-                Share to WhatsApp
+                {darStatus?.checkin_group_name ? `Share to ${darStatus.checkin_group_name}` : "Share to WhatsApp"}
               </button>
+              {darStatus?.checkin_group_name && (
+                <p className="text-xs text-emerald-800 mt-2 font-semibold" data-testid="tuition-share-hint">
+                  Post your check-in to the <b>{darStatus.checkin_group_name}</b> WhatsApp group.
+                </p>
+              )}
             </div>
           )}
           {/* Big "Checking you in…" during the auto countdown. */}

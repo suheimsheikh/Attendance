@@ -13,6 +13,21 @@ from fastapi import HTTPException
 DAR_CATEGORIES = {"staff", "coach", "executive"}
 DAR_DEFAULTS = {"enabled": True, "min_chars": 20, "group_name": "YCH DAR"}
 
+# Category keys whose key/label mentions "tuition" (e.g. "Tuition Teacher").
+# Refreshed at startup and on every category write.
+TUITION_KEYS: set = set()
+
+
+async def refresh_tuition_keys(db) -> None:
+    keys = {c["key"] async for c in db.categories.find({}, {"_id": 0, "key": 1, "label": 1})
+            if c.get("key") and "tuition" in f"{c['key']} {c.get('label') or ''}".lower()}
+    TUITION_KEYS.clear()
+    TUITION_KEYS.update(keys)
+
+
+def is_tuition_teacher(user: dict) -> bool:
+    return bool(user) and (user.get("custom_category") or user.get("category")) in TUITION_KEYS
+
 
 def dar_required_for(user: dict) -> bool:
     if not user or user.get("status") == "left" or user.get("dar_exempt"):

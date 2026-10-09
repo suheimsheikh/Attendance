@@ -694,6 +694,7 @@ function WhatsappGroupsPanel() {
       const res = await api.put("/config/whatsapp-groups", {
         staff_group_name: cfg.staff_group_name.trim(),
         athletes_group_name: cfg.athletes_group_name.trim(),
+        tuitions_group_name: (cfg.tuitions_group_name || "").trim(),
       });
       setCfg(res);
       // Invalidate the in-memory cache used by useWhatsappGroups so the
@@ -753,6 +754,18 @@ function WhatsappGroupsPanel() {
             required
           />
           <span className="text-[11px] text-slate-400 mt-0.5 block">Used for muster, escort check-in and meal-muster shares.</span>
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold text-slate-700">Tuitions group name</span>
+          <input
+            type="text"
+            value={cfg.tuitions_group_name || ""}
+            onChange={(e) => setCfg({ ...cfg, tuitions_group_name: e.target.value })}
+            className="iu-input w-full !min-h-[44px] mt-1"
+            placeholder="e.g. YCH Tuitions"
+            data-testid="wa-tuitions-group-input"
+          />
+          <span className="text-[11px] text-slate-400 mt-0.5 block">Tuition Teachers share their check-in and DAR here.</span>
         </label>
         <button
           type="submit"

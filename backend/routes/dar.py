@@ -15,7 +15,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from services.dar import (
-    DAR_CATEGORIES, DAR_USER_FILTER, compute_missed_by_user, dar_required_for, get_dar_policy, validate_dar_text,
+    DAR_CATEGORIES, DAR_USER_FILTER, compute_missed_by_user, dar_required_for, get_dar_policy,
+    is_tuition_teacher, validate_dar_text,
 )
 from services.time_utils import office_today_str, now_utc
 
@@ -89,6 +90,12 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
         required = dar_required_for(user) and policy.get("enabled", True) and today >= policy["effective_from"]
         today_dar = await db.dars.find_one({"user_id": user["id"], "date": today}, {"_id": 0})
         worked = await db.attendance.find_one({"user_id": user["id"], "date": today, "check_in_at": {"$ne": None}}, {"_id": 0, "id": 1})
+        # Tuition Teachers post check-in + DAR to their own group (Oct 2026).
+        tuition = is_tuition_teacher(user)
+        tuitions_group = None
+        if tuition:
+            wa = await db.config.find_one({"id": "whatsapp_groups"}, {"_id": 0}) or {}
+            tuitions_group = (wa.get("tuitions_group_name") or "YCH Tuitions").strip()
         return {
             "required": required,
             "done_today": today_dar is not None,
@@ -96,7 +103,9 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
             "today_dar": _pack(today_dar) if today_dar else None,
             "worked_today": worked is not None,
             "min_chars": policy["min_chars"],
-            "group_name": policy["group_name"],
+            "group_name": tuitions_group if tuition else policy["group_name"],
+            "is_tuition_teacher": tuition,
+            "checkin_group_name": tuitions_group if tuition else None,
             "effective_from": policy["effective_from"],
         }
 

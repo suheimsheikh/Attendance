@@ -198,17 +198,17 @@ export default React.memo(function MemberRow({
       <td className="iu-table-td">
         <InlineCell
           kind="select"
-          value={m.category || "athlete"}
+          value={m.custom_category || m.category || "athlete"}
           options={CATEGORY_OPTS}
           testId={`inline-category-${m.id}`}
           onSave={(v) => onPatchField(m.id, "category", v)}
-          renderDisplay={(v) => {
-            const cat = v || "athlete";
-            const meta = BUCKET_BY_KEY[cat] || BUCKET_BY_KEY.athlete;
+          renderDisplay={() => {
+            const meta = BUCKET_BY_KEY[m.category || "athlete"] || BUCKET_BY_KEY.athlete;
+            const custom = m.custom_category && CATEGORY_OPTS.find((o) => o.value === m.custom_category);
             return (
               <span className={`inline-flex items-center gap-1.5 px-2 h-6 rounded-full text-[11px] font-semibold border ${meta.inactiveBg} ${meta.inactiveText} ${meta.inactiveBorder}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${meta.dotBg}`} />
-                {meta.label.replace(/s$/, "")}
+                {custom ? custom.label : (m.custom_category || meta.label.replace(/s$/, ""))}
               </span>
             );
           }}

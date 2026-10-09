@@ -133,6 +133,7 @@ def make_router(db, require_admin, get_current_user, send_checkout_reminders, Of
     _WHATSAPP_DEFAULTS = {
         "staff_group_name":    "YCH Attendance",
         "athletes_group_name": "YCH Parents & Guardians Group",
+        "tuitions_group_name": "YCH Tuitions",
     }
 
     @router.get("/config/whatsapp-groups")
@@ -141,6 +142,7 @@ def make_router(db, require_admin, get_current_user, send_checkout_reminders, Of
         return {
             "staff_group_name":    (doc.get("staff_group_name") or _WHATSAPP_DEFAULTS["staff_group_name"]).strip(),
             "athletes_group_name": (doc.get("athletes_group_name") or _WHATSAPP_DEFAULTS["athletes_group_name"]).strip(),
+            "tuitions_group_name": (doc.get("tuitions_group_name") or _WHATSAPP_DEFAULTS["tuitions_group_name"]).strip(),
         }
 
     @router.put("/config/whatsapp-groups")
@@ -149,7 +151,7 @@ def make_router(db, require_admin, get_current_user, send_checkout_reminders, Of
         # names at 25 chars but we allow a little more so admins can
         # store descriptive labels like "YCH Camp Aug'26 Athletes".
         clean = {}
-        for k in ("staff_group_name", "athletes_group_name"):
+        for k in ("staff_group_name", "athletes_group_name", "tuitions_group_name"):
             v = str(body.get(k) or "").strip()[:60]
             if v:
                 clean[k] = v

@@ -23,6 +23,9 @@ class UserPublic(BaseModel):
     full_name: str
     role: Optional[str] = None
     category: Optional[str] = None
+    # Custom Masters category shown to admins (e.g. "tuition_teacher");
+    # `category` then holds the rule bucket (staff / athlete).
+    custom_category: Optional[str] = None
     rank: Optional[str] = None
     mobile: Optional[str] = None
     work_start: Optional[str] = None

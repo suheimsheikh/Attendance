@@ -32,11 +32,13 @@ import logging
 
 logger = logging.getLogger("server")
 
+SEEDED_CATEGORIES = {"athlete", "elite", "staff", "coach", "executive"}
+
 class MemberCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=4)
     full_name: str
-    category: Literal["athlete", "elite", "staff", "coach", "executive"] = "athlete"
+    category: str = "athlete"
     rank: Optional[str] = None
     mobile: Optional[str] = None
     work_start: Optional[str] = None
@@ -91,7 +93,7 @@ class MemberCreate(BaseModel):
 
 class MemberUpdate(BaseModel):
     full_name: Optional[str] = None
-    category: Optional[Literal["athlete", "elite", "staff", "coach", "executive"]] = None
+    category: Optional[str] = None
     rank: Optional[str] = None
     mobile: Optional[str] = None
     work_start: Optional[str] = None
@@ -140,6 +142,18 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
                 _payroll_bucket, _iso_week_key) -> APIRouter:
     router = APIRouter(prefix="/api")
 
+    async def _resolve_category(key: str) -> dict:
+        """Seeded keys map to themselves. A custom Masters category is kept in
+        `custom_category` and the member follows staff rules (athlete rules if
+        the category is athlete-like) — user rule, Oct 2026."""
+        key = (key or "").strip().lower()
+        if key in SEEDED_CATEGORIES:
+            return {"category": key, "custom_category": None}
+        cat = await db.categories.find_one({"key": key}, {"_id": 0, "is_athlete_like": 1})
+        if not cat:
+            raise HTTPException(status_code=400, detail=f"Unknown category '{key}' — add it in Masters → Categories first")
+        return {"category": "athlete" if cat.get("is_athlete_like") else "staff", "custom_category": key}
+
     # ----------------------------------------------------------------------------
     # Member management (admin)
     # ----------------------------------------------------------------------------
@@ -179,6 +193,7 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
             "hashed_password": hash_password(body.password),
             "created_at": now_utc().isoformat(),
         }
+        doc.update(await _resolve_category(body.category))
         await db.users.insert_one(doc)
         return UserPublic(**{k: doc.get(k) for k in UserPublic.model_fields})
 
@@ -447,6 +462,8 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
         # accidental UI bug can't blast e.g. everyone's password to the same
         # value via this endpoint.
         update = {k: v for k, v in submitted.items() if k in BULK_MEMBER_ALLOWED_FIELDS}
+        if update.get("category"):
+            update.update(await _resolve_category(update["category"]))
         if not update:
             raise HTTPException(status_code=400, detail="No valid fields to update — pick one of: " + ", ".join(sorted(BULK_MEMBER_ALLOWED_FIELDS)))
         # Self-protection: prevent the signed-in admin from accidentally
@@ -487,6 +504,11 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
         # SET values but never CLEAR them, because Pydantic defaults all
         # unspecified Optional fields to None and we used to filter all Nones.
         update = {k: v for k, v in body.model_dump(exclude_unset=True).items() if k != "password"}
+        if "category" in update:
+            if update["category"]:
+                update.update(await _resolve_category(update["category"]))
+            else:
+                update.pop("category")
         if body.password:
             update["hashed_password"] = hash_password(body.password)
         # Keep the denormalised phone key in sync when mobile changes.

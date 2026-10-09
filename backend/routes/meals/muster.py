@@ -35,6 +35,7 @@ from routes.meals.common import (  # noqa: F401
     timedelta,
     uuid,
 )
+from services.dar import refresh_tuition_keys
 
 
 def register(router, *, db, get_current_user, require_admin, require_chef_or_admin):
@@ -53,11 +54,14 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
     ):
         q = {} if include_inactive else {"active": True}
         rows = await db.categories.find(q, {"_id": 0}) \
-            .sort("sort_order", 1).to_list(50)
+            .sort("sort_order", 1).to_list(500)
         # Hydrate member counts so the admin UI can show "42 members" per
         # row and disable delete on non-empty categories.
         pipeline = [{"$group": {"_id": "$category", "n": {"$sum": 1}}}]
         counts = {c["_id"]: c["n"] async for c in db.users.aggregate(pipeline) if c["_id"]}
+        async for c in db.users.aggregate([{"$match": {"custom_category": {"$nin": [None, ""]}}},
+                                           {"$group": {"_id": "$custom_category", "n": {"$sum": 1}}}]):
+            counts[c["_id"]] = c["n"]
         for r in rows:
             r["member_count"] = counts.get(r["key"], 0)
             r["is_seeded"] = r["key"] in SEEDED_CATEGORY_KEYS
@@ -88,6 +92,7 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
         }
         await db.categories.insert_one(doc)
         doc.pop("_id", None)
+        await refresh_tuition_keys(db)
         return doc
 
     @router.patch("/masters/categories/{cat_id}")
@@ -121,6 +126,8 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
                 cascade = await db.users.update_many(
                     {"category": row["key"]}, {"$set": {"category": new_key}}
                 )
+                await db.users.update_many(
+                    {"custom_category": row["key"]}, {"$set": {"custom_category": new_key}})
                 update["key"] = new_key
                 # Stash cascade info on the returned row for the UI toast.
                 row["_cascaded_members"] = int(cascade.modified_count)
@@ -149,7 +156,13 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
         if not update:
             return row
         await db.categories.update_one({"id": cat_id}, {"$set": update})
+        if "is_athlete_like" in update and row["key"] not in SEEDED_CATEGORY_KEYS:
+            # Members in a custom category follow athlete or staff rules accordingly.
+            await db.users.update_many(
+                {"custom_category": update.get("key", row["key"])},
+                {"$set": {"category": "athlete" if update["is_athlete_like"] else "staff"}})
         row.update(update)
+        await refresh_tuition_keys(db)
         return row
 
     @router.delete("/masters/categories/{cat_id}")
@@ -160,13 +173,14 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
         if row["key"] in SEEDED_CATEGORY_KEYS:
             raise HTTPException(status_code=409,
                                 detail="Seeded categories are protected — rename instead.")
-        in_use = await db.users.count_documents({"category": row["key"]})
+        in_use = await db.users.count_documents({"$or": [{"category": row["key"]}, {"custom_category": row["key"]}]})
         if in_use > 0:
             raise HTTPException(
                 status_code=409,
                 detail=f"{in_use} member(s) still use this category — reassign first.",
             )
         await db.categories.delete_one({"id": cat_id})
+        await refresh_tuition_keys(db)
         return {"ok": True}
 
     # ------------------------------------------------------------------

@@ -797,6 +797,8 @@ async def _lifespan(_app):
     Shutdown: cancel loops + close Mongo client."""
     import asyncio
     await _seed_database()
+    from services.dar import refresh_tuition_keys
+    await refresh_tuition_keys(db)
     try:
         from services.attendance_helpers import clear_hourly_timing_marks
         n = await clear_hourly_timing_marks(db, await db.config.find_one({"id": "office"}))
@@ -2915,6 +2917,8 @@ app.include_router(_audit_router(db, require_admin))
 from routes.checkin_approvals import make_router as _checkin_approvals_router  # noqa: E402
 app.include_router(_checkin_approvals_router(db, require_admin, write_audit))
 
+from routes.id_docs import make_router as _id_docs_router  # noqa: E402
+app.include_router(_id_docs_router(db, require_admin))
 from routes.dar import make_router as _dar_router  # noqa: E402
 app.include_router(_dar_router(db, get_current_user, require_admin, valid_grid_key, write_audit))
 
@@ -3167,7 +3171,8 @@ async def _add_stable_cache_headers(request, call_next):  # noqa: ANN001
         if any(path == p or path.startswith(p + "/") for p in _CACHEABLE_GET_PREFIXES):
             # Don't clobber if a route already set its own policy.
             if "cache-control" not in {k.lower() for k in response.headers.keys()}:
-                response.headers["Cache-Control"] = "private, max-age=120"
+                # no-cache: a stale browser copy hid newly created masters (Oct 2026 bug).
+                response.headers["Cache-Control"] = "private, no-cache"
     return response
 
 # Trusted embed origins (PayCraft now, ychyderabad domain later) — read

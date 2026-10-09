@@ -9,6 +9,9 @@ import Avatar from "../../components/Avatar";
 import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
 import RecalcTimingsDialog from "../../components/RecalcTimingsDialog";
+import IdDocsSection from "./members/IdDocsSection";
+
+const SEEDED_CATS = ["athlete", "elite", "staff", "coach", "executive"];
 
 export default function MemberForm({ initial, onClose, onSaved }) {
   const isEdit = !!initial;
@@ -19,7 +22,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     password: "",
     mobile: initial?.mobile || "",
     rank: initial?.rank || "",
-    category: initial?.category || "athlete",
+    category: initial?.custom_category || initial?.category || "athlete",
     role: initial?.role || "member",
     work_start: initial?.work_start || "",
     work_end: initial?.work_end || "",
@@ -84,6 +87,10 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     { key: "member", label: "Member" },
   ]);
   const formErr = useFormError();
+  // Custom categories follow staff rules (athlete rules if athlete-like).
+  const ruleCat = SEEDED_CATS.includes(form.category)
+    ? form.category
+    : (categories.find((c) => c.key === form.category)?.is_athlete_like ? "athlete" : "staff");
 
   useEffect(() => {
     api.get("/institutions").then((rows) => setInstitutions((rows || []).filter((r) => r.active))).catch(() => {});
@@ -369,7 +376,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               </span>
             </label>
           </div>
-          {["staff", "coach", "executive"].includes(form.category) && (
+          {["staff", "coach", "executive"].includes(ruleCat) && (
             <div>
               <label className="iu-label">Hourly wager</label>
               <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
@@ -389,7 +396,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               </label>
             </div>
           )}
-          {["elite", "athlete"].includes(form.category) && (
+          {["elite", "athlete"].includes(ruleCat) && (
             <div>
               <label className="iu-label">Daily Activity Report</label>
               <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
@@ -407,7 +414,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               </label>
             </div>
           )}
-          {["staff", "coach", "executive"].includes(form.category) && (
+          {["staff", "coach", "executive"].includes(ruleCat) && (
             <div>
               <label className="iu-label">Daily Activity Report</label>
               <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
@@ -480,6 +487,11 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               </div>
             </div>
           </div>
+          {isEdit ? <IdDocsSection memberId={initial.id} /> : (
+            <p className="text-[11px] text-slate-500 pt-3 mt-3 border-t border-slate-100" data-testid="id-docs-after-create">
+              PAN &amp; Aadhaar details and scans can be added after the member is created (open Edit).
+            </p>
+          )}
           <FormErrorBanner
             error={formErr.error}
             requestId={formErr.requestId}
