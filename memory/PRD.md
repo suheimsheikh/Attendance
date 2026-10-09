@@ -719,3 +719,10 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Passport = 3rd card (member + parents for athletes): number (6–9 alnum) + expiry + one scan; Gemini reads number, surname, given names, expiry. Name rule: EXACT words + order ("Given Surname"), case/spacing ignored (id_ocr.name_exact) — red warning shows both names. Report: Passport no./scan/Expiry with expired / ≤6-month "soon" flags + filters; bulk upload + Members "Passport" column supported.
 - name_score now tolerates OCR-dropped spaces (bulk matching).
 - Tests: 15 in test_id_docs_and_tuition.py; iteration_99 all pass.
+
+### Oct 2026 — Passport name fix, weekly expiry list, travel check
+- POST /api/members/{mid}/id-docs/{person}/passport/use-name → Title-Case name into full_name / {person}_name (audited); buttons in member form DetectedBar (updates form field via onNameChanged) and bulk rows.
+- Weekly list: GET/POST /api/id-docs/passport-expiry-week (passport_reminder_log, unique week=Monday ISO; first admin wins). components/PassportExpiryPrompt.jsx in Layout: shows from Monday until posted that week; "Later" = session-only hide.
+- Travel check: GET /api/id-docs/travel-check — upcoming regattas with country ≠ India; all active athlete-like + coach members; issue missing / no_expiry / expiring (expiry < regatta end + 6 months). Tab in ID Documents. "Who is selected" deferred by user.
+- Tests: 18 in test_id_docs_and_tuition.py; iteration_100 all pass.
+- Design note from tester: 3 login popups stack (absent-dispatch overlay blocks clicks) — possible future toast-stack.
