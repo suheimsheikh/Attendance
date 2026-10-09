@@ -76,14 +76,13 @@ class AppHttpMiddleware:
             await send(message)
 
         scheme, _, cred = headers.get("authorization", "").partition(" ")
-        if scheme.lower() == "bearer" and cred.startswith("svc_") and method not in _WRITE_EXEMPT:
-            await JSONResponse(status_code=403, content={"detail": "This API token is read-only"})(
-                scope, receive, send_wrapper)
-            return
+        read_only_block = scheme.lower() == "bearer" and cred.startswith("svc_") and method not in _WRITE_EXEMPT
+        app = JSONResponse(status_code=403, content={"detail": "This API token is read-only"}) \
+            if read_only_block else self.app
 
         started = time.perf_counter()
         try:
-            await self.app(scope, receive, send_wrapper)
+            await app(scope, receive, send_wrapper)
         except Exception:
             _req_logger.exception("rid=%s %s %s -> EXC %dms", rid, method, path,
                                   int((time.perf_counter() - started) * 1000))

@@ -85,3 +85,39 @@ def test_tuition_teacher_dar_required_and_group(admin_client, base_url, make_mem
 def test_whatsapp_groups_has_tuitions(admin_client, base_url):
     g = admin_client.get(f"{base_url}/api/config/whatsapp-groups", timeout=30).json()
     assert g.get("tuitions_group_name")
+
+
+def test_audit_log_never_stores_raw_id_numbers(admin_client, base_url, make_member, mongo_db):
+    if mongo_db is None:
+        pytest.skip("mongo_db fixture unavailable")
+    m = make_member("staff")
+    r = admin_client.put(f"{base_url}/api/members/{m['id']}/id-docs",
+                         json={"people": {"self": {"pan": "ZZZZZ9999Z", "aadhaar": "987654321098"}}}, timeout=30)
+    assert r.status_code == 200
+    import json
+    rows = list(mongo_db.audit_log.find({"entity_id": m["id"], "action": "id_numbers_updated"}, {"_id": 0}))
+    assert rows, "change must still be audited"
+    blob = json.dumps(rows, default=str, ensure_ascii=False)
+    assert "ZZZZZ9999Z" not in blob and "987654321098" not in blob
+    assert "••••1098" in blob
+
+
+def test_unique_indexes_on_new_collections(mongo_db):
+    if mongo_db is None:
+        pytest.skip("mongo_db fixture unavailable")
+    for coll, key in (("absent_dispatch_log", "date"), ("member_id_docs", "user_id")):
+        idx = mongo_db[coll].index_information()
+        assert any(i.get("unique") and i["key"][0][0] == key for i in idx.values()), coll
+
+
+def test_scan_filename_sanitised(admin_client, base_url, make_member):
+    import requests
+    m = make_member("staff")
+    base = f"{base_url}/api/members/{m['id']}/id-docs/self/pan"
+    hdrs = {"Authorization": admin_client.headers["Authorization"]}
+    r = requests.post(base, headers=hdrs, files={"file": ('pan"\r\nx.pdf', PDF, "application/pdf")}, timeout=60)
+    assert r.status_code == 200, r.text
+    name = r.json()["people"]["self"]["pan_file"]["name"]
+    assert '"' not in name and "\r" not in name and "\n" not in name
+    d = requests.get(base + "/file", headers=hdrs, timeout=60)
+    assert d.status_code == 200 and d.content == PDF

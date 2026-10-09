@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from services.dar import (
     DAR_CATEGORIES, DAR_USER_FILTER, compute_missed_by_user, dar_required_for, get_dar_policy,
-    is_tuition_teacher, validate_dar_text,
+    is_tuition_teacher, refresh_tuition_keys, validate_dar_text,
 )
 from services.time_utils import office_today_str, now_utc
 
@@ -91,6 +91,7 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
         today_dar = await db.dars.find_one({"user_id": user["id"], "date": today}, {"_id": 0})
         worked = await db.attendance.find_one({"user_id": user["id"], "date": today, "check_in_at": {"$ne": None}}, {"_id": 0, "id": 1})
         # Tuition Teachers post check-in + DAR to their own group (Oct 2026).
+        await refresh_tuition_keys(db)  # cheap; keeps every worker current
         tuition = is_tuition_teacher(user)
         tuitions_group = None
         if tuition:

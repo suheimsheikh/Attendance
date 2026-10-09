@@ -60,8 +60,11 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
         pipeline = [{"$group": {"_id": "$category", "n": {"$sum": 1}}}]
         counts = {c["_id"]: c["n"] async for c in db.users.aggregate(pipeline) if c["_id"]}
         async for c in db.users.aggregate([{"$match": {"custom_category": {"$nin": [None, ""]}}},
-                                           {"$group": {"_id": "$custom_category", "n": {"$sum": 1}}}]):
-            counts[c["_id"]] = c["n"]
+                                           {"$group": {"_id": {"c": "$custom_category", "b": "$category"},
+                                                       "n": {"$sum": 1}}}]):
+            counts[c["_id"]["c"]] = counts.get(c["_id"]["c"], 0) + c["n"]
+            if c["_id"]["b"] in counts:  # don't double-count under staff/athlete
+                counts[c["_id"]["b"]] -= c["n"]
         for r in rows:
             r["member_count"] = counts.get(r["key"], 0)
             r["is_seeded"] = r["key"] in SEEDED_CATEGORY_KEYS
@@ -126,11 +129,11 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
                 cascade = await db.users.update_many(
                     {"category": row["key"]}, {"$set": {"category": new_key}}
                 )
-                await db.users.update_many(
+                custom = await db.users.update_many(
                     {"custom_category": row["key"]}, {"$set": {"custom_category": new_key}})
                 update["key"] = new_key
                 # Stash cascade info on the returned row for the UI toast.
-                row["_cascaded_members"] = int(cascade.modified_count)
+                row["_cascaded_members"] = int(cascade.modified_count) + int(custom.modified_count)
         if body.label is not None:
             update["label"] = body.label.strip()
         if body.color is not None:

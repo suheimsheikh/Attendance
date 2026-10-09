@@ -515,6 +515,11 @@ async def _seed_database() -> None:
     await db.audit_log.create_index([("entity_type", 1), ("at", -1)])
     await db.feature_usage.create_index("feature_key", unique=True)
     await db.daily_leave_report_log.create_index("date", unique=True)
+    for coll, key in (("absent_dispatch_log", "date"), ("member_id_docs", "user_id")):
+        try:
+            await db[coll].create_index(key, unique=True)
+        except Exception:
+            logger.exception("unique index %s.%s not created (duplicates?)", coll, key)
     await db.cron_runs.create_index([("job", 1), ("run_id", 1)], unique=True)
     await db.sms_log.create_index([("at", -1)])
     await db.sms_log.create_index("to", sparse=True)

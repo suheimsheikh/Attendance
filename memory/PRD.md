@@ -682,3 +682,8 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Frontend: removed unused vars/imports (MyLeaves noticeDays dead state, MealCompareTab X, MealEntryTab formatDate, MealsReport BarChart3, charts colorFn, MemberRow rowIdx, useUiPrefs e, stale eslint-disable). Hook-dependency warnings intentionally left (behaviour risk).
 - Full backend suite: 1086 passed, 10 skipped, 0 failed (needs env: API_BASE_URL, TEST_ADMIN_EMAIL/PASSWORD + backend .env sourced).
 - Open: user asked to "switch off the tips" — unclear which (hover titles vs hint boxes); user said skip for now.
+
+### Oct 2026 — Read-only code review (ponytail-style) + fixes
+- Review verdict: READY WITH FIXES (no critical/high). Fixed: PAN/Aadhaar no longer written raw to audit_log (masked ••••last4); unique indexes absent_dispatch_log.date + member_id_docs.user_id (startup, tolerant); upload read bounded to 10 MB+1; scan filename sanitised (Content-Disposition); blob URL revoked; category member_count no longer double-counts custom members under staff/athlete; rename toast counts custom cascade; TUITION_KEYS refreshed on each /dar/status (multi-worker safe); svc_ 403s now access-logged.
+- Preview-only: deleted 6 test audit rows that held raw IDs. Production never had the feature yet.
+- Tests added: audit masking, unique indexes, filename sanitising (tests/test_id_docs_and_tuition.py, 7 pass).

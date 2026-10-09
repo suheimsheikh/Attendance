@@ -31,7 +31,9 @@ function IdCardField({ memberId, person, card, value, file, onChange, onDoc }) {
     const tab = window.open("", "_blank");
     try {
       const blob = await api.getBlob(`${base}/file`);
-      tab.location.href = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(blob);
+      tab.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) { tab?.close(); showApiError(err, "Could not open scan"); }
   };
 

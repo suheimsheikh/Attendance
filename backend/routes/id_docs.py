@@ -48,6 +48,16 @@ def _clean_aadhaar(v: Optional[str]) -> str:
     return v
 
 
+def _masked(people: dict) -> dict:
+    """Audit-safe view: last 4 digits only — raw IDs never enter audit_log."""
+    return {p: {k: (f"••••{v[-4:]}" if v else "") for k, v in (d or {}).items() if k in CARDS}
+            for p, d in (people or {}).items()}
+
+
+def _safe_name(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._ -]", "_", name)[:120] or "scan"
+
+
 def make_router(db, require_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
 
@@ -84,7 +94,8 @@ def make_router(db, require_admin) -> APIRouter:
         after = await _doc(mid)
         await write_audit(db, actor=admin, action="id_numbers_updated", entity_type="member",
                           entity_id=mid, entity_name=m.get("full_name"),
-                          before={"people": before.get("people")}, after={"people": after.get("people")})
+                          before={"people": _masked(before.get("people"))},
+                          after={"people": _masked(after.get("people"))})
         return {**after, "allowed_people": people}
 
     @router.post("/members/{mid}/id-docs/{person}/{card}")
@@ -95,12 +106,12 @@ def make_router(db, require_admin) -> APIRouter:
         ctype = (file.content_type or "").lower()
         if ctype not in ALLOWED_TYPES:
             raise HTTPException(status_code=400, detail="Upload a PDF, JPG, PNG or WEBP file")
-        data = await file.read()
+        data = await file.read(MAX_BYTES + 1)
         if not data or len(data) > MAX_BYTES:
             raise HTTPException(status_code=400, detail="File must be between 1 byte and 10 MB")
         path = f"{APP_PREFIX}/id-docs/{mid}/{person}_{card}_{uuid.uuid4().hex}.{ALLOWED_TYPES[ctype]}"
         await asyncio.to_thread(put_object, path, data, ctype)
-        meta = {"path": path, "name": file.filename or path.rsplit("/", 1)[-1], "content_type": ctype,
+        meta = {"path": path, "name": _safe_name(file.filename or path.rsplit("/", 1)[-1]), "content_type": ctype,
                 "size": len(data), "uploaded_at": now_utc().isoformat(),
                 "uploaded_by": admin.get("full_name") or admin.get("email")}
         await db.member_id_docs.update_one(
@@ -118,7 +129,7 @@ def make_router(db, require_admin) -> APIRouter:
             raise HTTPException(status_code=404, detail="No scan uploaded")
         data, _ = await asyncio.to_thread(get_object, meta["path"])
         return Response(content=data, media_type=meta["content_type"],
-                        headers={"Content-Disposition": f'inline; filename="{meta["name"]}"',
+                        headers={"Content-Disposition": f'inline; filename="{_safe_name(meta["name"])}"',
                                  "Cache-Control": "no-store"})
 
     @router.delete("/members/{mid}/id-docs/{person}/{card}/file")
