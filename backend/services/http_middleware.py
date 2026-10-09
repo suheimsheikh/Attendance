@@ -88,5 +88,5 @@ class AppHttpMiddleware:
                                   int((time.perf_counter() - started) * 1000))
             raise
         if path != "/api/health":
-            _req_logger.info("rid=%s %s %s -> %d %dms", rid, method, path, status["code"],
+            _req_logger.info("rid=%s %s %s -> %s %dms", rid, method, path, status["code"] or "client-gone",
                              int((time.perf_counter() - started) * 1000))

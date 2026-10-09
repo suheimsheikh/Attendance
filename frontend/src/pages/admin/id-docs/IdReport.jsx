@@ -18,7 +18,8 @@ const Cell = ({ ok, text, tid }) => (ok
   : <span className="inline-flex items-center gap-1 text-rose-600 text-xs font-semibold" data-testid={tid} title="Missing — chase this"><X size={13} />Missing</span>);
 
 function downloadCsv(rows) {
-  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  // Leading = + - @ would run as a spreadsheet formula — prefix with '.
+  const esc = (v) => `"${String(v ?? "").replace(/^([=+\-@\t])/, "'$1").replace(/"/g, '""')}"`;
   const body = [COLS.join(","), ...rows.map((r) => COLS.map((c) => esc(typeof r[c] === "boolean" ? (r[c] ? "yes" : "MISSING") : r[c])).join(","))];
   const url = URL.createObjectURL(new Blob([body.join("\n")], { type: "text/csv" }));
   const a = Object.assign(document.createElement("a"), { href: url, download: "missing-id-documents.csv" });

@@ -54,22 +54,34 @@ def name_matches(card_name: Optional[str], expected: Optional[str]) -> Optional[
     return None if not a or not b else bool(a & b)
 
 
+async def _ask(path: str, content_type: str, card: str) -> str:
+    chat = LlmChat(api_key=os.environ["EMERGENT_LLM_KEY"], session_id=f"idocr-{uuid.uuid4().hex}",
+                   system_message="You read Indian ID cards and reply with JSON only.").with_model(*MODEL)
+    text = ""
+    msg = UserMessage(text=_PROMPT[card], file_contents=[FileContentWithMimeType(file_path=path, mime_type=content_type)])
+    async for ev in chat.stream_message(msg):
+        if isinstance(ev, TextDelta):
+            text += ev.content
+        elif isinstance(ev, StreamDone):
+            break
+    return text
+
+
 async def read_id_card(data: bytes, content_type: str, card: str) -> Optional[dict]:
     path = None
     try:
         with tempfile.NamedTemporaryFile(suffix=_EXT.get(content_type, ""), delete=False) as f:
             f.write(data)
             path = f.name
-        chat = LlmChat(api_key=os.environ["EMERGENT_LLM_KEY"], session_id=f"idocr-{uuid.uuid4().hex}",
-                       system_message="You read Indian ID cards and reply with JSON only.").with_model(*MODEL)
-        text = ""
-        msg = UserMessage(text=_PROMPT[card], file_contents=[FileContentWithMimeType(file_path=path, mime_type=content_type)])
-        async for ev in chat.stream_message(msg):
-            if isinstance(ev, TextDelta):
-                text += ev.content
-            elif isinstance(ev, StreamDone):
+        out = {}
+        for attempt in (1, 2):  # one retry: upstream LLM errors are usually transient
+            try:
+                out = _parse(await _ask(path, content_type, card))
                 break
-        out = _parse(text)
+            except Exception:
+                if attempt == 2:
+                    raise
+                logger.warning("ID OCR attempt 1 failed (%s) — retrying", card)
         kind = card if card != "auto" else (out.get("type") if out.get("type") in ("pan", "aadhaar") else None)
         return {"type": kind, "number": _clean_number(kind, out.get("number")) if kind else None,
                 "name": (out.get("name") or "").strip() or None}

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, showApiError } from "../../../api";
 
 const MAX_FILES = 30;
+let seq = 0;
 const PERSON_LABEL = { self: "Member", father: "Father", mother: "Mother", guardian: "Guardian" };
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
 
@@ -26,6 +27,7 @@ function RowEditor({ row, slots, onChange, onRemove }) {
       <td className="p-2 text-xs">
         {row.status === "reading" ? <span className="inline-flex items-center gap-1 text-slate-500"><Loader2 size={12} className="animate-spin" />Reading…</span>
           : <span title="Name the AI read on the card">{row.cardName || <i className="text-slate-400">no name read</i>}</span>}
+        {row.readError && <div className="text-rose-600 mt-1" data-testid={`${tid}-read-error`}>{row.readError} — fill in by hand</div>}
         {row.status === "ready" && !row.member_id && (
           <div className="text-amber-700 mt-1 inline-flex items-center gap-1" data-testid={`${tid}-nomatch`}><AlertTriangle size={11} />No match — pick below</div>)}
       </td>
@@ -52,7 +54,7 @@ function RowEditor({ row, slots, onChange, onRemove }) {
         </select>
       </td>
       <td className="p-2 text-xs">{row.status === "saved" ? <span className="text-emerald-700 font-semibold">Saved</span>
-        : row.status === "error" ? <span className="text-rose-600" title={row.error}>Failed</span> : null}</td>
+        : row.status === "error" ? <span className="text-rose-600" title={`${row.error} — press Save all to retry`} data-testid={`${tid}-failed`}>Failed · retry</span> : null}</td>
       <td className="p-2"><button type="button" onClick={onRemove} className="p-1.5 rounded text-rose-500 hover:bg-rose-50" title="Remove this file from the batch" data-testid={`${tid}-remove`}><Trash2 size={13} /></button></td>
     </tr>
   );
@@ -67,7 +69,7 @@ export default function BulkIdUpload({ slots }) {
   const addFiles = async (fileList) => {
     const files = [...fileList].slice(0, MAX_FILES - rows.length);
     if (fileList.length > files.length) toast.warning(`Only ${MAX_FILES} files per batch — extra files skipped`);
-    const fresh = files.map((file, i) => ({ key: `${Date.now()}-${i}`, file, status: "reading" }));
+    const fresh = files.map((file) => ({ key: `f${++seq}`, file, status: "reading" }));
     setRows((rs) => [...rs, ...fresh]);
     await pool(fresh, 3, async (r) => {
       try {
@@ -76,18 +78,24 @@ export default function BulkIdUpload({ slots }) {
         const res = await api.post("/id-docs/bulk/read", fd);
         patch(r.key, { status: "ready", card: res.detected?.type || "", number: res.detected?.number || "",
           cardName: res.detected?.name || "", member_id: res.match?.member_id || "", person: res.match?.person || "self" });
-      } catch (e) { patch(r.key, { status: "ready", error: e.message }); }
+      } catch (e) { patch(r.key, { status: "ready", readError: e.message || "Couldn't read this file" }); }
     });
   };
 
-  const ready = rows.filter((r) => r.status === "ready" && r.member_id && r.card);
+  // Failed rows stay eligible so "Save all" retries them; a scan already uploaded isn't re-sent.
+  const ready = rows.filter((r) => (r.status === "ready" || r.status === "error") && r.member_id && r.card);
   const saveAll = async () => {
     setSaving(true);
     for (const r of ready) {
       try {
         const fd = new FormData();
         fd.append("file", r.file);
-        await api.post(`/members/${r.member_id}/id-docs/${r.person}/${r.card}?ocr=false`, fd);
+        const target = `${r.member_id}/${r.person}/${r.card}`;
+        if (r.uploadedTo !== target) {
+          await api.post(`/members/${r.member_id}/id-docs/${r.person}/${r.card}?ocr=false`, fd);
+          r.uploadedTo = target;
+          patch(r.key, { uploadedTo: target });
+        }
         if (r.number) await api.put(`/members/${r.member_id}/id-docs`, { people: { [r.person]: { [r.card]: r.number } } });
         patch(r.key, { status: "saved" });
       } catch (e) { patch(r.key, { status: "error", error: e.message }); showApiError(e, `${r.file.name} failed`); }

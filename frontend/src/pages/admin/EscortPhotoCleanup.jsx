@@ -146,7 +146,7 @@ export default function EscortPhotoCleanup() {
                     </td>
                     <td className="iu-table-td text-right">
                       <button onClick={() => openPreview(r.id)} className="text-xs underline mr-2 text-slate-600 hover:text-slate-900" data-testid={`cleanup-preview-${r.id}`}>Preview</button>
-                      <button title="Delete permanently (asks to confirm)"
+                      <button title="Delete these selfies permanently (asks to confirm)"
                         onClick={() => purgeOne(r.id)}
                         disabled={busy}
                         className="text-xs text-red-600 hover:text-red-800"

@@ -760,7 +760,7 @@ export default function SelfCheckIn() {
               <p className="text-sm text-sky-800/80 mt-1 font-medium">
                 You&apos;re on-site · <span className="tabular-nums font-bold">{autoCountdown}s</span>
               </p>
-              <button title="Close without saving"
+              <button title="Stop the automatic check-in — you can check in yourself"
                 type="button"
                 onClick={cancelAuto}
                 data-testid="auto-checkin-cancel"

@@ -221,7 +221,7 @@ function ImportCalendarButton({ onDone }) {
                         className="iu-btn-secondary !h-9 !text-rose-700 !border-rose-300 hover:!bg-rose-50"
                         data-testid="mc-import-overwrite">Overwrite existing</button>
               )}
-              <button title="Mark as done" onClick={() => setResult(null)}
+              <button title="Close this import summary" onClick={() => setResult(null)}
                       className="iu-btn-primary !h-9" data-testid="mc-import-close">Done</button>
             </div>
           </div>
