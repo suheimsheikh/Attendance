@@ -122,7 +122,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   const [halfDay, setHalfDay] = useState(null);
   // Office half-day clock windows — surfaced in the UI copy so members
   // know what "FN" and "PN" actually mean for their academy. Populated
-  // by the same /api/office fetch that already resolves noticeDays.
+  // by the same /api/office fetch as below.
   const [halfDayWindows, setHalfDayWindows] = useState({
     fn: "09:30–13:30", pn: "13:30–18:00",
   });
@@ -155,29 +155,11 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
   // For admin path single-pick: fetched from /api/members/{id}/leave-summary.
   // For admin multi-pick: null (per-member balances differ — Notice falls back to per-member rows).
   const [balanceSummary, setBalanceSummary] = useState(null);
-  // R3 (30 Jun 2026): minimum days of notice required for self-applied
-  // leaves. Per-category (athlete/staff/coach/executive); falls back to 3
-  // if the category is unset in office config. Tours / postings /
-  // late-coming are exempt — checked further below.
-  const [noticeDays, setNoticeDays] = useState(3);
   useEffect(() => {
     if (asAdmin) return;
     api.get("/auth/me").then((u) => {
       setMe(u);
-      // Pull office config and resolve the category-specific threshold.
       api.get("/office").then((o) => {
-        const raw = (o || {}).leave_notice_days;
-        const cat = (u || {}).category || "";
-        let n = 3;
-        if (raw == null) {
-          n = 3;
-        } else if (typeof raw === "number") {
-          n = Math.max(0, Math.floor(raw));
-        } else if (typeof raw === "object" && cat && raw[cat] != null) {
-          const v = Number(raw[cat]);
-          n = Number.isFinite(v) && v >= 0 ? Math.floor(v) : 3;
-        }
-        setNoticeDays(n);
         setHalfDayWindows({
           fn: `${o.half_day_fn_start || "09:30"}–${o.half_day_fn_end || "13:30"}`,
           pn: `${o.half_day_pn_start || "13:30"}–${o.half_day_pn_end || "18:00"}`,

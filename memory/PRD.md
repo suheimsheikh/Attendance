@@ -674,3 +674,11 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Tuition Teacher = custom category whose key/label contains "tuition" (services/dar.py TUITION_KEYS). /dar/status returns is_tuition_teacher + checkin_group_name; check-in share + DAR share target WhatsApp "YCH Tuitions" (editable in Office → WhatsApp Groups: tuitions_group_name). Paid like staff.
 - Bug fix: masters GETs had Cache-Control max-age=120 → stale list after create; now "private, no-cache".
 - Tests: tests/test_id_docs_and_tuition.py; iteration_94 all pass (Tuition check-in UI label verified by code only).
+
+### Oct 2026 — Safe refactor pass
+- services/http_middleware.py: one pure-ASGI AppHttpMiddleware replaces 5 BaseHTTPMiddleware wrappers (request-id/access log, svc_ read-only guard, client-id, cache headers, CSP frame-ancestors). Fixes "RuntimeError: No response returned." on client disconnect. Behaviour unchanged.
+- server.py: removed unused imports (fastapi extras, io, re, openpyxl, EmailStr, AUTO_APPROVAL_LATE_CHECKINS, geo/geocode, UserPublic, dar helpers) + unused var days_accounted (each verified not imported via `server.X`).
+- routes/meals/__init__.py & routes/reports/__init__.py: pruned 91 dead re-exports (kept names imported externally, e.g. _classify_timeline_day).
+- Frontend: removed unused vars/imports (MyLeaves noticeDays dead state, MealCompareTab X, MealEntryTab formatDate, MealsReport BarChart3, charts colorFn, MemberRow rowIdx, useUiPrefs e, stale eslint-disable). Hook-dependency warnings intentionally left (behaviour risk).
+- Full backend suite: 1086 passed, 10 skipped, 0 failed (needs env: API_BASE_URL, TEST_ADMIN_EMAIL/PASSWORD + backend .env sourced).
+- Open: user asked to "switch off the tips" — unclear which (hover titles vs hint boxes); user said skip for now.

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { BarChart3, Boxes, X as CloseIcon, IndianRupee, Loader2, Maximize2, PieChart as PieIcon, ShoppingCart, TrendingUp } from "lucide-react";
 import { api, showApiError } from "../../../api";
 import { CategoryPie, DailyTrendChart, ItemsTable, TopItemsChart, TopVendorsChart } from "./charts";
-import { BannerStat, CHART_COLORS, colorForItem, inr } from "./helpers";
+import { BannerStat, colorForItem, inr } from "./helpers";
 import { Caption, NutritionBlock, PantryDayModal } from "./nutrition";
 
 export function Section({ title, subtitle, accent, data, testKind, first, from, to }) {
@@ -139,12 +139,12 @@ export function Section({ title, subtitle, accent, data, testKind, first, from, 
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-slate-500" /><div className="font-bold text-sm">Top items by ₹</div><span className="text-[10px] text-slate-400">· tap to focus</span></div>
           <Caption>Items with the highest {kind === "purchases" ? "purchase spend" : "consumption value"} (₹). Tap a bar to focus it in the Spend trend.</Caption>
-          <TopItemsChart items={data?.top_by_amount} dataKey="amount" colorFn={(i) => CHART_COLORS[i % CHART_COLORS.length]} label="Amount" testid={`kitchen-${testKind}-top-amt`} onToggleItem={toggleItem} focusedIds={focusedIds} />
+          <TopItemsChart items={data?.top_by_amount} dataKey="amount" label="Amount" testid={`kitchen-${testKind}-top-amt`} onToggleItem={toggleItem} focusedIds={focusedIds} />
         </div>
         <div className="iu-card p-3">
           <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-slate-500" /><div className="font-bold text-sm">Top items by qty</div><span className="text-[10px] text-slate-400">(kg items only · tap to focus)</span></div>
           <Caption>Items {kind === "purchases" ? "bought" : "consumed"} in the largest quantities (weight-based items only).</Caption>
-          <TopItemsChart items={data?.top_by_qty} dataKey="qty" colorFn={(i) => CHART_COLORS[(i + 3) % CHART_COLORS.length]} label="Qty (kg)" testid={`kitchen-${testKind}-top-qty`} onToggleItem={toggleItem} focusedIds={focusedIds} />
+          <TopItemsChart items={data?.top_by_qty} dataKey="qty" label="Qty (kg)" testid={`kitchen-${testKind}-top-qty`} onToggleItem={toggleItem} focusedIds={focusedIds} />
         </div>
       </div>
 

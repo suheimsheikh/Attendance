@@ -12,7 +12,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
-import { Loader2, Utensils, BarChart3, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale, Store, PieChart, LineChart, ClipboardCheck, TrendingUp } from "lucide-react";
+import { Loader2, Utensils, Printer, X, ChevronRight, IndianRupee, ShoppingCart, ClipboardList, Flame, FolderTree, Scale, Store, PieChart, LineChart, ClipboardCheck, TrendingUp } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate, todayIso } from "../../utils";
 import { useMealsEvents } from "../../hooks/useMealsEvents";

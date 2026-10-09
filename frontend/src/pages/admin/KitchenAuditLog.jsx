@@ -119,7 +119,7 @@ export default function KitchenAuditLog() {
       .catch((e) => showApiError(e, "Couldn't load the audit log"))
       .finally(() => setLoading(false));
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [action, since, until]);
+  useEffect(() => { load(); }, [action, since, until]);
 
   const toggle = (id) => setExpanded((prev) => {
     const n = new Set(prev);

@@ -18,7 +18,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, ChevronDown, Loader2, Check, Boxes, Filter, X, Search, TrendingUp, AlertTriangle } from "lucide-react";
 import { api, showApiError } from "../../api";
-import { formatDate, fmtQty, todayIso, addDaysIso } from "../../utils";
+import { fmtQty, todayIso, addDaysIso } from "../../utils";
 import { useRowFocus } from "../../hooks/useRowFocus";
 import VendorScorecardDrawer from "../../components/VendorScorecardDrawer";
 import ItemPriceTrendDrawer from "../../components/ItemPriceTrendDrawer";

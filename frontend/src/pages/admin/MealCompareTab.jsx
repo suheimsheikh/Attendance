@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, LineChart as LineIcon, Search, X, ShoppingCart, Utensils } from "lucide-react";
+import { Loader2, LineChart as LineIcon, Search, ShoppingCart, Utensils } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine } from "recharts";
 import { api, showApiError } from "../../api";
 import { fmtQty, todayIso, isoDaysAgo, money } from "../../utils";

@@ -1,21 +1,16 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, Request, Header
-from fastapi.responses import Response, JSONResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import DuplicateKeyError
 from fastapi.security import OAuth2PasswordBearer
 import os
-import io
 import asyncio
 import uuid
 import logging
 import jwt
-import re
-import openpyxl
-from openpyxl.utils import get_column_letter
 from pathlib import Path
-from pydantic import BaseModel, Field, EmailStr, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Literal, Dict
 from datetime import datetime, timezone, timedelta, date
 from contextlib import asynccontextmanager
@@ -54,13 +49,6 @@ app = FastAPI(lifespan=_lifespan_factory)
 api_router = APIRouter(prefix="/api")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
-# Feature flags — see backend/config.py for docs on why these exist. Imported
-# here (rather than defined) so `routes/muster.py` can share the same source
-# of truth without triggering a circular import back into server.py.
-from config import (  # noqa: E402
-    AUTO_APPROVAL_LATE_CHECKINS,
-)
-
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -85,8 +73,6 @@ from config import (  # noqa: E402, F401
 from services.time_utils import (  # noqa: E402, F401
     DEFAULT_TZ, now_utc, iso, office_tz, local_now, local_date_str, local_hm,
 )
-from services.geo import haversine_m, resolve_site  # noqa: E402
-from services.geocode import reverse_geocode_area  # noqa: E402
 from services.phone import phone_key  # noqa: E402
 from services.photo import (  # noqa: E402, F401
     MAX_PHOTO_BYTES, THUMB_MAX_PX, THUMB_QUALITY,
@@ -330,8 +316,6 @@ async def require_chef_or_admin(user: dict = Depends(get_current_user)) -> dict:
 # ----------------------------------------------------------------------------
 # Models
 # ----------------------------------------------------------------------------
-from models import UserPublic  # shared model (moved to backend/models.py 06/2026)
-from services.dar import dar_required_for, dar_missing_for_session, get_dar_policy, validate_dar_text
 
 
 class LeaveBalanceBulkRow(BaseModel):
@@ -2642,7 +2626,6 @@ async def compute_hours_report(start: str, end: str) -> List[dict]:
         for b in breaks_window:
             if _breaks_module.break_applies_to(b, u):
                 accounted_dates |= _days_overlap(b["start_date"], b["end_date"])
-        days_accounted = len(accounted_dates)
         # Clamp the span to the member's employment window (28 Sep 2026
         # payroll fix): days before joining_date / after leaving_date are
         # neither worked nor weekly-off, so counting them as Absent — and
@@ -3073,125 +3056,16 @@ async def health():
     return {"status": "ok", "service": "i-showed-up"}
 
 
-# ----------------------------------------------------------------------------
-# Request-ID middleware — added pre-launch (06/2026) so any coach complaint
-# ("the page froze at 9:14 AM") can be traced back to exact server-log lines.
-#
-# Behaviour:
-#   • Accepts X-Request-ID from the client (lets the frontend correlate
-#     across multiple chained calls). Falls back to a fresh UUID4.
-#   • Echoes it back in the response header so the browser network panel /
-#     curl shows it for free.
-#   • Stuffs it onto `request.state.request_id` so any handler can access it.
-#   • Logs one structured line per request with status + duration_ms.
-# ----------------------------------------------------------------------------
-from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
-import time as _time  # noqa: E402
-
-_req_logger = logging.getLogger("ishowedup.access")
-
-
-class RequestIDMiddleware(BaseHTTPMiddleware):
-    # Cap the echoed Request-ID at 64 chars and strip anything that isn't
-    # an ASCII letter / digit / dash / underscore — a malicious client could
-    # otherwise inject newlines into our access log line ("log injection").
-    _ALLOWED = re.compile(r"[^A-Za-z0-9_-]")
-
-    async def dispatch(self, request, call_next):
-        client_rid = request.headers.get("x-request-id") or ""
-        client_rid = self._ALLOWED.sub("", client_rid)[:64]
-        rid = client_rid or uuid.uuid4().hex[:12]
-        request.state.request_id = rid
-        started = _time.perf_counter()
-        try:
-            response = await call_next(request)
-        except Exception:
-            duration_ms = int((_time.perf_counter() - started) * 1000)
-            _req_logger.exception(
-                "rid=%s %s %s -> EXC %dms", rid, request.method, request.url.path, duration_ms,
-            )
-            raise
-        duration_ms = int((_time.perf_counter() - started) * 1000)
-        response.headers["X-Request-ID"] = rid
-        # Skip noisy health-check pings in the access log.
-        if request.url.path != "/api/health":
-            _req_logger.info(
-                "rid=%s %s %s -> %d %dms",
-                rid, request.method, request.url.path, response.status_code, duration_ms,
-            )
-        return response
-
-
-app.add_middleware(RequestIDMiddleware)
-
-
-@app.middleware("http")
-async def reject_service_writes(request: Request, call_next):
-    # Read-only guard for API service tokens: block any state-changing method
-    # when the caller presents a svc_ bearer token. Syntactic check only —
-    # authentication still happens in get_current_user (a forged svc_ string
-    # is rejected there). Purely additive; JWT sessions are unaffected.
-    auth = request.headers.get("authorization", "")
-    scheme, _, cred = auth.partition(" ")
-    if scheme.lower() == "bearer" and cred.startswith("svc_") \
-            and request.method not in ("GET", "HEAD", "OPTIONS"):
-        return JSONResponse(status_code=403, content={"detail": "This API token is read-only"})
-    return await call_next(request)
-
-# --- Cache-Control on stable read-only endpoints -----------------------
-# Small, rarely-changing reference data can safely sit in the browser
-# cache for a couple of minutes. `private` = user-scoped (never cache on
-# a shared CDN), `max-age=120` = 2-minute freshness. Only applies to GETs
-# on the whitelisted prefixes AND only when the response is a 200 —
-# anything else (401, 500, 304 with stale body) is left untouched.
-# Purely additive — the frontend already works fine without it.
-_CACHEABLE_GET_PREFIXES = (
-    "/api/office",
-    "/api/institutions",
-    "/api/fleets",
-    "/api/masters/categories",
-    "/api/roles",
-    "/api/holidays",
-    "/api/changelog",
-    "/api/version",
-)
-
-from services.client_ctx import current_client_id  # noqa: E402
-
-@app.middleware("http")
-async def _capture_client_id(request, call_next):  # noqa: ANN001
-    current_client_id.set(request.headers.get("x-client-id", ""))
-    return await call_next(request)
-
-@app.middleware("http")
-async def _add_stable_cache_headers(request, call_next):  # noqa: ANN001
-    response = await call_next(request)
-    if request.method == "GET" and response.status_code == 200:
-        path = request.url.path
-        if any(path == p or path.startswith(p + "/") for p in _CACHEABLE_GET_PREFIXES):
-            # Don't clobber if a route already set its own policy.
-            if "cache-control" not in {k.lower() for k in response.headers.keys()}:
-                # no-cache: a stale browser copy hid newly created masters (Oct 2026 bug).
-                response.headers["Cache-Control"] = "private, no-cache"
-    return response
-
 # Trusted embed origins (PayCraft now, ychyderabad domain later) — read
 # from env so the SAME build works in preview and production. Used both
 # for CORS (below) and the Content-Security-Policy frame-ancestors header.
 _EMBED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_EMBED_ORIGINS", "").split(",") if o.strip()]
 _FRAME_ANCESTORS = "frame-ancestors 'self'" + ("" if not _EMBED_ORIGINS else " " + " ".join(_EMBED_ORIGINS))
 
-@app.middleware("http")
-async def _embed_frame_headers(request, call_next):  # noqa: ANN001
-    """Let trusted apps iframe the portal (e.g. the /embed/grid page and
-    its API calls). We publish a CSP `frame-ancestors` allow-list from
-    ALLOWED_EMBED_ORIGINS and strip the legacy X-Frame-Options header
-    (DENY/SAMEORIGIN) which would otherwise block cross-site framing."""
-    response = await call_next(request)
-    response.headers["Content-Security-Policy"] = _FRAME_ANCESTORS
-    for h in [k for k in response.headers.keys() if k.lower() == "x-frame-options"]:
-        del response.headers[h]
-    return response
+# Request-ID/access log, read-only svc_ tokens, client-id, cache + frame
+# headers — one pure-ASGI layer (see services/http_middleware.py).
+from services.http_middleware import AppHttpMiddleware  # noqa: E402
+app.add_middleware(AppHttpMiddleware, frame_ancestors=_FRAME_ANCESTORS)
 
 # GZip compression — cuts JSON payload sizes ~70% for typical text-heavy
 # responses like /api/members and /api/presence (which include lots of

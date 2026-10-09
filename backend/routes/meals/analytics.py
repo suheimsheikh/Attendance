@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from routes.meals.common import (  # noqa: F401
-    BaseModel,
     Depends,
     HTTPException,
     Query,

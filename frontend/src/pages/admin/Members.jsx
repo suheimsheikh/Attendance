@@ -498,11 +498,10 @@ export default function Members() {
                 </tr>
               </thead>
               <tbody data-testid="members-table">
-                {sortedFiltered.map((m, rowIdx) => (
+                {sortedFiltered.map((m) => (
                   <MemberRow
                     key={m.id}
                     m={m}
-                    rowIdx={rowIdx}
                     today={today}
                     presenceRow={presence[m.id]}
                     busyId={busyId}

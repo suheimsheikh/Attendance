@@ -17,7 +17,6 @@ import { BUCKET_BY_KEY, GENDER_LABEL, bucketOf, isInteractive, lastSeenLabel, le
  *
  * Props:
  *   m              — the member doc
- *   rowIdx         — index in the filtered list (drives shift-click ranges)
  *   today          — local YYYY-MM-DD, used by lastSeenLabel
  *   presenceRow    — the matching row from /presence (or undefined)
  *   busyId         — the id currently mid-toggle (drives the spinner)
@@ -33,7 +32,7 @@ import { BUCKET_BY_KEY, GENDER_LABEL, bucketOf, isInteractive, lastSeenLabel, le
  *   onPhotoUpdated — fires after the InlinePhotoAvatar saves a new photo
  */
 export default React.memo(function MemberRow({
-  m, rowIdx, today, presenceRow, busyId,
+  m, today, presenceRow, busyId,
   options,
   onEdit, onDelete, onToggleAttendance, onPatchField,
   onPhotoUpdated,

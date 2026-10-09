@@ -59,7 +59,7 @@ async function _loadFromServer() {
       _writeLS(_cache);
       _serverLoaded = true;
       _notify();
-    } catch (e) {
+    } catch {
       // Anonymous / offline / stale token — stick with localStorage.
       _serverLoaded = true;
     } finally {

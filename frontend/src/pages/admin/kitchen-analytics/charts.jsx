@@ -268,7 +268,7 @@ function makeBarValueLabel(formatter, { minInsidePx = 46, offset = 4 } = {}) {
   };
 }
 
-export function TopItemsChart({ items, dataKey, colorFn, label, testid, showUnit, onToggleItem, focusedIds }) {
+export function TopItemsChart({ items, dataKey, label, testid, showUnit, onToggleItem, focusedIds }) {
   // Show ALL items sorted desc by the current metric (previously
   // capped at 10). Card body scrolls internally so the strip stays
   // compact next to Category share, but power-users can scroll to
