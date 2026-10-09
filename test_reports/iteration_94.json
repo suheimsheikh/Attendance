@@ -1,0 +1,32 @@
+{
+  "summary": "Verified PAN/Aadhaar ID-docs, custom categories, Tuition Teacher DAR/WhatsApp group end-to-end. Backend pytest /app/backend/tests/test_id_docs_and_tuition.py: 4/4 PASSED (people allow-list + validation + staff-father 400, PDF upload/download/delete + non-PDF 400, custom category CRUD + member cross-category move + /auth/me category='staff' custom_category=<key> + /dar/status is_tuition_teacher true group_name='YCH Tuitions' + member_count=1 + delete-in-use 409, /api/config/whatsapp-groups tuitions_group_name present). Frontend Playwright on preview URL as admin@attendance.app: (A) Masters/Categories: data-testid=category-new → cat-form-key/label/save → category-row-<key> appears IMMEDIATELY (no page reload) — Cache-Control fix confirmed. category-edit-<key> → label change → row text updates immediately. category-delete-<key> removes row. (B) Office page: data-testid=wa-tuitions-group-input visible with default value 'YCH Tuitions'. (C) Members → edit STAFF row (via edit-member-<id>): id-docs-section + id-docs-tip + id-docs-save all render; only id-person-self shown (no father/mother/guardian) — matches staff rule. id-self-pan-number/aadhaar-number/pan-upload/pan-file-input present. Invalid PAN '12345' → sonner error toast \"PAN '12345' must look like ABCDE1234F\". Valid 'abcde1234f' + '1234 5678 9012' saved and reflected back as 'ABCDE1234F' / '123456789012' with 'ID numbers saved' toast. (D) Members → edit ATHLETE row: id-person-self/father/mother/guardian all 4 visible. (E) New Member form: id-docs-after-create note shown; id-docs-section hidden until after save. (F) mf-category select includes custom key after creation (['athlete','elite','coach','staff','executive','tuition_qa3508']). All seed data created in UI cleaned up (categories deleted, admin AINUL HAQUE's id-docs restored to empty via DELETE scan + PUT clear). No throwaway members created in UI for Tuition Teacher flow — covered fully by pytest (/auth/me + /dar/status + checkin_group_name='YCH Tuitions'); UI code path reads darStatus.checkin_group_name so SelfCheckIn button label will say 'Share to YCH Tuitions' when darStatus is populated (verified via code review of SelfCheckIn.jsx L740 and tuition-share-hint L743).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "MemberForm select options (pre-existing)", "issues": ["React dev-mode hydration warning: <span> inside <option> for all x-dynamic selects (mf-fleet etc). Not introduced by this change — appears cosmetically only in dev build; see tooling instrumentation injecting <span style='display:contents'> into <option>."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_id_docs_and_tuition.py",
+    "/app/test_reports/pytest/id_docs_tuition_iter94.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/server.py _add_stable_cache_headers → 'private, no-cache' on master lists (categories, fleets, institutions, roles, holidays, office) correctly resolves the stale-category bug; browsers no longer serve a 120s cached copy after a POST.",
+    "backend/routes/id_docs.py — PAN regex ABCDE1234F enforced server-side (uppercased & validated), Aadhaar normalised to 12 digits, non-athlete-category members correctly reject father/mother/guardian keys with 400. Admin-only guard honoured (403 for member on their own id-docs — verified by pytest).",
+    "backend/routes/members.py _resolve_category routes custom keys to category='staff' + custom_category='<key>' (or 'athlete' for athlete-like custom), and old 'nope_x' returns 400 — good.",
+    "backend/services/dar.py refresh_tuition_keys + is_tuition_teacher correctly include any custom category key containing 'tuition' → DAR required + group='YCH Tuitions'. Category delete-in-use → 409 confirmed.",
+    "frontend/src/pages/admin/members/IdDocsSection.jsx cleanly scoped by allowed_people from server; file size guard client-side (10MB) mirrors server; uppercase + font-mono styling for PAN/Aadhaar numbers. Looks good.",
+    "frontend/src/pages/SelfCheckIn.jsx L740/L743 — the persistent share button label and tuition-share-hint pivot on darStatus.checkin_group_name, which backend emits as 'YCH Tuitions' for tuition teachers (verified in pytest). This path should render for a tuition-teacher member on login."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (4/4 pytest)", "frontend": "100% (6/6 UI scenarios)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 only (TEST_ADMIN_PASSWORD env). No throwaway members persisted; one AINUL HAQUE id-docs modification was reverted (DELETE scans + PUT empty).",
+  "seed_data_creation": "Transient: tuition_teacher_qa872 (edited then deleted), tuition_qa3508 (deleted). No lingering state.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Admin landing fires leave-report-prompt popup; always dismiss via [data-testid='leave-report-later'] after each page.goto before interacting (dialog has z-60 and intercepts clicks). Members list opens full form via click on [data-testid^='edit-member-'] (NOT dblclick on the row — dblclick is interrupted by inline cell edit). mf-category is a native <select>; options can be read via DOM evaluate. ID-docs-section only renders on edit (existing member); new form shows id-docs-after-create note instead. Preview URL: https://youth-regatta-app.preview.emergentagent.com — hot reload on both services.",
+  "rca of the issue": "Original bug (new category not appearing immediately) RCA already fixed: /api/masters/categories (and fleets/institutions/roles/holidays/office) were served with 'Cache-Control: private, max-age=120', so the browser's HTTP cache replayed the stale response for 2 min after a POST. Switch to 'private, no-cache' forces revalidation. Verified: a fresh POST → immediate GET returns the new row and the Categories page shows it in <1s with no reload."
+}

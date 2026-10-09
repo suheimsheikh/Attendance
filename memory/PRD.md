@@ -667,3 +667,10 @@ User request: "When issuing any item from the kitchen it should not allow if the
 ### Oct 2026 — Super Admin attendance corrections need a second admin too
 - create_correction: any admin's ATTENDANCE correction (missed check-in / time adjust) → pending + needs_second_admin; filer (incl. Super Admin) can't decide it; any other admin can. Leave/tour corrections still auto-apply.
 - Grid toast now says "another admin must approve it". Tests updated: test_review_iter88::test_07, test_roles_and_admin_corrections (77 corrections tests pass).
+
+### Oct 2026 — PAN/Aadhaar ID docs, custom categories, Tuition Teacher group, categories cache bug
+- ID docs: `member_id_docs` collection + routes/id_docs.py (admin-only). Self for all; father/mother/guardian for athlete-like. PAN/Aadhaar validated; one scan per card (PDF/JPG/PNG/WEBP ≤10 MB) in Object Storage at ych-attendance/id-docs/. UI: members/IdDocsSection.jsx inside MemberForm (edit mode). Audited.
+- Members can be saved in any Masters category: stored as category=<staff|athlete rule bucket> + custom_category=<key> (routes/members.py _resolve_category). Categories master counts/cascades custom_category.
+- Tuition Teacher = custom category whose key/label contains "tuition" (services/dar.py TUITION_KEYS). /dar/status returns is_tuition_teacher + checkin_group_name; check-in share + DAR share target WhatsApp "YCH Tuitions" (editable in Office → WhatsApp Groups: tuitions_group_name). Paid like staff.
+- Bug fix: masters GETs had Cache-Control max-age=120 → stale list after create; now "private, no-cache".
+- Tests: tests/test_id_docs_and_tuition.py; iteration_94 all pass (Tuition check-in UI label verified by code only).
