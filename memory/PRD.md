@@ -687,3 +687,9 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Review verdict: READY WITH FIXES (no critical/high). Fixed: PAN/Aadhaar no longer written raw to audit_log (masked ••••last4); unique indexes absent_dispatch_log.date + member_id_docs.user_id (startup, tolerant); upload read bounded to 10 MB+1; scan filename sanitised (Content-Disposition); blob URL revoked; category member_count no longer double-counts custom members under staff/athlete; rename toast counts custom cascade; TUITION_KEYS refreshed on each /dar/status (multi-worker safe); svc_ 403s now access-logged.
 - Preview-only: deleted 6 test audit rows that held raw IDs. Production never had the feature yet.
 - Tests added: audit masking, unique indexes, filename sanitising (tests/test_id_docs_and_tuition.py, 7 pass).
+
+### Oct 2026 — PAN/Aadhaar auto-read from scans
+- User: PAN/Aadhaar are not private → change log shows full numbers again (routes/id_docs.py `_numbers`).
+- services/id_ocr.py: Gemini gemini-3.5-flash (Emergent LLM key, emergentintegrations, FileContentWithMimeType) reads number + name from PDF/photo; best-effort (None on failure).
+- Upload response returns `detected` {number, name, expected_name, name_matches}; NOT saved until admin confirms. UI DetectedBar: auto-fill + "Confirm & save"/"Edit"; if box differs → "Use scanned"/"Keep current"; name mismatch = warning only.
+- Tests: 9 in test_id_docs_and_tuition.py (incl. real OCR); iteration_95 6/6 UI flows pass.

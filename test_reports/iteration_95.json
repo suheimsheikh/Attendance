@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend-focused end-to-end verification of the new PAN/Aadhaar OCR auto-fill flow on a throwaway staff member (Testy Mctestface, id 098b3fe7..., email test_e5281df3f8@ishowedup-test.example.com — created via POST /api/members, deleted at end). Playwright on preview URL executed all 6 required UI scenarios successfully. Backend side-checks (GET /api/members/<id>/id-docs, GET /api/admin/audit-log) also pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/tmp/gen_cards.py", "/tmp/create_member.py", "/tmp/verify_and_cleanup.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/routes/id_docs.py upload_scan returns `detected: {number, name, expected_name, name_matches}` as the only server-side effect of the OCR — numbers persist ONLY on PUT /api/members/{id}/id-docs. Correctly matches the spec (admin confirms before save).",
+    "`_numbers()` strips file metadata but keeps full PAN/Aadhaar strings — verified in audit log: changes.people.before/after.self.pan=='ABCDE1234F', .self.aadhaar=='123456789012'. Matches the Oct-2026 user directive ('no privacy for Aadhaar/PAN').",
+    "frontend/src/pages/admin/members/IdDocsSection.jsx `onUploaded` correctly distinguishes three outcomes: (a) no detected.number → toast 'couldn't read' + no bar, (b) empty box or same value → confirm mode, (c) existing non-matching value → choose mode. Clean implementation; keyed by `${person}.${card}` so each person/card bar is independent. Name warning rendered inside both bar modes when detected.name_matches===false, non-blocking as required.",
+    "services/id_ocr.read_id_card is called inside the POST handler synchronously (await) rather than deferred to a side-channel — fine for ~3-10s LLM latency but if volume grows consider returning early with a job id. Not a blocker for current admin-triggered single-upload flow."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (persistence + audit log verified)", "frontend": "100% (6/6 UI flows)"},
+  "test_credentials": "admin@attendance.app / Admin@12345",
+  "seed_data_creation": "Throwaway staff member Testy Mctestface created via POST /api/members and DELETED via DELETE /api/members/{id}?reason=test%20cleanup at end. No lingering data on real members.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "To exercise OCR flows: (1) generate PAN/Aadhaar PNGs with PIL + Liberation Sans Bold (`/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf`) — fonts/dejavu are NOT installed. (2) Hard-code the throwaway member's full name into the generated card so name_matches=true; use a visibly different name to trigger name warning. (3) Upload via `data-testid=id-self-pan-file-input` / `id-self-aadhaar-file-input`; wait up to 45s for Gemini. (4) The admin landing is `/` (not /admin); after login a Leave/Tour share dialog opens — dismiss via `data-testid=leave-report-later` OR button 'Later' before navigating. (5) Audit endpoint is `/api/admin/audit-log` and returns `{rows,count}`; full PAN/Aadhaar live under `changes.people.before/after.<person>.{pan,aadhaar}`.",
+  "flows_verified": [
+    "FLOW 1: Clean PAN scan (matching name) → id-self-pan-number auto-fills 'ABCDE1234F', id-self-pan-detected shows id-self-pan-confirm + id-self-pan-edit, NO name warning, Confirm saves (toast + bar disappears, GET id-docs shows people.self.pan='ABCDE1234F').",
+    "FLOW 2: Pre-typed 'PQRSX9876Z' + upload matching-name scan → choose mode (id-self-pan-use-scanned + id-self-pan-keep-current). 'Use scanned' → box becomes ABCDE1234F and bar flips to confirm mode.",
+    "FLOW 3: Same setup → 'Keep current' → bar disappears, box stays PQRSX9876Z, box unchanged.",
+    "FLOW 4: Upload scan whose Name differs from member → id-self-pan-name-warning rendered (warning only); id-self-pan-confirm still enabled.",
+    "FLOW 5: Aadhaar scan → id-self-aadhaar-number auto-fills '123456789012', id-self-aadhaar-confirm saves (bar disappears, GET id-docs shows people.self.aadhaar='123456789012').",
+    "FLOW 6: Blank/unreadable PNG upload → upload succeeds (file stored), NO id-self-pan-detected bar renders, PAN input value unchanged.",
+    "Backend persistence: GET /api/members/098b3fe7.../id-docs returned people.self.pan='ABCDE1234F', people.self.aadhaar='123456789012'.",
+    "Audit log: /api/admin/audit-log?action=id_numbers_updated contains rows with full numbers in changes.people.before/after.self.{pan,aadhaar}."
+  ],
+  "rca of the issue": "N/A — review request was feature verification, not a bug. All implemented behaviour matches spec."
+}
