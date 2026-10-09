@@ -4,10 +4,12 @@ import { IdCard, ArrowLeft } from "lucide-react";
 import { api } from "../../api";
 import IdReport from "./id-docs/IdReport";
 import BulkIdUpload from "./id-docs/BulkIdUpload";
+import TravelCheck from "./id-docs/TravelCheck";
 
 const TABS = [
   ["report", "Missing ID report", "Members and parents still missing PAN, Aadhaar, passport or scans — and passports expiring soon"],
   ["bulk", "Bulk upload", "Drop many scans at once — each is read and matched to the right person"],
+  ["travel", "Travel check", "Athletes & coaches whose passport is missing or not valid 6 months after an overseas regatta"],
 ];
 
 export default function IdDocuments() {
@@ -31,7 +33,7 @@ export default function IdDocuments() {
           </button>
         ))}
       </div>
-      {tab === "report" ? <IdReport /> : <BulkIdUpload slots={slots} />}
+      {tab === "report" ? <IdReport /> : tab === "bulk" ? <BulkIdUpload slots={slots} /> : <TravelCheck />}
     </div>
   );
 }

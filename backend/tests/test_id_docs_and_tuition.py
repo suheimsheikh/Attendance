@@ -241,3 +241,65 @@ def test_name_score_tolerates_missing_spaces():
     from services.id_ocr import name_score
     assert name_score("ZORAWARQUILLFEATHER", "Zorawar Quillfeather") == 1.0
     assert name_score("RAVI KUMAR", "Sita Devi") == 0.0
+
+
+def test_use_passport_name_title_cases_and_audits(admin_client, base_url, make_member):
+    m = make_member("athlete", father_name="Old Father")
+    base = f"{base_url}/api/members/{m['id']}/id-docs"
+    r = admin_client.post(f"{base}/self/passport/use-name", json={"name": "ANITA  DEVI SHARMA"}, timeout=30)
+    assert r.status_code == 200 and r.json() == {"field": "full_name", "name": "Anita Devi Sharma"}
+    r = admin_client.post(f"{base}/father/passport/use-name", json={"name": "RAJ SHARMA"}, timeout=30)
+    assert r.json()["field"] == "father_name"
+    row = next(x for x in admin_client.get(f"{base_url}/api/members", timeout=60).json() if x["id"] == m["id"])
+    assert row["full_name"] == "Anita Devi Sharma" and row["father_name"] == "Raj Sharma"
+    staff = make_member("staff")
+    assert admin_client.post(f"{base_url}/api/members/{staff['id']}/id-docs/father/passport/use-name",
+                             json={"name": "X Y"}, timeout=30).status_code == 400
+
+
+def test_weekly_passport_list_first_admin_wins(admin_client, second_admin_client, base_url, make_member, mongo_db):
+    if mongo_db is None:
+        import pytest
+        pytest.skip("mongo")
+    m = make_member("staff")
+    admin_client.put(f"{base_url}/api/members/{m['id']}/id-docs",
+                     json={"people": {"self": {"passport": "Z1112223", "passport_expiry": "2000-01-01"}}}, timeout=30)
+    url = f"{base_url}/api/id-docs/passport-expiry-week"
+    week = admin_client.get(url, timeout=30).json()["week"]
+    prior = mongo_db.passport_reminder_log.find_one({"week": week})
+    mongo_db.passport_reminder_log.delete_one({"week": week})
+    try:
+        st = admin_client.get(url, timeout=30).json()
+        assert st["due"] is True and any(x["member_id"] == m["id"] and x["status"] == "expired" for x in st["rows"])
+        assert admin_client.post(url, timeout=30).json()["first"] is True
+        assert second_admin_client.post(url, timeout=30).json()["first"] is False
+        assert second_admin_client.get(url, timeout=30).json()["due"] is False
+    finally:
+        mongo_db.passport_reminder_log.delete_one({"week": week})
+        if prior:
+            mongo_db.passport_reminder_log.insert_one(prior)
+
+
+def test_travel_check_overseas_only(admin_client, base_url, make_member, mongo_db):
+    import uuid
+    if mongo_db is None:
+        import pytest
+        pytest.skip("mongo")
+    rid = f"test-reg-{uuid.uuid4().hex[:6]}"
+    mongo_db.regattas.insert_one({"id": rid, "name": "TEST Worlds", "start_date": "2099-07-01", "end_date": "2099-07-10",
+                                  "country": "Portugal", "location": "Lisbon"})
+    try:
+        ath = make_member("athlete")
+        ok = make_member("coach")
+        admin_client.put(f"{base_url}/api/members/{ok['id']}/id-docs",
+                         json={"people": {"self": {"passport": "Z9998887", "passport_expiry": "2100-12-31"}}}, timeout=30)
+        exp = make_member("athlete")
+        admin_client.put(f"{base_url}/api/members/{exp['id']}/id-docs",
+                         json={"people": {"self": {"passport": "Z9998886", "passport_expiry": "2099-12-01"}}}, timeout=30)
+        j = admin_client.get(f"{base_url}/api/id-docs/travel-check", params={"regatta_id": rid}, timeout=60).json()
+        assert all(r["country"] != "India" for r in j["regattas"])
+        assert j["regatta"]["id"] == rid and j["valid_until_needed"] == "2100-01-10"
+        issues = {r["member_id"]: r["issue"] for r in j["rows"]}
+        assert issues[ath["id"]] == "missing" and issues[exp["id"]] == "expiring" and issues[ok["id"]] is None
+    finally:
+        mongo_db.regattas.delete_one({"id": rid})

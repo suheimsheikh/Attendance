@@ -16,7 +16,7 @@ async function pool(items, n, fn) {
   }));
 }
 
-function RowEditor({ row, slots, onChange, onRemove }) {
+function RowEditor({ row, slots, onChange, onRemove, onUseName }) {
   const members = useMemo(() => [...new Map(slots.map((s) => [s.member_id, s.member_name])).entries()]
     .sort((a, b) => (a[1] || "").localeCompare(b[1] || "")), [slots]);
   const persons = slots.filter((s) => s.member_id === row.member_id);
@@ -29,7 +29,13 @@ function RowEditor({ row, slots, onChange, onRemove }) {
           : <span title="Name the AI read on the card">{row.cardName || <i className="text-slate-400">no name read</i>}</span>}
         {row.card === "passport" && row.expiry && <div className="text-slate-500 mt-0.5">expires {row.expiry}</div>}
         {row.card === "passport" && row.nameMatches === false && (
-          <div className="text-rose-600 font-semibold mt-1" data-testid={`${tid}-name-warning`}>Not exactly the database name</div>)}
+          <div className="text-rose-600 font-semibold mt-1" data-testid={`${tid}-name-warning`}>
+            Not exactly the database name
+            {row.member_id && (
+              <button type="button" data-testid={`${tid}-use-name`} onClick={onUseName}
+                title="Replace the member's / parent's name in the database with this passport name"
+                className="block mt-0.5 px-1.5 h-5 rounded bg-rose-600 text-white text-[10px]">Use passport name</button>)}
+          </div>)}
         {row.readError && <div className="text-rose-600 mt-1" data-testid={`${tid}-read-error`}>{row.readError} — fill in by hand</div>}
         {row.status === "ready" && !row.member_id && (
           <div className="text-amber-700 mt-1 inline-flex items-center gap-1" data-testid={`${tid}-nomatch`}><AlertTriangle size={11} />No match — pick below</div>)}
@@ -134,7 +140,14 @@ export default function BulkIdUpload({ slots }) {
               </thead>
               <tbody>
                 {rows.map((r) => <RowEditor key={r.key} row={r} slots={slots} onChange={(p) => patch(r.key, p)}
-                  onRemove={() => setRows((rs) => rs.filter((x) => x.key !== r.key))} />)}
+                  onRemove={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
+                  onUseName={async () => {
+                    try {
+                      const res = await api.post(`/members/${r.member_id}/id-docs/${r.person}/passport/use-name`, { name: r.cardName });
+                      patch(r.key, { nameMatches: true });
+                      toast.success(`Name updated to "${res.name}"`);
+                    } catch (e) { showApiError(e, "Couldn't update the name"); }
+                  }} />)}
               </tbody>
             </table>
           </div>

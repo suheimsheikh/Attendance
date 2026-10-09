@@ -505,7 +505,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               ))}
             </div>
           </div>
-          {isEdit ? <IdDocsSection memberId={initial.id} /> : (
+          {isEdit ? <IdDocsSection memberId={initial.id} onNameChanged={(field, v) => set(field, v)} /> : (
             <p className="text-[11px] text-slate-500 pt-3 mt-3 border-t border-slate-100" data-testid="id-docs-after-create">
               PAN &amp; Aadhaar details and scans can be added after the member is created (open Edit).
             </p>

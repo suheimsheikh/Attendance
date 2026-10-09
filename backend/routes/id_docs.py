@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import re
 import uuid
+from datetime import date, timedelta
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -35,6 +36,10 @@ class PersonNumbers(BaseModel):
     aadhaar: Optional[str] = None
     passport: Optional[str] = None
     passport_expiry: Optional[str] = None
+
+
+class NameIn(BaseModel):
+    name: str
 
 
 class IdNumbersIn(BaseModel):
@@ -238,5 +243,82 @@ def make_router(db, require_admin) -> APIRouter:
         if match and det.get("type") == "passport":
             det["name_matches"] = name_exact(det["name"], match["person_name"])
         return {"detected": det, "match": match, "score": round(best_score, 2)}
+
+    # ---- Use passport name (Oct 2026) -------------------------------------
+    @router.post("/members/{mid}/id-docs/{person}/passport/use-name")
+    async def use_passport_name(mid: str, person: str, body: NameIn, admin: dict = Depends(require_admin)):
+        m, people = await _member_and_people(mid)
+        _check(person, "passport", people)
+        name = " ".join(w[:1].upper() + w[1:].lower() for w in body.name.split())
+        if not name:
+            raise HTTPException(status_code=400, detail="Name is empty")
+        field = "full_name" if person == "self" else f"{person}_name"
+        await db.users.update_one({"id": mid}, {"$set": {field: name}})
+        await write_audit(db, actor=admin, action="name_from_passport", entity_type="member", entity_id=mid,
+                          entity_name=m.get("full_name"), before={field: m.get(field)}, after={field: name})
+        return {"field": field, "name": name}
+
+    # ---- Weekly passport-expiry WhatsApp list -----------------------------
+    async def _expiring_rows(today: str) -> list:
+        docs = {d["user_id"]: d.get("people") or {}
+                async for d in db.member_id_docs.find({}, {"_id": 0, "user_id": 1, "people": 1})}
+        out = []
+        for r in await _active_people():
+            exp = (docs.get(r["member_id"], {}).get(r["person"]) or {}).get("passport_expiry") or ""
+            st = _expiry_status(exp, today)
+            if st in ("expired", "soon"):
+                out.append({**r, "passport_expiry": exp, "status": st})
+        return sorted(out, key=lambda x: x["passport_expiry"])
+
+    async def _week_key() -> tuple:
+        today = local_date_str(await db.config.find_one({"id": "office"}) or {})
+        d = date.fromisoformat(today)
+        return today, (d - timedelta(days=d.weekday())).isoformat()
+
+    @router.get("/id-docs/passport-expiry-week")
+    async def passport_week(admin: dict = Depends(require_admin)):
+        today, week = await _week_key()
+        sent = await db.passport_reminder_log.find_one({"week": week}, {"_id": 0})
+        rows = [] if sent else await _expiring_rows(today)
+        return {"week": week, "sent": bool(sent), **(sent or {}), "rows": rows, "due": not sent and bool(rows)}
+
+    @router.post("/id-docs/passport-expiry-week")
+    async def passport_week_sent(admin: dict = Depends(require_admin)):
+        _, week = await _week_key()
+        res = await db.passport_reminder_log.update_one(
+            {"week": week}, {"$setOnInsert": {"week": week, "sent_by_name": admin.get("full_name") or admin.get("email"),
+                                              "sent_at": now_utc().isoformat()}}, upsert=True)
+        row = await db.passport_reminder_log.find_one({"week": week}, {"_id": 0})
+        return {**row, "first": res.upserted_id is not None}
+
+    # ---- Travel check for regattas outside India ---------------------------
+    @router.get("/id-docs/travel-check")
+    async def travel_check(regatta_id: Optional[str] = None, admin: dict = Depends(require_admin)):
+        today, _ = await _week_key()
+        regattas = await db.regattas.find(
+            {"end_date": {"$gte": today}, "country": {"$nin": [None, "", "India", "india", "IN"]}},
+            {"_id": 0, "id": 1, "name": 1, "start_date": 1, "end_date": 1, "country": 1, "location": 1},
+        ).sort("start_date", 1).to_list(200)
+        reg = next((r for r in regattas if r["id"] == regatta_id), regattas[0] if regattas else None)
+        if not reg:
+            return {"regattas": [], "regatta": None, "rows": []}
+        end = date.fromisoformat(reg["end_date"])
+        m, y = end.month + 6, end.year
+        need = f"{y + (m - 1) // 12:04d}-{(m - 1) % 12 + 1:02d}-{min(end.day, 28):02d}"
+        coach_keys = {"coach"}
+        athlete_keys = set(await athlete_like_keys(db))
+        cats = {u["id"]: u.get("category") async for u in db.users.find({}, {"_id": 0, "id": 1, "category": 1})}
+        docs = {d["user_id"]: d.get("people") or {}
+                async for d in db.member_id_docs.find({}, {"_id": 0, "user_id": 1, "people": 1})}
+        rows = []
+        for r in await _active_people():
+            if r["person"] != "self" or cats.get(r["member_id"]) not in athlete_keys | coach_keys:
+                continue
+            p = docs.get(r["member_id"], {}).get("self") or {}
+            exp = p.get("passport_expiry") or ""
+            issue = "missing" if not p.get("passport") else "no_expiry" if not exp else "expiring" if exp < need else None
+            rows.append({**r, "passport": p.get("passport") or "", "passport_expiry": exp, "issue": issue})
+        rows.sort(key=lambda x: (x["issue"] is None, (x["member_name"] or "").lower()))
+        return {"regattas": regattas, "regatta": reg, "valid_until_needed": need, "rows": rows}
 
     return router

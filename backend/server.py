@@ -515,7 +515,7 @@ async def _seed_database() -> None:
     await db.audit_log.create_index([("entity_type", 1), ("at", -1)])
     await db.feature_usage.create_index("feature_key", unique=True)
     await db.daily_leave_report_log.create_index("date", unique=True)
-    for coll, key in (("absent_dispatch_log", "date"), ("member_id_docs", "user_id")):
+    for coll, key in (("absent_dispatch_log", "date"), ("member_id_docs", "user_id"), ("passport_reminder_log", "week")):
         try:
             await db[coll].create_index(key, unique=True)
         except Exception:

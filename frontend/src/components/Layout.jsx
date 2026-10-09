@@ -9,6 +9,7 @@ import Avatar from "./Avatar";
 import StaleSessionPrompt from "./StaleSessionPrompt";
 import LeaveReportPrompt from "./LeaveReportPrompt";
 import AbsentDispatchPrompt from "./AbsentDispatchPrompt";
+import { PassportExpiryPrompt } from "./PassportExpiryPrompt";
 import InstallPrompt from "./InstallPrompt";
 import OfflineBanner from "./OfflineBanner";
 import HelpChat from "./HelpChat";
@@ -344,6 +345,7 @@ export default function Layout() {
       <StaleSessionPrompt />
       {isAdmin && !isEscort && <LeaveReportPrompt />}
       {isAdmin && !isEscort && <AbsentDispatchPrompt />}
+      {isAdmin && !isEscort && <PassportExpiryPrompt />}
       <InstallPrompt />
       <OfflineBanner />
       <HelpChat />

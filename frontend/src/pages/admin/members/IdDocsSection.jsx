@@ -11,7 +11,7 @@ const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
 
 // Shown after a scan is read: confirm the auto-filled number, or pick between
 // the typed one and the scanned one. Name mismatch is a warning only.
-function DetectedBar({ card, d, onConfirm, onUseScanned, onDismiss, tid }) {
+function DetectedBar({ card, d, onConfirm, onUseScanned, onDismiss, onUseName, tid }) {
   return (
     <div className="mt-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 space-y-1" data-testid={`${tid}-detected`}>
       {d.mode === "choose" ? (
@@ -34,7 +34,10 @@ function DetectedBar({ card, d, onConfirm, onUseScanned, onDismiss, tid }) {
       )}
       {d.name_matches === false && (card === "passport" ? (
         <div className="text-rose-700 font-semibold" data-testid={`${tid}-name-warning`}>
-          Name is NOT exactly the same — passport: &ldquo;{d.name}&rdquo; · database: &ldquo;{d.expected_name}&rdquo;. Fix the member&apos;s name if the passport is right.
+          Name is NOT exactly the same — passport: &ldquo;{d.name}&rdquo; · database: &ldquo;{d.expected_name}&rdquo;.
+          <button type="button" onClick={onUseName} data-testid={`${tid}-use-name`}
+            title="Replace the name in the database with the passport name (normal capitals)"
+            className="ml-1.5 px-2 h-6 rounded bg-rose-600 text-white font-semibold">Use passport name</button>
         </div>
       ) : (
         <div className="text-rose-700 font-semibold" data-testid={`${tid}-name-warning`}>
@@ -113,7 +116,7 @@ function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onU
   );
 }
 
-export default function IdDocsSection({ memberId }) {
+export default function IdDocsSection({ memberId, onNameChanged }) {
   const [doc, setDoc] = useState(null);
   const [nums, setNums] = useState({});
   const [saving, setSaving] = useState(false);
@@ -148,6 +151,15 @@ export default function IdDocsSection({ memberId }) {
     setNum(p, card, d.number);
     if (card === "passport" && d.expiry) setNum(p, "passport_expiry", d.expiry);
     setDetected((x) => ({ ...x, [k]: { ...d, mode: "confirm" } }));
+  };
+  const applyPassportName = async (p, card) => {
+    const k = `${p}.${card}`;
+    try {
+      const res = await api.post(`/members/${memberId}/id-docs/${p}/passport/use-name`, { name: detected[k].name });
+      onNameChanged?.(res.field, res.name);
+      setDetected((x) => ({ ...x, [k]: { ...x[k], name_matches: true, expected_name: res.name } }));
+      toast.success(`Name updated to "${res.name}"`);
+    } catch (err) { showApiError(err, "Couldn't update the name"); }
   };
   const confirm = async (p, card, number) => {
     const d = detected[`${p}.${card}`] || {};
@@ -184,7 +196,7 @@ export default function IdDocsSection({ memberId }) {
                         setNum(p, card, detected[`${p}.${card}`].number);
                         setDetected((x) => ({ ...x, [`${p}.${card}`]: { ...x[`${p}.${card}`], mode: "confirm" } }));
                       }}
-                      onDismiss={() => clearDetected(`${p}.${card}`)} />
+                      onDismiss={() => clearDetected(`${p}.${card}`)} onUseName={() => applyPassportName(p, card)} />
                   )}
                 </div>
               ))}
