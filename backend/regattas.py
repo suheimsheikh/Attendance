@@ -36,6 +36,7 @@ class RegattaIn(BaseModel):
     end_date: str
     host_org: Optional[str] = None       # organising body (e.g. "World Sailing")
     notes: Optional[str] = None
+    team_ids: List[str] = []
 
     @field_validator("start_date", "end_date")
     @classmethod
@@ -54,6 +55,7 @@ class RegattaPatch(BaseModel):
     end_date: Optional[str] = None
     host_org: Optional[str] = None
     notes: Optional[str] = None
+    team_ids: Optional[List[str]] = None
 
 
 def make_router(db, require_admin) -> APIRouter:
@@ -81,6 +83,8 @@ def make_router(db, require_admin) -> APIRouter:
         existing = await db.regattas.find_one({"id": regatta_id}, {"_id": 0})
         if not existing:
             raise HTTPException(status_code=404, detail="Regatta not found")
+        if "team_ids" in payload:
+            payload["team_ids"] = list(dict.fromkeys(payload["team_ids"]))
         sd = payload.get("start_date", existing["start_date"])
         ed = payload.get("end_date", existing["end_date"])
         if sd > ed:

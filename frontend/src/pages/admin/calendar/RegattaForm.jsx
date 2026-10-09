@@ -8,6 +8,7 @@ import { useFormError } from "../../../hooks/useFormError";
 import FormErrorBanner from "../../../components/FormErrorBanner";
 import { LEVEL_STYLE, LEVELS } from "./helpers";
 import { todayIso } from "../../../utils";
+import TeamPicker from "./TeamPicker";
 
 /**
  * RegattaForm — modal for creating or editing a regatta (event for which
@@ -25,6 +26,7 @@ export default function RegattaForm({ initial, onClose, onSaved }) {
     end_date:    initial?.end_date || today,
     host_org:    initial?.host_org || "",
     notes:       initial?.notes || "",
+    team_ids:    initial?.team_ids || [],
   });
   const [saving, setSaving] = useState(false);
   const guard = useDirtyForm(form, onClose);
@@ -94,6 +96,10 @@ export default function RegattaForm({ initial, onClose, onSaved }) {
         <div>
           <label className="iu-label">Notes (optional)</label>
           <textarea data-testid="rf-notes" rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} className="iu-input" placeholder="Travel info, points of contact…" />
+        </div>
+        <div>
+          <label className="iu-label">Selected athletes &amp; coaches</label>
+          <TeamPicker value={form.team_ids} onChange={(v) => set("team_ids", v)} />
         </div>
         <footer className="flex flex-col gap-2 pt-2 border-t border-slate-200">
           <FormErrorBanner

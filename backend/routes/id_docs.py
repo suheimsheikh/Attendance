@@ -297,7 +297,7 @@ def make_router(db, require_admin) -> APIRouter:
         today, _ = await _week_key()
         regattas = await db.regattas.find(
             {"end_date": {"$gte": today}, "country": {"$nin": [None, "", "India", "india", "IN"]}},
-            {"_id": 0, "id": 1, "name": 1, "start_date": 1, "end_date": 1, "country": 1, "location": 1},
+            {"_id": 0, "id": 1, "name": 1, "start_date": 1, "end_date": 1, "country": 1, "location": 1, "team_ids": 1},
         ).sort("start_date", 1).to_list(200)
         reg = next((r for r in regattas if r["id"] == regatta_id), regattas[0] if regattas else None)
         if not reg:
@@ -310,15 +310,21 @@ def make_router(db, require_admin) -> APIRouter:
         cats = {u["id"]: u.get("category") async for u in db.users.find({}, {"_id": 0, "id": 1, "category": 1})}
         docs = {d["user_id"]: d.get("people") or {}
                 async for d in db.member_id_docs.find({}, {"_id": 0, "user_id": 1, "people": 1})}
+        team = set(reg.get("team_ids") or [])
         rows = []
         for r in await _active_people():
-            if r["person"] != "self" or cats.get(r["member_id"]) not in athlete_keys | coach_keys:
+            if r["person"] != "self":
+                continue
+            if team and r["member_id"] not in team:
+                continue
+            if not team and cats.get(r["member_id"]) not in athlete_keys | coach_keys:
                 continue
             p = docs.get(r["member_id"], {}).get("self") or {}
             exp = p.get("passport_expiry") or ""
             issue = "missing" if not p.get("passport") else "no_expiry" if not exp else "expiring" if exp < need else None
             rows.append({**r, "passport": p.get("passport") or "", "passport_expiry": exp, "issue": issue})
         rows.sort(key=lambda x: (x["issue"] is None, (x["member_name"] or "").lower()))
-        return {"regattas": regattas, "regatta": reg, "valid_until_needed": need, "rows": rows}
+        return {"regattas": regattas, "regatta": reg, "valid_until_needed": need, "rows": rows,
+                "team_picked": bool(team)}
 
     return router
