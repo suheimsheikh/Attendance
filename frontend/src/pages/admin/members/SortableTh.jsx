@@ -34,13 +34,13 @@ export const COL_HELP = {
 };
 
 export default function SortableTh({
-  k, sortKey, sortDir, onSort, align = "left", className = "", children,
+  k, sortKey, sortDir, onSort, align = "left", className = "", children, help, thProps,
 }) {
   const active = sortKey === k && !!sortDir;
   const justify = align === "center" ? "justify-center" : "justify-start";
-  const desc = COL_HELP[k] || "";
+  const desc = help || COL_HELP[k] || "";
   const tip = desc
-    ? `${desc}\n\nClick to sort${active ? ` — currently ${sortDir === "asc" ? "A → Z" : "Z → A"}` : ""}.`
+    ? `${desc}\n\nClick to sort${active ? ` — currently ${sortDir === "asc" ? "A → Z" : "Z → A"}` : ""}.${thProps ? " Drag to move this column." : ""}`
     : `Sort by ${k}${active ? ` (${sortDir})` : ""} — click again to change direction`;
   // Inactive-state indicator: stack an up + down chevron with ~5 mm of
   // vertical separation. Using two icons instead of `ChevronsUpDown`
@@ -55,7 +55,7 @@ export default function SortableTh({
     </div>
   );
   return (
-    <th className={`iu-table-th ${align === "center" ? "text-center" : ""} ${className}`}>
+    <th className={`iu-table-th ${align === "center" ? "text-center" : ""} ${thProps ? "cursor-grab" : ""} ${className}`} {...thProps}>
       <button
         type="button"
         data-testid={`sort-${k}`}

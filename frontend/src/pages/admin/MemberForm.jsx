@@ -12,6 +12,12 @@ import RecalcTimingsDialog from "../../components/RecalcTimingsDialog";
 import IdDocsSection from "./members/IdDocsSection";
 
 const SEEDED_CATS = ["athlete", "elite", "staff", "coach", "executive"];
+// Profile fields added Oct 2026 — [key, label, input type].
+const PROFILE_FIELDS = [
+  ["blood_group", "Blood group", "text"], ["school_class", "Class / grade", "text"],
+  ["emergency_contact_name", "Emergency contact name", "text"], ["emergency_contact_phone", "Emergency contact phone", "tel"],
+  ["address", "Address", "text"], ["medical_notes", "Medical notes (allergies, conditions)", "text"],
+];
 
 export default function MemberForm({ initial, onClose, onSaved }) {
   const isEdit = !!initial;
@@ -42,6 +48,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     mother_name: initial?.mother_name || "",
     guardian_mobile: initial?.guardian_mobile || "",
     guardian_name: initial?.guardian_name || "",
+    ...Object.fromEntries(PROFILE_FIELDS.map(([k]) => [k, initial?.[k] || ""])),
     date_of_birth: initial?.date_of_birth || "",
     joining_date: initial?.joining_date || "",
     leaving_date: initial?.leaving_date || "",
@@ -138,7 +145,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
       if (isEdit) {
         const body = { ...form, meal_eligible: mealMap[form.meal_eligible] };
         if (!body.password) delete body.password;
-        delete body.email; // backend doesn't update email
+        if ((body.email || "").trim().toLowerCase() === (initial.email || "").toLowerCase()) delete body.email;
         // Strip empty optional fields so Pydantic Literal validators (gender, role, etc.) don't 422.
         // We keep explicit nulls but drop "" since the backend treats absent == unchanged.
         Object.keys(body).forEach((k) => {
@@ -202,7 +209,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="iu-label">Email{isEdit && <span className="text-slate-400 normal-case font-normal"> (locked)</span>}</label>
-              <input data-testid="mf-email" type="email" value={form.email} disabled={isEdit} onChange={(e) => set("email", e.target.value)} className="iu-input" />
+              <input data-testid="mf-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className="iu-input" />
             </div>
             <div>
               <label className="iu-label">Mobile</label>
@@ -485,6 +492,17 @@ export default function MemberForm({ initial, onClose, onSaved }) {
                   <input data-testid="mf-guardian-mobile" type="tel" value={form.guardian_mobile} onChange={(e) => set("guardian_mobile", e.target.value)} className="iu-input font-mono text-xs" placeholder="+91…" />
                 </div>
               </div>
+            </div>
+          </div>
+          <div className="pt-3 mt-3 border-t border-slate-100" data-testid="mf-profile-section">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Profile &amp; emergency</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {PROFILE_FIELDS.map(([k, label, type]) => (
+                <div key={k} className={k === "address" || k === "medical_notes" ? "md:col-span-2" : ""}>
+                  <label className="iu-label">{label}</label>
+                  <input data-testid={`mf-${k}`} type={type} value={form[k]} onChange={(e) => set(k, e.target.value)} className="iu-input" />
+                </div>
+              ))}
             </div>
           </div>
           {isEdit ? <IdDocsSection memberId={initial.id} /> : (

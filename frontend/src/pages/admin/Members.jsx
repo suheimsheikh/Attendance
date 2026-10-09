@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Loader2, Plus, Search, FileSpreadsheet, Download, IdCard } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
@@ -7,6 +7,8 @@ import CorrectionRequestModal from "../../components/CorrectionRequestModal";
 import MemberForm from "./MemberForm";
 import MemberBucketFilters from "./members/MemberBucketFilters";
 import MemberRow from "./members/MemberRow";
+import ColumnsMenu from "./members/ColumnsMenu";
+import { useMemberColumns } from "./members/useMemberColumns";
 import SortableTh, { COL_HELP } from "./members/SortableTh";
 import { bucketOf } from "./members/helpers";
 import ExMemberToggle, { useExMemberToggle } from "../../components/ExMemberToggle";
@@ -101,6 +103,25 @@ export default function Members() {
   ), [institutions]);
   // Bundle for MemberRow — passing as one prop keeps the row component's
   // signature tidy and avoids one prop-update per option list change.
+  // Movable / hideable columns, saved per admin (Oct 2026).
+  const cols = useMemberColumns();
+  const dragCol = useRef(null);
+  // Member's own PAN / Aadhaar for the optional ID columns.
+  const [idNums, setIdNums] = useState({});
+  const showIds = cols.visible.some((c) => c.key === "pan" || c.key === "aadhaar");
+  useEffect(() => {
+    if (!showIds) return;
+    api.get("/id-docs/report").then((r) => setIdNums(Object.fromEntries(
+      r.rows.filter((x) => x.person === "self").map((x) => [x.member_id, { pan: x.pan, aadhaar: x.aadhaar }])))).catch(() => {});
+  }, [showIds]);
+  const saveIdNum = useCallback(async (memberId, card, value) => {
+    try {
+      const res = await api.put(`/members/${memberId}/id-docs`, { people: { self: { [card]: value || "" } } });
+      const self = res.people?.self || {};
+      setIdNums((prev) => ({ ...prev, [memberId]: { pan: self.pan || "", aadhaar: self.aadhaar || "" } }));
+    } catch (err) { showApiError(err, `Couldn't save ${card === "pan" ? "PAN" : "Aadhaar"}`); throw err; }
+  }, []);
+
   const rowOptions = useMemo(
     () => ({ CATEGORY_OPTS, ROLE_OPTS, GENDER_OPTS, FLEET_OPTS, INSTITUTION_OPTS, WEEKLY_OFF_OPTS }),
     [CATEGORY_OPTS, ROLE_OPTS, GENDER_OPTS, FLEET_OPTS, INSTITUTION_OPTS, WEEKLY_OFF_OPTS],
@@ -374,6 +395,7 @@ export default function Members() {
           </p>
         </div>
         <div className="flex gap-2">
+          <ColumnsMenu cols={cols} />
           <Link to="/admin/id-documents" className="iu-btn-secondary" data-testid="members-id-documents"
             title="See who is still missing PAN / Aadhaar numbers or scans, and bulk-upload scans">
             <IdCard size={16} /> ID Documents
@@ -484,21 +506,22 @@ export default function Members() {
                 <tr>
                   <th className="iu-table-th w-28 text-center sticky left-0 z-30 bg-slate-50 !text-slate-700 !font-bold" title="Edit · file correction · archive · delete">Actions</th>
                   <SortableTh k="full_name" className="sticky left-28 z-30 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Member</SortableTh>
-                  <SortableTh k="ot_eligible" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="center">OT / Meal</SortableTh>
-                  <SortableTh k="category" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Category</SortableTh>
-                  <SortableTh k="role" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Role</SortableTh>
-                  <SortableTh k="rank" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Rank</SortableTh>
-                  <SortableTh k="gender" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Gender</SortableTh>
-                  <SortableTh k="mobile" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Mobile</SortableTh>
-                  <SortableTh k="institution" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Institution</SortableTh>
-                  <SortableTh k="fleet" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Fleet</SortableTh>
-                  <SortableTh k="last_seen_date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Last seen</SortableTh>
-                  <SortableTh k="leave_balance_opening" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Leave balance</SortableTh>
-                  <SortableTh k="work_start" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Hours</SortableTh>
-                  <SortableTh k="weekly_off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>Weekly off</SortableTh>
-                  <SortableTh k="date_of_birth" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}>DOB</SortableTh>
-                  <th className="iu-table-th !text-slate-700 !font-bold" title={COL_HELP.parents}>Parents / Guardian</th>
-                  <th className="iu-table-th !text-slate-700 !font-bold" title={COL_HELP.status}>Status</th>
+                  {cols.visible.map((c) => {
+                    const dnd = {
+                      draggable: true,
+                      onDragStart: () => { dragCol.current = c.key; },
+                      onDragOver: (e) => e.preventDefault(),
+                      onDrop: () => { cols.move(dragCol.current, c.key); dragCol.current = null; },
+                      "data-testid": `col-head-${c.key}`,
+                    };
+                    return c.sortKey ? (
+                      <SortableTh key={c.key} k={c.sortKey} sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}
+                        align={c.align} help={c.help && c.help.includes(" ") ? c.help : undefined} thProps={dnd}>{c.label}</SortableTh>
+                    ) : (
+                      <th key={c.key} className="iu-table-th !text-slate-700 !font-bold cursor-grab" {...dnd}
+                        title={`${COL_HELP[c.help] || c.help || c.label}\n\nDrag to move this column.`}>{c.label}</th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody data-testid="members-table">
@@ -519,10 +542,13 @@ export default function Members() {
                     onPhotoUpdated={onPhotoUpdated(m.id)}
                     onFileCorrection={setCorrectingFor}
                     highlighted={highlightId === m.id}
+                    cols={cols.visible}
+                    idNum={idNums[m.id]}
+                    onSaveIdNum={saveIdNum}
                   />
                 ))}
                 {sortedFiltered.length === 0 && (
-                  <tr><td colSpan={17} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
+                  <tr><td colSpan={cols.visible.length + 2} className="text-center py-10 text-slate-500 text-sm">No members found.</td></tr>
                 )}
               </tbody>
             </table>

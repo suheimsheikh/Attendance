@@ -57,6 +57,12 @@ class MemberCreate(BaseModel):
     mother_name: Optional[str] = None
     guardian_mobile: Optional[str] = None
     guardian_name: Optional[str] = None
+    blood_group: Optional[str] = None
+    address: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    school_class: Optional[str] = None
+    medical_notes: Optional[str] = None
     # ISO YYYY-MM-DD. Optional — powers the "Happy birthday" flourish
     # on the Check-In greeting (added 7 Jul 2026).
     date_of_birth: Optional[str] = None
@@ -93,6 +99,7 @@ class MemberCreate(BaseModel):
 
 class MemberUpdate(BaseModel):
     full_name: Optional[str] = None
+    email: Optional[str] = None
     category: Optional[str] = None
     rank: Optional[str] = None
     mobile: Optional[str] = None
@@ -112,6 +119,12 @@ class MemberUpdate(BaseModel):
     mother_name: Optional[str] = None
     guardian_mobile: Optional[str] = None
     guardian_name: Optional[str] = None
+    blood_group: Optional[str] = None
+    address: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    school_class: Optional[str] = None
+    medical_notes: Optional[str] = None
     date_of_birth: Optional[str] = None
     joining_date: Optional[str] = None
     leaving_date: Optional[str] = None
@@ -181,6 +194,8 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
             "mother_name": body.mother_name,
             "guardian_mobile": body.guardian_mobile,
             "guardian_name": body.guardian_name,
+            **{k: getattr(body, k) for k in ("blood_group", "address", "emergency_contact_name",
+                                             "emergency_contact_phone", "school_class", "medical_notes")},
             "date_of_birth": body.date_of_birth,
             "joining_date": body.joining_date,
             "leaving_date": body.leaving_date,
@@ -504,6 +519,13 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
         # SET values but never CLEAR them, because Pydantic defaults all
         # unspecified Optional fields to None and we used to filter all Nones.
         update = {k: v for k, v in body.model_dump(exclude_unset=True).items() if k != "password"}
+        if "email" in update:
+            email = (update["email"] or "").strip().lower()
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+                raise HTTPException(status_code=400, detail="Enter a valid email address")
+            if await db.users.find_one({"email": email, "id": {"$ne": member_id}}, {"_id": 1}):
+                raise HTTPException(status_code=409, detail="Another member already uses this email")
+            update["email"] = email
         if "category" in update:
             if update["category"]:
                 update.update(await _resolve_category(update["category"]))

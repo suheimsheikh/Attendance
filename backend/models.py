@@ -27,6 +27,13 @@ class UserPublic(BaseModel):
     # `category` then holds the rule bucket (staff / athlete).
     custom_category: Optional[str] = None
     rank: Optional[str] = None
+    # Profile fields added Oct 2026 (Members table columns).
+    blood_group: Optional[str] = None
+    address: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    school_class: Optional[str] = None
+    medical_notes: Optional[str] = None
     mobile: Optional[str] = None
     work_start: Optional[str] = None
     work_end: Optional[str] = None
