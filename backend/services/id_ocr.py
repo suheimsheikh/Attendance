@@ -20,9 +20,13 @@ _PROMPT = {
            '{"number": "<10-char PAN, e.g. ABCDE1234F, or null>", "name": "<card holder name or null>"}.',
     "aadhaar": "This is an Indian Aadhaar card scan (front and/or back). Reply ONLY with JSON "
                '{"number": "<12-digit Aadhaar number, digits only, or null>", "name": "<card holder name or null>"}.',
-    "auto": "This is a scan of an Indian PAN card or Aadhaar card. Reply ONLY with JSON "
-            '{"type": "pan" | "aadhaar" | null, "number": "<PAN like ABCDE1234F, or 12-digit Aadhaar digits only, or null>", '
-            '"name": "<card holder name or null>"}.',
+    "passport": "This is a passport scan (data page). Reply ONLY with JSON "
+                '{"number": "<passport number, letters/digits only, or null>", "surname": "<Surname field exactly as printed or null>", '
+                '"given_names": "<Given name(s) field exactly as printed or null>", "expiry": "<Date of expiry as YYYY-MM-DD or null>"}.',
+    "auto": "This is a scan of an Indian PAN card, Aadhaar card or a passport data page. Reply ONLY with JSON "
+            '{"type": "pan" | "aadhaar" | "passport" | null, "number": "<PAN like ABCDE1234F, 12-digit Aadhaar digits only, '
+            'or passport number; null if unreadable>", "name": "<holder name or null>", "surname": "<passport Surname or null>", '
+            '"given_names": "<passport Given name(s) or null>", "expiry": "<passport Date of expiry YYYY-MM-DD or null>"}.',
 }
 _EXT = {"application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
@@ -33,6 +37,9 @@ def _parse(text: str) -> dict:
 
 
 def _clean_number(card: str, raw) -> Optional[str]:
+    if card == "passport":
+        v = re.sub(r"[^A-Za-z0-9]", "", str(raw or "")).upper()
+        return v if re.fullmatch(r"[A-Z0-9]{6,9}", v) else None
     if card == "pan":
         v = re.sub(r"[^A-Za-z0-9]", "", str(raw or "")).upper()
         return v if re.fullmatch(r"[A-Z]{5}[0-9]{4}[A-Z]", v) else None
@@ -44,7 +51,20 @@ def name_score(card_name: Optional[str], expected: Optional[str]) -> float:
     """Share of the card's 3+ letter words found in `expected` (0..1)."""
     words = lambda s: {w for w in re.findall(r"[a-z]+", (s or "").lower()) if len(w) >= 3}
     a, b = words(card_name), words(expected)
+    squash = lambda x: re.sub(r"[^a-z]", "", (x or "").lower())
+    ca, cb = squash(card_name), squash(expected)
+    if len(ca) >= 6 and len(cb) >= 6 and (ca in cb or cb in ca):  # OCR sometimes drops spaces
+        return 1.0
     return len(a & b) / len(a) if a and b else 0.0
+
+
+def _norm(s: Optional[str]) -> str:
+    return " ".join((s or "").upper().split())
+
+
+def name_exact(card_name: Optional[str], expected: Optional[str]) -> Optional[bool]:
+    """Passport rule (user, Oct 2026): same words in the same order; only case/spacing ignored."""
+    return None if not _norm(card_name) or not _norm(expected) else _norm(card_name) == _norm(expected)
 
 
 def name_matches(card_name: Optional[str], expected: Optional[str]) -> Optional[bool]:
@@ -82,9 +102,16 @@ async def read_id_card(data: bytes, content_type: str, card: str) -> Optional[di
                 if attempt == 2:
                     raise
                 logger.warning("ID OCR attempt 1 failed (%s) — retrying", card)
-        kind = card if card != "auto" else (out.get("type") if out.get("type") in ("pan", "aadhaar") else None)
-        return {"type": kind, "number": _clean_number(kind, out.get("number")) if kind else None,
-                "name": (out.get("name") or "").strip() or None}
+        kind = card if card != "auto" else (out.get("type") if out.get("type") in ("pan", "aadhaar", "passport") else None)
+        name = (out.get("name") or "").strip() or None
+        res = {"type": kind, "number": _clean_number(kind, out.get("number")) if kind else None, "name": name}
+        if kind == "passport":
+            # Database names are "Given Surname", so compare in that order.
+            given, sur = (out.get("given_names") or "").strip(), (out.get("surname") or "").strip()
+            res["name"] = " ".join(x for x in (given, sur) if x) or name
+            exp = str(out.get("expiry") or "")
+            res["expiry"] = exp if re.fullmatch(r"\d{4}-\d{2}-\d{2}", exp) else None
+        return res
     except Exception:
         logger.exception("ID OCR failed (%s)", card)
         return None

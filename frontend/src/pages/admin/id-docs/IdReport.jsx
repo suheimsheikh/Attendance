@@ -5,13 +5,22 @@ import MemberForm from "../MemberForm";
 
 const PERSON_LABEL = { self: "Member", father: "Father", mother: "Mother", guardian: "Guardian" };
 const MISSING = {
-  any: { label: "Missing anything", test: (r) => !r.pan || !r.aadhaar || !r.pan_scan || !r.aadhaar_scan },
+  any: { label: "Missing PAN or Aadhaar (number or scan)", test: (r) => !r.pan || !r.aadhaar || !r.pan_scan || !r.aadhaar_scan },
   pan: { label: "Missing PAN", test: (r) => !r.pan || !r.pan_scan },
   aadhaar: { label: "Missing Aadhaar", test: (r) => !r.aadhaar || !r.aadhaar_scan },
-  scans: { label: "Missing scans only", test: (r) => !r.pan_scan || !r.aadhaar_scan },
+  passport: { label: "Missing passport", test: (r) => !r.passport || !r.passport_scan },
+  expiring: { label: "Passport expired / expiring ≤ 6 months", test: (r) => r.passport_status === "expired" || r.passport_status === "soon" },
+  scans: { label: "Missing scans only", test: (r) => !r.pan_scan || !r.aadhaar_scan || !r.passport_scan },
   all: { label: "Show everyone", test: () => true },
 };
-const COLS = ["member_name", "person", "person_name", "category", "pan", "pan_scan", "aadhaar", "aadhaar_scan"];
+const COLS = ["member_name", "person", "person_name", "category", "pan", "pan_scan", "aadhaar", "aadhaar_scan",
+  "passport", "passport_scan", "passport_expiry", "passport_status"];
+const EXPIRY_STYLE = { expired: "bg-rose-100 text-rose-700", soon: "bg-amber-100 text-amber-800", ok: "text-slate-600" };
+const Expiry = ({ r, tid }) => (r.passport_expiry
+  ? <span className={`px-1.5 rounded text-xs font-semibold ${EXPIRY_STYLE[r.passport_status]}`} data-testid={tid}
+      title={r.passport_status === "expired" ? "Passport has expired" : r.passport_status === "soon" ? "Expires within 6 months — renew before overseas travel" : "Valid for more than 6 months"}>
+      {r.passport_expiry}{r.passport_status === "expired" ? " · expired" : r.passport_status === "soon" ? " · soon" : ""}</span>
+  : <span className="text-slate-300 text-xs" data-testid={tid}>—</span>);
 
 const Cell = ({ ok, text, tid }) => (ok
   ? <span className="inline-flex items-center gap-1 text-emerald-700 font-mono text-xs" data-testid={tid} title="On file"><Check size={13} />{text || ""}</span>
@@ -85,6 +94,9 @@ export default function IdReport() {
               <th className="text-left p-2" title="PAN scan uploaded">PAN scan</th>
               <th className="text-left p-2" title="Aadhaar number on file">Aadhaar no.</th>
               <th className="text-left p-2" title="Aadhaar scan uploaded">Aadhaar scan</th>
+              <th className="text-left p-2" title="Passport number on file">Passport no.</th>
+              <th className="text-left p-2" title="Passport scan uploaded">Passport scan</th>
+              <th className="text-left p-2" title="Passport expiry — red: expired, amber: within 6 months">Expiry</th>
             </tr>
           </thead>
           <tbody>
@@ -100,10 +112,13 @@ export default function IdReport() {
                   <td className="p-2"><Cell ok={r.pan_scan} tid={`${tid}-pan-scan`} /></td>
                   <td className="p-2"><Cell ok={!!r.aadhaar} text={r.aadhaar} tid={`${tid}-aadhaar`} /></td>
                   <td className="p-2"><Cell ok={r.aadhaar_scan} tid={`${tid}-aadhaar-scan`} /></td>
+                  <td className="p-2"><Cell ok={!!r.passport} text={r.passport} tid={`${tid}-passport`} /></td>
+                  <td className="p-2"><Cell ok={r.passport_scan} tid={`${tid}-passport-scan`} /></td>
+                  <td className="p-2"><Expiry r={r} tid={`${tid}-passport-expiry`} /></td>
                 </tr>
               );
             })}
-            {!shown.length && <tr><td colSpan={7} className="p-8 text-center text-slate-400" data-testid="id-report-empty">Nothing missing for this filter.</td></tr>}
+            {!shown.length && <tr><td colSpan={10} className="p-8 text-center text-slate-400" data-testid="id-report-empty">Nothing missing for this filter.</td></tr>}
           </tbody>
         </table>
       </div>

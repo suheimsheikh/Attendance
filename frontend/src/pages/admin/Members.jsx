@@ -108,18 +108,18 @@ export default function Members() {
   const dragCol = useRef(null);
   // Member's own PAN / Aadhaar for the optional ID columns.
   const [idNums, setIdNums] = useState({});
-  const showIds = cols.visible.some((c) => c.key === "pan" || c.key === "aadhaar");
+  const showIds = cols.visible.some((c) => ["pan", "aadhaar", "passport"].includes(c.key));
   useEffect(() => {
     if (!showIds) return;
     api.get("/id-docs/report").then((r) => setIdNums(Object.fromEntries(
-      r.rows.filter((x) => x.person === "self").map((x) => [x.member_id, { pan: x.pan, aadhaar: x.aadhaar }])))).catch(() => {});
+      r.rows.filter((x) => x.person === "self").map((x) => [x.member_id, { pan: x.pan, aadhaar: x.aadhaar, passport: x.passport }])))).catch(() => {});
   }, [showIds]);
   const saveIdNum = useCallback(async (memberId, card, value) => {
     try {
       const res = await api.put(`/members/${memberId}/id-docs`, { people: { self: { [card]: value || "" } } });
       const self = res.people?.self || {};
-      setIdNums((prev) => ({ ...prev, [memberId]: { pan: self.pan || "", aadhaar: self.aadhaar || "" } }));
-    } catch (err) { showApiError(err, `Couldn't save ${card === "pan" ? "PAN" : "Aadhaar"}`); throw err; }
+      setIdNums((prev) => ({ ...prev, [memberId]: { pan: self.pan || "", aadhaar: self.aadhaar || "", passport: self.passport || "" } }));
+    } catch (err) { showApiError(err, `Couldn't save ${{ pan: "PAN", aadhaar: "Aadhaar", passport: "passport" }[card]}`); throw err; }
   }, []);
 
   const rowOptions = useMemo(

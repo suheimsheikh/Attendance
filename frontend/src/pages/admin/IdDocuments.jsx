@@ -6,7 +6,7 @@ import IdReport from "./id-docs/IdReport";
 import BulkIdUpload from "./id-docs/BulkIdUpload";
 
 const TABS = [
-  ["report", "Missing ID report", "Members and parents still missing PAN, Aadhaar or scans"],
+  ["report", "Missing ID report", "Members and parents still missing PAN, Aadhaar, passport or scans — and passports expiring soon"],
   ["bulk", "Bulk upload", "Drop many scans at once — each is read and matched to the right person"],
 ];
 
@@ -22,7 +22,7 @@ export default function IdDocuments() {
       <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2 mt-1">
         <IdCard className="text-emerald-600" size={28} /> ID Documents
       </h1>
-      <p className="text-slate-500 text-sm mt-1 mb-5">PAN &amp; Aadhaar for members and (for athletes) their father, mother and guardian.</p>
+      <p className="text-slate-500 text-sm mt-1 mb-5">PAN, Aadhaar &amp; passports for members and (for athletes) their father, mother and guardian.</p>
       <div className="flex gap-2 mb-5">
         {TABS.map(([k, label, tip]) => (
           <button key={k} type="button" onClick={() => setTab(k)} title={tip} data-testid={`id-docs-tab-${k}`}

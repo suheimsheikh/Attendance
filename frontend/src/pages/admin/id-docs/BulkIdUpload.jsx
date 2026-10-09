@@ -27,13 +27,16 @@ function RowEditor({ row, slots, onChange, onRemove }) {
       <td className="p-2 text-xs">
         {row.status === "reading" ? <span className="inline-flex items-center gap-1 text-slate-500"><Loader2 size={12} className="animate-spin" />Reading…</span>
           : <span title="Name the AI read on the card">{row.cardName || <i className="text-slate-400">no name read</i>}</span>}
+        {row.card === "passport" && row.expiry && <div className="text-slate-500 mt-0.5">expires {row.expiry}</div>}
+        {row.card === "passport" && row.nameMatches === false && (
+          <div className="text-rose-600 font-semibold mt-1" data-testid={`${tid}-name-warning`}>Not exactly the database name</div>)}
         {row.readError && <div className="text-rose-600 mt-1" data-testid={`${tid}-read-error`}>{row.readError} — fill in by hand</div>}
         {row.status === "ready" && !row.member_id && (
           <div className="text-amber-700 mt-1 inline-flex items-center gap-1" data-testid={`${tid}-nomatch`}><AlertTriangle size={11} />No match — pick below</div>)}
       </td>
       <td className="p-2">
         <select value={row.card || ""} onChange={(e) => onChange({ card: e.target.value })} className="iu-input !h-8 !text-xs" data-testid={`${tid}-card`} title="Card type (detected automatically)">
-          <option value="">— card —</option><option value="pan">PAN</option><option value="aadhaar">Aadhaar</option>
+          <option value="">— card —</option><option value="pan">PAN</option><option value="aadhaar">Aadhaar</option><option value="passport">Passport</option>
         </select>
       </td>
       <td className="p-2">
@@ -77,7 +80,8 @@ export default function BulkIdUpload({ slots }) {
         fd.append("file", r.file);
         const res = await api.post("/id-docs/bulk/read", fd);
         patch(r.key, { status: "ready", card: res.detected?.type || "", number: res.detected?.number || "",
-          cardName: res.detected?.name || "", member_id: res.match?.member_id || "", person: res.match?.person || "self" });
+          cardName: res.detected?.name || "", member_id: res.match?.member_id || "", person: res.match?.person || "self",
+          expiry: res.detected?.expiry || "", nameMatches: res.detected?.name_matches });
       } catch (e) { patch(r.key, { status: "ready", readError: e.message || "Couldn't read this file" }); }
     });
   };
@@ -96,7 +100,8 @@ export default function BulkIdUpload({ slots }) {
           r.uploadedTo = target;
           patch(r.key, { uploadedTo: target });
         }
-        if (r.number) await api.put(`/members/${r.member_id}/id-docs`, { people: { [r.person]: { [r.card]: r.number } } });
+        const nums = { [r.card]: r.number, ...(r.card === "passport" && r.expiry ? { passport_expiry: r.expiry } : {}) };
+        if (r.number) await api.put(`/members/${r.member_id}/id-docs`, { people: { [r.person]: nums } });
         patch(r.key, { status: "saved" });
       } catch (e) { patch(r.key, { status: "error", error: e.message }); showApiError(e, `${r.file.name} failed`); }
     }
@@ -112,7 +117,7 @@ export default function BulkIdUpload({ slots }) {
         className="iu-card border-2 border-dashed border-slate-300 hover:border-emerald-400 p-8 text-center cursor-pointer">
         <UploadCloud className="mx-auto text-emerald-600" size={30} />
         <div className="font-bold mt-2">Drop scans here or click to choose</div>
-        <div className="text-xs text-slate-500 mt-1">Up to {MAX_FILES} files · PDF / JPG / PNG / WEBP · front + back in one file · max 10 MB each</div>
+        <div className="text-xs text-slate-500 mt-1">Up to {MAX_FILES} files · PAN, Aadhaar or passport · PDF / JPG / PNG / WEBP · front + back in one file · max 10 MB each</div>
         <input ref={inputRef} type="file" multiple accept={ACCEPT} className="hidden" data-testid="bulk-file-input"
           onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
       </div>

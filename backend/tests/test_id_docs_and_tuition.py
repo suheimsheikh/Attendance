@@ -186,3 +186,58 @@ def test_bulk_read_detects_type_and_matches_person(admin_client, base_url, make_
     j = r.json()
     assert j["detected"]["type"] == "pan" and j["detected"]["number"] == "KLMNO4321P"
     assert j["match"] and j["match"]["person"] == "father" and j["match"]["person_name"] == "Zorawar Quillfeather"
+
+
+def test_passport_numbers_expiry_and_status(admin_client, base_url, make_member):
+    from routes.id_docs import _expiry_status
+    assert _expiry_status("", "2026-10-09") == ""
+    assert _expiry_status("2026-10-08", "2026-10-09") == "expired"
+    assert _expiry_status("2027-03-01", "2026-10-09") == "soon"
+    assert _expiry_status("2028-01-01", "2026-10-09") == "ok"
+    m = make_member("athlete")
+    url = f"{base_url}/api/members/{m['id']}/id-docs"
+    assert admin_client.put(url, json={"people": {"mother": {"passport": "12"}}}, timeout=30).status_code == 400
+    assert admin_client.put(url, json={"people": {"self": {"passport_expiry": "next year"}}}, timeout=30).status_code == 400
+    r = admin_client.put(url, json={"people": {"self": {"pan": "ABCDE1234F"}}}, timeout=30)
+    r = admin_client.put(url, json={"people": {"self": {"passport": "z 1234567", "passport_expiry": "2000-01-01"}}}, timeout=30)
+    assert r.status_code == 200
+    assert r.json()["people"]["self"] == {"pan": "ABCDE1234F", "passport": "Z1234567", "passport_expiry": "2000-01-01"}
+    row = next(x for x in admin_client.get(f"{base_url}/api/id-docs/report", timeout=60).json()["rows"]
+               if x["member_id"] == m["id"] and x["person"] == "self")
+    assert row["passport"] == "Z1234567" and row["passport_status"] == "expired" and row["passport_scan"] is False
+
+
+def test_passport_name_exact_rule():
+    from services.id_ocr import name_exact
+    assert name_exact("RAVI KUMAR", "Ravi  Kumar") is True
+    assert name_exact("KUMAR RAVI", "Ravi Kumar") is False  # order matters
+    assert name_exact("RAVI K", "Ravi Kumar") is False
+    assert name_exact(None, "Ravi") is None
+
+
+def test_passport_scan_detects_number_expiry_and_name_mismatch(admin_client, base_url, make_member):
+    import io
+    import requests
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (800, 420), "white")
+    d = ImageDraw.Draw(img)
+    for y, t in [(30, "REPUBLIC OF INDIA   PASSPORT"), (90, "Passport No.: Z7654321"), (150, "Surname: SHARMA"),
+                 (210, "Given Name(s): ANITA DEVI"), (270, "Date of Birth: 01/02/2010"), (330, "Date of Expiry: 15/03/2027")]:
+        d.text((20, y), t, fill="black")
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    m = make_member("athlete", full_name="TEST Anita Sharma")
+    r = requests.post(f"{base_url}/api/members/{m['id']}/id-docs/self/passport",
+                      headers={"Authorization": admin_client.headers["Authorization"]},
+                      files={"file": ("pp.png", buf.getvalue(), "image/png")}, timeout=120)
+    assert r.status_code == 200, r.text
+    det = r.json()["detected"]
+    assert det["number"] == "Z7654321" and det["expiry"] == "2027-03-15"
+    assert det["name"].upper() == "ANITA DEVI SHARMA"
+    assert det["name_matches"] is False  # DB "TEST Anita Sharma" ≠ "ANITA DEVI SHARMA"
+
+
+def test_name_score_tolerates_missing_spaces():
+    from services.id_ocr import name_score
+    assert name_score("ZORAWARQUILLFEATHER", "Zorawar Quillfeather") == 1.0
+    assert name_score("RAVI KUMAR", "Sita Devi") == 0.0

@@ -4,7 +4,9 @@ import { toast } from "sonner";
 import { api, showApiError } from "../../../api";
 
 const PEOPLE_LABEL = { self: "Member", father: "Father", mother: "Mother", guardian: "Guardian" };
-const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar" };
+const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar", passport: "Passport" };
+const CARDS = ["pan", "aadhaar", "passport"];
+const PLACEHOLDER = { pan: "ABCDE1234F", aadhaar: "1234 5678 9012", passport: "Z1234567" };
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
 
 // Shown after a scan is read: confirm the auto-filled number, or pick between
@@ -22,24 +24,29 @@ function DetectedBar({ card, d, onConfirm, onUseScanned, onDismiss, tid }) {
         </>
       ) : (
         <>
-          <div>Detected {CARD_LABEL[card]} from scan: <b className="font-mono">{d.number}</b>. Please check it&apos;s correct.</div>
+          <div>Detected {CARD_LABEL[card]} from scan: <b className="font-mono">{d.number}</b>
+            {d.expiry && <> · expires <b>{d.expiry}</b></>}. Please check it&apos;s correct.</div>
           <div className="flex gap-1.5">
             <button type="button" data-testid={`${tid}-confirm`} onClick={onConfirm} className="px-2 h-6 rounded bg-emerald-600 text-white font-semibold">Confirm &amp; save</button>
             <button title="Edit this item" type="button" data-testid={`${tid}-edit`} onClick={onDismiss} className="px-2 h-6 rounded border border-amber-400 font-semibold">Edit</button>
           </div>
         </>
       )}
-      {d.name_matches === false && (
+      {d.name_matches === false && (card === "passport" ? (
+        <div className="text-rose-700 font-semibold" data-testid={`${tid}-name-warning`}>
+          Name is NOT exactly the same — passport: &ldquo;{d.name}&rdquo; · database: &ldquo;{d.expected_name}&rdquo;. Fix the member&apos;s name if the passport is right.
+        </div>
+      ) : (
         <div className="text-rose-700 font-semibold" data-testid={`${tid}-name-warning`}>
           Name on card &ldquo;{d.name}&rdquo; doesn&apos;t look like &ldquo;{d.expected_name}&rdquo; — check it&apos;s the right card.
         </div>
-      )}
+      ))}
     </div>
   );
 }
 
 // One card (PAN or Aadhaar) for one person: number + single scan.
-function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onUploaded }) {
+function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onUploaded, expiry, onExpiry }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const base = `/members/${memberId}/id-docs/${person}/${card}`;
@@ -77,7 +84,13 @@ function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onU
     <div>
       <label className="iu-label">{CARD_LABEL[card]} number</label>
       <input data-testid={`${tid}-number`} value={value || ""} onChange={(e) => onChange(e.target.value)}
-        className="iu-input font-mono text-xs uppercase" placeholder={card === "pan" ? "ABCDE1234F" : "1234 5678 9012"} />
+        className="iu-input font-mono text-xs uppercase" placeholder={PLACEHOLDER[card]} />
+      {card === "passport" && (
+        <div className="mt-1.5">
+          <label className="iu-label">Passport expiry</label>
+          <input type="date" data-testid={`${tid}-expiry`} value={expiry || ""} onChange={(e) => onExpiry(e.target.value)} className="iu-input text-xs" />
+        </div>
+      )}
       <div className="flex items-center gap-1.5 mt-1.5 text-[11px]">
         <input ref={inputRef} type="file" accept={ACCEPT} className="hidden" data-testid={`${tid}-file-input`}
           onChange={(e) => upload(e.target.files?.[0])} />
@@ -110,7 +123,7 @@ export default function IdDocsSection({ memberId }) {
     setDoc(d);
     setNums(Object.fromEntries((d.allowed_people || []).map((p) => {
       const x = d.people?.[p] || {};
-      return [p, { pan: x.pan || "", aadhaar: x.aadhaar || "" }];
+      return [p, { pan: x.pan || "", aadhaar: x.aadhaar || "", passport: x.passport || "", passport_expiry: x.passport_expiry || "" }];
     })));
   };
   useEffect(() => { api.get(`/members/${memberId}/id-docs`).then(applyDoc).catch(() => {}); }, [memberId]);
@@ -133,10 +146,12 @@ export default function IdDocsSection({ memberId }) {
     const k = `${p}.${card}`;
     if (current && current !== d.number) { setDetected((x) => ({ ...x, [k]: { ...d, mode: "choose", current } })); return; }
     setNum(p, card, d.number);
+    if (card === "passport" && d.expiry) setNum(p, "passport_expiry", d.expiry);
     setDetected((x) => ({ ...x, [k]: { ...d, mode: "confirm" } }));
   };
   const confirm = async (p, card, number) => {
-    const people = { ...nums, [p]: { ...nums[p], [card]: number } };
+    const d = detected[`${p}.${card}`] || {};
+    const people = { ...nums, [p]: { ...nums[p], [card]: number, ...(card === "passport" && d.expiry ? { passport_expiry: d.expiry } : {}) } };
     if (await save(people)) clearDetected(`${p}.${card}`);
   };
 
@@ -144,7 +159,7 @@ export default function IdDocsSection({ memberId }) {
   return (
     <div className="pt-3 mt-3 border-t border-slate-100" data-testid="id-docs-section">
       <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1.5">
-        <IdCard size={13} /> PAN &amp; Aadhaar (admins only)
+        <IdCard size={13} /> PAN, Aadhaar &amp; Passport (admins only)
       </div>
       <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-3" data-testid="id-docs-tip">
         One file per card. Scan the <b>front and back together into one clear PDF</b> (or a photo) — max 10 MB.
@@ -154,12 +169,13 @@ export default function IdDocsSection({ memberId }) {
         {doc.allowed_people.map((p) => (
           <div key={p} data-testid={`id-person-${p}`}>
             <div className="text-xs font-bold text-slate-700 mb-1.5">{PEOPLE_LABEL[p]}</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {["pan", "aadhaar"].map((card) => (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {CARDS.map((card) => (
                 <div key={card}>
                   <IdCardField memberId={memberId} person={p} card={card}
                     value={nums[p]?.[card]} file={doc.people?.[p]?.[`${card}_file`]}
                     onChange={(v) => setNum(p, card, v)} onDoc={applyDoc}
+                    expiry={nums[p]?.passport_expiry} onExpiry={(v) => setNum(p, "passport_expiry", v)}
                     onUploaded={(res) => onUploaded(p, card, res)} />
                   {detected[`${p}.${card}`] && (
                     <DetectedBar card={card} d={detected[`${p}.${card}`]} tid={`id-${p}-${card}`}

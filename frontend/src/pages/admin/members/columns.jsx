@@ -145,6 +145,7 @@ export const MEMBER_COLUMNS = [
   { key: "dar_exempt", label: "DAR exempt", sortKey: "dar_exempt", isNew: true, cell: field("dar_exempt", "checkbox") },
   { key: "pan", label: "PAN", isNew: true, help: "Member's own PAN number (parents' are in the edit form / ID Documents)", cell: idCell("pan") },
   { key: "aadhaar", label: "Aadhaar", isNew: true, help: "Member's own Aadhaar number", cell: idCell("aadhaar") },
+  { key: "passport", label: "Passport", isNew: true, help: "Member's own passport number", cell: idCell("passport") },
   { key: "blood_group", label: "Blood group", sortKey: "blood_group", isNew: true, cell: field("blood_group", "select", { options: BLOOD }) },
   { key: "address", label: "Address", sortKey: "address", isNew: true, tdClass: "text-xs min-w-[200px]", cell: field("address", "text") },
   { key: "emergency_contact_name", label: "Emergency contact", sortKey: "emergency_contact_name", isNew: true, cell: field("emergency_contact_name", "text") },

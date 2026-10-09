@@ -15,13 +15,15 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from routes.admin_audit import write_audit
-from services.id_ocr import name_matches, name_score, read_id_card
+from services.id_ocr import name_exact, name_matches, name_score, read_id_card
 from services.permissions import is_ex_member
 from services.object_storage import APP_PREFIX, get_object, put_object
 from services.scope import athlete_like_keys
-from services.time_utils import now_utc
+from services.time_utils import local_date_str, now_utc
 
-CARDS = ("pan", "aadhaar")
+CARDS = ("pan", "aadhaar", "passport")
+NUMBER_KEYS = ("pan", "aadhaar", "passport", "passport_expiry")
+PASSPORT_RE = re.compile(r"^[A-Z0-9]{6,9}$")
 PARENTS = ("father", "mother", "guardian")
 MAX_BYTES = 10 * 1024 * 1024
 ALLOWED_TYPES = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
@@ -31,6 +33,8 @@ PAN_RE = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
 class PersonNumbers(BaseModel):
     pan: Optional[str] = None
     aadhaar: Optional[str] = None
+    passport: Optional[str] = None
+    passport_expiry: Optional[str] = None
 
 
 class IdNumbersIn(BaseModel):
@@ -44,6 +48,31 @@ def _clean_pan(v: Optional[str]) -> str:
     return v
 
 
+def _clean_passport(v: Optional[str]) -> str:
+    v = re.sub(r"[\s-]", "", v or "").upper()
+    if v and not PASSPORT_RE.match(v):
+        raise HTTPException(status_code=400, detail="Passport number must be 6–9 letters/digits")
+    return v
+
+
+def _clean_date(v: Optional[str]) -> str:
+    v = (v or "").strip()
+    if v and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+        raise HTTPException(status_code=400, detail="Passport expiry must be a date (YYYY-MM-DD)")
+    return v
+
+
+def _expiry_status(exp: str, today: str) -> str:
+    if not exp:
+        return ""
+    if exp < today:
+        return "expired"
+    y, m, d = (int(x) for x in today.split("-"))
+    m += 6
+    y, m = y + (m - 1) // 12, (m - 1) % 12 + 1
+    return "soon" if exp <= f"{y:04d}-{m:02d}-{min(d, 28):02d}" else "ok"
+
+
 def _clean_aadhaar(v: Optional[str]) -> str:
     v = re.sub(r"[\s-]", "", v or "")
     if v and not (v.isdigit() and len(v) == 12):
@@ -53,7 +82,7 @@ def _clean_aadhaar(v: Optional[str]) -> str:
 
 def _numbers(people: dict) -> dict:
     """Audit view: numbers only (PAN/Aadhaar aren't treated as private — user, Oct 2026)."""
-    return {p: {k: v for k, v in (d or {}).items() if k in CARDS} for p, d in (people or {}).items()}
+    return {p: {k: v for k, v in (d or {}).items() if k in NUMBER_KEYS} for p, d in (people or {}).items()}
 
 
 def _safe_name(name: str) -> str:
@@ -95,6 +124,10 @@ def make_router(db, require_admin) -> APIRouter:
                 sets[f"people.{person}.pan"] = _clean_pan(nums.pan)
             if nums.aadhaar is not None:
                 sets[f"people.{person}.aadhaar"] = _clean_aadhaar(nums.aadhaar)
+            if nums.passport is not None:
+                sets[f"people.{person}.passport"] = _clean_passport(nums.passport)
+            if nums.passport_expiry is not None:
+                sets[f"people.{person}.passport_expiry"] = _clean_date(nums.passport_expiry)
         await db.member_id_docs.update_one(
             {"user_id": mid}, {"$set": {**sets, "user_id": mid, "updated_at": now_utc().isoformat()}}, upsert=True)
         after = await _doc(mid)
@@ -129,7 +162,8 @@ def make_router(db, require_admin) -> APIRouter:
         detected = await read_id_card(data, ctype, card) if ocr else None
         if detected:
             expected = m.get("full_name") if person == "self" else m.get(f"{person}_name")
-            detected.update(expected_name=expected, name_matches=name_matches(detected["name"], expected))
+            match = name_exact if card == "passport" else name_matches
+            detected.update(expected_name=expected, name_matches=match(detected["name"], expected))
         return {**await _doc(mid), "allowed_people": people, "detected": detected}
 
     @router.get("/members/{mid}/id-docs/{person}/{card}/file")
@@ -173,10 +207,14 @@ def make_router(db, require_admin) -> APIRouter:
         docs = {d["user_id"]: d.get("people") or {}
                 async for d in db.member_id_docs.find({}, {"_id": 0, "user_id": 1, "people": 1})}
         rows = []
+        today = local_date_str(await db.config.find_one({"id": "office"}) or {})
         for r in await _active_people():
             p = docs.get(r["member_id"], {}).get(r["person"]) or {}
             rows.append({**r, "pan": p.get("pan") or "", "aadhaar": p.get("aadhaar") or "",
-                         "pan_scan": bool(p.get("pan_file")), "aadhaar_scan": bool(p.get("aadhaar_file"))})
+                         "pan_scan": bool(p.get("pan_file")), "aadhaar_scan": bool(p.get("aadhaar_file")),
+                         "passport": p.get("passport") or "", "passport_scan": bool(p.get("passport_file")),
+                         "passport_expiry": p.get("passport_expiry") or "",
+                         "passport_status": _expiry_status(p.get("passport_expiry") or "", today)})
         rows.sort(key=lambda x: ((x["member_name"] or "").lower(), ["self", *PARENTS].index(x["person"])))
         return {"rows": rows}
 
@@ -196,6 +234,9 @@ def make_router(db, require_admin) -> APIRouter:
                 s = name_score(det["name"], r["person_name"])
                 if s > best_score:
                     best, best_score = r, s
-        return {"detected": det, "match": best if best_score >= 0.5 else None, "score": round(best_score, 2)}
+        match = best if best_score >= 0.5 else None
+        if match and det.get("type") == "passport":
+            det["name_matches"] = name_exact(det["name"], match["person_name"])
+        return {"detected": det, "match": match, "score": round(best_score, 2)}
 
     return router
