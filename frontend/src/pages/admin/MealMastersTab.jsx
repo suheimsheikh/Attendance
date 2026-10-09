@@ -601,8 +601,8 @@ export default function MealMastersTab({ liveSig }) {
                     addingSubCat === cat.key ? (
                       <div className="flex items-center gap-1 ml-6 mt-1.5">
                         <input autoFocus value={newSubName} onChange={(e) => setNewSubName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addSubcat(cat.key); if (e.key === "Escape") { setAddingSubCat(null); setNewSubName(""); } }} placeholder="Sub-category name…" className="iu-input !h-7 !w-44 text-xs" data-testid={`masters-subcat-input-${cat.key}`} />
-                        <button onClick={() => addSubcat(cat.key)} className="iu-btn-primary !h-7 !px-2 text-xs" data-testid={`masters-subcat-save-${cat.key}`}>Add</button>
-                        <button onClick={() => { setAddingSubCat(null); setNewSubName(""); }} className="iu-btn-secondary !h-7 !px-2 text-xs">Cancel</button>
+                        <button title="Add a new item" onClick={() => addSubcat(cat.key)} className="iu-btn-primary !h-7 !px-2 text-xs" data-testid={`masters-subcat-save-${cat.key}`}>Add</button>
+                        <button title="Close without saving" onClick={() => { setAddingSubCat(null); setNewSubName(""); }} className="iu-btn-secondary !h-7 !px-2 text-xs">Cancel</button>
                       </div>
                     ) : (
                       <button onClick={() => { setAddingSubCat(cat.key); setNewSubName(""); }} className="ml-6 mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:underline" data-testid={`masters-subcat-add-${cat.key}`}><Plus size={12} /> Add sub-category</button>

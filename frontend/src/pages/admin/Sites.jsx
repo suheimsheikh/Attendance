@@ -301,7 +301,7 @@ function SiteForm({ initial, onClose, onSaved }) {
         </div>
 
         <div className="flex items-center justify-end gap-2 mt-5">
-          <button type="button" onClick={onClose} className="iu-btn-secondary" data-testid="site-form-cancel">Cancel</button>
+          <button title="Close without saving" type="button" onClick={onClose} className="iu-btn-secondary" data-testid="site-form-cancel">Cancel</button>
           <button type="submit" disabled={saving} className="iu-btn-primary" data-testid="site-form-save">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {isEdit ? "Save changes" : "Create location"}

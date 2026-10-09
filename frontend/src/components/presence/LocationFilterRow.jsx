@@ -17,7 +17,7 @@ export function LocationFilterRow({ locations, locationFilter, onLocationChange 
       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1 flex items-center gap-1">
         <MapPin size={11} /> Location
       </span>
-      <button
+      <button title="Show everything"
         type="button"
         data-testid="location-filter-all"
         onClick={() => onLocationChange("")}

@@ -10,7 +10,7 @@ export function FleetFilterRow({ fleetOptions, fleetFilter, onFleetChange }) {
   return (
     <div className="flex items-center gap-1.5 mb-3 flex-wrap" data-testid="fleet-filter-row">
       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Fleet</span>
-      <button
+      <button title="Show everything"
         type="button"
         data-testid="fleet-filter-all"
         onClick={() => onFleetChange("")}

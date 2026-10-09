@@ -63,7 +63,7 @@ export default function NutritionEditorModal({ item, onClose, onSave }) {
             </div>
           ))}
           <div className="flex justify-end gap-2 pt-3">
-            <button type="button" onClick={onClose} className="iu-btn-secondary !h-8 text-sm" data-testid="nutrition-cancel">Cancel</button>
+            <button title="Close without saving" type="button" onClick={onClose} className="iu-btn-secondary !h-8 text-sm" data-testid="nutrition-cancel">Cancel</button>
             <button type="submit" disabled={saving} className="iu-btn-primary !h-8 text-sm" data-testid="nutrition-save">{saving ? "Saving…" : "Save"}</button>
           </div>
         </form>

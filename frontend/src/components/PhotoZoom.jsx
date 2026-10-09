@@ -82,7 +82,7 @@ export default function PhotoZoom({
             </button>
           )}
           {onRemove && photo && (
-            <button
+            <button title="Remove this item"
               type="button"
               onClick={onRemove}
               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold ring-1 ring-rose-200"

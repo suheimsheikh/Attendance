@@ -146,7 +146,7 @@ export default function ChefsView() {
               : <RefreshCw size={14} />}
             Refresh
           </button>
-          <button
+          <button title="Open a printable version"
             type="button"
             onClick={() => window.print()}
             className="inline-flex items-center gap-2 px-3 h-9 rounded-lg text-xs font-semibold bg-orange-600 text-white hover:bg-orange-700"

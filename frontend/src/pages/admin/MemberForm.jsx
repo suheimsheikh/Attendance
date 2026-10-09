@@ -187,7 +187,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => onPickPhoto(e.target.files?.[0])} />
                 </label>
                 {form.photo && (
-                  <button type="button" data-testid="mf-photo-clear" onClick={() => set("photo", "")} className="iu-btn-secondary !h-9 !px-3 text-red-600">
+                  <button title="Remove this item" type="button" data-testid="mf-photo-clear" onClick={() => set("photo", "")} className="iu-btn-secondary !h-9 !px-3 text-red-600">
                     <X size={14} /> Remove
                   </button>
                 )}

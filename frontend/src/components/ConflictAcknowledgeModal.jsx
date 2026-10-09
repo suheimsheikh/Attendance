@@ -131,7 +131,7 @@ export default function ConflictAcknowledgeModal({
         </div>
 
         <div className="p-3 border-t border-slate-100 flex gap-2 bg-slate-50/40 rounded-b-lg">
-          <button
+          <button title="Close without saving"
             type="button"
             onClick={onCancel}
             className="iu-btn-secondary flex-1"

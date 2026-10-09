@@ -163,7 +163,7 @@ export default function KitchenAuditLog() {
         <label className="text-xs text-slate-500 flex flex-col gap-1">To
           <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} className="iu-input !h-8 text-sm" data-testid="audit-filter-until" />
         </label>
-        <button onClick={load} className="iu-btn-secondary !h-8 !px-3 text-sm inline-flex items-center gap-1" data-testid="audit-refresh">
+        <button title="Reload the latest data" onClick={load} className="iu-btn-secondary !h-8 !px-3 text-sm inline-flex items-center gap-1" data-testid="audit-refresh">
           <RefreshCw size={13} /> Refresh
         </button>
         <div className="ml-auto text-xs text-slate-500 self-center" data-testid="audit-count">

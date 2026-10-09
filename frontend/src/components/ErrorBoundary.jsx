@@ -76,7 +76,7 @@ export default class ErrorBoundary extends React.Component {
             >
               <Copy size={14} /> {copied ? "Copied!" : "Copy error"}
             </button>
-            <button
+            <button title="Reload the latest data"
               data-testid="error-boundary-refresh"
               onClick={this.handleReset}
               className="iu-btn-primary flex-1"

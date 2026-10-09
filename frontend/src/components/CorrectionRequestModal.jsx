@@ -347,7 +347,7 @@ export default function CorrectionRequestModal({
           </div>
         </div>
         <footer className="p-4 border-t border-slate-100 flex items-center justify-end gap-2">
-          <button type="button" onClick={onClose} className="iu-btn-ghost" data-testid="correction-cancel">
+          <button title="Close without saving" type="button" onClick={onClose} className="iu-btn-ghost" data-testid="correction-cancel">
             Cancel
           </button>
           <button type="submit" disabled={saving} className="iu-btn-primary" data-testid="correction-submit">

@@ -316,7 +316,7 @@ function NodeModal({ node, onClose, onSaved }) {
           {node.note && <p className="text-[11px] text-slate-500">{node.note}</p>}
         </div>
         <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
-          <button className="iu-btn-secondary !h-9" onClick={onClose}>Cancel</button>
+          <button title="Close without saving" className="iu-btn-secondary !h-9" onClick={onClose}>Cancel</button>
           <button className="iu-btn-primary !h-9" onClick={save} disabled={busy} data-testid="recipe-modal-save">
             {busy ? <Loader2 size={14} className="animate-spin" /> : null} Save
           </button>

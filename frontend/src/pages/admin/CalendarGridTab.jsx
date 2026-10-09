@@ -201,8 +201,8 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
           {loading ? <Loader2 className="animate-spin" size={14}/> : <RefreshCw size={14}/>} Run
         </button>
         <div className="flex-1" />
-        <button data-testid="export-calendar-csv" onClick={() => exportGrid("csv")} className="iu-btn-secondary"><FileDown size={14}/> CSV</button>
-        <button data-testid="export-calendar-pdf" onClick={() => exportGrid("pdf")} className="iu-btn-secondary"><FileText size={14}/> PDF</button>
+        <button title="Download as CSV (opens in Excel)" data-testid="export-calendar-csv" onClick={() => exportGrid("csv")} className="iu-btn-secondary"><FileDown size={14}/> CSV</button>
+        <button title="Download as PDF" data-testid="export-calendar-pdf" onClick={() => exportGrid("pdf")} className="iu-btn-secondary"><FileText size={14}/> PDF</button>
       </div>
 
       <GridFilterBar

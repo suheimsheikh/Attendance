@@ -191,7 +191,7 @@ function RulesEditor({ data, onCancel, onSaved }) {
       <button onClick={addSec} className="iu-btn-secondary mt-3" data-testid="rules-add-section"><Plus size={15} /> Add section</button>
 
       <div className="flex gap-2 justify-end mt-6 pt-4 border-t border-slate-200">
-        <button onClick={cancel} className="iu-btn-secondary" data-testid="rules-editor-cancel-btn">Cancel</button>
+        <button title="Close without saving" onClick={cancel} className="iu-btn-secondary" data-testid="rules-editor-cancel-btn">Cancel</button>
         <button onClick={save} disabled={saving} className="iu-btn-primary" data-testid="rules-editor-save">
           {saving ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />} Save rules
         </button>

@@ -110,7 +110,7 @@ export default function BreakForm({ initial, members, institutions, fleets, onCl
             <Coffee size={18} className="text-amber-600" /> {isEdit ? "Edit break" : "Apply break"}
           </h2>
           <TopSaveButton formId="break-form-el" dirty={guard.dirty} saving={saving} testId="bf-top-save" />
-          <button type="button" onClick={guard.close} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
+          <button title="Close this panel" type="button" onClick={guard.close} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
         </header>
 
         <div>
@@ -296,7 +296,7 @@ export default function BreakForm({ initial, members, institutions, fleets, onCl
             testId="bf-save-error"
           />
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={guard.close} className="iu-btn-secondary">Cancel</button>
+            <button title="Close without saving" type="button" onClick={guard.close} className="iu-btn-secondary">Cancel</button>
             <button type="submit" disabled={saving} data-testid="bf-save" className="iu-btn-primary !bg-amber-600 hover:!bg-amber-700">
               {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save changes" : "Apply break")}
             </button>

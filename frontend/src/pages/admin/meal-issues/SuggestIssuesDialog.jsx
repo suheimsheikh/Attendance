@@ -82,7 +82,7 @@ export default function SuggestIssuesDialog({ open, onOpenChange, dateStr, onApp
               onSave={saveConversion} saving={savingConv}
             />
             <div className="flex items-center justify-end gap-2 pt-1">
-              <button type="button" onClick={() => onOpenChange(false)} className="iu-btn-secondary !h-9 text-sm" data-testid="suggest-cancel">Cancel</button>
+              <button title="Close without saving" type="button" onClick={() => onOpenChange(false)} className="iu-btn-secondary !h-9 text-sm" data-testid="suggest-cancel">Cancel</button>
               <button type="button" onClick={apply} disabled={!nPicked || busy} className="iu-btn-primary !h-9 !px-4 text-sm" data-testid="suggest-apply">
                 {busy ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />} Fill {nPicked} item{nPicked === 1 ? "" : "s"} into the issue
               </button>

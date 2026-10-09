@@ -152,3 +152,37 @@ def test_scan_upload_detects_pan_number_and_name(admin_client, base_url, make_me
     assert det and det["number"] == "ABCDE1234F"
     assert det["name_matches"] is False  # card says Ravi Kumar, member is Sita Devi
     assert not (r.json()["people"]["self"].get("pan"))  # not auto-saved
+
+
+def test_report_and_partial_save(admin_client, base_url, make_member):
+    ath = make_member("athlete", father_name="TEST Father Qa")
+    url = f"{base_url}/api/members/{ath['id']}/id-docs"
+    assert admin_client.put(url, json={"people": {"self": {"pan": "ABCDE1234F", "aadhaar": "123456789012"}}}, timeout=30).status_code == 200
+    # Partial save (bulk upload) must not wipe the other card.
+    r = admin_client.put(url, json={"people": {"self": {"pan": "PQRSX9876Z"}}}, timeout=30)
+    assert r.json()["people"]["self"] == {"pan": "PQRSX9876Z", "aadhaar": "123456789012"}
+    rows = admin_client.get(f"{base_url}/api/id-docs/report", timeout=60).json()["rows"]
+    mine = {x["person"]: x for x in rows if x["member_id"] == ath["id"]}
+    assert set(mine) == {"self", "father", "mother", "guardian"}
+    assert mine["self"]["pan"] == "PQRSX9876Z" and mine["self"]["pan_scan"] is False
+    assert mine["father"]["person_name"] == "TEST Father Qa" and mine["father"]["pan"] == ""
+
+
+def test_bulk_read_detects_type_and_matches_person(admin_client, base_url, make_member):
+    import io
+    import requests
+    from PIL import Image, ImageDraw
+    make_member("athlete", father_name="Zorawar Quillfeather")
+    img = Image.new("RGB", (700, 320), "white")
+    d = ImageDraw.Draw(img)
+    d.text((20, 40), "INCOME TAX DEPARTMENT   GOVT. OF INDIA", fill="black")
+    d.text((20, 110), "Name: ZORAWAR QUILLFEATHER", fill="black")
+    d.text((20, 180), "Permanent Account Number: KLMNO4321P", fill="black")
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    r = requests.post(f"{base_url}/api/id-docs/bulk/read", headers={"Authorization": admin_client.headers["Authorization"]},
+                      files={"file": ("x.png", buf.getvalue(), "image/png")}, timeout=120)
+    assert r.status_code == 200, r.text
+    j = r.json()
+    assert j["detected"]["type"] == "pan" and j["detected"]["number"] == "KLMNO4321P"
+    assert j["match"] and j["match"]["person"] == "father" and j["match"]["person_name"] == "Zorawar Quillfeather"

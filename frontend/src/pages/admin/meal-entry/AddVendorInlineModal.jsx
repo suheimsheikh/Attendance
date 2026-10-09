@@ -56,7 +56,7 @@ export default function AddVendorInlineModal({ onClose, onCreated }) {
           </label>
         </div>
         <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
-          <button className="iu-btn-secondary !h-9" onClick={onClose} data-testid="add-vendor-cancel">Cancel</button>
+          <button title="Close without saving" className="iu-btn-secondary !h-9" onClick={onClose} data-testid="add-vendor-cancel">Cancel</button>
           <button className="iu-btn-primary !h-9" onClick={submit} disabled={saving} data-testid="add-vendor-save">
             {saving ? "Saving…" : "Save vendor"}
           </button>

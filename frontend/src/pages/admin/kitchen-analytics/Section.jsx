@@ -96,7 +96,7 @@ export function Section({ title, subtitle, accent, data, testKind, first, from, 
                   </button>
                 </span>
               ))}
-              <button
+              <button title="Clear the selection"
                 type="button" onClick={clearFocus}
                 className="text-[10px] font-bold text-slate-500 hover:text-slate-800 underline"
                 data-testid={`kitchen-${testKind}-focus-clear`}

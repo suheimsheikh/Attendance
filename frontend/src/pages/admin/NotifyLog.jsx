@@ -64,7 +64,7 @@ export default function NotifyLog() {
             records that contact was <em>initiated</em>.)
           </p>
         </div>
-        <button onClick={load} className="iu-btn-secondary" data-testid="notifylog-reload"><RefreshCw size={14}/> Reload</button>
+        <button title="Reload the latest data" onClick={load} className="iu-btn-secondary" data-testid="notifylog-reload"><RefreshCw size={14}/> Reload</button>
       </header>
 
       <div className="iu-card p-3 mb-4 flex flex-wrap gap-2 items-center">

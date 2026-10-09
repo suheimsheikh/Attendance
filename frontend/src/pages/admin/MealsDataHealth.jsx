@@ -125,7 +125,7 @@ function FixRow({ it, mode, asOf, onSaved }) {
                 Sets a valued opening balance as of <b>{asOf}</b>. Earlier movements stop affecting this item's stock, so the count &amp; value start clean from today.
               </div>
               <div className="ml-auto flex items-center gap-2">
-                <button onClick={() => setOpen(false)} className="iu-btn-secondary !h-8 !px-3 text-xs inline-flex items-center gap-1" data-testid={`fix-cancel-${it.item_id}`}><X size={13} /> Cancel</button>
+                <button title="Close without saving" onClick={() => setOpen(false)} className="iu-btn-secondary !h-8 !px-3 text-xs inline-flex items-center gap-1" data-testid={`fix-cancel-${it.item_id}`}><X size={13} /> Cancel</button>
                 <button onClick={save} disabled={saving} className="iu-btn-primary !h-8 !px-3 text-xs inline-flex items-center gap-1 disabled:opacity-50" data-testid={`fix-save-${it.item_id}`}>
                   {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Save
                 </button>
@@ -183,7 +183,7 @@ export default function MealsDataHealth() {
       <div className="flex items-center gap-2 mb-1">
         <HeartPulse size={20} className="text-slate-700" />
         <h1 className="text-xl font-black text-slate-900">Kitchen Data Health</h1>
-        <button onClick={load} className="iu-btn-secondary !h-7 !px-2 text-xs ml-auto inline-flex items-center gap-1" data-testid="health-refresh"><RefreshCw size={12} /> Refresh</button>
+        <button title="Reload the latest data" onClick={load} className="iu-btn-secondary !h-7 !px-2 text-xs ml-auto inline-flex items-center gap-1" data-testid="health-refresh"><RefreshCw size={12} /> Refresh</button>
       </div>
       <p className="text-xs text-slate-500 mb-4">Items that need attention so stock stays accurate and issuing never gets blocked.{data?.as_of ? ` As of ${data.as_of}.` : ""}</p>
 

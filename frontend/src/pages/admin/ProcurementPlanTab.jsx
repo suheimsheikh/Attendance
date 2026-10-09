@@ -190,7 +190,7 @@ export default function ProcurementPlanTab({ liveSig }) {
             </select>
           </label>
           <div className="text-xs flex items-end">
-            <button
+            <button title="Apply these settings"
               onClick={load}
               disabled={loading}
               data-testid="plan-apply"

@@ -20,6 +20,9 @@ _PROMPT = {
            '{"number": "<10-char PAN, e.g. ABCDE1234F, or null>", "name": "<card holder name or null>"}.',
     "aadhaar": "This is an Indian Aadhaar card scan (front and/or back). Reply ONLY with JSON "
                '{"number": "<12-digit Aadhaar number, digits only, or null>", "name": "<card holder name or null>"}.',
+    "auto": "This is a scan of an Indian PAN card or Aadhaar card. Reply ONLY with JSON "
+            '{"type": "pan" | "aadhaar" | null, "number": "<PAN like ABCDE1234F, or 12-digit Aadhaar digits only, or null>", '
+            '"name": "<card holder name or null>"}.',
 }
 _EXT = {"application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
@@ -35,6 +38,13 @@ def _clean_number(card: str, raw) -> Optional[str]:
         return v if re.fullmatch(r"[A-Z]{5}[0-9]{4}[A-Z]", v) else None
     v = re.sub(r"\D", "", str(raw or ""))
     return v if len(v) == 12 else None
+
+
+def name_score(card_name: Optional[str], expected: Optional[str]) -> float:
+    """Share of the card's 3+ letter words found in `expected` (0..1)."""
+    words = lambda s: {w for w in re.findall(r"[a-z]+", (s or "").lower()) if len(w) >= 3}
+    a, b = words(card_name), words(expected)
+    return len(a & b) / len(a) if a and b else 0.0
 
 
 def name_matches(card_name: Optional[str], expected: Optional[str]) -> Optional[bool]:
@@ -60,7 +70,9 @@ async def read_id_card(data: bytes, content_type: str, card: str) -> Optional[di
             elif isinstance(ev, StreamDone):
                 break
         out = _parse(text)
-        return {"number": _clean_number(card, out.get("number")), "name": (out.get("name") or "").strip() or None}
+        kind = card if card != "auto" else (out.get("type") if out.get("type") in ("pan", "aadhaar") else None)
+        return {"type": kind, "number": _clean_number(kind, out.get("number")) if kind else None,
+                "name": (out.get("name") or "").strip() or None}
     except Exception:
         logger.exception("ID OCR failed (%s)", card)
         return None

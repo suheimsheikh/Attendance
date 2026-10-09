@@ -25,7 +25,7 @@ function DetectedBar({ card, d, onConfirm, onUseScanned, onDismiss, tid }) {
           <div>Detected {CARD_LABEL[card]} from scan: <b className="font-mono">{d.number}</b>. Please check it&apos;s correct.</div>
           <div className="flex gap-1.5">
             <button type="button" data-testid={`${tid}-confirm`} onClick={onConfirm} className="px-2 h-6 rounded bg-emerald-600 text-white font-semibold">Confirm &amp; save</button>
-            <button type="button" data-testid={`${tid}-edit`} onClick={onDismiss} className="px-2 h-6 rounded border border-amber-400 font-semibold">Edit</button>
+            <button title="Edit this item" type="button" data-testid={`${tid}-edit`} onClick={onDismiss} className="px-2 h-6 rounded border border-amber-400 font-semibold">Edit</button>
           </div>
         </>
       )}

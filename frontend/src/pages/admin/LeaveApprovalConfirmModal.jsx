@@ -102,7 +102,7 @@ export default function LeaveApprovalConfirmModal({
         </div>
 
         <footer className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-2">
-          <button
+          <button title="Close without saving"
             onClick={onCancel}
             disabled={busy}
             className="iu-btn-ghost !h-9 !px-4 text-sm"

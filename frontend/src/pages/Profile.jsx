@@ -130,7 +130,7 @@ export default function Profile() {
         <div className="text-center py-10" role="status" data-testid="profile-loading"><Loader2 className="mx-auto animate-spin text-slate-400" /></div>
       ) : error ? (
         <div role="alert" className="p-4 bg-rose-50 text-rose-800" data-testid="profile-error">
-          {error} <button className="iu-btn-secondary" data-testid="profile-retry" onClick={() => setRetry(n => n + 1)}>Retry</button>
+          {error} <button title="Try again" className="iu-btn-secondary" data-testid="profile-retry" onClick={() => setRetry(n => n + 1)}>Retry</button>
         </div>
       ) : data ? (
         <>

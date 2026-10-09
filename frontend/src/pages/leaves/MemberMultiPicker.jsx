@@ -36,7 +36,7 @@ export default function MemberMultiPicker({
             data-testid="ob-pick-all"
             className="iu-btn-secondary !h-8 !px-2 !text-xs"
           >Pick all ({members.length})</button>
-          <button
+          <button title="Clear the selection"
             type="button"
             onClick={onClearPicked}
             data-testid="ob-clear"

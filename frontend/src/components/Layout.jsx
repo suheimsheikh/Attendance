@@ -276,7 +276,7 @@ export default function Layout() {
             <div className="text-xs text-slate-400 truncate">{user?.email}</div>
           </div>
         </div>
-        <button
+        <button title="Sign out of this device"
           data-testid="logout-button"
           onClick={handleLogout}
           className="w-full mt-2 flex items-center justify-center gap-2 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-semibold transition"

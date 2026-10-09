@@ -128,7 +128,7 @@ export default function StaleSessionPrompt() {
                 <p className="text-[11px] text-slate-500 mt-1">Time on the day you checked in ({fmtDate(stale.check_in_at)}).</p>
               </div>
               <div className="flex gap-2">
-                <button
+                <button title="Go back"
                   data-testid="stale-custom-back"
                   onClick={() => setMode("default")}
                   className="iu-btn-secondary flex-1"

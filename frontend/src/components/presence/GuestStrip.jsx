@@ -17,7 +17,7 @@ function GuestStripRow({ guest, active, onCheckout, onDelete }) {
       </div>
       <div className="flex items-center gap-1 shrink-0">
         {active && (
-          <button
+          <button title="Record your departure"
             onClick={() => onCheckout(guest.id, guest.name)}
             data-testid={`guest-checkout-${guest.id}`}
             className="inline-flex items-center gap-1 px-2 h-7 rounded-md text-[11px] font-bold bg-slate-700 text-white hover:bg-slate-900"

@@ -61,7 +61,7 @@ export default function DayDetailModal({
               {camps_.length} camp{camps_.length === 1 ? "" : "s"} · {breaks_.length} break{breaks_.length === 1 ? "" : "s"} · {regs_.length} regatta{regs_.length === 1 ? "" : "s"} active
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
+          <button title="Close this panel" onClick={onClose} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
         </header>
 
         {breaks_.length > 0 && (
@@ -80,7 +80,7 @@ export default function DayDetailModal({
                       {b.scope === "selected" && <span>{(b.member_ids || []).length} members</span>}
                     </div>
                   </div>
-                  <button
+                  <button title="Edit this item"
                     onClick={() => onEditBreak(b)}
                     data-testid={`day-break-edit-${b.id}`}
                     className="iu-btn-secondary !px-3 !h-8 text-xs"
@@ -110,7 +110,7 @@ export default function DayDetailModal({
                         <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
                           {count} enrolled
                         </span>
-                        <button
+                        <button title="Edit this item"
                           onClick={() => onEditCamp(c)}
                           data-testid={`day-camp-edit-${c.id}`}
                           className="iu-btn-secondary !px-3 !h-8 text-xs"
@@ -156,7 +156,7 @@ export default function DayDetailModal({
                         {r.host_org && <span className="italic">{r.host_org}</span>}
                       </div>
                     </div>
-                    <button
+                    <button title="Edit this item"
                       onClick={() => onEditRegatta(r)}
                       data-testid={`day-regatta-edit-${r.id}`}
                       className="iu-btn-secondary !px-3 !h-8 text-xs"

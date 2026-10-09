@@ -15,7 +15,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from routes.admin_audit import write_audit
-from services.id_ocr import name_matches, read_id_card
+from services.id_ocr import name_matches, name_score, read_id_card
+from services.permissions import is_ex_member
 from services.object_storage import APP_PREFIX, get_object, put_object
 from services.scope import athlete_like_keys
 from services.time_utils import now_utc
@@ -89,8 +90,11 @@ def make_router(db, require_admin) -> APIRouter:
         sets = {}
         for person, nums in body.people.items():
             _check(person, "pan", people)
-            sets[f"people.{person}.pan"] = _clean_pan(nums.pan)
-            sets[f"people.{person}.aadhaar"] = _clean_aadhaar(nums.aadhaar)
+            # Only fields sent are written (bulk upload saves one card at a time).
+            if nums.pan is not None:
+                sets[f"people.{person}.pan"] = _clean_pan(nums.pan)
+            if nums.aadhaar is not None:
+                sets[f"people.{person}.aadhaar"] = _clean_aadhaar(nums.aadhaar)
         await db.member_id_docs.update_one(
             {"user_id": mid}, {"$set": {**sets, "user_id": mid, "updated_at": now_utc().isoformat()}}, upsert=True)
         after = await _doc(mid)
@@ -101,7 +105,7 @@ def make_router(db, require_admin) -> APIRouter:
         return {**after, "allowed_people": people}
 
     @router.post("/members/{mid}/id-docs/{person}/{card}")
-    async def upload_scan(mid: str, person: str, card: str, file: UploadFile = File(...),
+    async def upload_scan(mid: str, person: str, card: str, file: UploadFile = File(...), ocr: bool = True,
                           admin: dict = Depends(require_admin)):
         m, people = await _member_and_people(mid)
         _check(person, card, people)
@@ -122,7 +126,7 @@ def make_router(db, require_admin) -> APIRouter:
         await write_audit(db, actor=admin, action="id_scan_uploaded", entity_type="member",
                           entity_id=mid, entity_name=m.get("full_name"),
                           after={"person": person, "card": card, "file": meta["name"]})
-        detected = await read_id_card(data, ctype, card)
+        detected = await read_id_card(data, ctype, card) if ocr else None
         if detected:
             expected = m.get("full_name") if person == "self" else m.get(f"{person}_name")
             detected.update(expected_name=expected, name_matches=name_matches(detected["name"], expected))
@@ -146,5 +150,52 @@ def make_router(db, require_admin) -> APIRouter:
         await write_audit(db, actor=admin, action="id_scan_removed", entity_type="member",
                           entity_id=mid, entity_name=m.get("full_name"), before={"person": person, "card": card})
         return {**await _doc(mid), "allowed_people": people}
+
+    async def _active_people() -> list:
+        """Every (member, person) slot for active members — feeds the report + bulk matcher."""
+        athlete_keys = set(await athlete_like_keys(db))
+        users = await db.users.find(
+            {"archived": {"$ne": True}, "active": {"$ne": False}, "email": {"$exists": True}},
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "custom_category": 1, "leaving_date": 1,
+             "father_name": 1, "mother_name": 1, "guardian_name": 1}).to_list(5000)
+        out = []
+        for u in users:
+            if is_ex_member(u):
+                continue
+            for p in ["self"] + (list(PARENTS) if u.get("category") in athlete_keys else []):
+                out.append({"member_id": u["id"], "member_name": u.get("full_name"),
+                            "category": u.get("custom_category") or u.get("category"), "person": p,
+                            "person_name": u.get("full_name") if p == "self" else u.get(f"{p}_name")})
+        return out
+
+    @router.get("/id-docs/report")
+    async def id_docs_report(admin: dict = Depends(require_admin)):
+        docs = {d["user_id"]: d.get("people") or {}
+                async for d in db.member_id_docs.find({}, {"_id": 0, "user_id": 1, "people": 1})}
+        rows = []
+        for r in await _active_people():
+            p = docs.get(r["member_id"], {}).get(r["person"]) or {}
+            rows.append({**r, "pan": p.get("pan") or "", "aadhaar": p.get("aadhaar") or "",
+                         "pan_scan": bool(p.get("pan_file")), "aadhaar_scan": bool(p.get("aadhaar_file"))})
+        rows.sort(key=lambda x: ((x["member_name"] or "").lower(), ["self", *PARENTS].index(x["person"])))
+        return {"rows": rows}
+
+    @router.post("/id-docs/bulk/read")
+    async def bulk_read(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
+        """Read one scan (type, number, name) and suggest the best-matching person. Saves nothing."""
+        ctype = (file.content_type or "").lower()
+        if ctype not in ALLOWED_TYPES:
+            raise HTTPException(status_code=400, detail="Upload a PDF, JPG, PNG or WEBP file")
+        data = await file.read(MAX_BYTES + 1)
+        if not data or len(data) > MAX_BYTES:
+            raise HTTPException(status_code=400, detail="File must be between 1 byte and 10 MB")
+        det = await read_id_card(data, ctype, "auto") or {"type": None, "number": None, "name": None}
+        best, best_score = None, 0.0
+        if det.get("name"):
+            for r in await _active_people():
+                s = name_score(det["name"], r["person_name"])
+                if s > best_score:
+                    best, best_score = r, s
+        return {"detected": det, "match": best if best_score >= 0.5 else None, "score": round(best_score, 2)}
 
     return router

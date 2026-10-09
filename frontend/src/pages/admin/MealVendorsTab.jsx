@@ -185,7 +185,7 @@ export default function MealVendorsTab({ liveSig }) {
               data-testid="vendor-add-phone"
             />
           </label>
-          <button className="iu-btn-primary !h-9" onClick={submitCreate} data-testid="vendor-add-save">
+          <button title="Save your changes" className="iu-btn-primary !h-9" onClick={submitCreate} data-testid="vendor-add-save">
             <Save size={14}/> Save
           </button>
           <button

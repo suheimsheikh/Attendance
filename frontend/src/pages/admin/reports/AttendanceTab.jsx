@@ -239,8 +239,8 @@ export default function AttendanceTab({
           {loading ? <Loader2 className="animate-spin" size={14}/> : <RefreshCw size={14}/>} Run
         </button>
         <div className="flex-1" />
-        <button data-testid="export-attendance-csv" onClick={() => exportAttendance("csv")} className="iu-btn-secondary"><FileDown size={14}/> CSV</button>
-        <button data-testid="export-attendance-pdf" onClick={() => exportAttendance("pdf")} className="iu-btn-secondary"><FileText size={14}/> PDF</button>
+        <button title="Download as CSV (opens in Excel)" data-testid="export-attendance-csv" onClick={() => exportAttendance("csv")} className="iu-btn-secondary"><FileDown size={14}/> CSV</button>
+        <button title="Download as PDF" data-testid="export-attendance-pdf" onClick={() => exportAttendance("pdf")} className="iu-btn-secondary"><FileText size={14}/> PDF</button>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">

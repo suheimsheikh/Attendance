@@ -58,7 +58,7 @@ export default function AddItemForm({ catKey, units, onDone, onCancel }) {
       <button onClick={save} disabled={busy} className="iu-btn-primary !h-8 !px-3 text-xs" data-testid={`masters-add-item-save-${catKey}`}>
         {busy ? <Loader2 size={13} className="animate-spin"/> : <Check size={13}/>} Add
       </button>
-      <button onClick={onCancel} className="iu-btn-secondary !h-8 !px-3 text-xs">Cancel</button>
+      <button title="Close without saving" onClick={onCancel} className="iu-btn-secondary !h-8 !px-3 text-xs">Cancel</button>
     </div>
   );
 }

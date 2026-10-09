@@ -103,7 +103,7 @@ export function RejectReasonModal({ row, reason, onReasonChange, busy, onCancel,
                   </button>
                 );
               })}
-              <button
+              <button title="Clear the selection"
                 type="button"
                 data-testid="reject-suggestion-clear"
                 onClick={() => onReasonChange("")}
@@ -128,7 +128,7 @@ export function RejectReasonModal({ row, reason, onReasonChange, busy, onCancel,
           </p>
         </div>
         <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
-          <button
+          <button title="Close without saving"
             type="button"
             data-testid="reject-modal-cancel"
             onClick={onCancel}
@@ -197,7 +197,7 @@ export function OverrideReasonModal({ row, reason, onReasonChange, busy, onCance
           </p>
         </div>
         <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
-          <button type="button" data-testid="override-modal-cancel" onClick={onCancel} disabled={busy} className="iu-btn-secondary !h-9 !px-3 !text-sm">Cancel</button>
+          <button title="Close without saving" type="button" data-testid="override-modal-cancel" onClick={onCancel} disabled={busy} className="iu-btn-secondary !h-9 !px-3 !text-sm">Cancel</button>
           <button
             type="button"
             data-testid="override-modal-confirm"

@@ -148,7 +148,7 @@ export default function AbsentDispatchPrompt() {
           <PreviewList testid="dispatch-lop" label="LOP" tone="text-red-700" names={data.onLop} />
         </div>
         <div className="flex gap-2 p-4 border-t border-slate-100">
-          <button data-testid="absent-dispatch-dismiss" onClick={dismiss} className="iu-btn-secondary flex-1">Not now</button>
+          <button title="Hide this for now" data-testid="absent-dispatch-dismiss" onClick={dismiss} className="iu-btn-secondary flex-1">Not now</button>
           <button data-testid="absent-dispatch-send" onClick={dispatch} className="iu-btn-primary flex-1 inline-flex items-center justify-center gap-2">
             <Send size={15} /> Send to WhatsApp
           </button>

@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 const EmbedGrid = lazy(() => import("./pages/EmbedGrid"));
 import SelfCheckIn from "./pages/SelfCheckIn";
 import VersionPoller from "./components/VersionPoller";
+import AutoTooltips from "./components/AutoTooltips";
 import { Loader2 } from "lucide-react";
 
 // Admin and seldom-used routes are code-split — keeps the athlete bundle
@@ -27,6 +28,7 @@ const MealsDataHealth = lazy(() => import("./pages/admin/MealsDataHealth"));
 const Recipes = lazy(() => import("./pages/admin/Recipes"));
 const MealsCalendar = lazy(() => import("./pages/admin/MealsCalendar"));
 const Members = lazy(() => import("./pages/admin/Members"));
+const IdDocuments = lazy(() => import("./pages/admin/IdDocuments"));
 const Devices = lazy(() => import("./pages/admin/Devices"));
 const OfficeSettings = lazy(() => import("./pages/admin/Office"));
 const Reports = lazy(() => import("./pages/admin/Reports"));
@@ -137,6 +139,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
         <Toaster position="top-center" richColors closeButton />
+        <AutoTooltips />
         <VersionPoller />
         <Suspense fallback={<FullPageSpinner />}>
         <Routes>
@@ -169,6 +172,7 @@ function App() {
             <Route path="admin/category-health" element={<RequireAdmin><CategoryHealth /></RequireAdmin>} />
             <Route path="admin/roles" element={<RequireAdmin><Roles /></RequireAdmin>} />
             <Route path="admin/members" element={<RequireAdmin><Members /></RequireAdmin>} />
+            <Route path="admin/id-documents" element={<RequireAdmin><IdDocuments /></RequireAdmin>} />
             <Route path="admin/masters" element={<RequireAdmin><Masters /></RequireAdmin>} />
             <Route path="admin/approvals" element={<RequireAdmin><Approvals /></RequireAdmin>} />
             {/* Legacy direct links — keep deep-links working but funnel into Approvals.

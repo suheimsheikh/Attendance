@@ -146,7 +146,7 @@ export default function EscortPhotoCleanup() {
                     </td>
                     <td className="iu-table-td text-right">
                       <button onClick={() => openPreview(r.id)} className="text-xs underline mr-2 text-slate-600 hover:text-slate-900" data-testid={`cleanup-preview-${r.id}`}>Preview</button>
-                      <button
+                      <button title="Delete permanently (asks to confirm)"
                         onClick={() => purgeOne(r.id)}
                         disabled={busy}
                         className="text-xs text-red-600 hover:text-red-800"
@@ -169,7 +169,7 @@ export default function EscortPhotoCleanup() {
               <PhotoTile label="Check-in" b64={preview.check_in_selfie} />
               <PhotoTile label="Check-out" b64={preview.check_out_selfie} />
             </div>
-            <button onClick={() => { setPreviewId(null); setPreview(null); }} className="iu-btn-secondary w-full">Close</button>
+            <button title="Close this panel" onClick={() => { setPreviewId(null); setPreview(null); }} className="iu-btn-secondary w-full">Close</button>
           </div>
         </div>
       )}

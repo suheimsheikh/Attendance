@@ -414,7 +414,7 @@ function ProfileIntroForm({ phone, onSubmit, onBack }) {
           testId="profile-intro-error"
         />
         <div className="flex gap-2 pt-2">
-          <button type="button" onClick={onBack} className="iu-btn-secondary flex-1" data-testid="profile-back-button">
+          <button title="Go back" type="button" onClick={onBack} className="iu-btn-secondary flex-1" data-testid="profile-back-button">
             Back
           </button>
           <button data-testid="profile-submit-button" type="submit" disabled={busy} className="iu-btn-primary flex-1">

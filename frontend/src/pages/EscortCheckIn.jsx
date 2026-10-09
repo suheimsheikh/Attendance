@@ -626,7 +626,7 @@ function EscortStepOutForm({ escort, onClose, onDone }) {
         </div>
       )}
       <div className="flex gap-2">
-        <button onClick={onClose} className="iu-btn-secondary flex-1">Cancel</button>
+        <button title="Close without saving" onClick={onClose} className="iu-btn-secondary flex-1">Cancel</button>
         <button data-testid="escort-step-out-submit" onClick={submit} disabled={busy || !reason.trim()} className="iu-btn-primary flex-1">
           {busy ? <Loader2 className="animate-spin" size={14}/> : "Step out"}
         </button>
@@ -683,7 +683,7 @@ function EscortCheckOutForm({ escort, athletes, initialAthleteIds, onClose, onCa
         />
       )}
       <div className="flex gap-2">
-        <button onClick={onClose} className="iu-btn-secondary flex-1">Cancel</button>
+        <button title="Close without saving" onClick={onClose} className="iu-btn-secondary flex-1">Cancel</button>
         <button data-testid="escort-checkout-submit" onClick={submit} disabled={busy} className="iu-btn-primary flex-1">
           {busy ? <Loader2 className="animate-spin" size={14}/> : "Check out"}
         </button>

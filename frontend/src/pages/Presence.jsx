@@ -433,7 +433,7 @@ export default function Presence() {
       ) : error ? (
         <div className="iu-card p-10 text-center">
           <p className="text-slate-500">Failed to load presence data.</p>
-          <button onClick={load} className="iu-btn-primary mt-4">Retry</button>
+          <button title="Try again" onClick={load} className="iu-btn-primary mt-4">Retry</button>
         </div>
       ) : (
         <div

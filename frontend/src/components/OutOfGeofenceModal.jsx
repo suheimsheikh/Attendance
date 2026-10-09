@@ -115,7 +115,7 @@ export default function OutOfGeofenceModal({
         </div>
 
         <div className="p-3 border-t border-slate-100 flex justify-end gap-2 bg-slate-50">
-          <button
+          <button title="Close without saving"
             type="button"
             onClick={onClose}
             className="px-3 h-9 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-200"

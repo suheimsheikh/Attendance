@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useMemo } from "react";
-import { Loader2, Plus, Search, FileSpreadsheet, Download } from "lucide-react";
+import { Loader2, Plus, Search, FileSpreadsheet, Download, IdCard } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, showApiError, downloadBlob } from "../../api";
@@ -374,6 +374,10 @@ export default function Members() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Link to="/admin/id-documents" className="iu-btn-secondary" data-testid="members-id-documents"
+            title="See who is still missing PAN / Aadhaar numbers or scans, and bulk-upload scans">
+            <IdCard size={16} /> ID Documents
+          </Link>
           <button
             data-testid="export-staff-roster"
             onClick={async () => {

@@ -42,7 +42,7 @@ export default function OnBehalfMemberPicker({
           {onBehalfMember ? (
             <div className="flex items-center gap-2 text-sm text-sky-900">
               <span className="font-semibold">{onBehalfMember.full_name}</span>
-              <button
+              <button title="Clear the selection"
                 type="button"
                 onClick={onClear}
                 className="text-xs underline text-sky-700 hover:text-sky-900"

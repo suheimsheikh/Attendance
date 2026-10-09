@@ -38,8 +38,8 @@ export default function DailyTab() {
           {loading ? <Loader2 className="animate-spin" size={14}/> : <RefreshCw size={14}/>} Run report
         </button>
         <div className="flex-1" />
-        <button data-testid="export-daily-csv" onClick={() => exportDaily("csv")} className="iu-btn-secondary"><FileDown size={14}/> CSV</button>
-        <button data-testid="export-daily-pdf" onClick={() => exportDaily("pdf")} className="iu-btn-secondary"><FileText size={14}/> PDF</button>
+        <button title="Download as CSV (opens in Excel)" data-testid="export-daily-csv" onClick={() => exportDaily("csv")} className="iu-btn-secondary"><FileDown size={14}/> CSV</button>
+        <button title="Download as PDF" data-testid="export-daily-pdf" onClick={() => exportDaily("pdf")} className="iu-btn-secondary"><FileText size={14}/> PDF</button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

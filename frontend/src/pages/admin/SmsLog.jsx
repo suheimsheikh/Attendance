@@ -70,7 +70,7 @@ export default function SmsLog() {
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">SMS &amp; Voice Log</h1>
           <p className="text-slate-500 text-sm mt-1">Every Twilio dispatch — full body, sender, recipient, delivery status.</p>
         </div>
-        <button onClick={load} className="iu-btn-secondary"><RefreshCw size={14}/> Reload</button>
+        <button title="Reload the latest data" onClick={load} className="iu-btn-secondary"><RefreshCw size={14}/> Reload</button>
       </header>
 
       {/* Filters */}

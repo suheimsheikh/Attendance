@@ -28,7 +28,7 @@ export default function MonthNav({ monthLabel, isCurrent, onPrev, onNext, onToda
         aria-label="Next month"
       ><ChevronRight size={16}/></button>
       {!isCurrent && (
-        <button
+        <button title="Jump to today"
           type="button"
           data-testid="month-today"
           onClick={onToday}

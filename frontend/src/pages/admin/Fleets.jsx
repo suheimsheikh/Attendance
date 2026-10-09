@@ -182,7 +182,7 @@ function FleetForm({ initial, onClose, onSaved }) {
             testId="ff-save-error"
           />
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={guard.close} className="iu-btn-secondary">Cancel</button>
+            <button title="Close without saving" type="button" onClick={guard.close} className="iu-btn-secondary">Cancel</button>
             <button type="submit" disabled={saving} data-testid="ff-save" className="iu-btn-primary">
               {saving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Save
             </button>
@@ -289,7 +289,7 @@ function AssignAthletes({ fleet, athletes, onClose, onSaved }) {
             testId="assign-save-error"
           />
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
+            <button title="Close without saving" type="button" onClick={onClose} className="iu-btn-secondary">Cancel</button>
             <button type="button" onClick={save} disabled={saving} data-testid="assign-save" className="iu-btn-primary">
               {saving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Save
             </button>

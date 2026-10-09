@@ -38,7 +38,7 @@ export const MemberProfilePicker = ({ selfId, targetId, targetName, onPick }) =>
         {open && <div className="absolute z-20 mt-1 w-full max-h-72 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg"
           data-testid="admin-profile-search-results" onBlur={e => { if (!e.currentTarget.parentElement.contains(e.relatedTarget)) setOpen(false); }}>
           {error ? <div className="p-3 text-sm text-red-700" role="alert" data-testid="profile-member-search-error">
-            Could not load members. <button className="underline" data-testid="profile-member-search-retry" onClick={() => setRetry(n => n + 1)}>Retry</button>
+            Could not load members. <button title="Try again" className="underline" data-testid="profile-member-search-retry" onClick={() => setRetry(n => n + 1)}>Retry</button>
           </div> : !members ? <p className="p-3 text-sm" data-testid="profile-member-search-loading">Loading members…</p>
             : results.length === 0 ? <p className="p-3 text-sm" data-testid="profile-member-search-empty">No matching members.</p>
               : results.map(m => <button key={m.id} type="button" data-testid={`admin-profile-search-pick-${m.id}`}

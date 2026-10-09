@@ -498,7 +498,7 @@ function EscortForm({ institutionId, initial, activeRoster = [], onClose, onSave
         )}
         <FormErrorBanner error={formErr.error} requestId={formErr.requestId} onDismiss={formErr.clear} testId="escort-form-error" />
         <div className="flex gap-2">
-          <button type="button" onClick={guard.close} className="iu-btn-secondary flex-1">Cancel</button>
+          <button title="Close without saving" type="button" onClick={guard.close} className="iu-btn-secondary flex-1">Cancel</button>
           <button type="submit" disabled={busy} data-testid="escort-form-save" className="iu-btn-primary flex-1">
             {busy ? <Loader2 className="animate-spin" size={14}/> : "Save"}
           </button>
@@ -607,7 +607,7 @@ function InstForm({ initial, onClose, onSaved }) {
           testId="inst-save-error"
         />
         <div className="flex gap-2 pt-2">
-          <button type="button" onClick={guard.close} className="iu-btn-secondary flex-1">Cancel</button>
+          <button title="Close without saving" type="button" onClick={guard.close} className="iu-btn-secondary flex-1">Cancel</button>
           <button type="submit" disabled={busy} className="iu-btn-primary flex-1">{busy ? <Loader2 className="animate-spin" size={14}/> : "Save"}</button>
         </div>
       </form>

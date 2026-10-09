@@ -760,7 +760,7 @@ export default function SelfCheckIn() {
               <p className="text-sm text-sky-800/80 mt-1 font-medium">
                 You&apos;re on-site · <span className="tabular-nums font-bold">{autoCountdown}s</span>
               </p>
-              <button
+              <button title="Close without saving"
                 type="button"
                 onClick={cancelAuto}
                 data-testid="auto-checkin-cancel"
@@ -1189,7 +1189,7 @@ function TempExitCard({ onCreated }) {
       )}
 
       <div className="flex gap-2">
-        <button type="button" onClick={() => { setOpen(false); setReason(""); setDurationMin(60); setCustomTime(""); }} className="iu-btn-secondary flex-1">Cancel</button>
+        <button title="Close without saving" type="button" onClick={() => { setOpen(false); setReason(""); setDurationMin(60); setCustomTime(""); }} className="iu-btn-secondary flex-1">Cancel</button>
         <button data-testid="temp-exit-submit" type="submit" disabled={busy || !reason.trim() || (durationMin == null && !customTime)} className="iu-btn-primary flex-1">
           {busy ? <Loader2 className="animate-spin" size={16} /> : <><ArrowLeftRight size={14}/> Step out</>}
         </button>

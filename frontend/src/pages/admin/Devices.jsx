@@ -199,7 +199,7 @@ function ApproveDialog({ device, onClose, onApproved }) {
             <input data-testid="ad-rank" value={form.rank} onChange={(e) => set("rank", e.target.value)} className="iu-input" />
           </div>
           <div className="flex gap-2">
-            <button onClick={guard.close} type="button" className="iu-btn-secondary flex-1">Cancel</button>
+            <button title="Close without saving" onClick={guard.close} type="button" className="iu-btn-secondary flex-1">Cancel</button>
             <button data-testid="ad-submit" type="submit" disabled={busy} className="iu-btn-primary flex-1">
               {busy ? <Loader2 className="animate-spin" size={16}/> : "Approve & Sign in user"}
             </button>

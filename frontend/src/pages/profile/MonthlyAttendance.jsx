@@ -44,7 +44,7 @@ export const MonthlyAttendance = ({ memberId, month, onMonthChange }) => {
       </div>
       {loading ? <div className="flex justify-center gap-2 p-8 text-sm text-slate-500" role="status" data-testid="profile-attendance-loading"><Loader2 className="animate-spin" size={18}/> Loading attendance…</div>
         : error ? <div role="alert" data-testid="profile-attendance-error" className="p-4 bg-rose-50 text-rose-800 flex flex-wrap items-center gap-3">
-          {error}<button data-testid="profile-attendance-retry" className="iu-btn-secondary" onClick={() => setRetry(n => n + 1)}><RefreshCw size={14}/> Retry</button>
+          {error}<button title="Try again" data-testid="profile-attendance-retry" className="iu-btn-secondary" onClick={() => setRetry(n => n + 1)}><RefreshCw size={14}/> Retry</button>
         </div> : data && <>
           <p className="text-xs text-slate-500 mb-3" data-testid="profile-attendance-period">
             {data.member_name} · {new Date(`${data.month}-01T12:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" })}

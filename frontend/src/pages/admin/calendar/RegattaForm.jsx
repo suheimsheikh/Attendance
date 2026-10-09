@@ -103,7 +103,7 @@ export default function RegattaForm({ initial, onClose, onSaved }) {
             testId="rf-save-error"
           />
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={guard.close} className="iu-btn-secondary">Cancel</button>
+            <button title="Close without saving" type="button" onClick={guard.close} className="iu-btn-secondary">Cancel</button>
             <button type="submit" disabled={saving} data-testid="rf-save" className="iu-btn-primary">
               {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save" : "Create")}
             </button>

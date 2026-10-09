@@ -133,7 +133,7 @@ export default function LeaveReportPrompt() {
         >{message}</pre>
 
         <div className="flex items-center justify-end gap-2 px-4 pb-4">
-          <button
+          <button title="Remind me later"
             type="button" data-testid="leave-report-later"
             onClick={() => setOpen(false)}
             className="iu-btn iu-btn-secondary"

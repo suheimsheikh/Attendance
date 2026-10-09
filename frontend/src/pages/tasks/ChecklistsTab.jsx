@@ -73,7 +73,7 @@ export default function ChecklistsTab({ user, group }) {
               <option value="daily">Daily</option><option value="dow">Days of week</option><option value="monthly">Monthly</option>
             </select>
             <div className="flex gap-2">
-              {editId && <button type="button" onClick={cancelEdit} className="iu-btn-secondary !h-10" data-testid="checklist-cancel"><X size={15} /> Cancel</button>}
+              {editId && <button title="Close without saving" type="button" onClick={cancelEdit} className="iu-btn-secondary !h-10" data-testid="checklist-cancel"><X size={15} /> Cancel</button>}
               <button className="iu-btn-primary !h-10" disabled={busy} data-testid="checklist-add">{busy ? <Loader2 size={15} className="animate-spin" /> : editId ? <Save size={15} /> : <Plus size={15} />} {editId ? "Save" : "Add"}</button>
             </div>
           </div>

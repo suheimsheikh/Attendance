@@ -144,7 +144,7 @@ function RoleForm({ initial, onClose, onSaved }) {
         )}
 
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={guard.close} className="iu-btn-secondary" data-testid="role-form-cancel">Cancel</button>
+          <button title="Close without saving" type="button" onClick={guard.close} className="iu-btn-secondary" data-testid="role-form-cancel">Cancel</button>
           <button type="submit" disabled={saving} className="iu-btn-primary" data-testid="role-form-save">
             {saving && <Loader2 className="animate-spin" size={16} />}
             {isEdit ? "Save" : "Create"}

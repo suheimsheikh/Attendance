@@ -228,7 +228,7 @@ export function CampForm({ initial, onClose, onSaved }) {
         <header className="flex items-center justify-between">
           <h2 className="text-xl font-extrabold">{isEdit ? "Edit camp" : "New camp"}</h2>
           <TopSaveButton formId="camp-form-el" dirty={guard.dirty} saving={saving} testId="cf-top-save" />
-          <button type="button" onClick={guard.close} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
+          <button title="Close this panel" type="button" onClick={guard.close} className="text-slate-400 hover:text-slate-700 text-sm">Close</button>
         </header>
 
         <div>
@@ -386,7 +386,7 @@ export function CampForm({ initial, onClose, onSaved }) {
             testId="cf-save-error"
           />
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={guard.close} className="iu-btn-secondary">Cancel</button>
+            <button title="Close without saving" type="button" onClick={guard.close} className="iu-btn-secondary">Cancel</button>
             <button type="submit" disabled={saving} data-testid="cf-save" className="iu-btn-primary">
               {saving ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save changes" : "Create camp")}
             </button>

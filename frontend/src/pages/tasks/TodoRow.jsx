@@ -34,7 +34,7 @@ export default function TodoRow({
             <Flame size={13} /> Urgent
           </label>
           <div className="flex gap-2">
-            <button onClick={onCancelEdit} className="iu-btn-secondary !h-8 text-xs" data-testid={`todo-edit-cancel-${t.id}`}><X size={13} /> Cancel</button>
+            <button title="Close without saving" onClick={onCancelEdit} className="iu-btn-secondary !h-8 text-xs" data-testid={`todo-edit-cancel-${t.id}`}><X size={13} /> Cancel</button>
             <button onClick={onSaveEdit} disabled={busy === t.id} className="iu-btn-primary !h-8 text-xs" data-testid={`todo-edit-save-${t.id}`}>{busy === t.id ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save</button>
           </div>
         </div>
