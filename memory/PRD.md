@@ -700,3 +700,11 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Tooltips: components/AutoTooltips.jsx (MutationObserver: icon-only buttons/links get title from aria-label/data-testid) + 74 static titles on common text buttons (/tmp/addtitles.py dictionary).
 - Tests: 11 in test_id_docs_and_tuition.py; iteration_96 all pass.
 - OPEN: "Late not shown in WhatsApp check-in message for Preethi (PREETHI KONGARA, coach, work_start 06:00)". Code path verified correct (geo-toggle returns late; caption adds 🔴 LATE). Asked deployer (debug) for prod data: hourly_wager? camp start_time? method? Await result.
+
+### Oct 2026 — Code review of recent changes + fixes
+- Bulk ID upload: failed rows retry via Save all; scan not re-uploaded unless target changed (uploadedTo); seq row keys; visible read errors.
+- Missing-ID CSV neutralises leading = + - @ (formula injection).
+- Tooltip corrections: auto check-in cancel, escort selfie delete, meals import Done.
+- id_ocr: one retry on transient Gemini errors. Middleware logs "client-gone" instead of 0.
+- tests/test_http_middleware.py (3 unit tests). iteration_97: 6/6 pass.
+- Preethi late investigation: prod DB late=true (202 min); her WhatsApp caption lacks " · 🔴 LATE … ·" incl. one separator → no app version ever produced that → most likely edited in WhatsApp before sending. Offered: LATE first in caption, "Late today" list in admin post, server-side record of shared caption. Awaiting user choice.

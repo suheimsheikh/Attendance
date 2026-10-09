@@ -1,0 +1,31 @@
+{
+  "summary": "Verified the recent code-review fixes to BulkIdUpload (retry safety + readError), IdReport CSV formula-injection neutralisation, and the title-tooltip updates. 6/6 review scenarios pass. 3 throwaway members (athlete, staff, formula-prefix 'TEST Formula97') created via POST /api/members and deleted at end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/tmp/gen_cards_iter96.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BulkIdUpload.jsx `ready` filter now includes status 'error' and `uploadedTo` guard prevents the scan from being POSTed twice — confirmed in the network trace: athlete scan POST count = 1 across two Save-all presses while the PUT was retried.",
+    "On target change (member/person/card) uploadedTo is cleared implicitly because the new `${member_id}/${person}/${card}` string won't equal the stored uploadedTo — confirmed the scan WAS re-uploaded to the new member (inj) when target changed before retry.",
+    "IdReport.jsx downloadCsv() prefixes a single quote to leading =+-@\\t — CSV cell for '=TEST Formula97' comes out as \"'=TEST Formula97\". Normal names ('TestyAthlete97') are untouched.",
+    "Row keys use `f${++seq}` instead of Date.now() → no collision risk from rapid file picks (keys were f1, f2 in test).",
+    "Tooltips in source match review: auto-checkin-cancel → 'Stop the automatic check-in — you can check in yourself'; mc-import-close → 'Close this import summary'; cleanup-purge-{id} → 'Delete these selfies permanently (asks to confirm)'. cleanup-purge-selected is a text button ('Delete selected') with no explicit title — AutoTooltips skips text buttons by design, so this is consistent.",
+    "AutoTooltips coverage on /admin/members: 953 icon-only buttons measured, 953 have a runtime title (100%)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only run; API persistence verified)", "frontend": "100% (6/6 scenarios)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (Admin sign in with email)",
+  "seed_data_creation": "3 members created via POST /api/members (test_ath97_*, test_stf97_*, test_inj97_* with full_name '=TEST Formula97') and all DELETEd via /api/members/{id}?reason=test cleanup at end of run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "POST /api/members requires `full_name` (not `name`) and `password`. Use the admin JWT from /api/auth/login (field `access_token`). The bulk-file-input is `class='hidden'`, so wait with state='attached'. The /app/leave-report-later popup can re-appear after navigation — dismiss between every page.goto. page.route can intercept the retry PUT (`**/api/members/*/id-docs`) with 500 to force a 'Failed · retry' row; after unroute, pressing Save all again retries the PUT WITHOUT re-POSTing the scan (uploadedTo guard). The three test members are deleted at the end; no residual data.",
+  "flows_verified": [
+    "Bulk retry main fix: forced PUT 500 on athlete's first save → bulk-row-f1-failed visible ('Failed · retry'); staff row 'Saved'. Removed intercept, pressed bulk-save-all again → both 'Saved'. Final counts: athlete scan POST = 1, athlete PUT = 2 (fail+retry). GET /api/members/{athlete}/id-docs returns people.father.pan='QRSTU9876E' + pan_file; GET /api/members/{staff}/id-docs returns people.self.aadhaar='987654321023' + aadhaar_file.",
+    "Change target before retry: failed row re-pointed from staff/self to inj/self → retry POSTed the scan to the new target (/api/members/{inj}/id-docs/self/aadhaar?ocr=false observed exactly once) and PUT to {inj}/id-docs succeeded; API confirms inj has aadhaar_file persisted.",
+    "bulk/read 500: intercepted bulk/read for blank_card.png → row shows bulk-row-{key}-read-error 'forced read fail — fill in by hand'; filling card=pan, number=ABCDE1234F, member=athlete, person=self then Save all → row becomes 'Saved'. GET confirmed PAN persisted on athlete.",
+    "CSV formula injection: filtered id-report to '=TEST Formula97' (count=1 row), downloaded missing-id-documents.csv. Cell renders as \"'=TEST Formula97\" (leading apostrophe). Separate download for 'TestyAthlete97' confirms non-leading-equals names are left untouched.",
+    "Tooltips (source + DOM): auto-checkin-cancel, mc-import-close, cleanup-purge-{id} titles match the review text; icon-only AutoTooltips coverage on Members = 953/953 (100%).",
+    "Regression: /admin/id-documents loads with 360 rows, search 'AJAY' narrows to 5 rows, reset restores. /admin/members loads with 0 console errors and 0 error-class elements. Three throwaway members all DELETED (200 OK)."
+  ],
+  "rca of the issue": "N/A — review verification run. All fixes behave as described in the review."
+}
