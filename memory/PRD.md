@@ -714,3 +714,8 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - members/columns.jsx: MEMBER_COLUMNS column defs (15 existing + 14 new, new hidden by default); useMemberColumns.js saves order/hidden per admin in ui-prefs (members_col_order / members_col_hidden); ColumnsMenu.jsx (tick, arrows, drag, reset); header drag via HTML5 DnD (dataTransfer set for Firefox/Safari). PAN/Aadhaar columns inline-save via PUT /members/{id}/id-docs.
 - Tests: tests/test_member_profile_fields.py (2); iteration_98 all pass; header drag verified with real DragEvents.
 - New-field set chosen by agent (user didn't list) — confirm with user.
+
+### Oct 2026 — Passports
+- Passport = 3rd card (member + parents for athletes): number (6–9 alnum) + expiry + one scan; Gemini reads number, surname, given names, expiry. Name rule: EXACT words + order ("Given Surname"), case/spacing ignored (id_ocr.name_exact) — red warning shows both names. Report: Passport no./scan/Expiry with expired / ≤6-month "soon" flags + filters; bulk upload + Members "Passport" column supported.
+- name_score now tolerates OCR-dropped spaces (bulk matching).
+- Tests: 15 in test_id_docs_and_tuition.py; iteration_99 all pass.

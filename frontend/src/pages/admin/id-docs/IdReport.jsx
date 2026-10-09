@@ -23,7 +23,7 @@ const Expiry = ({ r, tid }) => (r.passport_expiry
   : <span className="text-slate-300 text-xs" data-testid={tid}>—</span>);
 
 const Cell = ({ ok, text, tid }) => (ok
-  ? <span className="inline-flex items-center gap-1 text-emerald-700 font-mono text-xs" data-testid={tid} title="On file"><Check size={13} />{text || ""}</span>
+  ? <span className="inline-flex items-center gap-1 text-emerald-700 font-mono text-xs" data-testid={tid} title="On file" aria-label="On file"><Check size={13} />{text || <span className="sr-only">On file</span>}</span>
   : <span className="inline-flex items-center gap-1 text-rose-600 text-xs font-semibold" data-testid={tid} title="Missing — chase this"><X size={13} />Missing</span>);
 
 function downloadCsv(rows) {
