@@ -7,8 +7,39 @@ const PEOPLE_LABEL = { self: "Member", father: "Father", mother: "Mother", guard
 const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar" };
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
 
+// Shown after a scan is read: confirm the auto-filled number, or pick between
+// the typed one and the scanned one. Name mismatch is a warning only.
+function DetectedBar({ card, d, onConfirm, onUseScanned, onDismiss, tid }) {
+  return (
+    <div className="mt-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 space-y-1" data-testid={`${tid}-detected`}>
+      {d.mode === "choose" ? (
+        <>
+          <div>Box has <b className="font-mono">{d.current}</b> but the scan shows <b className="font-mono">{d.number}</b>.</div>
+          <div className="flex gap-1.5">
+            <button type="button" data-testid={`${tid}-use-scanned`} onClick={onUseScanned} className="px-2 h-6 rounded bg-amber-600 text-white font-semibold">Use scanned</button>
+            <button type="button" data-testid={`${tid}-keep-current`} onClick={onDismiss} className="px-2 h-6 rounded border border-amber-400 font-semibold">Keep current</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div>Detected {CARD_LABEL[card]} from scan: <b className="font-mono">{d.number}</b>. Please check it&apos;s correct.</div>
+          <div className="flex gap-1.5">
+            <button type="button" data-testid={`${tid}-confirm`} onClick={onConfirm} className="px-2 h-6 rounded bg-emerald-600 text-white font-semibold">Confirm &amp; save</button>
+            <button type="button" data-testid={`${tid}-edit`} onClick={onDismiss} className="px-2 h-6 rounded border border-amber-400 font-semibold">Edit</button>
+          </div>
+        </>
+      )}
+      {d.name_matches === false && (
+        <div className="text-rose-700 font-semibold" data-testid={`${tid}-name-warning`}>
+          Name on card &ldquo;{d.name}&rdquo; doesn&apos;t look like &ldquo;{d.expected_name}&rdquo; — check it&apos;s the right card.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // One card (PAN or Aadhaar) for one person: number + single scan.
-function IdCardField({ memberId, person, card, value, file, onChange, onDoc }) {
+function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onUploaded }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const base = `/members/${memberId}/id-docs/${person}/${card}`;
@@ -21,8 +52,7 @@ function IdCardField({ memberId, person, card, value, file, onChange, onDoc }) {
     try {
       const fd = new FormData();
       fd.append("file", f);
-      onDoc(await api.post(base, fd));
-      toast.success(`${CARD_LABEL[card]} scan uploaded`);
+      onUploaded(await api.post(base, fd));
     } catch (err) { showApiError(err, "Upload failed"); }
     finally { setBusy(false); if (inputRef.current) inputRef.current.value = ""; }
   };
@@ -74,6 +104,7 @@ export default function IdDocsSection({ memberId }) {
   const [doc, setDoc] = useState(null);
   const [nums, setNums] = useState({});
   const [saving, setSaving] = useState(false);
+  const [detected, setDetected] = useState({});   // { "self.pan": {mode, number, current, name, ...} }
 
   const applyDoc = (d) => {
     setDoc(d);
@@ -85,11 +116,28 @@ export default function IdDocsSection({ memberId }) {
   useEffect(() => { api.get(`/members/${memberId}/id-docs`).then(applyDoc).catch(() => {}); }, [memberId]);
 
   const setNum = (p, card, v) => setNums((n) => ({ ...n, [p]: { ...n[p], [card]: v } }));
-  const save = async () => {
+  const clearDetected = (k) => setDetected(({ [k]: _drop, ...rest }) => rest);
+  const save = async (people = nums) => {
     setSaving(true);
-    try { applyDoc(await api.put(`/members/${memberId}/id-docs`, { people: nums })); toast.success("ID numbers saved"); }
-    catch (err) { showApiError(err, "Could not save ID numbers"); }
+    try { applyDoc(await api.put(`/members/${memberId}/id-docs`, { people })); toast.success("ID numbers saved"); return true; }
+    catch (err) { showApiError(err, "Could not save ID numbers"); return false; }
     finally { setSaving(false); }
+  };
+  // Keep unsaved typing: only the file metadata comes from the upload response.
+  const onUploaded = (p, card, res) => {
+    setDoc(res);
+    const d = res.detected;
+    if (!d?.number) { toast.message(`${CARD_LABEL[card]} scan uploaded — couldn't read the number, please type it`); return; }
+    toast.success(`${CARD_LABEL[card]} scan uploaded — number detected`);
+    const current = (nums[p]?.[card] || "").replace(/\s/g, "").toUpperCase();
+    const k = `${p}.${card}`;
+    if (current && current !== d.number) { setDetected((x) => ({ ...x, [k]: { ...d, mode: "choose", current } })); return; }
+    setNum(p, card, d.number);
+    setDetected((x) => ({ ...x, [k]: { ...d, mode: "confirm" } }));
+  };
+  const confirm = async (p, card, number) => {
+    const people = { ...nums, [p]: { ...nums[p], [card]: number } };
+    if (await save(people)) clearDetected(`${p}.${card}`);
   };
 
   if (!doc) return null;
@@ -100,6 +148,7 @@ export default function IdDocsSection({ memberId }) {
       </div>
       <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-3" data-testid="id-docs-tip">
         One file per card. Scan the <b>front and back together into one clear PDF</b> (or a photo) — max 10 MB.
+        The number is read from the scan automatically — just confirm it.
       </p>
       <div className="space-y-4">
         {doc.allowed_people.map((p) => (
@@ -107,15 +156,27 @@ export default function IdDocsSection({ memberId }) {
             <div className="text-xs font-bold text-slate-700 mb-1.5">{PEOPLE_LABEL[p]}</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {["pan", "aadhaar"].map((card) => (
-                <IdCardField key={card} memberId={memberId} person={p} card={card}
-                  value={nums[p]?.[card]} file={doc.people?.[p]?.[`${card}_file`]}
-                  onChange={(v) => setNum(p, card, v)} onDoc={applyDoc} />
+                <div key={card}>
+                  <IdCardField memberId={memberId} person={p} card={card}
+                    value={nums[p]?.[card]} file={doc.people?.[p]?.[`${card}_file`]}
+                    onChange={(v) => setNum(p, card, v)} onDoc={applyDoc}
+                    onUploaded={(res) => onUploaded(p, card, res)} />
+                  {detected[`${p}.${card}`] && (
+                    <DetectedBar card={card} d={detected[`${p}.${card}`]} tid={`id-${p}-${card}`}
+                      onConfirm={() => confirm(p, card, detected[`${p}.${card}`].number)}
+                      onUseScanned={() => {
+                        setNum(p, card, detected[`${p}.${card}`].number);
+                        setDetected((x) => ({ ...x, [`${p}.${card}`]: { ...x[`${p}.${card}`], mode: "confirm" } }));
+                      }}
+                      onDismiss={() => clearDetected(`${p}.${card}`)} />
+                  )}
+                </div>
               ))}
             </div>
           </div>
         ))}
       </div>
-      <button type="button" data-testid="id-docs-save" onClick={save} disabled={saving} className="iu-btn-secondary mt-3">
+      <button type="button" data-testid="id-docs-save" onClick={() => save()} disabled={saving} className="iu-btn-secondary mt-3">
         {saving ? <Loader2 size={14} className="animate-spin" /> : null} Save ID numbers
       </button>
     </div>

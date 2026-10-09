@@ -1,7 +1,8 @@
 """PAN / Aadhaar numbers + one scan per card for a member and (athlete-like
 members only) their father, mother and guardian. Admin-only (Oct 2026).
-Numbers live in `member_id_docs` (never on the user doc, so roster APIs
-can't leak them); scans live in Emergent Object Storage."""
+Numbers live in `member_id_docs`; scans live in Emergent Object Storage.
+On upload the number + name are read off the scan (services/id_ocr.py) and
+returned as `detected` for the admin to confirm — never auto-saved."""
 from __future__ import annotations
 
 import asyncio
@@ -14,6 +15,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from routes.admin_audit import write_audit
+from services.id_ocr import name_matches, read_id_card
 from services.object_storage import APP_PREFIX, get_object, put_object
 from services.scope import athlete_like_keys
 from services.time_utils import now_utc
@@ -48,10 +50,9 @@ def _clean_aadhaar(v: Optional[str]) -> str:
     return v
 
 
-def _masked(people: dict) -> dict:
-    """Audit-safe view: last 4 digits only — raw IDs never enter audit_log."""
-    return {p: {k: (f"••••{v[-4:]}" if v else "") for k, v in (d or {}).items() if k in CARDS}
-            for p, d in (people or {}).items()}
+def _numbers(people: dict) -> dict:
+    """Audit view: numbers only (PAN/Aadhaar aren't treated as private — user, Oct 2026)."""
+    return {p: {k: v for k, v in (d or {}).items() if k in CARDS} for p, d in (people or {}).items()}
 
 
 def _safe_name(name: str) -> str:
@@ -62,7 +63,8 @@ def make_router(db, require_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     async def _member_and_people(mid: str):
-        m = await db.users.find_one({"id": mid}, {"_id": 0, "id": 1, "full_name": 1, "category": 1})
+        m = await db.users.find_one({"id": mid}, {"_id": 0, "id": 1, "full_name": 1, "category": 1,
+                                                  "father_name": 1, "mother_name": 1, "guardian_name": 1})
         if not m:
             raise HTTPException(status_code=404, detail="Member not found")
         people = ["self"] + (list(PARENTS) if m.get("category") in await athlete_like_keys(db) else [])
@@ -94,8 +96,8 @@ def make_router(db, require_admin) -> APIRouter:
         after = await _doc(mid)
         await write_audit(db, actor=admin, action="id_numbers_updated", entity_type="member",
                           entity_id=mid, entity_name=m.get("full_name"),
-                          before={"people": _masked(before.get("people"))},
-                          after={"people": _masked(after.get("people"))})
+                          before={"people": _numbers(before.get("people"))},
+                          after={"people": _numbers(after.get("people"))})
         return {**after, "allowed_people": people}
 
     @router.post("/members/{mid}/id-docs/{person}/{card}")
@@ -120,7 +122,11 @@ def make_router(db, require_admin) -> APIRouter:
         await write_audit(db, actor=admin, action="id_scan_uploaded", entity_type="member",
                           entity_id=mid, entity_name=m.get("full_name"),
                           after={"person": person, "card": card, "file": meta["name"]})
-        return {**await _doc(mid), "allowed_people": people}
+        detected = await read_id_card(data, ctype, card)
+        if detected:
+            expected = m.get("full_name") if person == "self" else m.get(f"{person}_name")
+            detected.update(expected_name=expected, name_matches=name_matches(detected["name"], expected))
+        return {**await _doc(mid), "allowed_people": people, "detected": detected}
 
     @router.get("/members/{mid}/id-docs/{person}/{card}/file")
     async def download_scan(mid: str, person: str, card: str, admin: dict = Depends(require_admin)):

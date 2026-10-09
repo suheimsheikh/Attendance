@@ -87,7 +87,7 @@ def test_whatsapp_groups_has_tuitions(admin_client, base_url):
     assert g.get("tuitions_group_name")
 
 
-def test_audit_log_never_stores_raw_id_numbers(admin_client, base_url, make_member, mongo_db):
+def test_audit_log_records_full_id_numbers(admin_client, base_url, make_member, mongo_db):
     if mongo_db is None:
         pytest.skip("mongo_db fixture unavailable")
     m = make_member("staff")
@@ -98,8 +98,8 @@ def test_audit_log_never_stores_raw_id_numbers(admin_client, base_url, make_memb
     rows = list(mongo_db.audit_log.find({"entity_id": m["id"], "action": "id_numbers_updated"}, {"_id": 0}))
     assert rows, "change must still be audited"
     blob = json.dumps(rows, default=str, ensure_ascii=False)
-    assert "ZZZZZ9999Z" not in blob and "987654321098" not in blob
-    assert "••••1098" in blob
+    # Oct 2026: PAN/Aadhaar aren't private — full numbers in the change log.
+    assert "ZZZZZ9999Z" in blob and "987654321098" in blob
 
 
 def test_unique_indexes_on_new_collections(mongo_db):
@@ -121,3 +121,34 @@ def test_scan_filename_sanitised(admin_client, base_url, make_member):
     assert '"' not in name and "\r" not in name and "\n" not in name
     d = requests.get(base + "/file", headers=hdrs, timeout=60)
     assert d.status_code == 200 and d.content == PDF
+
+
+def test_name_matches_helper():
+    from services.id_ocr import name_matches
+    assert name_matches("RAVI KUMAR", "Ravi Kumar Sharma") is True
+    assert name_matches("SITA DEVI", "Ravi Kumar") is False
+    assert name_matches(None, "Ravi") is None
+
+
+def test_scan_upload_detects_pan_number_and_name(admin_client, base_url, make_member):
+    """Real Gemini vision call on a generated PAN image: number + name are
+    returned as `detected` but NOT saved until the admin confirms."""
+    import io
+    import requests
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (700, 320), "white")
+    d = ImageDraw.Draw(img)
+    d.text((20, 40), "INCOME TAX DEPARTMENT   GOVT. OF INDIA", fill="black")
+    d.text((20, 110), "Name: RAVI KUMAR", fill="black")
+    d.text((20, 180), "Permanent Account Number: ABCDE1234F", fill="black")
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    m = make_member("staff", full_name="TEST Sita Devi QA")
+    hdrs = {"Authorization": admin_client.headers["Authorization"]}
+    r = requests.post(f"{base_url}/api/members/{m['id']}/id-docs/self/pan", headers=hdrs,
+                      files={"file": ("pan.png", buf.getvalue(), "image/png")}, timeout=120)
+    assert r.status_code == 200, r.text
+    det = r.json()["detected"]
+    assert det and det["number"] == "ABCDE1234F"
+    assert det["name_matches"] is False  # card says Ravi Kumar, member is Sita Devi
+    assert not (r.json()["people"]["self"].get("pan"))  # not auto-saved
