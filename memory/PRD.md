@@ -693,3 +693,10 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - services/id_ocr.py: Gemini gemini-3.5-flash (Emergent LLM key, emergentintegrations, FileContentWithMimeType) reads number + name from PDF/photo; best-effort (None on failure).
 - Upload response returns `detected` {number, name, expected_name, name_matches}; NOT saved until admin confirms. UI DetectedBar: auto-fill + "Confirm & save"/"Edit"; if box differs → "Use scanned"/"Keep current"; name mismatch = warning only.
 - Tests: 9 in test_id_docs_and_tuition.py (incl. real OCR); iteration_95 6/6 UI flows pass.
+
+### Oct 2026 — ID Documents page (Missing report + Bulk upload) + app-wide tooltips
+- /admin/id-documents (button on Members): IdReport (filters, CSV, row → MemberForm) + BulkIdUpload (≤30 files, 3 parallel Gemini reads via POST /api/id-docs/bulk/read with auto card type + name→person match ≥0.5; review dropdowns; Save all uses upload ?ocr=false + partial PUT).
+- PUT /members/{id}/id-docs now writes only fields sent (no wiping the other card).
+- Tooltips: components/AutoTooltips.jsx (MutationObserver: icon-only buttons/links get title from aria-label/data-testid) + 74 static titles on common text buttons (/tmp/addtitles.py dictionary).
+- Tests: 11 in test_id_docs_and_tuition.py; iteration_96 all pass.
+- OPEN: "Late not shown in WhatsApp check-in message for Preethi (PREETHI KONGARA, coach, work_start 06:00)". Code path verified correct (geo-toggle returns late; caption adds 🔴 LATE). Asked deployer (debug) for prod data: hourly_wager? camp start_time? method? Await result.

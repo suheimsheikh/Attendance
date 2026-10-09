@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend end-to-end verification of the new Missing-ID Report, Bulk-ID Upload (Gemini OCR), and app-wide tooltip auto-fill. One throwaway athlete (Testy Athleteson, with father_name='TESTFATHER PANHOLDER') and one throwaway staff (TESTSTAFF AADHAARHOLDER) were created via POST /api/members and deleted at end. All 5 review scenarios pass; 0 console errors on Members / Muster / Dashboard regression.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/tmp/gen_cards_iter96.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "frontend/src/pages/admin/id-docs/BulkIdUpload.jsx saveAll() posts the scan then PUTs the number — PUT body uses `{people:{[person]:{[card]:number}}}` which goes through the partial-merge path in id_docs.save_id_numbers, so saving one card never wipes a sibling card on the same person. Verified on API: athlete.father ended with both pan='KLMNO4321P' and pan_file populated.",
+    "RowEditor's `member` <select> option list is derived from `slots` which comes from GET /id-docs/report (fetched once on IdDocuments mount via useEffect). Freshly created members would miss from the dropdown until the user re-enters the page — not a regression for this review but worth noting.",
+    "BulkIdUpload uses `pool(items, 3, fn)` concurrency for the Gemini reads which keeps parallelism polite; good.",
+    "AutoTooltips MutationObserver scans every added subtree per rAF — on Members page with 3537 buttons, measured 945 icon-only buttons and ALL 945 received a title. 12 text-only buttons on Members still lack a title (minor, mostly category chips), 5 on Muster, 4 on Dashboard. Icon-only coverage is 100% on all three screens."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (persistence + bulk upload API verified)", "frontend": "100% (all 5 review scenarios passed)"},
+  "test_credentials": "admin@attendance.app / Admin@12345",
+  "seed_data_creation": "Throwaway athlete (father_name=TESTFATHER PANHOLDER) and staff (TESTSTAFF AADHAARHOLDER) created via POST /api/members with ?reason=test cleanup DELETE at end. Generated PAN/Aadhaar PNGs via PIL in /tmp/pan_card.png, /tmp/aadhaar_card.png, /tmp/blank_card.png.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Admin login: toggle data-testid='toggle-admin-login' first, then fill login-email-input/login-password-input, click login-submit-button. Admin landing is '/'. After navigation to /admin/members or /admin, dismiss [data-testid='leave-report-later']. API uses Bearer JWT from localStorage.getItem('ishowedup_token'); page.context.request does NOT auto-inherit — must pass Authorization header. POST /api/members requires `password` field (422 otherwise). OCR takes ~3s per card on current Gemini. The AutoTooltips observer gives every icon-only button a title derived from aria-label/data-testid.",
+  "flows_verified": [
+    "Members page → data-testid='members-id-documents' has title 'See who is still missing PAN / Aadhaar numbers or scans, and bulk-upload scans' and navigates to /admin/id-documents (data-testid='id-documents-page').",
+    "Report tab: new athlete yields 4 rows (self/father/mother/guardian), new staff yields 1 row (no father/mother/guardian). All 4 cells show 'Missing' as expected.",
+    "Filters: id-report-count goes 359→4 (search 'Testy Athleteson')→1 (person=father)→1 (missing=pan). Reset restores. id-report-csv downloads 'missing-id-documents.csv'.",
+    "Clicking id-row-<aid>-self opens MemberForm (id-docs-section visible); Cancel returns to id-report.",
+    "Bulk tab: Set 3 files on data-testid='bulk-file-input' (PAN, Aadhaar, blank). OCR finished in ~3s. Row 1: card='pan', number='KLMNO4321P', member=athlete, person='father' (auto-detected father from name match). Row 2: card='aadhaar', number='123456781902', member=staff, person='self'. Row 3: blank → bulk-row-...-nomatch rendered, no number, no member.",
+    "bulk-save-all → 2 rows show 'Saved' (the two matched rows). GET /api/members/<athlete>/id-docs returns people.father.pan='KLMNO4321P' + pan_file; GET /api/members/<staff>/id-docs returns people.self.aadhaar='123456781902' + aadhaar_file. Saving one card did not wipe the other (different person-card paths; partial merge preserved sibling data).",
+    "Remove button: clicking data-testid='bulk-row-...-remove' deleted the row (3→2).",
+    "Tooltip coverage (visible buttons): Members 3537 total — 945 icon-only, 0 missing title; 12 text buttons missing title. Muster 14 total — 3 icon-only, 0 missing title; 5 text missing. Dashboard 124 total — 117 icon-only, 0 missing title; 4 text missing. Icon-only coverage 100% on all three pages.",
+    "Regression: 0 console errors across Members, Muster, Dashboard, id-documents, MemberForm."
+  ],
+  "rca of the issue": "N/A — feature verification, not a bug. All implemented behaviour matches the spec."
+}
