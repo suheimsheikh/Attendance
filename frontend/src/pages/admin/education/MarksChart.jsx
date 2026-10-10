@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { TrendingDown, TrendingUp, Minus } from "lucide-react";
-import { MONTHS } from "./MarksheetModal";
+import { monLabel } from "./MarksheetModal";
 
 // Pull an overall % (0-100) out of a free-text result like "86%",
 // "Overall 86.5%" or "88 / 100". Grades ("A1"), CGPA/GPA, ranks and
@@ -35,7 +35,7 @@ export function chartPoints(marksheets) {
     .map((s) => ({ pct: parsePct(s.result), month: s.month, year: s.year, exam: s.exam_name }))
     .filter((p) => p.pct != null)
     .sort((a, b) => a.year - b.year || a.month - b.month)
-    .map((p) => ({ ...p, label: `${MONTHS[p.month - 1]} ${p.year}` }));
+    .map((p) => ({ ...p, label: `${monLabel(p.month)} ${p.year}` }));
 }
 
 /**
@@ -85,7 +85,7 @@ export default function MarksChart({ marksheets }) {
                 <title>{`${p.exam} · ${p.label} · ${p.pct}%`}</title>
               </circle>
               <text x={x(i)} y={y(p.pct) - 7} textAnchor="middle" className="fill-slate-700 font-bold" fontSize="9">{p.pct}</text>
-              <text x={x(i)} y={H - 6} textAnchor="middle" className="fill-slate-400" fontSize="8">{MONTHS[p.month - 1]} '{String(p.year).slice(2)}</text>
+              <text x={x(i)} y={H - 6} textAnchor="middle" className="fill-slate-400" fontSize="8">{monLabel(p.month)} '{String(p.year).slice(2)}</text>
             </g>
           );
         })}

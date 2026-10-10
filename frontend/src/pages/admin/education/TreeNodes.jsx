@@ -1,6 +1,6 @@
 import React from "react";
 import { ChevronRight, FileText, Pencil, Plus, Trash2, UserCog, Eye } from "lucide-react";
-import { MONTHS } from "./MarksheetModal";
+import { monLabel } from "./MarksheetModal";
 import MarksChart from "./MarksChart";
 
 const Chevron = ({ open }) => <ChevronRight size={14} className={`transition-transform ${open ? "rotate-90" : ""}`} />;
@@ -11,7 +11,7 @@ function SheetRow({ s, onView, onEdit, onDelete }) {
   return (
     <li className="flex flex-wrap items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg hover:bg-slate-50" data-testid={tid}>
       <FileText size={14} className="text-slate-400" />
-      <span className="font-mono text-xs w-16 text-slate-600" data-testid={`${tid}-when`}>{MONTHS[s.month - 1]} {s.year}</span>
+      <span className="font-mono text-xs w-16 text-slate-600" data-testid={`${tid}-when`}>{monLabel(s.month)} {s.year}</span>
       <span className="font-semibold text-sm">{s.exam_name}</span>
       {s.board && <span className="text-xs text-slate-500">· {s.board}</span>}
       {s.result && <span className="text-xs font-semibold text-sky-700">· {s.result}</span>}

@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { api, showApiError } from "../../../api";
 
 export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// Safe month label — tolerates a missing/out-of-range month on a malformed sheet.
+export const monLabel = (m) => MONTHS[m - 1] || "";
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
 const nowYear = new Date().getFullYear();
 
