@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from services.time_utils import now_utc
+from services.scope import athlete_like_keys
 
 
 # -------------------- Pydantic bodies --------------------
@@ -215,13 +216,7 @@ def make_router(db, require_admin, get_current_user) -> APIRouter:
         # athlete-like category the admin has added). Previously hardcoded
         # to "athlete" only, which silently skipped Elite squad members
         # during bulk fleet assignment (bug reported 04 Feb 2026).
-        athlete_keys = set()
-        async for c in db.categories.find({"is_athlete_like": True}, {"_id": 0, "key": 1}):
-            k = c.get("key")
-            if k:
-                athlete_keys.add(k)
-        if not athlete_keys:
-            athlete_keys = {"athlete", "elite"}
+        athlete_keys = set(await athlete_like_keys(db))
         res = await db.users.update_many(
             {"id": {"$in": body.member_ids}, "category": {"$in": list(athlete_keys)}},
             {"$set": {"fleet": target}},

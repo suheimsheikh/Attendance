@@ -19,6 +19,7 @@ from services.dar import (
     is_tuition_teacher, refresh_tuition_keys, validate_dar_text,
 )
 from services.time_utils import office_today_str, now_utc
+from services.scope import athlete_like_keys
 
 
 class DarIn(BaseModel):
@@ -143,7 +144,7 @@ def make_router(db, get_current_user, require_admin, valid_grid_key, write_audit
             query["date"] = {k: v for k, v in (("$gte", from_), ("$lte", to)) if v}
         if member_id:
             query["user_id"] = member_id
-        if category and category in (DAR_CATEGORIES | {"elite", "athlete"}):
+        if category and category in (DAR_CATEGORIES | set(await athlete_like_keys(db))):
             query["category"] = category
         if q and q.strip():
             query["text"] = {"$regex": re.escape(q.strip()), "$options": "i"}

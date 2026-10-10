@@ -10,7 +10,6 @@ from __future__ import annotations
 import uuid
 import pytest
 import requests
-from datetime import date
 
 
 # ---------- helpers ----------

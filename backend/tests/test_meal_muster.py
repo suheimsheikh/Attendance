@@ -11,9 +11,7 @@ Uses the shared `base_url` / `admin_token` fixtures from conftest.
 """
 from __future__ import annotations
 
-import os
 import requests
-from datetime import date
 
 MEAL_KEYS = {"breakfast", "midmorning", "lunch", "snacks", "dinner"}
 # Fixed test date well in the past to avoid clashing with real usage.

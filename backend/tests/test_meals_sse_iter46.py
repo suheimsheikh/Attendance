@@ -7,7 +7,6 @@ Tests:
 """
 import json
 import os
-import re
 import threading
 import time
 

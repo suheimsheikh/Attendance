@@ -10,6 +10,7 @@ import { useEscape } from "../hooks/useEscape";
 import { shareToWhatsApp, formatCheckinCaption, dataUrlToBlob } from "../utils/shareWhatsApp";
 import useWhatsappGroups, { buildWhatsappHeader } from "../hooks/useWhatsappGroups";
 import { fmtHmLocal } from "../utils/dates";
+import { STEP_OUT_DURATIONS } from "../utils/stepOut";
 
 /**
  * EscortCheckIn — kiosk-style page used by both escorts themselves
@@ -558,12 +559,6 @@ function SelfieThumbnail({ attId, kind, localDataUrl, hasOnServer, label, testId
     </>
   );
 }
-
-const STEP_OUT_DURATIONS = [
-  { min: 30,  label: "30 min" },
-  { min: 60,  label: "1 hour" },
-  { min: 120, label: "2 hours" },
-];
 
 function EscortStepOutForm({ escort, onClose, onDone }) {
   const [reason, setReason] = useState("");

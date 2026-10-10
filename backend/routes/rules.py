@@ -114,7 +114,12 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
             upd["sections"] = secs
             content_changed = secs != (before.get("sections") or [])
         if body.required_categories is not None:
-            upd["required_categories"] = [c for c in body.required_categories if c in ("staff", "coach", "executive", "elite", "athlete")]
+            # Valid category keys come from the categories master so a
+            # custom category can be required for rule sign-off. Falls
+            # back to the seeded five if the master isn't populated yet.
+            valid_cats = {c["key"] async for c in db.categories.find({}, {"_id": 0, "key": 1}) if c.get("key")} \
+                or {"staff", "coach", "executive", "elite", "athlete"}
+            upd["required_categories"] = [c for c in body.required_categories if c in valid_cats]
         # Sign-off integrity: acceptances are keyed by version, so changing
         # the rule TEXT without bumping the version would leave employees
         # marked as having accepted wording they never saw. Force a new

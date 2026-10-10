@@ -86,7 +86,7 @@ def make_router(db, get_current_user, require_admin) -> APIRouter:
     async def overtime_list(
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
-        status_filter: Optional[str] = Query(None, alias="status"),  # noqa: ARG001 (kept for URL compat)
+        status_filter: Optional[str] = Query(None, alias="status"),
         admin: dict = Depends(require_admin),
     ):
         """DEPRECATED (15 Feb 2026) — OT no longer has an approval queue.

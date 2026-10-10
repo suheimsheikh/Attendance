@@ -5,7 +5,6 @@ Combines a few real-OCR calls (Gemini) with many fast API-only assertions.
 from __future__ import annotations
 
 import io
-import os
 import uuid
 
 import pytest

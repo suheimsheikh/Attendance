@@ -17,6 +17,11 @@ def iso(dt: Optional[datetime]) -> Optional[str]:
     return dt.isoformat() if dt else None
 
 
+def to_utc_iso(dt: datetime) -> str:
+    """Serialize an aware datetime to a UTC ISO-8601 string."""
+    return dt.astimezone(timezone.utc).isoformat()
+
+
 def office_tz(office: Optional[dict]) -> ZoneInfo:
     name = (office or {}).get("timezone") or DEFAULT_TZ
     try:

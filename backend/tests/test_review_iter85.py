@@ -126,7 +126,6 @@ class TestAttendancePhase2:
 
     def test_a_geo_toggle_checkin(self, zz_h, office, zz_member, mongo):
         # Clean any prior attendance for today to make test idempotent
-        from datetime import date
 
         mongo.attendance.delete_many({"user_id": zz_member["id"]})
         r = requests.post(

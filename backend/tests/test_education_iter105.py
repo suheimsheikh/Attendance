@@ -11,9 +11,7 @@ Covers:
 from __future__ import annotations
 
 import io
-import os
 import uuid
-from datetime import date
 
 import pytest
 import requests

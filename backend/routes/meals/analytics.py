@@ -1,7 +1,7 @@
 """Meals routes — analytics. Split out of routes/meals/__init__.py (Oct 2026); behaviour unchanged."""
 from __future__ import annotations
 
-from routes.meals.common import (  # noqa: F401
+from routes.meals.common import (
     Depends,
     HTTPException,
     Query,
@@ -187,7 +187,7 @@ def register(router, *, _purchase_categories, _stock_snapshot, _valid_date, db, 
 
     @router.get("/meals/pantry-day-detail")
     async def pantry_day_detail(
-        date: str,  # noqa: A002
+        date: str,
         kind: str = Query("purchases", pattern="^(purchases|issues)$"),
         user: dict = Depends(require_chef_or_admin),
     ):

@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import calendar
 import uuid
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from services.time_utils import local_date_str, now_utc, office_tz
+from services.time_utils import local_date_str, now_utc, office_tz, to_utc_iso
 
 
 def _local_day_utc_window(office: dict, iso: str) -> tuple[str, str]:
@@ -27,8 +27,7 @@ def _local_day_utc_window(office: dict, iso: str) -> tuple[str, str]:
     day = date.fromisoformat(iso)
     start_local = datetime.combine(day, time.min, tzinfo=tz)
     end_local = start_local + timedelta(days=1)
-    return (start_local.astimezone(timezone.utc).isoformat(),
-            end_local.astimezone(timezone.utc).isoformat())
+    return (to_utc_iso(start_local), to_utc_iso(end_local))
 
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 RECURRENCES = {"daily", "dow", "monthly"}

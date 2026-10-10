@@ -170,7 +170,7 @@ async def send_sms(*, db, to_e164: str, body: str, institution: Optional[str] = 
         # the admin. With 400 the JSON body passes through unmodified.
         logger.warning("Twilio SMS error to %s: %s", to_e164, exc)
         raise HTTPException(status_code=400, detail=f"Twilio rejected the SMS: {exc.msg}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("Unexpected Twilio failure")
         raise HTTPException(status_code=500, detail=f"Twilio failure: {exc}")
 

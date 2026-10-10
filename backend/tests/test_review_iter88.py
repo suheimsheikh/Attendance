@@ -11,7 +11,6 @@ Rules under test (Oct/Jan 2026, user request):
   * member archive/delete queued by non-super admin STAYS super-admin only
 """
 import os
-import time
 import uuid
 import pytest
 import requests

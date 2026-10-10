@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends
 
 from services.time_utils import local_date_str, now_utc
 from services.attendance_calc import session_ot_minutes
+from services.scope import athlete_like_keys
 
 
 def _has_valid_parent_mobile(u: dict) -> bool:
@@ -88,7 +89,8 @@ def make_router(db, require_admin) -> APIRouter:
             },
         ).to_list(5000)
         users_by_id: dict[str, dict] = {u["id"]: u for u in users}
-        athletes = [u for u in users if u.get("category") in ("athlete", "elite")]
+        athlete_keys = set(await athlete_like_keys(db))
+        athletes = [u for u in users if u.get("category") in athlete_keys]
 
         # ================== NOW (live today) ==============================
         open_sessions = await db.attendance.find(
@@ -189,7 +191,7 @@ def make_router(db, require_admin) -> APIRouter:
             if not u:
                 continue
             d = r.get("date")
-            if u.get("category") in ("athlete", "elite"):
+            if u.get("category") in athlete_keys:
                 per_day_athletes.setdefault(d, set()).add(r["user_id"])
             elif u.get("category") in ("coach", "staff", "executive"):
                 per_day_staff.setdefault(d, set()).add(r["user_id"])

@@ -1,7 +1,7 @@
 """Meals routes — calendar. Split out of routes/meals/__init__.py (Oct 2026); behaviour unchanged."""
 from __future__ import annotations
 
-from routes.meals.common import (  # noqa: F401
+from routes.meals.common import (
     DailyCountsIn,
     Depends,
     File,

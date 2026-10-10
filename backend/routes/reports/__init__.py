@@ -8,7 +8,7 @@ which is sourced from `routes.leaves` after that router is mounted.
 """
 from __future__ import annotations
 
-from routes.reports.common import (  # noqa: F401
+from routes.reports.common import (
     date,
     timedelta,
     Optional,
@@ -17,6 +17,7 @@ from routes.reports.common import (  # noqa: F401
     _classify_timeline_day,
 )
 from routes.reports.hours import register as _reg_hours
+from services.scope import athlete_like_keys
 from routes.reports.timeline import register as _reg_timeline
 from routes.reports.grid import register as _reg_grid
 from routes.reports.grid_api import register as _reg_grid_api
@@ -47,17 +48,10 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
         raise HTTPException(status_code=400, detail="Either `month` (YYYY-MM) or `year` must be provided")
 
     async def _athlete_like_keys(db_) -> set:
-        """Pull the set of category keys flagged `is_athlete_like=True` from
-        the categories master. Falls back to the seeded pair {athlete,elite}
-        if the collection isn't populated yet (fresh install / test)."""
-        keys = set()
-        async for c in db_.categories.find({"is_athlete_like": True}, {"_id": 0, "key": 1}):
-            k = c.get("key")
-            if k:
-                keys.add(k)
-        if not keys:
-            keys = {"athlete", "elite"}
-        return keys
+        """Category keys flagged `is_athlete_like=True` (via the shared
+        scope helper). Falls back to the seeded pair if the categories
+        master isn't populated yet (fresh install / test)."""
+        return set(await athlete_like_keys(db_))
 
     _ns = _reg_hours(router, _athlete_like_keys=_athlete_like_keys, compute_hours_report=compute_hours_report, db=db, enrich_leaves=enrich_leaves, get_current_user=get_current_user, require_admin=require_admin)
 

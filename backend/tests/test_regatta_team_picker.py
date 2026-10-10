@@ -8,7 +8,6 @@ Covers:
   team_ids (team_picked flag, member filtering).
 """
 import os
-import uuid
 import pytest
 import requests
 

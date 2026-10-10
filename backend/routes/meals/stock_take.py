@@ -1,7 +1,7 @@
 """Meals routes — stock_take. Split out of routes/meals/__init__.py (Oct 2026); behaviour unchanged."""
 from __future__ import annotations
 
-from routes.meals.common import (  # noqa: F401
+from routes.meals.common import (
     Depends,
     HTTPException,
     Optional,
@@ -29,7 +29,7 @@ def register(router, *, _audit, _not_future, _purchase_categories, _range_or_def
     # ==================================================================
     @router.get("/meals/stock-take")
     async def stock_take_sheet(
-        date: str,  # noqa: A002 — API contract; local name via _valid_date
+        date: str,
         user: dict = Depends(require_chef_or_admin),
     ):
         """Physical-count worksheet: every active item with its SYSTEM

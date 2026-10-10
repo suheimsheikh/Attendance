@@ -13,6 +13,7 @@ import DarPendingCard from "../components/DarPendingCard";
 import TodayTasksCard from "../components/TodayTasksCard";
 import CheckoutTaskNudge from "../components/CheckoutTaskNudge";
 import { formatDistance } from "../utils/shareWhatsApp";
+import { STEP_OUT_DURATIONS } from "../utils/stepOut";
 import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import OutOfGeofenceModal from "../components/OutOfGeofenceModal";
 import CorrectionRequestModal from "../components/CorrectionRequestModal";
@@ -1003,15 +1004,6 @@ export default function SelfCheckIn() {
   );
 }
 
-
-// Quick-pick durations for the one-tap Step-out card. The "return-by"
-// time is auto-computed as now + the selected minutes — saves the user
-// fiddling with a time picker just to log a lunch break.
-const STEP_OUT_DURATIONS = [
-  { min: 30,  label: "30 min" },
-  { min: 60,  label: "1 hour" },   // default
-  { min: 120, label: "2 hours" },
-];
 
 /** Personalised greeting shown above the check-in button —
  * "Good morning, ARUNA 👋". Time-of-day slot follows local hour:

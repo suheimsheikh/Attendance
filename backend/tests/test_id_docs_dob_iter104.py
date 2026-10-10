@@ -14,7 +14,6 @@ from __future__ import annotations
 import io
 import uuid
 
-import pytest
 import requests
 from PIL import Image, ImageDraw
 

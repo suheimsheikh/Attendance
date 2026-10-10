@@ -10,7 +10,8 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
-from .time_utils import office_tz
+from .scope import DEFAULT_ATHLETE_LIKE
+from .time_utils import office_tz, to_utc_iso
 
 # OT policy: ONLY staff accrue overtime. Athletes, coaches and executives
 # never accumulate OT minutes regardless of their check-in time.
@@ -23,7 +24,7 @@ OVERTIME_CATEGORIES = {"staff"}
 # "elite" was added when the Chef's View shipped so the kitchen can plan
 # menus by fleet tier — elite kids are still athletes for every other
 # system rule.
-ATHLETE_CATEGORIES = {"athlete", "elite"}
+ATHLETE_CATEGORIES = set(DEFAULT_ATHLETE_LIKE)
 
 
 def compute_late(office: dict, target: dict, ts: datetime, camp: Optional[dict] = None) -> Tuple[bool, int]:
@@ -207,7 +208,7 @@ def parse_expected_return(raw: Optional[str], office: Optional[dict], now: datet
             cand = local_now_v.replace(hour=h, minute=m, second=0, microsecond=0)
             if cand <= local_now_v:
                 cand = cand + timedelta(days=1)
-            return cand.astimezone(timezone.utc).isoformat()
+            return to_utc_iso(cand)
         except Exception:
             return None
     # Full ISO
@@ -217,6 +218,6 @@ def parse_expected_return(raw: Optional[str], office: Optional[dict], now: datet
             # Naive datetimes are interpreted as office-local time (matches
             # how admins type "2026-07-01 18:00" into the UI without TZ info).
             dt = dt.replace(tzinfo=office_tz(office))
-        return dt.astimezone(timezone.utc).isoformat()
+        return to_utc_iso(dt)
     except Exception:
         return None

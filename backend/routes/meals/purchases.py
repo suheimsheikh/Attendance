@@ -1,7 +1,8 @@
 """Meals routes — purchases. Split out of routes/meals/__init__.py (Oct 2026); behaviour unchanged."""
 from __future__ import annotations
 
-from routes.meals.common import (  # noqa: F401
+from services.scope import athlete_like_keys
+from routes.meals.common import (
     Depends,
     File,
     HTTPException,
@@ -348,10 +349,7 @@ def register(router, *, _audit, _diff_meta, _line_diff, _not_future, _overhead_d
         if (e_d - s_d).days > 370:
             raise HTTPException(status_code=400, detail="Range too large (max 1 year)")
 
-        athlete_like = {
-            c["key"] async for c in db.categories.find(
-                {"is_athlete_like": True}, {"_id": 0, "key": 1})
-        } or {"athlete", "elite"}
+        athlete_like = set(await athlete_like_keys(db))
 
         recs = await db.meal_records.find(
             {"date": {"$gte": s, "$lte": e}},

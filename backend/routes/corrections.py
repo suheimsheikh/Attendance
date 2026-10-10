@@ -24,7 +24,7 @@ Each applier receives (db, correction, admin) and mutates the target row.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -33,7 +33,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from services.grid_lock import assert_dates_unlocked
 from pydantic import BaseModel, Field
 
-from services.time_utils import now_utc, local_date_str, office_tz
+from services.time_utils import now_utc, local_date_str, office_tz, to_utc_iso
 from services.permissions import is_super_admin
 from services.live_signal import bump as live_bump
 from services.attendance_bulk import apply_bulk_delete
@@ -90,7 +90,7 @@ def _wall_to_utc_iso(date_str: str, hm: str, office: Optional[dict]) -> str:
     naive local strings made `local_hm()` (which does astimezone) shift the
     displayed time by the office UTC offset (28 Sep 2026 code-review fix)."""
     local_dt = datetime.fromisoformat(f"{date_str}T{hm}:00").replace(tzinfo=office_tz(office))
-    return local_dt.astimezone(timezone.utc).isoformat()
+    return to_utc_iso(local_dt)
 
 
 async def _apply_missed_checkin(db, c: dict, admin: dict) -> dict:

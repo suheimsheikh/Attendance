@@ -1,7 +1,7 @@
 """Meals routes — muster. Split out of routes/meals/__init__.py (Oct 2026); behaviour unchanged."""
 from __future__ import annotations
 
-from routes.meals.common import (  # noqa: F401
+from routes.meals.common import (
     CategoryIn,
     CategoryPatch,
     DEFAULT_DINNER_CUTOFF,
@@ -416,7 +416,7 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
     @router.get("/meals/roster")
     async def meal_roster(
         meal: str,
-        date: str,  # noqa: A002 — matches API contract; local name shadowed via `_valid_date`
+        date: str,
         scope: str = "all",
         user: dict = Depends(require_chef_or_admin),
     ):
@@ -715,7 +715,7 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
 
     @router.get("/meals/daily-counts")
     async def meal_daily_counts(
-        date: str,  # noqa: A002
+        date: str,
         user: dict = Depends(require_chef_or_admin),
     ):
         """Kitchen-facing headcount for the day. Groups by meal and by
@@ -749,7 +749,7 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
 
     @router.get("/meals/daily-details")
     async def meal_daily_details(
-        date: str,       # noqa: A002 — API contract; local name via _valid_date
+        date: str,
         meal: str,
         user: dict = Depends(require_chef_or_admin),
     ):
@@ -782,7 +782,7 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
 
     @router.get("/meals/day-attendees")
     async def meal_day_attendees(
-        date: str,  # noqa: A002 — API contract
+        date: str,
         user: dict = Depends(require_chef_or_admin),
     ):
         """One row per member who marked ANY meal on `date`, with the

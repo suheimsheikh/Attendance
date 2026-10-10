@@ -1,7 +1,7 @@
 """Reports routes — grid. Split out of routes/reports/__init__.py (Oct 2026); behaviour unchanged."""
 from __future__ import annotations
 
-from routes.reports.common import (  # noqa: F401
+from routes.reports.common import (
     Depends,
     GridReadResponse,
     HTTPException,
@@ -133,7 +133,7 @@ def register(router, *, _athlete_like_keys, db, require_admin):
         # 20 Feb 2026 perf pass. All four queries are independent, so
         # firing them concurrently saves ~3 round-trip latencies on the
         # month-view Grid). ---
-        import asyncio  # noqa: PLC0415 — local import, avoids module-level cost
+        import asyncio
         att_docs, leave_docs, holidays_docs, breaks_docs = await asyncio.gather(
             db.attendance.find(
                 {"user_id": {"$in": user_ids},

@@ -1,7 +1,7 @@
 """Reports routes — ledgers. Split out of routes/reports/__init__.py (Oct 2026); behaviour unchanged."""
 from __future__ import annotations
 
-from routes.reports.common import (  # noqa: F401
+from routes.reports.common import (
     Depends,
     HTTPException,
     Optional,

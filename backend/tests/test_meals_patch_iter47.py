@@ -11,7 +11,6 @@ Tests PATCH /api/meals/purchases/{date} and /api/meals/issues/{date}:
   * expense-report reflects PATCH totals
 """
 import os
-import time
 import datetime as _dt
 import pytest
 import requests

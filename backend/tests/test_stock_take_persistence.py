@@ -17,7 +17,6 @@ Locks in behaviours that previously regressed:
 All writes use throwaway PAST dates + freshly created test items and are
 cleaned up via the mongo_db fixture, so live pantry data is untouched.
 """
-import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 

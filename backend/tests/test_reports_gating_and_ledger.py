@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-import requests
 
 
 def _admin_is_super(admin_client, base_url) -> bool:

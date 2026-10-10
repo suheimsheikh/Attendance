@@ -18,7 +18,7 @@ lunch/dinner variations.
 """
 from __future__ import annotations
 
-from routes.meals.common import (  # noqa: F401
+from routes.meals.common import (
     asyncio,
     json,
     logging,
@@ -281,7 +281,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
         return flags
 
     @router.get("/meals/day-flags")
-    async def meal_day_flags(date: str, user: dict = Depends(require_chef_or_admin)):  # noqa: A002
+    async def meal_day_flags(date: str, user: dict = Depends(require_chef_or_admin)):
         """All data red flags for one day — powers the Daily-entry banner."""
         d = _valid_date(date)
         flags = await _compute_day_flags(d)
@@ -365,7 +365,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
     # Exposed so the presence router (Feb 2026) can broadcast row-focus
     # events on the same SSE channel without depending on meals.py's
     # module-private closures.
-    router._signal_meals_ref = [None]  # noqa: SLF001
+    router._signal_meals_ref = [None]
 
     # ------------------------------------------------------------------
     # Live update signal (Jun 2026 — user asked for pushed updates instead
@@ -388,7 +388,7 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
             )
         except Exception:
             logging.getLogger(__name__).warning("meals signal bump failed", exc_info=True)
-    router._signal_meals_ref[0] = _signal_meals  # noqa: SLF001
+    router._signal_meals_ref[0] = _signal_meals
 
     async def _safe_date_upsert(coll, flt, update):
         """upsert=True that tolerates a unique-`date` insert race: if a

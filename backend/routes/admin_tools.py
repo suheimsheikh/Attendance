@@ -25,7 +25,7 @@ from fastapi.responses import Response
 
 from services.attendance_bulk import run_or_queue
 from services.time_utils import (
-    DEFAULT_TZ, local_date_str, local_hm, local_now, now_utc, office_tz,
+    DEFAULT_TZ, local_date_str, local_hm, local_now, now_utc, office_tz, to_utc_iso,
 )
 
 logger = logging.getLogger(__name__)
@@ -557,7 +557,7 @@ def make_router(db, require_admin) -> APIRouter:
         # Office tz start-of-today (UTC). We compare against UTC-ISO timestamps stored in DB.
         tz = office_tz(office)
         start_local = datetime.fromisoformat(today_local + "T00:00:00").replace(tzinfo=tz)
-        start_utc = start_local.astimezone(timezone.utc).isoformat()
+        start_utc = to_utc_iso(start_local)
 
         # Pull today's attendance rows (already keyed by office-local date) — covers check-ins.
         atts = await db.attendance.find({"date": today_local}, {"_id": 0}).to_list(2000)
@@ -825,7 +825,7 @@ def make_router(db, require_admin) -> APIRouter:
                                         else "warn"
                                     ),
                                 })
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         continue
         hotspots.sort(key=lambda h: (h["severity"] != "warn", h["file"], h["line"]))
 

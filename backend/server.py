@@ -22,7 +22,7 @@ import regattas as _regattas_module
 import breaks as _breaks_module
 # Re-export shared SMS template constants from the SMS module so any legacy
 # `from server import DEFAULT_PARENT_TEMPLATES` callers keep working.
-from sms import DEFAULT_PARENT_TEMPLATES  # noqa: F401
+from sms import DEFAULT_PARENT_TEMPLATES
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 # truth; re-exported here so existing `from server import MAX_USERS` callers
 # continue to work.
 # ----------------------------------------------------------------------------
-from config import (  # noqa: E402, F401
+from config import (
     MAX_USERS, MAX_SESSIONS, MAX_LEAVES, MAX_DEVICES, MAX_LOG_ROWS,
 )
 
@@ -70,26 +70,26 @@ from config import (  # noqa: E402, F401
 # work unchanged, and so external imports (`from server import compute_late`)
 # remain valid until callers are migrated to the new locations.
 # ----------------------------------------------------------------------------
-from services.time_utils import (  # noqa: E402, F401
+from services.time_utils import (
     DEFAULT_TZ, now_utc, iso, office_tz, local_now, local_date_str, local_hm,
 )
-from services.phone import phone_key  # noqa: E402
-from services.photo import (  # noqa: E402, F401
+from services.phone import phone_key
+from services.photo import (
     MAX_PHOTO_BYTES, THUMB_MAX_PX, THUMB_QUALITY,
     check_photo_size as _check_photo_size,
     make_thumbnail as _make_thumbnail,
 )
-from services.auth_utils import (  # noqa: E402
+from services.auth_utils import (
     hash_password, verify_password, create_token,
 )
-from services.service_tokens import (  # noqa: E402
+from services.service_tokens import (
     is_service_token as _svc_is_service_token,
     authenticate_service_token as _svc_authenticate,
     create_or_replace_service_token as _svc_create,
     revoke_service_tokens as _svc_revoke,
     active_token_status as _svc_status,
 )
-from services.attendance_calc import (  # noqa: E402, F401
+from services.attendance_calc import (
     OVERTIME_THRESHOLD_MIN, OVERTIME_CATEGORIES, ATHLETE_CATEGORIES,
     compute_late,
     hm_to_minutes as _hm_to_minutes,
@@ -112,7 +112,7 @@ async def _active_camp_for(target: dict, ts: datetime, office: dict) -> Optional
 
 # Long-lived tokens for approved devices (passwordless phone login).
 # Source of truth in backend/config.py; re-exported so existing callers work.
-from config import DEVICE_TOKEN_MINUTES  # noqa: E402, F401
+from config import DEVICE_TOKEN_MINUTES
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
@@ -284,7 +284,7 @@ def _payroll_bucket(rows: list, category: Optional[str]) -> list:
 # routes/*.py can import it directly without a `from server import ...`
 # circular import. Re-exported here for backwards-compatibility with any
 # tests that reach for `server.is_super_admin` / `server._SUPER_ADMIN_PHONES`.
-from services.permissions import is_super_admin, _SUPER_ADMIN_PHONES, is_ex_member  # noqa: E402, F401
+from services.permissions import is_super_admin, _SUPER_ADMIN_PHONES, is_ex_member
 
 
 async def require_coach_or_admin(user: dict = Depends(get_current_user)) -> dict:
@@ -765,7 +765,7 @@ async def _seed_database() -> None:
 
 
 # Background daily jobs live in services/scheduler.py.
-from services.scheduler import (  # noqa: E402
+from services.scheduler import (
     close_stale_open_sessions as _close_stale_impl,
     send_checkout_reminders as _send_reminders_impl,
     midnight_auto_checkout_loop, checkout_reminder_loop,
@@ -1130,7 +1130,7 @@ async def bulk_set_leave_balances(body: LeaveBalanceBulkIn, admin: dict = Depend
 # ----------------------------------------------------------------------------
 # coaches always see a current likeness on the muster.
 # Source of truth in backend/config.py.
-from config import PHOTO_REFRESH_DAYS  # noqa: E402, F401
+from config import PHOTO_REFRESH_DAYS
 
 # Weekly photo-refresh (Jun 2026, user request): once a week, on a RANDOM
 # working day, the self check-in prompts for a fresh selfie that replaces
@@ -1274,8 +1274,8 @@ async def delete_my_reason(reason: str, user: dict = Depends(get_current_user)):
 # Attendance: check-in / check-out
 # ----------------------------------------------------------------------------
 # Attendance helpers live in services/attendance_helpers.py (thin db-bound wrappers below).
-import services.attendance_helpers as _att  # noqa: E402
-from services.attendance_helpers import geo_check, _compute_early_out_at_checkout  # noqa: E402,F401
+import services.attendance_helpers as _att
+from services.attendance_helpers import geo_check, _compute_early_out_at_checkout
 
 
 async def open_session_for(user_id: str) -> Optional[dict]:
@@ -2841,7 +2841,7 @@ async def delete_service_token(admin: dict = Depends(require_admin)):
 app.include_router(api_router)
 
 # Member management routes — included right after api_router to keep route priority unchanged.
-from routes.members import make_router as _members_router  # noqa: E402
+from routes.members import make_router as _members_router
 app.include_router(_members_router(
     db, get_current_user, require_admin, optional_user, valid_grid_key,
     valid_members_api_token, _bearer_from_header, _last10_digits,
@@ -2849,11 +2849,11 @@ app.include_router(_members_router(
 ))
 
 # Attendance read-only routes (phase 1 of the attendance split).
-from routes.attendance import make_router as _attendance_router  # noqa: E402
+from routes.attendance import make_router as _attendance_router
 app.include_router(_attendance_router(db, get_current_user, require_admin))
-from routes.live_events import make_router as _live_events_router  # noqa: E402
+from routes.live_events import make_router as _live_events_router
 app.include_router(_live_events_router(db, JWT_SECRET, JWT_ALGO))
-from routes.attendance_actions import make_router as _attendance_actions_router  # noqa: E402
+from routes.attendance_actions import make_router as _attendance_actions_router
 app.include_router(_attendance_actions_router(
     db, get_current_user, require_admin, open_session_for, _late_days_in_month,
     _resolve_site_for, _cancel_stale_missed_checkin, _has_checkin_today,
@@ -2861,7 +2861,7 @@ app.include_router(_attendance_actions_router(
 ))
 
 # Auth + device-approval — split out 06/2026 during the server.py refactor.
-from routes.auth import make_router as _auth_router  # noqa: E402
+from routes.auth import make_router as _auth_router
 app.include_router(_auth_router(
     db, require_admin, get_current_user,
     verify_password, hash_password, create_token,
@@ -2869,116 +2869,116 @@ app.include_router(_auth_router(
 ))
 
 # Office config + changelog — split out 06/2026.
-from routes.office import make_router as _office_router  # noqa: E402
+from routes.office import make_router as _office_router
 app.include_router(_office_router(
     db, require_admin, get_current_user, _send_checkout_reminders, OfficeConfig,
 ))
 
 # Institutions + Fleets master CRUD — split out 06/2026.
-from routes.masters import make_router as _masters_router  # noqa: E402
+from routes.masters import make_router as _masters_router
 app.include_router(_masters_router(db, require_admin, get_current_user))
 
 # Satellite-site geofences (e.g. Rowing Academy) — added 28 Jun 2026.
-from routes.sites import make_router as _sites_router  # noqa: E402
+from routes.sites import make_router as _sites_router
 app.include_router(_sites_router(db, require_admin, get_current_user))
 
 # Muster — bulk check-in/out for coaches, admins, and active escorts.
-from routes.muster import make_router as _muster_router  # noqa: E402
+from routes.muster import make_router as _muster_router
 app.include_router(_muster_router(db, get_current_user, _active_camp_for, _resolve_site_for))
 
-from routes.notify import make_router as _notify_router  # noqa: E402
+from routes.notify import make_router as _notify_router
 app.include_router(_notify_router(db, get_current_user, require_admin))
 
 # Admin tooling (wipe / backup / restore / preflight / summary / activity).
-from routes.admin_tools import make_router as _admin_tools_router  # noqa: E402
+from routes.admin_tools import make_router as _admin_tools_router
 app.include_router(_admin_tools_router(db, require_admin))
 
 # Platform-cron endpoints (daily auto-backup). Secured by WEBHOOK_CRON_SECRET.
-from routes.cron import make_router as _cron_router  # noqa: E402
+from routes.cron import make_router as _cron_router
 app.include_router(_cron_router(db))# Admin audit log — one row per admin-mutating action (member edits,
 # leave-balance changes, retroactive attendance overrides, etc.).
 # Read endpoint: GET /api/admin/audit-log.
-from routes.admin_audit import make_router as _audit_router, write_audit  # noqa: E402
+from routes.admin_audit import make_router as _audit_router, write_audit
 app.include_router(_audit_router(db, require_admin))
 
 # Check-in approvals queue + unified approvals summary (8 Jul 2026).
-from routes.checkin_approvals import make_router as _checkin_approvals_router  # noqa: E402
+from routes.checkin_approvals import make_router as _checkin_approvals_router
 app.include_router(_checkin_approvals_router(db, require_admin, write_audit))
 
-from routes.id_docs import make_router as _id_docs_router  # noqa: E402
+from routes.id_docs import make_router as _id_docs_router
 app.include_router(_id_docs_router(db, require_admin))
-from routes.education import make_router as _education_router  # noqa: E402
+from routes.education import make_router as _education_router
 app.include_router(_education_router(db, require_admin))
-from routes.dar import make_router as _dar_router  # noqa: E402
+from routes.dar import make_router as _dar_router
 app.include_router(_dar_router(db, get_current_user, require_admin, valid_grid_key, write_audit))
 
-from routes.tasks import make_router as _tasks_router  # noqa: E402
+from routes.tasks import make_router as _tasks_router
 app.include_router(_tasks_router(db, get_current_user, require_admin, write_audit))
 
-from routes.rules import make_router as _rules_router  # noqa: E402
+from routes.rules import make_router as _rules_router
 app.include_router(_rules_router(db, get_current_user, require_admin, write_audit))
-from routes.suggestions import make_router as _suggestions_router  # noqa: E402
+from routes.suggestions import make_router as _suggestions_router
 app.include_router(_suggestions_router(db, get_current_user, require_admin, write_audit))
 
 # Data-quality dashboard — read-only DB sweep for dupes, missing
 # fields, and structural inconsistencies.
-from routes.data_quality import make_router as _data_quality_router  # noqa: E402
+from routes.data_quality import make_router as _data_quality_router
 app.include_router(_data_quality_router(db, require_admin))
 
 # Feature usage & ageing (Jun 2026) — tracks which sidebar pages are
 # used and when, so admins can retire dormant screens. Any user pings;
 # super-admin reads. See routes/usage.py.
-from routes.usage import make_router as _usage_router  # noqa: E402
+from routes.usage import make_router as _usage_router
 app.include_router(_usage_router(db, get_current_user, require_admin))
 
 # Daily leave/tour WhatsApp report — once-a-day admin nudge + posted lock.
-from routes.leave_report import make_router as _leave_report_router  # noqa: E402
+from routes.leave_report import make_router as _leave_report_router
 app.include_router(_leave_report_router(db, require_admin))
 
 # Attendance dedupe / repair tool (Jun 2026) — one-check-in-per-day cleanup.
-from routes.attendance_repair import make_router as _attendance_repair_router  # noqa: E402
+from routes.attendance_repair import make_router as _attendance_repair_router
 app.include_router(_attendance_repair_router(db, require_admin))
 
 # Single-glance admin dashboard (GET /api/admin/dashboard) — aggregates
 # Now / This week / This month / Attention widgets in one payload.
-from routes.dashboard import make_router as _dashboard_router  # noqa: E402
+from routes.dashboard import make_router as _dashboard_router
 app.include_router(_dashboard_router(db, require_admin))
 
 # Chef's View (GET /api/admin/meals-today) + Categories master read.
-from routes.meals import make_router as _meals_router  # noqa: E402
+from routes.meals import make_router as _meals_router
 _meals = _meals_router(db, require_admin, get_current_user, require_chef_or_admin, write_audit)
 app.include_router(_meals)
 
-from routes.recipes import make_router as _recipes_router  # noqa: E402
+from routes.recipes import make_router as _recipes_router
 app.include_router(_recipes_router(db, require_admin, get_current_user, require_chef_or_admin))
 
 # Presence + row-focus (Feb 2026). Reuses the meals SSE channel so
 # peer tabs learn about focus changes on the same channel they already
 # subscribe to.
-from routes.presence import make_router as _presence_router  # noqa: E402
+from routes.presence import make_router as _presence_router
 _signal_meals_fn = getattr(_meals, "_signal_meals_ref", [None])[0] or (lambda *a, **k: None)
 app.include_router(_presence_router(require_chef_or_admin, _signal_meals_fn))
 
-from routes.roles import make_router as _roles_router  # noqa: E402
+from routes.roles import make_router as _roles_router
 app.include_router(_roles_router(db, require_admin, get_current_user))
 
-from routes.prefs import make_router as _prefs_router  # noqa: E402
+from routes.prefs import make_router as _prefs_router
 app.include_router(_prefs_router(db, get_current_user))
 
 # Help chat — Claude-powered assistant for the bottom-right widget.
 # Injects the user's own attendance snapshot into every turn so
 # questions like "how many late days do I have this year?" can be
 # answered without tool-calling.
-from routes.help_chat import make_router as _help_chat_router  # noqa: E402
+from routes.help_chat import make_router as _help_chat_router
 app.include_router(_help_chat_router(db, get_current_user, _profile_details_for))
 
 # Leave / Tour routes — split out 06/2026 during the server.py refactor.
-from routes.leaves import make_router as _leaves_router  # noqa: E402
+from routes.leaves import make_router as _leaves_router
 from holidays import (
     compute_comp_off_balance as _compute_comp_off_balance,
     compute_balance_summary as _compute_balance_summary,
     split_leave_days as _split_leave_days,
-)  # noqa: E402
+)
 _leaves = _leaves_router(
     db, require_admin, get_current_user,
     _compute_comp_off_balance, _compute_balance_summary, _split_leave_days,
@@ -2990,7 +2990,7 @@ enrich_leaves = _leaves.enrich_leaves  # type: ignore[attr-defined]
 
 # Reports — heavy aggregation lives in `compute_hours_report` (still in
 # server.py for now); the router file owns the HTTP shape + exports.
-from routes.reports import make_router as _reports_router  # noqa: E402
+from routes.reports import make_router as _reports_router
 _reports_router_instance = _reports_router(
     db, require_admin, get_current_user, compute_hours_report, enrich_leaves,
 )
@@ -2999,29 +2999,29 @@ _reports_router_instance = _reports_router(
 _GRID_IMPL = _reports_router_instance.grid_impl
 app.include_router(_reports_router_instance)
 
-from routes.profile_attendance import make_router as _profile_attendance_router  # noqa: E402
+from routes.profile_attendance import make_router as _profile_attendance_router
 app.include_router(_profile_attendance_router(db, get_current_user, require_admin, _GRID_IMPL))
 
 # Corrections facility — member-raised after-the-fact fixes to attendance
 # and leave rows, admin-approved. See routes/corrections.py for the full
 # design and the applier dispatch table.
-from routes.corrections import make_router as _corrections_router  # noqa: E402
+from routes.corrections import make_router as _corrections_router
 app.include_router(_corrections_router(db, require_admin, get_current_user, write_audit))
 
 # Escorts — separate entity (not employees) tracked under institutions.
 # Owns CRUD, daily attendance, temp-exit, and 30-day photo retention.
-from routes.escorts import make_router as _escorts_router  # noqa: E402
+from routes.escorts import make_router as _escorts_router
 app.include_router(_escorts_router(
     db, require_admin, get_current_user, require_coach_or_admin,
 ))
 
 # Daily bilingual content (motivational quote / English-Telugu word-of-the-day)
 # generated once per day with Gemini and cached in MongoDB.
-from daily_content import make_router as _daily_router  # noqa: E402
+from daily_content import make_router as _daily_router
 app.include_router(_daily_router(db))
 
 # Guest check-in / check-out (coaches + admins).
-from guests import make_router as _guests_router  # noqa: E402
+from guests import make_router as _guests_router
 app.include_router(_guests_router(db, require_coach_or_admin, local_date_str))
 
 # Camps — scheduling overlay for institutional camps. Imported at the top of
@@ -3040,18 +3040,18 @@ app.include_router(_breaks_module.make_router(db, require_admin))
 # Holidays — public-holiday master list. Drives comp-off accrual: any
 # attendance on a holiday OR the member's weekly_off accrues +1 comp-off
 # credit. Holidays and Breaks are managed separately (no auto-create).
-from holidays import make_router as _holidays_router  # noqa: E402
+from holidays import make_router as _holidays_router
 app.include_router(_holidays_router(db, require_admin, get_current_user))
 
 
 # Twilio SMS + Voice — parent notifications, per-institution sender numbers.
-from sms import make_router as _sms_router  # noqa: E402
+from sms import make_router as _sms_router
 app.include_router(_sms_router(db, require_admin))
 
 
 # External (server-to-server) read-only API for the Inventory app.
 # Guarded by X-API-Key header — see routes/external.py. Feb 2026.
-from routes.external import make_router as _external_router  # noqa: E402
+from routes.external import make_router as _external_router
 app.include_router(_external_router(db))
 
 
@@ -3071,7 +3071,7 @@ _FRAME_ANCESTORS = "frame-ancestors 'self'" + ("" if not _EMBED_ORIGINS else " "
 
 # Request-ID/access log, read-only svc_ tokens, client-id, cache + frame
 # headers — one pure-ASGI layer (see services/http_middleware.py).
-from services.http_middleware import AppHttpMiddleware  # noqa: E402
+from services.http_middleware import AppHttpMiddleware
 app.add_middleware(AppHttpMiddleware, frame_ancestors=_FRAME_ANCESTORS)
 
 # GZip compression — cuts JSON payload sizes ~70% for typical text-heavy
@@ -3079,7 +3079,7 @@ app.add_middleware(AppHttpMiddleware, frame_ancestors=_FRAME_ANCESTORS)
 # repeated field names). `minimum_size=500` avoids compressing tiny
 # heartbeat responses where the compression overhead would exceed the
 # win. Browsers send `Accept-Encoding: gzip` automatically.
-from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
+from fastapi.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.add_middleware(

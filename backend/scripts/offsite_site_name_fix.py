@@ -11,8 +11,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from dotenv import load_dotenv  # noqa: E402
-from motor.motor_asyncio import AsyncIOMotorClient  # noqa: E402
+from dotenv import load_dotenv
+from motor.motor_asyncio import AsyncIOMotorClient
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 

@@ -2,7 +2,6 @@
 
 Uses conftest fixtures (base_url, admin_client) for auth.
 """
-import pytest
 
 
 # -------- norm_per_serving on items --------
