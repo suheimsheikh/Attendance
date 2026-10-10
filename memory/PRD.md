@@ -730,3 +730,7 @@ User request: "When issuing any item from the kitchen it should not allow if the
 ### Oct 2026 — Regatta Team Picker
 - regattas.team_ids (any active member). Picker (calendar/TeamPicker.jsx) in RegattaForm + "Edit team" modal on Travel Check tab.
 - travel-check: team picked → only those members (any category); none → all athletes+coaches + "No team picked yet" banner; returns team_picked. Tested iter 101.
+
+### Oct 2026 — PAN/Aadhaar name check (like passport)
+- Strict name_exact for PAN + Aadhaar uploads (member form + bulk read). Generic POST /members/{mid}/id-docs/{person}/{card}/use-name (aadhaar as printed, pan/passport Title Case, audit name_from_{card}).
+- Passport wins: people.{person}.name_from_passport set on passport use-name or exact-match passport upload → pan/aadhaar use-name 409, UI shows name_locked note. Masked Aadhaar unchanged. Tested iter 102.
