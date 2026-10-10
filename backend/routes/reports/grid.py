@@ -300,6 +300,15 @@ def register(router, *, _athlete_like_keys, db, require_admin):
             _ov = overrides_by_user.get(uid)
             if _ov and iso in _ov:
                 return _ov[iso]
+            # Athletes are tracked for attendance ONLY during designated
+            # camps & regattas (user request, Jun 2026). On every other
+            # day — including weekly offs, holidays, leaves and plain
+            # check-ins — their grid cell stays BLANK and is excluded
+            # from every total. A manual admin/PayCraft override (checked
+            # above) still wins. Employees (staff/coach/exec) are
+            # unaffected by this rule.
+            if _cat_by_uid.get(uid, "") in _athlete_like_absent and iso not in _expected_dates.get(uid, set()):
+                return ""
             # Pre-joining / post-leaving days render as NJ / LF so the
             # Grid stays honest for members who joined mid-year or have
             # left. Both codes are excluded from every totals bucket
@@ -353,20 +362,26 @@ def register(router, *, _athlete_like_keys, db, require_admin):
         # Precompute day-of-week per iso for the month.
         dow_by_iso = {iso: date.fromisoformat(iso).weekday() for iso in days}
 
-        # Phase C (Jun 2026, user request): an athlete is marked "AB"
-        # (absent) ONLY on days they're expected at a camp/regatta —
-        # i.e. they're an enrolled participant of a camp covering that
-        # date. On every other day their grid cell stays BLANK (and is
-        # excluded from totals), so athletes who merely aren't at a camp
-        # are never counted absent. Employees (staff/coach/exec) are
-        # unaffected. Build the set of expected ISO dates per athlete.
+        # Designated camp/regatta dates per athlete (user request,
+        # Jun 2026). Athletes only carry attendance on these days — every
+        # other day is blanked by `_classify` and on a designated day a
+        # no-show paints "AB". `_expected_dates[uid]` = the union of:
+        #   • camp days (camp covers the date AND the athlete is enrolled)
+        #   • regatta days (the athlete is on the regatta's travelling team)
+        # Employees (staff/coach/exec) are unaffected.
         from camps import camp_active_on as _camp_active_on, camp_applies_to as _camp_applies_to
         _WK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
         _athlete_like_absent = await _athlete_like_keys(db)
         _cat_by_uid = {u["id"]: (u.get("category") or "") for u in users}
-        _camps_range = await db.camps.find(
-            {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}}, {"_id": 0},
-        ).to_list(500)
+        _camps_range, _regattas_range = await asyncio.gather(
+            db.camps.find(
+                {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}}, {"_id": 0},
+            ).to_list(500),
+            db.regattas.find(
+                {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
+                {"_id": 0, "team_ids": 1, "start_date": 1, "end_date": 1},
+            ).to_list(500),
+        )
         _expected_dates: dict = {}
         if _camps_range:
             _athletes = [u for u in users if (u.get("category") or "") in _athlete_like_absent]
@@ -378,6 +393,18 @@ def register(router, *, _athlete_like_keys, db, require_admin):
                 for u in _athletes:
                     if any(_camp_applies_to(c, u) for c in active):
                         _expected_dates.setdefault(u["id"], set()).add(iso)
+        # Regatta travelling team — every calendar day in the event window
+        # counts as a designated attendance day for the athletes on the team.
+        for r in _regattas_range:
+            tids = [t for t in (r.get("team_ids") or []) if _cat_by_uid.get(t, "") in _athlete_like_absent]
+            if not tids:
+                continue
+            cur = max(r.get("start_date") or start_iso, start_iso)
+            stop = min(r.get("end_date") or end_iso, end_iso)
+            while cur <= stop:
+                for uid in tids:
+                    _expected_dates.setdefault(uid, set()).add(cur)
+                cur = (date.fromisoformat(cur) + timedelta(days=1)).isoformat()
 
         _hourly_uids = {u["id"] for u in users if u.get("hourly_wager")}
 

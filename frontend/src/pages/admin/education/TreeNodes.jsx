@@ -1,6 +1,7 @@
 import React from "react";
 import { ChevronRight, FileText, Pencil, Plus, Trash2, UserCog, Eye } from "lucide-react";
 import { MONTHS } from "./MarksheetModal";
+import MarksChart from "./MarksChart";
 
 const Chevron = ({ open }) => <ChevronRight size={14} className={`transition-transform ${open ? "rotate-90" : ""}`} />;
 const iconBtn = "h-7 px-2 rounded-md text-xs font-semibold inline-flex items-center gap-1 transition-colors";
@@ -46,6 +47,7 @@ export function MemberNode({ m, open, onToggle, onAdd, onEditMember, sheetAction
       </div>
       {open && (
         <ul className="ml-2 pl-4 border-l border-dashed border-slate-300" data-testid={`${tid}-sheets`}>
+          <li className="pr-2"><MarksChart marksheets={m.marksheets} /></li>
           {m.marksheets.map((s) => <SheetRow key={s.id} s={s} onView={() => sheetActions.view(s)} onEdit={() => sheetActions.edit(m, s)} onDelete={() => sheetActions.remove(s)} />)}
           {!m.marksheets.length && <li className="py-1.5 pl-3 text-xs text-slate-400">No marksheets yet</li>}
         </ul>
