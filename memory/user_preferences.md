@@ -5,3 +5,4 @@
 - Respond in English. Pay = number of payable days only — never add salary/amount figures.
 - Live data: never modify real members/attendance/issues without explicit approval.
 
+- UI: every editable input, textarea, select and search box must be bright yellow (#fff176) — global rule at bottom of index.css.
