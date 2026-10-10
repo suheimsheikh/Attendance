@@ -734,3 +734,9 @@ User request: "When issuing any item from the kitchen it should not allow if the
 ### Oct 2026 — PAN/Aadhaar name check (like passport)
 - Strict name_exact for PAN + Aadhaar uploads (member form + bulk read). Generic POST /members/{mid}/id-docs/{person}/{card}/use-name (aadhaar as printed, pan/passport Title Case, audit name_from_{card}).
 - Passport wins: people.{person}.name_from_passport set on passport use-name or exact-match passport upload → pan/aadhaar use-name 409, UI shows name_locked note. Masked Aadhaar unchanged. Tested iter 102.
+
+### Oct 2026 — Name mismatch report, birth certificates, approvals name filter
+- Card names saved per scan ({card}_name / {card}_name_tried); /id-docs/name-report + one-off /id-docs/reread-names (batched). New "Name mismatch" tab.
+- App name follows passport ONLY: PAN/Aadhaar/birth mismatches = solid red alert, no fix button (generic use-name removed).
+- Birth certificate card (self only): number, DOB, name; use-dob endpoint; in Bulk upload + Missing ID report. Bulk Save-all popup lists name mismatches.
+- Approvals: type-ahead name filter (datalist) over pending + history. Tested iter 103.

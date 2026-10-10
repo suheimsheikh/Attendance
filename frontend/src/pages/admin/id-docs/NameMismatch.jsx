@@ -19,7 +19,7 @@ const FILTERS = {
 
 function NameCell({ c, tid }) {
   if (c === null) return <span className="text-slate-300 text-xs">n/a</span>;
-  if (!c.name) return <span className="text-slate-400 text-xs" data-testid={tid}>{c.unread ? "scan not read" : "—"}</span>;
+  if (!c.name) return <span className="text-slate-400 text-xs" data-testid={tid}>{c.unreadable ? "couldn't read name" : c.unread ? "scan not read" : "—"}</span>;
   return c.match
     ? <span className="inline-flex items-center gap-1 text-emerald-700 text-xs" data-testid={tid} title="Exactly the app name"><Check size={12} />{c.name}</span>
     : <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-xs font-semibold" data-testid={tid} title="Not exactly the app name">{c.name}</span>;

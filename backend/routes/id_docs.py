@@ -337,6 +337,7 @@ def make_router(db, require_admin) -> APIRouter:
                     continue
                 n = p.get(f"{c}_name") or ""
                 row[c] = {"name": n, "scan": bool(p.get(f"{c}_file")), "unread": bool(p.get(f"{c}_file")) and not n,
+                          "unreadable": bool(p.get(f"{c}_name_tried")) and not n,
                           "match": name_exact(n, r["person_name"]) if n else None}
             rows.append(row)
         rows.sort(key=lambda x: ((x["member_name"] or "").lower(), ["self", *PARENTS].index(x["person"])))
