@@ -7,8 +7,12 @@ import MemberForm from "../MemberForm";
 const PERSON_LABEL = { self: "Member", father: "Father", mother: "Mother", guardian: "Guardian" };
 const CARDS = [["passport", "Passport"], ["aadhaar", "Aadhaar"], ["pan", "PAN"], ["birth", "Birth cert"]];
 const bad = (c) => c && c.match === false;
+const badDob = (c) => c && c.dob_match === false;
 const FILTERS = {
-  any: ["Any mismatch", (r) => CARDS.some(([k]) => bad(r[k]))],
+  any: ["Any name or DOB mismatch", (r) => CARDS.some(([k]) => bad(r[k]) || badDob(r[k])) || r.app_dob_match === false],
+  names: ["Any name mismatch", (r) => CARDS.some(([k]) => bad(r[k]))],
+  dob: ["Any DOB mismatch", (r) => CARDS.some(([k]) => badDob(r[k])) || r.app_dob_match === false],
+  nodob: ["App DOB missing (members)", (r) => r.person === "self" && !r.app_dob],
   passport: ["App ≠ passport", (r) => bad(r.passport)],
   aadhaar: ["Aadhaar mismatch", (r) => bad(r.aadhaar)],
   pan: ["PAN mismatch", (r) => bad(r.pan)],
@@ -17,12 +21,24 @@ const FILTERS = {
   all: ["Show everyone", () => true],
 };
 
-function NameCell({ c, tid }) {
-  if (c === null) return <span className="text-slate-300 text-xs">n/a</span>;
+function NameOnly({ c, tid }) {
   if (!c.name) return <span className="text-slate-400 text-xs" data-testid={tid}>{c.unreadable ? "couldn't read name" : c.unread ? "scan not read" : "—"}</span>;
   return c.match
     ? <span className="inline-flex items-center gap-1 text-emerald-700 text-xs" data-testid={tid} title="Exactly the app name"><Check size={12} />{c.name}</span>
     : <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-xs font-semibold" data-testid={tid} title="Not exactly the app name">{c.name}</span>;
+}
+
+function NameCell({ c, tid }) {
+  if (c === null) return <span className="text-slate-300 text-xs">n/a</span>;
+  return (
+    <div className="space-y-0.5">
+      <NameOnly c={c} tid={tid} />
+      {c.dob && (
+        <div data-testid={`${tid}-dob`} title={c.dob_match === false ? "DOB doesn't match the app (or the first ID on file)" : "Date of birth on this card"}
+          className={`text-[11px] ${c.dob_match === false ? "inline-block px-1.5 rounded bg-rose-600 text-white font-semibold" : "text-slate-500"}`}>DOB {c.dob}</div>
+      )}
+    </div>
+  );
 }
 
 // Old scans have no saved card name — read them in small batches, once.
@@ -47,7 +63,7 @@ function RereadButton({ pending, onDone }) {
   if (!pending && !busy) return null;
   return (
     <button type="button" onClick={run} disabled={!!busy} className="iu-btn-secondary" data-testid="name-report-reread"
-      title="Read the name on scans uploaded before names were saved (uses a little AI credit per scan)">
+      title="Read the name and date of birth on scans uploaded before these were saved (uses a little AI credit per scan)">
       {busy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
       {busy ? `Reading ${busy.done}/${busy.total}…` : `Re-read old scans (${pending})`}
     </button>
@@ -72,8 +88,8 @@ export default function NameMismatch() {
   return (
     <div data-testid="name-report">
       <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded px-2 py-1.5 mb-3">
-        The app name must be <b>exactly</b> the passport name (same words, same order). Red = not exactly the app name.
-        Aadhaar, PAN and birth certificate names can&apos;t be changed here — fix the app name from the passport.
+        The app name must be <b>exactly</b> the passport name (same words, same order). Date of birth follows the first ID on file:
+        birth certificate → passport → Aadhaar → PAN. Red = doesn&apos;t match. Card names / dates can&apos;t be changed here.
       </p>
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <div className="relative">
@@ -104,12 +120,19 @@ export default function NameMismatch() {
                   className="border-t border-slate-100 hover:bg-amber-50/60 cursor-pointer">
                   <td className="p-2 font-semibold">{r.member_name}</td>
                   <td className="p-2 text-xs">{PERSON_LABEL[r.person]}</td>
-                  <td className="p-2 text-xs font-semibold" data-testid={`${tid}-app`}>{r.person_name || <span className="text-slate-400">not set</span>}</td>
+                  <td className="p-2 text-xs font-semibold" data-testid={`${tid}-app`}>
+                    {r.person_name || <span className="text-slate-400">not set</span>}
+                    {r.person === "self" && (
+                      <div data-testid={`${tid}-app-dob`} title={r.ref_card ? `First ID on file for DOB: ${r.ref_card} (${r.ref_dob})` : "No ID with a DOB yet"}
+                        className={`text-[11px] font-normal ${r.app_dob_match === false ? "inline-block px-1.5 rounded bg-rose-600 text-white font-semibold" : !r.app_dob ? "text-amber-700" : "text-slate-500"}`}>
+                        DOB {r.app_dob || "not set"}</div>
+                    )}
+                  </td>
                   {CARDS.map(([k]) => <td key={k} className="p-2"><NameCell c={r[k]} tid={`${tid}-${k}`} /></td>)}
                 </tr>
               );
             })}
-            {!shown.length && <tr><td colSpan={7} className="p-8 text-center text-slate-400" data-testid="name-report-empty">No name mismatches for this filter.</td></tr>}
+            {!shown.length && <tr><td colSpan={7} className="p-8 text-center text-slate-400" data-testid="name-report-empty">No mismatches for this filter.</td></tr>}
           </tbody>
         </table>
       </div>

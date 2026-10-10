@@ -8,6 +8,8 @@ const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar", passport: "Passport", birth
 const CARDS = ["pan", "aadhaar", "passport"];
 const cardsFor = (p) => (p === "self" ? [...CARDS, "birth"] : CARDS);
 const PLACEHOLDER = { pan: "ABCDE1234F", aadhaar: "1234 5678 9012", passport: "Z1234567", birth: "Registration no." };
+const DOB_KEY = { birth: "birth_dob", passport: "passport_dob", aadhaar: "aadhaar_dob", pan: "pan_dob" };
+const DOB_PRIORITY = ["birth", "passport", "aadhaar", "pan"];
 const norm = (s) => (s || "").toUpperCase().split(/\s+/).filter(Boolean).join(" ");
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
 
@@ -47,10 +49,15 @@ function DetectedBar({ card, d, onConfirm, onUseScanned, onDismiss, onUseName, o
           <span className="font-normal"> The {CARD_LABEL[card]} name can&apos;t be changed here — the app name follows the passport only.</span>
         </div>
       ))}
-      {card === "birth" && d.dob && d.dob !== d.expected_dob && (
+      {d.dob_matches === false && (
+        <div className="rounded bg-rose-600 text-white font-semibold px-2 py-1" data-testid={`${tid}-dob-warning`}>
+          DOB mismatch — {CARD_LABEL[card]}: {d.dob} · app: {d.expected_dob}.
+        </div>
+      )}
+      {d.dob_can_apply && (
         <div className="text-slate-800" data-testid={`${tid}-dob-diff`}>
-          Date of birth on certificate <b>{d.dob}</b> · app: <b>{d.expected_dob || "not set"}</b>
-          <button type="button" onClick={onUseDob} data-testid={`${tid}-use-dob`} title="Set the member's date of birth in the app to the certificate date"
+          App has no date of birth — {CARD_LABEL[card]} shows <b>{d.dob}</b>
+          <button type="button" onClick={onUseDob} data-testid={`${tid}-use-dob`} title="Set the member's date of birth in the app from this card"
             className="ml-1.5 px-2 h-6 rounded bg-sky-600 text-white font-semibold">Use this date of birth</button>
         </div>
       )}
@@ -59,7 +66,7 @@ function DetectedBar({ card, d, onConfirm, onUseScanned, onDismiss, onUseName, o
 }
 
 // One card (PAN or Aadhaar) for one person: number + single scan.
-function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onUploaded, extra, onExtra, cardName, appName }) {
+function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onUploaded, extra, onExtra, cardName, appName, cardDob, wantDob }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const base = `/members/${memberId}/id-docs/${person}/${card}`;
@@ -108,6 +115,12 @@ function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onU
         <div data-testid={`${tid}-card-name`} title="Name read from the scan"
           className={`mt-1 text-[11px] ${norm(cardName) === norm(appName) ? "text-emerald-700" : "text-rose-700 font-semibold"}`}>
           Name on card: {cardName}{norm(cardName) !== norm(appName) && " — doesn't match app name"}
+        </div>
+      )}
+      {cardDob && wantDob && (
+        <div data-testid={`${tid}-card-dob`} title="Date of birth read from the scan vs the app (or the first ID on file)"
+          className={`mt-0.5 text-[11px] ${cardDob === wantDob ? "text-emerald-700" : "text-rose-700 font-semibold"}`}>
+          DOB on card: {cardDob}{cardDob !== wantDob && ` — doesn't match ${wantDob}`}
         </div>
       )}
       <div className="flex items-center gap-1.5 mt-1.5 text-[11px]">
@@ -183,9 +196,10 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
   const applyDob = async (p, card) => {
     const k = `${p}.${card}`;
     try {
-      const res = await api.post(`/members/${memberId}/id-docs/self/birth/use-dob`, { dob: detected[k].dob });
+      const res = await api.post(`/members/${memberId}/id-docs/self/${card}/use-dob`, { dob: detected[k].dob });
       onNameChanged?.(res.field, res.dob);
-      setDetected((x) => ({ ...x, [k]: { ...x[k], expected_dob: res.dob } }));
+      setDoc((x) => ({ ...x, app_dob: res.dob }));
+      setDetected((x) => ({ ...x, [k]: { ...x[k], expected_dob: res.dob, dob_can_apply: false, dob_matches: true } }));
       toast.success(`Date of birth set to ${res.dob}`);
     } catch (err) { showApiError(err, "Couldn't update the date of birth"); }
   };
@@ -197,6 +211,9 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
   };
 
   if (!doc) return null;
+  const selfDocs = doc.people?.self || {};
+  const refDob = DOB_PRIORITY.map((c) => selfDocs[DOB_KEY[c]]).find(Boolean) || "";
+  const wantDob = doc.app_dob || refDob;
   return (
     <div className="pt-3 mt-3 border-t border-slate-100" data-testid="id-docs-section">
       <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1.5">
@@ -219,6 +236,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
                     extra={nums[p]?.[card === "birth" ? "birth_dob" : "passport_expiry"]}
                     onExtra={(v) => setNum(p, card === "birth" ? "birth_dob" : "passport_expiry", v)}
                     cardName={doc.people?.[p]?.[`${card}_name`]} appName={doc.app_names?.[p]}
+                    cardDob={p === "self" ? doc.people?.self?.[DOB_KEY[card]] : ""} wantDob={p === "self" ? wantDob : ""}
                     onUploaded={(res) => onUploaded(p, card, res)} />
                   {detected[`${p}.${card}`] && (
                     <DetectedBar card={card} d={detected[`${p}.${card}`]} tid={`id-${p}-${card}`}

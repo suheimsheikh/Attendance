@@ -9,7 +9,11 @@ const PERSON_LABEL = { self: "Member", father: "Father", mother: "Mother", guard
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
 const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar", passport: "Passport", birth: "Birth certificate" };
 const norm = (s) => (s || "").toUpperCase().split(/\s+/).filter(Boolean).join(" ");
-const appName = (slots, r) => slots.find((s) => s.member_id === r.member_id && s.person === (r.person || "self"))?.person_name;
+const slotOf = (slots, r) => slots.find((s) => s.member_id === r.member_id && s.person === (r.person || "self"));
+const appName = (slots, r) => slotOf(slots, r)?.person_name;
+const DOB_KEY = { birth: "birth_dob", passport: "passport_dob", aadhaar: "aadhaar_dob", pan: "pan_dob" };
+const isSelf = (r) => (r.person || "self") === "self";
+const dobBad = (slots, r) => !!(r.card && r.member_id && isSelf(r) && r.dob && slotOf(slots, r)?.app_dob && r.dob !== slotOf(slots, r).app_dob);
 // Strict passport rule: same words in the same order (case/spacing ignored).
 const mismatch = (slots, r) => !!(r.card && r.member_id && r.cardName && appName(slots, r) && norm(r.cardName) !== norm(appName(slots, r)));
 
@@ -26,6 +30,7 @@ function RowEditor({ row, slots, onChange, onRemove, onUseName }) {
     .sort((a, b) => (a[1] || "").localeCompare(b[1] || "")), [slots]);
   const persons = slots.filter((s) => s.member_id === row.member_id && (row.card !== "birth" || s.person === "self"));
   const bad = mismatch(slots, row);
+  const badDob = dobBad(slots, row);
   const tid = `bulk-row-${row.key}`;
   return (
     <tr className="border-t border-slate-100 align-top" data-testid={tid}>
@@ -34,7 +39,9 @@ function RowEditor({ row, slots, onChange, onRemove, onUseName }) {
         {row.status === "reading" ? <span className="inline-flex items-center gap-1 text-slate-500"><Loader2 size={12} className="animate-spin" />Reading…</span>
           : <span title="Name the AI read on the card">{row.cardName || <i className="text-slate-400">no name read</i>}</span>}
         {row.card === "passport" && row.expiry && <div className="text-slate-500 mt-0.5">expires {row.expiry}</div>}
-        {row.card === "birth" && row.dob && <div className="text-slate-500 mt-0.5">born {row.dob}</div>}
+        {row.dob && isSelf(row) && <div className="text-slate-500 mt-0.5">born {row.dob}</div>}
+        {badDob && <div className="bg-rose-600 text-white rounded px-1.5 py-0.5 font-semibold mt-1" data-testid={`${tid}-dob-warning`}>
+          DOB ≠ app ({slotOf(slots, row).app_dob})</div>}
         {bad && (
           <div className={`font-semibold mt-1 ${row.card === "passport" ? "text-rose-600" : "bg-rose-600 text-white rounded px-1.5 py-0.5"}`} data-testid={`${tid}-name-warning`}
             title={`App name: ${appName(slots, row)}`}>
@@ -117,7 +124,7 @@ export default function BulkIdUpload({ slots, onNamesChanged }) {
         }
         const nums = { [r.card]: r.number, [`${r.card}_name`]: r.cardName || "",
           ...(r.card === "passport" && r.expiry ? { passport_expiry: r.expiry } : {}),
-          ...(r.card === "birth" && r.dob ? { birth_dob: r.dob } : {}) };
+          ...(r.dob && isSelf(r) ? { [DOB_KEY[r.card]]: r.dob } : {}) };
         if (!r.number) delete nums[r.card];
         await api.put(`/members/${r.member_id}/id-docs`, { people: { [r.person]: nums } });
         r.status = "saved";
@@ -126,7 +133,7 @@ export default function BulkIdUpload({ slots, onNamesChanged }) {
     }
     setSaving(false);
     toast.success("Batch saved — check any rows marked Failed");
-    const bad = ready.filter((r) => r.status === "saved" && mismatch(slots, r));
+    const bad = ready.filter((r) => r.status === "saved" && (mismatch(slots, r) || dobBad(slots, r)));
     if (bad.length) setAlertRows(bad);
   };
 
@@ -180,21 +187,24 @@ export default function BulkIdUpload({ slots, onNamesChanged }) {
 function MismatchAlert({ rows, slots, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white w-full max-w-2xl rounded-2xl p-6 space-y-3" data-testid="bulk-mismatch-alert">
-        <h2 className="text-lg font-extrabold text-rose-700 flex items-center gap-2"><AlertTriangle size={18} /> {rows.length} name mismatch{rows.length > 1 ? "es" : ""}</h2>
-        <p className="text-xs text-slate-600">These cards were saved, but the name on the card isn&apos;t exactly the app name. The app name must follow the passport — fix passport mismatches with &ldquo;Use passport name&rdquo;; Aadhaar / PAN / birth certificate names can&apos;t be changed here.</p>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white w-full max-w-3xl rounded-2xl p-6 space-y-3" data-testid="bulk-mismatch-alert">
+        <h2 className="text-lg font-extrabold text-rose-700 flex items-center gap-2"><AlertTriangle size={18} /> {rows.length} name / DOB mismatch{rows.length > 1 ? "es" : ""}</h2>
+        <p className="text-xs text-slate-600">These cards were saved, but the name or date of birth on the card isn&apos;t exactly what the app has. The app name must follow the passport — fix passport mismatches with &ldquo;Use passport name&rdquo;; Aadhaar / PAN / birth certificate names can&apos;t be changed here.</p>
         <div className="max-h-80 overflow-y-auto border border-slate-200 rounded-lg">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
-              <tr><th className="p-2 text-left">Member</th><th className="p-2 text-left">Card</th><th className="p-2 text-left">Name on card</th><th className="p-2 text-left">App name</th></tr>
+              <tr><th className="p-2 text-left">Member</th><th className="p-2 text-left">Card</th><th className="p-2 text-left">Name on card</th><th className="p-2 text-left">App name</th>
+                <th className="p-2 text-left">DOB on card</th><th className="p-2 text-left">App DOB</th></tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.key} className="border-t border-slate-100" data-testid={`bulk-mismatch-${r.key}`}>
                   <td className="p-2">{slots.find((x) => x.member_id === r.member_id)?.member_name}</td>
                   <td className="p-2 font-semibold">{CARD_LABEL[r.card]}{r.person !== "self" && ` · ${PERSON_LABEL[r.person]}`}</td>
-                  <td className="p-2 text-rose-700 font-semibold">{r.cardName}</td>
+                  <td className={`p-2 ${mismatch(slots, r) ? "text-rose-700 font-semibold" : ""}`}>{r.cardName}</td>
                   <td className="p-2">{appName(slots, r)}</td>
+                  <td className={`p-2 ${dobBad(slots, r) ? "text-rose-700 font-semibold" : ""}`}>{isSelf(r) ? r.dob || "—" : "n/a"}</td>
+                  <td className="p-2">{isSelf(r) ? slotOf(slots, r)?.app_dob || "—" : "n/a"}</td>
                 </tr>
               ))}
             </tbody>

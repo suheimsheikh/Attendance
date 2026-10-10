@@ -266,3 +266,12 @@ input[data-testid^="search-"]::placeholder {
 @media (prefers-reduced-motion: reduce) {
   .wa-attention { animation: none; }
 }
+
+/* Every editable field + search box is bright yellow (user request, Oct 2026). Outside @layer so it beats bg-* utilities. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not(:disabled):not([readonly]),
+textarea:not(:disabled):not([readonly]),
+select:not(:disabled) {
+  background-color: #fff176;
+  border-color: #eab308;
+  color: #0f172a;
+}

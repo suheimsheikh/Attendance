@@ -9,7 +9,7 @@ import NameMismatch from "./id-docs/NameMismatch";
 
 const TABS = [
   ["report", "Missing ID report", "Members and parents still missing PAN, Aadhaar, passport or scans — and passports expiring soon"],
-  ["names", "Name mismatch", "People whose name on Aadhaar, PAN, passport or birth certificate isn't exactly the app name"],
+  ["names", "Name & DOB mismatch", "People whose name or date of birth on Aadhaar, PAN, passport or birth certificate isn't exactly what the app has"],
   ["bulk", "Bulk upload", "Drop many scans at once — each is read and matched to the right person"],
   ["travel", "Travel check", "Athletes & coaches whose passport is missing or not valid 6 months after an overseas regatta"],
 ];

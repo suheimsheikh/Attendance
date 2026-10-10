@@ -25,7 +25,11 @@ from services.time_utils import local_date_str, now_utc
 CARDS = ("pan", "aadhaar", "passport", "birth")
 SELF_ONLY = ("birth",)
 NAME_KEYS = tuple(f"{c}_name" for c in CARDS)
-NUMBER_KEYS = ("pan", "aadhaar", "passport", "passport_expiry", "birth", "birth_dob") + NAME_KEYS
+# DOB read off each card (self only). Birth certificate keeps its editable `birth_dob`.
+DOB_KEY = {"birth": "birth_dob", "passport": "passport_dob", "aadhaar": "aadhaar_dob", "pan": "pan_dob"}
+DOB_PRIORITY = ("birth", "passport", "aadhaar", "pan")  # first govt ID on file is the reference
+NUMBER_KEYS = ("pan", "aadhaar", "passport", "passport_expiry", "birth", "birth_dob",
+               "pan_dob", "aadhaar_dob", "passport_dob") + NAME_KEYS
 PASSPORT_RE = re.compile(r"^[A-Z0-9]{6,9}$")
 PARENTS = ("father", "mother", "guardian")
 MAX_BYTES = 10 * 1024 * 1024
@@ -44,6 +48,9 @@ class PersonNumbers(BaseModel):
     aadhaar_name: Optional[str] = None
     passport_name: Optional[str] = None
     birth_name: Optional[str] = None
+    pan_dob: Optional[str] = None
+    aadhaar_dob: Optional[str] = None
+    passport_dob: Optional[str] = None
 
 
 class DobIn(BaseModel):
@@ -99,6 +106,14 @@ def _clean_aadhaar(v: Optional[str]) -> str:
 
 def _clean_birth(v: Optional[str]) -> str:
     return " ".join((v or "").split()).upper()[:40]
+
+
+def _ref_dob(p: dict, skip: str = "") -> tuple:
+    """(card, dob) of the highest-priority card with a DOB on file."""
+    for c in DOB_PRIORITY:
+        if c != skip and p.get(DOB_KEY[c]):
+            return c, p[DOB_KEY[c]]
+    return None, ""
 
 
 def _numbers(people: dict) -> dict:
@@ -159,6 +174,10 @@ def make_router(db, require_admin) -> APIRouter:
                 sets[f"people.{person}.birth"] = _clean_birth(nums.birth)
             if nums.birth_dob is not None:
                 sets[f"people.{person}.birth_dob"] = _clean_date(nums.birth_dob)
+            for k in ("pan_dob", "aadhaar_dob", "passport_dob"):
+                if getattr(nums, k) is not None:
+                    _check(person, "birth", people)  # DOBs are self-only
+                    sets[f"people.{person}.{k}"] = _clean_date(getattr(nums, k))
             for k in NAME_KEYS:
                 if getattr(nums, k) is not None:
                     sets[f"people.{person}.{k}"] = " ".join(getattr(nums, k).split())[:120]
@@ -191,19 +210,27 @@ def make_router(db, require_admin) -> APIRouter:
         await db.member_id_docs.update_one(
             {"user_id": mid}, {"$set": {f"people.{person}.{card}_file": meta, "user_id": mid,
                                         "updated_at": meta["uploaded_at"]},
-                               "$unset": {f"people.{person}.{card}_name": "", f"people.{person}.{card}_name_tried": ""}},
+                               "$unset": {f"people.{person}.{card}_name": "", f"people.{person}.{card}_name_tried": "",
+                                          **({f"people.{person}.{card}_dob": ""} if card != "birth" else {})}},
             upsert=True)
         await write_audit(db, actor=admin, action="id_scan_uploaded", entity_type="member",
                           entity_id=mid, entity_name=m.get("full_name"),
                           after={"person": person, "card": card, "file": meta["name"]})
         detected = await read_id_card(data, ctype, card) if ocr else None
         if ocr:
-            await _store_card_name(mid, person, card, (detected or {}).get("name"))
+            await _store_read(mid, person, card, detected)
         if detected:
             expected = m.get("full_name") if person == "self" else m.get(f"{person}_name")
             detected.update(expected_name=expected, name_matches=name_exact(detected["name"], expected))
-            if card == "birth":
-                detected.update(expected_dob=m.get("date_of_birth") or "")
+            if person == "self":
+                app_dob = m.get("date_of_birth") or ""
+                stored = ((await _doc(mid)).get("people", {}).get("self") or {})
+                higher = [c for c in DOB_PRIORITY[:DOB_PRIORITY.index(card)] if stored.get(DOB_KEY[c])]
+                detected.update(expected_dob=app_dob,
+                                dob_matches=(detected.get("dob") == app_dob) if detected.get("dob") and app_dob else None,
+                                dob_can_apply=bool(detected.get("dob")) and not app_dob and not higher)
+            else:
+                detected.pop("dob", None)
         return {**_resp(await _doc(mid), m, people), "detected": detected}
 
     @router.get("/members/{mid}/id-docs/{person}/{card}/file")
@@ -232,7 +259,7 @@ def make_router(db, require_admin) -> APIRouter:
         users = await db.users.find(
             {"archived": {"$ne": True}, "active": {"$ne": False}, "email": {"$exists": True}},
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "custom_category": 1, "leaving_date": 1,
-             "father_name": 1, "mother_name": 1, "guardian_name": 1}).to_list(5000)
+             "date_of_birth": 1, "father_name": 1, "mother_name": 1, "guardian_name": 1}).to_list(5000)
         out = []
         for u in users:
             if is_ex_member(u):
@@ -240,7 +267,8 @@ def make_router(db, require_admin) -> APIRouter:
             for p in ["self"] + (list(PARENTS) if u.get("category") in athlete_keys else []):
                 out.append({"member_id": u["id"], "member_name": u.get("full_name"),
                             "category": u.get("custom_category") or u.get("category"), "person": p,
-                            "person_name": u.get("full_name") if p == "self" else u.get(f"{p}_name")})
+                            "person_name": u.get("full_name") if p == "self" else u.get(f"{p}_name"),
+                            "app_dob": (u.get("date_of_birth") or "") if p == "self" else None})
         return out
 
     @router.get("/id-docs/report")
@@ -298,22 +326,38 @@ def make_router(db, require_admin) -> APIRouter:
                           entity_name=m.get("full_name"), before={field: m.get(field)}, after={field: name})
         return {"field": field, "name": name}
 
-    @router.post("/members/{mid}/id-docs/self/birth/use-dob")
-    async def use_birth_dob(mid: str, body: DobIn, admin: dict = Depends(require_admin)):
-        m, _ = await _member_and_people(mid)
+    @router.post("/members/{mid}/id-docs/self/{card}/use-dob")
+    async def use_card_dob(mid: str, card: str, body: DobIn, admin: dict = Depends(require_admin)):
+        """Only fills an EMPTY app DOB, and only from the reference card (birth → passport → Aadhaar → PAN)."""
+        m, people = await _member_and_people(mid)
+        _check("self", card, people)
         dob = _clean_date(body.dob)
         if not dob:
             raise HTTPException(status_code=400, detail="Date of birth is empty")
+        if m.get("date_of_birth"):
+            raise HTTPException(status_code=409, detail="The app already has a date of birth — it isn't overwritten from a card")
+        stored = ((await _doc(mid)).get("people", {}).get("self") or {})
+        ref, _ = _ref_dob(stored, skip=card)
+        if ref and DOB_PRIORITY.index(ref) < DOB_PRIORITY.index(card):
+            raise HTTPException(status_code=409, detail=f"Use the {ref} date of birth — it comes first")
         await db.users.update_one({"id": mid}, {"$set": {"date_of_birth": dob}})
-        await write_audit(db, actor=admin, action="dob_from_birth_certificate", entity_type="member", entity_id=mid,
+        await write_audit(db, actor=admin, action=f"dob_from_{card}", entity_type="member", entity_id=mid,
                           entity_name=m.get("full_name"), before={"date_of_birth": m.get("date_of_birth")},
                           after={"date_of_birth": dob})
         return {"field": "date_of_birth", "dob": dob}
 
     # ---- Name mismatch report + one-off re-read of old scans --------------
-    async def _store_card_name(mid: str, person: str, card: str, name: Optional[str]):
-        name = " ".join((name or "").split())[:120]
-        sets = {f"people.{person}.{card}_name": name} if name else {f"people.{person}.{card}_name_tried": True}
+    async def _store_read(mid: str, person: str, card: str, det: Optional[dict], only_missing: dict = None):
+        """Save name (+ DOB for self) read off a scan; `_tried` flags stop endless re-reads."""
+        det, have = det or {}, only_missing or {}
+        sets = {f"people.{person}.{card}_name_tried": True}
+        name = " ".join((det.get("name") or "").split())[:120]
+        if name and not have.get(f"{card}_name"):
+            sets[f"people.{person}.{card}_name"] = name
+        if person == "self":
+            sets[f"people.{person}.{card}_dob_tried"] = True
+            if det.get("dob") and not have.get(DOB_KEY[card]) and (card != "birth" or only_missing is not None):
+                sets[f"people.{person}.{DOB_KEY[card]}"] = det["dob"]
         await db.member_id_docs.update_one({"user_id": mid}, {"$set": sets})
 
     async def _rows_with_docs():
@@ -321,9 +365,15 @@ def make_router(db, require_admin) -> APIRouter:
                 async for d in db.member_id_docs.find({}, {"_id": 0, "user_id": 1, "people": 1})}
         return [(r, docs.get(r["member_id"], {}).get(r["person"]) or {}) for r in await _active_people()]
 
+    def _needs(r: dict, p: dict, c: str) -> bool:
+        if not p.get(f"{c}_file"):
+            return False
+        no_name = not p.get(f"{c}_name") and not p.get(f"{c}_name_tried")
+        no_dob = r["person"] == "self" and not p.get(DOB_KEY[c]) and not p.get(f"{c}_dob_tried")
+        return no_name or no_dob
+
     def _pending(pairs) -> list:
-        return [(r, c, p[f"{c}_file"]) for r, p in pairs for c in CARDS
-                if p.get(f"{c}_file") and not p.get(f"{c}_name") and not p.get(f"{c}_name_tried")]
+        return [(r, c, p) for r, p in pairs for c in CARDS if _needs(r, p, c)]
 
     @router.get("/id-docs/name-report")
     async def name_report(admin: dict = Depends(require_admin)):
@@ -331,6 +381,11 @@ def make_router(db, require_admin) -> APIRouter:
         rows = []
         for r, p in pairs:
             row = {**r}
+            self_ = r["person"] == "self"
+            ref_card, ref_dob = _ref_dob(p) if self_ else (None, "")
+            want = r["app_dob"] or ref_dob
+            row.update(ref_card=ref_card, ref_dob=ref_dob,
+                       app_dob_match=(r["app_dob"] == ref_dob) if self_ and r["app_dob"] and ref_dob else None)
             for c in CARDS:
                 if c in SELF_ONLY and r["person"] != "self":
                     row[c] = None
@@ -339,6 +394,9 @@ def make_router(db, require_admin) -> APIRouter:
                 row[c] = {"name": n, "scan": bool(p.get(f"{c}_file")), "unread": bool(p.get(f"{c}_file")) and not n,
                           "unreadable": bool(p.get(f"{c}_name_tried")) and not n,
                           "match": name_exact(n, r["person_name"]) if n else None}
+                if self_:
+                    d = p.get(DOB_KEY[c]) or ""
+                    row[c].update(dob=d, dob_match=(d == want) if d and want else None)
             rows.append(row)
         rows.sort(key=lambda x: ((x["member_name"] or "").lower(), ["self", *PARENTS].index(x["person"])))
         return {"rows": rows, "pending_rereads": len(_pending(pairs))}
@@ -349,15 +407,16 @@ def make_router(db, require_admin) -> APIRouter:
         batch = todo[:max(1, min(limit, 12))]
         sem = asyncio.Semaphore(3)
 
-        async def one(r, card, meta):
+        async def one(r, card, p):
+            meta = p[f"{card}_file"]
             async with sem:
                 try:
                     data, _ = await asyncio.to_thread(get_object, meta["path"])
                     det = await read_id_card(data, meta["content_type"], card)
                 except Exception:
                     det = None
-                await _store_card_name(r["member_id"], r["person"], card, (det or {}).get("name"))
-                return bool((det or {}).get("name"))
+                await _store_read(r["member_id"], r["person"], card, det, only_missing=p)
+                return bool((det or {}).get("name") or (det or {}).get("dob"))
 
         got = await asyncio.gather(*(one(*t) for t in batch))
         return {"done": len(batch), "named": sum(got), "remaining": len(todo) - len(batch)}

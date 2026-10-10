@@ -17,12 +17,15 @@ logger = logging.getLogger(__name__)
 MODEL = ("gemini", "gemini-3.5-flash")
 _PROMPT = {
     "pan": "This is an Indian PAN card scan. Reply ONLY with JSON "
-           '{"number": "<10-char PAN, e.g. ABCDE1234F, or null>", "name": "<card holder name or null>"}.',
+           '{"number": "<10-char PAN, e.g. ABCDE1234F, or null>", "name": "<card holder name or null>", '
+           '"dob": "<date of birth as YYYY-MM-DD or null>"}.',
     "aadhaar": "This is an Indian Aadhaar card scan (front and/or back). Reply ONLY with JSON "
-               '{"number": "<12-digit Aadhaar number, digits only, or null>", "name": "<card holder name or null>"}.',
+               '{"number": "<12-digit Aadhaar number, digits only, or null>", "name": "<card holder name or null>", '
+               '"dob": "<full date of birth as YYYY-MM-DD, or null if only a year of birth is printed>"}.',
     "passport": "This is a passport scan (data page). Reply ONLY with JSON "
                 '{"number": "<passport number, letters/digits only, or null>", "surname": "<Surname field exactly as printed or null>", '
-                '"given_names": "<Given name(s) field exactly as printed or null>", "expiry": "<Date of expiry as YYYY-MM-DD or null>"}.',
+                '"given_names": "<Given name(s) field exactly as printed or null>", "expiry": "<Date of expiry as YYYY-MM-DD or null>", '
+                '"dob": "<Date of birth as YYYY-MM-DD or null>"}.',
     "birth": "This is a birth certificate. Reply ONLY with JSON "
              '{"number": "<registration / certificate number or null>", "name": "<name of the CHILD (not the parents) exactly as printed, or null>", '
              '"dob": "<date of birth as YYYY-MM-DD or null>"}.',
@@ -30,7 +33,7 @@ _PROMPT = {
             '{"type": "pan" | "aadhaar" | "passport" | "birth" | null, "number": "<PAN like ABCDE1234F, 12-digit Aadhaar digits only, '
             'passport number, or birth registration number; null if unreadable>", "name": "<holder name (for a birth certificate: the child) or null>", '
             '"surname": "<passport Surname or null>", "given_names": "<passport Given name(s) or null>", '
-            '"expiry": "<passport Date of expiry YYYY-MM-DD or null>", "dob": "<birth certificate date of birth YYYY-MM-DD or null>"}.',
+            '"expiry": "<passport Date of expiry YYYY-MM-DD or null>", "dob": "<holder\'s full date of birth YYYY-MM-DD or null>"}.',
 }
 _EXT = {"application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
@@ -118,7 +121,7 @@ async def read_id_card(data: bytes, content_type: str, card: str) -> Optional[di
             res["name"] = " ".join(x for x in (given, sur) if x) or name
             exp = str(out.get("expiry") or "")
             res["expiry"] = exp if re.fullmatch(r"\d{4}-\d{2}-\d{2}", exp) else None
-        if kind == "birth":
+        if kind:
             dob = str(out.get("dob") or "")
             res["dob"] = dob if re.fullmatch(r"\d{4}-\d{2}-\d{2}", dob) else None
         return res
