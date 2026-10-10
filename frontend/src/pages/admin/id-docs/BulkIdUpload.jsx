@@ -7,6 +7,7 @@ const MAX_FILES = 30;
 let seq = 0;
 const PERSON_LABEL = { self: "Member", father: "Father", mother: "Mother", guardian: "Guardian" };
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
+const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar", passport: "passport" };
 
 // Run `fn` over items with at most `n` in flight (keeps Gemini calls polite).
 async function pool(items, n, fn) {
@@ -28,20 +29,21 @@ function RowEditor({ row, slots, onChange, onRemove, onUseName }) {
         {row.status === "reading" ? <span className="inline-flex items-center gap-1 text-slate-500"><Loader2 size={12} className="animate-spin" />Reading…</span>
           : <span title="Name the AI read on the card">{row.cardName || <i className="text-slate-400">no name read</i>}</span>}
         {row.card === "passport" && row.expiry && <div className="text-slate-500 mt-0.5">expires {row.expiry}</div>}
-        {row.card === "passport" && row.nameMatches === false && (
+        {row.card && row.nameMatches === false && (
           <div className="text-rose-600 font-semibold mt-1" data-testid={`${tid}-name-warning`}>
             Not exactly the database name
-            {row.member_id && (
-              <button type="button" data-testid={`${tid}-use-name`} onClick={onUseName}
-                title="Replace the member's / parent's name in the database with this passport name"
-                className="block mt-0.5 px-1.5 h-5 rounded bg-rose-600 text-white text-[10px]">Use passport name</button>)}
+            {row.member_id && (row.nameLocked
+              ? <div className="font-normal text-slate-600" data-testid={`${tid}-name-locked`}>Name follows the passport (passport wins)</div>
+              : <button type="button" data-testid={`${tid}-use-name`} onClick={onUseName}
+                  title={`Replace the member's / parent's name in the database with this ${CARD_LABEL[row.card]} name`}
+                  className="block mt-0.5 px-1.5 h-5 rounded bg-rose-600 text-white text-[10px]">Use {CARD_LABEL[row.card]} name</button>)}
           </div>)}
         {row.readError && <div className="text-rose-600 mt-1" data-testid={`${tid}-read-error`}>{row.readError} — fill in by hand</div>}
         {row.status === "ready" && !row.member_id && (
           <div className="text-amber-700 mt-1 inline-flex items-center gap-1" data-testid={`${tid}-nomatch`}><AlertTriangle size={11} />No match — pick below</div>)}
       </td>
       <td className="p-2">
-        <select value={row.card || ""} onChange={(e) => onChange({ card: e.target.value })} className="iu-input !h-8 !text-xs" data-testid={`${tid}-card`} title="Card type (detected automatically)">
+        <select value={row.card || ""} onChange={(e) => onChange({ card: e.target.value, nameMatches: undefined })} className="iu-input !h-8 !text-xs" data-testid={`${tid}-card`} title="Card type (detected automatically)">
           <option value="">— card —</option><option value="pan">PAN</option><option value="aadhaar">Aadhaar</option><option value="passport">Passport</option>
         </select>
       </td>
@@ -50,14 +52,14 @@ function RowEditor({ row, slots, onChange, onRemove, onUseName }) {
           data-testid={`${tid}-number`} title="Number read from the scan — check it's correct" placeholder="number" />
       </td>
       <td className="p-2">
-        <select value={row.member_id || ""} onChange={(e) => onChange({ member_id: e.target.value, person: "self" })} className="iu-input !h-8 !text-xs max-w-[180px]"
+        <select value={row.member_id || ""} onChange={(e) => onChange({ member_id: e.target.value, person: "self", nameMatches: undefined })} className="iu-input !h-8 !text-xs max-w-[180px]"
           data-testid={`${tid}-member`} title="Which member this card belongs to (suggested from the name)">
           <option value="">— member —</option>
           {members.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
         </select>
       </td>
       <td className="p-2">
-        <select value={row.person || "self"} onChange={(e) => onChange({ person: e.target.value })} className="iu-input !h-8 !text-xs" disabled={!row.member_id}
+        <select value={row.person || "self"} onChange={(e) => onChange({ person: e.target.value, nameMatches: undefined })} className="iu-input !h-8 !text-xs" disabled={!row.member_id}
           data-testid={`${tid}-person`} title="Member themselves or their father / mother / guardian">
           {persons.map((s) => <option key={s.person} value={s.person}>{PERSON_LABEL[s.person]}{s.person !== "self" && s.person_name ? ` · ${s.person_name}` : ""}</option>)}
         </select>
@@ -87,7 +89,7 @@ export default function BulkIdUpload({ slots }) {
         const res = await api.post("/id-docs/bulk/read", fd);
         patch(r.key, { status: "ready", card: res.detected?.type || "", number: res.detected?.number || "",
           cardName: res.detected?.name || "", member_id: res.match?.member_id || "", person: res.match?.person || "self",
-          expiry: res.detected?.expiry || "", nameMatches: res.detected?.name_matches });
+          expiry: res.detected?.expiry || "", nameMatches: res.detected?.name_matches, nameLocked: res.detected?.name_locked });
       } catch (e) { patch(r.key, { status: "ready", readError: e.message || "Couldn't read this file" }); }
     });
   };
@@ -143,7 +145,7 @@ export default function BulkIdUpload({ slots }) {
                   onRemove={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
                   onUseName={async () => {
                     try {
-                      const res = await api.post(`/members/${r.member_id}/id-docs/${r.person}/passport/use-name`, { name: r.cardName });
+                      const res = await api.post(`/members/${r.member_id}/id-docs/${r.person}/${r.card}/use-name`, { name: r.cardName });
                       patch(r.key, { nameMatches: true });
                       toast.success(`Name updated to "${res.name}"`);
                     } catch (e) { showApiError(e, "Couldn't update the name"); }

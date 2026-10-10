@@ -16,7 +16,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from routes.admin_audit import write_audit
-from services.id_ocr import name_exact, name_matches, name_score, read_id_card
+from services.id_ocr import name_exact, name_score, read_id_card
 from services.permissions import is_ex_member
 from services.object_storage import APP_PREFIX, get_object, put_object
 from services.scope import athlete_like_keys
@@ -167,8 +167,11 @@ def make_router(db, require_admin) -> APIRouter:
         detected = await read_id_card(data, ctype, card) if ocr else None
         if detected:
             expected = m.get("full_name") if person == "self" else m.get(f"{person}_name")
-            match = name_exact if card == "passport" else name_matches
-            detected.update(expected_name=expected, name_matches=match(detected["name"], expected))
+            ok = name_exact(detected["name"], expected)
+            if card == "passport" and ok:
+                await _lock_name(mid, person)
+            detected.update(expected_name=expected, name_matches=ok,
+                            name_locked=card != "passport" and await _name_locked(mid, person))
         return {**await _doc(mid), "allowed_people": people, "detected": detected}
 
     @router.get("/members/{mid}/id-docs/{person}/{card}/file")
@@ -240,21 +243,36 @@ def make_router(db, require_admin) -> APIRouter:
                 if s > best_score:
                     best, best_score = r, s
         match = best if best_score >= 0.5 else None
-        if match and det.get("type") == "passport":
+        if match and det.get("type"):
             det["name_matches"] = name_exact(det["name"], match["person_name"])
+            det["name_locked"] = det["type"] != "passport" and await _name_locked(match["member_id"], match["person"])
         return {"detected": det, "match": match, "score": round(best_score, 2)}
 
-    # ---- Use passport name (Oct 2026) -------------------------------------
-    @router.post("/members/{mid}/id-docs/{person}/passport/use-name")
-    async def use_passport_name(mid: str, person: str, body: NameIn, admin: dict = Depends(require_admin)):
+    # ---- Use name from a card (Oct 2026) ----------------------------------
+    # Passport always wins: once the DB name follows a passport, PAN/Aadhaar can't overwrite it.
+    async def _name_locked(mid: str, person: str) -> bool:
+        return bool(((await _doc(mid)).get("people", {}).get(person) or {}).get("name_from_passport"))
+
+    async def _lock_name(mid: str, person: str):
+        await db.member_id_docs.update_one({"user_id": mid}, {"$set": {f"people.{person}.name_from_passport": True,
+                                                                         "user_id": mid}}, upsert=True)
+
+    @router.post("/members/{mid}/id-docs/{person}/{card}/use-name")
+    async def use_card_name(mid: str, person: str, card: str, body: NameIn, admin: dict = Depends(require_admin)):
         m, people = await _member_and_people(mid)
-        _check(person, "passport", people)
-        name = " ".join(w[:1].upper() + w[1:].lower() for w in body.name.split())
+        _check(person, card, people)
+        words = body.name.split()
+        # Passport & PAN print in ALL CAPS → Title Case; Aadhaar is used as printed.
+        name = " ".join(words if card == "aadhaar" else (w[:1].upper() + w[1:].lower() for w in words))
         if not name:
             raise HTTPException(status_code=400, detail="Name is empty")
+        if card != "passport" and await _name_locked(mid, person):
+            raise HTTPException(status_code=409, detail="This name already follows the passport — the passport name wins")
         field = "full_name" if person == "self" else f"{person}_name"
         await db.users.update_one({"id": mid}, {"$set": {field: name}})
-        await write_audit(db, actor=admin, action="name_from_passport", entity_type="member", entity_id=mid,
+        if card == "passport":
+            await _lock_name(mid, person)
+        await write_audit(db, actor=admin, action=f"name_from_{card}", entity_type="member", entity_id=mid,
                           entity_name=m.get("full_name"), before={field: m.get(field)}, after={field: name})
         return {"field": field, "name": name}
 
