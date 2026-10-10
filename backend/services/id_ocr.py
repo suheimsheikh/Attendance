@@ -1,4 +1,4 @@
-"""Read the PAN / Aadhaar number + holder name off an uploaded scan with
+"""Read the PAN / Aadhaar / passport / birth-certificate number + holder name off an uploaded scan with
 Gemini vision (Emergent LLM key). Best-effort: any failure → None, the
 upload itself never fails because of OCR (Oct 2026)."""
 from __future__ import annotations
@@ -23,10 +23,14 @@ _PROMPT = {
     "passport": "This is a passport scan (data page). Reply ONLY with JSON "
                 '{"number": "<passport number, letters/digits only, or null>", "surname": "<Surname field exactly as printed or null>", '
                 '"given_names": "<Given name(s) field exactly as printed or null>", "expiry": "<Date of expiry as YYYY-MM-DD or null>"}.',
-    "auto": "This is a scan of an Indian PAN card, Aadhaar card or a passport data page. Reply ONLY with JSON "
-            '{"type": "pan" | "aadhaar" | "passport" | null, "number": "<PAN like ABCDE1234F, 12-digit Aadhaar digits only, '
-            'or passport number; null if unreadable>", "name": "<holder name or null>", "surname": "<passport Surname or null>", '
-            '"given_names": "<passport Given name(s) or null>", "expiry": "<passport Date of expiry YYYY-MM-DD or null>"}.',
+    "birth": "This is a birth certificate. Reply ONLY with JSON "
+             '{"number": "<registration / certificate number or null>", "name": "<name of the CHILD (not the parents) exactly as printed, or null>", '
+             '"dob": "<date of birth as YYYY-MM-DD or null>"}.',
+    "auto": "This is a scan of an Indian PAN card, Aadhaar card, a passport data page or a birth certificate. Reply ONLY with JSON "
+            '{"type": "pan" | "aadhaar" | "passport" | "birth" | null, "number": "<PAN like ABCDE1234F, 12-digit Aadhaar digits only, '
+            'passport number, or birth registration number; null if unreadable>", "name": "<holder name (for a birth certificate: the child) or null>", '
+            '"surname": "<passport Surname or null>", "given_names": "<passport Given name(s) or null>", '
+            '"expiry": "<passport Date of expiry YYYY-MM-DD or null>", "dob": "<birth certificate date of birth YYYY-MM-DD or null>"}.',
 }
 _EXT = {"application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
@@ -37,6 +41,9 @@ def _parse(text: str) -> dict:
 
 
 def _clean_number(card: str, raw) -> Optional[str]:
+    if card == "birth":
+        v = " ".join(str(raw or "").split()).upper()
+        return v[:40] if v and v != "NULL" else None
     if card == "passport":
         v = re.sub(r"[^A-Za-z0-9]", "", str(raw or "")).upper()
         return v if re.fullmatch(r"[A-Z0-9]{6,9}", v) else None
@@ -102,7 +109,7 @@ async def read_id_card(data: bytes, content_type: str, card: str) -> Optional[di
                 if attempt == 2:
                     raise
                 logger.warning("ID OCR attempt 1 failed (%s) — retrying", card)
-        kind = card if card != "auto" else (out.get("type") if out.get("type") in ("pan", "aadhaar", "passport") else None)
+        kind = card if card != "auto" else (out.get("type") if out.get("type") in ("pan", "aadhaar", "passport", "birth") else None)
         name = (out.get("name") or "").strip() or None
         res = {"type": kind, "number": _clean_number(kind, out.get("number")) if kind else None, "name": name}
         if kind == "passport":
@@ -111,6 +118,9 @@ async def read_id_card(data: bytes, content_type: str, card: str) -> Optional[di
             res["name"] = " ".join(x for x in (given, sur) if x) or name
             exp = str(out.get("expiry") or "")
             res["expiry"] = exp if re.fullmatch(r"\d{4}-\d{2}-\d{2}", exp) else None
+        if kind == "birth":
+            dob = str(out.get("dob") or "")
+            res["dob"] = dob if re.fullmatch(r"\d{4}-\d{2}-\d{2}", dob) else None
         return res
     except Exception:
         logger.exception("ID OCR failed (%s)", card)

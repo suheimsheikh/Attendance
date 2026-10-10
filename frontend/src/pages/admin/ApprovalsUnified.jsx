@@ -26,6 +26,9 @@ import LeaveApprovalConfirmModal from "./LeaveApprovalConfirmModal";
 import LeaveContextPanel from "./LeaveContextPanel";
 import { BalanceChip, OverrideReasonModal, RejectReasonModal } from "./approvals/ApprovalModals";
 import { DecisionHistoryCheckins, DecisionHistoryCorrections, DecisionHistoryLeaves } from "./approvals/DecisionHistory";
+import NameFilter from "./approvals/NameFilter";
+
+const nameOf = (r) => r.member_name || r.user_name || "";
 import { ElapsedChip, FILTERS, KIND_META, daysBetween, fmtDateTime, normCheckin, normCorrection, normLeave } from "./approvals/rowHelpers";
 
 
@@ -35,6 +38,7 @@ export default function ApprovalsUnified() {
   const { user } = useAuth();
   const isSuper = !!user?.is_super_admin;
   const [filter, setFilter] = useState("all");
+  const [nameQ, setNameQ] = useState("");
   const [busyId, setBusyId] = useState(null);
   const queryClient = useQueryClient();
 
@@ -193,10 +197,10 @@ export default function ApprovalsUnified() {
     queryClient.invalidateQueries({ queryKey: ["/admin/devices"] });
   }, [queryClient]);
 
-  const filteredRows = useMemo(() => {
-    if (filter === "all") return rows;
-    return rows.filter((r) => r.kind === filter);
-  }, [rows, filter]);
+  const byName = useCallback((r) => !nameQ || nameOf(r).toLowerCase().includes(nameQ.trim().toLowerCase()), [nameQ]);
+  const filteredRows = useMemo(
+    () => rows.filter((r) => (filter === "all" || r.kind === filter) && byName(r)),
+    [rows, filter, byName]);
 
   const counts = useMemo(() => {
     const c = { all: rows.length, leave: 0, checkin: 0, correction: 0, device: deviceCount };
@@ -387,6 +391,10 @@ export default function ApprovalsUnified() {
     );
   }, [correctionsDecidedQ.data]);
 
+  const allNames = useMemo(() => [...new Set([...rows, ...decidedLeaves, ...decidedCheckins, ...decidedCorrections]
+    .map(nameOf).filter((n) => n && n !== "—"))].sort((a, b) => a.localeCompare(b)),
+  [rows, decidedLeaves, decidedCheckins, decidedCorrections]);
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto" data-testid="approvals-unified">
       <header className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
@@ -425,7 +433,7 @@ export default function ApprovalsUnified() {
         </div>
       </header>
 
-      <div className="flex flex-wrap gap-2 mb-4" data-testid="approvals-filter-chips">
+      <div className="flex flex-wrap items-center gap-2 mb-4" data-testid="approvals-filter-chips">
         {FILTERS.map((f) => {
           const active = filter === f.key;
           const count = counts[f.key] || 0;
@@ -444,6 +452,7 @@ export default function ApprovalsUnified() {
             </button>
           );
         })}
+        {filter !== "device" && <div className="ml-auto"><NameFilter value={nameQ} onChange={setNameQ} names={allNames} /></div>}
       </div>
 
       {filter === "device" ? (
@@ -603,7 +612,7 @@ export default function ApprovalsUnified() {
 
       {/* --- Decision history (leaves + checkins + corrections) --- */}
       <DecisionHistoryLeaves
-        rows={decidedLeaves}
+        rows={decidedLeaves.filter(byName)}
         onReopen={async (leaveId) => {
           try {
             await api.patch(`/leaves/${leaveId}`, { status: "pending" });
@@ -615,8 +624,8 @@ export default function ApprovalsUnified() {
           }
         }}
       />
-      <DecisionHistoryCheckins rows={decidedCheckins} />
-      <DecisionHistoryCorrections rows={decidedCorrections} />
+      <DecisionHistoryCheckins rows={decidedCheckins.filter(byName)} />
+      <DecisionHistoryCorrections rows={decidedCorrections.filter(byName)} />
       </>
       )}
 

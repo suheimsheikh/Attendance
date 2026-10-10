@@ -7,7 +7,11 @@ const MAX_FILES = 30;
 let seq = 0;
 const PERSON_LABEL = { self: "Member", father: "Father", mother: "Mother", guardian: "Guardian" };
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
-const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar", passport: "passport" };
+const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar", passport: "Passport", birth: "Birth certificate" };
+const norm = (s) => (s || "").toUpperCase().split(/\s+/).filter(Boolean).join(" ");
+const appName = (slots, r) => slots.find((s) => s.member_id === r.member_id && s.person === (r.person || "self"))?.person_name;
+// Strict passport rule: same words in the same order (case/spacing ignored).
+const mismatch = (slots, r) => !!(r.card && r.member_id && r.cardName && appName(slots, r) && norm(r.cardName) !== norm(appName(slots, r)));
 
 // Run `fn` over items with at most `n` in flight (keeps Gemini calls polite).
 async function pool(items, n, fn) {
@@ -20,7 +24,8 @@ async function pool(items, n, fn) {
 function RowEditor({ row, slots, onChange, onRemove, onUseName }) {
   const members = useMemo(() => [...new Map(slots.map((s) => [s.member_id, s.member_name])).entries()]
     .sort((a, b) => (a[1] || "").localeCompare(b[1] || "")), [slots]);
-  const persons = slots.filter((s) => s.member_id === row.member_id);
+  const persons = slots.filter((s) => s.member_id === row.member_id && (row.card !== "birth" || s.person === "self"));
+  const bad = mismatch(slots, row);
   const tid = `bulk-row-${row.key}`;
   return (
     <tr className="border-t border-slate-100 align-top" data-testid={tid}>
@@ -29,22 +34,23 @@ function RowEditor({ row, slots, onChange, onRemove, onUseName }) {
         {row.status === "reading" ? <span className="inline-flex items-center gap-1 text-slate-500"><Loader2 size={12} className="animate-spin" />Reading…</span>
           : <span title="Name the AI read on the card">{row.cardName || <i className="text-slate-400">no name read</i>}</span>}
         {row.card === "passport" && row.expiry && <div className="text-slate-500 mt-0.5">expires {row.expiry}</div>}
-        {row.card && row.nameMatches === false && (
-          <div className="text-rose-600 font-semibold mt-1" data-testid={`${tid}-name-warning`}>
-            Not exactly the database name
-            {row.member_id && (row.nameLocked
-              ? <div className="font-normal text-slate-600" data-testid={`${tid}-name-locked`}>Name follows the passport (passport wins)</div>
-              : <button type="button" data-testid={`${tid}-use-name`} onClick={onUseName}
-                  title={`Replace the member's / parent's name in the database with this ${CARD_LABEL[row.card]} name`}
-                  className="block mt-0.5 px-1.5 h-5 rounded bg-rose-600 text-white text-[10px]">Use {CARD_LABEL[row.card]} name</button>)}
+        {row.card === "birth" && row.dob && <div className="text-slate-500 mt-0.5">born {row.dob}</div>}
+        {bad && (
+          <div className={`font-semibold mt-1 ${row.card === "passport" ? "text-rose-600" : "bg-rose-600 text-white rounded px-1.5 py-0.5"}`} data-testid={`${tid}-name-warning`}
+            title={`App name: ${appName(slots, row)}`}>
+            {row.card === "passport" ? "Not exactly the app name" : `${CARD_LABEL[row.card]} name ≠ app name`}
+            {row.card === "passport" && (
+              <button type="button" data-testid={`${tid}-use-name`} onClick={onUseName}
+                title="Replace the member's / parent's name in the app with this passport name"
+                className="block mt-0.5 px-1.5 h-5 rounded bg-rose-600 text-white text-[10px]">Use passport name</button>)}
           </div>)}
         {row.readError && <div className="text-rose-600 mt-1" data-testid={`${tid}-read-error`}>{row.readError} — fill in by hand</div>}
         {row.status === "ready" && !row.member_id && (
           <div className="text-amber-700 mt-1 inline-flex items-center gap-1" data-testid={`${tid}-nomatch`}><AlertTriangle size={11} />No match — pick below</div>)}
       </td>
       <td className="p-2">
-        <select value={row.card || ""} onChange={(e) => onChange({ card: e.target.value, nameMatches: undefined })} className="iu-input !h-8 !text-xs" data-testid={`${tid}-card`} title="Card type (detected automatically)">
-          <option value="">— card —</option><option value="pan">PAN</option><option value="aadhaar">Aadhaar</option><option value="passport">Passport</option>
+        <select value={row.card || ""} onChange={(e) => onChange({ card: e.target.value, ...(e.target.value === "birth" ? { person: "self" } : {}) })} className="iu-input !h-8 !text-xs" data-testid={`${tid}-card`} title="Card type (detected automatically)">
+          <option value="">— card —</option><option value="pan">PAN</option><option value="aadhaar">Aadhaar</option><option value="passport">Passport</option><option value="birth">Birth certificate</option>
         </select>
       </td>
       <td className="p-2">
@@ -52,14 +58,14 @@ function RowEditor({ row, slots, onChange, onRemove, onUseName }) {
           data-testid={`${tid}-number`} title="Number read from the scan — check it's correct" placeholder="number" />
       </td>
       <td className="p-2">
-        <select value={row.member_id || ""} onChange={(e) => onChange({ member_id: e.target.value, person: "self", nameMatches: undefined })} className="iu-input !h-8 !text-xs max-w-[180px]"
+        <select value={row.member_id || ""} onChange={(e) => onChange({ member_id: e.target.value, person: "self" })} className="iu-input !h-8 !text-xs max-w-[180px]"
           data-testid={`${tid}-member`} title="Which member this card belongs to (suggested from the name)">
           <option value="">— member —</option>
           {members.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
         </select>
       </td>
       <td className="p-2">
-        <select value={row.person || "self"} onChange={(e) => onChange({ person: e.target.value, nameMatches: undefined })} className="iu-input !h-8 !text-xs" disabled={!row.member_id}
+        <select value={row.person || "self"} onChange={(e) => onChange({ person: e.target.value })} className="iu-input !h-8 !text-xs" disabled={!row.member_id}
           data-testid={`${tid}-person`} title="Member themselves or their father / mother / guardian">
           {persons.map((s) => <option key={s.person} value={s.person}>{PERSON_LABEL[s.person]}{s.person !== "self" && s.person_name ? ` · ${s.person_name}` : ""}</option>)}
         </select>
@@ -71,8 +77,9 @@ function RowEditor({ row, slots, onChange, onRemove, onUseName }) {
   );
 }
 
-export default function BulkIdUpload({ slots }) {
+export default function BulkIdUpload({ slots, onNamesChanged }) {
   const [rows, setRows] = useState([]);
+  const [alertRows, setAlertRows] = useState(null);
   const [saving, setSaving] = useState(false);
   const inputRef = useRef(null);
   const patch = (key, p) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
@@ -89,7 +96,7 @@ export default function BulkIdUpload({ slots }) {
         const res = await api.post("/id-docs/bulk/read", fd);
         patch(r.key, { status: "ready", card: res.detected?.type || "", number: res.detected?.number || "",
           cardName: res.detected?.name || "", member_id: res.match?.member_id || "", person: res.match?.person || "self",
-          expiry: res.detected?.expiry || "", nameMatches: res.detected?.name_matches, nameLocked: res.detected?.name_locked });
+          expiry: res.detected?.expiry || "", dob: res.detected?.dob || "" });
       } catch (e) { patch(r.key, { status: "ready", readError: e.message || "Couldn't read this file" }); }
     });
   };
@@ -108,24 +115,30 @@ export default function BulkIdUpload({ slots }) {
           r.uploadedTo = target;
           patch(r.key, { uploadedTo: target });
         }
-        const nums = { [r.card]: r.number, ...(r.card === "passport" && r.expiry ? { passport_expiry: r.expiry } : {}) };
-        if (r.number) await api.put(`/members/${r.member_id}/id-docs`, { people: { [r.person]: nums } });
+        const nums = { [r.card]: r.number, [`${r.card}_name`]: r.cardName || "",
+          ...(r.card === "passport" && r.expiry ? { passport_expiry: r.expiry } : {}),
+          ...(r.card === "birth" && r.dob ? { birth_dob: r.dob } : {}) };
+        if (!r.number) delete nums[r.card];
+        await api.put(`/members/${r.member_id}/id-docs`, { people: { [r.person]: nums } });
+        r.status = "saved";
         patch(r.key, { status: "saved" });
       } catch (e) { patch(r.key, { status: "error", error: e.message }); showApiError(e, `${r.file.name} failed`); }
     }
     setSaving(false);
     toast.success("Batch saved — check any rows marked Failed");
+    const bad = ready.filter((r) => r.status === "saved" && mismatch(slots, r));
+    if (bad.length) setAlertRows(bad);
   };
 
   return (
     <div data-testid="bulk-id-upload">
       <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
         onClick={() => inputRef.current?.click()} data-testid="bulk-dropzone"
-        title="Drop up to 30 PAN / Aadhaar scans (PDF or photo) — each is read and matched automatically"
+        title="Drop up to 30 PAN / Aadhaar / passport / birth certificate scans (PDF or photo) — each is read and matched automatically"
         className="iu-card border-2 border-dashed border-slate-300 hover:border-emerald-400 p-8 text-center cursor-pointer">
         <UploadCloud className="mx-auto text-emerald-600" size={30} />
         <div className="font-bold mt-2">Drop scans here or click to choose</div>
-        <div className="text-xs text-slate-500 mt-1">Up to {MAX_FILES} files · PAN, Aadhaar or passport · PDF / JPG / PNG / WEBP · front + back in one file · max 10 MB each</div>
+        <div className="text-xs text-slate-500 mt-1">Up to {MAX_FILES} files · PAN, Aadhaar, passport or birth certificate · PDF / JPG / PNG / WEBP · front + back in one file · max 10 MB each</div>
         <input ref={inputRef} type="file" multiple accept={ACCEPT} className="hidden" data-testid="bulk-file-input"
           onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
       </div>
@@ -146,8 +159,8 @@ export default function BulkIdUpload({ slots }) {
                   onUseName={async () => {
                     try {
                       const res = await api.post(`/members/${r.member_id}/id-docs/${r.person}/${r.card}/use-name`, { name: r.cardName });
-                      patch(r.key, { nameMatches: true });
                       toast.success(`Name updated to "${res.name}"`);
+                      onNamesChanged?.();
                     } catch (e) { showApiError(e, "Couldn't update the name"); }
                   }} />)}
               </tbody>
@@ -159,6 +172,36 @@ export default function BulkIdUpload({ slots }) {
           </button>
         </>
       )}
+      {alertRows && <MismatchAlert rows={alertRows} slots={slots} onClose={() => setAlertRows(null)} />}
+    </div>
+  );
+}
+
+function MismatchAlert({ rows, slots, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white w-full max-w-2xl rounded-2xl p-6 space-y-3" data-testid="bulk-mismatch-alert">
+        <h2 className="text-lg font-extrabold text-rose-700 flex items-center gap-2"><AlertTriangle size={18} /> {rows.length} name mismatch{rows.length > 1 ? "es" : ""}</h2>
+        <p className="text-xs text-slate-600">These cards were saved, but the name on the card isn&apos;t exactly the app name. The app name must follow the passport — fix passport mismatches with &ldquo;Use passport name&rdquo;; Aadhaar / PAN / birth certificate names can&apos;t be changed here.</p>
+        <div className="max-h-80 overflow-y-auto border border-slate-200 rounded-lg">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+              <tr><th className="p-2 text-left">Member</th><th className="p-2 text-left">Card</th><th className="p-2 text-left">Name on card</th><th className="p-2 text-left">App name</th></tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.key} className="border-t border-slate-100" data-testid={`bulk-mismatch-${r.key}`}>
+                  <td className="p-2">{slots.find((x) => x.member_id === r.member_id)?.member_name}</td>
+                  <td className="p-2 font-semibold">{CARD_LABEL[r.card]}{r.person !== "self" && ` · ${PERSON_LABEL[r.person]}`}</td>
+                  <td className="p-2 text-rose-700 font-semibold">{r.cardName}</td>
+                  <td className="p-2">{appName(slots, r)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex justify-end"><button type="button" onClick={onClose} className="iu-btn-primary" data-testid="bulk-mismatch-close">OK</button></div>
+      </div>
     </div>
   );
 }

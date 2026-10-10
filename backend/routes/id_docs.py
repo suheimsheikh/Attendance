@@ -22,8 +22,10 @@ from services.object_storage import APP_PREFIX, get_object, put_object
 from services.scope import athlete_like_keys
 from services.time_utils import local_date_str, now_utc
 
-CARDS = ("pan", "aadhaar", "passport")
-NUMBER_KEYS = ("pan", "aadhaar", "passport", "passport_expiry")
+CARDS = ("pan", "aadhaar", "passport", "birth")
+SELF_ONLY = ("birth",)
+NAME_KEYS = tuple(f"{c}_name" for c in CARDS)
+NUMBER_KEYS = ("pan", "aadhaar", "passport", "passport_expiry", "birth", "birth_dob") + NAME_KEYS
 PASSPORT_RE = re.compile(r"^[A-Z0-9]{6,9}$")
 PARENTS = ("father", "mother", "guardian")
 MAX_BYTES = 10 * 1024 * 1024
@@ -36,6 +38,16 @@ class PersonNumbers(BaseModel):
     aadhaar: Optional[str] = None
     passport: Optional[str] = None
     passport_expiry: Optional[str] = None
+    birth: Optional[str] = None
+    birth_dob: Optional[str] = None
+    pan_name: Optional[str] = None
+    aadhaar_name: Optional[str] = None
+    passport_name: Optional[str] = None
+    birth_name: Optional[str] = None
+
+
+class DobIn(BaseModel):
+    dob: str
 
 
 class NameIn(BaseModel):
@@ -63,7 +75,7 @@ def _clean_passport(v: Optional[str]) -> str:
 def _clean_date(v: Optional[str]) -> str:
     v = (v or "").strip()
     if v and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
-        raise HTTPException(status_code=400, detail="Passport expiry must be a date (YYYY-MM-DD)")
+        raise HTTPException(status_code=400, detail="Dates must be YYYY-MM-DD")
     return v
 
 
@@ -85,6 +97,10 @@ def _clean_aadhaar(v: Optional[str]) -> str:
     return v
 
 
+def _clean_birth(v: Optional[str]) -> str:
+    return " ".join((v or "").split()).upper()[:40]
+
+
 def _numbers(people: dict) -> dict:
     """Audit view: numbers only (PAN/Aadhaar aren't treated as private — user, Oct 2026)."""
     return {p: {k: v for k, v in (d or {}).items() if k in NUMBER_KEYS} for p, d in (people or {}).items()}
@@ -98,7 +114,7 @@ def make_router(db, require_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     async def _member_and_people(mid: str):
-        m = await db.users.find_one({"id": mid}, {"_id": 0, "id": 1, "full_name": 1, "category": 1,
+        m = await db.users.find_one({"id": mid}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "date_of_birth": 1,
                                                   "father_name": 1, "mother_name": 1, "guardian_name": 1})
         if not m:
             raise HTTPException(status_code=404, detail="Member not found")
@@ -109,13 +125,17 @@ def make_router(db, require_admin) -> APIRouter:
         return await db.member_id_docs.find_one({"user_id": mid}, {"_id": 0}) or {"user_id": mid, "people": {}}
 
     def _check(person: str, card: str, people: list):
-        if person not in people or card not in CARDS:
+        if person not in people or card not in CARDS or (card in SELF_ONLY and person != "self"):
             raise HTTPException(status_code=400, detail="Unknown person or card")
+
+    def _resp(doc: dict, m: dict, people: list) -> dict:
+        names = {p: m.get("full_name") if p == "self" else m.get(f"{p}_name") for p in people}
+        return {**doc, "allowed_people": people, "app_names": names, "app_dob": m.get("date_of_birth") or ""}
 
     @router.get("/members/{mid}/id-docs")
     async def get_id_docs(mid: str, admin: dict = Depends(require_admin)):
-        _, people = await _member_and_people(mid)
-        return {**await _doc(mid), "allowed_people": people}
+        m, people = await _member_and_people(mid)
+        return _resp(await _doc(mid), m, people)
 
     @router.put("/members/{mid}/id-docs")
     async def save_id_numbers(mid: str, body: IdNumbersIn, admin: dict = Depends(require_admin)):
@@ -133,6 +153,15 @@ def make_router(db, require_admin) -> APIRouter:
                 sets[f"people.{person}.passport"] = _clean_passport(nums.passport)
             if nums.passport_expiry is not None:
                 sets[f"people.{person}.passport_expiry"] = _clean_date(nums.passport_expiry)
+            if nums.birth is not None or nums.birth_dob is not None or nums.birth_name is not None:
+                _check(person, "birth", people)
+            if nums.birth is not None:
+                sets[f"people.{person}.birth"] = _clean_birth(nums.birth)
+            if nums.birth_dob is not None:
+                sets[f"people.{person}.birth_dob"] = _clean_date(nums.birth_dob)
+            for k in NAME_KEYS:
+                if getattr(nums, k) is not None:
+                    sets[f"people.{person}.{k}"] = " ".join(getattr(nums, k).split())[:120]
         await db.member_id_docs.update_one(
             {"user_id": mid}, {"$set": {**sets, "user_id": mid, "updated_at": now_utc().isoformat()}}, upsert=True)
         after = await _doc(mid)
@@ -140,7 +169,7 @@ def make_router(db, require_admin) -> APIRouter:
                           entity_id=mid, entity_name=m.get("full_name"),
                           before={"people": _numbers(before.get("people"))},
                           after={"people": _numbers(after.get("people"))})
-        return {**after, "allowed_people": people}
+        return _resp(after, m, people)
 
     @router.post("/members/{mid}/id-docs/{person}/{card}")
     async def upload_scan(mid: str, person: str, card: str, file: UploadFile = File(...), ocr: bool = True,
@@ -158,21 +187,24 @@ def make_router(db, require_admin) -> APIRouter:
         meta = {"path": path, "name": _safe_name(file.filename or path.rsplit("/", 1)[-1]), "content_type": ctype,
                 "size": len(data), "uploaded_at": now_utc().isoformat(),
                 "uploaded_by": admin.get("full_name") or admin.get("email")}
+        # New scan → old card name no longer applies (re-read or set by bulk save).
         await db.member_id_docs.update_one(
             {"user_id": mid}, {"$set": {f"people.{person}.{card}_file": meta, "user_id": mid,
-                                        "updated_at": meta["uploaded_at"]}}, upsert=True)
+                                        "updated_at": meta["uploaded_at"]},
+                               "$unset": {f"people.{person}.{card}_name": "", f"people.{person}.{card}_name_tried": ""}},
+            upsert=True)
         await write_audit(db, actor=admin, action="id_scan_uploaded", entity_type="member",
                           entity_id=mid, entity_name=m.get("full_name"),
                           after={"person": person, "card": card, "file": meta["name"]})
         detected = await read_id_card(data, ctype, card) if ocr else None
+        if ocr:
+            await _store_card_name(mid, person, card, (detected or {}).get("name"))
         if detected:
             expected = m.get("full_name") if person == "self" else m.get(f"{person}_name")
-            ok = name_exact(detected["name"], expected)
-            if card == "passport" and ok:
-                await _lock_name(mid, person)
-            detected.update(expected_name=expected, name_matches=ok,
-                            name_locked=card != "passport" and await _name_locked(mid, person))
-        return {**await _doc(mid), "allowed_people": people, "detected": detected}
+            detected.update(expected_name=expected, name_matches=name_exact(detected["name"], expected))
+            if card == "birth":
+                detected.update(expected_dob=m.get("date_of_birth") or "")
+        return {**_resp(await _doc(mid), m, people), "detected": detected}
 
     @router.get("/members/{mid}/id-docs/{person}/{card}/file")
     async def download_scan(mid: str, person: str, card: str, admin: dict = Depends(require_admin)):
@@ -188,10 +220,11 @@ def make_router(db, require_admin) -> APIRouter:
     async def delete_scan(mid: str, person: str, card: str, admin: dict = Depends(require_admin)):
         m, people = await _member_and_people(mid)
         _check(person, card, people)
-        await db.member_id_docs.update_one({"user_id": mid}, {"$unset": {f"people.{person}.{card}_file": ""}})
+        await db.member_id_docs.update_one({"user_id": mid}, {"$unset": {
+            f"people.{person}.{card}_file": "", f"people.{person}.{card}_name": "", f"people.{person}.{card}_name_tried": ""}})
         await write_audit(db, actor=admin, action="id_scan_removed", entity_type="member",
                           entity_id=mid, entity_name=m.get("full_name"), before={"person": person, "card": card})
-        return {**await _doc(mid), "allowed_people": people}
+        return _resp(await _doc(mid), m, people)
 
     async def _active_people() -> list:
         """Every (member, person) slot for active members — feeds the report + bulk matcher."""
@@ -222,7 +255,9 @@ def make_router(db, require_admin) -> APIRouter:
                          "pan_scan": bool(p.get("pan_file")), "aadhaar_scan": bool(p.get("aadhaar_file")),
                          "passport": p.get("passport") or "", "passport_scan": bool(p.get("passport_file")),
                          "passport_expiry": p.get("passport_expiry") or "",
-                         "passport_status": _expiry_status(p.get("passport_expiry") or "", today)})
+                         "passport_status": _expiry_status(p.get("passport_expiry") or "", today),
+                         "birth": (p.get("birth") or "") if r["person"] == "self" else None,
+                         "birth_scan": bool(p.get("birth_file")) if r["person"] == "self" else None})
         rows.sort(key=lambda x: ((x["member_name"] or "").lower(), ["self", *PARENTS].index(x["person"])))
         return {"rows": rows}
 
@@ -239,42 +274,92 @@ def make_router(db, require_admin) -> APIRouter:
         best, best_score = None, 0.0
         if det.get("name"):
             for r in await _active_people():
+                if det.get("type") in SELF_ONLY and r["person"] != "self":
+                    continue
                 s = name_score(det["name"], r["person_name"])
                 if s > best_score:
                     best, best_score = r, s
         match = best if best_score >= 0.5 else None
         if match and det.get("type"):
             det["name_matches"] = name_exact(det["name"], match["person_name"])
-            det["name_locked"] = det["type"] != "passport" and await _name_locked(match["member_id"], match["person"])
         return {"detected": det, "match": match, "score": round(best_score, 2)}
 
-    # ---- Use name from a card (Oct 2026) ----------------------------------
-    # Passport always wins: once the DB name follows a passport, PAN/Aadhaar can't overwrite it.
-    async def _name_locked(mid: str, person: str) -> bool:
-        return bool(((await _doc(mid)).get("people", {}).get(person) or {}).get("name_from_passport"))
-
-    async def _lock_name(mid: str, person: str):
-        await db.member_id_docs.update_one({"user_id": mid}, {"$set": {f"people.{person}.name_from_passport": True,
-                                                                         "user_id": mid}}, upsert=True)
-
-    @router.post("/members/{mid}/id-docs/{person}/{card}/use-name")
-    async def use_card_name(mid: str, person: str, card: str, body: NameIn, admin: dict = Depends(require_admin)):
+    # ---- App name follows the passport only (Oct 2026) ---------------------
+    @router.post("/members/{mid}/id-docs/{person}/passport/use-name")
+    async def use_passport_name(mid: str, person: str, body: NameIn, admin: dict = Depends(require_admin)):
         m, people = await _member_and_people(mid)
-        _check(person, card, people)
-        words = body.name.split()
-        # Passport & PAN print in ALL CAPS → Title Case; Aadhaar is used as printed.
-        name = " ".join(words if card == "aadhaar" else (w[:1].upper() + w[1:].lower() for w in words))
+        _check(person, "passport", people)
+        name = " ".join(w[:1].upper() + w[1:].lower() for w in body.name.split())
         if not name:
             raise HTTPException(status_code=400, detail="Name is empty")
-        if card != "passport" and await _name_locked(mid, person):
-            raise HTTPException(status_code=409, detail="This name already follows the passport — the passport name wins")
         field = "full_name" if person == "self" else f"{person}_name"
         await db.users.update_one({"id": mid}, {"$set": {field: name}})
-        if card == "passport":
-            await _lock_name(mid, person)
-        await write_audit(db, actor=admin, action=f"name_from_{card}", entity_type="member", entity_id=mid,
+        await write_audit(db, actor=admin, action="name_from_passport", entity_type="member", entity_id=mid,
                           entity_name=m.get("full_name"), before={field: m.get(field)}, after={field: name})
         return {"field": field, "name": name}
+
+    @router.post("/members/{mid}/id-docs/self/birth/use-dob")
+    async def use_birth_dob(mid: str, body: DobIn, admin: dict = Depends(require_admin)):
+        m, _ = await _member_and_people(mid)
+        dob = _clean_date(body.dob)
+        if not dob:
+            raise HTTPException(status_code=400, detail="Date of birth is empty")
+        await db.users.update_one({"id": mid}, {"$set": {"date_of_birth": dob}})
+        await write_audit(db, actor=admin, action="dob_from_birth_certificate", entity_type="member", entity_id=mid,
+                          entity_name=m.get("full_name"), before={"date_of_birth": m.get("date_of_birth")},
+                          after={"date_of_birth": dob})
+        return {"field": "date_of_birth", "dob": dob}
+
+    # ---- Name mismatch report + one-off re-read of old scans --------------
+    async def _store_card_name(mid: str, person: str, card: str, name: Optional[str]):
+        name = " ".join((name or "").split())[:120]
+        sets = {f"people.{person}.{card}_name": name} if name else {f"people.{person}.{card}_name_tried": True}
+        await db.member_id_docs.update_one({"user_id": mid}, {"$set": sets})
+
+    async def _rows_with_docs():
+        docs = {d["user_id"]: d.get("people") or {}
+                async for d in db.member_id_docs.find({}, {"_id": 0, "user_id": 1, "people": 1})}
+        return [(r, docs.get(r["member_id"], {}).get(r["person"]) or {}) for r in await _active_people()]
+
+    def _pending(pairs) -> list:
+        return [(r, c, p[f"{c}_file"]) for r, p in pairs for c in CARDS
+                if p.get(f"{c}_file") and not p.get(f"{c}_name") and not p.get(f"{c}_name_tried")]
+
+    @router.get("/id-docs/name-report")
+    async def name_report(admin: dict = Depends(require_admin)):
+        pairs = await _rows_with_docs()
+        rows = []
+        for r, p in pairs:
+            row = {**r}
+            for c in CARDS:
+                if c in SELF_ONLY and r["person"] != "self":
+                    row[c] = None
+                    continue
+                n = p.get(f"{c}_name") or ""
+                row[c] = {"name": n, "scan": bool(p.get(f"{c}_file")), "unread": bool(p.get(f"{c}_file")) and not n,
+                          "match": name_exact(n, r["person_name"]) if n else None}
+            rows.append(row)
+        rows.sort(key=lambda x: ((x["member_name"] or "").lower(), ["self", *PARENTS].index(x["person"])))
+        return {"rows": rows, "pending_rereads": len(_pending(pairs))}
+
+    @router.post("/id-docs/reread-names")
+    async def reread_names(limit: int = 6, admin: dict = Depends(require_admin)):
+        todo = _pending(await _rows_with_docs())
+        batch = todo[:max(1, min(limit, 12))]
+        sem = asyncio.Semaphore(3)
+
+        async def one(r, card, meta):
+            async with sem:
+                try:
+                    data, _ = await asyncio.to_thread(get_object, meta["path"])
+                    det = await read_id_card(data, meta["content_type"], card)
+                except Exception:
+                    det = None
+                await _store_card_name(r["member_id"], r["person"], card, (det or {}).get("name"))
+                return bool((det or {}).get("name"))
+
+        got = await asyncio.gather(*(one(*t) for t in batch))
+        return {"done": len(batch), "named": sum(got), "remaining": len(todo) - len(batch)}
 
     # ---- Weekly passport-expiry WhatsApp list -----------------------------
     async def _expiring_rows(today: str) -> list:

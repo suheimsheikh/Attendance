@@ -10,11 +10,12 @@ const MISSING = {
   aadhaar: { label: "Missing Aadhaar", test: (r) => !r.aadhaar || !r.aadhaar_scan },
   passport: { label: "Missing passport", test: (r) => !r.passport || !r.passport_scan },
   expiring: { label: "Passport expired / expiring ≤ 6 months", test: (r) => r.passport_status === "expired" || r.passport_status === "soon" },
-  scans: { label: "Missing scans only", test: (r) => !r.pan_scan || !r.aadhaar_scan || !r.passport_scan },
+  birth: { label: "Missing birth certificate (members only)", test: (r) => r.person === "self" && (!r.birth || !r.birth_scan) },
+  scans: { label: "Missing scans only", test: (r) => !r.pan_scan || !r.aadhaar_scan || !r.passport_scan || r.birth_scan === false },
   all: { label: "Show everyone", test: () => true },
 };
 const COLS = ["member_name", "person", "person_name", "category", "pan", "pan_scan", "aadhaar", "aadhaar_scan",
-  "passport", "passport_scan", "passport_expiry", "passport_status"];
+  "passport", "passport_scan", "passport_expiry", "passport_status", "birth", "birth_scan"];
 const EXPIRY_STYLE = { expired: "bg-rose-100 text-rose-700", soon: "bg-amber-100 text-amber-800", ok: "text-slate-600" };
 const Expiry = ({ r, tid }) => (r.passport_expiry
   ? <span className={`px-1.5 rounded text-xs font-semibold ${EXPIRY_STYLE[r.passport_status]}`} data-testid={tid}
@@ -29,7 +30,7 @@ const Cell = ({ ok, text, tid }) => (ok
 function downloadCsv(rows) {
   // Leading = + - @ would run as a spreadsheet formula — prefix with '.
   const esc = (v) => `"${String(v ?? "").replace(/^([=+\-@\t])/, "'$1").replace(/"/g, '""')}"`;
-  const body = [COLS.join(","), ...rows.map((r) => COLS.map((c) => esc(typeof r[c] === "boolean" ? (r[c] ? "yes" : "MISSING") : r[c])).join(","))];
+  const body = [COLS.join(","), ...rows.map((r) => COLS.map((c) => esc(r[c] === null ? "n/a" : typeof r[c] === "boolean" ? (r[c] ? "yes" : "MISSING") : r[c])).join(","))];
   const url = URL.createObjectURL(new Blob([body.join("\n")], { type: "text/csv" }));
   const a = Object.assign(document.createElement("a"), { href: url, download: "missing-id-documents.csv" });
   a.click();
@@ -97,6 +98,8 @@ export default function IdReport() {
               <th className="text-left p-2" title="Passport number on file">Passport no.</th>
               <th className="text-left p-2" title="Passport scan uploaded">Passport scan</th>
               <th className="text-left p-2" title="Passport expiry — red: expired, amber: within 6 months">Expiry</th>
+              <th className="text-left p-2" title="Birth certificate number (members only)">Birth cert no.</th>
+              <th className="text-left p-2" title="Birth certificate scan uploaded (members only)">Birth scan</th>
             </tr>
           </thead>
           <tbody>
@@ -115,10 +118,12 @@ export default function IdReport() {
                   <td className="p-2"><Cell ok={!!r.passport} text={r.passport} tid={`${tid}-passport`} /></td>
                   <td className="p-2"><Cell ok={r.passport_scan} tid={`${tid}-passport-scan`} /></td>
                   <td className="p-2"><Expiry r={r} tid={`${tid}-passport-expiry`} /></td>
+                  <td className="p-2">{r.person === "self" ? <Cell ok={!!r.birth} text={r.birth} tid={`${tid}-birth`} /> : <span className="text-slate-300 text-xs">n/a</span>}</td>
+                  <td className="p-2">{r.person === "self" ? <Cell ok={r.birth_scan} tid={`${tid}-birth-scan`} /> : <span className="text-slate-300 text-xs">n/a</span>}</td>
                 </tr>
               );
             })}
-            {!shown.length && <tr><td colSpan={10} className="p-8 text-center text-slate-400" data-testid="id-report-empty">Nothing missing for this filter.</td></tr>}
+            {!shown.length && <tr><td colSpan={12} className="p-8 text-center text-slate-400" data-testid="id-report-empty">Nothing missing for this filter.</td></tr>}
           </tbody>
         </table>
       </div>

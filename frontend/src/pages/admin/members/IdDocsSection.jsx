@@ -4,14 +4,16 @@ import { toast } from "sonner";
 import { api, showApiError } from "../../../api";
 
 const PEOPLE_LABEL = { self: "Member", father: "Father", mother: "Mother", guardian: "Guardian" };
-const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar", passport: "Passport" };
+const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar", passport: "Passport", birth: "Birth certificate" };
 const CARDS = ["pan", "aadhaar", "passport"];
-const PLACEHOLDER = { pan: "ABCDE1234F", aadhaar: "1234 5678 9012", passport: "Z1234567" };
+const cardsFor = (p) => (p === "self" ? [...CARDS, "birth"] : CARDS);
+const PLACEHOLDER = { pan: "ABCDE1234F", aadhaar: "1234 5678 9012", passport: "Z1234567", birth: "Registration no." };
+const norm = (s) => (s || "").toUpperCase().split(/\s+/).filter(Boolean).join(" ");
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
 
 // Shown after a scan is read: confirm the auto-filled number, or pick between
 // the typed one and the scanned one. Name mismatch is a warning only.
-function DetectedBar({ card, d, onConfirm, onUseScanned, onDismiss, onUseName, tid }) {
+function DetectedBar({ card, d, onConfirm, onUseScanned, onDismiss, onUseName, onUseDob, tid }) {
   return (
     <div className="mt-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 space-y-1" data-testid={`${tid}-detected`}>
       {d.mode === "choose" ? (
@@ -25,24 +27,31 @@ function DetectedBar({ card, d, onConfirm, onUseScanned, onDismiss, onUseName, t
       ) : (
         <>
           <div>Detected {CARD_LABEL[card]} from scan: <b className="font-mono">{d.number}</b>
-            {d.expiry && <> · expires <b>{d.expiry}</b></>}. Please check it&apos;s correct.</div>
+            {d.expiry && <> · expires <b>{d.expiry}</b></>}{d.dob && <> · born <b>{d.dob}</b></>}. Please check it&apos;s correct.</div>
           <div className="flex gap-1.5">
             <button type="button" data-testid={`${tid}-confirm`} onClick={onConfirm} className="px-2 h-6 rounded bg-emerald-600 text-white font-semibold">Confirm &amp; save</button>
             <button title="Edit this item" type="button" data-testid={`${tid}-edit`} onClick={onDismiss} className="px-2 h-6 rounded border border-amber-400 font-semibold">Edit</button>
           </div>
         </>
       )}
-      {d.name_matches === false && (
+      {d.name_matches === false && (card === "passport" ? (
         <div className="text-rose-700 font-semibold" data-testid={`${tid}-name-warning`}>
-          Name is NOT exactly the same — {CARD_LABEL[card]}: &ldquo;{d.name}&rdquo; · database: &ldquo;{d.expected_name}&rdquo;.
-          {d.name_locked ? (
-            <span className="ml-1.5 font-normal text-slate-600" data-testid={`${tid}-name-locked`}>
-              The database name follows the passport (passport wins) — check this card instead.</span>
-          ) : (
-            <button type="button" onClick={onUseName} data-testid={`${tid}-use-name`}
-              title={`Replace the name in the database with the ${CARD_LABEL[card]} name`}
-              className="ml-1.5 px-2 h-6 rounded bg-rose-600 text-white font-semibold">Use {CARD_LABEL[card]} name</button>
-          )}
+          Name is NOT exactly the same — passport: &ldquo;{d.name}&rdquo; · app: &ldquo;{d.expected_name}&rdquo;.
+          <button type="button" onClick={onUseName} data-testid={`${tid}-use-name`}
+            title="Replace the name in the app with the passport name (normal capitals)"
+            className="ml-1.5 px-2 h-6 rounded bg-rose-600 text-white font-semibold">Use passport name</button>
+        </div>
+      ) : (
+        <div className="rounded bg-rose-600 text-white font-semibold px-2 py-1" data-testid={`${tid}-name-warning`}>
+          Name mismatch — {CARD_LABEL[card]}: &ldquo;{d.name}&rdquo; · app: &ldquo;{d.expected_name}&rdquo;.
+          <span className="font-normal"> The {CARD_LABEL[card]} name can&apos;t be changed here — the app name follows the passport only.</span>
+        </div>
+      ))}
+      {card === "birth" && d.dob && d.dob !== d.expected_dob && (
+        <div className="text-slate-800" data-testid={`${tid}-dob-diff`}>
+          Date of birth on certificate <b>{d.dob}</b> · app: <b>{d.expected_dob || "not set"}</b>
+          <button type="button" onClick={onUseDob} data-testid={`${tid}-use-dob`} title="Set the member's date of birth in the app to the certificate date"
+            className="ml-1.5 px-2 h-6 rounded bg-sky-600 text-white font-semibold">Use this date of birth</button>
         </div>
       )}
     </div>
@@ -50,7 +59,7 @@ function DetectedBar({ card, d, onConfirm, onUseScanned, onDismiss, onUseName, t
 }
 
 // One card (PAN or Aadhaar) for one person: number + single scan.
-function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onUploaded, expiry, onExpiry }) {
+function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onUploaded, extra, onExtra, cardName, appName }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const base = `/members/${memberId}/id-docs/${person}/${card}`;
@@ -89,10 +98,16 @@ function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onU
       <label className="iu-label">{CARD_LABEL[card]} number</label>
       <input data-testid={`${tid}-number`} value={value || ""} onChange={(e) => onChange(e.target.value)}
         className="iu-input font-mono text-xs uppercase" placeholder={PLACEHOLDER[card]} />
-      {card === "passport" && (
+      {(card === "passport" || card === "birth") && (
         <div className="mt-1.5">
-          <label className="iu-label">Passport expiry</label>
-          <input type="date" data-testid={`${tid}-expiry`} value={expiry || ""} onChange={(e) => onExpiry(e.target.value)} className="iu-input text-xs" />
+          <label className="iu-label">{card === "passport" ? "Passport expiry" : "Date of birth (on certificate)"}</label>
+          <input type="date" data-testid={`${tid}-${card === "passport" ? "expiry" : "dob"}`} value={extra || ""} onChange={(e) => onExtra(e.target.value)} className="iu-input text-xs" />
+        </div>
+      )}
+      {cardName && (
+        <div data-testid={`${tid}-card-name`} title="Name read from the scan"
+          className={`mt-1 text-[11px] ${norm(cardName) === norm(appName) ? "text-emerald-700" : "text-rose-700 font-semibold"}`}>
+          Name on card: {cardName}{norm(cardName) !== norm(appName) && " — doesn't match app name"}
         </div>
       )}
       <div className="flex items-center gap-1.5 mt-1.5 text-[11px]">
@@ -127,7 +142,8 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
     setDoc(d);
     setNums(Object.fromEntries((d.allowed_people || []).map((p) => {
       const x = d.people?.[p] || {};
-      return [p, { pan: x.pan || "", aadhaar: x.aadhaar || "", passport: x.passport || "", passport_expiry: x.passport_expiry || "" }];
+      return [p, { pan: x.pan || "", aadhaar: x.aadhaar || "", passport: x.passport || "", passport_expiry: x.passport_expiry || "",
+        ...(p === "self" ? { birth: x.birth || "", birth_dob: x.birth_dob || "" } : {}) }];
     })));
   };
   useEffect(() => { api.get(`/members/${memberId}/id-docs`).then(applyDoc).catch(() => {}); }, [memberId]);
@@ -151,20 +167,32 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
     if (current && current !== d.number) { setDetected((x) => ({ ...x, [k]: { ...d, mode: "choose", current } })); return; }
     setNum(p, card, d.number);
     if (card === "passport" && d.expiry) setNum(p, "passport_expiry", d.expiry);
+    if (card === "birth" && d.dob) setNum(p, "birth_dob", d.dob);
     setDetected((x) => ({ ...x, [k]: { ...d, mode: "confirm" } }));
   };
-  const applyCardName = async (p, card) => {
+  const applyPassportName = async (p, card) => {
     const k = `${p}.${card}`;
     try {
-      const res = await api.post(`/members/${memberId}/id-docs/${p}/${card}/use-name`, { name: detected[k].name });
+      const res = await api.post(`/members/${memberId}/id-docs/${p}/passport/use-name`, { name: detected[k].name });
       onNameChanged?.(res.field, res.name);
+      setDoc((x) => ({ ...x, app_names: { ...x.app_names, [p]: res.name } }));
       setDetected((x) => ({ ...x, [k]: { ...x[k], name_matches: true, expected_name: res.name } }));
       toast.success(`Name updated to "${res.name}"`);
     } catch (err) { showApiError(err, "Couldn't update the name"); }
   };
+  const applyDob = async (p, card) => {
+    const k = `${p}.${card}`;
+    try {
+      const res = await api.post(`/members/${memberId}/id-docs/self/birth/use-dob`, { dob: detected[k].dob });
+      onNameChanged?.(res.field, res.dob);
+      setDetected((x) => ({ ...x, [k]: { ...x[k], expected_dob: res.dob } }));
+      toast.success(`Date of birth set to ${res.dob}`);
+    } catch (err) { showApiError(err, "Couldn't update the date of birth"); }
+  };
   const confirm = async (p, card, number) => {
     const d = detected[`${p}.${card}`] || {};
-    const people = { ...nums, [p]: { ...nums[p], [card]: number, ...(card === "passport" && d.expiry ? { passport_expiry: d.expiry } : {}) } };
+    const extra = card === "passport" && d.expiry ? { passport_expiry: d.expiry } : card === "birth" && d.dob ? { birth_dob: d.dob } : {};
+    const people = { ...nums, [p]: { ...nums[p], [card]: number, ...extra } };
     if (await save(people)) clearDetected(`${p}.${card}`);
   };
 
@@ -172,7 +200,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
   return (
     <div className="pt-3 mt-3 border-t border-slate-100" data-testid="id-docs-section">
       <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1.5">
-        <IdCard size={13} /> PAN, Aadhaar &amp; Passport (admins only)
+        <IdCard size={13} /> PAN, Aadhaar, Passport &amp; Birth certificate (admins only)
       </div>
       <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-3" data-testid="id-docs-tip">
         One file per card. Scan the <b>front and back together into one clear PDF</b> (or a photo) — max 10 MB.
@@ -183,12 +211,14 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
           <div key={p} data-testid={`id-person-${p}`}>
             <div className="text-xs font-bold text-slate-700 mb-1.5">{PEOPLE_LABEL[p]}</div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {CARDS.map((card) => (
+              {cardsFor(p).map((card) => (
                 <div key={card}>
                   <IdCardField memberId={memberId} person={p} card={card}
                     value={nums[p]?.[card]} file={doc.people?.[p]?.[`${card}_file`]}
                     onChange={(v) => setNum(p, card, v)} onDoc={applyDoc}
-                    expiry={nums[p]?.passport_expiry} onExpiry={(v) => setNum(p, "passport_expiry", v)}
+                    extra={nums[p]?.[card === "birth" ? "birth_dob" : "passport_expiry"]}
+                    onExtra={(v) => setNum(p, card === "birth" ? "birth_dob" : "passport_expiry", v)}
+                    cardName={doc.people?.[p]?.[`${card}_name`]} appName={doc.app_names?.[p]}
                     onUploaded={(res) => onUploaded(p, card, res)} />
                   {detected[`${p}.${card}`] && (
                     <DetectedBar card={card} d={detected[`${p}.${card}`]} tid={`id-${p}-${card}`}
@@ -197,7 +227,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
                         setNum(p, card, detected[`${p}.${card}`].number);
                         setDetected((x) => ({ ...x, [`${p}.${card}`]: { ...x[`${p}.${card}`], mode: "confirm" } }));
                       }}
-                      onDismiss={() => clearDetected(`${p}.${card}`)} onUseName={() => applyCardName(p, card)} />
+                      onDismiss={() => clearDetected(`${p}.${card}`)} onUseName={() => applyPassportName(p, card)} onUseDob={() => applyDob(p, card)} />
                   )}
                 </div>
               ))}
