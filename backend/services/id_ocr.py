@@ -29,6 +29,10 @@ _PROMPT = {
     "birth": "This is a birth certificate. Reply ONLY with JSON "
              '{"number": "<registration / certificate number or null>", "name": "<name of the CHILD (not the parents) exactly as printed, or null>", '
              '"dob": "<date of birth as YYYY-MM-DD or null>"}.',
+    "marksheet": "This is a school / college / exam marksheet or report card. Reply ONLY with JSON "
+                 '{"name": "<student name exactly as printed, or null>", "exam_name": "<exam name, e.g. SSC Class X Board Exam, or null>", '
+                 '"month": <exam month 1-12 or null>, "year": <exam year as 4 digits or null>, '
+                 '"board": "<board / university / school name or null>", "result": "<overall percentage, CGPA or grade as printed, or null>"}.',
     "auto": "This is a scan of an Indian PAN card, Aadhaar card, a passport data page or a birth certificate. Reply ONLY with JSON "
             '{"type": "pan" | "aadhaar" | "passport" | "birth" | null, "number": "<PAN like ABCDE1234F, 12-digit Aadhaar digits only, '
             'passport number, or birth registration number; null if unreadable>", "name": "<holder name (for a birth certificate: the child) or null>", '
@@ -86,7 +90,7 @@ def name_matches(card_name: Optional[str], expected: Optional[str]) -> Optional[
 
 async def _ask(path: str, content_type: str, card: str) -> str:
     chat = LlmChat(api_key=os.environ["EMERGENT_LLM_KEY"], session_id=f"idocr-{uuid.uuid4().hex}",
-                   system_message="You read Indian ID cards and reply with JSON only.").with_model(*MODEL)
+                   system_message="You read Indian ID cards, certificates and marksheets and reply with JSON only.").with_model(*MODEL)
     text = ""
     msg = UserMessage(text=_PROMPT[card], file_contents=[FileContentWithMimeType(file_path=path, mime_type=content_type)])
     async for ev in chat.stream_message(msg):
@@ -131,3 +135,25 @@ async def read_id_card(data: bytes, content_type: str, card: str) -> Optional[di
     finally:
         if path:
             os.unlink(path)
+
+
+async def read_marksheet(data: bytes, content_type: str) -> Optional[dict]:
+    """Best-effort read of a marksheet; None when the AI can't be reached."""
+    path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=_EXT.get(content_type, ""), delete=False) as f:
+            f.write(data)
+            path = f.name
+        out = _parse(await _ask(path, content_type, "marksheet"))
+    except Exception:
+        logger.warning("Marksheet OCR failed", exc_info=True)
+        return None
+    finally:
+        if path:
+            os.unlink(path)
+    txt = lambda k, n: (" ".join(str(out.get(k) or "").split())[:n] or None) if str(out.get(k) or "").lower() != "null" else None
+    num = lambda k: int(out[k]) if str(out.get(k) or "").isdigit() else None
+    month, year = num("month"), num("year")
+    return {"name": txt("name", 120), "exam_name": txt("exam_name", 120), "board": txt("board", 120),
+            "result": txt("result", 40), "month": month if month and 1 <= month <= 12 else None,
+            "year": year if year and 1980 <= year <= 2100 else None}

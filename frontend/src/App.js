@@ -29,6 +29,7 @@ const Recipes = lazy(() => import("./pages/admin/Recipes"));
 const MealsCalendar = lazy(() => import("./pages/admin/MealsCalendar"));
 const Members = lazy(() => import("./pages/admin/Members"));
 const IdDocuments = lazy(() => import("./pages/admin/IdDocuments"));
+const Education = lazy(() => import("./pages/admin/Education"));
 const Devices = lazy(() => import("./pages/admin/Devices"));
 const OfficeSettings = lazy(() => import("./pages/admin/Office"));
 const Reports = lazy(() => import("./pages/admin/Reports"));
@@ -173,6 +174,7 @@ function App() {
             <Route path="admin/roles" element={<RequireAdmin><Roles /></RequireAdmin>} />
             <Route path="admin/members" element={<RequireAdmin><Members /></RequireAdmin>} />
             <Route path="admin/id-documents" element={<RequireAdmin><IdDocuments /></RequireAdmin>} />
+            <Route path="admin/education" element={<RequireAdmin><Education /></RequireAdmin>} />
             <Route path="admin/masters" element={<RequireAdmin><Masters /></RequireAdmin>} />
             <Route path="admin/approvals" element={<RequireAdmin><Approvals /></RequireAdmin>} />
             {/* Legacy direct links — keep deep-links working but funnel into Approvals.

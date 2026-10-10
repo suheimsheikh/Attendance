@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import {
-  Users, ClipboardCheck, Settings, ChefHat, ListTodo, LogOut, Menu, Sparkles, PanelLeftClose,
+  Users, ClipboardCheck, Settings, ChefHat, ListTodo, LogOut, Menu, Sparkles, PanelLeftClose, GraduationCap,
 } from "lucide-react";
 import RulesGate from "./RulesGate";
 import Avatar from "./Avatar";
@@ -245,6 +245,9 @@ export default function Layout() {
                 <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
               ))}
             </SystemGroup>
+
+            <NavItem to="/admin/education" label="Education" icon={GraduationCap} onClick={() => setOpen(false)}
+                     hint="Marksheets for athletes & coaches — scan, upload and track exams" />
 
             <SystemGroup label="System" tone="slate" icon={Settings}
                          count={NAV_SYSTEM.length}

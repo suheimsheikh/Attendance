@@ -2907,6 +2907,8 @@ app.include_router(_checkin_approvals_router(db, require_admin, write_audit))
 
 from routes.id_docs import make_router as _id_docs_router  # noqa: E402
 app.include_router(_id_docs_router(db, require_admin))
+from routes.education import make_router as _education_router  # noqa: E402
+app.include_router(_education_router(db, require_admin))
 from routes.dar import make_router as _dar_router  # noqa: E402
 app.include_router(_dar_router(db, get_current_user, require_admin, valid_grid_key, write_audit))
 
