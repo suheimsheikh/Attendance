@@ -2,6 +2,16 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-10-10 — Safe refactor batch (#1–#7 + Office panel extraction)
+Across-app refactor pass (functional code review, ruff + ESLint). All behaviour-preserving; iter106 regression 100% (backend 8/8 pytest, all frontend pages load, no console errors, employees unaffected, athlete grid correct).
+- **#1** Hoisted duplicate `STEP_OUT_DURATIONS` to `frontend/src/utils/stepOut.js`; imported by `SelfCheckIn.jsx` + `EscortCheckIn.jsx`.
+- **#2/#4** Unified athlete-category logic on `services.scope.athlete_like_keys` (DB categories master). Removed 3 reimplementations: `reports/__init__._athlete_like_keys` now delegates; `masters.py` bulk-fleet + `meals/purchases.py` expense-report inline queries replaced. **Latent fix:** `dashboard.py` (athlete count + sparkline) and `dar.py` admin filter were hardcoding `("athlete","elite")` and silently miscounting any custom `is_athlete_like` category — now DB-driven. `attendance_calc.ATHLETE_CATEGORIES` references the shared `DEFAULT_ATHLETE_LIKE` constant.
+- **#3** Lint hygiene: removed 88 stale `# noqa` (RUF100) across backend source + 19 unused test imports/vars. Left the re-export hubs (`meals/common.py`, `reports/common.py`) untouched (intentional re-exports).
+- **#7** Added `time_utils.to_utc_iso()`; replaced repeated `.astimezone(timezone.utc).isoformat()` in `tasks.py`, `corrections.py`, `admin_tools.py`, `attendance_calc.py` (dropped now-unused `timezone` imports).
+- **#8 (partial, safe only):** Extracted the three self-contained Office panels — `ServiceTokenPanel`, `NotifyTemplatesPanel`, `WhatsappGroupsPanel` — into `frontend/src/pages/admin/office/`. `Office.jsx` 1070→744 lines. The riskier monolith splits (`SelfCheckIn.jsx`, `MealEntryTab.jsx`, `server.py` `presence`/`compute_hours_report`) were DEFERRED per user ("nothing risky for now") — they need characterization tests first.
+- Rules: `put_rules` now validates `required_categories` against the categories master (custom categories can be required) with the seeded five as fallback.
+
+
 ## 2026-10-10 — Athlete camp/regatta-only attendance + Marks progress chart
 - Grid (`routes/reports/grid.py`, `_grid_impl`): athletes (athlete-like categories) are now marked for attendance ONLY on designated camp **and regatta** days. `_expected_dates` is now the UNION of camp days (camp_active_on + camp_applies_to) and regatta days (every calendar day in a regatta window where the athlete is in `regattas.team_ids`). `_classify` returns "" (blank, excluded from all totals) for athlete-like members on any non-designated day — AFTER the manual override check, so PayCraft/admin cell edits still win. On a designated day a no-show still paints AB. Employees (staff/coach/exec) unaffected. Camps+regattas fetched via one asyncio.gather; deduped 3× `_athlete_like_keys` calls to 1.
   - Verified: camp weekend (Jun 27/28, Agape athletes → P on camp days only, all else blank); temp regatta Oct 2-4 → enrolled athlete AB on those 3 days only (temp data cleaned up); employees still fully marked (109/109 in June); future designated days stay blank until elapsed.

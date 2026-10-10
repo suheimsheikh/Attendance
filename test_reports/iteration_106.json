@@ -1,0 +1,28 @@
+{
+  "summary": "iter106 regression — athlete-only grid change + behaviour-preserving refactors (dashboard athlete_like_keys, DAR, rules required_categories validation, meals expense report, Office panel extraction, Education marks chart wiring, STEP_OUT_DURATIONS extraction, time_utils.to_utc_iso). Backend: 8/8 pytest cases in /app/backend/tests/test_iter106_regression.py pass. Ad-hoc per-cell inspection confirms: June 2026 athlete grid has 7/65 members with marks (only Agape Home camp sat/sun days — P ×13 + 1 AB), October 2026 athlete grid is 0/63 non-blank (all blank, as expected with no camps/regattas), June 2026 rest grid is 109/109 with full normal P/AB/WO/LT/LV/CO/NJ/TR distribution — no regression on employees. Frontend verified on preview admin session: /admin/dashboard loads (text=Dashboard visible), /admin/dar loads with category combobox, /rules loads with 'Attendance Rules' heading, /admin/office renders all three extracted panels — whatsapp-groups-panel, notify-templates-panel, service-token-panel — plus wa-groups-save and notify-tpl-save (both clickable without throwing), /admin/education loads with Athletes(63) + Coaches(12) tree expandable, /check-in and /escort-checkin pages load with no runtime pageerror. No console pageerrors fired on any route.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter106_regression.py",
+    "/app/test_reports/pytest/iter106.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/rules.py put_rules: valid_cats falls back to a hard-coded 5-element set when the categories master is empty — fine for seeded tenants, but note this bypass still allows those five keys even if an admin has explicitly deleted them from the master. Minor.",
+    "routes/rules.py put_rules: silently drops unknown category keys from required_categories (no 400). Spec-compliant per the request wording ('saves only valid category keys') but the client has no signal that one of its submitted keys was rejected. Consider returning the dropped keys in the response for admin UX.",
+    "routes/reports/grid.py _grid_impl: _expected_dates = camps UNION regattas for athlete-like users means a day with ONLY a holiday/break but no camp will blank out — correct per spec ('athletes marked only on designated camp/regatta days') but admins should be aware a HO on an athlete row will no longer show.",
+    "Office panel saves (wa-groups-save, notify-tpl-save) don't surface a visible toast on click when nothing has changed — fine functionally, but a short 'Saved' confirmation would improve UX. Not a bug.",
+    "frontend /check-in and /escort-checkin: STEP_OUT_DURATIONS extraction verified by no runtime error on page load; quick-pick buttons only render when a step-out is active (not reproduced without a live step-out session) — behaviour unchanged on static load.",
+    "Education page: with 0 marksheets in DB the MarksChart simply doesn't render (confirmed) — expected per task description."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter106_regression.py"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (all target pages load, all Office testids present and save buttons clickable, education tree expands, check-in pages load without pageerror)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (Admin sign-in-with-email toggle on /login)",
+  "seed_data_creation": "None. Rules PUT round-trip submits the existing required_categories so no persistent change; bogus-cat variant is filtered server-side and does not persist.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Grid API shape: {month,start,end,today,days,rows[]}; each row has cells[] (list, index = day of month), cell_meta[], totals. For October-2026/category=athlete the cells arrays are entirely falsy — use `sum(1 for v in row.cells if v)` to validate blank-grid behaviour. For June-2026/category=athlete only enrolled Agape Home athletes get P on sat/sun. PUT /api/admin/rules (NOT /admin/rules/{id}) is the only rules editor endpoint. On /login the admin flow is behind data-testid=toggle-admin-login before the email+password form appears. Dispatch overlay auto-pops on admin landing — dismiss with 'Not now'.",
+  "rca of the issue": "N/A — no bugs found."
+}
