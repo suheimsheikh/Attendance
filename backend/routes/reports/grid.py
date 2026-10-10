@@ -371,7 +371,7 @@ def register(router, *, _athlete_like_keys, db, require_admin):
         # Employees (staff/coach/exec) are unaffected.
         from camps import camp_active_on as _camp_active_on, camp_applies_to as _camp_applies_to
         _WK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-        _athlete_like_absent = await _athlete_like_keys(db)
+        _athlete_like_absent = athlete_like
         _cat_by_uid = {u["id"]: (u.get("category") or "") for u in users}
         _camps_range, _regattas_range = await asyncio.gather(
             db.camps.find(
@@ -421,7 +421,7 @@ def register(router, *, _athlete_like_keys, db, require_admin):
         # Athlete-like categories are tracked via Breaks, not payroll
         # absence — the weekly-off "sandwich" rule below is an EMPLOYEE
         # rule, so we skip it for them.
-        sandwich_athlete_like = await _athlete_like_keys(db)
+        sandwich_athlete_like = athlete_like
         # DAR misses per employee (Sep 2026) — payroll deducts a day per miss.
         from services.dar import compute_missed_by_user
         dar_missed_by_user = await compute_missed_by_user(db, users, start_iso, end_iso, today_iso)

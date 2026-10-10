@@ -3,17 +3,28 @@ import { TrendingDown, TrendingUp, Minus } from "lucide-react";
 import { MONTHS } from "./MarksheetModal";
 
 // Pull an overall % (0-100) out of a free-text result like "86%",
-// "Overall 86.5%" or "88 / 100". Grades like "A1" return null and are
-// skipped — they can't be plotted on a % axis.
+// "Overall 86.5%" or "88 / 100". Grades ("A1"), CGPA/GPA, ranks and
+// non-/100 ratios ("9/10") return null and are skipped — they can't be
+// plotted on a % axis and would otherwise plot as a false dip.
 export function parsePct(result) {
   if (result == null) return null;
   const s = String(result);
-  const outOf = s.match(/(\d{1,3}(?:\.\d+)?)\s*\/\s*100\b/);
+  // Explicit percent or an "N / 100" ratio are always trustworthy.
   const pctMark = s.match(/(\d{1,3}(?:\.\d+)?)\s*%/);
+  if (pctMark) return clampPct(pctMark[1]);
+  const outOf100 = s.match(/(\d{1,3}(?:\.\d+)?)\s*\/\s*100\b/);
+  if (outOf100) return clampPct(outOf100[1]);
+  // Any other ratio (9/10, 5/7 …) is NOT a percentage — skip it.
+  if (/\d\s*\/\s*\d/.test(s)) return null;
+  // Grade-point / rank style entries are not percentages — skip them.
+  if (/\b(cgpa|gpa|grade|rank|out of)\b/i.test(s)) return null;
+  // Bare number entered as a plain percentage (e.g. "86").
   const bare = s.match(/\b(\d{1,3}(?:\.\d+)?)\b/);
-  const m = pctMark || outOf || bare;
-  if (!m) return null;
-  const n = parseFloat(m[1]);
+  return bare ? clampPct(bare[1]) : null;
+}
+
+function clampPct(raw) {
+  const n = parseFloat(raw);
   if (Number.isNaN(n) || n < 0 || n > 100) return null;
   return n;
 }

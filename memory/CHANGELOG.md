@@ -2,6 +2,13 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-10-10 — Athlete camp/regatta-only attendance + Marks progress chart
+- Grid (`routes/reports/grid.py`, `_grid_impl`): athletes (athlete-like categories) are now marked for attendance ONLY on designated camp **and regatta** days. `_expected_dates` is now the UNION of camp days (camp_active_on + camp_applies_to) and regatta days (every calendar day in a regatta window where the athlete is in `regattas.team_ids`). `_classify` returns "" (blank, excluded from all totals) for athlete-like members on any non-designated day — AFTER the manual override check, so PayCraft/admin cell edits still win. On a designated day a no-show still paints AB. Employees (staff/coach/exec) unaffected. Camps+regattas fetched via one asyncio.gather; deduped 3× `_athlete_like_keys` calls to 1.
+  - Verified: camp weekend (Jun 27/28, Agape athletes → P on camp days only, all else blank); temp regatta Oct 2-4 → enrolled athlete AB on those 3 days only (temp data cleaned up); employees still fully marked (109/109 in June); future designated days stay blank until elapsed.
+- Education: new **Overall % trend** sparkline per member (`education/MarksChart.jsx`, wired in `TreeNodes.jsx`). Inline SVG, oldest→newest, scaled to data range so dips pop; dots rose on a drop / emerald on a rise; shows latest % + net delta. `parsePct` accepts "86%", "88/100", bare "86"; rejects grades (A1), CGPA/GPA/rank and non-/100 ratios (9/10) so they don't plot as false dips. Renders null when <2 chartable points.
+- Code review (functional): READY WITH FIXES — fixed the one MEDIUM (parsePct bare-number false-dip). No grid regressions found.
+
+
 ## 2026-10-06 — Recalculate-late admin tool
 - New `POST /api/attendance/recalc-late` (super-admin only): re-runs `compute_late()` against the CURRENT schedule + office/camp grace for existing attendance rows over a date range (optional single member, else all). `dry_run=true` (default) previews before/after; `dry_run=false` applies and stamps `late_recalc_at`/`late_recalc_by`. Uses the same `_active_camp_for` overlay as the check-in path for fidelity.
 - Frontend: "Recalculate late arrivals" panel on Rectify Data (DataQuality.jsx) with member picker (All + list), From/To (defaults this month), Preview (shows scanned/changed + a was→now table) and a Super-Admin Apply button. Mirrors the existing dedupe panel.
