@@ -1,0 +1,32 @@
+{
+  "summary": "iter105 — Education tree (athletes & coaches) + marksheet CRUD + AI /read. Backend: /app/backend/tests/test_education_iter105.py — 10/10 passing (admin-only tree, A→Z + newest-first ordering with full _public shape incl. name_matches/has_file/file_name; CRUD lifecycle incl. file upload+download+delete; whitespace exam → 400, month=13 → 400, year=1970 → 400; bad content-type → 400; >10MB → 400; one real-Gemini /education/read call on a synthetic PIL PNG marksheet returned a well-shaped detected={name,exam_name,month,year,board,result,expected_name,name_matches}). Frontend verified live on preview admin session: sidebar nav-education visible → /admin/education loads education-page + education-tree; both edu-root-athletes (count 63) and edu-root-coaches present with toggles; expand-all exposes 450 edu-member-* testids (member + its sub-testids like -toggle/-count/-add/-edit-member/-sheets); existing Coach Test member (4fe13a88-b6ef-4a28-b514-ada5f238c580) has -add, -edit-member, -toggle, -sheets; clicking add opens marksheet-modal with marksheet-save disabled until exam/month/year filled (verified transition disabled→enabled); marksheet-exam / marksheet-month / marksheet-year all computed bg = rgb(255,241,118) (#fff176, global yellow rule honoured on inputs AND selects); marksheet-cancel closes modal; edit-member opens the MemberForm overlay (verified via role=dialog), closed with Escape without editing; education-search 'zzzxxxnope' renders 'No matches' label; education-collapse-all removes all -sheets lists. All marksheets created during backend tests were cleaned up via the admin DELETE in the per-test fixture.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_education_iter105.py",
+    "/app/test_reports/pytest/iter105.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/education.py _fields: raises 400 only after FastAPI's own Form(...) validation passes. Sending exam_name='' makes FastAPI return 422 (missing). Only whitespace-only strings reach _fields() → 400. Minor spec deviation but harmless; validated both paths in tests.",
+    "routes/education.py tree(): uses `is_ex_member(u)` to exclude ex-members after a coarse `active != False` + `archived != True` query. Correct per spec (active non-ex only).",
+    "routes/education.py _public: name_matches uses strict name_exact (same words same order, case/space ignored) — not the loose name_matches helper. Matches passport-style rule the spec asks for.",
+    "routes/education.py create/update: if file.filename is falsy the UploadFile branch is skipped silently — fine for empty-form uploads where frontend may still send an empty file part.",
+    "routes/education.py update(): sheet_name update is guarded by `is not None` (preserves old name if the client doesn't send the field). Frontend MarksheetModal always sends f.sheet_name (defaulting to '') so an edit that clears it will clear it. Spec-compliant.",
+    "services/id_ocr.py read_marksheet: entirely best-effort — any Gemini/network failure returns None and the route still responds 200 with {detected: null}. The test asserts both paths (returned a populated object in this run).",
+    "Education.jsx expandAll: when tree is null at mount, 'Expand all' is disabled; after load it iterates ROOTS and builds openMembers map. Correct.",
+    "MarksheetModal.jsx: strict exact rule mirrored on frontend via check.name_matches check from /education/read response (good). The sheet-{id}-name-warning chip title shows the stored sheet_name — nice for admins to see the mismatch at a glance.",
+    "TreeNodes.jsx SheetRow: uses `MONTHS[s.month - 1]` for the 'Mon YYYY' label — correct for 1-indexed months from the API.",
+    "Layout.jsx: Education is a top-level NavItem (not inside a SystemGroup) — matches 'top-level Education item' requirement; label 'Education' is lowercased + slugged to data-testid=nav-education by NavParts.NavItem."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_education_iter105.py"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (all critical selectors + yellow bg + modal gating + search/expand/collapse verified live)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (toggle-admin-login + login-email-input + login-password-input + login-submit-button)",
+  "seed_data_creation": "A throwaway athlete member (test_edu_<hex>@ishowedup-test.example.com, category=athlete) is created per test module and deleted at the end. Multiple marksheets are created during the lifecycle test and all deleted (either explicitly by the test or by the _tracked fixture teardown). No marksheets were left attached to the existing Coach Test member — the frontend run only opened and cancelled the add modal.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Education feature is wired end-to-end on the preview tenant (63 athletes, 12 coaches). The /education/read endpoint hits real Gemini — expect ~5–20s latency on image uploads. For CRUD validation note that empty-string exam_name returns 422 (FastAPI Form missing) while whitespace-only returns 400 (route-level). The yellow-input global rule in index.css covers <select> elements too (confirmed on marksheet-month). The dispatch overlay plus the LeaveReportPrompt ('Post today's Leave/Tour to WhatsApp', dismiss via 'Later') both appear after admin login in the preview DB — dismiss both before clicking the sidebar.",
+  "rca of the issue": "N/A — no bugs found. All 10 backend + 11 frontend assertions pass."
+}

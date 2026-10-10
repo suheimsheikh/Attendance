@@ -745,3 +745,7 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - OCR reads DOB from PAN/Aadhaar/passport (+birth). Self-only stored {card}_dob (birth_dob for birth). Reference DOB priority birth → passport → aadhaar → pan.
 - /members/{mid}/id-docs/self/{card}/use-dob: only when app DOB empty and card is reference (else 409). Name report → "Name & DOB mismatch" with DOB filters; bulk popup includes DOB. Re-read fills missing DOBs. Parents skipped.
 - Global CSS (index.css bottom): every editable input/textarea/select bright yellow #fff176. Tested iter 104.
+
+### Oct 2026 — Education (marksheets tree)
+- Top-level sidebar "Education" (/admin/education, admins only). Tree: Athletes (athlete_like_keys) / Coaches (coach) → members A→Z → marksheets newest first (year, month desc).
+- routes/education.py: GET /education/tree, POST /education/read (AI pre-fill, nothing saved), POST /education/members/{mid}/marksheets, PATCH/DELETE /education/marksheets/{id}, GET .../file. Collection `marksheets`; scans in object storage. Strict name check vs app name (sheet_name). Tested iter 105.
