@@ -25,18 +25,25 @@ _PROMPT = {
                '{"doc_type": "<identify the ACTUAL document in the image: pan, aadhaar, passport, birth, or other>", '
                '"number": "<12-digit Aadhaar number, digits only, or null>", "name": "<card holder name or null>", '
                '"father_name": "<father\'s / guardian name if printed (often after S/O or C/O) or null>", '
-               '"dob": "<full date of birth as YYYY-MM-DD, or null if only a year of birth is printed>"}.',
+               '"dob": "<full date of birth as YYYY-MM-DD, or null if only a year of birth is printed>", '
+               '"extra": {"gender": "<Male/Female/Other or null>", "address": "<full address printed or null>"}}.',
     "passport": "This is supposed to be a passport scan (data page, read the bottom father/mother fields too). Reply ONLY with JSON "
                 '{"doc_type": "<identify the ACTUAL document in the image: pan, aadhaar, passport, birth, or other>", '
                 '"number": "<passport number, letters/digits only, or null>", "surname": "<Surname field exactly as printed or null>", '
                 '"given_names": "<Given name(s) field exactly as printed or null>", "expiry": "<Date of expiry as YYYY-MM-DD or null>", '
                 '"father_name": "<Name of Father exactly as printed or null>", "mother_name": "<Name of Mother exactly as printed or null>", '
-                '"dob": "<Date of birth as YYYY-MM-DD or null>"}.',
+                '"dob": "<Date of birth as YYYY-MM-DD or null>", '
+                '"extra": {"place_of_birth": "<Place of Birth or null>", "place_of_issue": "<Place of Issue or null>", '
+                '"date_of_issue": "<Date of Issue as YYYY-MM-DD or null>", "nationality": "<nationality or null>", '
+                '"sex": "<M/F/other or null>", "file_number": "<File Number or null>"}}.',
     "birth": "This is supposed to be a birth certificate. Reply ONLY with JSON "
              '{"doc_type": "<identify the ACTUAL document in the image: pan, aadhaar, passport, birth, or other>", '
              '"number": "<registration / certificate number or null>", "name": "<name of the CHILD (not the parents) exactly as printed, or null>", '
              '"father_name": "<father\'s name exactly as printed or null>", "mother_name": "<mother\'s name exactly as printed or null>", '
-             '"dob": "<date of birth as YYYY-MM-DD or null>"}.',
+             '"dob": "<date of birth as YYYY-MM-DD or null>", '
+             '"extra": {"place_of_birth": "<place of birth or null>", "sex": "<Male/Female/Other or null>", '
+             '"date_of_registration": "<date of registration as YYYY-MM-DD or null>", '
+             '"registration_authority": "<issuing authority / registrar or null>", "address": "<address of parents or null>"}}.',
     "marksheet": "This is a school / college / exam marksheet or report card. Reply ONLY with JSON "
                  '{"name": "<student name exactly as printed, or null>", "exam_name": "<exam name, e.g. SSC Class X Board Exam, or null>", '
                  '"month": <exam month 1-12 or null>, "year": <exam year as 4 digits or null>, '
@@ -48,6 +55,14 @@ _PROMPT = {
             '"expiry": "<passport Date of expiry YYYY-MM-DD or null>", "dob": "<holder\'s full date of birth YYYY-MM-DD or null>"}.',
 }
 _EXT = {"application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+
+# Extra fields scraped per card and stored WITHOUT validation (user, Jun 2026).
+EXTRA_KEYS = {
+    "pan": [],
+    "aadhaar": ["gender", "address"],
+    "passport": ["place_of_birth", "place_of_issue", "date_of_issue", "nationality", "sex", "file_number"],
+    "birth": ["place_of_birth", "sex", "date_of_registration", "registration_authority", "address"],
+}
 
 
 def _parse(text: str) -> dict:
@@ -213,6 +228,16 @@ async def read_id_card(data: bytes, content_type: str, card: str) -> Optional[di
         if kind:
             dob = str(out.get("dob") or "")
             res["dob"] = dob if re.fullmatch(r"\d{4}-\d{2}-\d{2}", dob) else None
+            # Extra fields are scraped and stored AS-IS, no validation (user,
+            # Jun 2026) — only names, parents and DOB are validated elsewhere.
+            ex = out.get("extra") if isinstance(out.get("extra"), dict) else {}
+            extra = {}
+            for k in EXTRA_KEYS.get(kind, []):
+                v = ex.get(k, out.get(k))
+                v = " ".join(str(v).split())[:200] if v is not None else ""
+                if v and v.lower() not in ("null", "none", "n/a", "-"):
+                    extra[k] = v
+            res["extra"] = extra
         return res
     except Exception:
         logger.exception("ID OCR failed (%s)", card)

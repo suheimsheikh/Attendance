@@ -24,7 +24,7 @@ const STAGES = [
 
 // Plain-English rule hints shown under a mismatch so the admin knows what to fix.
 const HINT = {
-  dob: "Date-of-birth priority is Birth certificate › Passport › Aadhaar › PAN. Fix the app DOB or re-scan the clearer document.",
+  dob: "The date of birth is locked to the Birth certificate (then Passport › Aadhaar › PAN). A later card that differs is only flagged — it never changes the app DOB. Re-scan the clearer document if the birth DOB itself is wrong.",
   father: "Father's name must match across the app and every document. Correct whichever is wrong.",
   mother: "Mother's name must match across the app and every document. Correct whichever is wrong.",
 };
@@ -38,6 +38,30 @@ function MatchRow({ ok, label, cardVal, appVal, hint, tid }) {
       </div>
       <div className="mt-0.5 font-mono text-[11px]">on scan: &ldquo;{cardVal || "—"}&rdquo; · in app: &ldquo;{appVal || "—"}&rdquo;</div>
       <div className="mt-0.5 text-[11px] text-rose-700/90">{hint}</div>
+    </div>
+  );
+}
+
+// Extra scraped fields (stored as-is, no validation) shown read-only.
+const EXTRA_LABEL = {
+  gender: "Gender", sex: "Sex", address: "Address", nationality: "Nationality",
+  place_of_birth: "Place of birth", place_of_issue: "Place of issue", date_of_issue: "Date of issue",
+  file_number: "File number", date_of_registration: "Date of registration", registration_authority: "Issuing authority",
+};
+function ExtraDetails({ extra, tid }) {
+  const entries = Object.entries(extra || {});
+  if (!entries.length) return null;
+  return (
+    <div className="mt-1.5 rounded-md border border-slate-200 bg-white/70 px-2.5 py-1.5" data-testid={tid}>
+      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5">Scanned details</div>
+      <ul className="space-y-0.5 text-[11px]">
+        {entries.map(([k, v]) => (
+          <li key={k} className="flex gap-2">
+            <span className="text-slate-500 min-w-[92px] shrink-0">{EXTRA_LABEL[k] || k.replace(/_/g, " ")}</span>
+            <span className="text-slate-800 break-words">{v}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -140,12 +164,14 @@ function DetectedPanel({ card, d, onConfirm, onUseScanned, onDismiss, onUseDob, 
             className="px-3 h-7 rounded-md bg-sky-600 text-white font-semibold">Use this date of birth</button>
         </div>
       )}
+
+      <ExtraDetails extra={d.extra} tid={`${tid}-extra`} />
     </div>
   );
 }
 
 // A single card: number + optional extra date + scan upload/view/remove.
-function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onUploaded, extra, onExtra, cardName, appName, cardDob, wantDob, locked, onRemoveWarn, compact }) {
+function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onUploaded, extra, onExtra, cardName, appName, cardDob, wantDob, cardExtra, locked, onRemoveWarn, compact }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const base = `/members/${memberId}/id-docs/${person}/${card}`;
@@ -203,6 +229,7 @@ function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onU
           DOB on card: {cardDob}{cardDob !== wantDob && ` — doesn't match ${wantDob}`}
         </div>
       )}
+      <ExtraDetails extra={cardExtra} tid={`${tid}-extra`} />
       <div className="flex items-center gap-2 mt-2 text-[11px]">
         <input ref={inputRef} type="file" accept={ACCEPT} className="hidden" data-testid={`${tid}-file-input`} onChange={(e) => upload(e.target.files?.[0])} />
         <button type="button" data-testid={`${tid}-upload`} onClick={() => inputRef.current?.click()} disabled={busy || locked}
@@ -366,6 +393,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
         onExtra={(v) => setNum(p, card === "birth" ? "birth_dob" : "passport_expiry", v)}
         cardName={doc.people?.[p]?.[`${card}_name`]} appName={doc.app_names?.[p]}
         cardDob={p === "self" ? doc.people?.self?.[DOB_KEY[card]] : ""} wantDob={p === "self" ? wantDob : ""}
+        cardExtra={doc.people?.[p]?.[`${card}_extra`]}
         onUploaded={(res, preview) => onUploaded(p, card, res, preview)} {...opts} />
       {detected[`${p}.${card}`] && (
         <DetectedPanel card={card} d={detected[`${p}.${card}`]} tid={`id-${p}-${card}`}

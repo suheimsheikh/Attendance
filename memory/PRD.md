@@ -777,3 +777,7 @@ User request: "When issuing any item from the kitchen it should not allow if the
 
 ### Jun 2026 — Dropped the Split-names backfill
 - Removed the "Split names" button (Members.jsx) and POST /members/backfill-name-split (members.py). Rationale (user): birth certificate is the source of truth, so a bulk split just complicates things. Given name/Surname are now populated only by the Birth-certificate upload or a manual edit in the member form.
+
+### Jun 2026 — DOB lock + extra field scraping
+- DOB reference: upload_scan now compares a card's DOB to reference = app DOB else highest-priority card on file (birth first). Once a birth-certificate (or any reference) DOB is accepted, Aadhaar/PAN/Passport DOB differences are FLAGGED RED only — dob_can_apply requires no app_dob AND no ref_dob AND no higher card, so they can never change it. HINT.dob updated; use_card_dob already 409s on an existing app DOB.
+- Extra scrape-and-store (no validation, user rule): OCR prompts + read_id_card now also return an `extra` dict — Aadhaar: gender, address; Passport: place_of_birth, place_of_issue, date_of_issue, nationality, sex, file_number; Birth: place_of_birth, sex, date_of_registration, registration_authority, address. Stored at people.{person}.{card}_extra via _store_read; shown read-only in the DetectedPanel and persistently under each card (ExtraDetails in IdDocsSection.jsx). Only names/parents/athlete-DOB remain validated. Verified extraction via mocked OCR; app compiles.

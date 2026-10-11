@@ -282,10 +282,16 @@ def make_router(db, require_admin) -> APIRouter:
                     detected[f"{par}_matches"] = (name_match_status(cval, aval) == "exact") if cval and aval else None
                 app_dob = m.get("date_of_birth") or ""
                 stored = ((await _doc(mid)).get("people", {}).get("self") or {})
+                # Reference DOB = the app DOB, else the highest-priority card
+                # already on file (birth first). Once a birth-certificate DOB is
+                # accepted, the app DOB is locked — lower cards can only FLAG a
+                # mismatch in red, never change it (user, Jun 2026).
+                _, ref_dob = _ref_dob(stored, skip=card)
+                reference = app_dob or ref_dob
                 higher = [c for c in DOB_PRIORITY[:DOB_PRIORITY.index(card)] if stored.get(DOB_KEY[c])]
-                detected.update(expected_dob=app_dob,
-                                dob_matches=(detected.get("dob") == app_dob) if detected.get("dob") and app_dob else None,
-                                dob_can_apply=bool(detected.get("dob")) and not app_dob and not higher)
+                detected.update(expected_dob=reference,
+                                dob_matches=(detected.get("dob") == reference) if detected.get("dob") and reference else None,
+                                dob_can_apply=bool(detected.get("dob")) and not app_dob and not ref_dob and not higher)
             else:
                 detected.pop("dob", None)
         return {**_resp(await _doc(mid), m, people), "detected": detected}
@@ -428,6 +434,9 @@ def make_router(db, require_admin) -> APIRouter:
         name = " ".join((det.get("name") or "").split())[:120]
         if name and not have.get(f"{card}_name"):
             sets[f"people.{person}.{card}_name"] = name
+        # Extra scraped fields — stored as-is, no validation (user, Jun 2026).
+        if isinstance(det.get("extra"), dict) and det["extra"]:
+            sets[f"people.{person}.{card}_extra"] = det["extra"]
         if person == "self":
             sets[f"people.{person}.{card}_dob_tried"] = True
             if det.get("dob") and not have.get(DOB_KEY[card]) and (card != "birth" or only_missing is not None):
