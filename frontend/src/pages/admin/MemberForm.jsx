@@ -177,7 +177,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={guard.close}>
-      <div className="bg-white w-full md:max-w-lg rounded-t-2xl md:rounded-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="member-form">
+      <div className="bg-white w-full md:max-w-3xl lg:max-w-4xl rounded-t-2xl md:rounded-2xl p-6 md:p-8 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="member-form">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-extrabold">{isEdit ? "Edit member" : "New member"}</h2>
           <TopSaveButton formId="member-form-el" dirty={guard.dirty} saving={busy} testId="mf-top-save" />
@@ -193,11 +193,6 @@ export default function MemberForm({ initial, onClose, onSaved }) {
                   {photoBusy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Choose file
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => onPickPhoto(e.target.files?.[0])} />
                 </label>
-                {form.photo && (
-                  <button title="Remove this item" type="button" data-testid="mf-photo-clear" onClick={() => set("photo", "")} className="iu-btn-secondary !h-9 !px-3 text-red-600">
-                    <X size={14} /> Remove
-                  </button>
-                )}
               </div>
               <p className="text-[11px] text-slate-500 mt-1">Resized to 320 px for fast load.</p>
             </div>

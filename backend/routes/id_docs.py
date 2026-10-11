@@ -222,7 +222,15 @@ def make_router(db, require_admin) -> APIRouter:
         if detected:
             expected = m.get("full_name") if person == "self" else m.get(f"{person}_name")
             detected.update(expected_name=expected, name_matches=name_exact(detected["name"], expected))
+            # Parent-name cross-check (self only): compare the father/mother
+            # names read off the scan against the member's app data so the
+            # admin can spot a wrong parent name at any stage.
             if person == "self":
+                for par in ("father", "mother"):
+                    cval = detected.get(f"{par}_name")
+                    aval = m.get(f"{par}_name") or ""
+                    detected[f"expected_{par}_name"] = aval
+                    detected[f"{par}_matches"] = name_exact(cval, aval) if cval and aval else None
                 app_dob = m.get("date_of_birth") or ""
                 stored = ((await _doc(mid)).get("people", {}).get("self") or {})
                 higher = [c for c in DOB_PRIORITY[:DOB_PRIORITY.index(card)] if stored.get(DOB_KEY[c])]
