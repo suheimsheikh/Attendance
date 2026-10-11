@@ -2,6 +2,14 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-10-11 — Members modal redesign + staged ID verification
+- MemberForm.jsx: widened the add/edit modal to md:max-w-3xl / lg:max-w-4xl (verified 896px) with more padding/spacing so OCR messages no longer overlap; REMOVED the top "remove photo" button (mf-photo-clear gone).
+- IdDocsSection.jsx: the member's own documents are now a 4-stage stepper — Birth certificate → Aadhaar → PAN (optional) → Passport — with HARD gating: each stage is locked until the previous scan is uploaded; Passport unlocks after Aadhaar (PAN skippable). Deleting an earlier scan is allowed but raises a confirm warning and the section shows a red "capture chain broken" banner. A top summary banner counts unresolved mismatches. Family IDs (Father/Mother/Guardian) are a separate always-open block. Roomier verification panel (DetectedPanel) with plain-English, rule-based hints for Name / DOB / Father's / Mother's name; uploads + OCR are always allowed even with mismatches, which stay flagged red until resolved.
+- Backend: id_ocr.py prompts now also read father_name/mother_name (birth, passport, PAN, aadhaar where present); id_docs.py upload response compares them to the member's app father_name/mother_name and returns father_matches/mother_matches + expected values.
+- Verified: testing_agent iter107 — modal width, photo-clear removed, staged stage-birth/aadhaar/pan(optional)/passport with locked panels, Family IDs block, no console errors (all pass). Note: parent-name OCR extraction is wired + compiles but not exercised with a live document scan. Edit button testid is `edit-member-<id>`.
+NOTE: needs a redeploy to reach production.
+
+
 ## 2026-10-11 — Athlete attendance is CAMPS-ONLY on Grid + Presence (regattas/work_start no longer count)
 User rule: for athletes, a camp is the SOLE source of "expected". No camp that day → Grid cell blank, Presence hides them entirely. Camp timings drive present/late/absent. Regattas and personal work_start must NOT make an athlete expected.
 - Grid (`routes/reports/grid.py`): reverted the regatta union — `_expected_dates` for athletes = enrolled-camp days only. Added: weekly-off (WO) and holiday (HO) no longer apply to athlete-like members, so a camp-day no-show resolves to AB (past day) or blank (today, in progress) instead of WO/HO. Employees unchanged.

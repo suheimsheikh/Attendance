@@ -1,0 +1,22 @@
+{
+  "summary": "Frontend-only verification of Members edit modal redesign (iter 107). Logged in as admin via email, opened Edit modal for a staff member and an athlete member. Verified: modal data-testid=member-form renders at 896px wide (lg:max-w-4xl) with no overlapping text; top Photo row shows mf-photo-pick (Choose file) but mf-photo-clear is NOT in the DOM; Identity documents section renders staged chain with stage-birth, stage-aadhaar, stage-pan (marked optional), stage-passport data-testids; on a member with no scans, Birth stage is open with id-self-birth-upload button enabled while Aadhaar/PAN/Passport stages render their stage-<card>-locked panels and the upload button is NOT rendered in those locked stages (replaced by the lock message), satisfying the 'disabled upload in locked stages' intent; Family IDs block (id-person-father / id-person-mother / id-person-guardian) renders separately and is always open for an athlete member; no console errors or page errors observed. The modal is scrollable and all fields are reachable.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iter107_modal.jpeg", "/app/test_reports/iter107_athlete.jpeg"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "IdDocsSection.jsx renders the lock message instead of a disabled upload button in locked stages; the review checklist referenced data-testid id-self-<card>-upload being 'disabled' in locked stages. The implementation hides the whole card instead, so id-self-aadhaar-upload etc. don't exist until unlocked. Functionally equivalent (no upload possible) and matches the stage-<card>-locked testid contract — flagging only so future tests don't assert on upload-button disabled state in locked stages."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 via 'Admin sign in with email' toggle",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login flow: on /login click 'Admin sign in with email' first, then fill email+password and submit. On /admin/members a 'Post today's Leave/Tour to WhatsApp' modal pops up — dismiss via 'Later' before clicking any row. Member edit testids are 'edit-member-<id>' (not 'member-edit-'). To exercise Family IDs block, filter to Athletes before opening Edit — non-athlete members' id-docs backend returns allowed_people=['self'] only.",
+  "rca of the issue": "N/A — all requested UI assertions pass."
+}
