@@ -213,12 +213,17 @@ export async function burnCaptionOnImage(imageBlob, caption) {
   try {
     if (!imageBlob || !caption || typeof document === "undefined") return imageBlob;
     const url = URL.createObjectURL(imageBlob);
-    const img = await new Promise((resolve, reject) => {
-      const i = new Image();
-      i.onload = () => resolve(i);
-      i.onerror = reject;
-      i.src = url;
-    });
+    let img;
+    try {
+      img = await new Promise((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = reject;
+        i.src = url;
+      });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
     const maxW = 1080;
     const scale = img.width > maxW ? maxW / img.width : 1;
     const w = Math.round(img.width * scale);
@@ -233,7 +238,6 @@ export async function burnCaptionOnImage(imageBlob, caption) {
     canvas.height = h + bannerH;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0, w, h);
-    URL.revokeObjectURL(url);
     ctx.fillStyle = "#0f172a";
     ctx.fillRect(0, h, w, bannerH);
     ctx.textBaseline = "middle";

@@ -2,6 +2,14 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-10-11 — Code review fixes on the roster/iOS changes (regression-tested)
+Functional review of the two fixes returned READY-WITH-FIXES; applied all:
+- MEDIUM: `muster_daily_roster` projection was missing `institution`/`fleet`, so `resolve_member_break` silently ignored institution/fleet-scoped breaks → staff on such a break were falsely flagged "Absent (no info)". Added both fields. Fixed + verified.
+- Consistency: `muster_absent_report` now excludes coaches on their weekly-off / academy holiday / applicable break (was only shift-start gated), matching the staff roster — prevents `AbsentShareBanner` flagging an off-duty coach. Added `weekly_off`/`fleet` to its projection + `_coach_off_today()`.
+- LOW: `burnCaptionOnImage` now revokes the object URL in a `finally` (no leak if image decode fails).
+Regression (seeded + API-verified, then cleaned up): absent={EarlyNoShow, CoachAbsent}; excluded={LateShift@18:00 not-due, WeeklyOff, InstBreak (institution), CoachOff}; late={LateArrival 185m}; absent-report coaches excluded CoachOff. All correct. ESLint + ruff clean; server boots.
+
+
 ## 2026-10-11 — FIX: LATE marker missing on iPhone WhatsApp check-in messages
 Reported: on iPhones the "LATE" marking (e.g. Preethi, Mahesh) didn't appear on the WhatsApp check-in message. Previously misattributed to an old PWA cache.
 Root cause (confirmed): iOS WhatsApp discards the shared `text` when a file (selfie) is attached via the Web Share API — a documented iOS/receiving-app limitation (w3c/web-share#279). So on iPhones the ENTIRE caption (name, IN time, 🔴 LATE, location) was silently dropped; only the photo arrived. The `late` flag itself is a correct backend boolean (`sess.late`/`res.late`) and was fine — the text just never reached WhatsApp on iOS. Android/desktop were unaffected (they keep the text caption).

@@ -278,7 +278,8 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             {"active": {"$ne": False}, "category": {"$in": cats}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1,
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1,
-             "institution": 1, "hourly_wager": 1, "work_start": 1},
+             "institution": 1, "fleet": 1, "hourly_wager": 1,
+             "work_start": 1, "weekly_off": 1},
         ).to_list(2000)
         # Hourly wagers have no set days → never "absent".
         members = [m for m in members if not is_ex_member(m, today) and not m.get("hourly_wager")]
@@ -313,6 +314,20 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         # grace — "as soon as the shift/session has started".
         ln_now = local_now(office)
         default_ws = office.get("default_work_start") or "09:00"
+        # Coaches follow the same non-working-day exclusions as the staff
+        # roster (weekly off / academy holiday / applicable break) so a
+        # coach on their day off is never flagged absent. Athletes are
+        # camp-driven (the camp's own days_of_week handles scheduling).
+        from holidays import WEEKDAY_KEY as _WEEKDAY_FULL
+        from breaks import fetch_breaks_active_on, resolve_member_break
+        _default_wo = (office.get("default_weekly_off") or "sunday").lower()
+        _today_wk_full = _WEEKDAY_FULL[date.fromisoformat(today).weekday()]
+        _is_holiday = (await db.holidays.find_one({"date": today})) is not None
+        _breaks_today = await fetch_breaks_active_on(db, today)
+
+        def _coach_off_today(m: dict) -> bool:
+            wo = (m.get("weekly_off") or _default_wo).lower()
+            return _is_holiday or _today_wk_full == wo or bool(resolve_member_break(m, _breaks_today))
 
         def _started(hm: str) -> bool:
             try:
@@ -334,6 +349,10 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             # Athletes count toward the absentee roster only on camp days
             # they're enrolled for; otherwise skip them entirely (blank).
             if not is_coach and not _athlete_expected(m):
+                continue
+            # Coaches on a non-working day (weekly off / holiday / break)
+            # are not absent.
+            if is_coach and _coach_off_today(m):
                 continue
             # Not due yet → skip entirely (session/shift hasn't begun).
             if not _due_now(m, is_coach):
@@ -459,7 +478,8 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         members = await db.users.find(
             {"active": {"$ne": False}, "category": {"$in": ["staff", "coach"]}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1,
-             "hourly_wager": 1, "work_start": 1, "weekly_off": 1},
+             "hourly_wager": 1, "work_start": 1, "weekly_off": 1,
+             "institution": 1, "fleet": 1},
         ).to_list(2000)
         members = [m for m in members if not is_ex_member(m, today)]
         member_ids = [m["id"] for m in members]
