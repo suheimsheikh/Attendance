@@ -19,6 +19,29 @@ const PROFILE_FIELDS = [
   ["address", "Address", "text"], ["medical_notes", "Medical notes (allergies, conditions)", "text"],
 ];
 
+// Coloured, clearly-labelled form section with a bold divider so each group
+// of fields reads as its own block (user, Jun 2026).
+const SECTION_TONE = {
+  identity: "bg-sky-50/70 border-sky-200",
+  role: "bg-indigo-50/60 border-indigo-200",
+  timings: "bg-emerald-50/60 border-emerald-200",
+  parents: "bg-rose-50/60 border-rose-200",
+  profile: "bg-slate-50 border-slate-200",
+  docs: "bg-white border-slate-200",
+};
+function Section({ title, hint, tone, testId, children }) {
+  return (
+    <section data-testid={testId} className={`rounded-xl border p-4 ${SECTION_TONE[tone] || SECTION_TONE.profile}`}>
+      <div className="flex items-center gap-3 mb-3">
+        <span className="text-xs font-extrabold uppercase tracking-wider text-slate-700 whitespace-nowrap">{title}</span>
+        <span className="flex-1 h-[2px] rounded bg-slate-400/50" />
+      </div>
+      {hint && <p className="text-[11px] text-slate-500 mb-3 -mt-1">{hint}</p>}
+      <div className="space-y-3">{children}</div>
+    </section>
+  );
+}
+
 export default function MemberForm({ initial, onClose, onSaved }) {
   const isEdit = !!initial;
   const [recalcFor, setRecalcFor] = useState(null);
@@ -201,325 +224,242 @@ export default function MemberForm({ initial, onClose, onSaved }) {
           <TopSaveButton formId="member-form-el" dirty={guard.dirty} saving={busy} testId="mf-top-save" />
           <button onClick={guard.close} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
         </div>
-        <form id="member-form-el" onSubmit={submit} className="space-y-3">
-          <div className="flex items-center gap-4 pb-2">
-            <Avatar name={form.full_name || "?"} photo={form.photo} size={64} />
-            <div className="flex-1">
-              <label className="iu-label">Photo</label>
-              <div className="flex gap-2 items-center">
-                <label className="iu-btn-secondary !h-9 !px-3 cursor-pointer" data-testid="mf-photo-pick">
-                  {photoBusy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Choose file
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => onPickPhoto(e.target.files?.[0])} />
+        <form id="member-form-el" onSubmit={submit} className="space-y-4">
+          <Section title="Identity" tone="identity" testId="mf-section-identity">
+            <div className="flex items-center gap-4">
+              <Avatar name={form.full_name || "?"} photo={form.photo} size={64} />
+              <div className="flex-1">
+                <label className="iu-label">Photo</label>
+                <div className="flex gap-2 items-center">
+                  <label className="iu-btn-secondary !h-9 !px-3 cursor-pointer" data-testid="mf-photo-pick">
+                    {photoBusy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Choose file
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => onPickPhoto(e.target.files?.[0])} />
+                  </label>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">Resized to 320 px for fast load.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="iu-label">Given name</label>
+                <input data-testid="mf-given-name" value={form.given_name} onChange={(e) => setName("given_name", e.target.value)} className="iu-input" placeholder="e.g. Rahul Vikram" />
+              </div>
+              <div>
+                <label className="iu-label">Surname</label>
+                <input data-testid="mf-surname" value={form.surname} onChange={(e) => setName("surname", e.target.value)} className="iu-input" placeholder="e.g. Sharma" />
+              </div>
+            </div>
+            {(form.given_name || form.surname) && (
+              <p className="text-[11px] text-slate-500 -mt-1" data-testid="mf-fullname-preview">
+                Shown across the app as <b>{form.full_name || "—"}</b>. The Birth certificate scan (under Identity documents) is the source of truth and can reset this.
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="iu-label">Email{isEdit && <span className="text-slate-400 normal-case font-normal"> (locked)</span>}</label>
+                <input data-testid="mf-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className="iu-input" />
+              </div>
+              <div>
+                <label className="iu-label">Mobile</label>
+                <input data-testid="mf-mobile" value={form.mobile} onChange={(e) => set("mobile", e.target.value)} className="iu-input" />
+              </div>
+            </div>
+            <div>
+              <label className="iu-label">{isEdit ? "Reset password (leave blank to keep)" : "Password"}</label>
+              <input data-testid="mf-password" type="password" value={form.password} onChange={(e) => set("password", e.target.value)} className="iu-input" autoComplete="new-password" />
+            </div>
+            <div>
+              <label className="iu-label">Date of birth <span className="text-slate-400 font-normal">(optional)</span></label>
+              <input data-testid="mf-dob" type="date" value={form.date_of_birth} onChange={(e) => set("date_of_birth", e.target.value)} className="iu-input" />
+              <p className="text-[11px] text-slate-500 mt-1">Powers a &ldquo;Happy birthday&rdquo; greeting on the Check-In screen.</p>
+            </div>
+          </Section>
+
+          <Section title="Role &amp; assignment" tone="role" testId="mf-section-role">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="iu-label">Role</label>
+                <select data-testid="mf-role" value={form.role} onChange={(e) => set("role", e.target.value)} className="iu-input">
+                  {roles.map((r) => (<option key={r.key} value={r.key}>{r.label}</option>))}
+                  {form.role && !roles.some((r) => r.key === form.role) && (<option value={form.role}>{form.role} (legacy)</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="iu-label">Category</label>
+                <select data-testid="mf-category" value={form.category} onChange={(e) => set("category", e.target.value)} className="iu-input">
+                  {categories.map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
+                  {form.category && !categories.some((c) => c.key === form.category) && (<option value={form.category}>{form.category} (legacy)</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="iu-label">Gender</label>
+                <select data-testid="mf-gender" value={form.gender || ""} onChange={(e) => set("gender", e.target.value)} className="iu-input">
+                  <option value="">—</option>
+                  <option value="M">Male</option>
+                  <option value="F">Female</option>
+                  <option value="O">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="iu-label">Rank / Title</label>
+                <input data-testid="mf-rank" value={form.rank} onChange={(e) => set("rank", e.target.value)} className="iu-input" placeholder="e.g. Petty Officer" />
+              </div>
+            </div>
+            <div>
+              <label className="iu-label">Institution</label>
+              <select data-testid="mf-institution" value={form.institution} onChange={(e) => set("institution", e.target.value)} className="iu-input">
+                <option value="">— Select institution —</option>
+                {institutions.map((i) => (<option key={i.id} value={i.name}>{`${i.name}${i.short_name ? ` (${i.short_name})` : ""}`}</option>))}
+                {form.institution && !institutions.some((i) => i.name === form.institution) && (<option value={form.institution}>{`${form.institution} (legacy)`}</option>)}
+              </select>
+            </div>
+            {(() => {
+              const selectedCat = categories.find((c) => c.key === form.category);
+              const showFleet = selectedCat ? !!selectedCat.is_athlete_like : form.category === "athlete" || form.category === "elite";  // cat-health-ok — fallback for pre-load
+              if (!showFleet) return null;
+              return (
+                <div>
+                  <label className="iu-label">Fleet <span className="text-slate-400 font-normal text-[10px]">(boat class)</span></label>
+                  <select data-testid="mf-fleet" value={form.fleet || ""} onChange={(e) => set("fleet", e.target.value)} className="iu-input">
+                    <option value="">— None / not yet assigned —</option>
+                    {fleets.map((f) => (<option key={f.id} value={f.name}>{f.name}{f.short_name ? ` (${f.short_name})` : ""}</option>))}
+                    {form.fleet && !fleets.some((f) => f.name === form.fleet) && (<option value={form.fleet}>{form.fleet} (legacy)</option>)}
+                  </select>
+                  <p className="text-[11px] text-slate-500 mt-1">Manage the list under <b>Admin → Fleets</b>. Used for break-on-fleet, filtering and bulk actions.</p>
+                </div>
+              );
+            })()}
+          </Section>
+
+          <Section title="Timings, dates &amp; pay" tone="timings" testId="mf-section-timings">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="iu-label">Work start</label>
+                <input data-testid="mf-work-start" type="time" value={form.work_start} onChange={(e) => set("work_start", e.target.value)} className="iu-input" />
+              </div>
+              <div>
+                <label className="iu-label">Work end</label>
+                <input data-testid="mf-work-end" type="time" value={form.work_end} onChange={(e) => set("work_end", e.target.value)} className="iu-input" />
+              </div>
+            </div>
+            <div>
+              <label className="iu-label">Weekly off</label>
+              <select data-testid="mf-weekly-off" value={form.weekly_off} onChange={(e) => set("weekly_off", e.target.value)} className="iu-input">
+                <option value="">— None —</option>
+                <option value="monday">Monday</option>
+                <option value="tuesday">Tuesday</option>
+                <option value="wednesday">Wednesday</option>
+                <option value="thursday">Thursday</option>
+                <option value="friday">Friday</option>
+                <option value="saturday">Saturday</option>
+                <option value="sunday">Sunday</option>
+              </select>
+              <p className="text-[11px] text-slate-500 mt-1">Working on this day earns a compensatory off.</p>
+            </div>
+            <div>
+              <label className="iu-label">Joining date <span className="text-slate-400 font-normal">(optional)</span></label>
+              <input data-testid="mf-joining-date" type="date" value={form.joining_date} onChange={(e) => set("joining_date", e.target.value)} className="iu-input" />
+              <p className="text-[11px] text-slate-500 mt-1">Days before this date render as &ldquo;NJ&rdquo; on the Grid instead of counting as absent.</p>
+            </div>
+            <div>
+              <label className="iu-label">Leaving date <span className="text-slate-400 font-normal">(optional)</span></label>
+              <input data-testid="mf-leaving-date" type="date" value={form.leaving_date} onChange={(e) => set("leaving_date", e.target.value)} className="iu-input" />
+              <p className="text-[11px] text-slate-500 mt-1">Days after this date render as &ldquo;LF&rdquo; on the Grid — for members who have exited the academy.</p>
+            </div>
+            <div>
+              <label className="iu-label">Overtime eligibility</label>
+              <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
+                <input data-testid="mf-ot-eligible" type="checkbox" checked={!!form.ot_eligible} onChange={(e) => set("ot_eligible", e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800" />
+                <span className="text-sm text-slate-700 leading-snug">
+                  Include this member in Overtime calculation.
+                  <span className="block text-[11px] text-slate-500 mt-0.5">Uncheck for salaried supervisors or anyone whose contract doesn&apos;t accrue OT. Athletes never accrue OT regardless.</span>
+                </span>
+              </label>
+            </div>
+            {["staff", "coach", "executive"].includes(ruleCat) && (
+              <div>
+                <label className="iu-label">Hourly wager</label>
+                <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
+                  <input data-testid="mf-hourly-wager" type="checkbox" checked={!!form.hourly_wager} onChange={(e) => set("hourly_wager", e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800" />
+                  <span className="text-sm text-slate-700 leading-snug">
+                    Paid per hour worked — check-in to check-out hours, rounded to the nearest half hour, are passed to payroll as OT.
+                    <span className="block text-[11px] text-slate-500 mt-0.5">For occasional coaches who are paid only for time present. They earn no leave or weekly-off pay and accrue no standard early-in/late-out OT.</span>
+                  </span>
                 </label>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">Resized to 320 px for fast load.</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="iu-label">Given name</label>
-              <input data-testid="mf-given-name" value={form.given_name} onChange={(e) => setName("given_name", e.target.value)} className="iu-input" placeholder="e.g. Rahul Vikram" />
-            </div>
-            <div>
-              <label className="iu-label">Surname</label>
-              <input data-testid="mf-surname" value={form.surname} onChange={(e) => setName("surname", e.target.value)} className="iu-input" placeholder="e.g. Sharma" />
-            </div>
-          </div>
-          {(form.given_name || form.surname) && (
-            <p className="text-[11px] text-slate-500 -mt-1" data-testid="mf-fullname-preview">
-              Shown across the app as <b>{form.full_name || "—"}</b>. The Birth certificate scan (under Identity documents) is the source of truth and can reset this.
-            </p>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="iu-label">Email{isEdit && <span className="text-slate-400 normal-case font-normal"> (locked)</span>}</label>
-              <input data-testid="mf-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className="iu-input" />
-            </div>
-            <div>
-              <label className="iu-label">Mobile</label>
-              <input data-testid="mf-mobile" value={form.mobile} onChange={(e) => set("mobile", e.target.value)} className="iu-input" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="iu-label">Role</label>
-              <select data-testid="mf-role" value={form.role} onChange={(e) => set("role", e.target.value)} className="iu-input">
-                {roles.map((r) => (
-                  <option key={r.key} value={r.key}>{r.label}</option>
-                ))}
-                {form.role && !roles.some((r) => r.key === form.role) && (
-                  <option value={form.role}>{form.role} (legacy)</option>
-                )}
-              </select>
-            </div>
-            <div>
-              <label className="iu-label">Category</label>
-              <select data-testid="mf-category" value={form.category} onChange={(e) => set("category", e.target.value)} className="iu-input">
-                {categories.map((c) => (
-                  <option key={c.key} value={c.key}>{c.label}</option>
-                ))}
-                {form.category && !categories.some((c) => c.key === form.category) && (
-                  <option value={form.category}>{form.category} (legacy)</option>
-                )}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="iu-label">Gender</label>
-              <select data-testid="mf-gender" value={form.gender || ""} onChange={(e) => set("gender", e.target.value)} className="iu-input">
-                <option value="">—</option>
-                <option value="M">Male</option>
-                <option value="F">Female</option>
-                <option value="O">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className="iu-label">Rank / Title</label>
-              <input data-testid="mf-rank" value={form.rank} onChange={(e) => set("rank", e.target.value)} className="iu-input" placeholder="e.g. Petty Officer" />
-            </div>
-          </div>
-          <div>
-            <label className="iu-label">Institution</label>
-            <select data-testid="mf-institution" value={form.institution} onChange={(e) => set("institution", e.target.value)} className="iu-input">
-              <option value="">— Select institution —</option>
-              {institutions.map((i) => (
-                <option key={i.id} value={i.name}>{`${i.name}${i.short_name ? ` (${i.short_name})` : ""}`}</option>
-              ))}
-              {form.institution && !institutions.some((i) => i.name === form.institution) && (
-                <option value={form.institution}>{`${form.institution} (legacy)`}</option>
-              )}
-            </select>
-          </div>
-          {(() => {
-            // Fleet dropdown is shown for every athlete-like category
-            // (athlete + elite + any admin-added athlete-like custom
-            // key). Sourced from the categories master already loaded
-            // above so we stay in sync with what admins configure.
-            // Fallback below is a defensive default when categories
-            // hasn't loaded yet — the dynamic check is the primary
-            // path. cat-health-ok
-            const selectedCat = categories.find((c) => c.key === form.category);
-            const showFleet = selectedCat
-              ? !!selectedCat.is_athlete_like
-              : form.category === "athlete" || form.category === "elite";  // cat-health-ok — fallback for pre-load
-            if (!showFleet) return null;
-            return (
-            <div>
-              <label className="iu-label">Fleet <span className="text-slate-400 font-normal text-[10px]">(boat class)</span></label>
-              <select
-                data-testid="mf-fleet"
-                value={form.fleet || ""}
-                onChange={(e) => set("fleet", e.target.value)}
-                className="iu-input"
-              >
-                <option value="">— None / not yet assigned —</option>
-                {fleets.map((f) => (
-                  <option key={f.id} value={f.name}>{f.name}{f.short_name ? ` (${f.short_name})` : ""}</option>
-                ))}
-                {form.fleet && !fleets.some((f) => f.name === form.fleet) && (
-                  <option value={form.fleet}>{form.fleet} (legacy)</option>
-                )}
-              </select>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Manage the list under <b>Admin → Fleets</b>. Used for break-on-fleet, filtering and bulk actions.
-              </p>
-            </div>
-            );
-          })()}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="iu-label">Work start</label>
-              <input data-testid="mf-work-start" type="time" value={form.work_start} onChange={(e) => set("work_start", e.target.value)} className="iu-input" />
-            </div>
-            <div>
-              <label className="iu-label">Work end</label>
-              <input data-testid="mf-work-end" type="time" value={form.work_end} onChange={(e) => set("work_end", e.target.value)} className="iu-input" />
-            </div>
-          </div>
-          <div>
-            <label className="iu-label">Weekly off</label>
-            <select data-testid="mf-weekly-off" value={form.weekly_off} onChange={(e) => set("weekly_off", e.target.value)} className="iu-input">
-              <option value="">— None —</option>
-              <option value="monday">Monday</option>
-              <option value="tuesday">Tuesday</option>
-              <option value="wednesday">Wednesday</option>
-              <option value="thursday">Thursday</option>
-              <option value="friday">Friday</option>
-              <option value="saturday">Saturday</option>
-              <option value="sunday">Sunday</option>
-            </select>
-            <p className="text-[11px] text-slate-500 mt-1">Working on this day earns a compensatory off.</p>
-          </div>
-          <div>
-            <label className="iu-label">{isEdit ? "Reset password (leave blank to keep)" : "Password"}</label>
-            <input data-testid="mf-password" type="password" value={form.password} onChange={(e) => set("password", e.target.value)} className="iu-input" autoComplete="new-password" />
-          </div>
-          <div>
-            <label className="iu-label">Date of birth <span className="text-slate-400 font-normal">(optional)</span></label>
-            <input
-              data-testid="mf-dob"
-              type="date"
-              value={form.date_of_birth}
-              onChange={(e) => set("date_of_birth", e.target.value)}
-              className="iu-input"
-            />
-            <p className="text-[11px] text-slate-500 mt-1">Powers a &ldquo;Happy birthday&rdquo; greeting on the Check-In screen.</p>
-          </div>
-          <div>
-            <label className="iu-label">Joining date <span className="text-slate-400 font-normal">(optional)</span></label>
-            <input
-              data-testid="mf-joining-date"
-              type="date"
-              value={form.joining_date}
-              onChange={(e) => set("joining_date", e.target.value)}
-              className="iu-input"
-            />
-            <p className="text-[11px] text-slate-500 mt-1">Days before this date render as &ldquo;NJ&rdquo; on the Grid instead of counting as absent.</p>
-          </div>
-          <div>
-            <label className="iu-label">Leaving date <span className="text-slate-400 font-normal">(optional)</span></label>
-            <input
-              data-testid="mf-leaving-date"
-              type="date"
-              value={form.leaving_date}
-              onChange={(e) => set("leaving_date", e.target.value)}
-              className="iu-input"
-            />
-            <p className="text-[11px] text-slate-500 mt-1">Days after this date render as &ldquo;LF&rdquo; on the Grid — for members who have exited the academy.</p>
-          </div>
-          <div>
-            <label className="iu-label">Overtime eligibility</label>
-            <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
-              <input
-                data-testid="mf-ot-eligible"
-                type="checkbox"
-                checked={!!form.ot_eligible}
-                onChange={(e) => set("ot_eligible", e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800"
-              />
-              <span className="text-sm text-slate-700 leading-snug">
-                Include this member in Overtime calculation.
-                <span className="block text-[11px] text-slate-500 mt-0.5">
-                  Uncheck for salaried supervisors or anyone whose contract
-                  doesn&apos;t accrue OT. Athletes never accrue OT regardless.
-                </span>
-              </span>
-            </label>
-          </div>
-          {["staff", "coach", "executive"].includes(ruleCat) && (
-            <div>
-              <label className="iu-label">Hourly wager</label>
-              <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
-                <input
-                  data-testid="mf-hourly-wager"
-                  type="checkbox"
-                  checked={!!form.hourly_wager}
-                  onChange={(e) => set("hourly_wager", e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800"
-                />
-                <span className="text-sm text-slate-700 leading-snug">
-                  Paid per hour worked — check-in to check-out hours, rounded to the nearest half hour, are passed to payroll as OT.
-                  <span className="block text-[11px] text-slate-500 mt-0.5">
-                    For occasional coaches who are paid only for time present. They earn no leave or weekly-off pay and accrue no standard early-in/late-out OT.
+            )}
+            {["elite", "athlete"].includes(ruleCat) && (
+              <div>
+                <label className="iu-label">Daily Activity Report</label>
+                <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
+                  <input data-testid="mf-dar-required" type="checkbox" checked={!!form.dar_required} onChange={(e) => set("dar_required", e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800" />
+                  <span className="text-sm text-slate-700 leading-snug">
+                    DAR required — this athlete must file a Daily Activity Report at check-out, like staff.
+                    <span className="block text-[11px] text-slate-500 mt-0.5">Missed DARs are listed in DAR Reports → Missed.</span>
                   </span>
-                </span>
-              </label>
-            </div>
-          )}
-          {["elite", "athlete"].includes(ruleCat) && (
-            <div>
-              <label className="iu-label">Daily Activity Report</label>
-              <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
-                <input
-                  data-testid="mf-dar-required"
-                  type="checkbox"
-                  checked={!!form.dar_required}
-                  onChange={(e) => set("dar_required", e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800"
-                />
-                <span className="text-sm text-slate-700 leading-snug">
-                  DAR required — this athlete must file a Daily Activity Report at check-out, like staff.
-                  <span className="block text-[11px] text-slate-500 mt-0.5">Missed DARs are listed in DAR Reports → Missed.</span>
-                </span>
-              </label>
-            </div>
-          )}
-          {["staff", "coach", "executive"].includes(ruleCat) && (
-            <div>
-              <label className="iu-label">Daily Activity Report</label>
-              <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
-                <input
-                  data-testid="mf-dar-exempt"
-                  type="checkbox"
-                  checked={!!form.dar_exempt}
-                  onChange={(e) => set("dar_exempt", e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800"
-                />
-                <span className="text-sm text-slate-700 leading-snug">
-                  DAR exempt — this member is not asked for a Daily Activity Report at check-out.
-                  <span className="block text-[11px] text-slate-500 mt-0.5">
-                    Leave unchecked for everyone who must file a DAR; missed DARs are reported to payroll.
+                </label>
+              </div>
+            )}
+            {["staff", "coach", "executive"].includes(ruleCat) && (
+              <div>
+                <label className="iu-label">Daily Activity Report</label>
+                <label className="flex items-start gap-2 mt-1 cursor-pointer select-none">
+                  <input data-testid="mf-dar-exempt" type="checkbox" checked={!!form.dar_exempt} onChange={(e) => set("dar_exempt", e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800" />
+                  <span className="text-sm text-slate-700 leading-snug">
+                    DAR exempt — this member is not asked for a Daily Activity Report at check-out.
+                    <span className="block text-[11px] text-slate-500 mt-0.5">Leave unchecked for everyone who must file a DAR; missed DARs are reported to payroll.</span>
                   </span>
-                </span>
-              </label>
+                </label>
+              </div>
+            )}
+            <div>
+              <label className="iu-label">Meal eligibility</label>
+              <select data-testid="mf-meal-eligible" value={form.meal_eligible} onChange={(e) => set("meal_eligible", e.target.value)} className="iu-input">
+                <option value="auto">🍴 Auto — follow the category&apos;s meal_eligible flag</option>
+                <option value="on">🍴 Always ON — always on the meal roster</option>
+                <option value="off">🍴 Always OFF — never on the meal roster</option>
+              </select>
+              <p className="text-[11px] text-slate-500 mt-1">Overrides the category-level flag for this one member. Use &ldquo;OFF&rdquo; for drivers, off-site staff and anyone else who never eats mess meals.</p>
             </div>
-          )}
-          <div>
-            <label className="iu-label">Meal eligibility</label>
-            <select
-              data-testid="mf-meal-eligible"
-              value={form.meal_eligible}
-              onChange={(e) => set("meal_eligible", e.target.value)}
-              className="iu-input"
-            >
-              <option value="auto">🍴 Auto — follow the category&apos;s meal_eligible flag</option>
-              <option value="on">🍴 Always ON — always on the meal roster</option>
-              <option value="off">🍴 Always OFF — never on the meal roster</option>
-            </select>
-            <p className="text-[11px] text-slate-500 mt-1">
-              Overrides the category-level flag for this one member. Use &ldquo;OFF&rdquo; for
-              drivers, off-site staff and anyone else who never eats mess meals.
-            </p>
-          </div>
-          <div className="pt-3 mt-3 border-t border-slate-100">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Parents & guardian</div>
-            <p className="text-[11px] text-slate-500 mb-3">Names + mobile numbers shown across the app and used when an athlete is late or absent. Imported via Admin → Import members → Parents.</p>
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="iu-label">Father&apos;s name</label>
-                  <input data-testid="mf-father-name" value={form.father_name} onChange={(e) => set("father_name", e.target.value)} className="iu-input" />
-                </div>
-                <div>
-                  <label className="iu-label">Father&apos;s mobile</label>
-                  <input data-testid="mf-father-mobile" type="tel" value={form.father_mobile} onChange={(e) => set("father_mobile", e.target.value)} className="iu-input font-mono text-xs" placeholder="+91…" />
-                </div>
+          </Section>
+
+          <Section title="Parents &amp; guardian" tone="parents" testId="mf-section-parents"
+            hint="Names + mobile numbers shown across the app and used when an athlete is late or absent. Imported via Admin → Import members → Parents.">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="iu-label">Father&apos;s name</label>
+                <input data-testid="mf-father-name" value={form.father_name} onChange={(e) => set("father_name", e.target.value)} className="iu-input" />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="iu-label">Mother&apos;s name</label>
-                  <input data-testid="mf-mother-name" value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} className="iu-input" />
-                </div>
-                <div>
-                  <label className="iu-label">Mother&apos;s mobile</label>
-                  <input data-testid="mf-mother-mobile" type="tel" value={form.mother_mobile} onChange={(e) => set("mother_mobile", e.target.value)} className="iu-input font-mono text-xs" placeholder="+91…" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="iu-label">Guardian&apos;s name</label>
-                  <input data-testid="mf-guardian-name" value={form.guardian_name} onChange={(e) => set("guardian_name", e.target.value)} className="iu-input" />
-                </div>
-                <div>
-                  <label className="iu-label">Guardian&apos;s mobile</label>
-                  <input data-testid="mf-guardian-mobile" type="tel" value={form.guardian_mobile} onChange={(e) => set("guardian_mobile", e.target.value)} className="iu-input font-mono text-xs" placeholder="+91…" />
-                </div>
+              <div>
+                <label className="iu-label">Father&apos;s mobile</label>
+                <input data-testid="mf-father-mobile" type="tel" value={form.father_mobile} onChange={(e) => set("father_mobile", e.target.value)} className="iu-input font-mono text-xs" placeholder="+91…" />
               </div>
             </div>
-          </div>
-          <div className="pt-3 mt-3 border-t border-slate-100" data-testid="mf-profile-section">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Profile &amp; emergency</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="iu-label">Mother&apos;s name</label>
+                <input data-testid="mf-mother-name" value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} className="iu-input" />
+              </div>
+              <div>
+                <label className="iu-label">Mother&apos;s mobile</label>
+                <input data-testid="mf-mother-mobile" type="tel" value={form.mother_mobile} onChange={(e) => set("mother_mobile", e.target.value)} className="iu-input font-mono text-xs" placeholder="+91…" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="iu-label">Guardian&apos;s name</label>
+                <input data-testid="mf-guardian-name" value={form.guardian_name} onChange={(e) => set("guardian_name", e.target.value)} className="iu-input" />
+              </div>
+              <div>
+                <label className="iu-label">Guardian&apos;s mobile</label>
+                <input data-testid="mf-guardian-mobile" type="tel" value={form.guardian_mobile} onChange={(e) => set("guardian_mobile", e.target.value)} className="iu-input font-mono text-xs" placeholder="+91…" />
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Profile &amp; emergency" tone="profile" testId="mf-profile-section">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {PROFILE_FIELDS.map(([k, label, type]) => (
                 <div key={k} className={k === "address" || k === "medical_notes" ? "md:col-span-2" : ""}>
@@ -528,18 +468,17 @@ export default function MemberForm({ initial, onClose, onSaved }) {
                 </div>
               ))}
             </div>
-          </div>
-          {isEdit ? <IdDocsSection memberId={initial.id} onNameChanged={(field, v) => set(field, v)} /> : (
-            <p className="text-[11px] text-slate-500 pt-3 mt-3 border-t border-slate-100" data-testid="id-docs-after-create">
-              PAN &amp; Aadhaar details and scans can be added after the member is created (open Edit).
-            </p>
-          )}
-          <FormErrorBanner
-            error={formErr.error}
-            requestId={formErr.requestId}
-            onDismiss={formErr.clear}
-            testId="mf-submit-error"
-          />
+          </Section>
+
+          <Section title="Identity documents" tone="docs" testId="mf-section-docs">
+            {isEdit ? <IdDocsSection memberId={initial.id} onNameChanged={(field, v) => set(field, v)} /> : (
+              <p className="text-[11px] text-slate-500" data-testid="id-docs-after-create">
+                PAN &amp; Aadhaar details and scans can be added after the member is created (open Edit).
+              </p>
+            )}
+          </Section>
+
+          <FormErrorBanner error={formErr.error} requestId={formErr.requestId} onDismiss={formErr.clear} testId="mf-submit-error" />
           <button data-testid="mf-submit" type="submit" disabled={busy} className="iu-btn-primary w-full">
             {busy ? <Loader2 className="animate-spin" size={16} /> : (isEdit ? "Save changes" : "Create member")}
           </button>
