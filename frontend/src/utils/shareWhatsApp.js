@@ -188,6 +188,71 @@ export function formatCheckinCaption({ action, name, siteName, when = new Date()
   return bits.join(" · ");
 }
 
+/**
+ * True on iOS / iPadOS. iOS WhatsApp drops the `text` when a file is also
+ * shared via the native share sheet, so on iOS we burn the caption onto
+ * the image instead (see `burnCaptionOnImage`). iPadOS 13+ masquerades as
+ * macOS, hence the touch check.
+ */
+export function isIOS() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  return ua.includes("Macintosh") && typeof document !== "undefined" && "ontouchend" in document;
+}
+
+/**
+ * Draw the check-in caption as a banner UNDER the selfie and return a new
+ * JPEG blob. Used on iOS where WhatsApp silently discards the shared text
+ * — burning it onto the image guarantees the LATE flag, name, time and
+ * location always reach the group. Each " · " segment is one line; any
+ * segment containing "LATE" is rendered bold red. Never throws: on any
+ * failure it returns the original blob so the share still goes through.
+ */
+export async function burnCaptionOnImage(imageBlob, caption) {
+  try {
+    if (!imageBlob || !caption || typeof document === "undefined") return imageBlob;
+    const url = URL.createObjectURL(imageBlob);
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = reject;
+      i.src = url;
+    });
+    const maxW = 1080;
+    const scale = img.width > maxW ? maxW / img.width : 1;
+    const w = Math.round(img.width * scale);
+    const h = Math.round(img.height * scale);
+    const parts = caption.split(" · ").map((p) => p.replace(/\*/g, "").trim()).filter(Boolean);
+    const pad = Math.max(16, Math.round(w * 0.035));
+    const fs = Math.max(22, Math.round(w * 0.04));
+    const lh = Math.round(fs * 1.5);
+    const bannerH = pad * 2 + parts.length * lh;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h + bannerH;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(url);
+    ctx.fillStyle = "#0f172a";
+    ctx.fillRect(0, h, w, bannerH);
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    parts.forEach((p, i) => {
+      const y = h + pad + i * lh + lh / 2;
+      const isLate = /LATE/i.test(p);
+      ctx.font = `${isLate ? "bold " : ""}${fs}px -apple-system, system-ui, sans-serif`;
+      ctx.fillStyle = isLate ? "#fb7185" : i === 0 ? "#ffffff" : "#e2e8f0";
+      ctx.fillText(p, pad, y);
+    });
+    const out = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    return out || imageBlob;
+  } catch {
+    return imageBlob;
+  }
+}
+
+
 /** Convert a data-URL selfie to a Blob so the Web Share API can attach it. */
 export async function dataUrlToBlob(dataUrl) {
   if (!dataUrl) return null;

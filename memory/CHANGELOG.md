@@ -2,6 +2,14 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-10-11 — FIX: LATE marker missing on iPhone WhatsApp check-in messages
+Reported: on iPhones the "LATE" marking (e.g. Preethi, Mahesh) didn't appear on the WhatsApp check-in message. Previously misattributed to an old PWA cache.
+Root cause (confirmed): iOS WhatsApp discards the shared `text` when a file (selfie) is attached via the Web Share API — a documented iOS/receiving-app limitation (w3c/web-share#279). So on iPhones the ENTIRE caption (name, IN time, 🔴 LATE, location) was silently dropped; only the photo arrived. The `late` flag itself is a correct backend boolean (`sess.late`/`res.late`) and was fine — the text just never reached WhatsApp on iOS. Android/desktop were unaffected (they keep the text caption).
+Fix: on iOS only, burn the check-in caption onto the selfie image as a bottom banner before sharing (`utils/shareWhatsApp.js` → new `isIOS()` + `burnCaptionOnImage()`), so the caption always survives. Each " · " segment is one line; any "LATE" segment renders bold red. Guarded with try/catch → returns the original blob on any draw failure. Wired into `SelfCheckIn.jsx` (`doShare`) and `EscortCheckIn.jsx`. Non-iOS keeps the existing text+image behaviour unchanged.
+Verified: ran the exact canvas draw in-browser — produces a valid JPEG with ✅ name / IN time / 🔴 LATE (red) / 📍 location banner.
+NOTE: needs a redeploy to reach production.
+
+
 ## 2026-10-10 — FIX: absentee roster ignored shift start / weekly-off (false "Absent (no info)")
 Reported bug: staff with later shifts (e.g. 09:30, 18:00) were listed as "Absent (no info)" in the admin WhatsApp summary at ~09:14 — the roster flagged anyone not yet checked in, regardless of whether their shift had started or whether today was a working day for them.
 Root cause: `routes/muster.py` `muster_daily_roster` loaded only id/name/category and marked every non-present, non-leave member absent. It never looked at `work_start`, `weekly_off`, holidays or breaks (unlike the Grid's `_classify`).

@@ -7,7 +7,7 @@ import Avatar from "../components/Avatar";
 import SelfieCapture from "../components/SelfieCapture";
 import { fileToResizedDataUrl, todayIso, academyDateOf } from "../utils";
 import { useEscape } from "../hooks/useEscape";
-import { shareToWhatsApp, formatCheckinCaption, dataUrlToBlob } from "../utils/shareWhatsApp";
+import { shareToWhatsApp, formatCheckinCaption, dataUrlToBlob, isIOS, burnCaptionOnImage } from "../utils/shareWhatsApp";
 import useWhatsappGroups, { buildWhatsappHeader } from "../hooks/useWhatsappGroups";
 import { fmtHmLocal } from "../utils/dates";
 import { STEP_OUT_DURATIONS } from "../utils/stepOut";
@@ -354,18 +354,24 @@ function OnCampusActions({ escort, att, athletes, openExcursion, localInSelfie, 
           blob = await dataUrlToBlob(res?.data_url);
         } catch { /* text-only fallback below */ }
       }
+      const caption = formatCheckinCaption({
+        action: "checkin",
+        name: escort.name,
+        siteName: escort.institution || "",
+        when: att.check_in_at ? new Date(att.check_in_at) : new Date(),
+      });
+      const header = buildWhatsappHeader({
+        audience: "athletes",
+        groups: whatsappGroups,
+        dateIso: att.check_in_at ? academyDateOf(att.check_in_at) : todayIso(),
+      });
+      // iOS drops shared text when a photo is attached — burn the caption
+      // onto the selfie so it survives (Oct 2026).
+      let shareImage = blob;
+      if (shareImage && isIOS()) shareImage = await burnCaptionOnImage(shareImage, caption);
       await shareToWhatsApp({
-        text: `${buildWhatsappHeader({
-          audience: "athletes",
-          groups: whatsappGroups,
-          dateIso: att.check_in_at ? academyDateOf(att.check_in_at) : todayIso(),
-        })}\n${formatCheckinCaption({
-          action: "checkin",
-          name: escort.name,
-          siteName: escort.institution || "",
-          when: att.check_in_at ? new Date(att.check_in_at) : new Date(),
-        })}`,
-        imageBlob: blob,
+        text: `${header}\n${caption}`,
+        imageBlob: shareImage,
         filename: `checkin-${escort.name.replace(/\s+/g, "-")}.jpg`,
       });
     } catch (err) {

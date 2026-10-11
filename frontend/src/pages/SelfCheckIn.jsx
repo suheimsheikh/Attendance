@@ -17,7 +17,7 @@ import { STEP_OUT_DURATIONS } from "../utils/stepOut";
 import GeoPermissionBanner from "../components/GeoPermissionBanner";
 import OutOfGeofenceModal from "../components/OutOfGeofenceModal";
 import CorrectionRequestModal from "../components/CorrectionRequestModal";
-import { shareToWhatsApp, formatCheckinCaption, dataUrlToBlob } from "../utils/shareWhatsApp";
+import { shareToWhatsApp, formatCheckinCaption, dataUrlToBlob, isIOS, burnCaptionOnImage } from "../utils/shareWhatsApp";
 import { fmtHmLocal } from "../utils/dates";
 
 function hmNow() {
@@ -251,6 +251,7 @@ export default function SelfCheckIn() {
       late: src.late,
       lateMinutes: src.lateMinutes,
     });
+    const caption = text;  // the personal check-in line, before extras
     // Admin check-in (user request, Jun 2026): append today's attendance
     // summary — who's on leave, on tour, and any absents detected — so
     // the attendance group gets the roster the moment an admin arrives.
@@ -258,9 +259,14 @@ export default function SelfCheckIn() {
     // Tuition Teachers post to their own group (Oct 2026).
     if (darStatus?.checkin_group_name) text = `👥 ${darStatus.checkin_group_name}\n` + text;
     if (extra) text += "\n\n" + extra;
+    // iOS WhatsApp discards shared text when a photo is attached, which
+    // was silently dropping the LATE marker (user report, Oct 2026). Burn
+    // the caption onto the selfie so it always survives on iPhones.
+    let shareImage = noPhoto ? null : imageBlob;
+    if (shareImage && isIOS()) shareImage = await burnCaptionOnImage(shareImage, caption);
     shareToWhatsApp({
       text,
-      imageBlob: noPhoto ? null : imageBlob,
+      imageBlob: shareImage,
       filename: `${(src.name || "member").replace(/\s+/g, "_")}_${src.action}.jpg`,
     });
   };
