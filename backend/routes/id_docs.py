@@ -239,15 +239,10 @@ def make_router(db, require_admin) -> APIRouter:
                 f"This scan looks like a {CARD_LABEL[dt]}, not a {CARD_LABEL[card]}. "
                 f"Upload rejected — nothing was saved. Upload the correct document in this slot."))
         name_status = name_match_status(detected.get("name"), expected) if detected and detected.get("name") else None
-        # Aadhaar/PAN/Passport: a clearly different person is rejected. The
-        # BIRTH certificate is never rejected on a name mismatch — it's the
-        # source of truth, so the admin is asked to change the app name or keep
-        # it and upload anyway (user, Jun 2026).
-        if name_status == "mismatch" and card != "birth":
-            who = "member" if person == "self" else PEOPLE_LABEL.get(person, person).lower()
-            raise HTTPException(status_code=422, detail=(
-                f'Name on the {CARD_LABEL[card]} scan ("{detected["name"]}") does not match the {who} name '
-                f'"{expected or "—"}". Scan rejected — nothing was saved. Upload the correct document or fix the name first.'))
+        # No document is rejected on a NAME mismatch (user, Jun 2026): the admin
+        # either changes the app name from the scan or keeps it and uploads
+        # anyway. Every mismatch just stays flagged red. (A WRONG document in
+        # the slot is still rejected above via doc_type.)
 
         path = f"{APP_PREFIX}/id-docs/{mid}/{person}_{card}_{uuid.uuid4().hex}.{ALLOWED_TYPES[ctype]}"
         await asyncio.to_thread(put_object, path, data, ctype)
@@ -273,10 +268,13 @@ def make_router(db, require_admin) -> APIRouter:
             # stays flagged red until resolved; None when unreadable.
             detected.update(expected_name=expected, name_status=name_status,
                             name_matches=(name_status == "exact") if name_status else None)
-            # Birth certificate is the SOURCE OF TRUTH for the member name —
-            # offer splits so the admin stores it as Given name + Surname.
-            if person == "self" and card == "birth":
-                detected["is_name_source"] = True
+            # Any SELF card can set the member name — the Birth certificate is
+            # the authority, but the admin may also fix the name from a clearer
+            # Aadhaar/PAN/Passport, or keep it and upload anyway. Mismatches
+            # stay flagged red regardless (user, Jun 2026).
+            if person == "self" and detected.get("name"):
+                detected["is_name_source"] = (card == "birth")
+                detected["name_differs"] = name_status not in ("exact", None)
                 detected["split_options"] = _split_options(detected.get("name") or "")
             # Parent-name cross-check (self only) and DOB.
             if person == "self":
@@ -380,19 +378,20 @@ def make_router(db, require_admin) -> APIRouter:
             det["name_matches"] = name_exact(det["name"], match["person_name"])
         return {"detected": det, "match": match, "score": round(best_score, 2)}
 
-    # ---- Birth certificate is the source of truth for the member name ------
-    @router.post("/members/{mid}/id-docs/self/birth/apply-name")
-    async def apply_birth_name(mid: str, body: SplitIn, admin: dict = Depends(require_admin)):
-        """Split the birth-certificate name into Given name + Surname and REPLACE
-        the app name (user, Jun 2026 — the birth certificate is sacrosanct)."""
+    # ---- Any self scan can set the member name (birth cert is the authority) --
+    @router.post("/members/{mid}/id-docs/apply-self-name")
+    async def apply_self_name(mid: str, body: SplitIn, admin: dict = Depends(require_admin)):
+        """Split a scanned name into Given name + Surname and REPLACE the app
+        name (user, Jun 2026). Available from any self document."""
         m, people = await _member_and_people(mid)
-        _check("self", "birth", people)
+        if "self" not in people:
+            raise HTTPException(status_code=400, detail="Not allowed for this member")
         given, surname = _title(body.given_name), _title(body.surname)
         full = " ".join(x for x in (given, surname) if x).strip()
         if not full:
             raise HTTPException(status_code=400, detail="Enter the given name and/or surname")
         await db.users.update_one({"id": mid}, {"$set": {"full_name": full, "given_name": given, "surname": surname}})
-        await write_audit(db, actor=admin, action="name_from_birth", entity_type="member", entity_id=mid,
+        await write_audit(db, actor=admin, action="name_from_scan", entity_type="member", entity_id=mid,
                           entity_name=full, before={"full_name": m.get("full_name")},
                           after={"full_name": full, "given_name": given, "surname": surname})
         return {"field": "full_name", "name": full, "given_name": given, "surname": surname}

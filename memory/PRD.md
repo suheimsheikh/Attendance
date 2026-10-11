@@ -790,3 +790,8 @@ User request: "When issuing any item from the kitchen it should not allow if the
 ### Jun 2026 — Birth-cert name mismatch asks instead of rejecting
 - upload_scan no longer rejects the BIRTH certificate on a name mismatch (card != "birth" guard); Aadhaar/PAN/Passport still reject. Wrong-document (doc_type) reject still applies to birth.
 - BirthSplit panel now shows an amber "differs from app name 'X'" notice with two choices: "Change app name" (apply split) or "Keep app name as-is" (keepBirthName dismisses the prompt, scan stays saved). Tip text updated.
+
+### Jun 2026 — Name mismatch = ask, for ALL documents
+- upload_scan no longer rejects ANY card on a name mismatch (removed the 422 for aadhaar/pan/passport too). Only a WRONG document (doc_type) is still rejected. All name mismatches stay flagged red.
+- Any SELF card (birth/aadhaar/pan/passport) with a differing name now shows the NameChoice panel (generalised from BirthSplit): "Change app name" (split → set) or "Keep app name as-is" (upload anyway). Birth always shows it (source of truth).
+- Generalised endpoint: POST /members/{mid}/id-docs/apply-self-name (replaces /self/birth/apply-name; path chosen to avoid shadowing the 2-segment upload route). Frontend applyName(card)/keepName(card). Tip text updated. Verified routes + compile.

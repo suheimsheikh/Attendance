@@ -69,45 +69,52 @@ function ExtraDetails({ extra, tid }) {
 // Birth certificate is the SOURCE OF TRUTH for the member name. The admin
 // picks how to split the one combined name into Given name + Surname; applying
 // it REPLACES the app name.
-function BirthSplit({ options, appName, status, onApply, onKeep }) {
+// Any self scan can set the member name. The Birth certificate is the
+// authority; other cards offer it too when the name differs. The admin either
+// changes the app name (split into Given name + Surname) or keeps it and
+// uploads anyway. Mismatches stay flagged red either way (user, Jun 2026).
+function NameChoice({ card, options, appName, status, isSource, onApply, onKeep }) {
   const [gn, setGn] = useState(options?.[0]?.given_name || "");
   const [sn, setSn] = useState(options?.[0]?.surname || "");
   const [busy, setBusy] = useState(false);
   const differs = status && status !== "exact";
   const apply = async () => { setBusy(true); try { await onApply(gn, sn); } finally { setBusy(false); } };
+  const tone = differs ? "bg-rose-50 border-rose-300 text-rose-900" : "bg-sky-50 border-sky-300 text-sky-900";
   return (
-    <div className="rounded-md bg-sky-50 border border-sky-300 px-3 py-2.5 text-sky-900 space-y-2" data-testid="birth-split">
-      <div className="font-semibold flex items-center gap-1.5"><IdCard size={13} /> Birth certificate name — the source of truth</div>
+    <div className={`rounded-md border px-3 py-2.5 space-y-2 ${tone}`} data-testid="name-choice">
+      <div className="font-semibold flex items-center gap-1.5">
+        <IdCard size={13} /> {isSource ? "Birth certificate name — the source of truth" : `Name on the ${CARD_LABEL[card]}`}
+      </div>
       {differs && appName ? (
-        <div className="rounded-md bg-amber-100 border border-amber-300 px-2.5 py-1.5 text-amber-900 text-[11px]" data-testid="birth-name-mismatch">
-          This name differs from the current app name <b>&ldquo;{appName}&rdquo;</b>. Change the app name below, or keep it as-is and upload anyway.
+        <div className="rounded-md bg-rose-100 border border-rose-300 px-2.5 py-1.5 text-rose-900 text-[11px]" data-testid="name-choice-mismatch">
+          This differs from the current app name <b>&ldquo;{appName}&rdquo;</b> ({NAME_STATUS_NOTE[status] || "verify"}). Change the app name below, or keep it and upload anyway — either way it stays flagged red until resolved.
         </div>
       ) : (
-        <div className="text-[11px]">Choose how to split it into <b>Given name</b> and <b>Surname</b> — applying this replaces the app name.</div>
+        <div className="text-[11px]">Choose how to split it into <b>Given name</b> and <b>Surname</b> — applying this sets the app name.</div>
       )}
       {options?.length > 1 && (
         <div className="flex flex-wrap gap-1.5">
           {options.map((o, i) => (
-            <button key={i} type="button" data-testid={`birth-split-suggestion-${i}`}
+            <button key={i} type="button" data-testid={`name-choice-suggestion-${i}`}
               onClick={() => { setGn(o.given_name); setSn(o.surname); }}
-              className="px-2.5 h-7 rounded-md border border-sky-300 bg-white text-[11px] font-semibold hover:bg-sky-100">
+              className="px-2.5 h-7 rounded-md border border-slate-300 bg-white text-[11px] font-semibold hover:bg-slate-100">
               {o.given_name || "—"} · <span className="uppercase">{o.surname || "—"}</span>
             </button>
           ))}
         </div>
       )}
       <div className="grid grid-cols-2 gap-2">
-        <div><label className="iu-label">Given name</label><input data-testid="birth-split-given" value={gn} onChange={(e) => setGn(e.target.value)} className="iu-input text-xs" /></div>
-        <div><label className="iu-label">Surname</label><input data-testid="birth-split-surname" value={sn} onChange={(e) => setSn(e.target.value)} className="iu-input text-xs" /></div>
+        <div><label className="iu-label">Given name</label><input data-testid="name-choice-given" value={gn} onChange={(e) => setGn(e.target.value)} className="iu-input text-xs" /></div>
+        <div><label className="iu-label">Surname</label><input data-testid="name-choice-surname" value={sn} onChange={(e) => setSn(e.target.value)} className="iu-input text-xs" /></div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <button type="button" data-testid="birth-split-apply" onClick={apply} disabled={busy || !(gn || sn)}
+        <button type="button" data-testid="name-choice-apply" onClick={apply} disabled={busy || !(gn || sn)}
           className="px-3 h-8 rounded-md bg-sky-600 text-white font-semibold disabled:opacity-50">
           {busy ? <Loader2 size={13} className="animate-spin inline" /> : null} {differs ? "Change app name" : "Apply & set name"}
         </button>
         {differs && (
-          <button type="button" data-testid="birth-split-keep" onClick={onKeep} disabled={busy}
-            className="px-3 h-8 rounded-md border border-sky-400 text-sky-800 font-semibold hover:bg-sky-100">
+          <button type="button" data-testid="name-choice-keep" onClick={onKeep} disabled={busy}
+            className="px-3 h-8 rounded-md border border-slate-400 text-slate-700 font-semibold hover:bg-slate-100 bg-white">
             Keep app name as-is
           </button>
         )}
@@ -151,20 +158,13 @@ function DetectedPanel({ card, d, onConfirm, onUseScanned, onDismiss, onUseDob, 
         </>
       )}
 
-      {/* Birth certificate: set the app name (Given name + Surname). */}
-      {card === "birth" && d.is_name_source && <BirthSplit options={d.split_options} appName={d.expected_name} status={d.name_status} onApply={onApplyBirth} onKeep={onKeepBirth} />}
-
-      {/* Non-birth cards: a tolerated name match (flipped order, a small typo,
-          an extra middle name or an initial) uploads but stays flagged red. */}
-      {card !== "birth" && ["close", "flipped", "misspelt"].includes(d.name_status) && (
-        <div className="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-rose-800" data-testid={`${tid}-name-warning`}>
-          <div className="font-semibold flex items-center gap-1.5">
-            <AlertTriangle size={13} /> {d.name_status === "flipped" ? "Name order looks flipped" : d.name_status === "misspelt" ? "Name spelling differs slightly" : "Name is a close match"} — verify
-          </div>
-          <div className="mt-0.5 font-mono text-[11px]">{CARD_LABEL[card]}: &ldquo;{d.name}&rdquo; · app: &ldquo;{d.expected_name}&rdquo;</div>
-          <div className="mt-0.5 text-[11px]">Uploaded and saved, but kept flagged red until the names match exactly.</div>
-        </div>
-      )}
+      {/* Any self card: change the app name from this scan, or keep & upload
+          anyway. Shown for the birth cert always, and for other cards when the
+          name differs. */}
+      {d.is_name_source || (d.name_differs && d.split_options) ? (
+        <NameChoice card={card} options={d.split_options} appName={d.expected_name} status={d.name_status}
+          isSource={d.is_name_source} onApply={onApplyBirth} onKeep={onKeepBirth} />
+      ) : null}
 
       {d.dob_matches === false && (
         <MatchRow ok={false} label="Date of birth" cardVal={d.dob} appVal={d.expected_dob} hint={HINT.dob} tid={`${tid}-dob-warning`} />
@@ -310,21 +310,21 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
     if (card === "birth" && d.dob) setNum(p, "birth_dob", d.dob);
     setDetected((x) => ({ ...x, [k]: { ...d, mode: "confirm" } }));
   };
-  const keepBirthName = () => {
-    const k = "self.birth";
-    setDetected((x) => ({ ...x, [k]: { ...x[k], is_name_source: false } }));
-    toast.message("Kept the current app name — birth certificate scan saved");
+  const keepName = (card) => {
+    const k = `self.${card}`;
+    setDetected((x) => ({ ...x, [k]: { ...x[k], is_name_source: false, name_differs: false } }));
+    toast.message("Kept the current app name — scan saved");
   };
 
-  const applyBirthName = async (given_name, surname) => {
-    const k = "self.birth";
+  const applyName = async (card, given_name, surname) => {
+    const k = `self.${card}`;
     try {
-      const res = await api.post(`/members/${memberId}/id-docs/self/birth/apply-name`, { given_name, surname });
+      const res = await api.post(`/members/${memberId}/id-docs/apply-self-name`, { given_name, surname });
       onNameChanged?.("full_name", res.name);
       onNameChanged?.("given_name", res.given_name);
       onNameChanged?.("surname", res.surname);
       setDoc((x) => ({ ...x, app_names: { ...x.app_names, self: res.name }, app_given: res.given_name, app_surname: res.surname }));
-      setDetected((x) => ({ ...x, [k]: { ...x[k], expected_name: res.name, name_status: "exact", name_matches: true, is_name_source: false } }));
+      setDetected((x) => ({ ...x, [k]: { ...x[k], expected_name: res.name, name_status: "exact", name_matches: true, is_name_source: false, name_differs: false } }));
       toast.success(`App name set to "${res.name}"`);
     } catch (err) { showApiError(err, "Couldn't update the name"); }
   };
@@ -423,7 +423,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
         <DetectedPanel card={card} d={detected[`${p}.${card}`]} tid={`id-${p}-${card}`}
           onConfirm={() => confirm(p, card, detected[`${p}.${card}`].number)}
           onUseScanned={() => { setNum(p, card, detected[`${p}.${card}`].number); setDetected((x) => ({ ...x, [`${p}.${card}`]: { ...x[`${p}.${card}`], mode: "confirm" } })); }}
-          onDismiss={() => clearDetected(`${p}.${card}`)} onApplyBirth={(gn, sn) => applyBirthName(gn, sn)} onKeepBirth={keepBirthName} onUseDob={() => applyDob(p, card)} />
+          onDismiss={() => clearDetected(`${p}.${card}`)} onApplyBirth={(gn, sn) => applyName(card, gn, sn)} onKeepBirth={() => keepName(card)} onUseDob={() => applyDob(p, card)} />
       )}
     </>
   );
@@ -443,7 +443,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
       <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-4" data-testid="id-docs-tip">
         Upload one clear PDF/photo per card (front &amp; back together). Photos are compressed automatically to keep them sharp yet small; PDFs upload as-is (max 5 MB). The number, name, DOB and parents&apos; names are read
         automatically and checked against the app. Capture them in order — <b>Birth certificate → Aadhaar → PAN → Passport</b>.
-        The <b>Birth certificate</b> sets the member&apos;s name (split into Given name + Surname) — if it differs from the app name you&apos;re asked to change it or keep the app name and upload anyway. On a later card (Aadhaar / PAN / Passport) a clearly different name is <b>rejected and nothing is saved</b>; a flipped order, a small spelling difference, an extra middle name or an initial all upload but stay flagged red until resolved.
+        The <b>Birth certificate</b> sets the member&apos;s name (split into Given name + Surname). On any scan whose name differs you&apos;re asked to <b>change the app name</b> or <b>keep it and upload anyway</b> — no scan is ever rejected for a name. Every name (and DOB) mismatch stays flagged red until resolved.
       </p>
 
       {(chainBroken || unresolved > 0) && (
