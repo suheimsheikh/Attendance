@@ -278,7 +278,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             {"active": {"$ne": False}, "category": {"$in": cats}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1,
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1,
-             "institution": 1, "hourly_wager": 1},
+             "institution": 1, "hourly_wager": 1, "work_start": 1},
         ).to_list(2000)
         # Hourly wagers have no set days → never "absent".
         members = [m for m in members if not is_ex_member(m, today) and not m.get("hourly_wager")]
@@ -307,11 +307,36 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         # builder stays byte-for-byte identical (live app, backward-compat).
         absent_athlete_contacts: List[dict] = []
         total_athletes = total_coaches = 0
+        # Only flag someone once their session has actually started (user
+        # bug, Oct 2026): athletes follow their enrolled camp's start_time,
+        # coaches follow their work_start (office default as fallback). No
+        # grace — "as soon as the shift/session has started".
+        ln_now = local_now(office)
+        default_ws = office.get("default_work_start") or "09:00"
+
+        def _started(hm: str) -> bool:
+            try:
+                h, mi = (int(x) for x in (hm or default_ws).split(":")[:2])
+            except Exception:
+                h, mi = 9, 0
+            return ln_now >= ln_now.replace(hour=h, minute=mi, second=0, microsecond=0)
+
+        def _due_now(m: dict, is_coach: bool) -> bool:
+            if is_coach:
+                return _started(m.get("work_start"))
+            camps_for = [c for c in _camps_today
+                         if camp_active_on(c, today, _wk_today) and camp_applies_to(c, m)]
+            starts = [c.get("start_time") or default_ws for c in camps_for]
+            return any(_started(s) for s in starts) if starts else _started(default_ws)
+
         for m in members:
             is_coach = m.get("category") == "coach"
             # Athletes count toward the absentee roster only on camp days
             # they're enrolled for; otherwise skip them entirely (blank).
             if not is_coach and not _athlete_expected(m):
+                continue
+            # Not due yet → skip entirely (session/shift hasn't begun).
+            if not _due_now(m, is_coach):
                 continue
             if is_coach:
                 total_coaches += 1
@@ -429,17 +454,45 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             raise HTTPException(status_code=403, detail="Escorts cannot view the staff roster")
         office = await db.config.find_one({"id": "office"}) or {}
         today = local_date_str(office)
+        ln = local_now(office)
 
         members = await db.users.find(
             {"active": {"$ne": False}, "category": {"$in": ["staff", "coach"]}, "archived": {"$ne": True}},
-            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1, "hourly_wager": 1},
+            {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1,
+             "hourly_wager": 1, "work_start": 1, "weekly_off": 1},
         ).to_list(2000)
         members = [m for m in members if not is_ex_member(m, today)]
         member_ids = [m["id"] for m in members]
 
-        present_ids = set(await db.attendance.distinct(
-            "user_id", {"date": today, "user_id": {"$in": member_ids}},
-        ))
+        # Scheduling context — mirrors the Grid's _classify so the roster
+        # never flags someone who isn't due (user bug, Oct 2026): a person
+        # is only "Absent (no info)" on a working day once their shift start
+        # time has actually passed.
+        from holidays import WEEKDAY_KEY
+        from breaks import fetch_breaks_active_on, resolve_member_break
+        default_wo = (office.get("default_weekly_off") or "sunday").lower()
+        default_ws = office.get("default_work_start") or "09:00"
+        today_wk = WEEKDAY_KEY[date.fromisoformat(today).weekday()]
+        is_holiday = (await db.holidays.find_one({"date": today})) is not None
+        breaks_today = await fetch_breaks_active_on(db, today)
+
+        def _shift_started(work_start: str) -> bool:
+            """True once office-local now has reached the member's shift start
+            time today (no grace — 'as soon as their shift has started')."""
+            try:
+                h, mi = (int(x) for x in (work_start or default_ws).split(":")[:2])
+            except Exception:
+                h, mi = 9, 0
+            start_dt = ln.replace(hour=h, minute=mi, second=0, microsecond=0)
+            return ln >= start_dt
+
+        # Full attendance rows today (we need check-in time + late flag to
+        # split present members into on-time vs late).
+        att_docs = await db.attendance.find(
+            {"date": today, "user_id": {"$in": member_ids}},
+            {"_id": 0, "user_id": 1, "check_in_at": 1, "late": 1, "late_minutes": 1},
+        ).to_list(5000)
+        att_by_user = {a["user_id"]: a for a in att_docs}
 
         # Fetch every leave that touches today (approved OR cancelled+LOP).
         leaves = await db.leaves.find(
@@ -486,8 +539,10 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             if not best or priority[bucket] < priority[best["bucket"]]:
                 by_user[L["user_id"]] = {"bucket": bucket, "till": L.get("end_date")}
 
-        on_leave, on_tour, on_lop, absent = [], [], [], []
+        on_leave, on_tour, on_lop, absent, late = [], [], [], [], []
         for m in members:
+            if m.get("hourly_wager"):
+                continue  # hourly wagers have no set days → never absent/late
             entry = by_user.get(m["id"])
             if entry:
                 item = {"name": m["full_name"], "till": entry["till"],
@@ -499,11 +554,23 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 else:
                     on_leave.append(item)
                 continue
-            if m["id"] in present_ids or m.get("hourly_wager"):
-                continue  # hourly wagers have no set days → never "absent"
-            absent.append({"name": m["full_name"], "category": m.get("category")})
+            # Not scheduled today → neither absent nor late (weekly off /
+            # academy holiday / an applicable break).
+            wo = (m.get("weekly_off") or default_wo).lower()
+            if is_holiday or today_wk == wo or resolve_member_break(m, breaks_today):
+                continue
+            att = att_by_user.get(m["id"])
+            if att:
+                if att.get("late"):
+                    late.append({"name": m["full_name"], "category": m.get("category"),
+                                 "check_in_at": att.get("check_in_at"),
+                                 "late_minutes": att.get("late_minutes")})
+                continue  # present & on time → nothing to report
+            # No check-in and no leave: absent ONLY once their shift has begun.
+            if _shift_started(m.get("work_start")):
+                absent.append({"name": m["full_name"], "category": m.get("category")})
 
-        for lst in (on_leave, on_tour, on_lop, absent):
+        for lst in (on_leave, on_tour, on_lop, absent, late):
             lst.sort(key=lambda x: (x["name"] or "").lower())
 
         return {
@@ -513,6 +580,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             "on_tour": on_tour,
             "on_lop": on_lop,
             "absent": absent,
+            "late": late,
             "total_members": len(members),
         }
 

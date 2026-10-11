@@ -2,6 +2,17 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-10-10 — FIX: absentee roster ignored shift start / weekly-off (false "Absent (no info)")
+Reported bug: staff with later shifts (e.g. 09:30, 18:00) were listed as "Absent (no info)" in the admin WhatsApp summary at ~09:14 — the roster flagged anyone not yet checked in, regardless of whether their shift had started or whether today was a working day for them.
+Root cause: `routes/muster.py` `muster_daily_roster` loaded only id/name/category and marked every non-present, non-leave member absent. It never looked at `work_start`, `weekly_off`, holidays or breaks (unlike the Grid's `_classify`).
+Fix (confirmed by user, Oct 2026 — absent = "as soon as shift start has passed", no grace):
+- `muster_daily_roster` now loads `work_start`/`weekly_off`, excludes weekly-off days, academy holidays (`db.holidays`) and applicable breaks (`resolve_member_break`), and only marks "Absent (no info)" once office-local now ≥ the member's effective `work_start`. Added a new `late` bucket (reuses the attendance row's stamped `late`/`late_minutes`).
+- `muster_absent_report` (athletes/coaches) now skips anyone not yet due: athletes gated by their enrolled camp's `start_time`, coaches by `work_start` (office default fallback).
+- Frontend: `AbsentDispatchPrompt.jsx` (10 AM prompt) now also fetches late-report and renders an "⏰ Late" section (staff/coach from roster.late + athletes from late-report) with check-in time + minutes. `SelfCheckIn.jsx` admin check-in summary now gates the Absent + new Late lines behind local hour ≥ 10 (user: don't surface absentees before 10 AM) and keeps on-leave/tour/LOP always.
+Verified with 5 seeded scenarios: 06:00-start no-show→absent; 18:00-start→excluded (not due); late check-in→late(min); weekly-off=today→excluded; approved leave→on_leave. On the test Sunday (default weekly-off), the roster correctly scoped to the 85 members rostered that day instead of flagging all ~96.
+NOTE: the deploy initiated before this fix will NOT include it — a redeploy is needed to ship to production.
+
+
 ## 2026-10-10 — Safe refactor batch (#1–#7 + Office panel extraction)
 Across-app refactor pass (functional code review, ruff + ESLint). All behaviour-preserving; iter106 regression 100% (backend 8/8 pytest, all frontend pages load, no console errors, employees unaffected, athlete grid correct).
 - **#1** Hoisted duplicate `STEP_OUT_DURATIONS` to `frontend/src/utils/stepOut.js`; imported by `SelfCheckIn.jsx` + `EscortCheckIn.jsx`.

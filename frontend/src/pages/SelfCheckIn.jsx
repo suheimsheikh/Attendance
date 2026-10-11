@@ -169,19 +169,35 @@ export default function SelfCheckIn() {
     let cancelled = false;
     (async () => {
       try {
-        const [roster, absentRep] = await Promise.all([
+        const [roster, absentRep, lateRep] = await Promise.all([
           api.get("/muster/daily-roster").catch(() => null),
           api.get("/muster/absent-report").catch(() => null),
+          api.get("/muster/late-report").catch(() => null),
         ]);
         const names = (arr) => (arr || []).map((x) => x.name).filter(Boolean).join(", ");
+        const hm = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "");
+        const lateName = (x) => {
+          const t = hm(x?.check_in_at);
+          const mins = Number(x?.late_minutes) > 0 ? `${x.late_minutes}m late` : "late";
+          const d = [t ? `IN ${t}` : "", mins].filter(Boolean).join(" · ");
+          return d ? `${x.name} (${d})` : x.name;
+        };
         const lines = [];
         if (roster?.on_leave?.length) lines.push(`📝 On leave: ${names(roster.on_leave)}`);
         if (roster?.on_tour?.length) lines.push(`✈️ On tour: ${names(roster.on_tour)}`);
         if (roster?.on_lop?.length) lines.push(`🔴 LOP: ${names(roster.on_lop)}`);
-        const staffAbsent = names(roster?.absent);
-        const athAbsent = (absentRep?.athletes || []).join(", ");
-        const allAbsent = [staffAbsent, athAbsent].filter(Boolean).join(", ");
-        if (allAbsent) lines.push(`❗ Absent (no info): ${allAbsent}`);
+        // Absent + Late are only surfaced from 10 AM onward (user rule,
+        // Oct 2026) — before that, shifts are still starting so the lists
+        // aren't meaningful yet.
+        if (new Date().getHours() >= 10) {
+          const staffAbsent = names(roster?.absent);
+          const athAbsent = (absentRep?.athletes || []).join(", ");
+          const allAbsent = [staffAbsent, athAbsent].filter(Boolean).join(", ");
+          if (allAbsent) lines.push(`❗ Absent (no info): ${allAbsent}`);
+          const late = [...(roster?.late || []), ...(lateRep?.athlete_contacts || [])]
+            .map(lateName).sort((a, b) => a.localeCompare(b));
+          if (late.length) lines.push(`⏰ Late: ${late.join(", ")}`);
+        }
         if (!cancelled) {
           setAdminDaySummary(lines.length ? `*Today's attendance summary*\n${lines.join("\n")}` : "");
         }

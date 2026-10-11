@@ -25,6 +25,15 @@ const sentTime = (iso) =>
 
 const sentNote = (st) => `Already sent by ${st.sent_by_name || "an admin"} at ${sentTime(st.sent_at)}`;
 
+// "NAME (IN 09:42 · 12m late)" — one-line late label from a roster.late
+// or late-report contact row.
+const lateLabel = (x) => {
+  const t = x?.check_in_at ? sentTime(x.check_in_at) : "";
+  const mins = Number(x?.late_minutes) > 0 ? `${x.late_minutes}m late` : "late";
+  const detail = [t ? `IN ${t}` : "", mins].filter(Boolean).join(" · ");
+  return detail ? `${x.name} (${detail})` : x.name;
+};
+
 const PreviewList = ({ testid, label, tone, names }) =>
   names?.length ? (
     <div data-testid={testid}>
@@ -56,9 +65,10 @@ export default function AbsentDispatchPrompt() {
         });
         return;
       }
-      const [absentRep, roster] = await Promise.all([
+      const [absentRep, roster, lateRep] = await Promise.all([
         api.get("/muster/absent-report").catch(() => null),
         api.get("/muster/daily-roster").catch(() => null),
+        api.get("/muster/late-report").catch(() => null),
       ]);
       const athletesAbsent = absentRep?.athletes || [];
       const staffAbsent = (roster?.absent || []).map((x) => x.name);
@@ -66,13 +76,20 @@ export default function AbsentDispatchPrompt() {
       const onTour = (roster?.on_tour || []).map((x) => x.name);
       const onLop = (roster?.on_lop || []).map((x) => x.name);
       const allAbsent = [...staffAbsent, ...athletesAbsent];
+      // Late arrivals: staff/coach from the roster + athletes from the
+      // late-report, each shown with their check-in time and minutes late.
+      const late = [
+        ...(roster?.late || []),
+        ...(lateRep?.athlete_contacts || []),
+      ].map(lateLabel).sort((a, b) => a.localeCompare(b));
       // Nothing to dispatch → don't nag.
-      if (allAbsent.length === 0 && onLeave.length === 0 && onTour.length === 0) return;
+      if (allAbsent.length === 0 && onLeave.length === 0 && onTour.length === 0 && late.length === 0) return;
       setData({
         allAbsent,
         onLeave,
         onTour,
         onLop,
+        late,
         office: (absentRep?.office_name || roster?.office_name || "").trim(),
         date: absentRep?.date || todayKey(),
       });
@@ -106,6 +123,7 @@ export default function AbsentDispatchPrompt() {
       lines.push("", `${label} (${names.length}):`, ...sortByName(names).map((n) => `• ${n}`));
     };
     section("❗ *Absent (no info)*", d.allAbsent);
+    section("⏰ *Late*", d.late);
     section("📝 *On leave*", d.onLeave);
     section("✈️ *On tour*", d.onTour);
     section("🔴 *LOP*", d.onLop);
@@ -143,6 +161,7 @@ export default function AbsentDispatchPrompt() {
         </div>
         <div className="p-4 space-y-2 text-sm max-h-[40vh] overflow-y-auto">
           <PreviewList testid="dispatch-absent" label="Absent (no info)" tone="text-rose-700" names={data.allAbsent} />
+          <PreviewList testid="dispatch-late" label="Late" tone="text-orange-700" names={data.late} />
           <PreviewList testid="dispatch-on-leave" label="On leave" tone="text-amber-700" names={data.onLeave} />
           <PreviewList testid="dispatch-on-tour" label="On tour" tone="text-sky-700" names={data.onTour} />
           <PreviewList testid="dispatch-lop" label="LOP" tone="text-red-700" names={data.onLop} />
