@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { FileUp, Eye, Trash2, Loader2, IdCard, Lock, CheckCircle2, AlertTriangle, Users } from "lucide-react";
+import { FileUp, Eye, Trash2, Loader2, IdCard, Lock, CheckCircle2, AlertTriangle, Users, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../../api";
 
@@ -173,6 +173,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
   const [doc, setDoc] = useState(null);
   const [nums, setNums] = useState({});
   const [saving, setSaving] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [detected, setDetected] = useState({});
 
   const applyDoc = (d) => {
@@ -233,6 +234,59 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
     if (await save(people)) clearDetected(`${p}.${card}`);
   };
 
+  // Compile every uploaded scan (member + family) into one printable
+  // window and open the browser print dialog — the user can send it to a
+  // physical printer OR choose "Save as PDF" from the same dialog.
+  const printAll = async () => {
+    const order = { self: ["birth", "aadhaar", "pan", "passport"] };
+    const items = [];
+    for (const p of doc.allowed_people || []) {
+      const cards = order[p] || FAMILY_CARDS;
+      for (const card of cards) {
+        if (doc.people?.[p]?.[`${card}_file`]) items.push({ p, card });
+      }
+    }
+    if (!items.length) { toast.error("No scans uploaded yet to print"); return; }
+    setPrinting(true);
+    const win = window.open("", "_blank");
+    if (!win) { setPrinting(false); toast.error("Allow pop-ups to print"); return; }
+    win.document.write(`<!doctype html><html><head><title>ID documents</title><style>
+      *{box-sizing:border-box} body{font-family:-apple-system,system-ui,sans-serif;margin:0;color:#0f172a}
+      .pg{page-break-after:always;padding:16px}
+      h2{font-size:14px;margin:0 0 8px;border-bottom:2px solid #0f172a;padding-bottom:6px}
+      img{max-width:100%;max-height:88vh;display:block;margin:0 auto;object-fit:contain}
+      iframe{width:100%;height:88vh;border:0}
+      @media print{.pg{padding:0}}
+    </style></head><body><p style="padding:16px">Preparing documents…</p></body></html>`);
+    win.document.close();
+    try {
+      const memberName = doc.app_names?.self || "Member";
+      const parts = [];
+      for (const it of items) {
+        const blob = await api.getBlob(`/members/${memberId}/id-docs/${it.p}/${it.card}/file`);
+        const num = nums[it.p]?.[it.card];
+        const title = `${PEOPLE_LABEL[it.p]} — ${CARD_LABEL[it.card]}${num ? ` · ${num}` : ""}`;
+        if (blob.type === "application/pdf") {
+          const url = URL.createObjectURL(blob);
+          parts.push(`<section class="pg"><h2>${title}</h2><iframe src="${url}"></iframe></section>`);
+        } else {
+          const dataUrl = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+          parts.push(`<section class="pg"><h2>${title}</h2><img src="${dataUrl}"/></section>`);
+        }
+      }
+      win.document.body.innerHTML = `<div style="padding:16px"><b>${memberName}</b> — identity documents (${items.length})</div>` + parts.join("");
+      // Give images/iframes a moment to lay out, then open the print dialog.
+      await new Promise((r) => setTimeout(r, 600));
+      win.focus();
+      win.print();
+    } catch (err) {
+      win.close();
+      showApiError(err, "Could not prepare documents for printing");
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   if (!doc) return null;
   const selfDocs = doc.people?.self || {};
   const refDob = DOB_PRIORITY.map((c) => selfDocs[DOB_KEY[c]]).find(Boolean) || "";
@@ -264,8 +318,15 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
 
   return (
     <div className="pt-4 mt-4 border-t border-slate-100" data-testid="id-docs-section">
-      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
-        <IdCard size={13} /> Identity documents (admins only)
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+          <IdCard size={13} /> Identity documents (admins only)
+        </div>
+        <button type="button" data-testid="id-docs-print" onClick={printAll} disabled={printing}
+          className="inline-flex items-center gap-1.5 px-3 h-8 rounded-md border border-slate-200 hover:bg-slate-50 text-xs font-semibold disabled:opacity-50"
+          title="Print or save all uploaded scans as PDF">
+          {printing ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />} Print / Save as PDF
+        </button>
       </div>
       <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-4" data-testid="id-docs-tip">
         Upload one clear PDF/photo per card (front &amp; back together, max 10 MB). The number, name, DOB and parents&apos; names are read
