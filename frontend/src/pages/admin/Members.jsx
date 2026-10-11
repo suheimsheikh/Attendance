@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
-import { Loader2, Plus, Search, FileSpreadsheet, Download, IdCard } from "lucide-react";
+import { Loader2, Plus, Search, FileSpreadsheet, Download, IdCard, Split } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, showApiError, downloadBlob } from "../../api";
@@ -35,6 +35,7 @@ export default function Members() {
   const [correctingFor, setCorrectingFor] = useState(null);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState(null);
+  const [splitting, setSplitting] = useState(false);
   const [bucket, setBucket] = useState("all");
   // Orthogonal "Admin role" filter. Independent of `bucket` because admin is
   // a ROLE, not a category — a coach who is also an admin is BOTH a coach
@@ -423,6 +424,27 @@ export default function Members() {
           >
             <FileSpreadsheet size={16}/> Import parents
           </Link>
+          <button
+            data-testid="members-split-names"
+            disabled={splitting}
+            onClick={async () => {
+              if (!window.confirm("Split every member's name into Given name + Surname (last word = surname)? This only fills members that don't already have the split, and is safe to run again.")) return;
+              setSplitting(true);
+              try {
+                const r = await api.post("/members/backfill-name-split");
+                toast.success(`Name split done — ${r.updated} updated, ${r.skipped} already set (${r.scanned} scanned)`);
+                load();
+              } catch (err) {
+                showApiError(err, "Couldn't split names");
+              } finally {
+                setSplitting(false);
+              }
+            }}
+            className="iu-btn-secondary"
+            title="One-time, repeatable pass: split each member's full name into Given name + Surname. Only fills members that don't already have it."
+          >
+            {splitting ? <Loader2 size={16} className="animate-spin" /> : <Split size={16} />} Split names
+          </button>
           <button data-testid="new-member-button" onClick={() => setEditing("new")} title="Create a new athlete, coach, staff or chef profile" className="iu-btn-primary"><Plus size={16}/> Add member</button>
         </div>
       </header>

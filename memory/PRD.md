@@ -769,3 +769,8 @@ User request: "When issuing any item from the kitchen it should not allow if the
 
 ### Jun 2026 — Member modal grouped into coloured sections
 - MemberForm now renders as labelled Section cards, each with its own tint + bold uppercase header + bold divider: Identity (sky), Role & assignment (indigo), Timings/dates & pay (emerald), Parents & guardian (rose), Profile & emergency (slate), Identity documents (white). All field test-ids preserved; cosmetic regroup only. Verified via screenshot.
+
+### Jun 2026 — Tolerant name matching (flipped / misspelt)
+- name_match_status (services/id_ocr.py + utils/nameMatch.js mirror) now returns exact | flipped | misspelt | close | mismatch. Flipped word order and small typos (Levenshtein ≤1 for ≤4-char words, ≤2 otherwise, 3+ letter tokens) are ALLOWED and flagged, not rejected. Only a genuine different-person mismatch is rejected (422).
+- IdDocsSection shows tailored red flags: "Name order looks flipped", "Name spelling differs slightly", "close match (extra name/initial)". Persistent card-name line + detected panel + tip text updated.
+- NOTE: Split-names backfill button (POST /members/backfill-name-split) is built & idempotent but NOT yet run on prod — awaiting user go-ahead (ask pending).

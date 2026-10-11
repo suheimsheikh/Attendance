@@ -98,11 +98,35 @@ def _tok_eq(a: str, b: str) -> bool:
     return a == b or (len(a) == 1 and b.startswith(a)) or (len(b) == 1 and a.startswith(b))
 
 
+def _lev(a: str, b: str) -> int:
+    """Levenshtein edit distance between two short strings."""
+    if a == b:
+        return 0
+    if not a or not b:
+        return len(a) or len(b)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def _fuzzy(a: str, b: str) -> bool:
+    """Near-spelling for 3+ letter words — tolerates a small typo / transposition."""
+    if len(a) < 3 or len(b) < 3:
+        return False
+    return _lev(a, b) <= (1 if min(len(a), len(b)) <= 4 else 2)
+
+
 def name_match_status(card_name: Optional[str], expected: Optional[str]) -> Optional[str]:
     """Order-independent name check (user, Jun 2026). Returns:
-        'exact'    — same words (any order), nothing extra
+        'exact'    — same words, same order
+        'flipped'  — same words, different order (allowed, flagged)
+        'misspelt' — a word differs by a small typo (allowed, flagged)
         'close'    — matches but with an extra/missing middle name or an initial
-        'mismatch' — a core word on the smaller name has no counterpart (reject)
+        'mismatch' — a core word has no reasonable counterpart (reject)
         None       — either side blank / unreadable (can't judge)
     """
     ca, cb = _name_tokens(card_name), _name_tokens(expected)
@@ -110,14 +134,25 @@ def name_match_status(card_name: Optional[str], expected: Optional[str]) -> Opti
         return None
     small, large = (ca, cb) if len(ca) <= len(cb) else (cb, ca)
     used = [False] * len(large)
+    levels = []
     for t in small:
         hit = next((i for i, u in enumerate(large) if not used[i] and u == t), -1)
+        lvl = "exact"
         if hit < 0:
-            hit = next((i for i, u in enumerate(large) if not used[i] and _tok_eq(t, u)), -1)
+            hit = next((i for i, u in enumerate(large) if not used[i] and t != u and _tok_eq(t, u)), -1)
+            lvl = "initial"
+        if hit < 0:
+            hit = next((i for i, u in enumerate(large) if not used[i] and _fuzzy(t, u)), -1)
+            lvl = "misspelt"
         if hit < 0:
             return "mismatch"
         used[hit] = True
-    return "exact" if len(ca) == len(cb) and sorted(ca) == sorted(cb) else "close"
+        levels.append(lvl)
+    if "misspelt" in levels:
+        return "misspelt"
+    if len(ca) != len(cb) or "initial" in levels:
+        return "close"
+    return "exact" if ca == cb else "flipped"
 
 
 def name_matches(card_name: Optional[str], expected: Optional[str]) -> Optional[bool]:

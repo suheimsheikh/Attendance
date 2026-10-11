@@ -3,7 +3,7 @@ import { FileUp, Eye, Trash2, Loader2, IdCard, Lock, CheckCircle2, AlertTriangle
 import { toast } from "sonner";
 import { api, showApiError } from "../../../api";
 import { compressImage } from "../../../utils/compressImage";
-import { nameStatus } from "../../../utils/nameMatch";
+import { nameStatus, NAME_STATUS_NOTE } from "../../../utils/nameMatch";
 
 const PEOPLE_LABEL = { self: "Member", father: "Father", mother: "Mother", guardian: "Guardian" };
 const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar", passport: "Passport", birth: "Birth certificate" };
@@ -115,12 +115,15 @@ function DetectedPanel({ card, d, onConfirm, onUseScanned, onDismiss, onUseDob, 
       {/* Birth certificate: set the app name (Given name + Surname). */}
       {card === "birth" && d.is_name_source && <BirthSplit options={d.split_options} onApply={onApplyBirth} />}
 
-      {/* Non-birth cards: a tolerated "close" name match stays flagged red. */}
-      {card !== "birth" && d.name_status === "close" && (
+      {/* Non-birth cards: a tolerated name match (flipped order, a small typo,
+          an extra middle name or an initial) uploads but stays flagged red. */}
+      {card !== "birth" && ["close", "flipped", "misspelt"].includes(d.name_status) && (
         <div className="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-rose-800" data-testid={`${tid}-name-warning`}>
-          <div className="font-semibold flex items-center gap-1.5"><AlertTriangle size={13} /> Name is a close match — verify</div>
+          <div className="font-semibold flex items-center gap-1.5">
+            <AlertTriangle size={13} /> {d.name_status === "flipped" ? "Name order looks flipped" : d.name_status === "misspelt" ? "Name spelling differs slightly" : "Name is a close match"} — verify
+          </div>
           <div className="mt-0.5 font-mono text-[11px]">{CARD_LABEL[card]}: &ldquo;{d.name}&rdquo; · app: &ldquo;{d.expected_name}&rdquo;</div>
-          <div className="mt-0.5 text-[11px]">Stored, but stays flagged red until the names match exactly (an extra middle name or an initial was allowed).</div>
+          <div className="mt-0.5 text-[11px]">Uploaded and saved, but kept flagged red until the names match exactly.</div>
         </div>
       )}
 
@@ -191,7 +194,7 @@ function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onU
         const ok = st === "exact" || st === null;
         return (
           <div data-testid={`${tid}-card-name`} className={`mt-1.5 text-[11px] ${ok ? "text-emerald-700" : "text-rose-700 font-semibold"}`}>
-            Name on card: {cardName}{st === "close" && " — close match, verify"}{st === "mismatch" && " — doesn't match app name"}
+            Name on card: {cardName}{!ok && ` — ${NAME_STATUS_NOTE[st] || "verify"}`}
           </div>
         );
       })()}
@@ -388,7 +391,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
       <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-4" data-testid="id-docs-tip">
         Upload one clear PDF/photo per card (front &amp; back together). Photos are compressed automatically to keep them sharp yet small; PDFs upload as-is (max 5 MB). The number, name, DOB and parents&apos; names are read
         automatically and checked against the app. Capture them in order — <b>Birth certificate → Aadhaar → PAN → Passport</b>.
-        The <b>Birth certificate</b> sets the member&apos;s name (split into Given name + Surname). If a later scan&apos;s name is clearly a different person it is <b>rejected and nothing is saved</b>; close matches (an extra middle name or an initial) upload but stay flagged red until resolved.
+        The <b>Birth certificate</b> sets the member&apos;s name (split into Given name + Surname). If a later scan&apos;s name is clearly a different person it is <b>rejected and nothing is saved</b>; a flipped order, a small spelling difference, an extra middle name or an initial all upload but stay flagged red until resolved.
       </p>
 
       {(chainBroken || unresolved > 0) && (
