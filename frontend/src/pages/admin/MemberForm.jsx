@@ -33,7 +33,7 @@ function Section({ title, hint, tone, testId, children }) {
   return (
     <section data-testid={testId} className={`rounded-xl border p-4 ${SECTION_TONE[tone] || SECTION_TONE.profile}`}>
       <div className="flex items-center gap-3 mb-3">
-        <span className="text-xs font-extrabold uppercase tracking-wider text-slate-700 whitespace-nowrap">{title}</span>
+        <span className="text-lg font-extrabold uppercase tracking-wider text-slate-700 whitespace-nowrap">{title}</span>
         <span className="flex-1 h-[2px] rounded bg-slate-400/50" />
       </div>
       {hint && <p className="text-[11px] text-slate-500 mb-3 -mt-1">{hint}</p>}
