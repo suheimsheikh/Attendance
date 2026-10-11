@@ -239,7 +239,11 @@ def make_router(db, require_admin) -> APIRouter:
                 f"This scan looks like a {CARD_LABEL[dt]}, not a {CARD_LABEL[card]}. "
                 f"Upload rejected — nothing was saved. Upload the correct document in this slot."))
         name_status = name_match_status(detected.get("name"), expected) if detected and detected.get("name") else None
-        if name_status == "mismatch":
+        # Aadhaar/PAN/Passport: a clearly different person is rejected. The
+        # BIRTH certificate is never rejected on a name mismatch — it's the
+        # source of truth, so the admin is asked to change the app name or keep
+        # it and upload anyway (user, Jun 2026).
+        if name_status == "mismatch" and card != "birth":
             who = "member" if person == "self" else PEOPLE_LABEL.get(person, person).lower()
             raise HTTPException(status_code=422, detail=(
                 f'Name on the {CARD_LABEL[card]} scan ("{detected["name"]}") does not match the {who} name '

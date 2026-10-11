@@ -786,3 +786,7 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - MEDIUM: clear people.{person}.{card}_extra on scan re-upload ($unset) so replaced docs don't leave stale scanned details.
 - MEDIUM: dob_can_apply no longer suppressed by a lower card's DOB (removed `not ref_dob`); birth certificate can set the app DOB via UI when app DOB empty. Lock on lower cards still enforced by `higher`.
 - LOW: revoke preview blob URL on clearDetected (leak); keep given_name/surname even when "" on edit so clearing a surname persists; removed unused splitSuggestions from nameMatch.js; fixed stale dd/mm/yy comments in dates.js.
+
+### Jun 2026 — Birth-cert name mismatch asks instead of rejecting
+- upload_scan no longer rejects the BIRTH certificate on a name mismatch (card != "birth" guard); Aadhaar/PAN/Passport still reject. Wrong-document (doc_type) reject still applies to birth.
+- BirthSplit panel now shows an amber "differs from app name 'X'" notice with two choices: "Change app name" (apply split) or "Keep app name as-is" (keepBirthName dismisses the prompt, scan stays saved). Tip text updated.

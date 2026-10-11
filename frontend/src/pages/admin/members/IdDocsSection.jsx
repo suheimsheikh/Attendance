@@ -69,15 +69,22 @@ function ExtraDetails({ extra, tid }) {
 // Birth certificate is the SOURCE OF TRUTH for the member name. The admin
 // picks how to split the one combined name into Given name + Surname; applying
 // it REPLACES the app name.
-function BirthSplit({ options, onApply }) {
+function BirthSplit({ options, appName, status, onApply, onKeep }) {
   const [gn, setGn] = useState(options?.[0]?.given_name || "");
   const [sn, setSn] = useState(options?.[0]?.surname || "");
   const [busy, setBusy] = useState(false);
+  const differs = status && status !== "exact";
   const apply = async () => { setBusy(true); try { await onApply(gn, sn); } finally { setBusy(false); } };
   return (
     <div className="rounded-md bg-sky-50 border border-sky-300 px-3 py-2.5 text-sky-900 space-y-2" data-testid="birth-split">
       <div className="font-semibold flex items-center gap-1.5"><IdCard size={13} /> Birth certificate name — the source of truth</div>
-      <div className="text-[11px]">Choose how to split it into <b>Given name</b> and <b>Surname</b> — applying this replaces the app name.</div>
+      {differs && appName ? (
+        <div className="rounded-md bg-amber-100 border border-amber-300 px-2.5 py-1.5 text-amber-900 text-[11px]" data-testid="birth-name-mismatch">
+          This name differs from the current app name <b>&ldquo;{appName}&rdquo;</b>. Change the app name below, or keep it as-is and upload anyway.
+        </div>
+      ) : (
+        <div className="text-[11px]">Choose how to split it into <b>Given name</b> and <b>Surname</b> — applying this replaces the app name.</div>
+      )}
       {options?.length > 1 && (
         <div className="flex flex-wrap gap-1.5">
           {options.map((o, i) => (
@@ -93,10 +100,18 @@ function BirthSplit({ options, onApply }) {
         <div><label className="iu-label">Given name</label><input data-testid="birth-split-given" value={gn} onChange={(e) => setGn(e.target.value)} className="iu-input text-xs" /></div>
         <div><label className="iu-label">Surname</label><input data-testid="birth-split-surname" value={sn} onChange={(e) => setSn(e.target.value)} className="iu-input text-xs" /></div>
       </div>
-      <button type="button" data-testid="birth-split-apply" onClick={apply} disabled={busy || !(gn || sn)}
-        className="px-3 h-8 rounded-md bg-sky-600 text-white font-semibold disabled:opacity-50">
-        {busy ? <Loader2 size={13} className="animate-spin inline" /> : null} Apply &amp; replace app name
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" data-testid="birth-split-apply" onClick={apply} disabled={busy || !(gn || sn)}
+          className="px-3 h-8 rounded-md bg-sky-600 text-white font-semibold disabled:opacity-50">
+          {busy ? <Loader2 size={13} className="animate-spin inline" /> : null} {differs ? "Change app name" : "Apply & set name"}
+        </button>
+        {differs && (
+          <button type="button" data-testid="birth-split-keep" onClick={onKeep} disabled={busy}
+            className="px-3 h-8 rounded-md border border-sky-400 text-sky-800 font-semibold hover:bg-sky-100">
+            Keep app name as-is
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -105,7 +120,7 @@ function BirthSplit({ options, onApply }) {
 // rejected server-side (nothing is saved), so by the time this shows the name
 // is an exact or a tolerated "close" match. Close matches stay flagged red
 // until resolved. For the birth certificate the admin sets the app name here.
-function DetectedPanel({ card, d, onConfirm, onUseScanned, onDismiss, onUseDob, onApplyBirth, tid }) {
+function DetectedPanel({ card, d, onConfirm, onUseScanned, onDismiss, onUseDob, onApplyBirth, onKeepBirth, tid }) {
   return (
     <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-3 text-xs text-amber-900 space-y-2.5" data-testid={`${tid}-detected`}>
       {/* Picture of the upload so the admin can eyeball the number & names. */}
@@ -137,7 +152,7 @@ function DetectedPanel({ card, d, onConfirm, onUseScanned, onDismiss, onUseDob, 
       )}
 
       {/* Birth certificate: set the app name (Given name + Surname). */}
-      {card === "birth" && d.is_name_source && <BirthSplit options={d.split_options} onApply={onApplyBirth} />}
+      {card === "birth" && d.is_name_source && <BirthSplit options={d.split_options} appName={d.expected_name} status={d.name_status} onApply={onApplyBirth} onKeep={onKeepBirth} />}
 
       {/* Non-birth cards: a tolerated name match (flipped order, a small typo,
           an extra middle name or an initial) uploads but stays flagged red. */}
@@ -295,6 +310,12 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
     if (card === "birth" && d.dob) setNum(p, "birth_dob", d.dob);
     setDetected((x) => ({ ...x, [k]: { ...d, mode: "confirm" } }));
   };
+  const keepBirthName = () => {
+    const k = "self.birth";
+    setDetected((x) => ({ ...x, [k]: { ...x[k], is_name_source: false } }));
+    toast.message("Kept the current app name — birth certificate scan saved");
+  };
+
   const applyBirthName = async (given_name, surname) => {
     const k = "self.birth";
     try {
@@ -402,7 +423,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
         <DetectedPanel card={card} d={detected[`${p}.${card}`]} tid={`id-${p}-${card}`}
           onConfirm={() => confirm(p, card, detected[`${p}.${card}`].number)}
           onUseScanned={() => { setNum(p, card, detected[`${p}.${card}`].number); setDetected((x) => ({ ...x, [`${p}.${card}`]: { ...x[`${p}.${card}`], mode: "confirm" } })); }}
-          onDismiss={() => clearDetected(`${p}.${card}`)} onApplyBirth={(gn, sn) => applyBirthName(gn, sn)} onUseDob={() => applyDob(p, card)} />
+          onDismiss={() => clearDetected(`${p}.${card}`)} onApplyBirth={(gn, sn) => applyBirthName(gn, sn)} onKeepBirth={keepBirthName} onUseDob={() => applyDob(p, card)} />
       )}
     </>
   );
@@ -422,7 +443,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
       <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-4" data-testid="id-docs-tip">
         Upload one clear PDF/photo per card (front &amp; back together). Photos are compressed automatically to keep them sharp yet small; PDFs upload as-is (max 5 MB). The number, name, DOB and parents&apos; names are read
         automatically and checked against the app. Capture them in order — <b>Birth certificate → Aadhaar → PAN → Passport</b>.
-        The <b>Birth certificate</b> sets the member&apos;s name (split into Given name + Surname). If a later scan&apos;s name is clearly a different person it is <b>rejected and nothing is saved</b>; a flipped order, a small spelling difference, an extra middle name or an initial all upload but stay flagged red until resolved.
+        The <b>Birth certificate</b> sets the member&apos;s name (split into Given name + Surname) — if it differs from the app name you&apos;re asked to change it or keep the app name and upload anyway. On a later card (Aadhaar / PAN / Passport) a clearly different name is <b>rejected and nothing is saved</b>; a flipped order, a small spelling difference, an extra middle name or an initial all upload but stay flagged red until resolved.
       </p>
 
       {(chainBroken || unresolved > 0) && (
