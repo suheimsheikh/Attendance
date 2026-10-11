@@ -25,7 +25,7 @@ const Field = ({ label, children }) => (
   </div>
 );
 
-export default React.memo(function MemberDetailsLine({ m, colSpan, onPatchField, frozenBg }) {
+export default React.memo(function MemberDetailsLine({ m, colSpan, onPatchField, idNum, onSaveIdNum, frozenBg }) {
   const cell = (key, kind, extra = {}) => (
     <InlineCell
       kind={kind}
@@ -34,6 +34,16 @@ export default React.memo(function MemberDetailsLine({ m, colSpan, onPatchField,
       onSave={(v) => onPatchField(m.id, key, v)}
       renderDisplay={kind === "date" ? fmtDate : (v) => (v === "" || v == null ? dash : String(v))}
       {...extra}
+    />
+  );
+  const idCell = (card) => (
+    <InlineCell
+      kind="text"
+      value={idNum?.[card] || ""}
+      testId={`detail-${card}-${m.id}`}
+      className="font-mono"
+      onSave={(v) => onSaveIdNum(m.id, card, v)}
+      renderDisplay={(v) => (v ? <span className="font-mono">{v}</span> : dash)}
     />
   );
   return (
@@ -49,6 +59,9 @@ export default React.memo(function MemberDetailsLine({ m, colSpan, onPatchField,
           <Field label="Joined">{cell("joining_date", "date")}</Field>
           <Field label="Left">{cell("leaving_date", "date")}</Field>
           <Field label="Class">{cell("school_class", "text")}</Field>
+          <Field label="PAN">{idCell("pan")}</Field>
+          <Field label="Aadhaar">{idCell("aadhaar")}</Field>
+          <Field label="Passport">{idCell("passport")}</Field>
           <Field label="Address">{cell("address", "text", { className: "min-w-[120px]" })}</Field>
           <Field label="Emergency">{cell("emergency_contact_name", "text")}</Field>
           <Field label="Phone">{cell("emergency_contact_phone", "tel", { className: "font-mono" })}</Field>

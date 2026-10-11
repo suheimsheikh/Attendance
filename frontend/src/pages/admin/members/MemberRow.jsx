@@ -147,7 +147,7 @@ export default React.memo(function MemberRow({
         </td>
       ))}
     </tr>
-    <MemberDetailsLine m={m} colSpan={cols.length} onPatchField={onPatchField} frozenBg={frozenBg} />
+    <MemberDetailsLine m={m} colSpan={cols.length} onPatchField={onPatchField} idNum={idNum} onSaveIdNum={onSaveIdNum} frozenBg={frozenBg} />
     </>
   );
 });

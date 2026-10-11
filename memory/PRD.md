@@ -801,3 +801,4 @@ User request: "When issuing any item from the kitchen it should not allow if the
 
 ### Jun 2026 — Members table second "Details" line
 - Added MemberDetailsLine.jsx: an always-on second <tr> under each member exposing DOB, Blood group, Joining/Leaving dates, Class, Address, Emergency contact + phone, Medical notes — all inline-editable via the existing onPatchField (MemberUpdate already accepts them). Two leading cells mirror the frozen Actions/Member columns for alignment; rest is a colSpan strip that wraps. Wired in MemberRow (fragment with the main row). Verified render + alignment via screenshot.
+- Details line also exposes the member PAN / Aadhaar / Passport numbers inline-editable (idNum + saveIdNum), alongside the profile fields.
