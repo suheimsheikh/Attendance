@@ -47,13 +47,3 @@ export const NAME_STATUS_NOTE = {
   close: "close match (extra name or an initial) — verify",
   mismatch: "doesn't match app name",
 };
-
-const title = (ws) => ws.map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-
-export function splitSuggestions(name) {
-  const t = (name || "").split(/\s+/).filter(Boolean);
-  if (t.length < 2) return [{ given_name: title(t), surname: "" }];
-  const last = { given_name: title(t.slice(0, -1)), surname: title(t.slice(-1)) };
-  const first = { given_name: title(t.slice(1)), surname: title(t.slice(0, 1)) };
-  return JSON.stringify(first) === JSON.stringify(last) ? [last] : [last, first];
-}

@@ -781,3 +781,8 @@ User request: "When issuing any item from the kitchen it should not allow if the
 ### Jun 2026 — DOB lock + extra field scraping
 - DOB reference: upload_scan now compares a card's DOB to reference = app DOB else highest-priority card on file (birth first). Once a birth-certificate (or any reference) DOB is accepted, Aadhaar/PAN/Passport DOB differences are FLAGGED RED only — dob_can_apply requires no app_dob AND no ref_dob AND no higher card, so they can never change it. HINT.dob updated; use_card_dob already 409s on an existing app DOB.
 - Extra scrape-and-store (no validation, user rule): OCR prompts + read_id_card now also return an `extra` dict — Aadhaar: gender, address; Passport: place_of_birth, place_of_issue, date_of_issue, nationality, sex, file_number; Birth: place_of_birth, sex, date_of_registration, registration_authority, address. Stored at people.{person}.{card}_extra via _store_read; shown read-only in the DetectedPanel and persistently under each card (ExtraDetails in IdDocsSection.jsx). Only names/parents/athlete-DOB remain validated. Verified extraction via mocked OCR; app compiles.
+
+### Jun 2026 — Code-review fixes
+- MEDIUM: clear people.{person}.{card}_extra on scan re-upload ($unset) so replaced docs don't leave stale scanned details.
+- MEDIUM: dob_can_apply no longer suppressed by a lower card's DOB (removed `not ref_dob`); birth certificate can set the app DOB via UI when app DOB empty. Lock on lower cards still enforced by `higher`.
+- LOW: revoke preview blob URL on clearDetected (leak); keep given_name/surname even when "" on edit so clearing a surname persists; removed unused splitSuggestions from nameMatch.js; fixed stale dd/mm/yy comments in dates.js.

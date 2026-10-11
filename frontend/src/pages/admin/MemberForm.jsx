@@ -189,8 +189,9 @@ export default function MemberForm({ initial, onClose, onSaved }) {
         if ((body.email || "").trim().toLowerCase() === (initial.email || "").toLowerCase()) delete body.email;
         // Strip empty optional fields so Pydantic Literal validators (gender, role, etc.) don't 422.
         // We keep explicit nulls but drop "" since the backend treats absent == unchanged.
+        // Exception: given_name/surname are kept even when "" so clearing them persists.
         Object.keys(body).forEach((k) => {
-          if (body[k] === "") delete body[k];
+          if (body[k] === "" && k !== "given_name" && k !== "surname") delete body[k];
         });
         await api.patch(`/members/${initial.id}`, body);
         toast.success("Member updated");

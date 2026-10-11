@@ -5,7 +5,7 @@ const day = (iso, opts) => new Date(iso + "T00:00:00").toLocaleDateString("en-GB
 export const fmtDateLong = (iso) => iso ? day(iso, { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) : "";
 // "Mon, 03 Jun"
 export const fmtDateWk = (iso) => iso ? day(iso, { weekday: "short", day: "2-digit", month: "short" }) : "";
-// "Mon, 03 Jun 26"
+// "Mon, 03 Jun 2026"
 export const fmtDateWkYY = (iso) => iso ? day(iso, { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) : "";
 // "03 Jun"
 export const fmtDateDM = (iso) => iso ? day(iso, { day: "2-digit", month: "short" }) : "";

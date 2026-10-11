@@ -255,6 +255,7 @@ def make_router(db, require_admin) -> APIRouter:
             {"user_id": mid}, {"$set": {f"people.{person}.{card}_file": meta, "user_id": mid,
                                         "updated_at": meta["uploaded_at"]},
                                "$unset": {f"people.{person}.{card}_name": "", f"people.{person}.{card}_name_tried": "",
+                                          f"people.{person}.{card}_extra": "",
                                           **({f"people.{person}.{card}_dob": ""} if card != "birth" else {})}},
             upsert=True)
         await write_audit(db, actor=admin, action="id_scan_uploaded", entity_type="member",
@@ -291,7 +292,7 @@ def make_router(db, require_admin) -> APIRouter:
                 higher = [c for c in DOB_PRIORITY[:DOB_PRIORITY.index(card)] if stored.get(DOB_KEY[c])]
                 detected.update(expected_dob=reference,
                                 dob_matches=(detected.get("dob") == reference) if detected.get("dob") and reference else None,
-                                dob_can_apply=bool(detected.get("dob")) and not app_dob and not ref_dob and not higher)
+                                dob_can_apply=bool(detected.get("dob")) and not app_dob and not higher)
             else:
                 detected.pop("dob", None)
         return {**_resp(await _doc(mid), m, people), "detected": detected}

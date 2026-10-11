@@ -268,7 +268,10 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
   useEffect(() => { api.get(`/members/${memberId}/id-docs`).then(applyDoc).catch(() => {}); }, [memberId]);
 
   const setNum = (p, card, v) => setNums((n) => ({ ...n, [p]: { ...n[p], [card]: v } }));
-  const clearDetected = (k) => setDetected(({ [k]: _drop, ...rest }) => rest);
+  const clearDetected = (k) => setDetected(({ [k]: dropped, ...rest }) => {
+    if (dropped?.preview) URL.revokeObjectURL(dropped.preview);
+    return rest;
+  });
   const save = async (people = nums) => {
     setSaving(true);
     try { applyDoc(await api.put(`/members/${memberId}/id-docs`, { people })); toast.success("ID numbers saved"); return true; }
