@@ -4,6 +4,7 @@ import InlinePhotoAvatar from "../../../components/InlinePhotoAvatar";
 import ParentContact from "../../../components/ParentContact";
 import InlineCell from "../../../components/InlineCell";
 import ExMemberChip from "../../../components/ExMemberChip";
+import MemberDetailsLine from "./MemberDetailsLine";
 import { BUCKET_BY_KEY, bucketOf, isInteractive } from "./helpers";
 
 /**
@@ -50,6 +51,7 @@ export default React.memo(function MemberRow({
   const frozenBg = highlighted ? "bg-amber-50" : "bg-white";
 
   return (
+    <>
     <tr
       className={`transition cursor-pointer ${
         highlighted ? "ring-2 ring-amber-400 bg-amber-50/60" : b.rowHover
@@ -145,5 +147,7 @@ export default React.memo(function MemberRow({
         </td>
       ))}
     </tr>
+    <MemberDetailsLine m={m} colSpan={cols.length} onPatchField={onPatchField} frozenBg={frozenBg} />
+    </>
   );
 });
