@@ -218,31 +218,6 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
         await db.users.insert_one(doc)
         return UserPublic(**{k: doc.get(k) for k in UserPublic.model_fields})
 
-    @router.post("/members/backfill-name-split")
-    async def backfill_name_split(admin: dict = Depends(require_admin)):
-        """One-time, IDEMPOTENT pass: split each member's full_name into
-        given_name + surname (last word = surname). Only fills members that
-        don't already have the split, so it's safe to run repeatedly. Does NOT
-        touch full_name (that stays the authoritative display name)."""
-        scanned = updated = skipped = 0
-        async for u in db.users.find({"email": {"$exists": True}},
-                                     {"_id": 0, "id": 1, "full_name": 1, "given_name": 1, "surname": 1}):
-            scanned += 1
-            if (u.get("given_name") or "").strip() or (u.get("surname") or "").strip():
-                skipped += 1
-                continue
-            toks = (u.get("full_name") or "").split()
-            if not toks:
-                skipped += 1
-                continue
-            given, surname = (toks[0], "") if len(toks) == 1 else (" ".join(toks[:-1]), toks[-1])
-            await db.users.update_one({"id": u["id"]}, {"$set": {"given_name": given, "surname": surname}})
-            updated += 1
-        await write_audit(db, actor=admin, action="backfill_name_split", entity_type="member",
-                          entity_id="*", entity_name="roster",
-                          after={"scanned": scanned, "updated": updated, "skipped": skipped})
-        return {"scanned": scanned, "updated": updated, "skipped": skipped}
-
 
     @router.get("/members")
     async def list_members(key: str = "", category: Optional[str] = None,

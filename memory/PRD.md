@@ -774,3 +774,6 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - name_match_status (services/id_ocr.py + utils/nameMatch.js mirror) now returns exact | flipped | misspelt | close | mismatch. Flipped word order and small typos (Levenshtein ≤1 for ≤4-char words, ≤2 otherwise, 3+ letter tokens) are ALLOWED and flagged, not rejected. Only a genuine different-person mismatch is rejected (422).
 - IdDocsSection shows tailored red flags: "Name order looks flipped", "Name spelling differs slightly", "close match (extra name/initial)". Persistent card-name line + detected panel + tip text updated.
 - NOTE: Split-names backfill button (POST /members/backfill-name-split) is built & idempotent but NOT yet run on prod — awaiting user go-ahead (ask pending).
+
+### Jun 2026 — Dropped the Split-names backfill
+- Removed the "Split names" button (Members.jsx) and POST /members/backfill-name-split (members.py). Rationale (user): birth certificate is the source of truth, so a bulk split just complicates things. Given name/Surname are now populated only by the Birth-certificate upload or a manual edit in the member form.
