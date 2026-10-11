@@ -226,15 +226,22 @@ def make_router(db, require_admin) -> APIRouter:
             raise HTTPException(status_code=400, detail="File must be between 1 byte and 5 MB")
 
         expected = m.get("full_name") if person == "self" else m.get(f"{person}_name")
-        # OCR runs BEFORE we store anything: if the name on the scan is clearly
-        # a different person (user rule, Jun 2026) the whole upload is rejected
-        # and NOTHING is written — no file, no number, no name.
+        # Upload to object storage and OCR run CONCURRENTLY to cut latency — the
+        # storage PUT no longer waits for the (slower) AI read to finish.
+        path = f"{APP_PREFIX}/id-docs/{mid}/{person}_{card}_{uuid.uuid4().hex}.{ALLOWED_TYPES[ctype]}"
+        store_task = asyncio.create_task(asyncio.to_thread(put_object, path, data, ctype))
         detected = await read_id_card(data, ctype, card) if ocr else None
+
         # Wrong document in the slot (e.g. a passport dropped into the Birth
         # certificate stage) — reject so we never overwrite one card's number
-        # with another's (user, Jun 2026).
+        # with another's (user, Jun 2026). The already-uploaded blob is simply
+        # left unreferenced (no DB row points at it).
         dt = (detected or {}).get("doc_type")
         if dt and dt in CARDS and dt != card:
+            try:
+                await store_task
+            except Exception:
+                pass
             raise HTTPException(status_code=422, detail=(
                 f"This scan looks like a {CARD_LABEL[dt]}, not a {CARD_LABEL[card]}. "
                 f"Upload rejected — nothing was saved. Upload the correct document in this slot."))
@@ -244,8 +251,7 @@ def make_router(db, require_admin) -> APIRouter:
         # anyway. Every mismatch just stays flagged red. (A WRONG document in
         # the slot is still rejected above via doc_type.)
 
-        path = f"{APP_PREFIX}/id-docs/{mid}/{person}_{card}_{uuid.uuid4().hex}.{ALLOWED_TYPES[ctype]}"
-        await asyncio.to_thread(put_object, path, data, ctype)
+        await store_task  # ensure the file is written (propagates any error)
         meta = {"path": path, "name": _safe_name(file.filename or path.rsplit("/", 1)[-1]), "content_type": ctype,
                 "size": len(data), "uploaded_at": now_utc().isoformat(),
                 "uploaded_by": admin.get("full_name") or admin.get("email")}

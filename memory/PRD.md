@@ -795,3 +795,6 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - upload_scan no longer rejects ANY card on a name mismatch (removed the 422 for aadhaar/pan/passport too). Only a WRONG document (doc_type) is still rejected. All name mismatches stay flagged red.
 - Any SELF card (birth/aadhaar/pan/passport) with a differing name now shows the NameChoice panel (generalised from BirthSplit): "Change app name" (split → set) or "Keep app name as-is" (upload anyway). Birth always shows it (source of truth).
 - Generalised endpoint: POST /members/{mid}/id-docs/apply-self-name (replaces /self/birth/apply-name; path chosen to avoid shadowing the 2-segment upload route). Frontend applyName(card)/keepName(card). Tip text updated. Verified routes + compile.
+
+### Jun 2026 — Faster scan uploads
+- upload_scan now runs the object-storage PUT and the AI OCR read CONCURRENTLY (asyncio.create_task + await), instead of OCR→then→store sequentially. On a wrong-document (doc_type) reject the already-uploaded blob is left unreferenced (no DB row). Verified store path with ocr=false on a throwaway member. The remaining wait is the inherent AI read time.
