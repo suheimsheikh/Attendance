@@ -754,3 +754,10 @@ User request: "When issuing any item from the kitchen it should not allow if the
 - Added `frontend/src/utils/compressImage.js`: resizes longest edge to ~2000px, re-encodes JPEG ~82%, flattens transparency to white; falls back to original if undecodable or no size gain.
 - Wired into `IdDocsSection.jsx` upload for all ID doc scans (member + family). PDFs left untouched (compressed=image only).
 - Lowered hard cap 10 MB → 5 MB: client post-compression check + backend `MAX_BYTES` in `routes/id_docs.py`; updated tip + error copy. Self-tested (smoke).
+
+### Jun 2026 — Surname/Given name split + reject-on-name-mismatch
+- Member name is now stored as given_name + surname (self only); full_name kept in sync for the rest of the app. MemberForm shows Given name + Surname fields with a live full-name preview; legacy members derive the split from full_name (last word = surname) and can be corrected. Models: MemberCreate/MemberUpdate/UserPublic gained given_name/surname (members.py, models.py).
+- Birth certificate is the SOURCE OF TRUTH: uploading it offers Given/Surname split suggestions (last-word & first-word surname) which the admin picks/edits; POST /members/{mid}/id-docs/self/birth/apply-name replaces the app name (audit name_from_birth). Passport-name authority retired from the UI.
+- Reject-on-mismatch: upload_scan now OCRs BEFORE storing; if the scan name is a clear different-person "mismatch" the upload is rejected 422 and NOTHING is saved (member self + family father/mother/guardian cards). Birth cert also rejected if way off the existing app name.
+- Matching = order-independent, tolerant of an extra/missing middle name or an initial (services/id_ocr.name_match_status: exact|close|mismatch). "close" matches upload but stay flagged red until resolved; mirror JS util frontend/src/utils/nameMatch.js drives persistent red card-name warnings.
+- Verified: name_match_status unit cases; curl on throwaway member (given/surname persist, apply-birth-name title-cases + replaces, empty→400, id-docs app_given/app_surname); MemberForm UI screenshot. NOT auto-tested: live OCR upload reject/birth-split flow (needs real ID scans + Gemini).

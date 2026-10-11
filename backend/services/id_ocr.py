@@ -85,6 +85,37 @@ def name_exact(card_name: Optional[str], expected: Optional[str]) -> Optional[bo
     return None if not _norm(card_name) or not _norm(expected) else _norm(card_name) == _norm(expected)
 
 
+def _name_tokens(s: Optional[str]) -> list:
+    return [t for t in re.sub(r"[^A-Za-z ]", " ", (s or "")).upper().split() if t]
+
+
+def _tok_eq(a: str, b: str) -> bool:
+    """Two name words match if equal, or one is a single-letter initial of the other."""
+    return a == b or (len(a) == 1 and b.startswith(a)) or (len(b) == 1 and a.startswith(b))
+
+
+def name_match_status(card_name: Optional[str], expected: Optional[str]) -> Optional[str]:
+    """Order-independent name check (user, Jun 2026). Returns:
+        'exact'    — same words (any order), nothing extra
+        'close'    — matches but with an extra/missing middle name or an initial
+        'mismatch' — a core word on the smaller name has no counterpart (reject)
+        None       — either side blank / unreadable (can't judge)
+    """
+    ca, cb = _name_tokens(card_name), _name_tokens(expected)
+    if not ca or not cb:
+        return None
+    small, large = (ca, cb) if len(ca) <= len(cb) else (cb, ca)
+    used = [False] * len(large)
+    for t in small:
+        hit = next((i for i, u in enumerate(large) if not used[i] and u == t), -1)
+        if hit < 0:
+            hit = next((i for i, u in enumerate(large) if not used[i] and _tok_eq(t, u)), -1)
+        if hit < 0:
+            return "mismatch"
+        used[hit] = True
+    return "exact" if len(ca) == len(cb) and sorted(ca) == sorted(cb) else "close"
+
+
 def name_matches(card_name: Optional[str], expected: Optional[str]) -> Optional[bool]:
     """Loose check: any shared word of 3+ letters. None when either side is blank."""
     words = lambda s: {w for w in re.findall(r"[a-z]+", (s or "").lower()) if len(w) >= 3}

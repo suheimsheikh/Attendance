@@ -16,7 +16,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from routes.admin_audit import write_audit
-from services.id_ocr import name_exact, name_score, read_id_card
+from services.id_ocr import name_exact, name_match_status, name_score, read_id_card
 from services.permissions import is_ex_member
 from services.object_storage import APP_PREFIX, get_object, put_object
 from services.scope import athlete_like_keys
@@ -35,6 +35,22 @@ PARENTS = ("father", "mother", "guardian")
 MAX_BYTES = 5 * 1024 * 1024
 ALLOWED_TYPES = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 PAN_RE = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+CARD_LABEL = {"pan": "PAN", "aadhaar": "Aadhaar", "passport": "passport", "birth": "birth certificate"}
+PEOPLE_LABEL = {"self": "Member", "father": "Father", "mother": "Mother", "guardian": "Guardian"}
+
+
+def _title(name: str) -> str:
+    return " ".join(w[:1].upper() + w[1:].lower() for w in (name or "").split())
+
+
+def _split_options(name: str) -> list:
+    """Suggest ways to split one combined name into {given_name, surname}."""
+    toks = (name or "").split()
+    if len(toks) < 2:
+        return [{"given_name": _title(name), "surname": ""}]
+    last = {"given_name": _title(" ".join(toks[:-1])), "surname": _title(toks[-1])}
+    first = {"given_name": _title(" ".join(toks[1:])), "surname": _title(toks[0])}
+    return [last] if first == last else [last, first]
 
 
 class PersonNumbers(BaseModel):
@@ -59,6 +75,11 @@ class DobIn(BaseModel):
 
 class NameIn(BaseModel):
     name: str
+
+
+class SplitIn(BaseModel):
+    given_name: str = ""
+    surname: str = ""
 
 
 class IdNumbersIn(BaseModel):
@@ -129,7 +150,8 @@ def make_router(db, require_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     async def _member_and_people(mid: str):
-        m = await db.users.find_one({"id": mid}, {"_id": 0, "id": 1, "full_name": 1, "category": 1, "date_of_birth": 1,
+        m = await db.users.find_one({"id": mid}, {"_id": 0, "id": 1, "full_name": 1, "given_name": 1, "surname": 1,
+                                                  "category": 1, "date_of_birth": 1,
                                                   "father_name": 1, "mother_name": 1, "guardian_name": 1})
         if not m:
             raise HTTPException(status_code=404, detail="Member not found")
@@ -145,7 +167,8 @@ def make_router(db, require_admin) -> APIRouter:
 
     def _resp(doc: dict, m: dict, people: list) -> dict:
         names = {p: m.get("full_name") if p == "self" else m.get(f"{p}_name") for p in people}
-        return {**doc, "allowed_people": people, "app_names": names, "app_dob": m.get("date_of_birth") or ""}
+        return {**doc, "allowed_people": people, "app_names": names, "app_dob": m.get("date_of_birth") or "",
+                "app_given": m.get("given_name") or "", "app_surname": m.get("surname") or ""}
 
     @router.get("/members/{mid}/id-docs")
     async def get_id_docs(mid: str, admin: dict = Depends(require_admin)):
@@ -201,6 +224,19 @@ def make_router(db, require_admin) -> APIRouter:
         data = await file.read(MAX_BYTES + 1)
         if not data or len(data) > MAX_BYTES:
             raise HTTPException(status_code=400, detail="File must be between 1 byte and 5 MB")
+
+        expected = m.get("full_name") if person == "self" else m.get(f"{person}_name")
+        # OCR runs BEFORE we store anything: if the name on the scan is clearly
+        # a different person (user rule, Jun 2026) the whole upload is rejected
+        # and NOTHING is written — no file, no number, no name.
+        detected = await read_id_card(data, ctype, card) if ocr else None
+        name_status = name_match_status(detected.get("name"), expected) if detected and detected.get("name") else None
+        if name_status == "mismatch":
+            who = "member" if person == "self" else PEOPLE_LABEL.get(person, person).lower()
+            raise HTTPException(status_code=422, detail=(
+                f'Name on the {CARD_LABEL[card]} scan ("{detected["name"]}") does not match the {who} name '
+                f'"{expected or "—"}". Scan rejected — nothing was saved. Upload the correct document or fix the name first.'))
+
         path = f"{APP_PREFIX}/id-docs/{mid}/{person}_{card}_{uuid.uuid4().hex}.{ALLOWED_TYPES[ctype]}"
         await asyncio.to_thread(put_object, path, data, ctype)
         meta = {"path": path, "name": _safe_name(file.filename or path.rsplit("/", 1)[-1]), "content_type": ctype,
@@ -216,21 +252,26 @@ def make_router(db, require_admin) -> APIRouter:
         await write_audit(db, actor=admin, action="id_scan_uploaded", entity_type="member",
                           entity_id=mid, entity_name=m.get("full_name"),
                           after={"person": person, "card": card, "file": meta["name"]})
-        detected = await read_id_card(data, ctype, card) if ocr else None
         if ocr:
             await _store_read(mid, person, card, detected)
         if detected:
-            expected = m.get("full_name") if person == "self" else m.get(f"{person}_name")
-            detected.update(expected_name=expected, name_matches=name_exact(detected["name"], expected))
-            # Parent-name cross-check (self only): compare the father/mother
-            # names read off the scan against the member's app data so the
-            # admin can spot a wrong parent name at any stage.
+            # name_matches: True only on an exact word-set match; False on a
+            # tolerated "close" match (extra middle name / an initial) which
+            # stays flagged red until resolved; None when unreadable.
+            detected.update(expected_name=expected, name_status=name_status,
+                            name_matches=(name_status == "exact") if name_status else None)
+            # Birth certificate is the SOURCE OF TRUTH for the member name —
+            # offer splits so the admin stores it as Given name + Surname.
+            if person == "self" and card == "birth":
+                detected["is_name_source"] = True
+                detected["split_options"] = _split_options(detected.get("name") or "")
+            # Parent-name cross-check (self only) and DOB.
             if person == "self":
                 for par in ("father", "mother"):
                     cval = detected.get(f"{par}_name")
                     aval = m.get(f"{par}_name") or ""
                     detected[f"expected_{par}_name"] = aval
-                    detected[f"{par}_matches"] = name_exact(cval, aval) if cval and aval else None
+                    detected[f"{par}_matches"] = (name_match_status(cval, aval) == "exact") if cval and aval else None
                 app_dob = m.get("date_of_birth") or ""
                 stored = ((await _doc(mid)).get("people", {}).get("self") or {})
                 higher = [c for c in DOB_PRIORITY[:DOB_PRIORITY.index(card)] if stored.get(DOB_KEY[c])]
@@ -319,6 +360,23 @@ def make_router(db, require_admin) -> APIRouter:
         if match and det.get("type"):
             det["name_matches"] = name_exact(det["name"], match["person_name"])
         return {"detected": det, "match": match, "score": round(best_score, 2)}
+
+    # ---- Birth certificate is the source of truth for the member name ------
+    @router.post("/members/{mid}/id-docs/self/birth/apply-name")
+    async def apply_birth_name(mid: str, body: SplitIn, admin: dict = Depends(require_admin)):
+        """Split the birth-certificate name into Given name + Surname and REPLACE
+        the app name (user, Jun 2026 — the birth certificate is sacrosanct)."""
+        m, people = await _member_and_people(mid)
+        _check("self", "birth", people)
+        given, surname = _title(body.given_name), _title(body.surname)
+        full = " ".join(x for x in (given, surname) if x).strip()
+        if not full:
+            raise HTTPException(status_code=400, detail="Enter the given name and/or surname")
+        await db.users.update_one({"id": mid}, {"$set": {"full_name": full, "given_name": given, "surname": surname}})
+        await write_audit(db, actor=admin, action="name_from_birth", entity_type="member", entity_id=mid,
+                          entity_name=full, before={"full_name": m.get("full_name")},
+                          after={"full_name": full, "given_name": given, "surname": surname})
+        return {"field": "full_name", "name": full, "given_name": given, "surname": surname}
 
     # ---- App name follows the passport only (Oct 2026) ---------------------
     @router.post("/members/{mid}/id-docs/{person}/passport/use-name")

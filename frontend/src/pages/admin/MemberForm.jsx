@@ -22,8 +22,20 @@ const PROFILE_FIELDS = [
 export default function MemberForm({ initial, onClose, onSaved }) {
   const isEdit = !!initial;
   const [recalcFor, setRecalcFor] = useState(null);
+  // Name is stored as Given name + Surname (user, Jun 2026). Legacy members
+  // without the split are derived from their full name (last word = surname);
+  // the admin can correct it here, and the Birth certificate scan can override.
+  const splitFull = (full) => {
+    const t = (full || "").trim().split(/\s+/).filter(Boolean);
+    return t.length < 2 ? { given_name: full || "", surname: "" } : { given_name: t.slice(0, -1).join(" "), surname: t.slice(-1).join(" ") };
+  };
+  const nameParts = initial?.given_name || initial?.surname
+    ? { given_name: initial?.given_name || "", surname: initial?.surname || "" }
+    : splitFull(initial?.full_name);
   const [form, setForm] = useState({
     full_name: initial?.full_name || "",
+    given_name: nameParts.given_name,
+    surname: nameParts.surname,
     email: initial?.email || "",
     password: "",
     mobile: initial?.mobile || "",
@@ -117,6 +129,12 @@ export default function MemberForm({ initial, onClose, onSaved }) {
   }, []);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  // Given name / Surname edits keep full_name (used across the app) in sync.
+  const setName = (k, v) => setForm((f) => {
+    const next = { ...f, [k]: v };
+    next.full_name = [next.given_name, next.surname].filter(Boolean).join(" ").trim();
+    return next;
+  });
 
   const onPickPhoto = async (file) => {
     if (!file) return;
@@ -197,10 +215,21 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               <p className="text-[11px] text-slate-500 mt-1">Resized to 320 px for fast load.</p>
             </div>
           </div>
-          <div>
-            <label className="iu-label">Full name</label>
-            <input data-testid="mf-name" value={form.full_name} onChange={(e) => set("full_name", e.target.value)} className="iu-input" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="iu-label">Given name</label>
+              <input data-testid="mf-given-name" value={form.given_name} onChange={(e) => setName("given_name", e.target.value)} className="iu-input" placeholder="e.g. Rahul Vikram" />
+            </div>
+            <div>
+              <label className="iu-label">Surname</label>
+              <input data-testid="mf-surname" value={form.surname} onChange={(e) => setName("surname", e.target.value)} className="iu-input" placeholder="e.g. Sharma" />
+            </div>
           </div>
+          {(form.given_name || form.surname) && (
+            <p className="text-[11px] text-slate-500 -mt-1" data-testid="mf-fullname-preview">
+              Shown across the app as <b>{form.full_name || "—"}</b>. The Birth certificate scan (under Identity documents) is the source of truth and can reset this.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="iu-label">Email{isEdit && <span className="text-slate-400 normal-case font-normal"> (locked)</span>}</label>

@@ -21,6 +21,8 @@ class UserPublic(BaseModel):
     id: str
     email: Optional[str] = None
     full_name: str
+    given_name: Optional[str] = None
+    surname: Optional[str] = None
     role: Optional[str] = None
     category: Optional[str] = None
     # Custom Masters category shown to admins (e.g. "tuition_teacher");

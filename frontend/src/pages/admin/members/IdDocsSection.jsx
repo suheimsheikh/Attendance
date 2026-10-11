@@ -3,6 +3,7 @@ import { FileUp, Eye, Trash2, Loader2, IdCard, Lock, CheckCircle2, AlertTriangle
 import { toast } from "sonner";
 import { api, showApiError } from "../../../api";
 import { compressImage } from "../../../utils/compressImage";
+import { nameStatus } from "../../../utils/nameMatch";
 
 const PEOPLE_LABEL = { self: "Member", father: "Father", mother: "Mother", guardian: "Guardian" };
 const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar", passport: "Passport", birth: "Birth certificate" };
@@ -11,7 +12,6 @@ const PLACEHOLDER = { pan: "ABCDE1234F", aadhaar: "1234 5678 9012", passport: "Z
 const DOB_KEY = { birth: "birth_dob", passport: "passport_dob", aadhaar: "aadhaar_dob", pan: "pan_dob" };
 const DOB_PRIORITY = ["birth", "passport", "aadhaar", "pan"];
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
-const norm = (s) => (s || "").toUpperCase().split(/\s+/).filter(Boolean).join(" ");
 
 // Ordered capture chain for the MEMBER's own documents. PAN is optional, so
 // the Passport unlocks once the Aadhaar scan is in.
@@ -24,7 +24,6 @@ const STAGES = [
 
 // Plain-English rule hints shown under a mismatch so the admin knows what to fix.
 const HINT = {
-  name: "The app name follows the Passport only. If this differs, check the spelling — you can update the app name from the Passport stage.",
   dob: "Date-of-birth priority is Birth certificate › Passport › Aadhaar › PAN. Fix the app DOB or re-scan the clearer document.",
   father: "Father's name must match across the app and every document. Correct whichever is wrong.",
   mother: "Mother's name must match across the app and every document. Correct whichever is wrong.",
@@ -43,10 +42,46 @@ function MatchRow({ ok, label, cardVal, appVal, hint, tid }) {
   );
 }
 
-// Verification panel shown after a scan is read. Confirm the number, resolve
-// any name / DOB / parent mismatches. Uploads are allowed WITH mismatches —
-// they just stay flagged red until sorted out.
-function DetectedPanel({ card, d, onConfirm, onUseScanned, onDismiss, onUseName, onUseDob, tid }) {
+// Birth certificate is the SOURCE OF TRUTH for the member name. The admin
+// picks how to split the one combined name into Given name + Surname; applying
+// it REPLACES the app name.
+function BirthSplit({ options, onApply }) {
+  const [gn, setGn] = useState(options?.[0]?.given_name || "");
+  const [sn, setSn] = useState(options?.[0]?.surname || "");
+  const [busy, setBusy] = useState(false);
+  const apply = async () => { setBusy(true); try { await onApply(gn, sn); } finally { setBusy(false); } };
+  return (
+    <div className="rounded-md bg-sky-50 border border-sky-300 px-3 py-2.5 text-sky-900 space-y-2" data-testid="birth-split">
+      <div className="font-semibold flex items-center gap-1.5"><IdCard size={13} /> Birth certificate name — the source of truth</div>
+      <div className="text-[11px]">Choose how to split it into <b>Given name</b> and <b>Surname</b> — applying this replaces the app name.</div>
+      {options?.length > 1 && (
+        <div className="flex flex-wrap gap-1.5">
+          {options.map((o, i) => (
+            <button key={i} type="button" data-testid={`birth-split-suggestion-${i}`}
+              onClick={() => { setGn(o.given_name); setSn(o.surname); }}
+              className="px-2.5 h-7 rounded-md border border-sky-300 bg-white text-[11px] font-semibold hover:bg-sky-100">
+              {o.given_name || "—"} · <span className="uppercase">{o.surname || "—"}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <div><label className="iu-label">Given name</label><input data-testid="birth-split-given" value={gn} onChange={(e) => setGn(e.target.value)} className="iu-input text-xs" /></div>
+        <div><label className="iu-label">Surname</label><input data-testid="birth-split-surname" value={sn} onChange={(e) => setSn(e.target.value)} className="iu-input text-xs" /></div>
+      </div>
+      <button type="button" data-testid="birth-split-apply" onClick={apply} disabled={busy || !(gn || sn)}
+        className="px-3 h-8 rounded-md bg-sky-600 text-white font-semibold disabled:opacity-50">
+        {busy ? <Loader2 size={13} className="animate-spin inline" /> : null} Apply &amp; replace app name
+      </button>
+    </div>
+  );
+}
+
+// Verification panel shown after a scan is read. A clear NAME mismatch is
+// rejected server-side (nothing is saved), so by the time this shows the name
+// is an exact or a tolerated "close" match. Close matches stay flagged red
+// until resolved. For the birth certificate the admin sets the app name here.
+function DetectedPanel({ card, d, onConfirm, onUseScanned, onDismiss, onUseDob, onApplyBirth, tid }) {
   return (
     <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-3 text-xs text-amber-900 space-y-2.5" data-testid={`${tid}-detected`}>
       {d.mode === "choose" ? (
@@ -68,21 +103,17 @@ function DetectedPanel({ card, d, onConfirm, onUseScanned, onDismiss, onUseName,
         </>
       )}
 
-      {/* Name — passport can push its name to the app; other cards are read-only vs the app name. */}
-      {d.name_matches === false && (card === "passport" ? (
+      {/* Birth certificate: set the app name (Given name + Surname). */}
+      {card === "birth" && d.is_name_source && <BirthSplit options={d.split_options} onApply={onApplyBirth} />}
+
+      {/* Non-birth cards: a tolerated "close" name match stays flagged red. */}
+      {card !== "birth" && d.name_status === "close" && (
         <div className="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-rose-800" data-testid={`${tid}-name-warning`}>
-          <div className="font-semibold flex items-center gap-1.5"><AlertTriangle size={13} /> Name doesn&apos;t match</div>
-          <div className="mt-0.5 font-mono text-[11px]">passport: &ldquo;{d.name}&rdquo; · app: &ldquo;{d.expected_name}&rdquo;</div>
-          <button type="button" onClick={onUseName} data-testid={`${tid}-use-name`}
-            className="mt-1.5 px-3 h-7 rounded-md bg-rose-600 text-white font-semibold">Use passport name in app</button>
-        </div>
-      ) : (
-        <div className="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-rose-800" data-testid={`${tid}-name-warning`}>
-          <div className="font-semibold flex items-center gap-1.5"><AlertTriangle size={13} /> Name doesn&apos;t match</div>
+          <div className="font-semibold flex items-center gap-1.5"><AlertTriangle size={13} /> Name is a close match — verify</div>
           <div className="mt-0.5 font-mono text-[11px]">{CARD_LABEL[card]}: &ldquo;{d.name}&rdquo; · app: &ldquo;{d.expected_name}&rdquo;</div>
-          <div className="mt-0.5 text-[11px]">{HINT.name}</div>
+          <div className="mt-0.5 text-[11px]">Stored, but stays flagged red until the names match exactly (an extra middle name or an initial was allowed).</div>
         </div>
-      ))}
+      )}
 
       {d.dob_matches === false && (
         <MatchRow ok={false} label="Date of birth" cardVal={d.dob} appVal={d.expected_dob} hint={HINT.dob} tid={`${tid}-dob-warning`} />
@@ -143,11 +174,15 @@ function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onU
           <input type="date" data-testid={`${tid}-${card === "passport" ? "expiry" : "dob"}`} value={extra || ""} onChange={(e) => onExtra(e.target.value)} disabled={locked} className="iu-input text-xs disabled:opacity-50" />
         </div>
       )}
-      {cardName && (
-        <div data-testid={`${tid}-card-name`} className={`mt-1.5 text-[11px] ${norm(cardName) === norm(appName) ? "text-emerald-700" : "text-rose-700 font-semibold"}`}>
-          Name on card: {cardName}{norm(cardName) !== norm(appName) && " — doesn't match app name"}
-        </div>
-      )}
+      {cardName && (() => {
+        const st = nameStatus(cardName, appName);
+        const ok = st === "exact" || st === null;
+        return (
+          <div data-testid={`${tid}-card-name`} className={`mt-1.5 text-[11px] ${ok ? "text-emerald-700" : "text-rose-700 font-semibold"}`}>
+            Name on card: {cardName}{st === "close" && " — close match, verify"}{st === "mismatch" && " — doesn't match app name"}
+          </div>
+        );
+      })()}
       {cardDob && wantDob && (
         <div data-testid={`${tid}-card-dob`} className={`mt-0.5 text-[11px] ${cardDob === wantDob ? "text-emerald-700" : "text-rose-700 font-semibold"}`}>
           DOB on card: {cardDob}{cardDob !== wantDob && ` — doesn't match ${wantDob}`}
@@ -211,14 +246,16 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
     if (card === "birth" && d.dob) setNum(p, "birth_dob", d.dob);
     setDetected((x) => ({ ...x, [k]: { ...d, mode: "confirm" } }));
   };
-  const applyPassportName = async (p, card) => {
-    const k = `${p}.${card}`;
+  const applyBirthName = async (given_name, surname) => {
+    const k = "self.birth";
     try {
-      const res = await api.post(`/members/${memberId}/id-docs/${p}/passport/use-name`, { name: detected[k].name });
-      onNameChanged?.(res.field, res.name);
-      setDoc((x) => ({ ...x, app_names: { ...x.app_names, [p]: res.name } }));
-      setDetected((x) => ({ ...x, [k]: { ...x[k], name_matches: true, expected_name: res.name } }));
-      toast.success(`Name updated to "${res.name}"`);
+      const res = await api.post(`/members/${memberId}/id-docs/self/birth/apply-name`, { given_name, surname });
+      onNameChanged?.("full_name", res.name);
+      onNameChanged?.("given_name", res.given_name);
+      onNameChanged?.("surname", res.surname);
+      setDoc((x) => ({ ...x, app_names: { ...x.app_names, self: res.name }, app_given: res.given_name, app_surname: res.surname }));
+      setDetected((x) => ({ ...x, [k]: { ...x[k], expected_name: res.name, name_status: "exact", name_matches: true, is_name_source: false } }));
+      toast.success(`App name set to "${res.name}"`);
     } catch (err) { showApiError(err, "Couldn't update the name"); }
   };
   const applyDob = async (p, card) => {
@@ -315,7 +352,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
         <DetectedPanel card={card} d={detected[`${p}.${card}`]} tid={`id-${p}-${card}`}
           onConfirm={() => confirm(p, card, detected[`${p}.${card}`].number)}
           onUseScanned={() => { setNum(p, card, detected[`${p}.${card}`].number); setDetected((x) => ({ ...x, [`${p}.${card}`]: { ...x[`${p}.${card}`], mode: "confirm" } })); }}
-          onDismiss={() => clearDetected(`${p}.${card}`)} onUseName={() => applyPassportName(p, card)} onUseDob={() => applyDob(p, card)} />
+          onDismiss={() => clearDetected(`${p}.${card}`)} onApplyBirth={(gn, sn) => applyBirthName(gn, sn)} onUseDob={() => applyDob(p, card)} />
       )}
     </>
   );
@@ -335,7 +372,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
       <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-4" data-testid="id-docs-tip">
         Upload one clear PDF/photo per card (front &amp; back together). Photos are compressed automatically to keep them sharp yet small; PDFs upload as-is (max 5 MB). The number, name, DOB and parents&apos; names are read
         automatically and checked against the app. Capture them in order — <b>Birth certificate → Aadhaar → PAN → Passport</b>.
-        You can still upload with mismatches; they stay flagged red until sorted out.
+        The <b>Birth certificate</b> sets the member&apos;s name (split into Given name + Surname). If a later scan&apos;s name is clearly a different person it is <b>rejected and nothing is saved</b>; close matches (an extra middle name or an initial) upload but stay flagged red until resolved.
       </p>
 
       {(chainBroken || unresolved > 0) && (

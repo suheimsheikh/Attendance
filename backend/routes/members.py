@@ -38,6 +38,8 @@ class MemberCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=4)
     full_name: str
+    given_name: Optional[str] = None
+    surname: Optional[str] = None
     category: str = "athlete"
     rank: Optional[str] = None
     mobile: Optional[str] = None
@@ -99,6 +101,8 @@ class MemberCreate(BaseModel):
 
 class MemberUpdate(BaseModel):
     full_name: Optional[str] = None
+    given_name: Optional[str] = None
+    surname: Optional[str] = None
     email: Optional[str] = None
     category: Optional[str] = None
     rank: Optional[str] = None
@@ -178,6 +182,8 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
             "id": str(uuid.uuid4()),
             "email": body.email,
             "full_name": body.full_name,
+            "given_name": body.given_name,
+            "surname": body.surname,
             "role": body.role,
             "category": body.category,
             "rank": body.rank,
