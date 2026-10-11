@@ -2,6 +2,15 @@
 
 Append-only log of feature/bug shipments. PRD.md holds the static
 
+## 2026-10-11 — Athlete attendance is CAMPS-ONLY on Grid + Presence (regattas/work_start no longer count)
+User rule: for athletes, a camp is the SOLE source of "expected". No camp that day → Grid cell blank, Presence hides them entirely. Camp timings drive present/late/absent. Regattas and personal work_start must NOT make an athlete expected.
+- Grid (`routes/reports/grid.py`): reverted the regatta union — `_expected_dates` for athletes = enrolled-camp days only. Added: weekly-off (WO) and holiday (HO) no longer apply to athlete-like members, so a camp-day no-show resolves to AB (past day) or blank (today, in progress) instead of WO/HO. Employees unchanged.
+- Presence (`server.py` presence): camp-less athlete-like members are now hidden from the board entirely (previously a camp-less athlete WITH a personal work_start was wrongly shown "absent"). Uses DB-driven `athlete_like_keys`. In the no-session branch, `_is_athlete_like(u) and not camp_today → continue`. Camp athletes still resolve absent/not_due against the camp's start-time. Non-athletes unaffected.
+- Muster absent-report: already camp-only for athletes (`_athlete_expected` uses camps) — no change needed.
+Verified via seeded API tests (today = Sunday / default weekly-off): AthleteCamp enrolled no-show → Presence absent, Grid AB (past) / blank (today); AthleteNoCamp (in a regatta + has work_start) → Presence HIDDEN, Grid blank; StaffCtrl → absent (unaffected). Backend boots clean; test data removed.
+NOTE: needs a redeploy to reach production.
+
+
 ## 2026-10-11 — Code review fixes on the roster/iOS changes (regression-tested)
 Functional review of the two fixes returned READY-WITH-FIXES; applied all:
 - MEDIUM: `muster_daily_roster` projection was missing `institution`/`fleet`, so `resolve_member_break` silently ignored institution/fleet-scoped breaks → staff on such a break were falsely flagged "Absent (no info)". Added both fields. Fixed + verified.

@@ -99,6 +99,7 @@ from services.attendance_calc import (
     open_excursion as _open_excursion,
     parse_expected_return as _parse_expected_return,
 )
+from services.scope import athlete_like_keys as _athlete_like_keys
 
 
 async def _active_camp_for(target: dict, ts: datetime, office: dict) -> Optional[dict]:
@@ -1474,6 +1475,14 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
     def _camp_for(u: dict) -> Optional[dict]:
         return _camps_module.resolve_member_camp(u, camps_today, today_weekday, target_date)
 
+    # Camps are the SOLE source of "expected" for athlete-like members
+    # (user rule, Oct 2026). A camp-less athlete is hidden from the board
+    # entirely — never shown as absent/not-due off a personal work_start or
+    # a regatta. Employees are unaffected.
+    _athlete_like_set = set(await _athlete_like_keys(db))
+    def _is_athlete_like(u: dict) -> bool:
+        return (u.get("category") or "") in _athlete_like_set
+
     # Breaks overlay — like an approved leave but applied to whole categories /
     # institutions / arbitrary member groups. Bulk-fetch, resolve per-member.
     breaks_today = await _breaks_module.fetch_breaks_active_on(db, target_date)
@@ -1625,18 +1634,22 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                 # times override; otherwise fall back to the member's personal
                 # work_start (or the office default).
                 camp_today = _camp_for(u)
+                # Camps-only rule: an athlete with no camp today isn't expected
+                # at all — hide them from the board (never absent/not-due off a
+                # personal work_start). Camp athletes fall through normally.
+                if _is_athlete_like(u) and not camp_today:
+                    continue
                 if camp_today:
                     ws_hm = camp_today.get("start_time") or "09:00"
                     cg = camp_today.get("late_grace_minutes")
                     grace = int(cg if cg is not None else (office.get("late_grace_minutes") or 0))
                     is_expected_today = True
                 else:
+                    # Only non-athletes reach here (camp-less athletes skipped
+                    # above). Employees are expected on a working day.
                     ws_hm = u.get("work_start") or office.get("default_work_start") or "09:00"
                     grace = int(office.get("late_grace_minutes") or 0)
-                    # Athletes with no personal work_start AND no camp today
-                    # aren't expected on campus. Skip the "absent" branch so
-                    # we don't slander camp-only kids on weekdays.
-                    is_expected_today = bool(u.get("work_start")) or u.get("category") not in ATHLETE_CATEGORIES
+                    is_expected_today = True
                 try:
                     ws_h, ws_m = (int(x) for x in ws_hm.split(":")[:2])
                     if is_historical:

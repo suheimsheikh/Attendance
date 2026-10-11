@@ -346,9 +346,14 @@ def register(router, *, _athlete_like_keys, db, require_admin):
             # apart from a global HO (15 Feb 2026).
             if iso in breaks_by_user.get(uid, {}):
                 return "BK"
-            if WEEKDAY_KEY[dow_idx] == weekly_off:
+            # Weekly-off / holiday are employee concepts and do NOT apply to
+            # athletes — they're camp-driven, so an enrolled camp day always
+            # overrides a weekly-off/holiday (a no-show resolves to AB on a
+            # past day, or blank today while still in progress).
+            _is_ath = _cat_by_uid.get(uid, "") in _athlete_like_absent
+            if not _is_ath and WEEKDAY_KEY[dow_idx] == weekly_off:
                 return "WO"
-            if iso in holiday_dates:
+            if not _is_ath and iso in holiday_dates:
                 return "HO"
             # The current day never shows "AB": the day is still in
             # progress, so a member with no check-in yet is rendered
@@ -362,26 +367,18 @@ def register(router, *, _athlete_like_keys, db, require_admin):
         # Precompute day-of-week per iso for the month.
         dow_by_iso = {iso: date.fromisoformat(iso).weekday() for iso in days}
 
-        # Designated camp/regatta dates per athlete (user request,
-        # Jun 2026). Athletes only carry attendance on these days — every
-        # other day is blanked by `_classify` and on a designated day a
-        # no-show paints "AB". `_expected_dates[uid]` = the union of:
-        #   • camp days (camp covers the date AND the athlete is enrolled)
-        #   • regatta days (the athlete is on the regatta's travelling team)
-        # Employees (staff/coach/exec) are unaffected.
+        # Camp-expected dates per athlete (user rule, Oct 2026 — camps only).
+        # Athletes carry attendance ONLY on days an enrolled camp covers;
+        # every other day is blanked by `_classify` and a camp no-show paints
+        # "AB". Regattas and personal work_start do NOT make an athlete
+        # expected. Employees (staff/coach/exec) are unaffected.
         from camps import camp_active_on as _camp_active_on, camp_applies_to as _camp_applies_to
         _WK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
         _athlete_like_absent = athlete_like
         _cat_by_uid = {u["id"]: (u.get("category") or "") for u in users}
-        _camps_range, _regattas_range = await asyncio.gather(
-            db.camps.find(
-                {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}}, {"_id": 0},
-            ).to_list(500),
-            db.regattas.find(
-                {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}},
-                {"_id": 0, "team_ids": 1, "start_date": 1, "end_date": 1},
-            ).to_list(500),
-        )
+        _camps_range = await db.camps.find(
+            {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}}, {"_id": 0},
+        ).to_list(500)
         _expected_dates: dict = {}
         if _camps_range:
             _athletes = [u for u in users if (u.get("category") or "") in _athlete_like_absent]
@@ -393,18 +390,6 @@ def register(router, *, _athlete_like_keys, db, require_admin):
                 for u in _athletes:
                     if any(_camp_applies_to(c, u) for c in active):
                         _expected_dates.setdefault(u["id"], set()).add(iso)
-        # Regatta travelling team — every calendar day in the event window
-        # counts as a designated attendance day for the athletes on the team.
-        for r in _regattas_range:
-            tids = [t for t in (r.get("team_ids") or []) if _cat_by_uid.get(t, "") in _athlete_like_absent]
-            if not tids:
-                continue
-            cur = max(r.get("start_date") or start_iso, start_iso)
-            stop = min(r.get("end_date") or end_iso, end_iso)
-            while cur <= stop:
-                for uid in tids:
-                    _expected_dates.setdefault(uid, set()).add(cur)
-                cur = (date.fromisoformat(cur) + timedelta(days=1)).isoformat()
 
         _hourly_uids = {u["id"] for u in users if u.get("hourly_wager")}
 
