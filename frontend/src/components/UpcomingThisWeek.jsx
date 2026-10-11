@@ -8,7 +8,7 @@ function shortDate(s) {
   if (!s) return "";
   const [y, m, d] = s.split("-");
   const dt = new Date(Number(y), Number(m) - 1, Number(d));
-  return dt.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "2-digit", year: "2-digit" });
+  return dt.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 const REGATTA_LEVEL_TONE = {

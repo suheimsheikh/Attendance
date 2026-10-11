@@ -230,6 +230,14 @@ def make_router(db, require_admin) -> APIRouter:
         # a different person (user rule, Jun 2026) the whole upload is rejected
         # and NOTHING is written — no file, no number, no name.
         detected = await read_id_card(data, ctype, card) if ocr else None
+        # Wrong document in the slot (e.g. a passport dropped into the Birth
+        # certificate stage) — reject so we never overwrite one card's number
+        # with another's (user, Jun 2026).
+        dt = (detected or {}).get("doc_type")
+        if dt and dt in CARDS and dt != card:
+            raise HTTPException(status_code=422, detail=(
+                f"This scan looks like a {CARD_LABEL[dt]}, not a {CARD_LABEL[card]}. "
+                f"Upload rejected — nothing was saved. Upload the correct document in this slot."))
         name_status = name_match_status(detected.get("name"), expected) if detected and detected.get("name") else None
         if name_status == "mismatch":
             who = "member" if person == "self" else PEOPLE_LABEL.get(person, person).lower()

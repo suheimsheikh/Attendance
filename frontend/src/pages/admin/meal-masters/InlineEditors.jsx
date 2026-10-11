@@ -117,7 +117,7 @@ export function InlineDate({ value, onSave, testid }) {
   const [v, setV] = useState(value || "");
   useEffect(() => { setV(value || ""); }, [value]);
   const display = value
-    ? new Date(value + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })
+    ? new Date(value + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
     : "set date";
   if (!editing) {
     return (

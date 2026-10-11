@@ -17,7 +17,7 @@ export default function ShoppingListPanel({ data }) {
   const copyList = async () => {
     const lines = items.map((i) => `• ${i.name}: buy ${fmt(i.suggested_qty, i.unit)} ${i.unit} (${fmt(i.on_hand, i.unit)} on hand)`);
     try {
-      await navigator.clipboard.writeText(`Pantry shopping list — ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" })}\n${lines.join("\n")}`);
+      await navigator.clipboard.writeText(`Pantry shopping list — ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}\n${lines.join("\n")}`);
       toast.success("Shopping list copied");
     } catch {
       toast.error("Couldn't copy — your browser blocked clipboard access");

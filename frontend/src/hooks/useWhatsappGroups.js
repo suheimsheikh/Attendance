@@ -52,10 +52,10 @@ export function buildWhatsappHeader({ audience, groups, dateIso }) {
     : (groups?.athletes_group_name || DEFAULTS.athletes_group_name);
   const dt = dateIso
     ? new Date(dateIso + "T00:00:00").toLocaleDateString("en-GB", {
-        weekday: "short", day: "2-digit", month: "short", year: "2-digit",
+        weekday: "short", day: "2-digit", month: "short", year: "numeric",
       })
     : new Date().toLocaleDateString("en-GB", {
-        weekday: "short", day: "2-digit", month: "short", year: "2-digit",
+        weekday: "short", day: "2-digit", month: "short", year: "numeric",
       });
   return `📊 *Attendance Report for ${name}*\n📅 Date: ${dt}\n`;
 }

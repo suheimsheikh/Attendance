@@ -84,7 +84,16 @@ function BirthSplit({ options, onApply }) {
 function DetectedPanel({ card, d, onConfirm, onUseScanned, onDismiss, onUseDob, onApplyBirth, tid }) {
   return (
     <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-3 text-xs text-amber-900 space-y-2.5" data-testid={`${tid}-detected`}>
-      {d.mode === "choose" ? (
+      {/* Picture of the upload so the admin can eyeball the number & names. */}
+      {d.preview && (
+        <div className="rounded-md overflow-hidden border border-amber-200 bg-white">
+          <img src={d.preview} alt="Uploaded scan" data-testid={`${tid}-preview`} className="max-h-56 w-auto mx-auto object-contain" />
+          <div className="text-[10px] text-amber-700 text-center py-1 border-t border-amber-100">Check the details below against this scan</div>
+        </div>
+      )}
+      {d.no_number ? (
+        <div data-testid={`${tid}-no-number`}>Couldn&apos;t read the {CARD_LABEL[card]} number — type it in the box above, then <b>Save ID numbers</b>.</div>
+      ) : d.mode === "choose" ? (
         <>
           <div>The box has <b className="font-mono">{d.current}</b> but the scan shows <b className="font-mono">{d.number}</b>.</div>
           <div className="flex gap-2">
@@ -145,7 +154,10 @@ function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onU
     try {
       const compressed = await compressImage(f);
       if (compressed.size > 5 * 1024 * 1024) { toast.error("File must be 5 MB or smaller"); return; }
-      const fd = new FormData(); fd.append("file", compressed); onUploaded(await api.post(base, fd));
+      const fd = new FormData(); fd.append("file", compressed);
+      const res = await api.post(base, fd);
+      const preview = compressed.type?.startsWith("image/") ? URL.createObjectURL(compressed) : null;
+      onUploaded(res, preview);
     }
     catch (err) { showApiError(err, "Upload failed"); }
     finally { setBusy(false); if (inputRef.current) inputRef.current.value = ""; }
@@ -233,13 +245,17 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
     catch (err) { showApiError(err, "Could not save ID numbers"); return false; }
     finally { setSaving(false); }
   };
-  const onUploaded = (p, card, res) => {
+  const onUploaded = (p, card, res, preview) => {
     setDoc(res);
-    const d = res.detected;
-    if (!d?.number) { toast.message(`${CARD_LABEL[card]} scan uploaded — couldn't read the number, please type it`); return; }
+    const d = { ...res.detected, preview };
+    const k = `${p}.${card}`;
+    if (!d?.number) {
+      toast.message(`${CARD_LABEL[card]} scan uploaded — couldn't read the number, please type it`);
+      setDetected((x) => ({ ...x, [k]: { ...d, mode: "confirm", no_number: true } }));
+      return;
+    }
     toast.success(`${CARD_LABEL[card]} scan uploaded — number detected`);
     const current = (nums[p]?.[card] || "").replace(/\s/g, "").toUpperCase();
-    const k = `${p}.${card}`;
     if (current && current !== d.number) { setDetected((x) => ({ ...x, [k]: { ...d, mode: "choose", current } })); return; }
     setNum(p, card, d.number);
     if (card === "passport" && d.expiry) setNum(p, "passport_expiry", d.expiry);
@@ -347,7 +363,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
         onExtra={(v) => setNum(p, card === "birth" ? "birth_dob" : "passport_expiry", v)}
         cardName={doc.people?.[p]?.[`${card}_name`]} appName={doc.app_names?.[p]}
         cardDob={p === "self" ? doc.people?.self?.[DOB_KEY[card]] : ""} wantDob={p === "self" ? wantDob : ""}
-        onUploaded={(res) => onUploaded(p, card, res)} {...opts} />
+        onUploaded={(res, preview) => onUploaded(p, card, res, preview)} {...opts} />
       {detected[`${p}.${card}`] && (
         <DetectedPanel card={card} d={detected[`${p}.${card}`]} tid={`id-${p}-${card}`}
           onConfirm={() => confirm(p, card, detected[`${p}.${card}`].number)}

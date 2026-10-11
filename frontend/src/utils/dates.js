@@ -6,17 +6,17 @@ export const fmtDateLong = (iso) => iso ? day(iso, { weekday: "short", day: "2-d
 // "Mon, 03 Jun"
 export const fmtDateWk = (iso) => iso ? day(iso, { weekday: "short", day: "2-digit", month: "short" }) : "";
 // "Mon, 03 Jun 26"
-export const fmtDateWkYY = (iso) => iso ? day(iso, { weekday: "short", day: "2-digit", month: "short", year: "2-digit" }) : "";
+export const fmtDateWkYY = (iso) => iso ? day(iso, { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) : "";
 // "03 Jun"
 export const fmtDateDM = (iso) => iso ? day(iso, { day: "2-digit", month: "short" }) : "";
 
-// "03/06/26" from "2026-06-03"; raw value if not ISO-shaped.
+// "03/06/2026" from "2026-06-03"; raw value if not ISO-shaped.
 export function fmtDDMMYY(iso) {
   if (!iso) return "—";
   const parts = String(iso).split("-");
   if (parts.length !== 3) return iso;
   const [y, m, d] = parts;
-  return `${d}/${m}/${y.slice(-2)}`;
+  return `${d}/${m}/${y}`;
 }
 
 // Timestamp → "03 Jun 2026, 14:05" in IST.

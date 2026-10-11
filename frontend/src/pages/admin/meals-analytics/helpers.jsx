@@ -121,7 +121,7 @@ export function useMetrics(days) {
     const monthMap = new Map();
     rows.forEach((r) => {
       const [y, m] = r.date.split("-");
-      const key = `${MONTH_LABELS[+m - 1]} ${y.slice(-2)}`;
+      const key = `${MONTH_LABELS[+m - 1]} ${y}`;
       const rec = monthMap.get(key) || { month: key, ...emptySlots(), days: 0 };
       SLOT_KEYS.forEach((k) => { rec[k] += r[k]; });
       rec.days += 1;

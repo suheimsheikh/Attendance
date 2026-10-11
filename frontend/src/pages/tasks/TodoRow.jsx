@@ -4,7 +4,7 @@ import { recurrenceLabel } from "./ChecklistsTab";
 import TodoComments from "./TodoComments";
 import { fmtDateDM as fmtDay } from "../../utils/dates";
 
-const fmtStamp = (iso) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }) : "";
+const fmtStamp = (iso) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "";
 const daysSince = (iso) => { if (!iso) return null; const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000); return diff < 0 ? 0 : diff; };
 const elapsedLabel = (n) => n === null ? "" : n === 0 ? "today" : n === 1 ? "1 day ago" : `${n} days ago`;
 const daysToDue = (due, today) => { if (!due || !today) return null; return Math.round((new Date(due + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000); };

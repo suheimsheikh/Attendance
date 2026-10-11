@@ -9,7 +9,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const ddmmyy = (iso) => {
   if (!iso) return "";
   const [y, m, d] = String(iso).split("-");
-  return d && m && y ? `${d}/${m}/${String(y).slice(-2)}` : String(iso);
+  return d && m && y ? `${d}/${m}/${String(y)}` : String(iso);
 };
 const nq = (x) => (x === null || x === undefined ? "" : Number(x).toLocaleString("en-IN", { maximumFractionDigits: 3 }));
 const rs = (x) => money(x, 2, "");

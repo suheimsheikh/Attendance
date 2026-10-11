@@ -111,13 +111,13 @@ export function formatDate(d) {
     if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
       const [y, m, day] = d.split("-").map(Number);
       const dow = dayOfWeek(d);
-      const numeric = `${String(day).padStart(2, "0")}/${String(m).padStart(2, "0")}/${String(y).slice(-2)}`;
+      const numeric = `${String(day).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
       return dow ? `${dow} ${numeric}` : numeric;
     }
     // Full ISO timestamps: render in IST via `en-GB` (dd/mm/yy) with a
     // short day-of-week prefix (user request 26 Feb 2026).
     const numeric = new Date(d).toLocaleDateString("en-GB", {
-      day: "2-digit", month: "2-digit", year: "2-digit", timeZone: OFFICE_TZ,
+      day: "2-digit", month: "2-digit", year: "numeric", timeZone: OFFICE_TZ,
     });
     const dow = new Date(d).toLocaleDateString("en-GB", {
       weekday: "short", timeZone: OFFICE_TZ,

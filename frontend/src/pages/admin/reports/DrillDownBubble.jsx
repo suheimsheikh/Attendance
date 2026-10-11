@@ -24,7 +24,7 @@ export default function DrillDownBubble({ tip }) {
     try {
       const dt = new Date(d + "T00:00:00");
       return dt.toLocaleDateString("en-GB",
-        { weekday: "short", day: "2-digit", month: "2-digit", year: "2-digit" });
+        { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
     } catch { return d; }
   });
   return (

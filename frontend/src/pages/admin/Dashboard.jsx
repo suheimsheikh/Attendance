@@ -97,7 +97,7 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-center gap-2 mt-0.5">
             <p className="text-sm text-slate-500">
               {new Date(today + "T00:00:00").toLocaleDateString("en-GB", {
-                weekday: "long", day: "2-digit", month: "2-digit", year: "2-digit",
+                weekday: "long", day: "2-digit", month: "2-digit", year: "numeric",
               })}
             </p>
             <RosterStatusChip />

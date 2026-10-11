@@ -163,7 +163,7 @@ export default function ItemRow({ item, stock, cats, subcats = [], isAdmin, onPa
               )}
               {Number(item.opening_stock) > 0 && item.opening_stock_as_of && (
                 <span className="text-[9px] leading-tight text-slate-500 tabular-nums">
-                  as of {new Date(item.opening_stock_as_of + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                  as of {new Date(item.opening_stock_as_of + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                 </span>
               )}
             </span>
