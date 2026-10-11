@@ -749,3 +749,8 @@ User request: "When issuing any item from the kitchen it should not allow if the
 ### Oct 2026 — Education (marksheets tree)
 - Top-level sidebar "Education" (/admin/education, admins only). Tree: Athletes (athlete_like_keys) / Coaches (coach) → members A→Z → marksheets newest first (year, month desc).
 - routes/education.py: GET /education/tree, POST /education/read (AI pre-fill, nothing saved), POST /education/members/{mid}/marksheets, PATCH/DELETE /education/marksheets/{id}, GET .../file. Collection `marksheets`; scans in object storage. Strict name check vs app name (sheet_name). Tested iter 105.
+
+### Jun 2026 — ID scan client-side compression
+- Added `frontend/src/utils/compressImage.js`: resizes longest edge to ~2000px, re-encodes JPEG ~82%, flattens transparency to white; falls back to original if undecodable or no size gain.
+- Wired into `IdDocsSection.jsx` upload for all ID doc scans (member + family). PDFs left untouched (compressed=image only).
+- Lowered hard cap 10 MB → 5 MB: client post-compression check + backend `MAX_BYTES` in `routes/id_docs.py`; updated tip + error copy. Self-tested (smoke).

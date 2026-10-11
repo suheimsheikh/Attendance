@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { FileUp, Eye, Trash2, Loader2, IdCard, Lock, CheckCircle2, AlertTriangle, Users, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../../api";
+import { compressImage } from "../../../utils/compressImage";
 
 const PEOPLE_LABEL = { self: "Member", father: "Father", mother: "Mother", guardian: "Guardian" };
 const CARD_LABEL = { pan: "PAN", aadhaar: "Aadhaar", passport: "Passport", birth: "Birth certificate" };
@@ -109,9 +110,12 @@ function IdCardField({ memberId, person, card, value, file, onChange, onDoc, onU
 
   const upload = async (f) => {
     if (!f) return;
-    if (f.size > 10 * 1024 * 1024) { toast.error("File must be 10 MB or smaller"); return; }
     setBusy(true);
-    try { const fd = new FormData(); fd.append("file", f); onUploaded(await api.post(base, fd)); }
+    try {
+      const compressed = await compressImage(f);
+      if (compressed.size > 5 * 1024 * 1024) { toast.error("File must be 5 MB or smaller"); return; }
+      const fd = new FormData(); fd.append("file", compressed); onUploaded(await api.post(base, fd));
+    }
     catch (err) { showApiError(err, "Upload failed"); }
     finally { setBusy(false); if (inputRef.current) inputRef.current.value = ""; }
   };
@@ -329,7 +333,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
         </button>
       </div>
       <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-4" data-testid="id-docs-tip">
-        Upload one clear PDF/photo per card (front &amp; back together, max 10 MB). The number, name, DOB and parents&apos; names are read
+        Upload one clear PDF/photo per card (front &amp; back together). Photos are compressed automatically to keep them sharp yet small; PDFs upload as-is (max 5 MB). The number, name, DOB and parents&apos; names are read
         automatically and checked against the app. Capture them in order — <b>Birth certificate → Aadhaar → PAN → Passport</b>.
         You can still upload with mismatches; they stay flagged red until sorted out.
       </p>

@@ -32,7 +32,7 @@ NUMBER_KEYS = ("pan", "aadhaar", "passport", "passport_expiry", "birth", "birth_
                "pan_dob", "aadhaar_dob", "passport_dob") + NAME_KEYS
 PASSPORT_RE = re.compile(r"^[A-Z0-9]{6,9}$")
 PARENTS = ("father", "mother", "guardian")
-MAX_BYTES = 10 * 1024 * 1024
+MAX_BYTES = 5 * 1024 * 1024
 ALLOWED_TYPES = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 PAN_RE = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
 
@@ -200,7 +200,7 @@ def make_router(db, require_admin) -> APIRouter:
             raise HTTPException(status_code=400, detail="Upload a PDF, JPG, PNG or WEBP file")
         data = await file.read(MAX_BYTES + 1)
         if not data or len(data) > MAX_BYTES:
-            raise HTTPException(status_code=400, detail="File must be between 1 byte and 10 MB")
+            raise HTTPException(status_code=400, detail="File must be between 1 byte and 5 MB")
         path = f"{APP_PREFIX}/id-docs/{mid}/{person}_{card}_{uuid.uuid4().hex}.{ALLOWED_TYPES[ctype]}"
         await asyncio.to_thread(put_object, path, data, ctype)
         meta = {"path": path, "name": _safe_name(file.filename or path.rsplit("/", 1)[-1]), "content_type": ctype,
@@ -305,7 +305,7 @@ def make_router(db, require_admin) -> APIRouter:
             raise HTTPException(status_code=400, detail="Upload a PDF, JPG, PNG or WEBP file")
         data = await file.read(MAX_BYTES + 1)
         if not data or len(data) > MAX_BYTES:
-            raise HTTPException(status_code=400, detail="File must be between 1 byte and 10 MB")
+            raise HTTPException(status_code=400, detail="File must be between 1 byte and 5 MB")
         det = await read_id_card(data, ctype, "auto") or {"type": None, "number": None, "name": None}
         best, best_score = None, 0.0
         if det.get("name"):
