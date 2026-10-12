@@ -24,7 +24,7 @@ const todayKey = todayIso;
 const sentTime = (iso) =>
   iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 
-const sentNote = (st) => `Already sent by ${st.sent_by_name || "an admin"} at ${sentTime(st.sent_at)}`;
+const sentNote = (st) => `Already sent by ${st.sent_by_name || "a colleague"} at ${sentTime(st.sent_at)}`;
 
 // "NAME (IN 09:42 · 12m late)" — one-line late label from a roster.late
 // or late-report contact row.
@@ -60,6 +60,8 @@ export default function AbsentDispatchPrompt() {
     if (new Date().getHours() < DISPATCH_HOUR) return;
     try {
       const status = await api.get("/muster/absent-dispatch");
+      // Camp days only, and only to eligible people (admins + present coaches).
+      if (!status?.is_camp_day || status?.eligible === false) return;
       if (status?.sent) {
         setOpen((wasOpen) => {
           if (wasOpen) toast.info(sentNote(status));

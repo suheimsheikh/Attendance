@@ -27,6 +27,14 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 12 Oct 2026 — Absentee WhatsApp dispatch: coaches + camp-days (Phase 1, shipped)
+- Reused the existing daily absentee-dispatch prompt; two gates added, minimal diff:
+  - `routes/muster.py` `/muster/absent-dispatch` GET+POST now allow **admins OR coaches** (category=coach, non-escort), gate to **camp days** (`fetch_camps_active_on`), and require coaches to be **checked in today**. GET returns `is_camp_day` + `eligible`; POST 400s off-camp and 403s an un-checked-in coach. Removed the dead `_require_admin` helper.
+  - `Layout.jsx`: mount the prompt for coaches too (`isAdmin || category==='coach'`).
+  - `AbsentDispatchPrompt.jsx`: bail unless `is_camp_day && eligible`; "sent by" fallback wording.
+- Unchanged (per plan): once-per-day group-wide sent flag, message content (Absent·Late·Leave·Tour·LOP), 10:00 cut-off, WhatsApp share-sheet flow, per-device "Not now".
+- Verified via curl end-to-end: admin eligible on camp days / silent off-camp; coach eligible only when checked in; coach POST sets the shared flag; non-camp POST→400. Frontend compiles. Phases 2 (manual button, group hint) & 3 (per-parent messaging via WA Business API / SMS) deferred.
+
 ### 12 Oct 2026 — Prod "refresh" banner nagging forever (fixed)
 - Symptom: production continuously showed the red "new version available" banner, even after refreshing.
 - Root cause: `routes/office.py _cached_version()` fell back to `boot-<timestamp>` (container start time) when neither `APP_VERSION` env var nor a `.git` dir was present — which is the case in the deployed image. With multiple replicas (or any pod restart), each pod returned a DIFFERENT `boot-...`, so the frontend's 5-min `/api/version` poll flapped between pods → banner never cleared. (Frontend `VersionPoller.jsx` logic was fine.)

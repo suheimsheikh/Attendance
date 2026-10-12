@@ -347,7 +347,7 @@ export default function Layout() {
       <UserCredsChip />
       <StaleSessionPrompt />
       {isAdmin && !isEscort && <LeaveReportPrompt />}
-      {isAdmin && !isEscort && <AbsentDispatchPrompt />}
+      {(isAdmin || user?.category === "coach") && !isEscort && <AbsentDispatchPrompt />}
       {isAdmin && !isEscort && <PassportExpiryPrompt />}
       <InstallPrompt />
       <OfflineBanner />

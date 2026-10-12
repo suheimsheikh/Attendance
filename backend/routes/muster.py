@@ -231,26 +231,48 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         out.sort(key=lambda x: (x["full_name"] or "").lower())
         return {"mode": mode, "date": today, "athletes": out, "count": len(out)}
 
-    def _require_admin(user: dict) -> None:
-        if user.get("role") != "admin" or user.get("is_escort"):
-            raise HTTPException(status_code=403, detail="Admins only")
+    def _dispatch_access(user: dict):
+        """(is_admin, is_coach) for the absentee-dispatch prompt. Coaches are
+        members with category 'coach'. Escorts never qualify."""
+        if user.get("is_escort"):
+            return (False, False)
+        return (user.get("role") == "admin",
+                (user.get("category") or "").lower() == "coach")
 
     async def _dispatch_status(today: str) -> dict:
         row = await db.absent_dispatch_log.find_one({"date": today}, {"_id": 0})
         return {"date": today, "sent": bool(row), **(row or {})}
 
-    # Shared "absentees sent to WhatsApp today" flag — first admin wins.
+    # Shared "absentees sent to WhatsApp today" flag — first sender (admin or
+    # present coach) wins. Gated to camp days; coaches must be checked in.
     @router.get("/muster/absent-dispatch")
     async def absent_dispatch_status(user: dict = Depends(get_current_user)):
-        _require_admin(user)
+        is_admin, is_coach = _dispatch_access(user)
+        if not (is_admin or is_coach):
+            raise HTTPException(status_code=403, detail="Not permitted")
+        from camps import fetch_camps_active_on
         office = await db.config.find_one({"id": "office"}) or {}
-        return await _dispatch_status(local_date_str(office))
+        today = local_date_str(office)
+        is_camp_day = bool(await fetch_camps_active_on(db, today))
+        # Present coach = any check-in today; admins are always eligible.
+        eligible = is_admin or bool(await db.attendance.find_one(
+            {"user_id": user.get("id"), "date": today}, {"_id": 1}))
+        return {**await _dispatch_status(today),
+                "is_camp_day": is_camp_day, "eligible": eligible}
 
     @router.post("/muster/absent-dispatch")
     async def absent_dispatch_mark_sent(user: dict = Depends(get_current_user)):
-        _require_admin(user)
+        is_admin, is_coach = _dispatch_access(user)
+        if not (is_admin or is_coach):
+            raise HTTPException(status_code=403, detail="Not permitted")
+        from camps import fetch_camps_active_on
         office = await db.config.find_one({"id": "office"}) or {}
         today = local_date_str(office)
+        if not await fetch_camps_active_on(db, today):
+            raise HTTPException(status_code=400, detail="No camp active today")
+        if not is_admin and not await db.attendance.find_one(
+                {"user_id": user.get("id"), "date": today}, {"_id": 1}):
+            raise HTTPException(status_code=403, detail="Check in first to dispatch")
         res = await db.absent_dispatch_log.update_one(
             {"date": today},
             {"$setOnInsert": {"date": today, "sent_by_id": user.get("id"),
