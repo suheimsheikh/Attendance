@@ -27,6 +27,12 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 12 Oct 2026 — Prod "refresh" banner nagging forever (fixed)
+- Symptom: production continuously showed the red "new version available" banner, even after refreshing.
+- Root cause: `routes/office.py _cached_version()` fell back to `boot-<timestamp>` (container start time) when neither `APP_VERSION` env var nor a `.git` dir was present — which is the case in the deployed image. With multiple replicas (or any pod restart), each pod returned a DIFFERENT `boot-...`, so the frontend's 5-min `/api/version` poll flapped between pods → banner never cleared. (Frontend `VersionPoller.jsx` logic was fine.)
+- Fix: replaced the clock fallback with a DETERMINISTIC md5 content-hash of the backend source (`*.py` in backend root + routes/ + services/). Identical across every replica of the same build; changes only when backend code changes; last-resort returns the constant "app", never the clock. Verified: identical hash across two separate processes; `/api/version` still returns the git SHA in preview.
+- ⚠️ Needs a REDEPLOY to take effect in prod (the deploy that was in-flight when this was reported does NOT include the fix). Optional best practice: have the deploy set `APP_VERSION` to the git SHA for the cleanest signal.
+
 ### 12 Oct 2026 — Half-day leave: partial cell shading + one-time dedupe button (shipped)
 - **Half-day shading**: a half-day leave Grid cell is now partially shaded — TOP half for first-half (FN), BOTTOM half for second-half (PN). Frontend-only change in `calendar-grid/gridHelpers.jsx` `GridCell()` (LV/LP + `meta.half_day`): light-amber `<td>` with an absolute half-height overlay (amber-300; rose-400 for LP), `data-testid=grid-cell-halfday-<iso>`, `data-half-day=FN|PN`. Backend already supplied `cell_meta[iso].half_day`. Verified: testing_agent iteration_117 (100%) + authenticated screenshot (LV total also = 0.5).
 - **One-time dedupe button**: admin-only Maintenance card on the Backup & Restore page ("Clean duplicates & enable safeguard") → `POST /api/admin/attendance/dedupe` (+ `GET .../dedupe-status`) in `admin_tools.py`. Keeps the completed/earliest session per day, deletes duplicate copies, then builds the unique index. Idempotent; audit-logged. Verified: testing_agent iteration_116 (100%, button disabled/"Already clean" when 0 dups + index on). ⚠️ Run once on PRODUCTION (the page button) to clean prod's legacy duplicates and switch on the one-per-day guard there.

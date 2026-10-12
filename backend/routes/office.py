@@ -24,6 +24,7 @@ import pathlib
 import subprocess
 import time
 import asyncio
+import hashlib
 from functools import lru_cache
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -39,10 +40,15 @@ def _cached_version() -> str:
       2. `git rev-parse --short HEAD` executed against the repo the
          container was built from. Works in-place when the .git dir
          is present.
-      3. Container-start timestamp (fallback). Guarantees the endpoint
-         always returns a stable string per-restart, so at worst the
-         version-poller triggers a refresh on the first backend restart
-         after a stale-cached tab reconnects.
+      3. A DETERMINISTIC content hash of the backend source (fallback).
+         Every replica of the SAME deploy returns the SAME string, and it
+         only changes when the code changes — so the version-poller fires
+         once on a real deploy, never continuously.
+
+    IMPORTANT: the fallback must NEVER be the wall clock. The old
+    `boot-<timestamp>` fallback returned a different value per pod / per
+    restart, so in multi-replica production the frontend poll flapped
+    between pods and the "refresh" banner never went away (12 Oct 2026 fix).
     """
     env = os.environ.get("APP_VERSION", "").strip()
     if env:
@@ -57,7 +63,25 @@ def _cached_version() -> str:
             return out.stdout.strip()
     except Exception:
         pass
-    return f"boot-{int(time.time())}"
+    # Deterministic source hash — identical across every replica of a build,
+    # changes when backend code changes. Computed once per process (lru_cache).
+    try:
+        root = pathlib.Path(__file__).resolve().parent.parent
+        files = list(root.glob("*.py"))
+        for sub in ("routes", "services"):
+            d = root / sub
+            if d.exists():
+                files += list(d.rglob("*.py"))
+        h = hashlib.md5()
+        for p in sorted(files):
+            if "__pycache__" in p.parts:
+                continue
+            h.update(p.read_bytes())
+        return "src-" + h.hexdigest()[:12]
+    except Exception:
+        # Last resort: a CONSTANT, never the clock — so the banner can't
+        # false-fire. Worst case the poller simply never nags.
+        return "app"
 
 
 def make_router(db, require_admin, get_current_user, send_checkout_reminders, OfficeConfig) -> APIRouter:
