@@ -45,23 +45,24 @@ const PreviewList = ({ testid, label, tone, names }) =>
     </div>
   ) : null;
 
-export default function AbsentDispatchPrompt() {
-  const [data, setData] = useState(null); // { absent:[], onLeave:[], onTour:[], onLop:[], office }
+export default function AbsentDispatchPrompt({ kind = "camp" }) {
+  const [data, setData] = useState(null); // { allAbsent, onLeave, onTour, onLop, late, office }
   const [open, setOpen] = useState(false);
   useEscape(open ? () => setOpen(false) : null);
 
   const dismissedToday = useCallback(
-    () => localStorage.getItem(`absent-dispatch-dismissed-${todayKey()}`) === "1",
-    [],
+    () => localStorage.getItem(`absent-dispatch-dismissed-${kind}-${todayKey()}`) === "1",
+    [kind],
   );
 
   const evaluate = useCallback(async () => {
     if (dismissedToday()) return;
     try {
-      const status = await api.get("/muster/absent-dispatch");
-      // Camp days only, and only to eligible people (admins + present coaches).
-      if (!status?.is_camp_day || status?.eligible === false) return;
-      // Due right after the camp's start time (falls back to 10:00 if unset).
+      const status = await api.get(`/muster/absent-dispatch?kind=${kind}`);
+      if (status?.eligible === false) return;
+      // Camp dispatch runs on camp days only; staff dispatch runs every day.
+      if (kind === "camp" && !status?.is_camp_day) return;
+      // Due once the local clock reaches the cutoff (camp start, or 10:00).
       const [sh, sm] = (status?.dispatch_after_hm || `${DISPATCH_HOUR}:00`)
         .split(":").map(Number);
       const now = new Date();
@@ -73,37 +74,35 @@ export default function AbsentDispatchPrompt() {
         });
         return;
       }
-      const [absentRep, roster, lateRep] = await Promise.all([
-        api.get("/muster/absent-report").catch(() => null),
-        api.get("/muster/daily-roster").catch(() => null),
-        api.get("/muster/late-report").catch(() => null),
-      ]);
-      const athletesAbsent = absentRep?.athletes || [];
-      const staffAbsent = (roster?.absent || []).map((x) => x.name);
-      const onLeave = (roster?.on_leave || []).map((x) => x.name);
-      const onTour = (roster?.on_tour || []).map((x) => x.name);
-      const onLop = (roster?.on_lop || []).map((x) => x.name);
-      const allAbsent = [...staffAbsent, ...athletesAbsent];
-      // Late arrivals: staff/coach from the roster + athletes from the
-      // late-report, each shown with their check-in time and minutes late.
-      const late = [
-        ...(roster?.late || []),
-        ...(lateRep?.athlete_contacts || []),
-      ].map(lateLabel).sort((a, b) => a.localeCompare(b));
-      // Nothing to dispatch → don't nag.
-      if (allAbsent.length === 0 && onLeave.length === 0 && onTour.length === 0 && late.length === 0) return;
-      setData({
-        allAbsent,
-        onLeave,
-        onTour,
-        onLop,
-        late,
-        office: (absentRep?.office_name || roster?.office_name || "").trim(),
-        date: absentRep?.date || todayKey(),
-      });
+      if (kind === "camp") {
+        // Only the camp's participating athletes (absent + late).
+        const [absentRep, lateRep] = await Promise.all([
+          api.get("/muster/absent-report").catch(() => null),
+          api.get("/muster/late-report").catch(() => null),
+        ]);
+        const allAbsent = absentRep?.athletes || [];
+        const late = (lateRep?.athlete_contacts || []).map(lateLabel)
+          .sort((a, b) => a.localeCompare(b));
+        if (allAbsent.length === 0 && late.length === 0) return;
+        setData({ allAbsent, onLeave: [], onTour: [], onLop: [], late,
+          office: (absentRep?.office_name || "").trim(),
+          date: absentRep?.date || todayKey() });
+      } else {
+        // Non-athletes: staff/coach absentees, leave, tour, LOP, late.
+        const roster = await api.get("/muster/daily-roster").catch(() => null);
+        const allAbsent = (roster?.absent || []).map((x) => x.name);
+        const onLeave = (roster?.on_leave || []).map((x) => x.name);
+        const onTour = (roster?.on_tour || []).map((x) => x.name);
+        const onLop = (roster?.on_lop || []).map((x) => x.name);
+        const late = (roster?.late || []).map(lateLabel).sort((a, b) => a.localeCompare(b));
+        if (allAbsent.length === 0 && onLeave.length === 0 && onTour.length === 0 && late.length === 0) return;
+        setData({ allAbsent, onLeave, onTour, onLop, late,
+          office: (roster?.office_name || "").trim(),
+          date: roster?.date || todayKey() });
+      }
       setOpen(true);
     } catch { /* silent */ }
-  }, [dismissedToday]);
+  }, [dismissedToday, kind]);
 
   useEffect(() => {
     evaluate();
@@ -115,7 +114,7 @@ export default function AbsentDispatchPrompt() {
   }, [evaluate]);
 
   const dismiss = () => {
-    localStorage.setItem(`absent-dispatch-dismissed-${todayKey()}`, "1");
+    localStorage.setItem(`absent-dispatch-dismissed-${kind}-${todayKey()}`, "1");
     setOpen(false);
   };
 
@@ -124,7 +123,8 @@ export default function AbsentDispatchPrompt() {
     const day = new Date((d.date || todayKey()) + "T00:00:00").toLocaleDateString("en-GB", {
       weekday: "long", day: "numeric", month: "long",
     });
-    const lines = [`📋 *Attendance — ${d.office || "Academy"}* · ${day}`];
+    const scope = kind === "camp" ? "Camp attendance" : "Staff attendance";
+    const lines = [`📋 *${scope} — ${d.office || "Academy"}* · ${day}`];
     // A–Z, one person per line (user request, Oct 2026).
     const section = (label, names) => {
       if (!names?.length) return;
@@ -142,28 +142,33 @@ export default function AbsentDispatchPrompt() {
   const dispatch = () => {
     shareToWhatsApp({ text: buildMessage() });
     dismiss();
-    api.post("/muster/absent-dispatch").then((res) => {
-      if (res.first) toast.success(`Marked as sent at ${sentTime(res.sent_at)} — other admins won't be prompted today`);
+    api.post(`/muster/absent-dispatch?kind=${kind}`).then((res) => {
+      if (res.first) toast.success(`Marked as sent at ${sentTime(res.sent_at)} — others won't be prompted today`);
       else toast.info(sentNote(res));
     }).catch(() => {});
   };
 
   if (!open || !data) return null;
 
+  const title = kind === "camp" ? "Dispatch camp absentees" : "Dispatch staff absentees";
+  const subtitle = kind === "camp"
+    ? "The camp has started — send the participants' attendance summary to the WhatsApp group."
+    : "It's past 10 AM — send today's staff attendance summary to the WhatsApp group.";
+
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/40 p-3" data-testid="absent-dispatch-prompt">
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/40 p-3" data-testid={`absent-dispatch-prompt-${kind}`}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-amber-200 overflow-hidden">
         <div className="flex items-start gap-3 p-4 bg-amber-50 border-b border-amber-100">
           <div className="w-10 h-10 rounded-lg bg-amber-500/15 text-amber-700 flex items-center justify-center shrink-0">
             <AlertTriangle size={18} />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-extrabold text-slate-900">Dispatch today's absentees</div>
+            <div className="font-extrabold text-slate-900">{title}</div>
             <div className="text-xs text-slate-600 mt-0.5">
-              The camp has started — send today's attendance summary to the WhatsApp attendance group.
+              {subtitle}
             </div>
           </div>
-          <button data-testid="absent-dispatch-close" onClick={dismiss} className="p-1.5 rounded-lg hover:bg-amber-100 text-slate-500" title="Dismiss for today">
+          <button data-testid={`absent-dispatch-close-${kind}`} onClick={dismiss} className="p-1.5 rounded-lg hover:bg-amber-100 text-slate-500" title="Dismiss for today">
             <X size={16} />
           </button>
         </div>
@@ -175,8 +180,8 @@ export default function AbsentDispatchPrompt() {
           <PreviewList testid="dispatch-lop" label="LOP" tone="text-red-700" names={data.onLop} />
         </div>
         <div className="flex gap-2 p-4 border-t border-slate-100">
-          <button title="Hide this for now" data-testid="absent-dispatch-dismiss" onClick={dismiss} className="iu-btn-secondary flex-1">Not now</button>
-          <button data-testid="absent-dispatch-send" onClick={dispatch} className="iu-btn-primary flex-1 inline-flex items-center justify-center gap-2">
+          <button title="Hide this for now" data-testid={`absent-dispatch-dismiss-${kind}`} onClick={dismiss} className="iu-btn-secondary flex-1">Not now</button>
+          <button data-testid={`absent-dispatch-send-${kind}`} onClick={dispatch} className="iu-btn-primary flex-1 inline-flex items-center justify-center gap-2">
             <Send size={15} /> Send to WhatsApp
           </button>
         </div>
