@@ -21,6 +21,25 @@ from services.time_utils import local_date_str
 WEEKDAY_KEY = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
 
+def member_weekly_off(member: Optional[dict], default_weekly_off: Optional[str]) -> str:
+    """Effective weekly-off weekday name for a member: member setting wins,
+    else the office default, else 'sunday'. The single source of truth for
+    the `(member.weekly_off or default).lower()` pattern that was copied
+    across the Grid, Presence board, Muster roll and comp-off accrual."""
+    return ((member or {}).get("weekly_off") or default_weekly_off or "sunday").lower()
+
+
+def is_weekly_off_on(member: Optional[dict], default_weekly_off: Optional[str], when) -> bool:
+    """True when `when` (an ISO 'YYYY-MM-DD' string, or a weekday index
+    0=Mon…6=Sun) falls on the member's effective weekly off."""
+    wo = member_weekly_off(member, default_weekly_off)
+    try:
+        idx = when if isinstance(when, int) else date.fromisoformat(str(when)[:10]).weekday()
+        return WEEKDAY_KEY[idx] == wo
+    except Exception:
+        return False
+
+
 def _days_inclusive(start_iso: str, end_iso: str) -> int:
     try:
         return (date.fromisoformat(end_iso) - date.fromisoformat(start_iso)).days + 1

@@ -1506,6 +1506,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
     # Grid's WO/HO treatment. Fixed Jun 2026 (user: "a lot of employees
     # show absent despite it being their weekly off").
     default_weekly_off = (office.get("default_weekly_off") or "sunday").lower()
+    from holidays import is_weekly_off_on as _is_weekly_off_on
     target_is_holiday = (await db.holidays.find_one({"date": target_date}, {"_id": 1})) is not None
 
     # Admin contacts to surface as the "call the academy" numbers in the SMS body.
@@ -1671,13 +1672,12 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                     # they're NOT expected (never 'absent') on their weekly-off,
                     # an academy holiday, or after they've left — those render
                     # as not_due with an explanatory chip.
-                    wo = (u.get("weekly_off") or default_weekly_off).lower()
                     is_ex = bool(u.get("leaving_date")) and u["leaving_date"] < target_date
                     if is_ex:
                         off_reason = "Left"
                     elif target_is_holiday:
                         off_reason = "Holiday"
-                    elif today_weekday == wo:
+                    elif _is_weekly_off_on(u, default_weekly_off, target_date):
                         off_reason = "Weekly off"
                     ws_hm = _effective_hours(u, office, target_date)[0]
                     grace = int(office.get("late_grace_minutes") or 0)

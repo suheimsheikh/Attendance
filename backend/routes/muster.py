@@ -318,16 +318,14 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         # roster (weekly off / academy holiday / applicable break) so a
         # coach on their day off is never flagged absent. Athletes are
         # camp-driven (the camp's own days_of_week handles scheduling).
-        from holidays import WEEKDAY_KEY as _WEEKDAY_FULL
         from breaks import fetch_breaks_active_on, resolve_member_break
+        from holidays import is_weekly_off_on as _is_weekly_off_on
         _default_wo = (office.get("default_weekly_off") or "sunday").lower()
-        _today_wk_full = _WEEKDAY_FULL[date.fromisoformat(today).weekday()]
         _is_holiday = (await db.holidays.find_one({"date": today})) is not None
         _breaks_today = await fetch_breaks_active_on(db, today)
 
         def _coach_off_today(m: dict) -> bool:
-            wo = (m.get("weekly_off") or _default_wo).lower()
-            return _is_holiday or _today_wk_full == wo or bool(resolve_member_break(m, _breaks_today))
+            return _is_holiday or _is_weekly_off_on(m, _default_wo, today) or bool(resolve_member_break(m, _breaks_today))
 
         def _started(hm: str) -> bool:
             try:
