@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend test of Task Manager Plan/Checklists/ViewAll/To-dos tabs for Tasks QA exec (tasks.qa@example.com). All 5 tabs render. Plan tab: fresh add places item in plan-list, plan-toggle flips circle to CheckCircle2 with line-through styling and plan-count increments 0/1->1/1, plan-dar checkbox is default checked (include_in_dar=true), plan-del removes item. Checklists tab: owner dropdown (checklist-owner) populated with 19 teammates; selecting ASIF AHMED shows checklist-foreign-banner reading 'Adding to ASIF AHMED's checklist' and the item added via checklist-add appears in the foreign checklist list. View all tab: 20 member rows with Plan/Checklist/Due stats; clicking a row (viewall-row-<id>) navigates to Checklists tab with that owner preselected (checklist-owner value matches). To-dos tab loads and groups by owner (regression OK).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PlanTab load() swallows loadTodos errors silently (.catch(() => {})) — acceptable but a toast on failure would help diagnose auth/network issues.",
+    "PlanTab shows the 'Pick from your to-dos' section only when available.length>0 (open to-dos owned by the user and not already in plan). For execs who have no open to-dos of their own (common when the group's to-dos are assigned elsewhere) the section stays hidden — intentional, but a one-liner hint ('No open to-dos to pick from') would improve discoverability.",
+    "ChecklistsTab allows posting to another owner's list via owner_id, but there is no visible 'Switch back to my checklist' affordance beyond the dropdown — minor UX.",
+    "ChecklistsTab delete uses window.confirm which blocks and is browser-chrome; team style likely prefers a shadcn AlertDialog — minor polish."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (previously curl-verified)", "frontend": "100%"},
+  "seed_data_creation": "Created ephemeral QA_fresh_<ts> plan item (deleted during test). Created QA_cl_<ts> checklist item on ASIF AHMED's checklist — cleanup delete failed because the delete button testid matcher didn't resolve; main agent / next run should purge any QA_cl_* residuals on ASIF AHMED's checklist. Leftover item id present in run log.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login: toggle-admin-login -> login-email-input tasks.qa@example.com / Tasks@12345 / login-submit-button. After login the user lands on /rules — click [data-testid='rules-accept'] once (sticks across sessions after first accept). Overlays: remove '[data-testid=leave-report-prompt]' via DOM. Task Manager tab testids are 'tasks-tab-<v>' with v in {today,plan,todos,checklists,all}. Content containers: plan-tab, checklists-tab, viewall-tab. Plan item ids are UUIDs — plan-toggle-<id>, plan-dar-<id>, plan-del-<id>, plan-item-<id>. DAR prefill endpoint is GET /api/tasks/dar-prefill (needs Bearer token; test token-fetching from in-browser axios requires reading the auth hook storage key, not localStorage.token). Pick section only renders when the exec has open to-dos of their own; QA exec in this preview has none, so plan-pick stays hidden (expected)."
+}
