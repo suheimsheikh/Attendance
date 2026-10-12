@@ -142,9 +142,22 @@ export default function OfficeSettings() {
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto">
-      <header className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Office Settings</h1>
-        <p className="text-slate-500 text-sm mt-1">Geofence, work hours, and timezone.</p>
+      <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Office Settings</h1>
+          <p className="text-slate-500 text-sm mt-1">Geofence, work hours, and timezone.</p>
+        </div>
+        <button
+          type="button"
+          data-testid="of-timing-chart-btn"
+          onClick={openTimingChart}
+          disabled={chartBusy}
+          className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm md:text-base px-5 py-3 shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-300 hover:ring-emerald-400 transition active:scale-[0.98] disabled:opacity-60"
+          title="Print the alphabetical, employee-wise check-in/out timing chart for the notice board"
+        >
+          {chartBusy ? <Loader2 className="animate-spin" size={18} /> : <Printer size={18} />}
+          Timing Chart (PDF)
+        </button>
       </header>
 
       {/* Training Locations shortcut — moved out of the sidebar (04 Feb 2026)
@@ -260,20 +273,6 @@ export default function OfficeSettings() {
             Standard start/end for specific weekdays, applied to all employees (staff, coaches, executives — never athletes). Example: shorter Saturday &amp; Sunday hours. Leave a day blank to use the default work start/end above. A member&apos;s own day-of-week timings override this.
           </p>
           <DowHoursEditor value={form.dow_hours} onChange={(v) => set("dow_hours", v)} testIdPrefix="of-dow" />
-          <div className="mt-4 pt-3 border-t border-emerald-200">
-            <p className="text-[11px] text-slate-500 mb-2">
-              Print an alphabetical, employee-wise chart of everyone&apos;s check-in/out times for each day of the week — ready to pin on the notice board.
-            </p>
-            <button
-              type="button"
-              data-testid="of-timing-chart-btn"
-              onClick={openTimingChart}
-              disabled={chartBusy}
-              className="iu-btn-secondary"
-            >
-              {chartBusy ? <Loader2 className="animate-spin" size={14} /> : <Printer size={14} />} Office check-in/out timing chart (PDF)
-            </button>
-          </div>
         </div>
 
         <div>
