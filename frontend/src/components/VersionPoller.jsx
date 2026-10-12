@@ -42,6 +42,17 @@ const POLL_MS = 5 * 60_000;          // 5 min — quiet, but responsive
 const IDLE_MS = 3 * 60_000;          // 3 min of no input
 const HARD_FALLBACK_MS = 30 * 60_000;  // 30 min after detection
 
+// (b) Preview / local-dev auto-reload suppression.
+// In the preview environment the backend hot-reloads on every code change
+// and the platform commits after each step, so `/api/version` (git SHA)
+// advances constantly — the poller would then reload the tab every few
+// minutes while you work. We detect those hosts and disable auto-reload
+// entirely there. Production (custom domain / non-preview host) is
+// unaffected and still auto-reloads once per real deploy.
+const AUTO_RELOAD_DISABLED =
+  typeof window !== "undefined" &&
+  /(^localhost$)|(^127\.0\.0\.1$)|(\.preview\.emergentagent\.com$)/.test(window.location.hostname);
+
 async function _hardReload() {
   try {
     if ("serviceWorker" in navigator) {
@@ -74,10 +85,13 @@ export default function VersionPoller() {
   const reloadingRef = useRef(false);
   const location = useLocation();
 
+  // (b) Short-circuit the whole poller on preview/localhost — no polling,
+  // no reload triggers. Hooks below still run but bail immediately.
   // ------------------------------------------------------------------
   // 1. Polling — memoise initial version, watch for drift.
   // ------------------------------------------------------------------
   useEffect(() => {
+    if (AUTO_RELOAD_DISABLED) return;
     let cancelled = false;
     const check = async () => {
       if (cancelled || staleDetectedAt.current) return;
@@ -104,6 +118,7 @@ export default function VersionPoller() {
   // 2. Triggers — reload on the first safe signal after drift.
   // ------------------------------------------------------------------
   useEffect(() => {
+    if (AUTO_RELOAD_DISABLED) return;
     const tryReload = (reason, { ignoreActiveEdit = false } = {}) => {
       if (reloadingRef.current) return;
       if (!staleDetectedAt.current) return;
@@ -153,6 +168,7 @@ export default function VersionPoller() {
   //    doesn't re-register the visibility/idle listeners on every nav.
   // ------------------------------------------------------------------
   useEffect(() => {
+    if (AUTO_RELOAD_DISABLED) return;
     if (!staleDetectedAt.current) return;
     if (reloadingRef.current) return;
     if (_hasActiveEdit()) return;
