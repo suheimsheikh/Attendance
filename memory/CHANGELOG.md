@@ -5163,3 +5163,9 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - /tasks/dar-prefill now also includes plan done-items flagged include_in_dar (de-duped), so completed plan items flow into the DAR at check-out automatically (editable). Consumed already by SelfCheckIn + DarPendingCard.
 - New endpoints: GET /tasks/plan, POST /tasks/plan/items, POST /tasks/plan/pick, PATCH+DELETE /tasks/plan/items/{id}, GET /tasks/overview. New frontend: pages/tasks/PlanTab.jsx, ViewAllTab.jsx; Tasks.jsx tabs (Today, Plan, To-dos, Checklists, View all).
 - Tested: backend curl (all green) + testing_agent frontend 100% (iteration_112). Test account tasks.qa@example.com / Tasks@12345 (executive) recorded in test_credentials.md.
+
+## 2026-06 (fork) — Plan day-end nudge + office/today helper refactor
+- FEATURE: PlanPendingNudge at check-out (components/PlanPendingNudge.jsx) — when the user's Plan for the day has unfinished items, an amber nudge lists them above the DAR box; ticking one marks it done and appends it to the DAR text. Hidden when nothing pending. Wired into SelfCheckIn.jsx darNeededNow block.
+- REFACTOR #1: added services/time_utils.office_and_today(db) and collapsed 12 inline `local_date_str(await _office())` calls in routes/tasks.py into a single _today() helper. Behaviour unchanged (tasks endpoints re-verified 200).
+- Refactors #2 (merge date utils) and #3 (DAR policy hook) intentionally SKIPPED after inspection: utils.js (date-math) and utils/dates.js (formatters) aren't duplicates; the DAR policy fetch is a single line embedded in each component's Promise.all, so extracting it would add loading-state indirection, not remove real duplication.
+- Tested: testing_agent iteration_113 — 100% (nudge render/click/empty-case + 5-tab regression + 6 backend endpoints).

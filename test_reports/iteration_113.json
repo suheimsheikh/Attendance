@@ -1,0 +1,19 @@
+{
+  "summary": "End-to-end verification of day-end PlanPendingNudge at check-out for Tasks QA executive (tasks.qa@example.com). Backend endpoints 200 across /tasks/plan, /tasks/today, /tasks/overview, /tasks/dar-prefill, /todos, /checklists (post-refactor behaviour unchanged). Seeded 2 unfinished plan items via POST /api/tasks/plan/items, admin-toggled the exec into an open check-in, then opened /check-in: plan-pending-nudge rendered ABOVE the DAR textarea (DOM order verified via compareDocumentPosition), listed both items with nudge-done-<id> buttons. Clicking nudge-done-<id> removed that row (2 → 1) AND appended its title into the DAR textarea as '✅ Done: QA_nudge_item_1'. After deleting all plan items, re-opened /check-in: plan-pending-nudge did NOT render while dar-voice-block still rendered — negative case passes. Task Manager regression: all 5 tabs (today/plan/todos/checklists/all) load and switch without errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/test_reports/plan_nudge_after_click.jpeg", "/app/test_reports/plan_nudge_empty.jpeg"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PlanPendingNudge appends with naive substring check (cur.includes(title)) in SelfCheckIn — fine today, but if two plan items share a title or the user has pre-typed the word, the append is silently skipped. A dedicated set of 'nudge-appended' ids would be more robust.",
+    "PlanPendingNudge polls once on mount only; if the user updates the Plan in another tab after opening /check-in, the nudge list is stale until refresh. A lightweight re-fetch on window focus would help.",
+    "In SelfCheckIn.jsx:819 the append template uses non-ASCII '✅' + '; ' separators — looks great in the UI but will surface in share-to-WhatsApp payloads. Confirm that's intentional for DAR exports."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (6/6 endpoints)", "frontend": "100% (nudge render + click + empty-case + 5 tab regression)"},
+  "test_credentials": "tasks.qa@example.com / Tasks@12345 (exec), admin@attendance.app / Admin@12345 (for admin toggle)",
+  "seed_data_creation": "Created & then deleted plan items QA_nudge_item_1 and QA_nudge_item_2 for the QA exec. Admin-toggled check-in for the exec (session 986bcb4c-...) and cleaned up via DELETE /api/admin/attendance/open-session/{member}. No residual data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Nudge DOM: [data-testid=plan-pending-nudge] with children [data-testid^=nudge-item-<id>] and [data-testid=nudge-done-<id>]. It only mounts inside the darNeededNow block (status.checked_in && darStatus.required && !done_today). To drive /check-in in tests without geofence hassle, use admin toggle: POST /api/admin/attendance/toggle/{member_id}. Clean up with DELETE /api/admin/attendance/open-session/{member_id}. Plan items added via POST /api/tasks/plan/items {title}. DAR append format is '✅ Done: <title>' first, then '; <title>' for subsequent clicks."
+}
