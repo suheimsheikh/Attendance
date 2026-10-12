@@ -1,0 +1,21 @@
+{
+  "summary": "Frontend-only regression for weekly-off / ex-member / timing-chart fixes. Admin login OK. Presence Board (TODAY Mon 12/10/2026) renders On Campus=0, Off Campus=0, Away=8, Absent=105 — numeric counts, no NaN/undefined. Switched date to Sunday 11/10/2026 via native date input: On Campus=0, Off Campus=0, Away=12, Absent=0 — core fix verified: weekly-off employees no longer counted as Absent (they drop off the board as expected via not_due). 'Show ex-members' toggle flips to 'Showing ex-members 5 - Including 5 ex-members' with no crash. Timing chart button (/admin/office data-testid=of-timing-chart-btn) triggers GET /api/reports/timing-chart.pdf returning 200 and opens a new blob tab (2 pages in context, second url = blob:) with no toast error.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Office.jsx openTimingChart uses window.open() after an awaited blob fetch — Chrome popup blocker can intermittently block this because the gesture is no longer attached. Consider prefetching nothing and instead creating an <a target=_blank download> element at click time, or trigger a direct download via a hidden anchor to avoid popup-blocker edge cases."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (used from review request)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Presence Board is the admin home route at /. Direct nav to /presence may time out on networkidle due to persistent polling but domcontentloaded works. There's a LeaveReportPrompt overlay (data-testid=leave-report-prompt) after login that must be removed from DOM (document.querySelectorAll(...).forEach(e=>e.remove())) to interact with page. Date picker is a native input[type=date]; use .fill('YYYY-MM-DD'). Sidebar nav has 'Presence' item but direct URL is also /presence. Weekly-off handling: on Sunday the Absent column shows 0 and ~104 not_due employees are intentionally hidden from all columns — Away column still populates with leave/tour rows (12 on 11/10/2026 Sunday)."
+}

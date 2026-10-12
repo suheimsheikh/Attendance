@@ -5138,3 +5138,11 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Backend: new routes/reports/timing_chart.py (GET /api/reports/timing-chart.pdf, admin-only, reportlab via shared _pdf_from_table, A4 landscape, inline disposition). Registered in routes/reports/__init__.py.
 - Frontend: Office Settings -> "Office check-in/out timing chart (PDF)" button (data-testid of-timing-chart-btn) under the DOW editor; opens the authed PDF in a new tab via api.getBlob (print-ready).
 - Tested: curl returns 200 application/pdf (4 pages, 106 employees); PDF content analysis confirmed title, columns (#, Name, Designation, Mon..Sun, Signature), alpha order, WEEKLY OFF + Hourly cells. Frontend compiles, /admin/office 200.
+
+## 2026-06 (fork) — Presence weekly-off/ex-member fixes + timing-chart polish
+- FIX (Presence board, server.py presence()): employees with no session on their WEEKLY-OFF day, an academy HOLIDAY, or after their leaving_date now render as `not_due` (detail "Weekly off"/"Holiday"/"Left") instead of "absent". Added default_weekly_off + target_is_holiday context before the roster loop. Verified: Sunday Absent went ~105 -> 0 (104 now "Weekly off"); left employees no longer counted absent.
+- FIX (consistency): services/permissions.is_ex_member() now also true for status=="left" or archived==True (not only leaving_date past) — applies app-wide to check-in guard, muster, boards. Frontend utils/exMember.js isExMember() mirrors this.
+- FIX (dashboard.py): admin dashboard "absent athletes" + "no parent contact" tiles now exclude ex-members (left/archived/past leaving_date); added status/archived/leaving_date to its user projection.
+- TIMING CHART: removed the Signature column; Name + Designation now LEFT-justified (new optional left_cols param on _pdf_from_table). Title/columns/alpha order unchanged.
+- Tested: curl (presence counts weekday + Sunday, left not absent, PDF no 'Signature'), testing_agent frontend 100% (iteration_109): Presence renders, Sunday Absent=0, ex-toggle works, timing-chart button opens PDF.
+- AUDIT note: grid.py and muster.py already exclude left/archived (grid also paints LF post-leaving); members-list payroll path filters status!=left + archived; Presence intentionally still returns ex-members for the "Show ex-members" toggle but they are no longer 'absent'.
