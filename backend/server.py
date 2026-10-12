@@ -979,20 +979,29 @@ async def list_leave_balances(key: str = "", category: Optional[str] = None,
     for L in approved:
         uid = L["user_id"]
         n = _days_inclusive_safe(L["start_date"], L["end_date"])
+        # In-year portion so a leave/tour spanning New Year only counts its
+        # days inside this balance year (12 Oct 2026 cross-year fix — mirrors
+        # holidays._days_in_window used by the member view + PayCraft feed).
+        try:
+            _s = max(date.fromisoformat(L["start_date"]), date.fromisoformat(yr_start))
+            _e = min(date.fromisoformat(L["end_date"]), date.fromisoformat(yr_end))
+            in_year = max(0, (_e - _s).days + 1)
+        except Exception:
+            in_year = n
+        frac = (in_year / n) if n else 0.0
         if L["type"] == "leave":
             # Prefer the explicit stamps; fall back to the whole window as
             # paid days for legacy pre-Jun-2026 rows that don't have them.
-            if L.get("paid_leave_used") is not None:
-                paid_used[uid] = paid_used.get(uid, 0.0) + float(L["paid_leave_used"])
-            else:
-                paid_used[uid] = paid_used.get(uid, 0.0) + n
+            # Prorated to the in-year portion for cross-year leaves.
+            base_paid = float(L["paid_leave_used"]) if L.get("paid_leave_used") is not None else n
+            paid_used[uid] = paid_used.get(uid, 0.0) + base_paid * frac
             if L.get("comp_off_used") is not None:
                 comp_used[uid] = comp_used.get(uid, 0) + int(L["comp_off_used"])
         elif L["type"] == "comp_off":
             # Legacy direct comp-off application — whole window counts.
             comp_used[uid] = comp_used.get(uid, 0) + n
         elif L["type"] == "tour":
-            tour_days[uid] = tour_days.get(uid, 0) + n
+            tour_days[uid] = tour_days.get(uid, 0) + in_year
             tour_ranges_by_user.setdefault(uid, []).append(
                 (L["start_date"], L["end_date"])
             )

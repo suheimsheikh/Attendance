@@ -47,13 +47,32 @@ def _days_inclusive(start_iso: str, end_iso: str) -> int:
         return 1
 
 
-def _bucket_leave_rows(rows: list, today: str) -> dict:
+def _days_in_window(start_iso: str, end_iso: str, lo: str, hi: str) -> int:
+    """Inclusive day count of [start,end] clipped to [lo,hi] — the portion of
+    a leave/tour that actually falls inside the balance year. Used so a leave
+    spanning New Year only deducts its in-year days (12 Oct 2026)."""
+    try:
+        s = max(date.fromisoformat(start_iso), date.fromisoformat(lo))
+        e = min(date.fromisoformat(end_iso), date.fromisoformat(hi))
+        return max(0, (e - s).days + 1)
+    except Exception:
+        return _days_inclusive(start_iso, end_iso)
+
+
+def _bucket_leave_rows(rows: list, today: str,
+                       yr_start: str = None, yr_end: str = None) -> dict:
     """Walk a year's worth of leave/tour rows for one member and bucket the
     aggregates we need for the balance summary. Single-pass so the caller
     can stay flat. Returns paid_used, pending_leave_days, future_approved_leave_days,
     tour_ytd_days, pending_tour_days, lop_ytd_days, plus a
     `leave_full_count` / `leave_half_count` breakdown of approved rows
     for the summary card (added 30 Jun 2026, half-day launch).
+
+    When `yr_start`/`yr_end` are given, a row that straddles the year boundary
+    is counted for ITS IN-YEAR PORTION only — paid/LOP are prorated by the
+    in-year day fraction, tour/pending days are clipped to the year (12 Oct
+    2026 cross-year fix). Omitting the bounds keeps the old whole-row maths
+    (used by the behaviour-lock unit tests).
 
     Refactored Feb 2026 to use guard clauses so each row-type is a
     self-contained early-continue block — cyclomatic complexity dropped
@@ -70,41 +89,54 @@ def _bucket_leave_rows(rows: list, today: str) -> dict:
     }
     for L in rows:
         n = _days_inclusive(L["start_date"], L["end_date"])
+        # In-year portion (defaults to the whole row when no bounds given).
+        in_year = (_days_in_window(L["start_date"], L["end_date"], yr_start, yr_end)
+                   if yr_start and yr_end else n)
         row_type = L.get("type")
         status = L.get("status")
 
         if row_type == "leave" and status == "approved":
-            _tally_approved_leave(agg, L, n, today)
+            _tally_approved_leave(agg, L, n, today, in_year)
             continue
         if row_type == "leave" and status == "pending":
-            agg["pending_leave_days"] += n
+            agg["pending_leave_days"] += in_year
             continue
         if row_type == "tour" and status == "approved":
-            agg["tour_ytd_days"] += n
+            agg["tour_ytd_days"] += in_year
             continue
         if row_type == "tour" and status == "pending":
-            agg["pending_tour_days"] += n
+            agg["pending_tour_days"] += in_year
             continue
         # Legacy comp_off rows are accounted in compute_comp_off_balance.
     return agg
 
 
-def _tally_approved_leave(agg: dict, L: dict, n: int, today: str) -> None:
+def _tally_approved_leave(agg: dict, L: dict, n: int, today: str,
+                          in_year: int = None) -> None:
     """Update the running aggregate for one approved-leave row. Split out
-    from _bucket_leave_rows so the loop body stays trivially readable."""
+    from _bucket_leave_rows so the loop body stays trivially readable.
+
+    `in_year` is the portion of the row inside the balance year (defaults to
+    the whole row). Paid-leave-used and LOP are prorated by in_year/n so a
+    leave spanning New Year only deducts its in-year share (12 Oct 2026)."""
+    if in_year is None:
+        in_year = n
+    frac = (in_year / n) if n else 0.0
     # Paid-leave used — prefer the ladder-stamped value, fall back to
-    # the whole window for legacy rows without a stamp.
-    agg["paid_used"] += (
+    # the whole window for legacy rows without a stamp — then prorate to
+    # the in-year portion.
+    base_paid = (
         float(L["paid_leave_used"])
         if L.get("paid_leave_used") is not None
         else n
     )
+    agg["paid_used"] += base_paid * frac
     if L.get("lop_days") is not None:
-        agg["lop_ytd_days"] += float(L["lop_days"])
+        agg["lop_ytd_days"] += float(L["lop_days"]) * frac
     # Future-approved (starts after today) is still a commitment the
     # member should see — applied & not yet taken.
     if L["start_date"] > today:
-        agg["future_approved_leave_days"] += n
+        agg["future_approved_leave_days"] += in_year
     # Half-vs-full breakdown for the summary card.
     if L.get("half_day"):
         agg["leave_half_count"] += 1
@@ -147,14 +179,15 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
 
     rows = await db.leaves.find({
         "user_id": user["id"],
-        "start_date": {"$gte": yr_start, "$lte": yr_end},
+        "start_date": {"$lte": yr_end},
+        "end_date": {"$gte": yr_start},
         "type": {"$in": ["leave", "tour", "comp_off"]},
     }, {"_id": 0, "type": 1, "status": 1, "start_date": 1, "end_date": 1,
         "paid_leave_used": 1, "lop_days": 1, "comp_off_used": 1,
         "half_day": 1}).to_list(2000)
 
     today = local_date_str(None)
-    buckets = _bucket_leave_rows(rows, today)
+    buckets = _bucket_leave_rows(rows, today, yr_start, yr_end)
     paid_avail = max(0.0, float(opening) - buckets["paid_used"]) if tracked else 0
 
     absent_ytd_days = 0
@@ -215,12 +248,13 @@ async def compute_pay_balances(db, user: dict, year: Optional[str] = None) -> di
     tracked = (user.get("category") != "athlete") and (opening is not None)
     rows = await db.leaves.find({
         "user_id": user["id"],
-        "start_date": {"$gte": yr_start, "$lte": yr_end},
+        "start_date": {"$lte": yr_end},
+        "end_date": {"$gte": yr_start},
         "type": {"$in": ["leave", "tour", "comp_off"]},
     }, {"_id": 0, "type": 1, "status": 1, "start_date": 1, "end_date": 1,
         "paid_leave_used": 1, "lop_days": 1, "comp_off_used": 1,
         "half_day": 1}).to_list(2000)
-    buckets = _bucket_leave_rows(rows, local_date_str(None))
+    buckets = _bucket_leave_rows(rows, local_date_str(None), yr_start, yr_end)
     paid_avail = max(0.0, float(opening) - buckets["paid_used"]) if tracked else 0
     return {"paid_available": paid_avail, "comp_available": co["available"]}
 

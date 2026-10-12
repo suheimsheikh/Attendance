@@ -589,11 +589,25 @@ def register(router, *, _athlete_like_keys, db, require_admin):
             # month's LV / TR / LP figures (the LP total feeds PayCraft
             # leave-balances — future LOP must not be docked early).
             elapsed_cells = [c for c, iso in zip(cells, days) if iso <= today_iso]
+            # Half-day leaves consume 0.5 of a leave day — reflect that on the
+            # register so the Grid's `leave` + `payable` totals match the 0.5
+            # the balance deducts (half-day leaves are single-day by
+            # definition). 12 Oct 2026, user-approved. No half-days → no change.
+            _hd_dates = {L["start_date"] for L in leaves_by_user.get(uid, [])
+                         if L.get("half_day") and (L.get("type") or "").lower() == "leave"}
+            _hd_count = sum(1 for c, iso in zip(cells, days)
+                            if iso <= today_iso and c == "LV" and iso in _hd_dates)
+
+            def _half(total: int) -> float:
+                v = total - 0.5 * _hd_count
+                return int(v) if float(v).is_integer() else round(v, 1)
+
             totals = {
                 # Payable days (Oct 2026): every elapsed day that is paid —
                 # worked (P/HD/LT), paid time-off (LV/CO), duty (TR/PS) and
                 # off-days (WO/HO/BK). Excludes AB, LP, NJ, LF and future days.
-                "payable":     sum(1 for c in elapsed_cells if c in PAYABLE_CODES),
+                # Half-day leaves count 0.5 (only the paid half is payable).
+                "payable":     _half(sum(1 for c in elapsed_cells if c in PAYABLE_CODES)),
                 "present":     sum(1 for c in elapsed_cells if c in ("P", "HD", "LT")),
                 "absent":      sum(1 for c in elapsed_cells if c == "AB"),
                 # LP days count toward the "leave" total (backward
@@ -601,7 +615,7 @@ def register(router, *, _athlete_like_keys, db, require_admin):
                 # leave day rolled up into LV). The dedicated `lop`
                 # sub-total below breaks it out for admins who want to
                 # see the split.
-                "leave":       sum(1 for c in elapsed_cells if c in ("LV", "CO", "LP")),
+                "leave":       _half(sum(1 for c in elapsed_cells if c in ("LV", "CO", "LP"))),
                 "tour":        sum(1 for c in elapsed_cells if c == "TR"),
                 # Late-count is a subset of Present — surfaced as its
                 # own column at the right of the totals strip so admins

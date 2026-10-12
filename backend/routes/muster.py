@@ -278,12 +278,16 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         members = await db.users.find(
             {"active": {"$ne": False}, "category": {"$in": cats}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1,
+             "joining_date": 1,
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1,
              "institution": 1, "fleet": 1, "hourly_wager": 1,
              "work_start": 1, "weekly_off": 1, "dow_hours": 1},
         ).to_list(2000)
         # Hourly wagers have no set days → never "absent".
-        members = [m for m in members if not is_ex_member(m, today) and not m.get("hourly_wager")]
+        members = [m for m in members if not is_ex_member(m, today) and not m.get("hourly_wager")
+                   # Pre-joining members (Grid shows NJ) are not expected yet —
+                   # mirror the Grid so they're never flagged absent (12 Oct 2026).
+                   and not (m.get("joining_date") and today < m["joining_date"])]
         # Phase C (Jun 2026): athletes are "absent" only when expected at
         # a camp/regatta today (enrolled participant). Non-expected
         # athletes are never flagged absent and never parent-notified.
