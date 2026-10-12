@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Download, Upload, Loader2, AlertTriangle, CheckCircle2, Database, CalendarClock, Clock } from "lucide-react";
+import { Download, Upload, Loader2, AlertTriangle, CheckCircle2, Database, CalendarClock, Clock, Wrench, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { getToken, api, apiUrl } from "../../api";
 import { SafetyBackupsCard } from "./backup/SafetyBackupsCard";
@@ -29,11 +29,37 @@ export default function BackupRestore() {
   const [report, setReport] = useState(null);
   const [status, setStatus] = useState(null);
   const [autoBusy, setAutoBusy] = useState(null);
+  const [dedupe, setDedupe] = useState(null);     // { duplicate_groups, duplicate_rows, index_present }
+  const [dedupeBusy, setDedupeBusy] = useState(false);
+  const [dedupeResult, setDedupeResult] = useState(null);
 
   const loadStatus = useCallback(async () => {
     try { setStatus(await api.get("/admin/backup-status")); } catch { /* non-blocking */ }
+    try { setDedupe(await api.get("/admin/attendance/dedupe-status")); } catch { /* non-blocking */ }
   }, []);
   useEffect(() => { loadStatus(); }, [loadStatus]);
+
+  const runDedupe = async () => {
+    if (!window.confirm(
+      "Clean duplicate attendance days?\n\nThis keeps the completed (or earliest) check-in for each member per day and removes only the duplicate copies, then switches on the one-per-day safeguard.\n\nA full backup is recommended first. Continue?"
+    )) return;
+    setDedupeBusy(true);
+    setDedupeResult(null);
+    try {
+      const res = await api.post("/admin/attendance/dedupe", {});
+      setDedupeResult(res);
+      toast.success(
+        res.rows_deleted > 0
+          ? `Removed ${res.rows_deleted} duplicate row${res.rows_deleted === 1 ? "" : "s"}; safeguard ${res.index_built ? "ON" : "still pending"}`
+          : `No duplicates found; safeguard ${res.index_built ? "ON" : "pending"}`
+      );
+    } catch (err) {
+      toast.error(err?.message || "Cleanup failed");
+    } finally {
+      setDedupeBusy(false);
+      loadStatus();
+    }
+  };
 
   const [preBusy, setPreBusy] = useState(null);
 
@@ -170,6 +196,59 @@ export default function BackupRestore() {
               {downloading ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
               {downloading ? "Preparing…" : "Download full backup"}
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* One-time maintenance: clean duplicate attendance days + enable the
+          one-per-day safeguard. Safe to run on production; idempotent. */}
+      <div className="iu-card p-5 mb-4 border-2 border-amber-200" style={{ background: "#FFFBEB" }} data-testid="dedupe-card">
+        <div className="flex items-start gap-3">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-500 text-white shrink-0 shadow-sm">
+            <Wrench size={20} />
+          </div>
+          <div className="flex-1">
+            <div className="font-bold text-slate-900 mb-1">Attendance cleanup &amp; one-per-day safeguard</div>
+            <p className="text-sm text-slate-600 mb-3">
+              Removes any accidental duplicate attendance rows for the same member on the same day
+              (keeping the completed / earliest check-in) and switches on a safeguard that stops them
+              from ever happening again. Run this once. It only deletes duplicate copies &mdash; never the real session.
+            </p>
+            {dedupe && (
+              <div className="flex flex-wrap items-center gap-2 mb-3 text-sm" data-testid="dedupe-status">
+                {dedupe.duplicate_groups > 0 ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">
+                    <AlertTriangle size={14} /> {dedupe.duplicate_rows} duplicate row{dedupe.duplicate_rows === 1 ? "" : "s"} across {dedupe.duplicate_groups} day{dedupe.duplicate_groups === 1 ? "" : "s"}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+                    <CheckCircle2 size={14} /> No duplicates
+                  </span>
+                )}
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold ${dedupe.index_present ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+                  <ShieldCheck size={14} /> Safeguard {dedupe.index_present ? "ON" : "off"}
+                </span>
+              </div>
+            )}
+            <button
+              onClick={runDedupe}
+              disabled={dedupeBusy || (dedupe && dedupe.duplicate_groups === 0 && dedupe.index_present)}
+              data-testid="dedupe-run-btn"
+              className="iu-btn-primary !bg-amber-500 hover:!bg-amber-600 disabled:opacity-50"
+            >
+              {dedupeBusy ? <Loader2 className="animate-spin" size={16} /> : <Wrench size={16} />}
+              {dedupeBusy ? "Cleaning…"
+                : (dedupe && dedupe.duplicate_groups === 0 && dedupe.index_present)
+                  ? "Already clean — safeguard on"
+                  : "Clean duplicates & enable safeguard"}
+            </button>
+            {dedupeResult && (
+              <div className="mt-3 text-sm text-slate-700" data-testid="dedupe-result">
+                Done: removed <b>{dedupeResult.rows_deleted}</b> duplicate row{dedupeResult.rows_deleted === 1 ? "" : "s"} across{" "}
+                <b>{dedupeResult.groups_found}</b> day{dedupeResult.groups_found === 1 ? "" : "s"}; safeguard{" "}
+                <b>{dedupeResult.index_built ? "enabled" : "still pending"}</b>.
+              </div>
+            )}
           </div>
         </div>
       </div>

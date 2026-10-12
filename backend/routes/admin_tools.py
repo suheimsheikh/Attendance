@@ -185,8 +185,87 @@ async def _stored_backup_response(doc: dict) -> Response:
     )
 
 
+async def _attendance_dup_groups(db) -> list[dict]:
+    """Groups of attendance rows that share the same (user_id, date) — the
+    invariant is one row per member per day. Returns [{_id:{u,d}, ids, n}]."""
+    return await db.attendance.aggregate([
+        {"$group": {"_id": {"u": "$user_id", "d": "$date"},
+                    "ids": {"$push": "$_id"}, "n": {"$sum": 1}}},
+        {"$match": {"n": {"$gt": 1}}},
+    ]).to_list(100000)
+
+
+async def _attendance_index_present(db) -> bool:
+    async for ix in db.attendance.list_indexes():
+        if ix.get("unique") and list(ix.get("key", {}).items()) == [("user_id", 1), ("date", 1)]:
+            return True
+    return False
+
+
+async def dedupe_attendance(db) -> dict:
+    """Remove duplicate attendance rows so the unique (user_id, date) index
+    can enforce the one-row-per-day invariant. Keeps the single best row per
+    day — a completed session (has check_out_at) wins, else the earliest
+    check-in. Then (re)builds the unique index. Fully idempotent: with no
+    duplicates it deletes nothing and just ensures the index exists."""
+    groups = await _attendance_dup_groups(db)
+    deleted = 0
+    for g in groups:
+        docs = await db.attendance.find({"_id": {"$in": g["ids"]}}).to_list(1000)
+        keep = min(docs, key=lambda d: (
+            0 if d.get("check_out_at") else 1,   # completed session first
+            d.get("check_in_at") or "9999",       # then earliest arrival
+        ))
+        losers = [d["_id"] for d in docs if d["_id"] != keep["_id"]]
+        if losers:
+            res = await db.attendance.delete_many({"_id": {"$in": losers}})
+            deleted += res.deleted_count
+    index_built = False
+    try:
+        await db.attendance.create_index(
+            [("user_id", 1), ("date", 1)], unique=True, name="uniq_user_date",
+        )
+        index_built = True
+    except Exception as e:
+        logger.warning("dedupe: uniq_user_date index still could not build: %s", e)
+    return {
+        "groups_found": len(groups),
+        "rows_deleted": deleted,
+        "index_built": index_built,
+    }
+
+
 def make_router(db, require_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
+
+    @router.get("/admin/attendance/dedupe-status")
+    async def admin_dedupe_status(admin: dict = Depends(require_admin)):
+        """How many duplicate attendance days exist and whether the one-per-day
+        unique index is already active. Drives the Maintenance card button
+        state (nothing to do when groups=0 and index is present)."""
+        groups = await _attendance_dup_groups(db)
+        return {
+            "duplicate_groups": len(groups),
+            "duplicate_rows": sum(g["n"] - 1 for g in groups),
+            "index_present": await _attendance_index_present(db),
+        }
+
+    @router.post("/admin/attendance/dedupe")
+    async def admin_dedupe(admin: dict = Depends(require_admin)):
+        """One-time maintenance: clean duplicate attendance days (keeping the
+        completed / earliest session) and switch on the one-per-day unique
+        index. Idempotent — safe to run again; a clean DB just confirms the
+        index is active. Removes only duplicate rows, never the real one."""
+        result = await dedupe_attendance(db)
+        from routes.admin_audit import write_audit
+        await write_audit(
+            db, actor=admin, action="attendance.dedupe",
+            entity_type="attendance", entity_id="(bulk)",
+            entity_name="Duplicate attendance cleanup",
+            meta=result,
+        )
+        logger.info("attendance dedupe by %s: %s", admin.get("full_name"), result)
+        return result
 
     @router.post("/admin/attendance/wipe")
     async def admin_wipe_attendance(admin: dict = Depends(require_admin)):
