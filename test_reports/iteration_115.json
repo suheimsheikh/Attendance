@@ -1,0 +1,21 @@
+{
+  "summary": "Independent regression for Refactor #5 — GET /api/presence (Presence Board) moved from server.py to routes/presence_board.py. Backend: 8/8 pytest cases pass against the preview URL covering the live contract, counts/total invariant, member key set + null site_id/site_name for off-status rows, by_location only-present invariant, historical determinism (byte-identical for 2026-09-15, is_historical=true, escorts_present=[]), sibling ephemeral endpoints (/api/presence/public no-auth, /api/presence/ping, /api/presence/online), and Admin Dashboard now.on_campus_by_location. Frontend: Admin email login works, /presence renders fully — column pills (On Campus 21 / Temp Out / Checked Out 3 / Tour / Leave 9 / Absent 4), fleet filters, location filters (Main Club 15, Off-site 5, Vahini), guest/member cards all populated, no console errors, no blank screen.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_presence_board_refactor5.py",
+    "/app/test_reports/pytest/refactor5_presence.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/presence_board.py uses `today` (live date) for the 30-day absence-streak lookback, not `target_date`. Harmless today since streak is suppressed on historical views (`if status_v == 'absent' and not is_historical`), but the extra Mongo work on historical calls is wasted. Minor only.",
+    "presence_board.py is ~760 LOC in a single function; the GATHER/RESOLVE/RENDER phases could be split further for maintainability, but the refactor's stated goal was a lift-and-shift with zero behaviour change, which was achieved."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (via 'Admin sign in with email' toggle)",
+  "seed_data_creation": "None — read-only endpoint tests; a single /api/presence/ping heartbeat (ephemeral, expires in 90s).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Refactor #5 verified clean. presence_board router registered in server.py (line ~2298) after the sibling routes.presence heartbeat router (line ~2294). Both routers co-exist with distinct path prefixes (/api/presence vs /api/presence/{online,public,ping}) and FastAPI resolves them correctly — confirmed by live tests."
+}

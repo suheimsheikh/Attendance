@@ -27,6 +27,15 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 12 Oct 2026 — Presence Board split (Refactor #5, shipped)
+- Moved the big read-only `GET /api/presence` Presence Board endpoint (plus its private `_make_absence_streak_computer` helper + `_WEEKDAY_KEY` constant) OUT of the monolithic `server.py` into a new module **`backend/routes/presence_board.py`** — `make_router(db, get_current_user)`, wired via `app.include_router` near the bottom of server.py. ZERO behaviour change: identical JSON shape, identical route path. server.py shrank ~718 lines (3144→2432).
+- The pre-existing `routes/presence.py` (ephemeral heartbeat + `/meals/focus` row-focus signals) is a DIFFERENT concern and was left untouched — hence the new file is `presence_board.py`.
+- Regression anchor: captured `/api/presence?on=<date>` for 2026-10-06 / 2026-09-15 / 2026-08-20 BEFORE the move and confirmed **byte-identical** AFTER (historical views are deterministic). Live "today" view matched too (65 members, same counts).
+- New pytest `backend/tests/test_presence_board_split.py` (shape, counts-sum-to-total invariant, full member key set + null site on off-status rows, historical determinism, by_location only-present). All green alongside existing `test_presence_by_location.py` + `test_presence_break_precedence.py`.
+- Independent verification: testing_agent iteration_115 → **100% backend + 100% frontend, zero issues**. Confirmed sibling heartbeat endpoints (`/presence/online`, `/presence/public`, `/presence/ping`) and the Admin Dashboard `now.on_campus_by_location` aggregate were unaffected.
+- Note: `parent-notify/dispatch` was deliberately left in server.py (out of scope). ⚠️ Needs REDEPLOY to reach production (no data/schema/auth change).
+
+
 ### 06 Oct 2026 — Member Archive · Leave policy · Athlete camp-absent · WhatsApp (this session)
 Twelve user requests across 4 areas (all tested; backend curl-verified, frontend testing_agent iter 81 = 95%, no issues in new code):
 - **(A) Members Archive + approval-gated delete/archive + actions-left**
