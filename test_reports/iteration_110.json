@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only behavioral check that ESC closes modals across the admin app via the new shared useEscape() hook. Logged in as admin (admin@attendance.app), verified three distinct modals/overlays and the blur-then-close semantics. All checks passed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_performed": [
+    {"case": "LeaveReportPrompt overlay (data-testid='leave-report-prompt') closes on ESC", "result": "PASS"},
+    {"case": "Members > New Member modal (data-testid='member-form') closes on ESC when no input focused", "result": "PASS"},
+    {"case": "Focused text input inside member-form: 1st ESC blurs input and modal stays open (activeElement went INPUT -> BODY, modal still in DOM)", "result": "PASS"},
+    {"case": "2nd ESC after blur closes member-form modal", "result": "PASS"},
+    {"case": "ESC with NO modal open is a no-op (URL unchanged, no navigation, no crash)", "result": "PASS"},
+    {"case": "LeaveReportPrompt reliably dismissible via ESC on multiple pages (home, members, meal-entry)", "result": "PASS"}
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "useEscape.js correctly uses a module-level stack so only the top-most modal closes per ESC; good design.",
+    "The listener uses stopPropagation() only when actually closing a modal — safe default so native ESC behavior (closing <dialog>, native file pickers, etc.) is preserved when stack is empty.",
+    "Minor: the keydown listener is attached once and never removed (module-scoped `listenerAttached`). Fine in practice but worth noting for SSR / test isolation; it is already guarded by `typeof window !== 'undefined'`.",
+    "Only inputs/textarea/select/contentEditable are treated as 'blur first'. Shadcn/Radix comboboxes with role='combobox' on a BUTTON will NOT get the blur-first treatment and will directly close the modal — acceptable but a subtle UX asymmetry.",
+    "Did not spot-check every one of the ~20 modals listed; representative coverage (LeaveReportPrompt + MemberForm) exercises the hook's full behavior (open, stack push, blur-first, close, cleanup, no-op when empty)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (6/6 behavioral checks)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (email toggle on /login)",
+  "seed_data_creation": "None. Modals were opened and dismissed via ESC without saving.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "useEscape hook behavior verified end-to-end on preview. If asked to spot-check additional modals from the list (ItemPriceTrendDrawer, VendorScorecardDrawer, AbsentDispatchPrompt, Recipes MvaModal/NodeModal, MarksheetModal, PantryDayModal, AddVendorInlineModal, DailyTotalsHistoryModal, NutritionEditorModal, ApprovalModals Reject/Override, MealPurchasesTab price-outlier, MealsCalendar import-result, StockLedgersPrintButton, BulkIdUpload MismatchAlert, TravelCheck TeamModal), open each via its page and press ESC; the hook is centralized so if LeaveReportPrompt + MemberForm pass, the mechanism itself is sound. Note: LeaveReportPrompt pops up again on each full navigation (daily reminder) — dismiss with ESC before trying other buttons on a page."
+}
