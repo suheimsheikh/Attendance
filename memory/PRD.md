@@ -27,6 +27,13 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 12 Oct 2026 — Presence ↔ Grid parity for athletes (bug fix, shipped)
+- **Report**: "In Presence, Away is also showing non-camp athletes. Presence and Grid should reflect the same truth."
+- **Root cause** (in `routes/presence_board.py`): athlete-like members are tracked ONLY on camp days (Grid blanks a non-camp athlete and excludes them from totals). Presence only applied that hide-rule in the no-session/no-leave branch, so a non-camp athlete with an approved leave/tour or a scope-break slipped into the merged "Away" (on_leave + on_tour) column. Live data confirmed it: with NO camp active today, 11 athlete-like members showed in Away (10 on a break, 1 elite on leave).
+- **Second latent bug found + fixed**: Presence passed the FULL weekday name (`"saturday"`) to `camp_active_on`, which compares against stored SHORT `days_of_week` keys (`"sat"`) — so every day-of-week-filtered camp (e.g. the Agape Sat/Sun weekend camp) silently never matched in Presence. Switched to `camps.WEEKDAY_KEYS` (mon..sun) to match the Grid.
+- **Fix**: a single top-of-loop guard (runs before the leave/tour/break branches) now mirrors the Grid exactly for athlete-like members: hide them when outside their joining/leaving window (Grid NJ/LF) OR when not expected at a camp today AND no physical check-in (Grid blank). A real check-in still surfaces them (Grid P/LT). Removed the now-redundant inner hide. Added `joining_date` to the presence projection.
+- **Verified**: Presence athlete set == Grid "tracked" (non-blank, non-NJ/LF) athlete set with **0 mismatches** on 2026-07-11, 2026-07-18 (weekend camp) and 2026-08-20 (weekday camp); live board today shows 0 athlete-like in Away (54 members vs 65 before). New pytest `tests/test_presence_grid_parity.py` (4 cases) + existing presence/dashboard suites all green. ⚠️ Needs REDEPLOY (no data/schema change).
+
 ### 12 Oct 2026 — Presence Board split (Refactor #5, shipped)
 - Moved the big read-only `GET /api/presence` Presence Board endpoint (plus its private `_make_absence_streak_computer` helper + `_WEEKDAY_KEY` constant) OUT of the monolithic `server.py` into a new module **`backend/routes/presence_board.py`** — `make_router(db, get_current_user)`, wired via `app.include_router` near the bottom of server.py. ZERO behaviour change: identical JSON shape, identical route path. server.py shrank ~718 lines (3144→2432).
 - The pre-existing `routes/presence.py` (ephemeral heartbeat + `/meals/focus` row-focus signals) is a DIFFERENT concern and was left untouched — hence the new file is `presence_board.py`.

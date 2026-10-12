@@ -148,6 +148,7 @@ def make_router(db, get_current_user):
                  "dow_hours": 1,  # per-DOW timing override (Jun 2026) → effective_hours
                  "weekly_off": 1,  # needed so the WO-not-absent rule reads the member's real off-day (Jun 2026 fix)
                  "fleet": 1,  # NOTE: needed by break_applies_to() for scope=fleet breaks
+                 "joining_date": 1,  # 12 Oct 2026 — athlete NJ (pre-joining) parity with the Grid
                  "leaving_date": 1,  # 24 Feb 2026 — feeds the ex-member filter/chip on the Presence Board
                  "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1}
         ).sort("full_name", 1).to_list(2000)
@@ -208,8 +209,12 @@ def make_router(db, get_current_user):
         # Camps overlay — fetch all camps whose date range covers the target date.
         camps_today = await _camps_module.fetch_camps_active_on(db, target_date)
         target_dt = date.fromisoformat(target_date)
-        DOW_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-        today_weekday = DOW_KEYS[target_dt.weekday()]
+        # Short weekday key (mon..sun) — MUST match the stored `days_of_week`
+        # format on camps and the Grid's `camp_active_on` (which compares
+        # against short keys). Passing the full name ("saturday") silently
+        # excluded every day-of-week-filtered camp (e.g. weekend-only camps)
+        # from the board. Fixed 12 Oct 2026 to match the Grid.
+        today_weekday = _camps_module.WEEKDAY_KEYS[target_dt.weekday()]
         def _camp_for(u: dict) -> Optional[dict]:
             return _camps_module.resolve_member_camp(u, camps_today, today_weekday, target_date)
 
@@ -270,6 +275,24 @@ def make_router(db, get_current_user):
             sess = sess_map.get(u["id"])
             leave = leave_map.get(u["id"])
             brk = _break_for(u)
+            # Mirror the Grid's truth for athlete-like members: they're tracked
+            # ONLY on camp days, and only within their joining/leaving window.
+            #   * outside the join/leave window → Grid shows NJ/LF (excluded)
+            #   * not expected at a camp today AND no physical check-in →
+            #     Grid shows a BLANK, totals-excluded cell
+            # In all three cases the member is NOT expected, so hide them from
+            # the board entirely — this is what stops non-camp athletes on
+            # leave/tour/break leaking into the "Away" column (12 Oct 2026 —
+            # Presence ↔ Grid parity fix). A real check-in still surfaces them
+            # (the Grid shows P/LT), so the check-in guard is skipped for them.
+            if _is_athlete_like(u):
+                _jd = u.get("joining_date")
+                _ld = u.get("leaving_date")
+                if (_jd and target_date < _jd) or (_ld and target_date > _ld):
+                    continue
+                if (not _camp_for(u)
+                        and u["id"] not in sess_map and u["id"] not in last_map):
+                    continue
             # Geo info for whichever session is "current" (open session for on-campus/temp-out;
             # last-completed session for exited members).
             geo_in: dict = {}
@@ -382,11 +405,6 @@ def make_router(db, get_current_user):
                     # work_start (or the office default).
                     camp_today = _camp_for(u)
                     off_reason = None  # weekly-off / holiday / left → not_due, not absent
-                    # Camps-only rule: an athlete with no camp today isn't expected
-                    # at all — hide them from the board (never absent/not-due off a
-                    # personal work_start). Camp athletes fall through normally.
-                    if _is_athlete_like(u) and not camp_today:
-                        continue
                     if camp_today:
                         ws_hm = camp_today.get("start_time") or "09:00"
                         cg = camp_today.get("late_grace_minutes")
