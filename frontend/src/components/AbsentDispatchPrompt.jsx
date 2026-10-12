@@ -57,11 +57,15 @@ export default function AbsentDispatchPrompt() {
 
   const evaluate = useCallback(async () => {
     if (dismissedToday()) return;
-    if (new Date().getHours() < DISPATCH_HOUR) return;
     try {
       const status = await api.get("/muster/absent-dispatch");
       // Camp days only, and only to eligible people (admins + present coaches).
       if (!status?.is_camp_day || status?.eligible === false) return;
+      // Due right after the camp's start time (falls back to 10:00 if unset).
+      const [sh, sm] = (status?.dispatch_after_hm || `${DISPATCH_HOUR}:00`)
+        .split(":").map(Number);
+      const now = new Date();
+      if (now.getHours() < sh || (now.getHours() === sh && now.getMinutes() < sm)) return;
       if (status?.sent) {
         setOpen((wasOpen) => {
           if (wasOpen) toast.info(sentNote(status));
@@ -103,8 +107,8 @@ export default function AbsentDispatchPrompt() {
 
   useEffect(() => {
     evaluate();
-    // Re-check periodically so an admin who had the app open before 10 AM
-    // still gets the nudge once the hour passes.
+    // Re-check periodically so someone who had the app open before the camp
+    // start time still gets the nudge once it passes.
     const t = setInterval(evaluate, 5 * 60 * 1000);
     window.addEventListener("focus", evaluate);
     return () => { clearInterval(t); window.removeEventListener("focus", evaluate); };
@@ -156,7 +160,7 @@ export default function AbsentDispatchPrompt() {
           <div className="flex-1 min-w-0">
             <div className="font-extrabold text-slate-900">Dispatch today's absentees</div>
             <div className="text-xs text-slate-600 mt-0.5">
-              It's past 10 AM — send today's attendance summary to the WhatsApp attendance group.
+              The camp has started — send today's attendance summary to the WhatsApp attendance group.
             </div>
           </div>
           <button data-testid="absent-dispatch-close" onClick={dismiss} className="p-1.5 rounded-lg hover:bg-amber-100 text-slate-500" title="Dismiss for today">

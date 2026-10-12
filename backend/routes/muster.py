@@ -253,12 +253,17 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
         from camps import fetch_camps_active_on
         office = await db.config.find_one({"id": "office"}) or {}
         today = local_date_str(office)
-        is_camp_day = bool(await fetch_camps_active_on(db, today))
+        camps = await fetch_camps_active_on(db, today)
+        is_camp_day = bool(camps)
+        # Prompt becomes due right after the camp starts (earliest active camp).
+        starts = [c.get("start_time") for c in camps if c.get("start_time")]
+        dispatch_after_hm = min(starts) if starts else None
         # Present coach = any check-in today; admins are always eligible.
         eligible = is_admin or bool(await db.attendance.find_one(
             {"user_id": user.get("id"), "date": today}, {"_id": 1}))
         return {**await _dispatch_status(today),
-                "is_camp_day": is_camp_day, "eligible": eligible}
+                "is_camp_day": is_camp_day, "eligible": eligible,
+                "dispatch_after_hm": dispatch_after_hm}
 
     @router.post("/muster/absent-dispatch")
     async def absent_dispatch_mark_sent(user: dict = Depends(get_current_user)):
