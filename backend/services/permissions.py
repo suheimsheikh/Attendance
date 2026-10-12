@@ -48,6 +48,11 @@ def is_ex_member(user: dict, today_iso: str | None = None) -> bool:
     from datetime import date as _date
     if not user:
         return False
+    # Hard off-board flags take precedence over the date check so a member
+    # marked left/archived (even without a leaving_date) is treated as an
+    # ex-member everywhere is_ex_member gates (check-in, muster, boards).
+    if user.get("status") == "left" or user.get("archived") is True:
+        return True
     lv = (user.get("leaving_date") or "").strip()
     if not lv:
         return False

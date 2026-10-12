@@ -94,6 +94,7 @@ def _pdf_from_table(
     grouped_headers: Optional[List[tuple]] = None,
     pagesize_override=None,
     font_size: int = 8,
+    left_cols: Optional[List[int]] = None,
 ) -> bytes:
     """Build a tabular PDF. ``orientation`` accepts "portrait" (default)
     or "landscape"; landscape is what wide attendance tables want so the
@@ -216,10 +217,13 @@ def _pdf_from_table(
         ("ROWBACKGROUNDS", (0, header_rows_count), (-1, -1),
          [colors.white, colors.HexColor("#F3F4F6")]),
         # Left-align the Name column for readability; center-align the
-        # rest for tight number columns.
-        ("ALIGN", (0, header_rows_count), (0, -1), "LEFT"),
+        # rest for tight number columns. `left_cols` lets a caller
+        # left-align extra text columns (e.g. Designation) too.
         ("ALIGN", (1, header_rows_count), (-1, -1), "CENTER"),
+        ("ALIGN", (0, header_rows_count), (0, -1), "LEFT"),
     ])
+    for _c in (left_cols or []):
+        style_ops.append(("ALIGN", (_c, header_rows_count), (_c, -1), "LEFT"))
     table_data = header_rows + (data if data else [["No records"] + [""] * (len(headers) - 1)])
     t = Table(table_data, repeatRows=header_rows_count, colWidths=col_widths)
     t.setStyle(TableStyle(style_ops))

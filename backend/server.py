@@ -1498,6 +1498,15 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
     def _break_for(u: dict) -> Optional[dict]:
         return _breaks_module.resolve_member_break(u, breaks_today)
 
+    # Weekly-off / holiday context (employees only). A member with no
+    # session on their weekly-off day or on an academy holiday is NOT
+    # absent — they're simply not expected, so they render as `not_due`
+    # (hidden from the board, excluded from the Absent count). Mirrors the
+    # Grid's WO/HO treatment. Fixed Jun 2026 (user: "a lot of employees
+    # show absent despite it being their weekly off").
+    default_weekly_off = (office.get("default_weekly_off") or "sunday").lower()
+    target_is_holiday = (await db.holidays.find_one({"date": target_date}, {"_id": 1})) is not None
+
     # Admin contacts to surface as the "call the academy" numbers in the SMS body.
     admin_docs = await db.users.find(
         {"role": "admin"},
@@ -1643,6 +1652,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                 # times override; otherwise fall back to the member's personal
                 # work_start (or the office default).
                 camp_today = _camp_for(u)
+                off_reason = None  # weekly-off / holiday / left → not_due, not absent
                 # Camps-only rule: an athlete with no camp today isn't expected
                 # at all — hide them from the board (never absent/not-due off a
                 # personal work_start). Camp athletes fall through normally.
@@ -1656,10 +1666,21 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                 else:
                     # Only non-athletes reach here (camp-less athletes skipped
                     # above). Employees are expected on a working day — their
-                    # effective start honors any per-DOW timing override.
+                    # effective start honors any per-DOW timing override. BUT
+                    # they're NOT expected (never 'absent') on their weekly-off,
+                    # an academy holiday, or after they've left — those render
+                    # as not_due with an explanatory chip.
+                    wo = (u.get("weekly_off") or default_weekly_off).lower()
+                    is_ex = bool(u.get("leaving_date")) and u["leaving_date"] < target_date
+                    if is_ex:
+                        off_reason = "Left"
+                    elif target_is_holiday:
+                        off_reason = "Holiday"
+                    elif today_weekday == wo:
+                        off_reason = "Weekly off"
                     ws_hm = _effective_hours(u, office, target_date)[0]
                     grace = int(office.get("late_grace_minutes") or 0)
-                    is_expected_today = True
+                    is_expected_today = off_reason is None
                 try:
                     ws_h, ws_m = (int(x) for x in ws_hm.split(":")[:2])
                     if is_historical:
@@ -1685,12 +1706,14 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                         detail = f"Expected by {ws_hm}"
                 else:
                     status_v = "not_due"
-                    if camp_today:
+                    if off_reason:
+                        detail = off_reason
+                    elif camp_today:
                         detail = f"Camp “{camp_today['name']}” starts {ws_hm}"
                     elif is_expected_today:
                         detail = f"Shift starts {ws_hm}"
                     else:
-                        detail = "No camp scheduled today"
+                        detail = "Not expected today"
                 since = None
                 photo = u_thumb
         # Open excursion: how many minutes overdue (if expected_return is in the past)?

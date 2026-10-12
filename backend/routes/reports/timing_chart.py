@@ -70,7 +70,7 @@ def register(router, *, db, require_admin):
             return f"{start} \u2013 {end}"
 
         cat_label = {"staff": "Staff", "coach": "Coach", "executive": "Executive"}
-        headers = ["#", "Name", "Designation"] + _DOW_LABEL + ["Signature"]
+        headers = ["#", "Name", "Designation"] + _DOW_LABEL
         rows = []
         for n, u in enumerate(users, start=1):
             rows.append([
@@ -78,7 +78,6 @@ def register(router, *, db, require_admin):
                 u.get("full_name") or "",
                 u.get("rank") or cat_label.get(u.get("category"), (u.get("category") or "").title()),
                 *[_cell(u, i) for i in range(7)],
-                "",  # blank signature box for notice-board verification
             ])
 
         gen_local = now_utc().astimezone(office_tz(office))
@@ -92,8 +91,8 @@ def register(router, *, db, require_admin):
                     "WEEKLY OFF = no duty that day; Hourly = paid per hour, no fixed timing.",
         }
 
-        # A4 landscape (~270 mm usable). #, Name, Designation, 7 DOW, Signature.
-        col_widths_mm = [8, 46, 26] + [22] * 7 + [28]
+        # A4 landscape (~270 mm usable). #, Name, Designation, 7 DOW.
+        col_widths_mm = [10, 56, 34] + [24] * 7
         pdf = _pdf_from_table(
             "OFFICE CHECK IN / OUT TIMING CHART",
             headers, rows,
@@ -102,6 +101,7 @@ def register(router, *, db, require_admin):
             col_widths=[w * mm for w in col_widths_mm],
             meta=meta,
             font_size=8,
+            left_cols=[1, 2],
         )
         return Response(
             content=pdf, media_type="application/pdf",

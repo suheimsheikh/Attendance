@@ -10,8 +10,11 @@
  */
 import { todayIso } from "../utils";
 
-/** True when the member has a `leaving_date` strictly in the past. */
+/** True when the member has left: a hard `left`/archived flag, or a
+ *  `leaving_date` strictly in the past. */
 export function isExMember(m, today = todayIso()) {
+  if (!m) return false;
+  if (m.status === "left" || m.archived === true) return true;
   const lv = (m?.leaving_date || "").trim();
   return !!lv && lv < today;
 }

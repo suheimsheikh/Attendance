@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends
 from services.time_utils import local_date_str, now_utc
 from services.attendance_calc import session_ot_minutes
 from services.scope import athlete_like_keys
+from services.permissions import is_ex_member
 
 
 def _has_valid_parent_mobile(u: dict) -> bool:
@@ -86,11 +87,17 @@ def make_router(db, require_admin) -> APIRouter:
                 "photo_thumb": 1, "date_of_birth": 1, "created_at": 1,
                 "institution": 1, "fleet": 1, "hourly_wager": 1,
                 "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1,
+                # Off-board flags so ex-members (left / archived / past
+                # leaving_date) are excluded from absent & no-parent counts.
+                "status": 1, "archived": 1, "leaving_date": 1,
             },
         ).to_list(5000)
         users_by_id: dict[str, dict] = {u["id"]: u for u in users}
         athlete_keys = set(await athlete_like_keys(db))
-        athletes = [u for u in users if u.get("category") in athlete_keys]
+        # Active athletes only — a resigned / archived athlete must not
+        # inflate the "absent" or "no parent contact" tiles (user, Jun 2026).
+        athletes = [u for u in users
+                    if u.get("category") in athlete_keys and not is_ex_member(u, today_iso)]
 
         # ================== NOW (live today) ==============================
         open_sessions = await db.attendance.find(
