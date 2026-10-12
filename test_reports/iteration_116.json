@@ -1,0 +1,27 @@
+{
+  "summary": "Frontend-only read-only UI verification of the new Attendance Maintenance card on /admin/backup. Logged in as admin via 'Admin sign in with email' toggle, navigated to the Backup & Restore page, dismissed the daily WhatsApp prompt, and verified all required elements and labels. All assertions passed with 0 console errors and no webpack overlay.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verifications": [
+    "data-testid='dedupe-card' rendered on /admin/backup",
+    "Heading text 'Attendance cleanup & one-per-day safeguard' present inside the card",
+    "data-testid='dedupe-status' shows BOTH 'No duplicates' and 'Safeguard ON' chips",
+    "data-testid='dedupe-run-btn' is DISABLED and shows exact label 'Already clean — safeguard on'",
+    "No webpack 'Compiled with problems' overlay",
+    "Zero console errors captured during the flow"
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "Admin: admin@attendance.app / Admin@12345 (via data-testid='toggle-admin-login')",
+  "seed_data_creation": "None (read-only verification; DB already clean with unique index present)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login submit button inside the admin section is a <button> with accessible name 'Sign in' (exact). The phone-flow 'Continue' button is also a submit; use get_by_role('button', name='Sign in', exact=True) to target admin login. The /admin/backup page shows a 'Post today's Leave/Tour to WhatsApp' modal on load — click 'Later' to dismiss before interacting with cards. Backup page contains three cards in order: Download full backup, Attendance cleanup & one-per-day safeguard (dedupe-card), Automatic daily backups."
+}

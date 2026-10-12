@@ -58,6 +58,35 @@ export function GridCell({ code, dow, onClick, meta, iso, rowSpan, isToday }) {
   const s = CELL_STYLE[code] || CELL_STYLE.AB;
   const clickable = !!onClick;
   const title = buildCellTooltip({ code, dow, meta, iso, clickable });
+  // Half-day leave → shade only the half that's off: top half for a
+  // first-half (FN / forenoon) leave, bottom half for a second-half
+  // (PN / afternoon) leave. The worked half stays light so a glance at
+  // the Grid shows which part of the day the member was on leave.
+  // 12 Oct 2026, user request. Only leave-family cells carry `half_day`.
+  const half = (code === "LV" || code === "LP") ? meta?.half_day : null;
+  if (half === "FN" || half === "PN") {
+    const topShaded = half === "FN";
+    return (
+      <td
+        rowSpan={rowSpan}
+        className={`relative overflow-hidden border border-white text-center text-[10px] font-bold text-amber-900 bg-amber-50 h-6 w-6 leading-none${todayCls} ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
+        title={title}
+        onClick={onClick}
+        data-half-day={half}
+        data-testid={`grid-cell-halfday-${iso}`}
+        data-corrected={meta?.correction ? "1" : undefined}
+      >
+        <span
+          className={`absolute inset-x-0 ${topShaded ? "top-0" : "bottom-0"} h-1/2 ${code === "LP" ? "bg-rose-400" : "bg-amber-300"}`}
+          aria-hidden="true"
+        />
+        <span className="relative z-10 flex items-center justify-center h-full">{s.label}</span>
+        {meta?.correction && (
+          <span className="absolute top-0 right-0 z-20 w-0 h-0 border-t-[6px] border-l-[6px] border-t-violet-600 border-l-transparent" data-testid={`grid-corrected-mark-${iso}`} />
+        )}
+      </td>
+    );
+  }
   return (
     <td
       rowSpan={rowSpan}
