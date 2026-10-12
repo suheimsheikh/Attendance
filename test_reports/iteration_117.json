@@ -1,0 +1,40 @@
+{
+  "summary": "Verified half-day leave partial shading on The Grid (Calendar tab) for August 2026 for 'ZZ Test HalfDay FN' and 'ZZ Test HalfDay PN'. All visual + attribute checks pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification_results": {
+    "fn_cell": {
+      "data-testid": "grid-cell-halfday-2026-08-06 FOUND",
+      "data-half-day": "FN",
+      "overlay_class": "absolute inset-x-0 top-0 h-1/2 bg-amber-300 (TOP shaded amber as expected)",
+      "label": "LV",
+      "tooltip_includes_Half_day_FN": true
+    },
+    "pn_cell": {
+      "data-testid": "grid-cell-halfday-2026-08-07 FOUND",
+      "data-half-day": "PN",
+      "overlay_class": "absolute inset-x-0 bottom-0 h-1/2 bg-amber-300 (BOTTOM shaded amber as expected)",
+      "label": "LV",
+      "tooltip_includes_Half_day_PN": true
+    },
+    "month_navigation": "Oct 2026 -> Aug 2026 via two month-prev clicks worked; label shows 'August 2026'",
+    "console_errors": "none",
+    "webpack_overlay": false
+  },
+  "test_report_links": ["/app/test_reports/halfday_grid.png"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "gridHelpers.jsx GridCell half-day branch is clean, uses semantic data-testid/data-half-day, aria-hidden on overlay, keeps 'LV' label layered above shade. No concerns."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (via toggle-admin-login)",
+  "seed_data_creation": "None created; used pre-seeded 'ZZ Test HalfDay FN' and 'ZZ Test HalfDay PN' members.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Note: After login, a LeaveReportPrompt modal appears daily; dismiss via data-testid='leave-report-later' (not get_by_role('button', name='Later') because 'leave-report-dismiss' close icon also has name='Later')."
+}

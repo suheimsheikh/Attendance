@@ -27,6 +27,11 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 12 Oct 2026 — Half-day leave: partial cell shading + one-time dedupe button (shipped)
+- **Half-day shading**: a half-day leave Grid cell is now partially shaded — TOP half for first-half (FN), BOTTOM half for second-half (PN). Frontend-only change in `calendar-grid/gridHelpers.jsx` `GridCell()` (LV/LP + `meta.half_day`): light-amber `<td>` with an absolute half-height overlay (amber-300; rose-400 for LP), `data-testid=grid-cell-halfday-<iso>`, `data-half-day=FN|PN`. Backend already supplied `cell_meta[iso].half_day`. Verified: testing_agent iteration_117 (100%) + authenticated screenshot (LV total also = 0.5).
+- **One-time dedupe button**: admin-only Maintenance card on the Backup & Restore page ("Clean duplicates & enable safeguard") → `POST /api/admin/attendance/dedupe` (+ `GET .../dedupe-status`) in `admin_tools.py`. Keeps the completed/earliest session per day, deletes duplicate copies, then builds the unique index. Idempotent; audit-logged. Verified: testing_agent iteration_116 (100%, button disabled/"Already clean" when 0 dups + index on). ⚠️ Run once on PRODUCTION (the page button) to clean prod's legacy duplicates and switch on the one-per-day guard there.
+- **Screenshot auth**: authenticated screenshots now use JWT injection (UI login + networkidle were unreliable) — recipe saved in `/app/memory/screenshot_auth_tip.md`.
+
 ### 12 Oct 2026 — Ponytail review fixes #2/#3/Muster/#1 (follow-through, shipped)
 User approved actioning the held items. All done + verified:
 - **#1 Dedupe & enforce (DONE):** ran `scripts/dedupe_attendance.py --apply` on preview (removed 8 loser rows across 7 groups, kept completed sessions); the unique index `attendance.uniq_user_date` now **builds and enforces** (verified present + a duplicate insert raises DuplicateKeyError). ⚠️ PRODUCTION still needs the same: run the dedupe `--apply` on prod then redeploy so the index builds there too (the defensive guard logs a warning until then).
