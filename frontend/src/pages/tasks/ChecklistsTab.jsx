@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Trash2, Loader2, Repeat, Edit3, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
@@ -13,12 +14,14 @@ export function recurrenceLabel(c) {
 }
 
 export default function ChecklistsTab({ user, group }) {
-  const [ownerId, setOwnerId] = useState(user.id);
+  const [params] = useSearchParams();
+  const [ownerId, setOwnerId] = useState(params.get("owner") || user.id);
   const [rows, setRows] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
   const [editId, setEditId] = useState("");
   const mine = ownerId === user.id;
+  const ownerName = group.find((m) => m.id === ownerId)?.full_name || "this member";
 
   const load = () => api.get("/checklists", { owner_id: ownerId }).then((r) => setRows(r.rows)).catch((e) => toast.error(e?.message || "Failed"));
   useEffect(() => { load(); }, [ownerId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -31,8 +34,8 @@ export default function ChecklistsTab({ user, group }) {
         await api.patch(`/checklists/${editId}`, form);
         toast.success("Checklist item updated");
       } else {
-        await api.post("/checklists", form);
-        toast.success("Checklist item added");
+        await api.post("/checklists", mine ? form : { ...form, owner_id: ownerId });
+        toast.success(mine ? "Checklist item added" : `Added to ${ownerName}'s checklist`);
       }
       setForm(EMPTY); setEditId(""); load();
     } catch (err) { toast.error(err?.message || "Couldn't save"); }
@@ -64,9 +67,11 @@ export default function ChecklistsTab({ user, group }) {
           </select>
         </div>
       )}
-      {(mine || editId) && (
+      {(mine || editId || !mine) && (
         <form onSubmit={submitForm} className="iu-card p-3 md:p-4 mb-4 space-y-2" data-testid="checklist-add-form">
-          {editId && <div className="text-xs font-bold text-indigo-600" data-testid="checklist-editing-banner">Editing checklist item</div>}
+          {editId
+            ? <div className="text-xs font-bold text-indigo-600" data-testid="checklist-editing-banner">Editing checklist item</div>
+            : !mine && <div className="text-xs font-bold text-amber-600" data-testid="checklist-foreign-banner">Adding to {ownerName}&apos;s checklist</div>}
           <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
             <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Must-do item, e.g. Reconcile petty cash" className="iu-input !h-10 text-sm" data-testid="checklist-title" required />
             <select value={form.recurrence} onChange={(e) => setForm({ ...form, recurrence: e.target.value })} className="iu-input !h-10 !w-auto text-sm" data-testid="checklist-recurrence">

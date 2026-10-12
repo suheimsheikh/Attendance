@@ -57,6 +57,25 @@ class ChecklistIn(BaseModel):
     days_of_week: Optional[List[str]] = None
     day_of_month: Optional[str] = None
     active: bool = True
+    owner_id: Optional[str] = None  # add to another member's checklist (create only)
+
+
+class PlanItemIn(BaseModel):
+    date: Optional[str] = None
+    title: Optional[str] = None
+    todo_id: Optional[str] = None
+    include_in_dar: bool = True
+
+
+class PlanItemPatch(BaseModel):
+    title: Optional[str] = None
+    done: Optional[bool] = None
+    include_in_dar: Optional[bool] = None
+
+
+class PlanPickIn(BaseModel):
+    date: Optional[str] = None
+    todo_ids: List[str] = []
 
 
 class TickIn(BaseModel):
@@ -170,8 +189,19 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     async def dar_prefill(user: dict = Depends(get_current_user)):
         if not _is_member(user):
             return {"text": ""}
-        p = await _today_payload(user, local_date_str(await _office()))
-        done = [c["title"] for c in p["checklist"] if c["done"]] + [t["title"] for t in p["todos_done_today"]]
+        iso = local_date_str(await _office())
+        p = await _today_payload(user, iso)
+        # Plan-for-the-day: only items the user flagged "include in DAR".
+        plan = await db.day_plans.find_one({"owner_id": user["id"], "date": iso}, {"_id": 0})
+        plan_done = [it["title"] for it in (plan or {}).get("items", [])
+                     if it.get("done") and it.get("include_in_dar", True)]
+        raw_done = plan_done + [c["title"] for c in p["checklist"] if c["done"]] + [t["title"] for t in p["todos_done_today"]]
+        # De-dupe (case-insensitive) preserving first-seen order.
+        seen, done = set(), []
+        for t in raw_done:
+            k = (t or "").strip().lower()
+            if k and k not in seen:
+                seen.add(k); done.append(t)
         pending = [c["title"] for c in p["checklist"] if not c["done"]] + [
             f"{t['title']} (due {t['due_date']})" for t in p["todos_due"]]
         lines = []
@@ -446,7 +476,9 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     @router.post("/checklists")
     async def create_checklist(body: ChecklistIn, user: dict = Depends(get_current_user)):
         _require(user)
-        doc = {"id": str(uuid.uuid4()), "owner_id": user["id"], "owner_name": user.get("full_name"),
+        owner = await _owner(body.owner_id, user)
+        doc = {"id": str(uuid.uuid4()), "owner_id": owner["id"], "owner_name": owner.get("full_name"),
+               "created_by_id": user["id"], "created_by_name": user.get("full_name"),
                "created_at": now_utc().isoformat(), **_validate_cl(body)}
         await db.checklists.insert_one(dict(doc))
         return _pack_cl(doc)
@@ -506,5 +538,171 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
                         "checklist_done": sum(1 for c in p["checklist"] if c["done"]),
                         "todos_due": len(p["todos_due"]), "todos_open": len(p["todos_due"]) + len(p["todos_upcoming"])})
         return {"date": iso, "rows": out}
+
+    # ── Group overview (any member) — "View all" ─────────────────────
+    @router.get("/tasks/overview")
+    async def tasks_overview(user: dict = Depends(get_current_user)):
+        _require(user)
+        iso = local_date_str(await _office())
+        out = []
+        for m in await _group():
+            u = await db.users.find_one({"id": m["id"]}, {"_id": 0, "id": 1, "full_name": 1, "weekly_off": 1, "category": 1})
+            p = await _today_payload(u, iso)
+            plan = await db.day_plans.find_one({"owner_id": m["id"], "date": iso}, {"_id": 0, "items": 1})
+            items = (plan or {}).get("items", [])
+            out.append({
+                "member_id": m["id"], "member_name": m.get("full_name"), "rank": m.get("rank"),
+                "checklist_total": len(p["checklist"]),
+                "checklist_done": sum(1 for c in p["checklist"] if c["done"]),
+                "todos_due": len(p["todos_due"]),
+                "todos_open": len(p["todos_due"]) + len(p["todos_upcoming"]),
+                "plan_total": len(items), "plan_done": sum(1 for it in items if it.get("done")),
+            })
+        return {"date": iso, "rows": out, "me": user["id"]}
+
+    # ── Plan for the day ──────────────────────────────────────────────
+    def _pack_plan(doc: dict) -> dict:
+        return {"date": doc.get("date"), "owner_id": doc.get("owner_id"),
+                "owner_name": doc.get("owner_name"),
+                "items": [{k: it.get(k) for k in
+                           ("id", "title", "todo_id", "checklist_id", "done", "done_at", "include_in_dar")}
+                          for it in doc.get("items", [])]}
+
+    async def _get_or_create_plan(owner: dict, iso: str, server_today: str, create: bool) -> Optional[dict]:
+        doc = await db.day_plans.find_one({"owner_id": owner["id"], "date": iso}, {"_id": 0})
+        if doc or not create:
+            return doc
+        # Seed today's plan by carrying forward the latest prior plan's
+        # unfinished items (reset to not-done). Only for the real "today".
+        items: list = []
+        if iso == server_today:
+            prev = await db.day_plans.find(
+                {"owner_id": owner["id"], "date": {"$lt": iso}}, {"_id": 0}
+            ).sort("date", -1).limit(1).to_list(1)
+            if prev:
+                for it in prev[0].get("items", []):
+                    if not it.get("done"):
+                        items.append({
+                            "id": str(uuid.uuid4()), "title": it.get("title"),
+                            "todo_id": it.get("todo_id"), "checklist_id": it.get("checklist_id"),
+                            "done": False, "done_at": None,
+                            "include_in_dar": it.get("include_in_dar", True), "carried": True,
+                        })
+        now = now_utc().isoformat()
+        doc = {"id": str(uuid.uuid4()), "owner_id": owner["id"], "owner_name": owner.get("full_name"),
+               "date": iso, "items": items, "created_at": now, "updated_at": now}
+        await db.day_plans.insert_one(dict(doc))
+        return doc
+
+    @router.get("/tasks/plan")
+    async def get_plan(date: Optional[str] = None, owner_id: Optional[str] = None,
+                       user: dict = Depends(get_current_user)):
+        _require(user)
+        server_today = local_date_str(await _office())
+        iso = _valid_date(date, "date") or server_today
+        owner = await _owner(owner_id, user) if owner_id else user
+        # Only auto-create (and carry-forward) for the plan owner viewing their own.
+        create = owner["id"] == user["id"]
+        doc = await _get_or_create_plan(owner, iso, server_today, create)
+        if not doc:
+            return {"date": iso, "owner_id": owner["id"], "owner_name": owner.get("full_name"),
+                    "items": [], "can_edit": owner["id"] == user["id"] or user.get("role") == "admin"}
+        return {**_pack_plan(doc), "can_edit": owner["id"] == user["id"] or user.get("role") == "admin"}
+
+    async def _plan_for_write(owner_id: Optional[str], iso: str, user: dict) -> dict:
+        """Resolve the plan doc the caller may modify. Self always; admins any."""
+        oid = owner_id or user["id"]
+        if oid != user["id"] and user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="You can only edit your own day plan")
+        owner = await _owner(oid, user) if oid != user["id"] else user
+        doc = await _get_or_create_plan(owner, iso, iso, True)
+        return doc
+
+    @router.post("/tasks/plan/items")
+    async def add_plan_item(body: PlanItemIn, user: dict = Depends(get_current_user)):
+        _require(user)
+        server_today = local_date_str(await _office())
+        iso = _valid_date(body.date, "date") or server_today
+        doc = await _plan_for_write(None, iso, user)
+        title = (body.title or "").strip()
+        todo_id = None
+        if body.todo_id:
+            t = await db.todos.find_one({"id": body.todo_id, "owner_id": doc["owner_id"]}, {"_id": 0, "title": 1})
+            if not t:
+                raise HTTPException(status_code=404, detail="To-do not found in your list")
+            title = title or t["title"]
+            todo_id = body.todo_id
+        if not title:
+            raise HTTPException(status_code=400, detail="title or todo_id is required")
+        item = {"id": str(uuid.uuid4()), "title": title[:300], "todo_id": todo_id,
+                "checklist_id": None, "done": False, "done_at": None,
+                "include_in_dar": bool(body.include_in_dar)}
+        await db.day_plans.update_one(
+            {"id": doc["id"]}, {"$push": {"items": item}, "$set": {"updated_at": now_utc().isoformat()}})
+        return item
+
+    @router.post("/tasks/plan/pick")
+    async def pick_plan_items(body: PlanPickIn, user: dict = Depends(get_current_user)):
+        _require(user)
+        server_today = local_date_str(await _office())
+        iso = _valid_date(body.date, "date") or server_today
+        doc = await _plan_for_write(None, iso, user)
+        have = {it.get("todo_id") for it in doc.get("items", []) if it.get("todo_id")}
+        todos = await db.todos.find(
+            {"id": {"$in": body.todo_ids}, "owner_id": doc["owner_id"]}, {"_id": 0, "id": 1, "title": 1}).to_list(500)
+        added = []
+        for t in todos:
+            if t["id"] in have:
+                continue
+            item = {"id": str(uuid.uuid4()), "title": t["title"][:300], "todo_id": t["id"],
+                    "checklist_id": None, "done": False, "done_at": None, "include_in_dar": True}
+            added.append(item)
+        if added:
+            await db.day_plans.update_one(
+                {"id": doc["id"]}, {"$push": {"items": {"$each": added}}, "$set": {"updated_at": now_utc().isoformat()}})
+        return {"added": added, "count": len(added)}
+
+    @router.patch("/tasks/plan/items/{item_id}")
+    async def patch_plan_item(item_id: str, body: PlanItemPatch, date: Optional[str] = None,
+                              owner_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+        _require(user)
+        server_today = local_date_str(await _office())
+        iso = _valid_date(date, "date") or server_today
+        doc = await _plan_for_write(owner_id, iso, user)
+        items = doc.get("items", [])
+        it = next((x for x in items if x.get("id") == item_id), None)
+        if not it:
+            raise HTTPException(status_code=404, detail="Plan item not found")
+        if body.title is not None:
+            if not body.title.strip():
+                raise HTTPException(status_code=400, detail="title cannot be empty")
+            it["title"] = body.title.strip()[:300]
+        if body.include_in_dar is not None:
+            it["include_in_dar"] = bool(body.include_in_dar)
+        if body.done is not None:
+            it["done"] = bool(body.done)
+            it["done_at"] = now_utc().isoformat() if body.done else None
+            # Keep a linked to-do in sync (owner's own list only).
+            if it.get("todo_id"):
+                await db.todos.update_one(
+                    {"id": it["todo_id"], "owner_id": doc["owner_id"]},
+                    {"$set": {"status": "done" if body.done else "open",
+                              "done_at": now_utc().isoformat() if body.done else None,
+                              "done_by_name": user.get("full_name") if body.done else None,
+                              "updated_at": now_utc().isoformat()}})
+        await db.day_plans.update_one(
+            {"id": doc["id"]}, {"$set": {"items": items, "updated_at": now_utc().isoformat()}})
+        return {k: it.get(k) for k in ("id", "title", "todo_id", "done", "done_at", "include_in_dar")}
+
+    @router.delete("/tasks/plan/items/{item_id}")
+    async def delete_plan_item(item_id: str, date: Optional[str] = None, owner_id: Optional[str] = None,
+                               user: dict = Depends(get_current_user)):
+        _require(user)
+        server_today = local_date_str(await _office())
+        iso = _valid_date(date, "date") or server_today
+        doc = await _plan_for_write(owner_id, iso, user)
+        await db.day_plans.update_one(
+            {"id": doc["id"]}, {"$pull": {"items": {"id": item_id}}, "$set": {"updated_at": now_utc().isoformat()}})
+        return {"ok": True}
 
     return router

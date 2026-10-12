@@ -6,8 +6,10 @@ import { api } from "../api";
 import TodayTasksCard from "../components/TodayTasksCard";
 import TodosTab from "./tasks/TodosTab";
 import ChecklistsTab from "./tasks/ChecklistsTab";
+import PlanTab from "./tasks/PlanTab";
+import ViewAllTab from "./tasks/ViewAllTab";
 
-const TABS = [["today", "Today"], ["todos", "To-dos"], ["checklists", "Checklists"]];
+const TABS = [["today", "Today"], ["plan", "Plan"], ["todos", "To-dos"], ["checklists", "Checklists"], ["all", "View all"]];
 
 export default function Tasks() {
   const { user } = useAuth();
@@ -39,8 +41,10 @@ export default function Tasks() {
         </div>
       </header>
       {tab === "today" && <TodayTasksCard key={key} userName={user?.full_name} compact onChanged={() => setKey((k) => k + 1)} />}
+      {tab === "plan" && <PlanTab />}
       {tab === "todos" && <TodosTab user={user} group={group} />}
       {tab === "checklists" && <ChecklistsTab user={user} group={group} />}
+      {tab === "all" && <ViewAllTab />}
     </div>
   );
 }
