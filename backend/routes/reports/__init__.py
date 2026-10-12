@@ -22,6 +22,7 @@ from routes.reports.timeline import register as _reg_timeline
 from routes.reports.grid import register as _reg_grid
 from routes.reports.grid_api import register as _reg_grid_api
 from routes.reports.ledgers import register as _reg_ledgers
+from routes.reports.timing_chart import register as _reg_timing_chart
 
 
 def make_router(db, require_admin, get_current_user, compute_hours_report, enrich_leaves) -> APIRouter:
@@ -64,6 +65,8 @@ def make_router(db, require_admin, get_current_user, compute_hours_report, enric
 
 
     _ns = _reg_ledgers(router, _ledger_window=_ledger_window, db=db, require_admin=require_admin)
+
+    _reg_timing_chart(router, db=db, require_admin=require_admin)
 
     # Expose the month-grid engine so server-to-server endpoints (e.g. the
     # PayCraft /leave-balances feed) can read the SAME per-member month

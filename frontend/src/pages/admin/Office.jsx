@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Save, MapPin, MessageSquare, Phone, KeyRound, RefreshCw, ArrowRight } from "lucide-react";
+import { Loader2, Save, MapPin, MessageSquare, Phone, KeyRound, RefreshCw, ArrowRight, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { getLocation, setAcademyTz } from "../../utils";
@@ -64,6 +64,7 @@ export default function OfficeSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [chartBusy, setChartBusy] = useState(false);
   const formErr = useFormError();
 
   useEffect(() => {
@@ -84,6 +85,20 @@ export default function OfficeSettings() {
       toast.success("Captured your current GPS position");
     } catch (err) { toast.error(err.message); }
     finally { setPicking(false); }
+  };
+
+  const openTimingChart = async () => {
+    setChartBusy(true);
+    try {
+      const blob = await api.getBlob("/reports/timing-chart.pdf");
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      toast.error("Could not generate the timing chart");
+    } finally {
+      setChartBusy(false);
+    }
   };
 
   const save = async (e) => {
@@ -245,6 +260,20 @@ export default function OfficeSettings() {
             Standard start/end for specific weekdays, applied to all employees (staff, coaches, executives — never athletes). Example: shorter Saturday &amp; Sunday hours. Leave a day blank to use the default work start/end above. A member&apos;s own day-of-week timings override this.
           </p>
           <DowHoursEditor value={form.dow_hours} onChange={(v) => set("dow_hours", v)} testIdPrefix="of-dow" />
+          <div className="mt-4 pt-3 border-t border-emerald-200">
+            <p className="text-[11px] text-slate-500 mb-2">
+              Print an alphabetical, employee-wise chart of everyone&apos;s check-in/out times for each day of the week — ready to pin on the notice board.
+            </p>
+            <button
+              type="button"
+              data-testid="of-timing-chart-btn"
+              onClick={openTimingChart}
+              disabled={chartBusy}
+              className="iu-btn-secondary"
+            >
+              {chartBusy ? <Loader2 className="animate-spin" size={14} /> : <Printer size={14} />} Office check-in/out timing chart (PDF)
+            </button>
+          </div>
         </div>
 
         <div>

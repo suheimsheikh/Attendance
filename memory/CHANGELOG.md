@@ -5131,3 +5131,10 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Frontend: new reusable `components/DowHoursEditor.jsx` (7 rows, iu-input yellow, testIdPrefix); wired into Office.jsx (of-dow-*) and MemberForm.jsx (mf-dow-*, employees only).
 - Tested: unit (compute_late/effective_hours precedence + athlete exclusion), curl round-trip (create/patch/list/grid 200), testing_agent frontend 18/18 pass. Throwaway coach cleaned up.
 - NOTE: screenshot_tool returns the entry (login) frame for localStorage-auth deep pages → post-login UI verification routed to testing_agent (not an app bug).
+
+## 2026-06 (fork) — OFFICE CHECK IN / OUT TIMING CHART (PDF)
+- FEATURE: notice-board PDF listing every employee (staff/coach/exec; athletes excluded) in ALPHABETICAL order with their effective check-in/out time per weekday (Mon-Sun). Titled "OFFICE CHECK IN / OUT TIMING CHART".
+- Cells resolve via effective_hours (member DOW -> office DOW -> member default -> office default) so they match the app's lateness logic exactly. Weekly-off day -> "WEEKLY OFF"; hourly wagers -> "Hourly". Extra blank "Signature" column for on-board verification.
+- Backend: new routes/reports/timing_chart.py (GET /api/reports/timing-chart.pdf, admin-only, reportlab via shared _pdf_from_table, A4 landscape, inline disposition). Registered in routes/reports/__init__.py.
+- Frontend: Office Settings -> "Office check-in/out timing chart (PDF)" button (data-testid of-timing-chart-btn) under the DOW editor; opens the authed PDF in a new tab via api.getBlob (print-ready).
+- Tested: curl returns 200 application/pdf (4 pages, 106 employees); PDF content analysis confirmed title, columns (#, Name, Designation, Mon..Sun, Signature), alpha order, WEEKLY OFF + Hourly cells. Frontend compiles, /admin/office 200.
