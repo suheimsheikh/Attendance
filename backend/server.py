@@ -1418,6 +1418,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
         {"archived": {"$ne": True}}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1,
              "photo_thumb": 1, "work_start": 1, "work_end": 1, "institution": 1,
              "dow_hours": 1,  # per-DOW timing override (Jun 2026) → effective_hours
+             "weekly_off": 1,  # needed so the WO-not-absent rule reads the member's real off-day (Jun 2026 fix)
              "fleet": 1,  # NOTE: needed by break_applies_to() for scope=fleet breaks
              "leaving_date": 1,  # 24 Feb 2026 — feeds the ex-member filter/chip on the Presence Board
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1}

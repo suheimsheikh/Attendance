@@ -5146,3 +5146,7 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - TIMING CHART: removed the Signature column; Name + Designation now LEFT-justified (new optional left_cols param on _pdf_from_table). Title/columns/alpha order unchanged.
 - Tested: curl (presence counts weekday + Sunday, left not absent, PDF no 'Signature'), testing_agent frontend 100% (iteration_109): Presence renders, Sunday Absent=0, ex-toggle works, timing-chart button opens PDF.
 - AUDIT note: grid.py and muster.py already exclude left/archived (grid also paints LF post-leaving); members-list payroll path filters status!=left + archived; Presence intentionally still returns ex-members for the "Show ex-members" toggle but they are no longer 'absent'.
+
+## 2026-06 (fork) — Presence WO root-cause + timing-chart button relocation
+- ROOT-CAUSE FIX: the Presence roster query (server.py presence(), ~line 1417) did NOT project `weekly_off`, so every member defaulted to office default_weekly_off (Sunday). Effect: on Mon (43/52 employees have weekly_off=monday) they ALL showed Absent; on Sun it falsely flipped EVERYONE to "Weekly off". Added "weekly_off": 1 to the projection. Verified: Monday Absent 24->2 with Monday-WO staff now "Weekly off"; Sunday weekly-off 104->6 (only real Sunday-WO).
+- UI: moved the "Timing Chart (PDF)" button to the Office Settings header next to the title, restyled loud (solid emerald, shadow + ring, printer icon); removed the duplicate button under the DOW editor. Single of-timing-chart-btn remains.
