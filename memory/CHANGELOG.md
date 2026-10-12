@@ -5121,3 +5121,13 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Earlier same day: 3 body-model 422s (recalc-late, resolve-stale, meal-calendar PUT, escort purge-bulk), meal-calendar end-date 500.
 - Tested: iteration_90 — 200/200 regression + 7/7 new, frontend 0 console errors. Orphan test correction cleaned.
 - Recommended, NOT changed: JWT in localStorage → HttpOnly cookies (logs everyone out); partial unique index for one open session per user (needs a duplicate audit first); short-notice monthly count uses created_at UTC vs local month start (5.5 h edge on the 1st); deploy to production so users get today's fixes.
+
+## 2026-06 (fork) — Per-day-of-week (DOW) work timings for employees
+- FEATURE: employees (staff/coach/executive) can have special timings per weekday (e.g. coach Sat/Sun hours). Athletes excluded (camp-driven).
+- Two levels: office-wide standard (`OfficeConfig.dow_hours`, Office Settings) + per-member override (`users.dow_hours`, Member form). Both shape `{mon..sun:{start,end}}`; blank day inherits.
+- Precedence per field (start/end independent): member DOW → office DOW → member default work_start/end → office default.
+- Central resolver `services/attendance_calc.effective_hours(member, office, when)` + `_dow_override`/`_dow_key`. Used by: compute_late (check-in lateness — the authoritative stamp), compute_overtime_in/out, attendance_helpers._compute_early_out_at_checkout, grid.py early-out (now per-day), muster.py shift-started (both rosters), server.py Presence board, scheduler.py auto-checkout, attendance_actions "close at work_end", attendance.py stale-session.
+- Models: UserPublic/MemberCreate/MemberUpdate + create_member doc now carry dow_hours; projections added where effective_hours is called (grid, muster, presence, scheduler).
+- Frontend: new reusable `components/DowHoursEditor.jsx` (7 rows, iu-input yellow, testIdPrefix); wired into Office.jsx (of-dow-*) and MemberForm.jsx (mf-dow-*, employees only).
+- Tested: unit (compute_late/effective_hours precedence + athlete exclusion), curl round-trip (create/patch/list/grid 200), testing_agent frontend 18/18 pass. Throwaway coach cleaned up.
+- NOTE: screenshot_tool returns the entry (login) frame for localStorage-auth deep pages → post-login UI verification routed to testing_agent (not an app bug).

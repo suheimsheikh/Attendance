@@ -1,0 +1,20 @@
+{
+  "summary": "Frontend-only verification of the new per-day-of-week (DOW) work-timings editor at both office level and member level. All 18 UI/integration checks pass. Admin login OK; Office Settings DOW editor renders 7 rows (Mon-Sun) with iu-input yellow styling, Saturday 08:00-12:00 saves (PUT /api/office 200), persists across reload, and the Saturday-clear + save cleanup correctly leaves the live office config with empty day-of-week timings. In MemberForm, the mf-dow-hours sub-section renders only for staff/coach/executive and is correctly hidden for athlete and elite. A throwaway coach (qa_coach_dow_<ts>@ishowedup-test.example.com) was created with Sunday 07:30-11:30 and POST /api/members returned 200.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LeaveReportPrompt (data-testid='leave-report-prompt') overlay auto-appears for admins and intercepts pointer events on Office/Member screens; while tests use force=True to work around it, real admins may hit the same friction right after login. Consider auto-dismissing or lowering z-index when the admin navigates away from the Check-In landing.",
+    "/admin/members list is a tall client-rendered table (170 rows loaded eagerly) — consider pagination/virtualisation.",
+    "Throwaway test coach 'qa_coach_dow_1791790411@ishowedup-test.example.com' was created by the member test and NOT deleted (members list has no self-service delete during a modal flow; cleanup would need a secondary archive/delete step)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100% (18/18 checks)"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (email toggle on /login)",
+  "seed_data_creation": "1 throwaway coach member created: qa_coach_dow_1791790411@ishowedup-test.example.com (sun dow=07:30-11:30). Office Saturday row was set then cleared (final state: empty, as requested).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login testids: toggle-admin-login, login-email-input, login-password-input, login-submit-button. Office DOW wrapper: of-dow-hours; rows of-dow-row-{mon..sun}; inputs of-dow-{day}-start/-end; clear button of-dow-{day}-clear; editor root of-dow-editor; office save btn: of-save. Member form: open with [data-testid='new-member-button'], root 'member-form', category 'mf-category'. DOW sub-section 'mf-dow-hours' only renders for staff/coach/executive. There is a persistent LeaveReportPrompt overlay (data-testid='leave-report-prompt') that intercepts clicks after login; remove it via DOM or use force=True.",
+  "rca of the issue": "N/A — feature works end-to-end on the UI."
+}
