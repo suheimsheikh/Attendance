@@ -5169,3 +5169,12 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - REFACTOR #1: added services/time_utils.office_and_today(db) and collapsed 12 inline `local_date_str(await _office())` calls in routes/tasks.py into a single _today() helper. Behaviour unchanged (tasks endpoints re-verified 200).
 - Refactors #2 (merge date utils) and #3 (DAR policy hook) intentionally SKIPPED after inspection: utils.js (date-math) and utils/dates.js (formatters) aren't duplicates; the DAR policy fetch is a single line embedded in each component's Promise.all, so extracting it would add loading-state indirection, not remove real duplication.
 - Tested: testing_agent iteration_113 — 100% (nudge render/click/empty-case + 5-tab regression + 6 backend endpoints).
+
+## 2026-06 (fork) — Refactor #4: unified weekly-off resolver
+- Added holidays.member_weekly_off(member, default) + is_weekly_off_on(member, default, when) as the single source of truth for the "(member.weekly_off or office default).lower()" + weekday-name mapping that was copied across Presence, Muster, Grid and comp-off.
+- Applied in server.py presence() and routes/muster.py _coach_off_today() (removed the duplicated _today_wk_full/_WEEKDAY_FULL inline logic). Grid already shares the WEEKDAY_KEY constant so it was left as-is.
+- Behaviour unchanged — tested: curl (Sunday presence 6 weekly-off identical; muster/daily-roster 200) + testing_agent iteration_114 frontend 100% (Presence + Muster render, weekly-off excluded from Absent).
+- NOTE: public-holiday system was removed 26 Jun 2026; the vestigial db.holidays checks remain harmless (empty collection).
+
+## Refactor #5 (server.py presence split) — DEFERRED
+- The /presence endpoint is a single ~650-line function (server.py 1390-2038) tightly coupled to server globals. A safe extraction needs a register(deps) shim threading ~10 helpers; risk of a hard import failure is high, so deferred to a dedicated isolated task rather than rushed.

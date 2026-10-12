@@ -1,0 +1,47 @@
+{
+  "summary": "Frontend regression confirmation for the weekly-off resolver refactor (holidays.is_weekly_off_on used by presence() and _coach_off_today()). Logged in as admin, verified Presence board for TODAY (Mon 12/10/2026) and historical SUNDAY (11/10/2026), plus Muster Roll screen. Both screens load without errors and weekly-off members are correctly excluded from Absent.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification_details": {
+    "presence_today_mon_12_10_2026": {
+      "members_header": 65,
+      "on_campus": 21,
+      "off_campus": 3,
+      "away": 9,
+      "absent": 2,
+      "not_due_implicit": 30,
+      "absent_sample": "Campus Administrator (Admin/Staff) expected by 09:30; MANOJ MAJJI (Driver/Staff) expected by 09:30 — no weekly_off=monday employees appear in Absent",
+      "numeric_count_badges": "present (column-count-on_campus/off_campus/away/absent all render)"
+    },
+    "presence_sunday_11_10_2026": {
+      "members_header": 78,
+      "on_campus": 0,
+      "off_campus": 52,
+      "away": 12,
+      "absent": 3,
+      "not_due_implicit": 11,
+      "absent_sample": "DAYA SHANKAR, MAHESH KUMAR A, Tasks QA Exec — none have weekly_off=sunday; Sunday weekly-off members correctly filtered out of Absent"
+    },
+    "muster_roll": {
+      "loaded": true,
+      "today_roster_summary": "Away today: 1 leave, 2 absent",
+      "errors": "none",
+      "note": "Coaches on weekly-off today are not listed as expected/absent — consistent with pre-refactor behavior"
+    },
+    "console_errors": "none"
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345 (toggle-admin-login)",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Refactor #4 (shared weekly-off resolver in holidays.py) is UI-confirmed. Presence and Muster both render fine; weekly-off employees not shown as Absent. Backend was pre-verified via curl. No data was modified during testing."
+}
