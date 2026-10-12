@@ -77,7 +77,8 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin):
         if await db.menu_days.count_documents({}) > 0:
             return
         try:
-            data = json.load(open(SEED_PATH))
+            with open(SEED_PATH) as f:
+                data = json.load(f)
         except Exception as e:
             log.warning("recipe seed missing: %s", e)
             return

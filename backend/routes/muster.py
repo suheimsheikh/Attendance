@@ -34,6 +34,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from pymongo.errors import DuplicateKeyError
 
 from services.time_utils import now_utc, local_date_str, local_now
 from services.attendance_calc import compute_late, excursion_seconds, effective_hours
@@ -713,7 +714,16 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                     "out_of_geofence": bool(out_of_geofence),
                 } if (late or bool(out_of_geofence)) else None,
             }
-            await db.attendance.insert_one(att)
+            try:
+                await db.attendance.insert_one(att)
+            except DuplicateKeyError:
+                # Someone else checked this member in a split-second earlier
+                # (another coach's muster, or a self check-in). The unique
+                # (user_id, date) index kept the first row — skip, don't crash
+                # the batch.
+                skipped.append({"id": sid, "name": athlete["full_name"],
+                                "reason": "already checked in"})
+                continue
             done.append({"id": sid, "name": athlete["full_name"], "late": late})
         return {
             "checked_in_count": len(done),

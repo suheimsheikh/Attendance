@@ -11,6 +11,7 @@ from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from pymongo.errors import DuplicateKeyError
 
 from config import AUTO_APPROVAL_LATE_CHECKINS
 from routes.admin_audit import write_audit
@@ -336,7 +337,15 @@ def make_router(db, get_current_user, require_admin, open_session_for, _late_day
                 "out_of_geofence": bool(out),
             } if (late or out) else None,
         }
-        await db.attendance.insert_one(doc)
+        try:
+            await db.attendance.insert_one(doc)
+        except DuplicateKeyError:
+            # Lost a same-moment check-in race (retry / 2nd device / self +
+            # console). The unique (user_id, date) index kept the first row;
+            # treat this as the normal "already checked in" response.
+            raise HTTPException(
+                status_code=400,
+                detail=f"ALREADY_CHECKED_IN_TODAY: {target.get('full_name') or 'This member'} has already checked in today. Use Step Out for breaks; once checked out, they're done for the day.")
         await _cancel_stale_missed_checkin(doc["user_id"], doc["date"])
         return {"ok": True, "action": "checkin", "member": target["full_name"],
                 "out_of_geofence": out, "distance_m": dist,
@@ -558,7 +567,14 @@ def make_router(db, get_current_user, require_admin, open_session_for, _late_day
                 "overtime_early_reason": _early_reason,
                 "work_start_at_session": work_start_hm,
             })
-        await db.attendance.insert_one(doc)
+        try:
+            await db.attendance.insert_one(doc)
+        except DuplicateKeyError:
+            # Lost a same-moment check-in race — the unique (user_id, date)
+            # index kept the first row. Report it as "already checked in".
+            raise HTTPException(
+                status_code=400,
+                detail="ALREADY_CHECKED_IN_TODAY: You've already checked in today. Use Step Out for breaks; once you check out, you're done for the day. If this is a mistake, please ask an admin.")
         await _cancel_stale_missed_checkin(doc["user_id"], doc["date"])
         # Early-OT reason → personal bank (see notes on _ensure_reason_in_bank).
         if early_min > 0 and overtime_reason and overtime_reason.strip():

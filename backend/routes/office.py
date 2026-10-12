@@ -23,6 +23,7 @@ import os
 import pathlib
 import subprocess
 import time
+import asyncio
 from functools import lru_cache
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -108,7 +109,9 @@ def make_router(db, require_admin, get_current_user, send_checkout_reminders, Of
         path = pathlib.Path(__file__).resolve().parent.parent.parent / "CHANGELOG.md"
         if not path.exists():
             return {"markdown": "# Changelog\n\n_Not available yet._"}
-        return {"markdown": path.read_text(encoding="utf-8")}
+        # Read off the event loop so a slow disk can't stall other requests.
+        md = await asyncio.to_thread(path.read_text, "utf-8")
+        return {"markdown": md}
 
     @router.get("/version")
     async def app_version():

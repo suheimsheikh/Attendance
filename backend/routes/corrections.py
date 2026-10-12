@@ -32,6 +32,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from services.grid_lock import assert_dates_unlocked
 from pydantic import BaseModel, Field
+from pymongo.errors import DuplicateKeyError
 
 from services.time_utils import now_utc, local_date_str, office_tz, to_utc_iso
 from services.permissions import is_super_admin
@@ -121,7 +122,12 @@ async def _apply_missed_checkin(db, c: dict, admin: dict) -> dict:
         "corrected_by": admin.get("full_name"),
         "corrected_at": now_utc().isoformat(),
     }
-    await db.attendance.insert_one(row)
+    try:
+        await db.attendance.insert_one(row)
+    except DuplicateKeyError:
+        # A row for this date appeared between the check above and now
+        # (concurrent apply). The unique (user_id, date) index protected us.
+        raise HTTPException(status_code=409, detail="Attendance already exists for this date — use time_adjust instead")
     return {"attendance_id": row["id"], "created": True}
 
 

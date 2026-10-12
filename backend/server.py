@@ -514,6 +514,24 @@ async def _seed_database() -> None:
         ("user_id", 1), ("date", -1),
         ("check_in_at", 1), ("is_late", 1),
     ])
+    # One attendance row per member per day is the app's invariant — every
+    # check-in path (self geo, console/card, muster bulk, admin correction)
+    # already rejects a second row for the same (user_id, date). This unique
+    # index makes that race-proof: two near-simultaneous check-ins can no
+    # longer both insert (the loser gets a DuplicateKeyError, handled in the
+    # toggle/muster/correction paths as "already checked in"). Built
+    # DEFENSIVELY: a DB that still holds legacy/race duplicates can't build it,
+    # so we log a clear warning and carry on rather than crash startup — the
+    # duplicates must be cleaned first (see scripts/dedupe_attendance.py).
+    try:
+        await db.attendance.create_index(
+            [("user_id", 1), ("date", 1)], unique=True, name="uniq_user_date",
+        )
+    except Exception as e:
+        logger.warning(
+            "attendance uniq_user_date index NOT built — duplicate (user_id,date) "
+            "rows still exist; run scripts/dedupe_attendance.py then redeploy. (%s)", e,
+        )
     # Perf pass 24 Feb 2026 — audit_log + sms_log had NO indexes; every
     # admin view/filter was doing a full-collection scan (~700 rows and
     # growing). Sort key is `at` DESC (most-recent-first paging), and

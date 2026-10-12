@@ -27,6 +27,18 @@ Port the "Attendance" mobile app for the youth competitive sailing academy (Yach
 
 ## Session log
 
+### 12 Oct 2026 — App-wide "Ponytail" review fixes (shipped + warnings)
+Ran a read-only app-wide audit (ponytail.dev methodology). Actioned:
+- **#1 Duplicate attendance day (concurrency) — code shipped, index deferred.** All four check-in insert paths (self geo `attendance_actions.py`, console/card, muster bulk `muster.py`, admin correction `corrections.py`) now catch `DuplicateKeyError` and return the normal "already checked in" response. Added a DEFENSIVE unique index `attendance.uniq_user_date (user_id, date)` in `_seed_database` (wrapped in try/except — logs a warning and continues if legacy duplicates block it, never crashes startup). Added review-only `scripts/dedupe_attendance.py` (dry-run default; keeps the completed/richest row per day). ⚠️ The index will NOT enforce until existing duplicate rows are removed — preview has **7 groups / 8 rows**; production likely has some too. Needs explicit approval to run `scripts/dedupe_attendance.py --apply` then redeploy.
+- **#4 Tests — shipped.** `tests/test_attendance_one_per_day.py`: index-aware uniqueness test (skips with an actionable message until dups cleaned) + API guard test (second same-day check-in → 400 ALREADY_CHECKED_IN, still exactly one row).
+- **#6 Blocking file I/O — shipped.** `/api/changelog` read offloaded via `asyncio.to_thread`; recipes one-time seed now uses `with open(...)` (fixed a leaked file handle).
+
+Held/declined with warnings (would risk live-payroll regressions):
+- **#2 Half-day leave Grid count** — NOT changed. The Grid paints a half-day leave as a full `LV` (counts 1 payable/1 leave) while the balance deducts 0.5. BUT the PayCraft feed's balances come from `holidays.compute_pay_balances` (correct 0.5) and only `lop` flows from the Grid — so payroll balances are NOT wrong; only the on-screen/printed register count is simplified. Changing it alters the live payroll register (policy decision) — awaiting explicit approval.
+- **#3 Cross-year leave** — NOT changed. A leave starting in prior Dec running into Jan is excluded from the new year's balance (query filters `start_date >= Jan 1`), so balance can read slightly high. A correct fix needs per-year day-splitting (the `paid_leave_used` stamp is whole-leave, so naively widening the query would double-count December into the new year). Minor edge; awaiting approval.
+- **#5 "Dead imports"** — NOT removed. The flagged imports in `routes/reports/common.py` and `routes/meals/common.py` are intentional RE-EXPORT hubs (siblings do `from routes.meals.common import json, asyncio, DuplicateKeyError, ...`). ruff F401 is a false positive here; deleting them would break sibling imports. Declined to avoid a build-breaking regression.
+Verified: 65+ pytest pass (smoke, meal muster, presence, corrections); backend boots clean; changelog endpoint OK.
+
 ### 12 Oct 2026 — Presence ↔ Grid parity for athletes (bug fix, shipped)
 - **Report**: "In Presence, Away is also showing non-camp athletes. Presence and Grid should reflect the same truth."
 - **Root cause** (in `routes/presence_board.py`): athlete-like members are tracked ONLY on camp days (Grid blanks a non-camp athlete and excludes them from totals). Presence only applied that hide-rule in the no-session/no-leave branch, so a non-camp athlete with an approved leave/tour or a scope-break slipped into the merged "Away" (on_leave + on_tour) column. Live data confirmed it: with NO camp active today, 11 athlete-like members showed in Away (10 on a break, 1 elite on leave).
