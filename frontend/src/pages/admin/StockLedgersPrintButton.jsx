@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useEscape } from "../../hooks/useEscape";
 import { api, showApiError } from "../../api";
 import { Printer, Loader2, X } from "lucide-react";
 import { todayIso, monthStartIso, money } from "../../utils";
@@ -141,6 +142,7 @@ function buildHtml(data) {
 
 export default function StockLedgersPrintButton() {
   const [open, setOpen] = useState(false);
+  useEscape(open ? () => setOpen(false) : null);
   const [start, setStart] = useState(monthStartIso());
   const [end, setEnd] = useState(todayIso());
   const [cats, setCats] = useState([]);

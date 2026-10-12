@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useEscape } from "../../../hooks/useEscape";
 import { BarChart3, Beef, Boxes, X as CloseIcon, Droplet, Flame, ListOrdered, Loader2, PieChart as PieIcon, TrendingUp, Wheat } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api, showApiError } from "../../../api";
@@ -146,6 +147,7 @@ export function NutritionBlock({ nutrition, testKind, accent }) {
 }
 
 export function PantryDayModal({ date, kind, accent, onClose }) {
+  useEscape(onClose);
   // Fetches /meals/pantry-day-detail once for the clicked day and
   // renders a compact table: item + qty + rate + amount (+ vendor
   // for purchases). Bulk-uploaded category totals surface as

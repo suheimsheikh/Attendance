@@ -8,6 +8,7 @@
  * accountants who want the receipts.
  */
 import React, { useEffect, useState } from "react";
+import { useEscape } from "../hooks/useEscape";
 import { X, Loader2, TrendingUp, BarChart2 } from "lucide-react";
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
@@ -20,6 +21,7 @@ const inr = (n) => money(n);
 const fmtQty = uQty;
 
 export default function ItemPriceTrendDrawer({ itemId, itemName, onClose }) {
+  useEscape(onClose);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 

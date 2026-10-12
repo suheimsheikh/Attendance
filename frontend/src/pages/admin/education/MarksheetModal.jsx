@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useEscape } from "../../../hooks/useEscape";
 import { Loader2, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../../api";
@@ -15,6 +16,7 @@ function Field({ label, children }) {
 
 // Add / edit one marksheet. Picking a scan reads it with AI to pre-fill the form.
 export default function MarksheetModal({ member, sheet, onClose, onSaved }) {
+  useEscape(onClose);
   const [f, setF] = useState({
     exam_name: sheet?.exam_name || "", month: sheet?.month || "", year: sheet?.year || "",
     board: sheet?.board || "", result: sheet?.result || "", notes: sheet?.notes || "", sheet_name: sheet?.sheet_name || "",

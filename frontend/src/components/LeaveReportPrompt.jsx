@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useEscape } from "../hooks/useEscape";
 import { Share2, X, CalendarClock, CheckCircle2 } from "lucide-react";
 import { api } from "../api";
 import { shareToWhatsApp } from "../utils/shareWhatsApp";
@@ -59,6 +60,7 @@ export function buildLeaveTourMessage(roster) {
  */
 export default function LeaveReportPrompt() {
   const [open, setOpen] = useState(false);
+  useEscape(open ? () => setOpen(false) : null);
   const [roster, setRoster] = useState(null);
   const [busy, setBusy] = useState(false);
 

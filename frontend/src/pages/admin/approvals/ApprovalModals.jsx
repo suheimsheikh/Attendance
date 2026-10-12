@@ -1,4 +1,5 @@
 import { AlertTriangle, Check, Loader2, X } from "lucide-react";
+import { useEscape } from "../../../hooks/useEscape";
 import { round1 } from "../../leaves/utils";
 
 // ---------------------------------------------------------------------------
@@ -70,6 +71,7 @@ const REJECT_SUGGESTIONS = {
 };
 
 export function RejectReasonModal({ row, reason, onReasonChange, busy, onCancel, onSubmit }) {
+  useEscape(onCancel);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" data-testid="reject-modal">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
@@ -160,6 +162,7 @@ export function RejectReasonModal({ row, reason, onReasonChange, busy, onCancel,
 // with LOP) and hard-shows the shortfall so admins can't miss it.
 // ---------------------------------------------------------------------------
 export function OverrideReasonModal({ row, reason, onReasonChange, busy, onCancel, onSubmit }) {
+  useEscape(onCancel);
   const requested = row._requested;
   const available = row._available;
   const shortfall = round1(Math.max(0, requested - available));

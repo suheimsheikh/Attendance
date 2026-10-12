@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useEscape } from "../../../hooks/useEscape";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { api, showApiError } from "../../../api";
@@ -9,6 +10,7 @@ import { api, showApiError } from "../../../api";
  * 25 Jun 2026 (pure move).
  */
 export default function AddVendorInlineModal({ onClose, onCreated }) {
+  useEscape(onClose);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);

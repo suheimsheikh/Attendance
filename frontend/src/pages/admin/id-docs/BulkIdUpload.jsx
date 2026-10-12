@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
+import { useEscape } from "../../../hooks/useEscape";
 import { UploadCloud, Loader2, Save, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../../api";
@@ -185,6 +186,7 @@ export default function BulkIdUpload({ slots, onNamesChanged }) {
 }
 
 function MismatchAlert({ rows, slots, onClose }) {
+  useEscape(onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white w-full max-w-3xl rounded-2xl p-6 space-y-3" data-testid="bulk-mismatch-alert">

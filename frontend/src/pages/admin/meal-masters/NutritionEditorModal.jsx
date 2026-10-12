@@ -3,10 +3,12 @@
  * from MealMastersTab.jsx on 25 Jun 2026 (pure move).
  */
 import React, { useState } from "react";
+import { useEscape } from "../../../hooks/useEscape";
 import { createPortal } from "react-dom";
 import { Flame } from "lucide-react";
 
 export default function NutritionEditorModal({ item, onClose, onSave }) {
+  useEscape(onClose);
   const initial = item.nutrition || {};
   const [d, setD] = useState({
     kcal:          initial.kcal ?? "",

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useEscape } from "../../hooks/useEscape";
 import { api, showApiError } from "../../api";
 import { toast } from "sonner";
 import {
@@ -147,6 +148,7 @@ function Legend() {
 // Menu-vs-Actual: map each weekday to a real date + servings, compare planned recipe
 // consumption against actual pantry issues.
 function MvaModal({ days, onClose, onChanged }) {
+  useEscape(onClose);
   const [rows, setRows] = useState(() => days.map((d) => ({ day_id: d.id, name: d.name, date: "", servings: "" })));
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -278,6 +280,7 @@ function MvaModal({ days, onClose, onChanged }) {
 
 // Single generic modal for create/edit of any node type
 function NodeModal({ node, onClose, onSaved }) {
+  useEscape(onClose);
   const [f, setF] = useState(node.data || {});
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));

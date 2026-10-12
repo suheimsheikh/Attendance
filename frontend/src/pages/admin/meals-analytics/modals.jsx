@@ -1,9 +1,11 @@
 import React from "react";
+import { useEscape } from "../../../hooks/useEscape";
 import { X as CloseIcon, Coffee, Loader2, Moon as MoonIcon, Sun as SunIcon, Users } from "lucide-react";
 import { api, showApiError } from "../../../api";
 import { EVENT_COLORS, SLOT_COLORS, fmt } from "./helpers";
 
 export function DayAttendeesModal({ date, onClose }) {
+  useEscape(onClose);
   // Fetches /meals/day-attendees once, lists every member who marked
   // any meal on `date`, with a BF/L/D badge trio per row so the admin
   // can spot who took what without a second click.
@@ -138,6 +140,7 @@ function StatChip({ icon: Icon, label, value, tint }) {
 }
 
 export function EventDetailsModal({ kind, ev, onClose }) {
+  useEscape(onClose);
   // Lightweight read-only popup shown when an admin taps a coloured
   // sliver in the timeline strip. Surfaces every field we packed from
   // the /meal-calendar/events endpoint. Runs one meal-calendar day

@@ -6,6 +6,7 @@
  * Admin manages items and categories via modals.
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEscape } from "../../hooks/useEscape";
 import { toast } from "sonner";
 import {
   Loader2, Save, Upload, FileDown, Boxes, AlertTriangle, X as CloseIcon,
@@ -31,6 +32,7 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
   const [recent, setRecent] = useState([]);
   const [lastRates, setLastRates] = useState({});   // { item_id: {rate, date} }
   const [outlierConfirm, setOutlierConfirm] = useState(null); // list of outliers or null
+  useEscape(outlierConfirm ? () => setOutlierConfirm(null) : null);
   const OUTLIER_PCT = 5; // warn if new rate deviates >5% from the previous purchase rate
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);

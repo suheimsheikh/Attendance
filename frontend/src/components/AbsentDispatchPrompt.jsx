@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useEscape } from "../hooks/useEscape";
 import { AlertTriangle, Send, X } from "lucide-react";
 import { api } from "../api";
 import { shareToWhatsApp } from "../utils/shareWhatsApp";
@@ -47,6 +48,7 @@ const PreviewList = ({ testid, label, tone, names }) =>
 export default function AbsentDispatchPrompt() {
   const [data, setData] = useState(null); // { absent:[], onLeave:[], onTour:[], onLop:[], office }
   const [open, setOpen] = useState(false);
+  useEscape(open ? () => setOpen(false) : null);
 
   const dismissedToday = useCallback(
     () => localStorage.getItem(`absent-dispatch-dismissed-${todayKey()}`) === "1",

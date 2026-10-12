@@ -10,6 +10,7 @@
  * Read-only — zero API cost beyond one GET, no writes.
  */
 import React, { useEffect, useState } from "react";
+import { useEscape } from "../hooks/useEscape";
 import { X, TrendingUp, TrendingDown, Minus, Phone, Loader2, Store } from "lucide-react";
 import { api, showApiError } from "../api";
 import { fmtQty as uQty, money } from "../utils";
@@ -18,6 +19,7 @@ const inr = (n) => money(n);
 const fmtQty = uQty;
 
 export default function VendorScorecardDrawer({ vendorId, days = 30, onClose, onOpenItem }) {
+  useEscape(onClose);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 

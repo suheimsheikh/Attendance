@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useEscape } from "../../../hooks/useEscape";
 import { Plane, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../../api";
@@ -78,6 +79,7 @@ export default function TravelCheck() {
 }
 
 function TeamModal({ regatta, onClose, onSaved }) {
+  useEscape(onClose);
   const [ids, setIds] = useState(regatta.team_ids || []);
   const [saving, setSaving] = useState(false);
   const save = async () => {

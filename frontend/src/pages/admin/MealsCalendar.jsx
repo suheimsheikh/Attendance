@@ -6,6 +6,7 @@
  * can also type new days here — a single PUT upserts the row.
  */
 import React, { useEffect, useMemo, useState } from "react";
+import { useEscape } from "../../hooks/useEscape";
 import { Loader2, CalendarDays, Utensils, Coffee, Moon, Sun, Pencil, Check, X as CloseIcon, Upload, BarChart3, ChevronDown, ChevronUp, ChevronRight, IndianRupee, Divide, AlertTriangle, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
@@ -128,6 +129,7 @@ function EditRow({ date, initial, onSave, onCancel }) {
 function ImportCalendarButton({ onDone }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
+  useEscape(result ? () => setResult(null) : null);
   const inputRef = React.useRef(null);
   const pickFile = () => inputRef.current?.click();
   const onPick = async (e) => {

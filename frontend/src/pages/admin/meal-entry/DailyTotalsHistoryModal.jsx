@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useEscape } from "../../../hooks/useEscape";
 import { Loader2, X, CalendarRange, Printer } from "lucide-react";
 import { api, showApiError } from "../../../api";
 import { formatDate, todayIso, addDaysIso } from "../../../utils";
@@ -16,6 +17,7 @@ import { inr } from "./helpers";
  * Extracted from MealEntryTab.jsx on 25 Jun 2026 (pure move).
  */
 export default function DailyTotalsHistoryModal({ kind, selectedDate, onClose }) {
+  useEscape(onClose);
   // Sensible default: 7-day trailing window ending on the selected day.
   const [start, setStart] = useState(() => addDaysIso(selectedDate, -6));
   const [end, setEnd] = useState(selectedDate);
