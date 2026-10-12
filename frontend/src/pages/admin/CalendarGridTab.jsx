@@ -223,28 +223,28 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
       />
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-2 mb-3 text-[11px]" data-testid="calendar-legend">
-        <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-3 text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5" data-testid="calendar-legend">
+        <span className="inline-flex items-center gap-1 font-bold text-slate-800 text-sm uppercase tracking-wide">
           Legend
           <InfoTip
             id="grid-totals"
-            size={13}
+            size={14}
             text="The sticky columns on the right total each member's month: Pay = payable days (every day so far except AB, LP and days before joining / after leaving), DAR = missed Daily Activity Reports, P = present days (incl. half-day & late), AB = absent, LP = loss-of-pay (leave beyond paid balance), LV = leave + comp-off, TR = tour, OT h = overtime hours, EO = early-out days (checked out 15+ min before end time), LT = late days. This grid is the single source of truth for payroll."
           />
         </span>
-        {Object.entries(CELL_STYLE).map(([code, s]) => (
+        {Object.entries(CELL_STYLE).sort(([a], [b]) => a.localeCompare(b)).map(([code, s]) => (
           <span key={code} className="inline-flex items-center gap-1.5">
-            <span className={`inline-flex items-center justify-center w-6 h-5 rounded ${s.bg} ${s.text} font-bold text-[10px]`}>{s.label}</span>
-            <span className="text-slate-600">{s.title}</span>
+            <span className={`inline-flex items-center justify-center w-7 h-6 rounded ${s.bg} ${s.text} font-bold text-[11px]`}>{s.label}</span>
+            <span className="text-slate-700 font-medium">{s.title}</span>
           </span>
         ))}
-        <span className="inline-flex items-center gap-1.5 pl-2 ml-1 border-l border-slate-300" data-testid="legend-pay">
-          <span className="inline-flex items-center justify-center px-1 h-5 rounded bg-sky-100 text-sky-800 font-bold text-[10px]">Pay</span>
-          <span className="text-slate-600">Payable days (all except AB, LP, NJ, LF)</span>
+        <span className="inline-flex items-center gap-1.5 pl-3 ml-1 border-l border-slate-300" data-testid="legend-eo">
+          <span className="inline-flex items-center justify-center w-7 h-6 rounded bg-rose-100 text-rose-700 font-bold text-[11px]">EO</span>
+          <span className="text-slate-700 font-medium">Early out (left 15+ min before end time)</span>
         </span>
-        <span className="inline-flex items-center gap-1.5" data-testid="legend-eo">
-          <span className="inline-flex items-center justify-center w-6 h-5 rounded bg-rose-100 text-rose-700 font-bold text-[10px]">EO</span>
-          <span className="text-slate-600">Early out (left 15+ min before end time)</span>
+        <span className="inline-flex items-center gap-1.5" data-testid="legend-pay">
+          <span className="inline-flex items-center justify-center px-1.5 h-6 rounded bg-sky-100 text-sky-800 font-bold text-[11px]">Pay</span>
+          <span className="text-slate-700 font-medium">Payable days (all except AB, LP, NJ, LF)</span>
         </span>
       </div>
 
