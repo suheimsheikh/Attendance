@@ -542,11 +542,21 @@ async def _seed_database() -> None:
     await db.audit_log.create_index([("entity_type", 1), ("at", -1)])
     await db.feature_usage.create_index("feature_key", unique=True)
     await db.daily_leave_report_log.create_index("date", unique=True)
-    for coll, key in (("absent_dispatch_log", "date"), ("member_id_docs", "user_id"), ("passport_reminder_log", "week")):
+    for coll, key in (("member_id_docs", "user_id"), ("passport_reminder_log", "week")):
         try:
             await db[coll].create_index(key, unique=True)
         except Exception:
             logger.exception("unique index %s.%s not created (duplicates?)", coll, key)
+    # absent_dispatch_log now holds one sent-flag per (date, kind) — the camp
+    # and staff dispatches share a date, so the unique key is compound. Drop
+    # the legacy single-field `date` unique index if it's still around.
+    try:
+        if "date_1" in await db.absent_dispatch_log.index_information():
+            await db.absent_dispatch_log.drop_index("date_1")
+        await db.absent_dispatch_log.create_index(
+            [("date", 1), ("kind", 1)], unique=True, name="uniq_date_kind")
+    except Exception:
+        logger.exception("absent_dispatch_log (date,kind) unique index not created")
     await db.cron_runs.create_index([("job", 1), ("run_id", 1)], unique=True)
     await db.sms_log.create_index([("at", -1)])
     await db.sms_log.create_index("to", sparse=True)
