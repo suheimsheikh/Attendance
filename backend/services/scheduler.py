@@ -40,9 +40,10 @@ async def close_stale_open_sessions(db, reason: str) -> int:
     async for sess in cur:
         try:
             ci = datetime.fromisoformat(sess["check_in_at"])
-            # Prefer the member's own work_end, else office default.
-            u = await db.users.find_one({"id": sess.get("user_id")}, {"_id": 0, "work_end": 1})
-            end_hm = (u or {}).get("work_end") or default_end
+            # Prefer the member's own work_end (honoring per-DOW override), else office default.
+            u = await db.users.find_one({"id": sess.get("user_id")}, {"_id": 0, "work_end": 1, "category": 1, "dow_hours": 1})
+            from services.attendance_calc import effective_hours as _eh
+            end_hm = _eh(u or {}, office, sess["date"])[1] or default_end
             hh, mm = (int(x) for x in str(end_hm).split(":"))
             close_local = datetime.fromisoformat(sess["date"] + f"T{hh:02d}:{mm:02d}:00").replace(tzinfo=tz)
             close_utc = close_local.astimezone(timezone.utc)

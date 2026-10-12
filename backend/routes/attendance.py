@@ -57,11 +57,13 @@ def make_router(db, get_current_user, require_admin) -> APIRouter:
         today = local_date_str(office)
         if sess.get("date") and sess["date"] >= today:
             return {"stale": None}
+        from services.attendance_calc import _dow_key, _dow_override
+        _dow_end = _dow_override(user, office, _dow_key(sess.get("date")))[1]
         return {"stale": {
             "session_id": sess["id"],
             "check_in_at": sess["check_in_at"],
             "date": sess.get("date"),
-            "work_end": user.get("work_end") or "18:00",
+            "work_end": _dow_end or user.get("work_end") or "18:00",
         }}
 
 

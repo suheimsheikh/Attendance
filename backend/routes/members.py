@@ -45,6 +45,10 @@ class MemberCreate(BaseModel):
     mobile: Optional[str] = None
     work_start: Optional[str] = None
     work_end: Optional[str] = None
+    # Per-day-of-week timing override for THIS member (employees only).
+    # Shape { "sat": {"start":"08:00","end":"12:00"}, ... } keyed mon..sun;
+    # a blank/missing day inherits. Overrides the office-level dow_hours.
+    dow_hours: Optional[Dict[str, Dict[str, str]]] = None
     role: Literal["admin", "member", "chef"] = "member"
     institution: Optional[str] = None
     gender: Optional[Literal["M", "F", "O"]] = None
@@ -109,6 +113,7 @@ class MemberUpdate(BaseModel):
     mobile: Optional[str] = None
     work_start: Optional[str] = None
     work_end: Optional[str] = None
+    dow_hours: Optional[Dict[str, Dict[str, str]]] = None
     photo: Optional[str] = None
     password: Optional[str] = None
     role: Optional[Literal["admin", "member", "chef"]] = None
@@ -191,6 +196,7 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
             "mobile_last10": phone_key(body.mobile or "") or None,
             "work_start": body.work_start,
             "work_end": body.work_end,
+            "dow_hours": body.dow_hours,
             "institution": body.institution,
             "gender": body.gender,
             "weekly_off": body.weekly_off,

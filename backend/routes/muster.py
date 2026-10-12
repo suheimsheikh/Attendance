@@ -36,7 +36,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from services.time_utils import now_utc, local_date_str, local_now
-from services.attendance_calc import compute_late, excursion_seconds
+from services.attendance_calc import compute_late, excursion_seconds, effective_hours
 from services.dar import dar_missing_for_session
 from services.permissions import is_ex_member
 from services.photo import member_photo_url
@@ -279,7 +279,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1,
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1,
              "institution": 1, "fleet": 1, "hourly_wager": 1,
-             "work_start": 1, "weekly_off": 1},
+             "work_start": 1, "weekly_off": 1, "dow_hours": 1},
         ).to_list(2000)
         # Hourly wagers have no set days → never "absent".
         members = [m for m in members if not is_ex_member(m, today) and not m.get("hourly_wager")]
@@ -338,7 +338,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
 
         def _due_now(m: dict, is_coach: bool) -> bool:
             if is_coach:
-                return _started(m.get("work_start"))
+                return _started(effective_hours(m, office, today)[0])
             camps_for = [c for c in _camps_today
                          if camp_active_on(c, today, _wk_today) and camp_applies_to(c, m)]
             starts = [c.get("start_time") or default_ws for c in camps_for]
@@ -479,7 +479,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             {"active": {"$ne": False}, "category": {"$in": ["staff", "coach"]}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "full_name": 1, "category": 1, "leaving_date": 1,
              "hourly_wager": 1, "work_start": 1, "weekly_off": 1,
-             "institution": 1, "fleet": 1},
+             "institution": 1, "fleet": 1, "dow_hours": 1},
         ).to_list(2000)
         members = [m for m in members if not is_ex_member(m, today)]
         member_ids = [m["id"] for m in members]
@@ -587,7 +587,7 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                                  "late_minutes": att.get("late_minutes")})
                 continue  # present & on time → nothing to report
             # No check-in and no leave: absent ONLY once their shift has begun.
-            if _shift_started(m.get("work_start")):
+            if _shift_started(effective_hours(m, office, today)[0]):
                 absent.append({"name": m["full_name"], "category": m.get("category")})
 
         for lst in (on_leave, on_tour, on_lop, absent, late):

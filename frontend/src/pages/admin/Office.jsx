@@ -9,6 +9,7 @@ import DarPolicyPanel from "./DarPolicyPanel";
 import { ServiceTokenPanel } from "./office/ServiceTokenPanel";
 import { NotifyTemplatesPanel } from "./office/NotifyTemplatesPanel";
 import { WhatsappGroupsPanel } from "./office/WhatsappGroupsPanel";
+import { DowHoursEditor } from "../../components/DowHoursEditor";
 import { useFormError } from "../../hooks/useFormError";
 
 const TZS = ["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Australia/Sydney"];
@@ -101,6 +102,7 @@ export default function OfficeSettings() {
         late_grace_minutes: Number(form.late_grace_minutes || 0),
         parent_notify_grace_minutes: Number(form.parent_notify_grace_minutes ?? 30),
         default_weekly_off: form.default_weekly_off || "sunday",
+        dow_hours: form.dow_hours || {},
         leave_notice_days: _normLeaveNoticeDays(form.leave_notice_days),
         half_day_fn_start: form.half_day_fn_start || "09:30",
         half_day_fn_end:   form.half_day_fn_end   || "13:30",
@@ -235,6 +237,14 @@ export default function OfficeSettings() {
             comp-off accrual: attending on this day earns +1 comp-off credit, which they can later spend
             via the Comp Off leave type. Member-level weekly off (if set) always overrides this default.
           </p>
+        </div>
+
+        <div data-testid="of-dow-hours" className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+          <label className="iu-label">Day-of-week work timings <span className="text-slate-400 font-normal">(optional)</span></label>
+          <p className="text-[11px] text-slate-500 mb-3">
+            Standard start/end for specific weekdays, applied to all employees (staff, coaches, executives — never athletes). Example: shorter Saturday &amp; Sunday hours. Leave a day blank to use the default work start/end above. A member&apos;s own day-of-week timings override this.
+          </p>
+          <DowHoursEditor value={form.dow_hours} onChange={(v) => set("dow_hours", v)} testIdPrefix="of-dow" />
         </div>
 
         <div>

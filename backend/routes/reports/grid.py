@@ -1,6 +1,7 @@
 """Reports routes — grid. Split out of routes/reports/__init__.py (Oct 2026); behaviour unchanged."""
 from __future__ import annotations
 
+from services.attendance_calc import effective_hours
 from routes.reports.common import (
     Depends,
     GridReadResponse,
@@ -77,7 +78,7 @@ def register(router, *, _athlete_like_keys, db, require_admin):
             {"id": member_id} if member_id else {"status": {"$ne": "left"}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "full_name": 1, "rank": 1, "category": 1,
              "fleet": 1, "institution": 1, "weekly_off": 1,
-             "work_start": 1, "work_end": 1,
+             "work_start": 1, "work_end": 1, "dow_hours": 1,
              # dar_exempt / dar_required MUST be projected — the DAR-miss
              # column runs dar_required_for() on these dicts, and without
              # these fields every staff/coach is wrongly treated as
@@ -549,20 +550,26 @@ def register(router, *, _athlete_like_keys, db, require_admin):
             # historical rows also register. Grace threshold matches
             # the Profile early-out list (server.py:_early_by >= 15)
             # and the SelfCheckIn early-out prompt threshold.
-            user_work_end = u.get("work_end") or ((office or {}).get("default_work_end") or "17:00")
-            _we_parts = (user_work_end or "").split(":")[:2]
-            try:
-                user_work_end_min = int(_we_parts[0]) * 60 + int(_we_parts[1])
-            except (ValueError, IndexError):
-                user_work_end_min = None
+            user_work_end = u.get("work_end") or ((office or {}).get("default_work_end") or "17:00")  # noqa: F841 (kept for row schedule display)
 
-            def _is_early_out(att: dict) -> bool:
+            def _we_min_for(iso: str):
+                """Member's effective work_end (minutes-of-day) for a given
+                date, honoring any per-DOW override. None on parse failure."""
+                we_hm = effective_hours(u, office, iso)[1]
+                _p = (we_hm or "").split(":")[:2]
+                try:
+                    return int(_p[0]) * 60 + int(_p[1])
+                except (ValueError, IndexError):
+                    return None
+
+            def _is_early_out(att: dict, iso: str) -> bool:
                 if not att or not att.get("check_out_at"):
                     return False
                 stored = att.get("early_out_minutes")
                 if stored is not None:
                     return int(stored) >= 15
-                if user_work_end_min is None:
+                we_min = _we_min_for(iso)
+                if we_min is None:
                     return False
                 hm = local_hm(office, att.get("check_out_at"))
                 if not hm or ":" not in hm:
@@ -572,10 +579,10 @@ def register(router, *, _athlete_like_keys, db, require_admin):
                     out_min = int(h) * 60 + int(m)
                 except (ValueError, IndexError):
                     return False
-                return (user_work_end_min - out_min) >= 15
+                return (we_min - out_min) >= 15
 
             early_out_days = sum(
-                1 for iso in days if _is_early_out(att_by_user.get(uid, {}).get(iso))
+                1 for iso in days if _is_early_out(att_by_user.get(uid, {}).get(iso), iso)
             )
             # Totals count ELAPSED days only (iso <= today) so future
             # planned-leave cells surfaced above never inflate the

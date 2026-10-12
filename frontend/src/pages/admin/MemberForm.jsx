@@ -10,6 +10,7 @@ import FormErrorBanner from "../../components/FormErrorBanner";
 import { useFormError } from "../../hooks/useFormError";
 import RecalcTimingsDialog from "../../components/RecalcTimingsDialog";
 import IdDocsSection from "./members/IdDocsSection";
+import { DowHoursEditor } from "../../components/DowHoursEditor";
 
 const SEEDED_CATS = ["athlete", "elite", "staff", "coach", "executive"];
 // Profile fields added Oct 2026 — [key, label, input type].
@@ -67,6 +68,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     role: initial?.role || "member",
     work_start: initial?.work_start || "",
     work_end: initial?.work_end || "",
+    dow_hours: initial?.dow_hours || {},
     institution: initial?.institution || "",
     gender: initial?.gender || "",
     fleet: initial?.fleet || "",
@@ -196,7 +198,8 @@ export default function MemberForm({ initial, onClose, onSaved }) {
         await api.patch(`/members/${initial.id}`, body);
         toast.success("Member updated");
         const timingsChanged = (form.work_start || "") !== (initial.work_start || "")
-          || (form.work_end || "") !== (initial.work_end || "");
+          || (form.work_end || "") !== (initial.work_end || "")
+          || JSON.stringify(form.dow_hours || {}) !== JSON.stringify(initial.dow_hours || {});
         if (timingsChanged) { setRecalcFor({ id: initial.id, name: form.full_name }); return; }
       } else {
         const body = { ...form, meal_eligible: mealMap[form.meal_eligible] };
@@ -359,6 +362,15 @@ export default function MemberForm({ initial, onClose, onSaved }) {
               </select>
               <p className="text-[11px] text-slate-500 mt-1">Working on this day earns a compensatory off.</p>
             </div>
+            {["staff", "coach", "executive"].includes(ruleCat) && (
+              <div data-testid="mf-dow-hours">
+                <label className="iu-label">Day-of-week timings <span className="text-slate-400 font-normal">(optional)</span></label>
+                <p className="text-[11px] text-slate-500 mb-2">
+                  Special start/end for specific days (e.g. a coach&apos;s Saturday &amp; Sunday hours). Leave a day blank to use the normal work timings above. Overrides the office-wide day-of-week standard.
+                </p>
+                <DowHoursEditor value={form.dow_hours} onChange={(v) => set("dow_hours", v)} testIdPrefix="mf-dow" />
+              </div>
+            )}
             <div>
               <label className="iu-label">Joining date <span className="text-slate-400 font-normal">(optional)</span></label>
               <input data-testid="mf-joining-date" type="date" value={form.joining_date} onChange={(e) => set("joining_date", e.target.value)} className="iu-input" />

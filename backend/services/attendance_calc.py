@@ -26,6 +26,55 @@ OVERTIME_CATEGORIES = {"staff"}
 # system rule.
 ATHLETE_CATEGORIES = set(DEFAULT_ATHLETE_LIKE)
 
+# Day-of-week keys used by per-DOW work-timing overrides (`dow_hours`).
+# Index matches datetime.weekday() (Mon=0 … Sun=6).
+DOW_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+def _dow_key(when) -> Optional[str]:
+    """Weekday key (mon..sun) for a date / datetime / ISO 'YYYY-MM-DD' string.
+    Returns None on anything unparseable so callers fall back cleanly."""
+    try:
+        if hasattr(when, "weekday"):
+            return DOW_KEYS[when.weekday()]
+        if isinstance(when, str) and len(when) >= 10:
+            from datetime import date as _date
+            return DOW_KEYS[_date.fromisoformat(when[:10]).weekday()]
+    except Exception:
+        return None
+    return None
+
+
+def _dow_override(member: Optional[dict], office: Optional[dict], dow: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """Per-day-of-week (start, end) work-timing override for an EMPLOYEE.
+
+    Precedence (per field, independently): member `dow_hours` → office
+    `dow_hours`. Returns (None, None) for athletes (their timings are
+    camp-driven, never DOW), a missing/blank dow, or when nothing is
+    configured for that day — so callers keep their existing fallbacks."""
+    if not dow:
+        return None, None
+    member = member or {}
+    if member.get("category") in ATHLETE_CATEGORIES:
+        return None, None
+    m = (member.get("dow_hours") or {}).get(dow) or {}
+    o = ((office or {}).get("dow_hours") or {}).get(dow) or {}
+    return (m.get("start") or o.get("start") or None,
+            m.get("end") or o.get("end") or None)
+
+
+def effective_hours(member: Optional[dict], office: Optional[dict], when) -> Tuple[str, str]:
+    """(work_start, work_end) for an employee on `when`'s weekday, honoring
+    any per-DOW override. Falls back to the member's own default timings,
+    then the office defaults. Athletes always get their base timings
+    (DOW overrides never apply to them)."""
+    member = member or {}
+    office = office or {}
+    base_start = member.get("work_start") or office.get("default_work_start") or "09:00"
+    base_end = member.get("work_end") or office.get("default_work_end") or "17:00"
+    ds, de = _dow_override(member, office, _dow_key(when))
+    return (ds or base_start), (de or base_end)
+
 
 def compute_late(office: dict, target: dict, ts: datetime, camp: Optional[dict] = None) -> Tuple[bool, int]:
     """Returns (is_late, minutes_late) comparing the check-in local time
@@ -40,7 +89,7 @@ def compute_late(office: dict, target: dict, ts: datetime, camp: Optional[dict] 
         cg = camp.get("late_grace_minutes")
         grace = int(cg if cg is not None else (office.get("late_grace_minutes") or 0))
     else:
-        ws = (target.get("work_start") or office.get("default_work_start") or "09:00")
+        ws = effective_hours(target, office, ts)[0]
         grace = int(office.get("late_grace_minutes") or 0)
     try:
         h, m = (int(x) for x in ws.split(":")[:2])
@@ -126,7 +175,12 @@ def compute_overtime_in(office: Optional[dict], member: dict, ts: datetime) -> T
     if member.get("hourly_wager"):
         # Hourly wagers are paid for actual hours worked, not early-in OT.
         return 0, ""
-    work_start = member.get("work_start")
+    # Per-DOW override (member → office) overlaid on the member's own
+    # work_start. We intentionally do NOT fall back to the office DEFAULT
+    # start here — staff with no configured start never accrued early-in
+    # OT, and that stays true unless a DOW schedule is explicitly set.
+    _ds, _de = _dow_override(member, office, _dow_key(ts))
+    work_start = _ds or member.get("work_start")
     ws_min = hm_to_minutes(work_start)
     if ws_min is None:
         return 0, ""
@@ -148,7 +202,10 @@ def compute_overtime_out(office: Optional[dict], member: dict, ts: datetime) -> 
     if member.get("hourly_wager"):
         # Hourly wagers are paid for actual hours worked, not late-out OT.
         return 0, ""
-    work_end = member.get("work_end")
+    # Per-DOW override (member → office) overlaid on the member's own
+    # work_end — same no-office-default rule as compute_overtime_in.
+    _ds, _de = _dow_override(member, office, _dow_key(ts))
+    work_end = _de or member.get("work_end")
     we_min = hm_to_minutes(work_end)
     if we_min is None:
         return 0, ""

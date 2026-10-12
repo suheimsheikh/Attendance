@@ -90,7 +90,9 @@ def _compute_early_out_at_checkout(ts: datetime, target: dict, office: dict) -> 
     """
     if target.get("hourly_wager"):
         return 0  # no set timings for hourly wagers → never an early-out
-    work_end_hm = target.get("work_end")
+    from services.attendance_calc import _dow_key, _dow_override
+    _dow_end = _dow_override(target, office, _dow_key(ts))[1]
+    work_end_hm = _dow_end or target.get("work_end")
     if not work_end_hm or ":" not in (work_end_hm or ""):
         return 0
     try:

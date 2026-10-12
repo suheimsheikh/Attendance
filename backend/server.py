@@ -98,6 +98,7 @@ from services.attendance_calc import (
     excursion_seconds as _excursion_seconds,
     open_excursion as _open_excursion,
     parse_expected_return as _parse_expected_return,
+    effective_hours as _effective_hours,
 )
 from services.scope import athlete_like_keys as _athlete_like_keys
 
@@ -363,6 +364,13 @@ class OfficeConfig(BaseModel):
     # in the same Sunday/Monday choice on every single member profile.
     # Member-level `weekly_off` (if set) always overrides this fallback.
     default_weekly_off: Literal["monday","tuesday","wednesday","thursday","friday","saturday","sunday"] = "sunday"
+    # Per-day-of-week work-timing overrides, standardised across ALL employees
+    # (staff / coach / executive — never athletes, who are camp-driven). Shape:
+    #   { "sat": {"start": "08:00", "end": "12:00"}, "sun": {...}, ... }
+    # keyed mon..sun. A blank/missing day inherits the normal schedule. A
+    # member's own `dow_hours` overrides this office-level default per day.
+    # Added Jun 2026 (user request — coaches need special Sat/Sun timings).
+    dow_hours: Dict[str, Dict[str, str]] = Field(default_factory=dict)
     # R3 (30 Jun 2026): Per-category minimum calendar-day notice before a
     # member may self-apply for a `leave` (NOT tour/posting/late-coming,
     # which are all naturally last-minute). Each category falls back to 3
@@ -1409,6 +1417,7 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
     users = await db.users.find(
         {"archived": {"$ne": True}}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "category": 1, "rank": 1,
              "photo_thumb": 1, "work_start": 1, "work_end": 1, "institution": 1,
+             "dow_hours": 1,  # per-DOW timing override (Jun 2026) → effective_hours
              "fleet": 1,  # NOTE: needed by break_applies_to() for scope=fleet breaks
              "leaving_date": 1,  # 24 Feb 2026 — feeds the ex-member filter/chip on the Presence Board
              "father_mobile": 1, "mother_mobile": 1, "guardian_mobile": 1}
@@ -1646,8 +1655,9 @@ async def presence(on: Optional[str] = None, user: dict = Depends(get_current_us
                     is_expected_today = True
                 else:
                     # Only non-athletes reach here (camp-less athletes skipped
-                    # above). Employees are expected on a working day.
-                    ws_hm = u.get("work_start") or office.get("default_work_start") or "09:00"
+                    # above). Employees are expected on a working day — their
+                    # effective start honors any per-DOW timing override.
+                    ws_hm = _effective_hours(u, office, target_date)[0]
                     grace = int(office.get("late_grace_minutes") or 0)
                     is_expected_today = True
                 try:

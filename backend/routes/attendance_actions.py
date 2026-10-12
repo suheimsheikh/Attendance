@@ -138,7 +138,9 @@ def make_router(db, get_current_user, require_admin, open_session_for, _late_day
 
         # Decide the close time
         if body.action == "work_end":
-            target_hm = user.get("work_end") or "18:00"
+            from services.attendance_calc import _dow_key, _dow_override
+            _dow_end = _dow_override(user, office, _dow_key(cin_local))[1]
+            target_hm = _dow_end or user.get("work_end") or "18:00"
         else:
             # body.action should be an ISO datetime OR HH:MM
             target_hm = body.action
