@@ -301,13 +301,15 @@ def register(router, *, _athlete_like_keys, db, require_admin):
             if _ov and iso in _ov:
                 return _ov[iso]
             # Athletes are tracked for attendance ONLY during designated
-            # camps & regattas (user request, Jun 2026). On every other
-            # day — including weekly offs, holidays, leaves and plain
-            # check-ins — their grid cell stays BLANK and is excluded
-            # from every total. A manual admin/PayCraft override (checked
-            # above) still wins. Employees (staff/coach/exec) are
-            # unaffected by this rule.
-            if _cat_by_uid.get(uid, "") in _athlete_like_absent and iso not in _expected_dates.get(uid, set()):
+            # camps (user rule). On every other day their cell stays BLANK
+            # and is excluded from totals — EXCEPT if they actually checked
+            # in or were mustered that day, in which case the real attendance
+            # is shown (user, Jun 2026). A manual override (above) still wins.
+            # Employees (staff/coach/exec) are unaffected by this rule.
+            _att_nc = att_by_user.get(uid, {}).get(iso)
+            if (_cat_by_uid.get(uid, "") in _athlete_like_absent
+                    and iso not in _expected_dates.get(uid, set())
+                    and not (_att_nc and _att_nc.get("check_in_at"))):
                 return ""
             # Pre-joining / post-leaving days render as NJ / LF so the
             # Grid stays honest for members who joined mid-year or have

@@ -802,3 +802,7 @@ User request: "When issuing any item from the kitchen it should not allow if the
 ### Jun 2026 — Members table second "Details" line
 - Added MemberDetailsLine.jsx: an always-on second <tr> under each member exposing DOB, Blood group, Joining/Leaving dates, Class, Address, Emergency contact + phone, Medical notes — all inline-editable via the existing onPatchField (MemberUpdate already accepts them). Two leading cells mirror the frozen Actions/Member columns for alignment; rest is a colSpan strip that wraps. Wired in MemberRow (fragment with the main row). Verified render + alignment via screenshot.
 - Details line also exposes the member PAN / Aadhaar / Passport numbers inline-editable (idNum + saveIdNum), alongside the profile fields.
+
+### Jun 2026 — Camp-less athletes show attendance when they check in / are mustered
+- Grid (reports/grid.py _classify): a camp-less athlete day is still blank, EXCEPT when there's actual attendance (check_in_at from a check-in or muster) — then it shows P/LT like any present day. Previously the camp-only rule blanked it before the attendance check. Verified: inserted a muster attendance for a camp-less athlete → grid cell = "P", all other days blank.
+- Presence board already surfaces them: it reads sessions from db.attendance, so a check-in/muster puts them in sess_map/last_map (on_campus/exited); the camp-less hide only applies when there's no session at all. No change needed there.
