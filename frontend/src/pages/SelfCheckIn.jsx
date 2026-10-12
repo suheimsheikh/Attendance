@@ -9,6 +9,7 @@ import SelfieCapture from "../components/SelfieCapture";
 import DailyContent from "../components/DailyContent";
 import ReasonPrompt from "../components/ReasonPrompt";
 import { DarTextarea, DarShareButton } from "../components/Dar";
+import PlanPendingNudge from "../components/PlanPendingNudge";
 import DarPendingCard from "../components/DarPendingCard";
 import TodayTasksCard from "../components/TodayTasksCard";
 import CheckoutTaskNudge from "../components/CheckoutTaskNudge";
@@ -814,6 +815,8 @@ export default function SelfCheckIn() {
           )}
           {darNeededNow && (
             <div data-testid="dar-voice-block">
+              <PlanPendingNudge onItemDone={(title) =>
+                setDarText((cur) => (cur && cur.includes(title)) ? cur : (cur ? `${cur}; ${title}` : `✅ Done: ${title}`))} />
               <button type="button" onClick={speakDar} data-testid="dar-voice-replay"
                       className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
                 <Volume2 size={14} /> Hear reminder

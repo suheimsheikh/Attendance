@@ -16,7 +16,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from services.time_utils import local_date_str, now_utc, office_tz, to_utc_iso
+from services.time_utils import now_utc, office_tz, to_utc_iso, office_and_today
 
 
 def _local_day_utc_window(office: dict, iso: str) -> tuple[str, str]:
@@ -139,6 +139,10 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     async def _office() -> dict:
         return await db.config.find_one({"id": "office"}, {"_id": 0}) or {}
 
+    async def _today() -> str:
+        _office_doc, t = await office_and_today(db)
+        return t
+
     async def _group() -> list:
         return await db.users.find(
             {"status": {"$ne": "left"}, "category": {"$in": sorted(TASK_CATEGORIES)}},
@@ -183,13 +187,13 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     async def tasks_today(user: dict = Depends(get_current_user)):
         if not _is_member(user):
             return {"enabled": False, "pending": 0}
-        return await _today_payload(user, local_date_str(await _office()))
+        return await _today_payload(user, await _today())
 
     @router.get("/tasks/dar-prefill")
     async def dar_prefill(user: dict = Depends(get_current_user)):
         if not _is_member(user):
             return {"text": ""}
-        iso = local_date_str(await _office())
+        iso = await _today()
         p = await _today_payload(user, iso)
         # Plan-for-the-day: only items the user flagged "include in DAR".
         plan = await db.day_plans.find_one({"owner_id": user["id"], "date": iso}, {"_id": 0})
@@ -280,7 +284,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     async def list_todos(scope: str = "all", status: str = "open", date: Optional[str] = None,
                          user: dict = Depends(get_current_user)):
         _require(user)
-        server_today = local_date_str(await _office())
+        server_today = await _today()
         iso = _valid_date(date, "date") or server_today
         q: dict = {}
         if scope == "mine":
@@ -421,7 +425,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     async def tasks_heatmap(scope: str = "all", days: int = 7, user: dict = Depends(get_current_user)):
         _require(user)
         days = max(1, min(days, 31))
-        start = local_date_str(await _office())
+        start = await _today()
         window = [(date.fromisoformat(start) + timedelta(days=i)).isoformat() for i in range(days)]
         end = window[-1]
         q: dict = {"status": "open", "due_date": {"$ne": None}}
@@ -515,7 +519,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
             raise HTTPException(status_code=404, detail="Checklist item not found")
         if c["owner_id"] != user["id"] and user.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Only the owner or an admin can tick this item")
-        iso = _valid_date(body.date, "date") or local_date_str(await _office())
+        iso = _valid_date(body.date, "date") or await _today()
         if body.done:
             await db.checklist_ticks.update_one(
                 {"checklist_id": cid, "date": iso},
@@ -528,7 +532,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     # ── Admin overview ────────────────────────────────────────────────
     @router.get("/admin/tasks/overview")
     async def admin_overview(admin: dict = Depends(require_admin)):
-        iso = local_date_str(await _office())
+        iso = await _today()
         out = []
         for m in await _group():
             u = await db.users.find_one({"id": m["id"]}, {"_id": 0, "id": 1, "full_name": 1, "weekly_off": 1, "category": 1})
@@ -543,7 +547,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     @router.get("/tasks/overview")
     async def tasks_overview(user: dict = Depends(get_current_user)):
         _require(user)
-        iso = local_date_str(await _office())
+        iso = await _today()
         out = []
         for m in await _group():
             u = await db.users.find_one({"id": m["id"]}, {"_id": 0, "id": 1, "full_name": 1, "weekly_off": 1, "category": 1})
@@ -598,7 +602,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     async def get_plan(date: Optional[str] = None, owner_id: Optional[str] = None,
                        user: dict = Depends(get_current_user)):
         _require(user)
-        server_today = local_date_str(await _office())
+        server_today = await _today()
         iso = _valid_date(date, "date") or server_today
         owner = await _owner(owner_id, user) if owner_id else user
         # Only auto-create (and carry-forward) for the plan owner viewing their own.
@@ -621,7 +625,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     @router.post("/tasks/plan/items")
     async def add_plan_item(body: PlanItemIn, user: dict = Depends(get_current_user)):
         _require(user)
-        server_today = local_date_str(await _office())
+        server_today = await _today()
         iso = _valid_date(body.date, "date") or server_today
         doc = await _plan_for_write(None, iso, user)
         title = (body.title or "").strip()
@@ -644,7 +648,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     @router.post("/tasks/plan/pick")
     async def pick_plan_items(body: PlanPickIn, user: dict = Depends(get_current_user)):
         _require(user)
-        server_today = local_date_str(await _office())
+        server_today = await _today()
         iso = _valid_date(body.date, "date") or server_today
         doc = await _plan_for_write(None, iso, user)
         have = {it.get("todo_id") for it in doc.get("items", []) if it.get("todo_id")}
@@ -666,7 +670,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     async def patch_plan_item(item_id: str, body: PlanItemPatch, date: Optional[str] = None,
                               owner_id: Optional[str] = None, user: dict = Depends(get_current_user)):
         _require(user)
-        server_today = local_date_str(await _office())
+        server_today = await _today()
         iso = _valid_date(date, "date") or server_today
         doc = await _plan_for_write(owner_id, iso, user)
         items = doc.get("items", [])
@@ -698,7 +702,7 @@ def make_router(db, get_current_user, require_admin, write_audit) -> APIRouter:
     async def delete_plan_item(item_id: str, date: Optional[str] = None, owner_id: Optional[str] = None,
                                user: dict = Depends(get_current_user)):
         _require(user)
-        server_today = local_date_str(await _office())
+        server_today = await _today()
         iso = _valid_date(date, "date") or server_today
         doc = await _plan_for_write(owner_id, iso, user)
         await db.day_plans.update_one(

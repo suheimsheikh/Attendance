@@ -52,3 +52,11 @@ async def office_today_str(db) -> str:
     """Today's date (YYYY-MM-DD) in the configured office timezone."""
     office = await db.config.find_one({"id": "office"}, {"_id": 0, "timezone": 1})
     return local_date_str(office)
+
+
+async def office_and_today(db) -> tuple[dict, str]:
+    """Load the full office config and today's office-local date in one go.
+    Consolidates the `office = find_one({'id':'office'}); today = local_date_str(office)`
+    pattern repeated across many routes. Returns ({}, today) when unconfigured."""
+    office = await db.config.find_one({"id": "office"}, {"_id": 0}) or {}
+    return office, local_date_str(office)
