@@ -267,6 +267,12 @@ input[data-testid^="search-"]::placeholder {
   .wa-attention { animation: none; }
 }
 
+/* Version-update banner slide-in (VersionPoller). */
+@keyframes slideDown {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(0); }
+}
+
 /* Every editable field + search box is bright yellow (user request, Oct 2026). Outside @layer so it beats bg-* utilities. */
 input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not(:disabled):not([readonly]),
 textarea:not(:disabled):not([readonly]),
