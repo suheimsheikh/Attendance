@@ -384,9 +384,11 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                     const tone = seg.camp ? "bg-indigo-100 text-indigo-800" : "bg-rose-100 text-rose-800";
                     const label = seg.camp && seg.regatta ? `${seg.camp} + ${seg.regatta}` : (seg.camp || seg.regatta);
                     const title = [seg.camp && `Camp: ${seg.camp}`, seg.regatta && `Regatta: ${seg.regatta}`].filter(Boolean).join("  ·  ");
+                    // Label is absolutely positioned so a long camp name can't
+                    // widen the day columns — the full name shows on hover.
                     return (
-                      <th key={i} colSpan={seg.span} className={`h-5 border-b border-l border-r border-slate-300 ${tone} text-[9px] font-bold text-center overflow-hidden whitespace-nowrap px-1`} title={title} data-testid={`event-band-${seg.startIdx}`}>
-                        <span className="inline-block max-w-full truncate align-middle">{label}</span>
+                      <th key={i} colSpan={seg.span} className={`relative h-5 border-b border-l border-r border-slate-300 ${tone} p-0`} title={title} data-testid={`event-band-${seg.startIdx}`}>
+                        <span className="absolute inset-0 truncate px-1 text-[9px] font-bold text-center leading-5 pointer-events-none">{label}</span>
                       </th>
                     );
                   })}

@@ -5225,3 +5225,7 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Weekend separators toned down: replaced the bold 2px black border with a subtle uniform 1px grey inset shadow (WEEKEND_COL / WEEKEND_COL_CAP in gridHelpers). Header row 1 uses the _CAP variant so the line is closed at the top, mirroring the current-day indicator. Applied in GridCell, GridTimeCell, and both header rows.
 - New sticky "CAMPS / REGATTAS" header row below the DOW row: backend _grid_impl now returns `events` (camps + regattas overlapping the window, clamped to it); CalendarGridTab builds colSpan segments (indigo=camp, rose=regatta, combined label when both) and renders them in the sticky thead so the row scrolls with the day/DOW headers. Only shown when the month has events.
 - Verified via authenticated screenshot (temp camp + regatta) and curl (events array). Temp data cleaned up.
+
+### 13 Oct 2026 — Grid band: restore original column widths
+- The Camps/Regattas band labels were widening the day columns. Fixed by absolutely-positioning the segment label (absolute inset-0 truncate, pointer-events-none) so it never contributes to the th's content width. Day columns back to 24px; full camp/regatta name shows on hover via the title tooltip.
+- Verified: day col width = 24px (original), band labels truncate with hover hint.
