@@ -5313,3 +5313,9 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Fix (routes/data_quality.py): too_long_16h now also sets hours=16.0 and stores original_check_out_at + original_hours. open_over_36h now sets hours=8.0 + original_hours. Both now payroll-correct and reversible.
 - Leave-balance question: confirmed already implemented end-to-end — MyLeaves.jsx fetches /me/leave-summary and renders LeaveBalanceNotice (comp-off avail, paid-leave avail, exact LOP days, red when LOP>0) BEFORE submit; backend computes+stores the comp_off/paid/lop split at apply (split_leave_days) and Approvals shows a BalanceChip shortfall warning. No change needed.
 - Recommended: take a Backup before running Fix-all. Not run automatically.
+
+### 13 Oct 2026 — Ran Fix-all (too_long_16h) in preview + legacy cleanup
+- Ran POST /admin/data-quality/fix/session.too_long_16h in preview: fixed=177, too_long_16h now 0, total findings 373->195. All 177 verified: check_out capped to check_in+16h, hours=16.0, original_check_out_at/original_hours saved, no checkout<=checkin.
+- PROBLEM SURFACED: 57 rows had been capped by an earlier PRE-hardening Fix-all run — their check_out was capped but stored `hours` stayed inflated (16.0-17.5h) with no saved original; the detector can't re-catch them (window already <=16h). 2 were hourly-wager members (RAVALI PARANDI, VAISHNAVI) => payroll was reading inflated hours and overpaying.
+- Cleanup: recomputed hours from the actual capped window for 53 stale legacy auto_capped rows. Final sweep: 234 auto_capped rows, 0 stale hours remaining; hourly-wager rows now 16.0=window (RAVALI 18.11->16.0, VAISHNAVI 17.47->16.0).
+- Observation: 45 of 48 affected members are elite/athlete (not payroll-tracked) with same-day 16-18.8h spans (live-in academy) — capping affects only their displayed worked-hours, not pay. Only ~3 hourly-wager staff rows had any pay impact (now corrected).
