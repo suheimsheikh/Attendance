@@ -990,9 +990,17 @@ def make_router(db, require_admin) -> APIRouter:
                     capped = (dt_in + timedelta(hours=16)).isoformat()
                     await db.attendance.update_one(
                         {"id": r["id"]},
-                        {"$set": {"check_out_at": capped, "auto_capped": True,
+                        {"$set": {"check_out_at": capped,
+                                  # Recompute hours so hourly-wager pay and
+                                  # worked-hours reports reflect the capped
+                                  # window, not the old forgotten-checkout one.
+                                  "hours": 16.0,
+                                  "auto_capped": True,
                                   "auto_capped_by": "data_quality",
-                                  "auto_capped_at": datetime.now(timezone.utc).isoformat()}},
+                                  "auto_capped_at": datetime.now(timezone.utc).isoformat(),
+                                  # Keep the original so the cap is reversible.
+                                  "original_check_out_at": r["check_out_at"],
+                                  "original_hours": r.get("hours")}},
                     )
                     fixed += 1
             except Exception:
@@ -1016,9 +1024,12 @@ def make_router(db, require_admin) -> APIRouter:
                 close_at = (dt_in + timedelta(hours=8)).isoformat()
                 await db.attendance.update_one(
                     {"id": r["id"]},
-                    {"$set": {"check_out_at": close_at, "auto_closed": True,
+                    {"$set": {"check_out_at": close_at,
+                              "hours": 8.0,
+                              "auto_closed": True,
                               "auto_closed_by": "data_quality",
-                              "auto_closed_at": datetime.now(timezone.utc).isoformat()}},
+                              "auto_closed_at": datetime.now(timezone.utc).isoformat(),
+                              "original_hours": r.get("hours")}},
                 )
                 fixed += 1
             except Exception:
