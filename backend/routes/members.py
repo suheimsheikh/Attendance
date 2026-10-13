@@ -25,6 +25,7 @@ from routes.admin_audit import write_audit
 from services.auth_utils import hash_password
 from services.permissions import is_super_admin
 from services.phone import phone_key
+from services.member_validation import validate_member
 from services.photo import check_photo_size as _check_photo_size, make_thumbnail as _make_thumbnail, member_photo_url
 from services.time_utils import local_date_str, local_now, now_utc
 
@@ -180,9 +181,25 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
     # Member management (admin)
     # ----------------------------------------------------------------------------
     @router.post("/members", response_model=UserPublic)
-    async def create_member(body: MemberCreate, admin: dict = Depends(require_admin)):
+    async def create_member(body: MemberCreate, force: bool = False, admin: dict = Depends(require_admin)):
         if await db.users.find_one({"email": body.email}):
             raise HTTPException(status_code=400, detail="Email already registered")
+        # Data-entry guardrails (Oct 2026): catch bad mobiles / DOB / missing
+        # parent contact at the source so they never reach the Data Quality sweep.
+        is_ath = (body.category or "").lower() in ("athlete", "elite")
+        errs, warns = validate_member(body.model_dump(), is_ath)
+        if body.mobile and (body.mobile or "").strip():
+            key = phone_key(body.mobile)
+            if key and len(key) == 10 and await db.users.find_one(
+                    {"mobile_last10": key, "archived": {"$ne": True}}, {"_id": 1}):
+                errs.append("This mobile number is already used by another member")
+        if (body.full_name or "").strip() and await db.users.find_one(
+                {"full_name": body.full_name, "archived": {"$ne": True}}, {"_id": 1}):
+            warns.append(f"Another member is already named '{body.full_name}'")
+        if errs:
+            raise HTTPException(status_code=400, detail=" • ".join(errs))
+        if warns and not force:
+            raise HTTPException(status_code=409, detail={"needs_confirm": True, "warnings": warns})
         doc = {
             "id": str(uuid.uuid4()),
             "email": body.email,
@@ -502,7 +519,7 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
 
 
     @router.patch("/members/{member_id}", response_model=UserPublic)
-    async def update_member(member_id: str, body: MemberUpdate, admin: dict = Depends(require_admin)):
+    async def update_member(member_id: str, body: MemberUpdate, force: bool = False, admin: dict = Depends(require_admin)):
         if body.role is not None and body.role == "member" and member_id == admin["id"]:
             raise HTTPException(status_code=400, detail="You cannot remove your own admin access")
         if body.photo is not None:
@@ -560,6 +577,22 @@ def make_router(db, get_current_user, require_admin, optional_user, valid_grid_k
             else:
                 # No-op: drop the photo field so we don't touch it at all.
                 update.pop("photo", None)
+        # Data-entry guardrails (Oct 2026): validate the resulting member.
+        merged = {**before_doc, **update}
+        is_ath = (merged.get("category") or "").lower() in ("athlete", "elite")
+        errs, warns = validate_member(merged, is_ath)
+        if "mobile" in update and (update.get("mobile") or "").strip():
+            key = phone_key(update["mobile"])
+            if key and len(key) == 10 and await db.users.find_one(
+                    {"mobile_last10": key, "id": {"$ne": member_id}, "archived": {"$ne": True}}, {"_id": 1}):
+                errs.append("This mobile number is already used by another member")
+        if "full_name" in update and (update.get("full_name") or "").strip() and await db.users.find_one(
+                {"full_name": update["full_name"], "id": {"$ne": member_id}, "archived": {"$ne": True}}, {"_id": 1}):
+            warns.append(f"Another member is already named '{update['full_name']}'")
+        if errs:
+            raise HTTPException(status_code=400, detail=" • ".join(errs))
+        if warns and not force:
+            raise HTTPException(status_code=409, detail={"needs_confirm": True, "warnings": warns})
         if update:
             await db.users.update_one({"id": member_id}, {"$set": update})
         u = await db.users.find_one({"id": member_id}, {"_id": 0})

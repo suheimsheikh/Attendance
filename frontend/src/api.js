@@ -26,13 +26,16 @@ client.interceptors.request.use((cfg) => {
 });
 
 export class ApiError extends Error {
-  constructor(status, message, requestId) {
+  constructor(status, message, requestId, detail) {
     super(message);
     this.status = status;
     // The server echoes the X-Request-ID it logged this call under. Show it
     // in error toasts so coaches can read it back to support over the phone
     // and ops can pull the matching log lines.
     this.requestId = requestId || null;
+    // Raw `detail` payload (string OR object) so callers can read structured
+    // errors — e.g. a 409 soft-confirm { needs_confirm, warnings:[...] }.
+    this.detail = detail;
   }
 }
 
@@ -42,9 +45,10 @@ const unwrap = async (p) => {
     return res.data;
   } catch (err) {
     const status = err?.response?.status || 0;
-    const msg = err?.response?.data?.detail || err?.message || "Request failed";
+    const detail = err?.response?.data?.detail;
+    const msg = detail || err?.message || "Request failed";
     const requestId = err?.response?.headers?.["x-request-id"] || null;
-    throw new ApiError(status, typeof msg === "string" ? msg : "Request failed", requestId);
+    throw new ApiError(status, typeof msg === "string" ? msg : "Request failed", requestId, detail);
   }
 };
 

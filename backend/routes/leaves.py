@@ -212,6 +212,25 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
                 raise HTTPException(status_code=403, detail="Posting can only be filed by an admin on behalf of a member")
             if not target_user_id or target_user_id == user["id"]:
                 raise HTTPException(status_code=400, detail="Posting must target another member (apply-on-behalf only)")
+        # Data-entry guardrails (Oct 2026): a leave can't end before it starts,
+        # late-coming is single-day, and real absences can't overlap an existing
+        # pending/approved one for the same member.
+        if body.start_date and body.end_date and body.end_date < body.start_date:
+            raise HTTPException(status_code=400, detail="End date can't be before the start date")
+        if body.type == "late_coming" and body.start_date != body.end_date:
+            raise HTTPException(status_code=400, detail="Late-coming must be a single day")
+        if body.type in ("leave", "tour", "posting", "comp_off"):
+            clash = await db.leaves.find_one({
+                "user_id": target_user["id"],
+                "status": {"$in": ["pending", "approved"]},
+                "type": {"$in": ["leave", "tour", "comp_off", "posting"]},
+                "start_date": {"$lte": body.end_date},
+                "end_date": {"$gte": body.start_date},
+            }, {"_id": 0, "start_date": 1, "end_date": 1, "type": 1})
+            if clash:
+                raise HTTPException(status_code=400, detail=(
+                    f"Overlaps an existing {clash['type']} ({clash['start_date']} → {clash['end_date']}). "
+                    "Cancel or adjust that one first."))
         # R3 superseded (Jun 2026, user request): the hard "N-day advance
         # notice" BLOCK is removed — anyone may apply for leave at any
         # time, including backdated (after the effective date). Instead a
@@ -665,6 +684,23 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
                     short_list.append(f"{u.get('full_name', uid)}: {exc.detail}")
             if short_list:
                 raise HTTPException(status_code=400, detail=" • ".join(short_list))
+        if body.start_date and body.end_date and body.end_date < body.start_date:
+            raise HTTPException(status_code=400, detail="End date can't be before the start date")
+        if body.type in ("leave", "tour", "posting", "comp_off"):
+            clashes = []
+            for uid in body.user_ids:
+                c = await db.leaves.find_one({
+                    "user_id": uid, "status": {"$in": ["pending", "approved"]},
+                    "type": {"$in": ["leave", "tour", "comp_off", "posting"]},
+                    "start_date": {"$lte": body.end_date},
+                    "end_date": {"$gte": body.start_date},
+                }, {"_id": 1})
+                if c:
+                    uu = await db.users.find_one({"id": uid}, {"_id": 0, "full_name": 1})
+                    clashes.append((uu or {}).get("full_name", uid))
+            if clashes:
+                raise HTTPException(status_code=400, detail=(
+                    "These members already have an overlapping leave/tour: " + ", ".join(clashes)))
         office = await db.config.find_one({"id": "office"})
         today = local_date_str(office)
         late_application = bool(body.start_date and body.start_date < today)

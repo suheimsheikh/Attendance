@@ -185,6 +185,25 @@ export default function MemberForm({ initial, onClose, onSaved }) {
     try {
       // Serialise the 3-state meal_eligible select back to true/false/null.
       const mealMap = { on: true, off: false, auto: null };
+      // Soft-confirm guardrails: backend returns 409 {needs_confirm, warnings}
+      // for judgment-call issues (high leave balance, duplicate name, athlete
+      // with no parent mobile). Confirm, then retry the same call with ?force.
+      const withConfirm = async (call) => {
+        try {
+          await call(false);
+        } catch (e) {
+          if (e?.status === 409 && e?.detail?.needs_confirm) {
+            const lines = (e.detail.warnings || []).map((w) => `• ${w}`).join("\n");
+            if (window.confirm(`Please confirm:\n\n${lines}\n\nSave anyway?`)) {
+              await call(true);
+            } else {
+              throw new Error("__cancelled__");
+            }
+          } else {
+            throw e;
+          }
+        }
+      };
       if (isEdit) {
         const body = { ...form, meal_eligible: mealMap[form.meal_eligible] };
         if (!body.password) delete body.password;
@@ -195,7 +214,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
         Object.keys(body).forEach((k) => {
           if (body[k] === "" && k !== "given_name" && k !== "surname") delete body[k];
         });
-        await api.patch(`/members/${initial.id}`, body);
+        await withConfirm((force) => api.patch(`/members/${initial.id}?force=${force}`, body));
         toast.success("Member updated");
         const timingsChanged = (form.work_start || "") !== (initial.work_start || "")
           || (form.work_end || "") !== (initial.work_end || "")
@@ -205,11 +224,12 @@ export default function MemberForm({ initial, onClose, onSaved }) {
         const body = { ...form, meal_eligible: mealMap[form.meal_eligible] };
         // Same as edit: drop "" so Literal fields (weekly_off, gender, …) fall back to backend defaults instead of 422.
         Object.keys(body).forEach((k) => { if (body[k] === "") delete body[k]; });
-        await api.post("/members", body);
+        await withConfirm((force) => api.post(`/members?force=${force}`, body));
         toast.success("Member created");
       }
       onSaved();
     } catch (err) {
+      if (err?.message === "__cancelled__") { setBusy(false); return; }
       formErr.setFromApi(err, "Failed to save member");
     } finally {
       setBusy(false);

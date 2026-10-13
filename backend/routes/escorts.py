@@ -181,6 +181,17 @@ def make_router(db, require_admin, get_current_user, require_coach_or_admin) -> 
                 status_code=400,
                 detail="Valid-until must be on or after valid-from",
             )
+        # Data-entry guardrail (Oct 2026): a phone, when given, must be a real
+        # 10-digit number and unique among the institution's active escorts.
+        phone = (body.phone or "").strip()
+        if phone:
+            digits = "".join(c for c in phone if c.isdigit())
+            if len(digits) < 10:
+                raise HTTPException(status_code=400, detail="Escort phone must have at least 10 digits")
+            if await db.escorts.find_one({
+                    "institution": inst["name"], "mobile_last10": digits[-10:],
+                    "status": "active"}, {"_id": 1}):
+                raise HTTPException(status_code=400, detail="Another active escort in this institution already uses this phone number")
         # Force the FK by institution NAME so it matches the members
         # collection's existing convention.
         doc = {
@@ -227,6 +238,15 @@ def make_router(db, require_admin, get_current_user, require_coach_or_admin) -> 
         if "phone" in update:
             digits = "".join(c for c in (update["phone"] or "") if c.isdigit())[-10:]
             update["mobile_last10"] = digits or None
+            if update.get("phone"):
+                full = "".join(c for c in (update["phone"] or "") if c.isdigit())
+                if len(full) < 10:
+                    raise HTTPException(status_code=400, detail="Escort phone must have at least 10 digits")
+                inst_name = update.get("institution", escort.get("institution"))
+                if await db.escorts.find_one({
+                        "institution": inst_name, "mobile_last10": digits,
+                        "status": "active", "id": {"$ne": escort_id}}, {"_id": 1}):
+                    raise HTTPException(status_code=400, detail="Another active escort in this institution already uses this phone number")
         # If status transitions to a terminal value, stamp ended_at if
         # the admin didn't supply it explicitly.
         if update.get("status") in ("replaced", "left") and not update.get("ended_at"):

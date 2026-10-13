@@ -7,3 +7,11 @@ crons:
     method: POST
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true
+  - name: close-stale-sessions
+    description: "Auto-closes attendance sessions left open from a previous day at ~00:45 IST so forgotten check-outs don't balloon into 16h+ records"
+    cron: "45 0 * * *"
+    timezone: "Asia/Kolkata"
+    endpoint: "{{BASE_URL}}/api/cron/close-stale-sessions"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
