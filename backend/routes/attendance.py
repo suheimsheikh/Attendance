@@ -1,11 +1,9 @@
-"""Attendance read-only routes (status, stale-session, deprecated OT stubs).
+"""Attendance read-only routes (status, stale-session).
 Phase 1 of the attendance split out of server.py (Oct 2026) — paths and behaviour unchanged."""
 from __future__ import annotations
 
-from datetime import date, timedelta
-from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
 from services.attendance_calc import open_excursion as _open_excursion
 from services.attendance_helpers import late_days_in_month, open_session_for as _open_session_impl
