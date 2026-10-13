@@ -5238,3 +5238,9 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 ### 13 Oct 2026 — Grid: weekend lines visible on populated cells + legend DAR/OT h
 - Weekend outer-edge inset bumped 1px->2px grey (#94a3b8). With border-collapse the 1px white cell border was covering a 1px inset on status-coloured cells; 2px leaves ~1px visible (same approach as the 2px today indicator), so the Sat/Sun boundary lines now show through populated cells too. Still subtle, outer-edges only.
 - Legend: added DAR (Missed Daily Activity Reports) and OT h (Overtime hours, early-in + late-out) chips alongside EO and Pay.
+
+### 13 Oct 2026 — Grid: pill labels, legend order/label, bigger pills
+- Stat-pill group labels (Staff / Athletes) now font-extrabold text-slate-900 (bolder, black).
+- Removed the "Legend" word + InfoTip from the legend strip (unused InfoTip import dropped).
+- Legend is now a single A→Z list by label: merged the CELL_STYLE codes with the DAR/EO/OT h/Pay total-column chips and sorted by label (case-insensitive). Uniform chip style (px-1.5 min-w-28).
+- Stat pills enlarged: h-7->h-8, dots 1.5->2, text-[11px]->text-xs, font-semibold->font-bold.

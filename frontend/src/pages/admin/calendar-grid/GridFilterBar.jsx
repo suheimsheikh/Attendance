@@ -28,17 +28,17 @@ function StatGroup({ title, stats, testid }) {
   if (!stats) return null;
   return (
     <div className="inline-flex items-center gap-1.5" data-testid={testid}>
-      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">{title}</span>
+      <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-900 mr-0.5">{title}</span>
       {STAT_PILLS.map((p) => (
         <span
           key={p.key}
-          className={`inline-flex items-center gap-1 h-7 pl-1.5 pr-2 rounded-full border text-[11px] font-semibold ${p.bg} ${p.text}`}
+          className={`inline-flex items-center gap-1.5 h-8 pl-2 pr-2.5 rounded-full border text-xs font-bold ${p.bg} ${p.text}`}
           title={`${title} — ${p.label}`}
           data-testid={`${testid}-${p.key}`}
         >
-          <span className={`w-1.5 h-1.5 rounded-full ${p.dot}`} />
+          <span className={`w-2 h-2 rounded-full ${p.dot}`} />
           <span className="tabular-nums">{stats[p.key] ?? 0}</span>
-          <span className="hidden 2xl:inline text-slate-500 font-medium">{p.label}</span>
+          <span className="hidden 2xl:inline text-slate-500 font-semibold">{p.label}</span>
         </span>
       ))}
     </div>
