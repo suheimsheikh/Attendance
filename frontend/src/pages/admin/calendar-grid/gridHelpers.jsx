@@ -13,11 +13,17 @@ import React from "react";
 // disturbing the grid's row/column alignment (borders would). sky-500
 // = #0ea5e9. Added 25 Jun 2026 per user request.
 export const TODAY_COL = "shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9]";
-// Weekend (Sat/Sun) column marker — subtle, uniform 1px grey inset on
-// both sides. The header's top row uses the *_CAP variant so the line
-// is closed at the top, mirroring the current-day indicator.
-export const WEEKEND_COL = "shadow-[inset_1px_0_0_#94a3b8,inset_-1px_0_0_#94a3b8]";
-export const WEEKEND_COL_CAP = "shadow-[inset_1px_0_0_#94a3b8,inset_-1px_0_0_#94a3b8,inset_0_1px_0_#94a3b8]";
+// Weekend (Sat/Sun) column marker — a subtle 1px grey line on the OUTER
+// edge of the weekend block only (left of Sat, right of Sun) so there's
+// no divider *between* Sat and Sun. The *_CAP variants close the line at
+// the top in the header row, mirroring the current-day indicator.
+export const WEEKEND_LEFT = "shadow-[inset_1px_0_0_#94a3b8]";
+export const WEEKEND_RIGHT = "shadow-[inset_-1px_0_0_#94a3b8]";
+export const WEEKEND_LEFT_CAP = "shadow-[inset_1px_0_0_#94a3b8,inset_0_1px_0_#94a3b8]";
+export const WEEKEND_RIGHT_CAP = "shadow-[inset_-1px_0_0_#94a3b8,inset_0_1px_0_#94a3b8]";
+// Faint column tint applied to Sat/Sun cells (status-coloured cells keep
+// their own colour; this shows through blank cells + headers).
+export const WEEKEND_BG = "bg-slate-200/50";
 
 // Cell colour + label registry. Each entry maps a status code to
 // tailwind bg + text classes and the display label (2-letter code).
@@ -56,12 +62,15 @@ export const CELL_STYLE = {
  * for LV/TR/CO/PS. Kept as a native `title` (no JS popover library) so
  * the whole 31-day grid stays fast when hovering across 100 rows. */
 export function GridCell({ code, dow, onClick, meta, iso, rowSpan, isToday }) {
-  // Column indicator: today keeps its sky inset; weekends get a subtle,
-  // uniform grey inset on both sides (one wins when a day is both).
-  const isWeekend = dow === "Sat" || dow === "Sun";
-  const todayCls = isToday ? ` ${TODAY_COL}` : (isWeekend ? ` ${WEEKEND_COL}` : "");
+  // Column indicator: today keeps its sky inset; weekends get a single
+  // outer-edge grey inset (left for Sat, right for Sun — no line between)
+  // plus a faint tint. Today wins when a day is both.
+  const isSat = dow === "Sat", isSun = dow === "Sun";
+  const wkndCls = isSat ? ` ${WEEKEND_LEFT}` : isSun ? ` ${WEEKEND_RIGHT}` : "";
+  const todayCls = isToday ? ` ${TODAY_COL}` : wkndCls;
+  const wkndBg = (isSat || isSun) && !isToday ? ` ${WEEKEND_BG}` : "";
   if (!code) {
-    return <td rowSpan={rowSpan} className={`border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-6${todayCls}${isToday ? " bg-sky-50" : ""}`}>·</td>;
+    return <td rowSpan={rowSpan} className={`border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-6${todayCls}${isToday ? " bg-sky-50" : wkndBg}`}>·</td>;
   }
   const s = CELL_STYLE[code] || CELL_STYLE.AB;
   const clickable = !!onClick;
@@ -150,8 +159,9 @@ export function GridTimeCell({ code, time, dow, onClick, meta, iso, half, half_k
   const clickable = !!onClick;
   const title = buildCellTooltip({ code, dow, meta, iso, clickable });
   const label = time ? fmtHM(time) : "—";
-  const isWeekend = dow === "Sat" || dow === "Sun";
-  const colCls = isToday ? ` ${TODAY_COL}` : (isWeekend ? ` ${WEEKEND_COL}` : "");
+  const isSat = dow === "Sat", isSun = dow === "Sun";
+  const wkndCls = isSat ? ` ${WEEKEND_LEFT}` : isSun ? ` ${WEEKEND_RIGHT}` : "";
+  const colCls = isToday ? ` ${TODAY_COL}` : wkndCls;
   return (
     <td
       className={`border border-white text-center text-[9px] font-semibold tabular-nums ${s.bg} ${s.text} h-6 w-9 leading-none px-0.5${colCls} ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}

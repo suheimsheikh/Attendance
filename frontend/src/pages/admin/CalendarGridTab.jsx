@@ -12,7 +12,7 @@ import AttendanceLedgerModal from "./AttendanceLedgerModal";
 import { InfoTip } from "../../components/InfoTip";
 import OTLedgerModal from "./OTLedgerModal";
 import MemberForm from "./MemberForm";
-import { GridCell, GridTimeCell, CELL_STYLE, correctionForCode, WEEKEND_COL, WEEKEND_COL_CAP } from "./calendar-grid/gridHelpers";
+import { GridCell, GridTimeCell, CELL_STYLE, correctionForCode, WEEKEND_LEFT, WEEKEND_RIGHT, WEEKEND_LEFT_CAP, WEEKEND_RIGHT_CAP, WEEKEND_BG } from "./calendar-grid/gridHelpers";
 import GridFilterBar from "./calendar-grid/GridFilterBar";
 import GridRowTotals from "./calendar-grid/GridRowTotals";
 import { useUiPrefs } from "../../hooks/useUiPrefs";
@@ -328,7 +328,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso}
-                    className={`text-center h-6 w-6 border-b border-r border-slate-200 tabular-nums font-bold ${h.isWeekend ? `bg-slate-100 text-slate-400 ${WEEKEND_COL_CAP}` : "bg-slate-50 text-slate-700"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9,inset_0_2px_0_#0ea5e9]" : ""}`}
+                    className={`text-center h-6 w-6 border-b border-r border-slate-200 tabular-nums font-bold ${h.isWeekend ? `${WEEKEND_BG} text-slate-500 ${h.dow === "Sat" ? WEEKEND_LEFT_CAP : WEEKEND_RIGHT_CAP}` : "bg-slate-50 text-slate-700"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9,inset_0_2px_0_#0ea5e9]" : ""}`}
                     title={`${h.dow} · ${h.iso}${h.isToday ? " · Today" : ""}`}
                     data-testid={`cal-header-${h.iso}`}
                   >
@@ -356,7 +356,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso + "-dow"}
-                    className={`text-center h-4 border-b border-r border-slate-200 text-[9px] uppercase font-semibold ${h.isWeekend ? `bg-slate-100 text-slate-400 ${WEEKEND_COL}` : "bg-slate-50 text-slate-500"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9]" : ""}`}
+                    className={`text-center h-4 border-b border-r border-slate-200 text-[9px] uppercase font-semibold ${h.isWeekend ? `${WEEKEND_BG} text-slate-500 ${h.dow === "Sat" ? WEEKEND_LEFT : WEEKEND_RIGHT}` : "bg-slate-50 text-slate-500"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9]" : ""}`}
                   >
                     {h.dow.slice(0, 2)}
                   </th>

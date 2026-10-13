@@ -5229,3 +5229,8 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 ### 13 Oct 2026 — Grid band: restore original column widths
 - The Camps/Regattas band labels were widening the day columns. Fixed by absolutely-positioning the segment label (absolute inset-0 truncate, pointer-events-none) so it never contributes to the th's content width. Day columns back to 24px; full camp/regatta name shows on hover via the title tooltip.
 - Verified: day col width = 24px (original), band labels truncate with hover hint.
+
+### 13 Oct 2026 — Grid weekend: no Sat/Sun divider + subtle shading
+- Weekend inset line is now one-sided per day: Saturday gets a left inset, Sunday a right inset, so the line sits only on the OUTER edges of the Sat+Sun block (no divider between them). Header row 1 keeps the top-cap variants. New constants WEEKEND_LEFT/RIGHT(_CAP) replace the old two-sided WEEKEND_COL.
+- Subtle weekend shading added via WEEKEND_BG (bg-slate-200/50) on Sat/Sun header cells and blank body cells; status-coloured cells keep their own colour.
+- Verified via screenshot: outer-edge-only lines, subtle shading, day columns still 24px.
