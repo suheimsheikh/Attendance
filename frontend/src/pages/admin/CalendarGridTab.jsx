@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { keepPreviousData } from "@tanstack/react-query";
-import { Loader2, FileText, RefreshCw } from "lucide-react";
+import { Loader2, FileText, RefreshCw, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob, showApiError } from "../../api";
 import { useApiQuery } from "../../hooks/useApiQuery";
@@ -316,7 +316,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
               {eventBands.hasEvents && (
                 <tr data-testid="calendar-event-band">
                   <th className="sticky left-0 z-40 bg-slate-50 w-7 min-w-[28px] max-w-[28px] border-b border-slate-200 h-5"></th>
-                  <th className="sticky left-[28px] z-40 bg-slate-50 w-[132px] min-w-[132px] max-w-[132px] text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200 h-5 px-2 text-left">Camps / Regattas</th>
+                  <th className="sticky left-[28px] z-40 bg-slate-50 w-[132px] min-w-[132px] max-w-[132px] text-[9px] uppercase tracking-wider text-slate-900 font-semibold border-b border-slate-200 h-5 px-2 text-left"><span className="inline-flex items-center gap-1">Camps / Regattas <ArrowRight size={10} strokeWidth={2.5} /></span></th>
                   {eventBands.segments.map((seg, i) => {
                     if (!seg.camp && !seg.regatta) {
                       return <th key={i} colSpan={seg.span} className="h-5 border-b border-r border-slate-200 bg-slate-50" />;
@@ -365,7 +365,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
               </tr>
               <tr>
                 <th className="py-0.5 sticky left-0 z-40 bg-slate-50 w-7 min-w-[28px] max-w-[28px] border-b border-slate-200"></th>
-                <th className="py-0.5 px-2 sticky left-[28px] z-40 bg-slate-50 w-[132px] min-w-[132px] max-w-[132px] text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">Name / Rank</th>
+                <th className="py-0.5 px-2 text-left sticky left-[28px] z-40 bg-slate-50 w-[132px] min-w-[132px] max-w-[132px] text-[9px] uppercase tracking-wider text-slate-900 font-semibold border-b border-slate-200">Name / Rank</th>
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso + "-dow"}
