@@ -587,4 +587,30 @@ def make_router(
         })
         return {"ok": True}
 
+    @router.post("/admin/devices/revoke-extras/{user_id}")
+    async def revoke_extra_devices(user_id: str, admin: dict = Depends(require_admin)):
+        """One-click cleanup: keep a member's single most-recently-used approved
+        device and revoke every other approved one. Clears the "leftover
+        browsers" clutter (Data Quality: device.too_many_active) without
+        locking the member out of their current device. Each revoke is
+        individually audit-stamped. Returns how many were revoked + which was
+        kept. To revoke EVERYTHING (e.g. an ex-member), use the per-device
+        revoke or the ex-member Data Quality fix instead."""
+        approved = await db.devices.find(
+            {"user_id": user_id, "status": "approved"}, {"_id": 0}
+        ).to_list(1000)
+        if len(approved) <= 1:
+            return {"revoked": 0, "kept": approved[0]["id"] if approved else None}
+        # Newest wins: last login, else approval time, else creation time.
+        def _recency(d):
+            return d.get("last_login_at") or d.get("approved_at") or d.get("created_at") or ""
+        approved.sort(key=_recency, reverse=True)
+        keep = approved[0]
+        revoked = 0
+        for d in approved[1:]:
+            await _stamp_action(d["id"], "revoked", admin["id"],
+                                extra={"last_action": "revoked (bulk cleanup)"})
+            revoked += 1
+        return {"revoked": revoked, "kept": keep["id"]}
+
     return router

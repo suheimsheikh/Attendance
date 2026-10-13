@@ -5327,3 +5327,10 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
   - By issue: regroups by finding CODE (one section per distinct check, e.g. "Checkout before checkin"), ordered by severity then cluster size — "the fix list in order of issue".
   - grouped useMemo now keys by code (issue mode) or category (others); prettyCode() builds friendly headings; group React key switched to unique `key`.
 - Compiles clean (1 pre-existing warning). Pills verified rendering in preview.
+
+### 13 Oct 2026 — One-click bulk "revoke extras" per member + device/login audit
+- Finding: login is gated ONLY by device approval, NOT by employment status. routes/auth.py /auth/phone issues a token for any approved device whose linked user still exists (line ~438) with no leaving_date/archived check; the "trusted-phone cinch" (~473) auto-approves NEW devices for anyone holding an existing approved device. => An ex-member with even one approved device can still sign in; offboarding must revoke ALL their devices.
+- NEW POST /api/admin/devices/revoke-extras/{user_id}: keeps the member's most-recently-used approved device (last_login_at > approved_at > created_at) and revokes the rest, each audit-stamped "revoked (bulk cleanup)". Returns {revoked, kept}. For ex-members use per-device revoke / the ex-member DQ fix (revoke ALL).
+- Frontend Devices.jsx (Approved tab): per-member "Revoke N extra" button shown when a member has >1 approved device; confirms, calls the endpoint, reloads.
+- Verified: LAXMAN VISHLAVATH 61 approved -> 1 kept + 60 bulk-revoked; DQ too_many_active 13 -> 12. Frontend compiles.
+- OPEN/OFFERED: add an offboarding guard (block login + auto-revoke devices once leaving_date has passed) — not yet built.

@@ -32,6 +32,15 @@ export default function Devices({ embedded = false }) {
   }, [filter]);
   useEffect(() => { load(); }, [load]);
 
+  // When viewing Approved devices, count how many each member has so we can
+  // offer a one-click "revoke the extras" per member (keeps their newest).
+  const approvedCountByUser = React.useMemo(() => {
+    if (filter !== "approved") return {};
+    const m = {};
+    for (const d of items) if (d.user_id) m[d.user_id] = (m[d.user_id] || 0) + 1;
+    return m;
+  }, [items, filter]);
+
   const reject = async (d) => {
     try { await api.post(`/admin/devices/${d.id}/reject`); toast.success("Rejected"); load(); }
     catch (err) { toast.error(err?.message || "Failed"); }
@@ -40,6 +49,15 @@ export default function Devices({ embedded = false }) {
     if (!window.confirm("Revoke this device? The user will be signed out.")) return;
     try { await api.post(`/admin/devices/${d.id}/revoke`); toast.success("Revoked"); load(); }
     catch (err) { toast.error(err?.message || "Failed"); }
+  };
+  const revokeExtras = async (d, count) => {
+    const who = d.member_name || "this member";
+    if (!window.confirm(`Keep ${who}'s most recently used device and revoke the other ${count}? They stay signed in on their current device.`)) return;
+    try {
+      const r = await api.post(`/admin/devices/revoke-extras/${d.user_id}`);
+      toast.success(`Revoked ${r.revoked} extra device${r.revoked === 1 ? "" : "s"}`);
+      load();
+    } catch (err) { toast.error(err?.message || "Failed"); }
   };
   const reinstate = async (d) => {
     const who = d.member_name || d.proposed_full_name || (d.phone ? `phone ${d.phone}` : "this device");
@@ -103,7 +121,19 @@ export default function Devices({ embedded = false }) {
                   </>
                 )}
                 {filter === "approved" && (
-                  <button data-testid={`revoke-device-${d.id}`} onClick={() => revoke(d)} title="Block this device from signing in again" className="iu-btn-danger !h-9 !px-3"><Ban size={14}/> Revoke</button>
+                  <>
+                    {d.user_id && approvedCountByUser[d.user_id] > 1 && (
+                      <button
+                        data-testid={`revoke-extras-${d.id}`}
+                        onClick={() => revokeExtras(d, approvedCountByUser[d.user_id] - 1)}
+                        title={`This member has ${approvedCountByUser[d.user_id]} approved devices — keep the newest and revoke the rest`}
+                        className="iu-btn-secondary !h-9 !px-3 text-amber-700 border-amber-300"
+                      >
+                        <Ban size={14}/> Revoke {approvedCountByUser[d.user_id] - 1} extra
+                      </button>
+                    )}
+                    <button data-testid={`revoke-device-${d.id}`} onClick={() => revoke(d)} title="Block this device from signing in again" className="iu-btn-danger !h-9 !px-3"><Ban size={14}/> Revoke</button>
+                  </>
                 )}
                 {(filter === "rejected" || filter === "revoked") && (
                   <>
