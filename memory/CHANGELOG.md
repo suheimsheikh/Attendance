@@ -5334,3 +5334,8 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Frontend Devices.jsx (Approved tab): per-member "Revoke N extra" button shown when a member has >1 approved device; confirms, calls the endpoint, reloads.
 - Verified: LAXMAN VISHLAVATH 61 approved -> 1 kept + 60 bulk-revoked; DQ too_many_active 13 -> 12. Frontend compiles.
 - OPEN/OFFERED: add an offboarding guard (block login + auto-revoke devices once leaving_date has passed) — not yet built.
+
+### 13 Oct 2026 — Device cap (2) + offboarding login guard
+- routes/auth.py: _enforce_device_cap(user_id, actor, cap=2) keeps the 2 newest-used approved devices and auto-revokes the rest ("revoked (device cap)"). Called after every approval path: explicit admin approve, auto-admin, and trusted-phone cinch. Existing over-cap members shrink gradually as they sign in from a new device (or via the Revoke-extras button).
+- Offboarding guard: _has_left(u) = leaving_date non-empty and < today(UTC). _block_if_left(u) auto-revokes ALL the member's approved devices ("revoked (member left)") and raises 403. Wired into /auth/phone straight-in, /auth/phone/status, auto-admin and trusted-phone-cinch token issue points. Login now respects employment status, closing the gap where an ex-member with an approved device could still sign in.
+- Verified via curl: approving a 3rd device -> 2 approved (oldest pruned); ex-member straight-in -> 403 + all approved revoked; status poll returns revoked. Backend-only; test data cleaned up.

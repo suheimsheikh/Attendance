@@ -182,6 +182,40 @@ def make_router(
         res = await db.devices.update_one({"id": device_pk}, {"$set": payload})
         return res.matched_count
 
+    async def _enforce_device_cap(user_id: str, actor: str, cap: int = 2) -> None:
+        """Option C (Oct 2026): keep at most `cap` approved devices per member.
+        When a new one pushes the count over the cap, the oldest-used ones are
+        auto-revoked (newest survive) — so a fresh browser/phone never gets
+        stuck 'awaiting approval' yet the clutter stays bounded."""
+        if not user_id:
+            return
+        approved = await db.devices.find(
+            {"user_id": user_id, "status": "approved"}, {"_id": 0}).to_list(1000)
+        if len(approved) <= cap:
+            return
+        approved.sort(
+            key=lambda d: d.get("last_login_at") or d.get("approved_at") or d.get("created_at") or "",
+            reverse=True)
+        for d in approved[cap:]:
+            await _stamp_action(d["id"], "revoked", actor, extra={"last_action": "revoked (device cap)"})
+
+    def _has_left(u: Optional[dict]) -> bool:
+        ld = ((u or {}).get("leaving_date") or "").strip()
+        return bool(ld) and ld < now_utc().isoformat()[:10]
+
+    async def _block_if_left(u: Optional[dict]) -> None:
+        """Offboarding guard (Oct 2026): once a member's leaving date has
+        passed they can't sign in — and all their approved devices are
+        auto-revoked so no lingering browser keeps working."""
+        if not _has_left(u):
+            return
+        await db.devices.update_many(
+            {"user_id": u["id"], "status": "approved"},
+            {"$set": {"status": "revoked", "last_action": "revoked (member left)",
+                      "last_action_by": "system-offboarding",
+                      "last_action_at": now_utc().isoformat()}})
+        raise HTTPException(status_code=403, detail="Your access has ended. Please contact your admin.")
+
     # ------------------------------------------------------------------
     # Auth routes
     # ------------------------------------------------------------------
@@ -438,6 +472,7 @@ def make_router(
         if device["status"] == "approved" and device.get("user_id"):
             u = await db.users.find_one({"id": device["user_id"]}, {"_id": 0})
             if u:
+                await _block_if_left(u)
                 await db.devices.update_one({"device_id": body.device_id}, {"$set": {"last_login_at": now}})
                 return _device_token_response(u, body.device_id)
 
@@ -446,6 +481,7 @@ def make_router(
         # revoked (e.g. while testing the revoke flow), we silently bring it
         # back to approved and stamp a "recovered" audit note.
         if matched and matched.get("role") == "admin":
+            await _block_if_left(matched)
             was_revoked = device.get("status") == "revoked"
             update = {
                 "status": "approved", "user_id": matched["id"],
@@ -458,6 +494,7 @@ def make_router(
                 logger.info("Admin self-recovery: re-approved revoked device %s for %s",
                             body.device_id, matched.get("full_name"))
             await db.devices.update_one({"device_id": body.device_id}, {"$set": update})
+            await _enforce_device_cap(matched["id"], "auto-admin")
             return _device_token_response(matched, body.device_id)
 
         # Trusted-phone cinch: if the matched member ALREADY has another approved
@@ -477,11 +514,13 @@ def make_router(
                 "device_id": {"$ne": body.device_id},
             }, {"_id": 0, "id": 1})
             if prior:
+                await _block_if_left(matched)
                 await db.devices.update_one({"device_id": body.device_id}, {"$set": {
                     "status": "approved", "user_id": matched["id"],
                     "approved_by": "auto-trusted-phone", "approved_at": now, "last_login_at": now,
                     "last_action": "approved", "last_action_by": "auto-trusted-phone", "last_action_at": now,
                 }})
+                await _enforce_device_cap(matched["id"], "auto-trusted-phone")
                 return _device_token_response(matched, body.device_id)
 
         return {
@@ -501,6 +540,7 @@ def make_router(
         if device["status"] == "approved" and device.get("user_id"):
             u = await db.users.find_one({"id": device["user_id"]}, {"_id": 0})
             if u:
+                await _block_if_left(u)
                 await db.devices.update_one({"device_id": device_id},
                                             {"$set": {"last_login_at": now_utc().isoformat()}})
                 return _device_token_response(u, device_id)
@@ -555,6 +595,7 @@ def make_router(
             "approved_by": admin["id"], "approved_at": now,
             "last_action": "approved", "last_action_by": admin["id"], "last_action_at": now,
         }})
+        await _enforce_device_cap(user_id, admin["id"])
         return {"ok": True}
 
     @router.post("/admin/devices/{device_pk}/reject")
