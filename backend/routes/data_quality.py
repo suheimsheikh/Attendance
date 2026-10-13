@@ -368,6 +368,7 @@ def make_router(db, require_admin) -> APIRouter:
 
         # ── Members ───────────────────────────────────────────────
         users = await db.users.find({}, {"_id": 0}).to_list(5000)
+        uid2name = {u["id"]: u.get("full_name") for u in users}
 
         # 1-3. Duplicate emails / mobiles / full-names — one helper,
         # one shape, one place to update if we ever change the fields.
@@ -556,7 +557,7 @@ def make_router(db, require_admin) -> APIRouter:
                     "message": f"Leave {lv.get('type')} {s} → {e}: end before start",
                     "entity_type": "leave",
                     "entity_ids": [lv["id"]],
-                    "entity_names": [lv.get("reason") or "(no reason)"],
+                    "entity_names": [uid2name.get(lv.get("user_id")) or lv.get("user_name") or "(unknown)"],
                 })
             if lv.get("type") == "late_coming" and s != e:
                 findings.append({
@@ -566,7 +567,7 @@ def make_router(db, require_admin) -> APIRouter:
                     "message": f"Late-coming spans multiple days ({s} → {e}) — should be single-day",
                     "entity_type": "leave",
                     "entity_ids": [lv["id"]],
-                    "entity_names": [lv.get("reason") or "(no reason)"],
+                    "entity_names": [uid2name.get(lv.get("user_id")) or lv.get("user_name") or "(unknown)"],
                 })
             if lv.get("half_day") and lv.get("type") != "leave":
                 findings.append({
@@ -576,11 +577,10 @@ def make_router(db, require_admin) -> APIRouter:
                     "message": f"Half-day flag set on type={lv.get('type')} (only Leave supports half-day)",
                     "entity_type": "leave",
                     "entity_ids": [lv["id"]],
-                    "entity_names": [lv.get("reason") or "(no reason)"],
+                    "entity_names": [uid2name.get(lv.get("user_id")) or lv.get("user_name") or "(unknown)"],
                 })
 
         # ── Attendance sessions ──────────────────────────────────
-        uid2name = {u["id"]: u.get("full_name") for u in users}
         sessions = await db.attendance.find({}, {"_id": 0}).to_list(20000)
         stale_cutoff = now - timedelta(hours=36)
         for s in sessions:
@@ -665,7 +665,7 @@ def make_router(db, require_admin) -> APIRouter:
         # --- Approved leaves without a reason ---
         approved_leaves = await db.leaves.find(
             {"status": "approved", "$or": [{"reason": None}, {"reason": ""}]},
-            {"_id": 0, "id": 1, "user_name": 1, "start_date": 1, "end_date": 1}
+            {"_id": 0, "id": 1, "user_id": 1, "user_name": 1, "start_date": 1, "end_date": 1}
         ).limit(200).to_list(200)
         for L in approved_leaves:
             findings.append({
@@ -674,7 +674,7 @@ def make_router(db, require_admin) -> APIRouter:
                 "message": f"Approved leave {L.get('start_date')}→{L.get('end_date')} has no reason",
                 "entity_type": "leave",
                 "entity_ids": [L["id"]],
-                "entity_names": [L.get("user_name") or "(unknown)"],
+                "entity_names": [L.get("user_name") or uid2name.get(L.get("user_id")) or "(unknown)"],
             })
 
         # --- Overlapping approved leaves for the same member ---
@@ -697,13 +697,13 @@ def make_router(db, require_admin) -> APIRouter:
                                     f"clashes with {b['start_date']}→{b['end_date']}"),
                         "entity_type": "leave",
                         "entity_ids": [b["id"], a["id"]],
-                        "entity_names": [b.get("user_name") or "(unknown)"],
+                        "entity_names": [b.get("user_name") or uid2name.get(b.get("user_id")) or "(unknown)"],
                     })
 
         # --- LOP days > actual leave span (arithmetic corruption) ---
         lop_leaves = await db.leaves.find(
             {"lop_days": {"$gt": 0}},
-            {"_id": 0, "id": 1, "user_name": 1, "start_date": 1, "end_date": 1, "lop_days": 1}
+            {"_id": 0, "id": 1, "user_id": 1, "user_name": 1, "start_date": 1, "end_date": 1, "lop_days": 1}
         ).to_list(20000)
         for L in lop_leaves:
             try:
@@ -718,7 +718,7 @@ def make_router(db, require_admin) -> APIRouter:
                                     f"({L['start_date']}→{L['end_date']})"),
                         "entity_type": "leave",
                         "entity_ids": [L["id"]],
-                        "entity_names": [L.get("user_name") or "(unknown)"],
+                        "entity_names": [L.get("user_name") or uid2name.get(L.get("user_id")) or "(unknown)"],
                         "auto_fix": True,
                     })
             except Exception:
@@ -728,7 +728,7 @@ def make_router(db, require_admin) -> APIRouter:
         zero_dur = await db.attendance.find(
             {"$expr": {"$eq": ["$check_in_at", "$check_out_at"]},
              "check_out_at": {"$ne": None}},
-            {"_id": 0, "id": 1, "user_name": 1, "check_in_at": 1}
+            {"_id": 0, "id": 1, "user_id": 1, "user_name": 1, "check_in_at": 1}
         ).limit(200).to_list(200)
         for r in zero_dur:
             findings.append({
@@ -737,14 +737,14 @@ def make_router(db, require_admin) -> APIRouter:
                 "message": f"Zero-duration session at {r['check_in_at'][:16].replace('T', ' ')}",
                 "entity_type": "attendance",
                 "entity_ids": [r["id"]],
-                "entity_names": [r.get("user_name") or "(unknown)"],
+                "entity_names": [r.get("user_name") or uid2name.get(r.get("user_id")) or "(unknown)"],
                 "auto_fix": True,
             })
 
         # --- Attendance: sessions longer than 16 hours ---
         long_cursor = db.attendance.find(
             {"check_out_at": {"$ne": None}},
-            {"_id": 0, "id": 1, "user_name": 1, "check_in_at": 1, "check_out_at": 1}
+            {"_id": 0, "id": 1, "user_id": 1, "user_name": 1, "check_in_at": 1, "check_out_at": 1}
         )
         long_added = 0
 
@@ -771,7 +771,7 @@ def make_router(db, require_admin) -> APIRouter:
                         "message": f"Session lasted {hours}h ({r['check_in_at'][:10]}) — likely missed checkout",
                         "entity_type": "attendance",
                         "entity_ids": [r["id"]],
-                        "entity_names": [r.get("user_name") or "(unknown)"],
+                        "entity_names": [r.get("user_name") or uid2name.get(r.get("user_id")) or "(unknown)"],
                         "auto_fix": True,
                     })
                     long_added += 1
@@ -797,7 +797,7 @@ def make_router(db, require_admin) -> APIRouter:
                     "message": f"Duplicate open session at {s['check_in_at'][:16].replace('T', ' ')}",
                     "entity_type": "attendance",
                     "entity_ids": [s["id"]],
-                    "entity_names": [s.get("user_name") or "(unknown)"],
+                    "entity_names": [s.get("user_name") or uid2name.get(g.get("_id")) or "(unknown)"],
                     "auto_fix": True,
                 })
 

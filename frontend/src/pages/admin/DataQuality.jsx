@@ -40,6 +40,21 @@ function prettyDates(text) {
   );
 }
 
+// Sort helpers: findings are shown latest-date-first (most recent issue on
+// top), then by severity. Dates are read out of the finding text; findings
+// with no date fall to the bottom of their group.
+const SEV_RANK = { high: 0, medium: 1, low: 2, info: 3 };
+function findingDate(f) {
+  const hits = `${f?.message || ""} ${f?.what || ""}`.match(/\d{4}-\d{2}-\d{2}/g);
+  return hits ? hits.sort().slice(-1)[0] : "";
+}
+function compareFindings(a, b) {
+  const da = findingDate(a);
+  const db = findingDate(b);
+  if (da !== db) return db.localeCompare(da); // latest date first; "" sinks
+  return (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9);
+}
+
 function SeverityBadge({ severity }) {
   const s = SEVERITY_STYLES[severity] || SEVERITY_STYLES.info;
   return (
@@ -421,7 +436,18 @@ export default function DataQuality() {
       if (!g[cat]) g[cat] = [];
       g[cat].push(f);
     }
-    return g;
+    // Sort each category's rows latest-date-first + severity, then order the
+    // category groups so the one holding the most recent issue sits on top.
+    const entries = Object.entries(g).map(([cat, items]) => {
+      const sorted = [...items].sort(compareFindings);
+      const maxDate = sorted.reduce((mx, f) => {
+        const d = findingDate(f);
+        return d > mx ? d : mx;
+      }, "");
+      return { cat, items: sorted, maxDate };
+    });
+    entries.sort((a, b) => b.maxDate.localeCompare(a.maxDate));
+    return entries;
   }, [filtered]);
 
   return (
@@ -436,7 +462,7 @@ export default function DataQuality() {
           <b> Priority</b> (how urgent) → <b>Issue</b> (what's wrong, with a plain explanation) →
           <b> Who / record</b> it affects → <b>What gets fixed</b> → <b>Action</b> to do it.
           Click a name to open that member, or a green <b>Fix all</b> button to auto-correct in bulk.
-          Dates are shown as dd/mm/yyyy.
+          Newest issues are listed first; dates are shown as dd/mm/yyyy.
         </p>
       </div>
 
@@ -505,7 +531,7 @@ export default function DataQuality() {
         </div>
       )}
 
-      {Object.entries(grouped).map(([category, items]) => (
+      {grouped.map(({ cat: category, items }) => (
         <div key={category} className="mb-6" data-testid={`dq-group-${category.toLowerCase().replace(/\s+/g, "-")}`}>
           <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">
             {category} <span className="text-slate-400">({items.length})</span>
