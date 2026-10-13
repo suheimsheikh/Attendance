@@ -6,6 +6,10 @@
 - Live data: never modify real members/attendance/issues without explicit approval.
 
 
+## Latest change (Jun 2026) — Leave/Tour report: reliable one-time daily lock
+- Bug: after one admin posted the daily Leave/Tour list to WhatsApp, the prompt kept reappearing for other admins. Root cause: both posters (`LeaveReportPrompt.jsx` modal + `dashboard/RosterStatusChip.jsx` "Post now") called `/leave-report/mark-posted` AFTER `shareToWhatsApp(...)`; on mobile the OS share sheet backgrounds the tab and the trailing request was dropped, so the day was never locked.
+- Fix: lock the day FIRST (`mark-posted`), THEN open WhatsApp, in both entry points. Matches the existing "tap = done" decision. Backend lock (`leave_report.py`, `$setOnInsert` upsert, first admin wins) was already correct and verified e2e (first admin wins, second sees posted, no overwrite).
+
 ## Latest change (Jun 2026) — Late-arrival reason prompt
 - Self check-in now ASKS WHY when a member is late. `SelfCheckIn.jsx` computes `lateInfo` client-side (now > work_start + office grace, non-hourly only); when late, auto check-in is suppressed so the member sees an amber "Reason for being late (required)" ReasonPrompt (testid `late-reason`) and taps in manually.
 - **Mandatory:** reason is now REQUIRED. Frontend disables the check-in button (`lateBlocked`) and blocks `handleToggle` until a reason is entered; backend `_geo_toggle` rejects a late SELF check-in with no reason via `400 LATE_REASON_REQUIRED:<min>` (admin/proxy `by=<id>` paths exempt).

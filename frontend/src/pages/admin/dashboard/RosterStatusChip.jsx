@@ -20,8 +20,10 @@ export default function RosterStatusChip() {
     setBusy(true);
     try {
       const roster = await api.get("/muster/daily-roster");
-      await shareToWhatsApp({ text: buildLeaveTourMessage(roster) });
+      // Lock the day BEFORE the share navigates away (mobile share sheet
+      // backgrounds the tab and drops a trailing request) — Jun 2026 fix.
       await api.post("/leave-report/mark-posted");
+      await shareToWhatsApp({ text: buildLeaveTourMessage(roster) });
       toast.success("Posted — pick the YCH Attendance group and send.");
       refetch();
     } catch (e) {

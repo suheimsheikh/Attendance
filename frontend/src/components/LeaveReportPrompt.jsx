@@ -91,9 +91,13 @@ export default function LeaveReportPrompt() {
     if (busy) return;
     setBusy(true);
     try {
-      await shareToWhatsApp({ text: message });
-      // Mark done the moment the button is tapped (user decision).
+      // Lock the day FIRST, before the WhatsApp share navigates this tab
+      // away — on mobile the OS share sheet backgrounds the page, so a
+      // mark-posted call made AFTER the share was routinely lost and every
+      // admin kept getting re-prompted (Jun 2026 user report). Tapping Post
+      // = done (existing user decision), so locking up-front is safe.
       await api.post("/leave-report/mark-posted").catch(() => {});
+      await shareToWhatsApp({ text: message });
       toast.success("Posted — pick the YCH Attendance group and send.");
       setOpen(false);
     } finally { setBusy(false); }
