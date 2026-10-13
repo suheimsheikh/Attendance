@@ -166,6 +166,11 @@ export default function CorrectionRequestModal({
     if (kind === "missed_checkin" || kind === "time_adjust") {
       if (kind === "missed_checkin" && !checkInTime) { toast.error("Enter the time you checked in"); return; }
       if (kind === "time_adjust" && !checkInTime && !checkOutTime) { toast.error("Enter a new check-in and/or check-out time"); return; }
+      // Guardrail: a correction can't put check-out at or before check-in.
+      if (checkInTime && checkOutTime && checkOutTime <= checkInTime) {
+        toast.error(`Check-out (${checkOutTime}) must be later than check-in (${checkInTime})`);
+        return;
+      }
       if (checkInTime) payload.check_in_time = checkInTime;
       if (checkOutTime) payload.check_out_time = checkOutTime;
     } else if (kind === "leave_date_change") {

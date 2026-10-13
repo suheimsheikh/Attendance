@@ -6,7 +6,8 @@
  * dedicated modal launched from Check-in / Leaves rows.
  */
 import React, { useCallback, useEffect, useState } from "react";
-import { Loader2, RefreshCw, Plus } from "lucide-react";
+import { Loader2, RefreshCw, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { api, showApiError } from "../api";
 import { formatDate } from "../utils";
 import CorrectionRequestModal from "../components/CorrectionRequestModal";
@@ -66,6 +67,15 @@ export default function MyCorrections() {
   }, [status]);
 
   useEffect(() => { load(); }, [load]);
+
+  const del = useCallback(async (cid) => {
+    if (!window.confirm("Delete this pending correction request? This can't be undone.")) return;
+    try {
+      await api.del(`/me/corrections/${cid}`);
+      toast.success("Correction request deleted");
+      setRows((rs) => rs.filter((r) => r.id !== cid));
+    } catch (err) { showApiError(err, "Could not delete"); }
+  }, []);
 
   useEffect(() => {
     // Preload counts for all three status buckets so the tab pills tell
@@ -157,6 +167,16 @@ export default function MyCorrections() {
                 <span className="text-xs text-slate-400 ml-auto">
                   Raised {row.requested_at?.slice(0, 16).replace("T", " ")}
                 </span>
+                {row.status === "pending" && (
+                  <button
+                    onClick={() => del(row.id)}
+                    data-testid={`my-corr-delete-${row.id}`}
+                    title="Delete this pending request"
+                    className="inline-flex items-center gap-1 px-2 h-6 rounded-md text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition"
+                  >
+                    <Trash2 size={11} /> Delete
+                  </button>
+                )}
               </div>
               <div className="text-sm text-slate-800 mt-1.5 font-semibold">{summariseChange(row)}</div>
               {row.reason && (

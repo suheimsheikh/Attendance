@@ -5302,3 +5302,8 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
   - _apply_missed_checkin: same guard on payload times.
   - _apply_time_adjust: compares merged final_in/final_out (new ± existing row) tz-aware -> 400 if check-out <= check-in (catches adjusting only one side into an invalid order). Replaces the old silent max(0.0) hours-clamp path for the invalid case.
 - Verified via curl: time_adjust 17:00->09:00 = 400, missed_checkin 10:00==10:00 = 400, valid 09:00->17:00 = 200. Backend only; admin sees the 400 as a toast. Test data cleaned up.
+
+### 13 Oct 2026 — Correction guard for all filers + self-delete
+- corrections.py create_correction guard is role-agnostic (members/staff included): both-times-present check-out<=check-in -> 400; NEW one-sided time_adjust now fetches the target attendance row and compares merged times via _wall_to_utc_iso so an employee's one-field edit that inverts the order is blocked at filing (not just at admin approval).
+- NEW DELETE /api/me/corrections/{cid}: the requester can delete their OWN correction, but only while status=pending (403 if not owner, 400 if already decided, 404 if missing). Verified: staff 400 guard, admin-delete-others 403, owner-delete-pending ok, re-delete 404.
+- Frontend: CorrectionRequestModal blocks check-out<=check-in before submit (instant toast). MyCorrections.jsx: pending rows get a Delete button (api.del + confirm + optimistic row removal). api.del already existed.

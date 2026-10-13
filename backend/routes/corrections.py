@@ -531,6 +531,19 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
         _cout = (body.payload or {}).get("check_out_time")
         if _cin and _cout and _cout <= _cin:
             raise HTTPException(status_code=400, detail=f"Check-out ({_cout}) must be later than check-in ({_cin})")
+        # One-sided time_adjust (only one time supplied): compare the new value
+        # against the existing row so a staff/employee request that would put
+        # check-out before check-in is blocked at filing, not just at approval.
+        if body.kind == "time_adjust" and body.entity_id and not (_cin and _cout):
+            _office = await db.config.find_one({"id": "office"})
+            _row = await db.attendance.find_one(
+                {"id": body.entity_id}, {"_id": 0, "date": 1, "check_in_at": 1, "check_out_at": 1})
+            if _row:
+                _d = _row.get("date") or body.target_date
+                eff_in = _wall_to_utc_iso(_d, _cin, _office) if _cin else _row.get("check_in_at")
+                eff_out = _wall_to_utc_iso(_d, _cout, _office) if _cout else _row.get("check_out_at")
+                if eff_in and eff_out and eff_out <= eff_in:
+                    raise HTTPException(status_code=400, detail="Check-out must be later than check-in")
 
         # Resolve target member — admin-on-behalf-of flow takes precedence.
         # Only actual admins may impersonate; non-admins get a 403 rather
@@ -696,6 +709,21 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             q["status"] = status
         rows = await db.corrections.find(q, {"_id": 0}).sort("requested_at", -1).to_list(500)
         return rows
+
+    @router.delete("/me/corrections/{cid}")
+    async def delete_my_correction(cid: str, user: dict = Depends(get_current_user)):
+        """Let the person who raised a correction withdraw it — but only
+        while it is still pending (an approved/applied or rejected request
+        has already been decided and stays for the audit trail)."""
+        row = await db.corrections.find_one({"id": cid}, {"_id": 0, "requester_id": 1, "status": 1})
+        if not row:
+            raise HTTPException(status_code=404, detail="Correction request not found")
+        if row.get("requester_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="You can only delete your own correction requests")
+        if row.get("status") != "pending":
+            raise HTTPException(status_code=400, detail="Only a pending request can be deleted — this one has already been decided")
+        await db.corrections.delete_one({"id": cid})
+        return {"ok": True, "deleted": cid}
 
     @router.get("/me/corrections/candidates")
     async def correction_candidates(
