@@ -5194,3 +5194,11 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Backend routes/muster.py: GET/POST /muster/absent-dispatch take ?kind=, return per-kind sent flag + dispatch_after_hm. absent_dispatch_log now keyed by (date,kind); server.py migrated the unique index date_1 -> uniq_date_kind {date,kind}.
 - Frontend AbsentDispatchPrompt.jsx takes a `kind` prop; mounted twice in Layout.jsx (camp for admin+coach, staff for admin). Per-kind dismiss + testids.
 - Verified via curl (independent flags) + 5 pytest (test_absent_dispatch_once.py rewritten for two kinds; unique-index guard green).
+
+### 13 Oct 2026 — Grid header reorg + live stat pills + legend polish
+- CalendarGridTab.jsx + GridFilterBar.jsx:
+  - Added live status stat pills to the right of the filter row: two groups (Staff, Athletes), each Present / Absent / Leave / Tour, counted from the reference-day column (today for current month, else month-end). Academy-wide counts (all rows), split by isAthleteLike. New testids: calendar-stat-pills, grid-stats-staff(-present/absent/leave/tour), grid-stats-athletes(...).
+  - Removed the "Elite" category chip (CATEGORY_FILTERS + displayedRows branch). Stale persisted `reports_calendar_category === "elite"` now folds to "rest".
+  - Header tightened: controls card p-4/mb-4 -> p-3/mb-3; filter row mb-3 -> mb-2; legend py-2.5/mb-3 -> py-2/mb-2; table maxHeight calc(100vh - 340px) -> 300px (more rows visible).
+  - Legend: "Legend" label toned down (font-medium text-slate-400 text-[11px], no uppercase); entry titles made louder (text-slate-900 font-semibold).
+- Verified: authenticated screenshot of /admin/reports shows pills (Staff 31P/0A/3L/0T, Athletes 24P/0A/1L/0T), no Elite chip, louder legend; compiles clean (pre-existing warnings only).

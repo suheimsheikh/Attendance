@@ -12,9 +12,37 @@ import { Search, Rows2, Rows } from "lucide-react";
 const CATEGORY_FILTERS = [
   { key: "all",     label: "All" },
   { key: "athlete", label: "Athletes" },
-  { key: "elite",   label: "Elite" },
   { key: "rest",    label: "Staff & Coaches" },
 ];
+
+// Compact live-snapshot pills shown to the right of the filter row.
+const STAT_PILLS = [
+  { key: "present", label: "Present", dot: "bg-emerald-500", text: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
+  { key: "absent",  label: "Absent",  dot: "bg-red-500",     text: "text-red-700",     bg: "bg-red-50 border-red-200" },
+  { key: "leave",   label: "Leave",   dot: "bg-amber-400",   text: "text-amber-700",   bg: "bg-amber-50 border-amber-200" },
+  { key: "tour",    label: "Tour",    dot: "bg-orange-400",  text: "text-orange-700",  bg: "bg-orange-50 border-orange-200" },
+];
+
+function StatGroup({ title, stats, testid }) {
+  if (!stats) return null;
+  return (
+    <div className="inline-flex items-center gap-1.5" data-testid={testid}>
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">{title}</span>
+      {STAT_PILLS.map((p) => (
+        <span
+          key={p.key}
+          className={`inline-flex items-center gap-1 h-7 pl-1.5 pr-2 rounded-full border text-[11px] font-semibold ${p.bg} ${p.text}`}
+          title={`${title} — ${p.label}`}
+          data-testid={`${testid}-${p.key}`}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${p.dot}`} />
+          <span className="tabular-nums">{stats[p.key] ?? 0}</span>
+          <span className="hidden lg:inline text-slate-500 font-medium">{p.label}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export default function GridFilterBar({
   rows,
@@ -31,16 +59,18 @@ export default function GridFilterBar({
   onNameSearch,
   rowsMode,
   onToggleRowsMode,
+  staffStats,
+  athleteStats,
+  statsDateLabel,
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-      <div className="flex flex-wrap gap-2" data-testid="calendar-category-filters">
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-2">
+      <div className="flex flex-wrap items-center gap-2" data-testid="calendar-category-filters">
         {CATEGORY_FILTERS.map((f) => {
           const active = categoryFilter === f.key;
           const count =
             f.key === "all"     ? rows.length
           : f.key === "athlete" ? rows.filter(isAthleteLike).length
-          : f.key === "elite"   ? rows.filter((r) => r.category === "elite").length
           :                       rows.filter((r) => !isAthleteLike(r)).length;
           return (
             <button
@@ -121,6 +151,15 @@ export default function GridFilterBar({
           {rowsMode === "single" ? <Rows2 size={12}/> : <Rows size={12}/>}
           {rowsMode === "single" ? "In / Out" : "Compact"}
         </button>
+      </div>
+
+      {/* Live status snapshot — Staff & Athletes, as of the reference day. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="calendar-stat-pills">
+        <StatGroup title="Staff" stats={staffStats} testid="grid-stats-staff" />
+        <StatGroup title="Athletes" stats={athleteStats} testid="grid-stats-athletes" />
+        {statsDateLabel && (
+          <span className="text-[10px] text-slate-400 hidden xl:inline">as of {statsDateLabel}</span>
+        )}
       </div>
     </div>
   );
