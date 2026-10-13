@@ -5247,3 +5247,9 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 
 ### 13 Oct 2026 — Grid: move Camps/Regattas band above the date row
 - Moved the Camps/Regattas band <tr> to be the FIRST row of the thead (above the day-numbers row). Previously it sat below the DOW row and broke the weekend vertical separators mid-header. Now the weekend inset lines run continuously through day-numbers + DOW + body (cap at the day-numbers row, which is now directly under the band).
+
+### 13 Oct 2026 — Retired redundant features (OT stubs, Category Health, Escort Photo Cleanup)
+- Deleted the two deprecated OT-approval stub endpoints: GET /api/admin/overtime and /api/admin/overtime/needs-review (routes/attendance.py). OT approval was retired Feb 2026; no live callers. Both now 404.
+- Retired Category Health: removed backend GET /api/admin/category-health (admin_tools.py), frontend page (pages/admin/CategoryHealth.jsx), route + lazy import (App.js), nav entry (navConfig.js), and the usage-registry entry (usage.py).
+- Retired Escort Photo Cleanup: removed backend endpoints GET /escort-attendance/photos/purge-candidates, DELETE /escort-attendance/{id}/photos, POST /escort-attendance/photos/purge-bulk + unused PurgeBulkIn model (escorts.py); frontend page (pages/admin/EscortPhotoCleanup.jsx), route + lazy import (App.js), nav entry + unused Camera icon import (navConfig.js), usage-registry entry (usage.py).
+- Verified: all 4 removed endpoints return 404; Feature Usage never-used dropped 5->3 (now SMS Log, Parent Notify Log, Feature Usage); frontend compiles clean; backend restarts clean.

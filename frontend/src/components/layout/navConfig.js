@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, FileBarChart2, ScanLine, UserCog, CalendarCheck2, ClipboardCheck, CalendarDays, Settings,
-  MessageSquare, Database, Sparkles, UserCheck, Camera, ShieldAlert, Gauge, ChefHat, PencilRuler, Utensils,
+  MessageSquare, Database, Sparkles, UserCheck, ShieldAlert, Gauge, ChefHat, PencilRuler, Utensils,
   CalendarRange, FileText, ScrollText, HeartPulse, BookOpen, Activity,
 } from "lucide-react";
 
@@ -85,10 +85,8 @@ export const NAV_KITCHEN = [
 // Office Settings page, not the sidebar.
 export const NAV_SYSTEM = [
   { to: "/admin/office", label: "Office Settings", icon: Settings, hint: "Working hours, geofence, training locations and app configuration" },
-  { to: "/admin/category-health", label: "Category Health", icon: ShieldAlert, hint: "Members whose category setup looks wrong" },
   { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare, hint: "Every OTP and SMS the app has sent" },
   { to: "/admin/notify-log", label: "Parent Notify Log", icon: MessageSquare, hint: "Proof of contact — every WhatsApp parent notification sent from Muster (absent / late), with who sent it and when" },
-  { to: "/admin/escort-photos", label: "Escort Photo Cleanup", icon: Camera, hint: "Review and purge old escort check-in photos" },
   { to: "/admin/audit-log", label: "Audit Log", icon: ScanLine, hint: "Who changed what, when — full history" },
   { to: "/admin/feature-usage", label: "Feature Usage", icon: Activity, superOnly: true, hint: "Which screens are used and when — spot dormant pages to retire" },
   { to: "/admin/backup", label: "Backup & Restore", icon: Database, hint: "Download backups or restore data" },

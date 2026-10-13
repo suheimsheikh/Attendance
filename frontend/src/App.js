@@ -49,14 +49,12 @@ const NotifyLog = lazy(() => import("./pages/admin/NotifyLog"));
 const WhatsNew = lazy(() => import("./pages/WhatsNew"));
 const Cards = lazy(() => import("./pages/admin/Cards"));
 const EscortCheckIn = lazy(() => import("./pages/EscortCheckIn"));
-const EscortPhotoCleanup = lazy(() => import("./pages/admin/EscortPhotoCleanup"));
 const AuditLog = lazy(() => import("./pages/admin/AuditLog"));
 const DataQuality = lazy(() => import("./pages/admin/DataQuality"));
 const FeatureUsage = lazy(() => import("./pages/admin/FeatureUsage"));
 const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
 const ChefsView = lazy(() => import("./pages/admin/ChefsView"));
 const Categories = lazy(() => import("./pages/admin/Categories"));
-const CategoryHealth = lazy(() => import("./pages/admin/CategoryHealth"));
 const Roles = lazy(() => import("./pages/admin/Roles"));
 const Masters = lazy(() => import("./pages/admin/Masters"));
 const MyCorrections = lazy(() => import("./pages/MyCorrections"));
@@ -170,7 +168,6 @@ function App() {
             <Route path="admin/dashboard" element={<RequireAdmin><Dashboard /></RequireAdmin>} />
             <Route path="admin/chefs-view" element={<RequireChefOrAdmin><ChefsView /></RequireChefOrAdmin>} />
             <Route path="admin/categories" element={<RequireAdmin><Categories /></RequireAdmin>} />
-            <Route path="admin/category-health" element={<RequireAdmin><CategoryHealth /></RequireAdmin>} />
             <Route path="admin/roles" element={<RequireAdmin><Roles /></RequireAdmin>} />
             <Route path="admin/members" element={<RequireAdmin><Members /></RequireAdmin>} />
             <Route path="admin/id-documents" element={<RequireAdmin><IdDocuments /></RequireAdmin>} />
@@ -207,7 +204,6 @@ function App() {
             <Route path="admin/calendar" element={<RequireAdmin><Calendar /></RequireAdmin>} />
             <Route path="admin/backup" element={<RequireAdmin><BackupRestore /></RequireAdmin>} />
             <Route path="admin/import" element={<RequireAdmin><ImportMembers /></RequireAdmin>} />
-            <Route path="admin/escort-photos" element={<RequireAdmin><EscortPhotoCleanup /></RequireAdmin>} />
             <Route path="admin/audit-log" element={<RequireAdmin><AuditLog /></RequireAdmin>} />
             <Route path="admin/data-quality" element={<RequireAdmin><DataQuality /></RequireAdmin>} />
             <Route path="admin/feature-usage" element={<RequireAdmin><FeatureUsage /></RequireAdmin>} />

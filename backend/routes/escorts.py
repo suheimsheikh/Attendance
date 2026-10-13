@@ -143,10 +143,6 @@ def _strip_selfies(att: dict) -> dict:
 
 
 
-class PurgeBulkIn(BaseModel):
-    att_ids: List[str]
-
-
 def make_router(db, require_admin, get_current_user, require_coach_or_admin) -> APIRouter:
     router = APIRouter(prefix="/api")
 
@@ -500,55 +496,6 @@ def make_router(db, require_admin, get_current_user, require_coach_or_admin) -> 
         today = local_date_str(office)
         row["purge_ready"] = _purge_ready(row, today)
         return row
-
-    # ════════════════════════════════════════════════════════════════
-    # PHOTO RETENTION (6c) — admin curated purge
-    # ════════════════════════════════════════════════════════════════
-    @router.get("/escort-attendance/photos/purge-candidates")
-    async def list_purge_candidates(admin: dict = Depends(require_admin)):
-        """Attendance rows that carry a selfie AND are older than the
-        retention window. Returns the strip-list form (no base64). The
-        admin curation UI walks this list and decides what to delete."""
-        office = await db.config.find_one({"id": "office"})
-        today = local_date_str(office)
-        cutoff = (date.fromisoformat(today) - timedelta(days=PHOTO_RETENTION_DAYS)).isoformat()
-        q = {"date": {"$lte": cutoff},
-             "$or": [{"check_in_selfie": {"$ne": None, "$exists": True}},
-                     {"check_out_selfie": {"$ne": None, "$exists": True}}]}
-        rows = await db.escort_attendance.find(q, {"_id": 0}).sort("date", 1).to_list(2000)
-        # Only return rows that ACTUALLY still have a selfie (the $or
-        # check on nullable fields can be loose with older Mongo drivers).
-        out = []
-        for r in rows:
-            if r.get("check_in_selfie") or r.get("check_out_selfie"):
-                out.append({**_strip_selfies(r), "purge_ready": True})
-        return out
-
-    @router.delete("/escort-attendance/{att_id}/photos")
-    async def purge_one_row(att_id: str, admin: dict = Depends(require_admin)):
-        row = await db.escort_attendance.find_one({"id": att_id}, {"_id": 0})
-        if not row:
-            raise HTTPException(status_code=404, detail="Attendance row not found")
-        await db.escort_attendance.update_one(
-            {"id": att_id},
-            {"$set": {"check_in_selfie": None, "check_out_selfie": None,
-                      "photos_purged_at": now_utc().isoformat(),
-                      "photos_purged_by": admin.get("full_name") or admin.get("email")}},
-        )
-        return {"ok": True}
-
-    @router.post("/escort-attendance/photos/purge-bulk")
-    async def purge_many(body: PurgeBulkIn, admin: dict = Depends(require_admin)):
-        if not body.att_ids:
-            return {"ok": True, "purged": 0}
-        stamp_by = admin.get("full_name") or admin.get("email")
-        res = await db.escort_attendance.update_many(
-            {"id": {"$in": body.att_ids}},
-            {"$set": {"check_in_selfie": None, "check_out_selfie": None,
-                      "photos_purged_at": now_utc().isoformat(),
-                      "photos_purged_by": stamp_by}},
-        )
-        return {"ok": True, "purged": int(res.modified_count)}
 
     @router.get("/escorts/{escort_id}/recent-visits")
     async def recent_visits(escort_id: str, limit: int = 5, user: dict = Depends(get_current_user)):

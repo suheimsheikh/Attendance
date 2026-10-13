@@ -57,10 +57,8 @@ FEATURE_REGISTRY = [
     {"key": "/admin/kitchen-health", "label": "Data Health", "group": "Kitchen"},
     # System
     {"key": "/admin/office", "label": "Office Settings", "group": "System"},
-    {"key": "/admin/category-health", "label": "Category Health", "group": "System"},
     {"key": "/admin/sms-log", "label": "SMS Log", "group": "System"},
     {"key": "/admin/notify-log", "label": "Parent Notify Log", "group": "System"},
-    {"key": "/admin/escort-photos", "label": "Escort Photo Cleanup", "group": "System"},
     {"key": "/admin/audit-log", "label": "Audit Log", "group": "System"},
     {"key": "/admin/feature-usage", "label": "Feature Usage", "group": "System"},
     {"key": "/admin/backup", "label": "Backup & Restore", "group": "System"},

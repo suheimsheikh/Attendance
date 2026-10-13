@@ -67,35 +67,4 @@ def make_router(db, get_current_user, require_admin) -> APIRouter:
         }}
 
 
-    @router.get("/admin/overtime/needs-review")
-    async def overtime_needs_review(admin: dict = Depends(require_admin)):
-        """DEPRECATED (15 Feb 2026) — OT no longer needs approval. Kept as
-        a stub returning zeros so any older cached client that still polls
-        this endpoint doesn't 404. Safe to remove once all clients are
-        known to be updated."""
-        office = await db.config.find_one({"id": "office"})
-        today = local_date_str(office)
-        yesterday = (date.fromisoformat(today) - timedelta(days=1)).isoformat()
-        comp_off_pending = await db.leaves.count_documents({
-            "type": "comp_off", "status": "pending",
-        })
-        return {"yesterday": yesterday, "yesterday_count": 0,
-                "total_pending": 0,
-                "comp_off_pending": comp_off_pending}
-
-
-    @router.get("/admin/overtime")
-    async def overtime_list(
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
-        status_filter: Optional[str] = Query(None, alias="status"),
-        admin: dict = Depends(require_admin),
-    ):
-        """DEPRECATED (15 Feb 2026) — OT no longer has an approval queue.
-        Returns an empty rows list so any older client that still polls
-        /api/admin/overtime doesn't 404. New clients should read OT
-        minutes directly off the attendance rows (see the OT ledger /
-        The Grid's OT column)."""
-        return {"date_from": date_from, "date_to": date_to, "rows": []}
-
     return router
