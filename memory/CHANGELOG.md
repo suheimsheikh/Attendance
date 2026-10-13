@@ -5214,3 +5214,9 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Removed the CSV export button from the Grid controls (PDF kept).
 - Removed the "All" category chip (GridFilterBar CATEGORY_FILTERS); stale persisted "all"/"elite" prefs fold to "rest".
 - Verified via authenticated screenshot: one-line tabs+controls, no CSV, no All chip, athlete Pay column all 0, stat pills intact.
+
+### 13 Oct 2026 — Grid: weekend separators, athlete payroll cols hidden, chip order
+- Weekend (Sat/Sun) columns get a bold black left/right separator (border-l-2/border-r-2 !border-slate-900) in both header rows and in GridCell/GridTimeCell body cells; top/bottom stay light so it reads as vertical column dividers.
+- Athletes view hides the payroll columns Pay / DAR / LP (they don't apply to unpaid sailors). CalendarGridTab: hidePayroll = categoryFilter==="athlete"; header ths + GridRowTotals conditionally omit Pay/DAR/LP and shift P (right-244->210) and AB (210->176) with P taking the thick left border; skeleton/empty colSpan uses totalsColCount (7 vs 10). Verified: athletes 0 Pay cells, staff 49.
+- GridFilterBar CATEGORY_FILTERS reordered: Staff & Coaches first, then Athletes (default already "rest").
+- Attendance tab parity: no change — /reports/payroll (compute_hours_report) has no payable/Pay column (only Present/Leave/Tour/Off/Late/Absent/hours/OT/comp-off), so it already agrees with the Grid's athlete-unpaid rule.

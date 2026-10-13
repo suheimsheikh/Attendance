@@ -22,6 +22,7 @@ export default function GridRowTotals({
   memberId,
   rowBg,
   rowSpan = 1,
+  hidePayroll = false,
   onOpenAttn,
   onOpenOt,
   onOpenDar,
@@ -32,41 +33,47 @@ export default function GridRowTotals({
   const base = "z-20 group-hover:bg-sky-50 text-center font-bold tabular-nums text-[11px] border-b border-slate-100 border-l border-slate-200 cursor-pointer select-none";
   return (
     <>
+      {!hidePayroll && (
+        <td
+          rowSpan={rowSpan}
+          className={`static md:sticky md:right-[312px] ${base} !border-l-2 !border-slate-300 text-sky-800 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+          data-testid={`cal-total-pay-${memberId}`}
+          title={`Payable days (all days except AB, LP, before joining / after leaving) · ${attnTitle}`}
+          onDoubleClick={onOpenAttn}
+        >{t.payable ?? ""}</td>
+      )}
+      {!hidePayroll && (
+        <td
+          rowSpan={rowSpan}
+          className={`static md:sticky md:right-[278px] ${base} text-rose-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+          data-testid={`cal-total-dar-${memberId}`}
+          title={t.dar_missed ? `${t.dar_missed} missed DAR${t.dar_missed === 1 ? "" : "s"} · Double-click to open the DAR report` : "No missed DARs"}
+          onDoubleClick={onOpenDar}
+        >{t.dar_missed ? `✗${t.dar_missed}` : ""}</td>
+      )}
       <td
         rowSpan={rowSpan}
-        className={`static md:sticky md:right-[312px] ${base} !border-l-2 !border-slate-300 text-sky-800 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
-        data-testid={`cal-total-pay-${memberId}`}
-        title={`Payable days (all days except AB, LP, before joining / after leaving) · ${attnTitle}`}
-        onDoubleClick={onOpenAttn}
-      >{t.payable ?? ""}</td>
-      <td
-        rowSpan={rowSpan}
-        className={`static md:sticky md:right-[278px] ${base} text-rose-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
-        data-testid={`cal-total-dar-${memberId}`}
-        title={t.dar_missed ? `${t.dar_missed} missed DAR${t.dar_missed === 1 ? "" : "s"} · Double-click to open the DAR report` : "No missed DARs"}
-        onDoubleClick={onOpenDar}
-      >{t.dar_missed ? `✗${t.dar_missed}` : ""}</td>
-      <td
-        rowSpan={rowSpan}
-        className={`static md:sticky md:right-[244px] ${base} text-emerald-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        className={`static ${hidePayroll ? "md:sticky md:right-[210px] !border-l-2 !border-slate-300" : "md:sticky md:right-[244px]"} ${base} text-emerald-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-p-${memberId}`}
         title={`Present · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
       >{t.present || ""}</td>
       <td
         rowSpan={rowSpan}
-        className={`static md:sticky md:right-[210px] ${base} text-red-600 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+        className={`static ${hidePayroll ? "md:sticky md:right-[176px]" : "md:sticky md:right-[210px]"} ${base} text-red-600 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
         data-testid={`cal-total-ab-${memberId}`}
         title={`Absent · ${attnTitle}`}
         onDoubleClick={onOpenAttn}
       >{t.absent || ""}</td>
-      <td
-        rowSpan={rowSpan}
-        className={`static md:sticky md:right-[176px] ${base} text-pink-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
-        data-testid={`cal-total-lop-${memberId}`}
-        title={t.lop ? `${t.lop} loss-of-pay day${t.lop === 1 ? "" : "s"} (leave beyond paid balance) · ${attnTitle}` : `Loss of pay · ${attnTitle}`}
-        onDoubleClick={onOpenAttn}
-      >{t.lop || ""}</td>
+      {!hidePayroll && (
+        <td
+          rowSpan={rowSpan}
+          className={`static md:sticky md:right-[176px] ${base} text-pink-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}
+          data-testid={`cal-total-lop-${memberId}`}
+          title={t.lop ? `${t.lop} loss-of-pay day${t.lop === 1 ? "" : "s"} (leave beyond paid balance) · ${attnTitle}` : `Loss of pay · ${attnTitle}`}
+          onDoubleClick={onOpenAttn}
+        >{t.lop || ""}</td>
+      )}
       <td
         rowSpan={rowSpan}
         className={`static md:sticky md:right-[142px] ${base} text-amber-700 ${rowBg} w-[34px] min-w-[34px] max-w-[34px]`}

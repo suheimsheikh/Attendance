@@ -34,6 +34,10 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
   // value back into "rest" so a stale pref doesn't leave the view in limbo.
   const _cat = uiPrefs.reports_calendar_category;
   const categoryFilter = (_cat === "elite" || _cat === "all") ? "rest" : (_cat || "rest");
+  // Athletes aren't paid, so the Pay / DAR / LOP payroll columns don't
+  // apply — hide them in the Athletes view (user request, Oct 2026).
+  const hidePayroll = categoryFilter === "athlete";
+  const totalsColCount = hidePayroll ? 7 : 10;
   const setCategoryFilter = useCallback((v) => {
     patchUiPrefs({ reports_calendar_category: v });
   }, [patchUiPrefs]);
@@ -307,7 +311,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso}
-                    className={`text-center h-6 w-6 border-b border-r border-slate-200 tabular-nums font-bold ${h.isWeekend ? "bg-slate-100 text-slate-400" : "bg-slate-50 text-slate-700"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9,inset_0_2px_0_#0ea5e9]" : ""}`}
+                    className={`text-center h-6 w-6 border-b border-r border-slate-200 tabular-nums font-bold ${h.isWeekend ? "bg-slate-100 text-slate-400 border-l-2 border-r-2 !border-l-slate-900 !border-r-slate-900" : "bg-slate-50 text-slate-700"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9,inset_0_2px_0_#0ea5e9]" : ""}`}
                     title={`${h.dow} · ${h.iso}${h.isToday ? " · Today" : ""}`}
                     data-testid={`cal-header-${h.iso}`}
                   >
@@ -316,12 +320,13 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 ))}
                 {/* Sticky-right totals headers. Layout (rightmost-first):
                     LT (Late) → EO (Early Out) → OT (mins) → TR → LV → LP → AB → P → DAR → Pay.
-                    Offsets: LT=0, EO=34, OT=68, TR=108, LV=142, LP=176, AB=210, P=244, DAR=278, Pay=312. */}
-                <th className="static md:sticky md:right-[312px] z-40 bg-sky-100 text-sky-800 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l-2 border-slate-300 text-[10px] font-bold" title="Payable days: all days except AB, LP, before joining / after leaving (future days not counted)" data-testid="cal-header-pay">Pay</th>
-                <th className="static md:sticky md:right-[278px] z-40 bg-rose-100 text-rose-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Missed Daily Activity Reports (worked days with no DAR filed)">DAR</th>
-                <th className="static md:sticky md:right-[244px] z-40 bg-emerald-100 text-emerald-800 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Present days (incl. HD + Late)">P</th>
-                <th className="static md:sticky md:right-[210px] z-40 bg-red-100 text-red-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Absent days">AB</th>
-                <th className="static md:sticky md:right-[176px] z-40 bg-pink-100 text-pink-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Loss-of-pay days (leave days beyond paid balance)">LP</th>
+                    Offsets: LT=0, EO=34, OT=68, TR=108, LV=142, LP=176, AB=210, P=244, DAR=278, Pay=312.
+                    Athletes view hides Pay/DAR/LP → P & AB shift right by one slot. */}
+                {!hidePayroll && <th className="static md:sticky md:right-[312px] z-40 bg-sky-100 text-sky-800 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l-2 border-slate-300 text-[10px] font-bold" title="Payable days: all days except AB, LP, before joining / after leaving (future days not counted)" data-testid="cal-header-pay">Pay</th>}
+                {!hidePayroll && <th className="static md:sticky md:right-[278px] z-40 bg-rose-100 text-rose-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Missed Daily Activity Reports (worked days with no DAR filed)">DAR</th>}
+                <th className={`static z-40 bg-emerald-100 text-emerald-800 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b text-[10px] font-bold ${hidePayroll ? "md:sticky md:right-[210px] border-l-2 border-slate-300" : "md:sticky md:right-[244px] border-l border-slate-200"}`} title="Present days (incl. HD + Late)">P</th>
+                <th className={`static z-40 bg-red-100 text-red-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold ${hidePayroll ? "md:sticky md:right-[176px]" : "md:sticky md:right-[210px]"}`} title="Absent days">AB</th>
+                {!hidePayroll && <th className="static md:sticky md:right-[176px] z-40 bg-pink-100 text-pink-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Loss-of-pay days (leave days beyond paid balance)">LP</th>}
                 <th className="static md:sticky md:right-[142px] z-40 bg-amber-100 text-amber-700 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Leave + Comp-off days">LV</th>
                 <th className="static md:sticky md:right-[108px] z-40 bg-orange-200 text-orange-800 h-6 w-[34px] min-w-[34px] max-w-[34px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Tour days">TR</th>
                 <th className="static md:sticky md:right-[68px] z-40 bg-violet-100 text-violet-800 h-6 w-[40px] min-w-[40px] max-w-[40px] text-center border-b border-l border-slate-200 text-[10px] font-bold" title="Overtime hours accumulated (early arrival + late departure)">OT h</th>
@@ -334,17 +339,17 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso + "-dow"}
-                    className={`text-center h-4 border-b border-r border-slate-200 text-[9px] uppercase font-semibold ${h.isWeekend ? "bg-slate-100 text-slate-400" : "bg-slate-50 text-slate-500"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9]" : ""}`}
+                    className={`text-center h-4 border-b border-r border-slate-200 text-[9px] uppercase font-semibold ${h.isWeekend ? "bg-slate-100 text-slate-400 border-l-2 border-r-2 !border-l-slate-900 !border-r-slate-900" : "bg-slate-50 text-slate-500"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9]" : ""}`}
                   >
                     {h.dow.slice(0, 2)}
                   </th>
                 ))}
                 {/* Sticky-right total sub-labels */}
-                <th className="static md:sticky md:right-[312px] z-40 bg-sky-50 h-4 text-[8px] uppercase font-semibold text-sky-700 border-b border-l-2 border-slate-300 text-center">Days</th>
-                <th className="static md:sticky md:right-[278px] z-40 bg-rose-50 h-4 text-[8px] uppercase font-semibold text-rose-700 border-b border-l border-slate-200 text-center">Miss</th>
-                <th className="static md:sticky md:right-[244px] z-40 bg-emerald-50 h-4 text-[8px] uppercase font-semibold text-emerald-700 border-b border-l border-slate-200 text-center">Total</th>
-                <th className="static md:sticky md:right-[210px] z-40 bg-red-50 h-4 text-[8px] uppercase font-semibold text-red-600 border-b border-l border-slate-200 text-center">Total</th>
-                <th className="static md:sticky md:right-[176px] z-40 bg-pink-50 h-4 text-[8px] uppercase font-semibold text-pink-700 border-b border-l border-slate-200 text-center">Days</th>
+                {!hidePayroll && <th className="static md:sticky md:right-[312px] z-40 bg-sky-50 h-4 text-[8px] uppercase font-semibold text-sky-700 border-b border-l-2 border-slate-300 text-center">Days</th>}
+                {!hidePayroll && <th className="static md:sticky md:right-[278px] z-40 bg-rose-50 h-4 text-[8px] uppercase font-semibold text-rose-700 border-b border-l border-slate-200 text-center">Miss</th>}
+                <th className={`static z-40 bg-emerald-50 h-4 text-[8px] uppercase font-semibold text-emerald-700 border-b text-center ${hidePayroll ? "md:sticky md:right-[210px] border-l-2 border-slate-300" : "md:sticky md:right-[244px] border-l border-slate-200"}`}>Total</th>
+                <th className={`static z-40 bg-red-50 h-4 text-[8px] uppercase font-semibold text-red-600 border-b border-l border-slate-200 text-center ${hidePayroll ? "md:sticky md:right-[176px]" : "md:sticky md:right-[210px]"}`}>Total</th>
+                {!hidePayroll && <th className="static md:sticky md:right-[176px] z-40 bg-pink-50 h-4 text-[8px] uppercase font-semibold text-pink-700 border-b border-l border-slate-200 text-center">Days</th>}
                 <th className="static md:sticky md:right-[142px] z-40 bg-amber-50 h-4 text-[8px] uppercase font-semibold text-amber-700 border-b border-l border-slate-200 text-center">Total</th>
                 <th className="static md:sticky md:right-[108px] z-40 bg-orange-100 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-l border-slate-200 text-center">Total</th>
                 <th className="static md:sticky md:right-[68px] z-40 bg-violet-50 h-4 text-[8px] uppercase font-semibold text-violet-700 border-b border-l border-slate-200 text-center">Sum</th>
@@ -362,14 +367,14 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 // 20 Feb 2026.)
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={`skeleton-${i}`} className={i % 2 === 1 ? "bg-slate-100/40" : "bg-white"} data-testid="calendar-skeleton-row">
-                    <td className="py-1 px-2" colSpan={2 + days.length + 10}>
+                    <td className="py-1 px-2" colSpan={2 + days.length + totalsColCount}>
                       <div className="h-4 rounded bg-slate-200/70 animate-pulse w-full" />
                     </td>
                   </tr>
                 ))
               )}
               {!loading && displayedRows.length === 0 && (
-                <tr><td colSpan={2 + days.length + 10} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
+                <tr><td colSpan={2 + days.length + totalsColCount} className="py-8 text-center text-slate-400" data-testid="calendar-empty">No members match the current filters.</td></tr>
               )}
               {displayedRows.map((r, i) => {
                 // Opaque zebra bg (NOT the translucent slate-100/40) — the
@@ -426,6 +431,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                     memberId={r.member_id}
                     rowBg={rowBg}
                     rowSpan={totalsRowSpan}
+                    hidePayroll={hidePayroll}
                     onOpenAttn={openAttn}
                     onOpenOt={openOt}
                     onOpenDar={openDar}

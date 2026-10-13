@@ -10,8 +10,8 @@ import React from "react";
 import { Search, Rows2, Rows } from "lucide-react";
 
 const CATEGORY_FILTERS = [
-  { key: "athlete", label: "Athletes" },
   { key: "rest",    label: "Staff & Coaches" },
+  { key: "athlete", label: "Athletes" },
 ];
 
 // Compact live-snapshot pills shown to the right of the filter row.
