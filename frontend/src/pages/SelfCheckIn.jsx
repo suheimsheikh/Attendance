@@ -362,6 +362,9 @@ export default function SelfCheckIn() {
     return null;
   }, [user, status, office, doneToday]);
 
+  // Late arrival → reason is mandatory before a self check-in (user rule, Jun 2026).
+  const lateBlocked = !!lateInfo && !status?.checked_in && !lateReason.trim();
+
   // Early-out detection — mirrors the backend's 15-minute grace window
   // in /me/profile-details. Fires only when the member is CHECKED IN
   // (i.e. about to check out) and the current local minute is more than
@@ -490,6 +493,11 @@ export default function SelfCheckIn() {
         refresh();
         return;
       }
+      if (/LATE_REASON_REQUIRED/.test(err?.message || "")) {
+        toast.error("Please tell us why you're late before checking in.");
+        refresh();
+        return;
+      }
       toast.error(err?.message || "Failed");
     } finally {
       setWorking(false);
@@ -544,6 +552,7 @@ export default function SelfCheckIn() {
 
   const handleToggle = () => {
     if (status?.checked_in) { performCheckout(); return; }
+    if (lateBlocked) { toast.error("Please tell us why you're late before checking in."); return; }
     cancelAuto();            // a manual tap supersedes any running countdown
     beginCheckin({ auto: false });
   };
@@ -853,7 +862,7 @@ export default function SelfCheckIn() {
             <ReasonPrompt
               variant="amber"
               headline={lateInfo.label}
-              labelText="Reason for being late (optional)"
+              labelText="Reason for being late (required)"
               placeholder="e.g. Traffic, medical appointment, prior permission…"
               footnote="Leaves an audit note on today's attendance — your coach/admin sees it on the muster and in the day's ledger."
               value={lateReason}
@@ -887,9 +896,9 @@ export default function SelfCheckIn() {
           )}
           <button
             data-testid="self-checkin-button"
-            disabled={working || darBlocked}
+            disabled={working || darBlocked || lateBlocked}
             onClick={handleToggle}
-            title={darBlocked ? `Enter your DAR (min ${darMin} characters) to check out` : undefined}
+            title={lateBlocked ? "Enter a reason for being late to check in" : darBlocked ? `Enter your DAR (min ${darMin} characters) to check out` : undefined}
             className={`mx-auto ${doneToday ? "hidden" : "inline-flex"} flex-col items-center justify-center gap-2 rounded-3xl shadow-xl transition active:scale-[0.97] disabled:opacity-60 w-44 h-44 ${
               status?.checked_in
                 ? "bg-gradient-to-br from-rose-500 to-rose-700 text-white"

@@ -523,6 +523,11 @@ def make_router(db, get_current_user, require_admin, open_session_for, _late_day
             if by is None and not (check_in_photo and (reason or "").strip()):
                 raise HTTPException(status_code=400, detail=f"OFFSITE_PROOF_REQUIRED:{int(dist)}")
         late, late_minutes = compute_late(office, target, ts, camp=await _active_camp_for(target, ts, office))
+        # Late arrival on a SELF check-in must carry a reason (user rule,
+        # Jun 2026). Proxy paths (admin/muster, by=<admin id>) are exempt —
+        # an admin marking someone present can't be expected to know why.
+        if late and by is None and not (late_reason or "").strip():
+            raise HTTPException(status_code=400, detail=f"LATE_REASON_REQUIRED:{int(late_minutes or 0)}")
         early_min, work_start_hm = compute_overtime_in(office, target, ts)
         # OFF-SITE only: look up a short area name from the GPS fix so the
         # WhatsApp check-in message can say roughly WHERE they checked in from.
