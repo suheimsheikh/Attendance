@@ -5319,3 +5319,11 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - PROBLEM SURFACED: 57 rows had been capped by an earlier PRE-hardening Fix-all run — their check_out was capped but stored `hours` stayed inflated (16.0-17.5h) with no saved original; the detector can't re-catch them (window already <=16h). 2 were hourly-wager members (RAVALI PARANDI, VAISHNAVI) => payroll was reading inflated hours and overpaying.
 - Cleanup: recomputed hours from the actual capped window for 53 stale legacy auto_capped rows. Final sweep: 234 auto_capped rows, 0 stale hours remaining; hourly-wager rows now 16.0=window (RAVALI 18.11->16.0, VAISHNAVI 17.47->16.0).
 - Observation: 45 of 48 affected members are elite/athlete (not payroll-tracked) with same-day 16-18.8h spans (live-in academy) — capping affects only their displayed worked-hours, not pay. Only ~3 hourly-wager staff rows had any pay impact (now corrected).
+
+### 13 Oct 2026 — Data Quality sort pill
+- DataQuality.jsx: added a Sort pill group (data-testid dq-sort-pills) with 3 modes:
+  - Newest (default): category groups ordered by most-recent dated issue (prior behaviour).
+  - Priority: groups ordered by highest severity; rows severity-first then date.
+  - By issue: regroups by finding CODE (one section per distinct check, e.g. "Checkout before checkin"), ordered by severity then cluster size — "the fix list in order of issue".
+  - grouped useMemo now keys by code (issue mode) or category (others); prettyCode() builds friendly headings; group React key switched to unique `key`.
+- Compiles clean (1 pre-existing warning). Pills verified rendering in preview.

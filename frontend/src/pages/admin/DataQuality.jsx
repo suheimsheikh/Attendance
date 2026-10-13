@@ -55,6 +55,19 @@ function compareFindings(a, b) {
   return (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9);
 }
 
+// Turn a machine code (e.g. "session.checkout_before_checkin") into a short
+// human group heading for the "By issue" sort ("Checkout before checkin").
+function prettyCode(code) {
+  const base = String(code || "").split(".").pop().replace(/_/g, " ");
+  return base ? base.charAt(0).toUpperCase() + base.slice(1) : "Other";
+}
+
+const SORT_PILLS = [
+  { key: "recent", label: "Newest" },
+  { key: "priority", label: "Priority" },
+  { key: "issue", label: "By issue" },
+];
+
 function SeverityBadge({ severity }) {
   const s = SEVERITY_STYLES[severity] || SEVERITY_STYLES.info;
   return (
@@ -408,6 +421,7 @@ export default function DataQuality() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [severityFilter, setSeverityFilter] = useState("all");
+  const [sortMode, setSortMode] = useState("recent");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -430,25 +444,38 @@ export default function DataQuality() {
   }, [data, severityFilter]);
 
   const grouped = useMemo(() => {
+    // "By issue" clusters each distinct check (code) into its own section;
+    // the others group by the friendlier category. Within a section rows are
+    // ordered newest-first, except in Priority mode where severity leads.
+    const byCode = sortMode === "issue";
+    const keyFn = byCode ? (f) => f.code : (f) => (f.category || "Other");
+    const itemCmp = sortMode === "priority"
+      ? (a, b) => ((SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9)) || compareFindings(a, b)
+      : compareFindings;
     const g = {};
     for (const f of filtered) {
-      const cat = f.category || "Other";
-      if (!g[cat]) g[cat] = [];
-      g[cat].push(f);
+      const k = keyFn(f);
+      if (!g[k]) g[k] = [];
+      g[k].push(f);
     }
-    // Sort each category's rows latest-date-first + severity, then order the
-    // category groups so the one holding the most recent issue sits on top.
-    const entries = Object.entries(g).map(([cat, items]) => {
-      const sorted = [...items].sort(compareFindings);
+    const entries = Object.entries(g).map(([key, items]) => {
+      const sorted = [...items].sort(itemCmp);
       const maxDate = sorted.reduce((mx, f) => {
         const d = findingDate(f);
         return d > mx ? d : mx;
       }, "");
-      return { cat, items: sorted, maxDate };
+      const sevRank = Math.min(...sorted.map((f) => SEV_RANK[f.severity] ?? 9));
+      return { key, cat: byCode ? prettyCode(key) : key, items: sorted, maxDate, sevRank };
     });
-    entries.sort((a, b) => b.maxDate.localeCompare(a.maxDate));
+    if (sortMode === "priority") {
+      entries.sort((a, b) => a.sevRank - b.sevRank || b.maxDate.localeCompare(a.maxDate));
+    } else if (sortMode === "issue") {
+      entries.sort((a, b) => a.sevRank - b.sevRank || b.items.length - a.items.length || a.cat.localeCompare(b.cat));
+    } else {
+      entries.sort((a, b) => b.maxDate.localeCompare(a.maxDate));
+    }
     return entries;
-  }, [filtered]);
+  }, [filtered, sortMode]);
 
   return (
     <div className="p-4 md:p-8">
@@ -518,6 +545,26 @@ export default function DataQuality() {
             Generated {new Date(data.generated_at).toLocaleString()}
           </span>
         )}
+        {data && data.total_findings > 0 && (
+          <div className="ml-auto flex items-center gap-1.5" data-testid="dq-sort-pills">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mr-0.5">Sort</span>
+            {SORT_PILLS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setSortMode(p.key)}
+                data-testid={`dq-sort-${p.key}`}
+                className={`px-3 h-7 rounded-full text-[11px] font-semibold border transition ${
+                  sortMode === p.key
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Findings, grouped by category */}
@@ -531,8 +578,8 @@ export default function DataQuality() {
         </div>
       )}
 
-      {grouped.map(({ cat: category, items }) => (
-        <div key={category} className="mb-6" data-testid={`dq-group-${category.toLowerCase().replace(/\s+/g, "-")}`}>
+      {grouped.map(({ key, cat: category, items }) => (
+        <div key={key} className="mb-6" data-testid={`dq-group-${category.toLowerCase().replace(/\s+/g, "-")}`}>
           <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">
             {category} <span className="text-slate-400">({items.length})</span>
           </h2>
