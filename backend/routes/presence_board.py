@@ -426,7 +426,7 @@ def make_router(db, get_current_user):
                             off_reason = "Left"
                         elif target_is_holiday:
                             off_reason = "Holiday"
-                        elif ("mon", "tue", "wed", "thu", "fri", "sat", "sun")[target_date.weekday()] in {
+                        elif ("mon", "tue", "wed", "thu", "fri", "sat", "sun")[today_d.weekday()] in {
                                 k for k, v in (u.get("dow_hours") or {}).items()
                                 if isinstance(v, dict) and v.get("off")}:
                             off_reason = "Not scheduled"

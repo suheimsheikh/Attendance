@@ -75,7 +75,7 @@ export function DowHoursEditor({ value, onChange, testIdPrefix = "dow", allowOff
                   className="h-3.5 w-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
                 />
                 <Ban size={12} className={isOff ? "" : "opacity-50"} />
-                <span className="hidden sm:inline">Off</span>
+                <span className="hidden sm:inline">Not expected</span>
               </label>
             )}
             <button

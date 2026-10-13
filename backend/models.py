@@ -7,7 +7,7 @@ recreate import cycles when more route files are carved out of server.py.
 """
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 from pydantic import BaseModel
 
 
@@ -41,7 +41,7 @@ class UserPublic(BaseModel):
     work_end: Optional[str] = None
     # Per-day-of-week work-timing override (employees only). Keyed mon..sun,
     # e.g. { "sat": {"start":"08:00","end":"12:00"} }. Added Jun 2026.
-    dow_hours: Optional[Dict[str, Dict[str, str]]] = None
+    dow_hours: Optional[Dict[str, Dict[str, Any]]] = None
     photo: Optional[str] = None
     photo_captured_at: Optional[str] = None
     institution: Optional[str] = None

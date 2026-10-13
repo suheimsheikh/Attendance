@@ -5257,3 +5257,11 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 ### 13 Oct 2026 — Ponytail review of the retirements
 - Removed dead imports left by the feature retirements: routes/attendance.py (date, timedelta, Optional, Query) and routes/escorts.py (timedelta); updated the stale attendance.py module docstring ("deprecated OT stubs" removed).
 - Verified by testing_agent (iteration_118): all 4 retired endpoints 404; attendance/status, calendar-grid, usage/report, escort-attendance list all 200; nav links gone, no crash; Grid renders. No critical/minor regressions (1 flaky cold-start login timeout only). Added guard test tests/test_regression_retired_features.py.
+
+### 13 Oct 2026 — "Not expected" weekdays for part-timers (NE)
+- Members who only come on certain weekdays: added a per-weekday "Not expected" checkbox in the Member master's DOW Timings editor (DowHoursEditor allowOff prop; MemberForm passes it, Office does not). Ticking stores dow_hours[dow] = {off: true}.
+- Grid: new neutral cell code "NE" (grey, "Not expected"). routes/reports/grid.py _classify returns NE for staff on their off-DOWs; it's NOT in PAYABLE_CODES and not counted as Absent. Attendance and approved leave still win (they show P/LT/leave). NE added to meta-skip + CELL_STYLE + legend.
+- Presence: not-expected weekday renders as not_due "Not scheduled" (presence_board.py); _consecutive_absent_days skips these days so no false absence streaks.
+- Comp-off: unchanged — not-expected days don't earn comp-off (only the single weekly_off does).
+- Model: members.py MemberCreate/Update dow_hours widened to Dict[str, Dict[str, Any]]; models.py UserPublic.dow_hours widened to Dict[str, Any] (response-model fix).
+- Verified by testing_agent iteration_119 (7/7 backend, frontend verified). Testing agent fixed 2 bugs: UserPublic.dow_hours schema (500 on member save) and a presence_board weekday() call on a str (500 on /api/presence) -> uses today_d.weekday(). Guard test: tests/test_not_expected_dow_iter119.py.
