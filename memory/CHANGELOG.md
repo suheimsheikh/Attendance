@@ -5273,3 +5273,15 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Dates everywhere on the page render dd/mm/yyyy via a frontend prettyDates() regex over finding messages.
 - Backend (routes/data_quality.py): added _CODE_DOC map -> each finding now carries `what` (why it matters) and `rectify` (what the fix does); attached in the same post-process loop as `fix`. Also resolve attendance session member names via uid2name so Who/record shows names, not raw user_id UUIDs.
 - Verified: curl /api/admin/data-quality => 373 findings, all carry what/rectify, names resolved; screenshot confirms new columns + dd/mm/yyyy. No testing-agent run (display-only change).
+
+### 13 Oct 2026 — Data Quality sort + name resolution, and admin menu reorg
+- Data Quality: findings now sort latest-date-first then severity (frontend compareFindings/findingDate; groups ordered by their most-recent dated issue). Resolved ALL remaining "(unknown)"/UUID names in Who/record — attendance (zero_dur, too_long_16h, duplicate_open) and leave findings (end_before_start, late_coming, half_day, missing_reason, overlapping, lop_exceeds_span) now fall back to uid2name. Verified: 0 unknown across 373 findings.
+- Menu reorg (admin sidebar only; non-admin/coach/chef/escort nav untouched): 5 top-level groups -> 4.
+  - Me = personal only + Escorts kiosk (dropped Attendance Rules, Suggestions, Task Manager from admin Me).
+  - Attendance = pure ops+reports (Muster, Presence, Parent Notifications, Dashboard, Approvals, Calendar, The Grid, DAR, Leave Balances). Removed Data Quality + Masters from here.
+  - Kitchen = unchanged.
+  - NEW "Setup & Admin" (NAV_SETUP) absorbs all config/diagnostics: Masters, Office Settings, Attendance Rules, Education, Data Quality, Logs, Feature Usage (super only), Backup, Task Manager, Suggestions.
+  - Education no longer a standalone top-level item; folded into Setup & Admin.
+  - NEW combined Logs page (/admin/logs, pages/admin/Logs.jsx) with tabs: Audit Log / SMS Log / Parent Notify Log (embeds existing components). Old routes (/admin/sms-log, /admin/notify-log, /admin/audit-log) still work.
+- Files: frontend/src/components/layout/navConfig.js (NAV_ATTENDANCE_LIVE trimmed+reordered, NAV_SYSTEM->NAV_SETUP, new icons Users/GraduationCap/ListTodo), components/Layout.jsx (admin memberNav trim, Attendance count, new Setup & Admin section, removed standalone Masters/Education NavItems + unused Users/GraduationCap imports), App.js (Logs lazy route), pages/admin/Logs.jsx (new), pages/admin/DataQuality.jsx (sort helpers), backend/routes/data_quality.py (uid2name earlier + name fallbacks).
+- Verified by screenshots: admin sidebar renders 4 groups, Logs tabs switch, Data Quality names+dates+sort correct. Frontend compiles (1 pre-existing deps warning). No testing-agent run (nav-only change; non-admin paths logically unchanged).

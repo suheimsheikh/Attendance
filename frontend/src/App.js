@@ -50,6 +50,7 @@ const WhatsNew = lazy(() => import("./pages/WhatsNew"));
 const Cards = lazy(() => import("./pages/admin/Cards"));
 const EscortCheckIn = lazy(() => import("./pages/EscortCheckIn"));
 const AuditLog = lazy(() => import("./pages/admin/AuditLog"));
+const Logs = lazy(() => import("./pages/admin/Logs"));
 const DataQuality = lazy(() => import("./pages/admin/DataQuality"));
 const FeatureUsage = lazy(() => import("./pages/admin/FeatureUsage"));
 const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
@@ -205,6 +206,7 @@ function App() {
             <Route path="admin/backup" element={<RequireAdmin><BackupRestore /></RequireAdmin>} />
             <Route path="admin/import" element={<RequireAdmin><ImportMembers /></RequireAdmin>} />
             <Route path="admin/audit-log" element={<RequireAdmin><AuditLog /></RequireAdmin>} />
+            <Route path="admin/logs" element={<RequireAdmin><Logs /></RequireAdmin>} />
             <Route path="admin/data-quality" element={<RequireAdmin><DataQuality /></RequireAdmin>} />
             <Route path="admin/feature-usage" element={<RequireAdmin><FeatureUsage /></RequireAdmin>} />
           </Route>

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import {
-  Users, ClipboardCheck, Settings, ChefHat, ListTodo, LogOut, Menu, Sparkles, PanelLeftClose, GraduationCap,
+  ClipboardCheck, Settings, ChefHat, ListTodo, LogOut, Menu, Sparkles, PanelLeftClose,
 } from "lucide-react";
 import RulesGate from "./RulesGate";
 import Avatar from "./Avatar";
@@ -24,7 +24,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAppEvents } from "../hooks/useAppEvents";
 import CorrectionsWaitingBanner from "./CorrectionsWaitingBanner";
 import {
-  PREFETCH_MAP, NAV_MEMBER, NAV_COACH_ATTENDANCE, NAV_COACH_KITCHEN, NAV_ATTENDANCE_LIVE, NAV_KITCHEN, NAV_SYSTEM,
+  PREFETCH_MAP, NAV_MEMBER, NAV_COACH_ATTENDANCE, NAV_COACH_KITCHEN, NAV_ATTENDANCE_LIVE, NAV_KITCHEN, NAV_SETUP,
 } from "./layout/navConfig";
 import { SystemGroup, NavItem } from "./layout/NavParts";
 
@@ -119,9 +119,13 @@ export default function Layout() {
         ...NAV_MEMBER.filter((n) => n.to === "/escort-checkin"),
         { to: "/muster", label: "Muster Roll", icon: ClipboardCheck },
       ]
-    : (isAdmin || user?.category === "executive" || user?.category === "coach")
-      ? [...NAV_MEMBER.slice(0, -1), { to: "/tasks", label: "Task Manager", icon: ListTodo, badgeKey: "tasks_today", hint: "Team to-dos with deadlines and your daily / weekly / monthly checklist" }, NAV_MEMBER[NAV_MEMBER.length - 1]]
-      : NAV_MEMBER;
+    : isAdmin
+      // Admin "Me" = personal screens only (+ Escorts kiosk). Attendance
+      // Rules, Suggestions and Task Manager now live under Setup & Admin.
+      ? NAV_MEMBER.filter((n) => n.to !== "/rules" && n.to !== "/suggestions")
+      : (user?.category === "executive" || user?.category === "coach")
+        ? [...NAV_MEMBER.slice(0, -1), { to: "/tasks", label: "Task Manager", icon: ListTodo, badgeKey: "tasks_today", hint: "Team to-dos with deadlines and your daily / weekly / monthly checklist" }, NAV_MEMBER[NAV_MEMBER.length - 1]]
+        : NAV_MEMBER;
   const tasksTodayQuery = useApiQuery(
     "/tasks/today", undefined,
     { enabled: !isEscort && (isAdmin || user?.category === "executive" || user?.category === "coach"), staleTime: 30_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
@@ -203,7 +207,7 @@ export default function Layout() {
         {!isEscort && isAdmin && (
           <>
             <SystemGroup label="Attendance" tone="cyan" icon={ClipboardCheck}
-                         count={NAV_ATTENDANCE_LIVE.length + 1}
+                         count={NAV_ATTENDANCE_LIVE.length}
                          open={isOpen("attendance")} onToggle={() => toggleSection("attendance")}>
               {NAV_ATTENDANCE_LIVE.map((item) => {
                 // Synthetic key `approvals_page` sums only the queues that the
@@ -232,10 +236,6 @@ export default function Layout() {
                   />
                 );
               })}
-              {/* All master-data screens now live under one Masters
-                  page (tabbed). Single entry keeps the sidebar tidy. */}
-              <NavItem to="/admin/masters" label="Masters" icon={Users} onClick={() => setOpen(false)}
-                       hint="Members, Institutions, Fleets, Categories and Roles — all in one place" />
             </SystemGroup>
 
             <SystemGroup label="Kitchen" tone="amber" icon={ChefHat}
@@ -246,14 +246,16 @@ export default function Layout() {
               ))}
             </SystemGroup>
 
-            <NavItem to="/admin/education" label="Education" icon={GraduationCap} onClick={() => setOpen(false)}
-                     hint="Marksheets for athletes & coaches — scan, upload and track exams" />
-
-            <SystemGroup label="System" tone="slate" icon={Settings}
-                         count={NAV_SYSTEM.length}
+            <SystemGroup label="Setup & Admin" tone="slate" icon={Settings}
+                         count={NAV_SETUP.filter((item) => !item.superOnly || user?.is_super_admin).length}
                          open={isOpen("system")} onToggle={() => toggleSection("system")}>
-              {NAV_SYSTEM.filter((item) => !item.superOnly || user?.is_super_admin).map((item) => (
-                <NavItem key={item.to} {...item} onClick={() => setOpen(false)} />
+              {NAV_SETUP.filter((item) => !item.superOnly || user?.is_super_admin).map((item) => (
+                <NavItem
+                  key={item.to}
+                  {...item}
+                  badge={item.badgeKey === "tasks_today" ? (tasksPending > 0 ? tasksPending : undefined) : undefined}
+                  onClick={() => setOpen(false)}
+                />
               ))}
             </SystemGroup>
           </>

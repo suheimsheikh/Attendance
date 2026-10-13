@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileBarChart2, ScanLine, UserCog, CalendarCheck2, ClipboardCheck, CalendarDays, Settings,
   MessageSquare, Database, Sparkles, UserCheck, ShieldAlert, Gauge, ChefHat, PencilRuler, Utensils,
-  CalendarRange, FileText, ScrollText, HeartPulse, BookOpen, Activity,
+  CalendarRange, FileText, ScrollText, HeartPulse, BookOpen, Activity, Users, GraduationCap, ListTodo,
 } from "lucide-react";
 
 /** Map: route path → [reactQueryKey to prefetch, api-path, params].
@@ -53,20 +53,19 @@ export const NAV_COACH_KITCHEN = [
   { to: "/admin/kitchen-health", label: "Data Health & Fixes", icon: HeartPulse, hint: "Fix stock issues here: correct negative stock, backfill missing per-unit cost rates, see untracked & low stock" },
 ];
 
-// ATTENDANCE system — one visually-cohesive group for every
-// attendance-related screen (live ops + masters). Aug 2026 reorg so
-// the "two systems" (Attendance vs Kitchen) are obvious at a glance.
+// ATTENDANCE system — pure operations + reporting. Masters, Data Quality
+// and all configuration/diagnostics moved out to "Setup & Admin" (Oct 2026
+// menu reorg) so this group reads as "the things you do & review day to day".
 export const NAV_ATTENDANCE_LIVE = [
   { to: "/muster", label: "Muster Roll", icon: ClipboardCheck, hint: "Roll-call: check members in/out in bulk with photos" },
   { to: "/presence", label: "Presence", icon: LayoutDashboard, hint: "Who is on campus right now" },
   { to: "/parent-notifications", label: "Parent Notifications", icon: MessageSquare, hint: "Message parents/guardians on WhatsApp about today's absent & late athletes — one tap each, Telugu + English" },
-  { to: "/admin/calendar", label: "Calendar", icon: CalendarDays, hint: "Holidays, weekly offs, camps and regattas at a glance", adminOnly: true },
   { to: "/admin/dashboard", label: "Dashboard", icon: Gauge, end: true, hint: "Single-glance summary: on campus, on leave, alerts", adminOnly: true },
   { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck, badgeKey: "approvals_page", hint: "Pending leaves, corrections, check-ins and device access requests in one queue", adminOnly: true },
+  { to: "/admin/calendar", label: "Calendar", icon: CalendarDays, hint: "Holidays, weekly offs, camps and regattas at a glance", adminOnly: true },
   { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, hint: "All-in-one 31-day attendance grid with drill-downs and exports", adminOnly: true },
   { to: "/admin/dar", label: "DAR Reports", icon: FileText, hint: "Daily Activity Reports filed at check-out — search, filter, missed-DAR payroll list", adminOnly: true },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2, hint: "Paid leave, comp-off and tour balances for every member", adminOnly: true },
-  { to: "/admin/data-quality", label: "Data Quality", icon: ShieldAlert, hint: "Automatic checks that flag suspicious or missing data — fix it here", adminOnly: true },
 ];
 
 export const NAV_KITCHEN = [
@@ -79,15 +78,19 @@ export const NAV_KITCHEN = [
   { to: "/admin/kitchen-health", label: "Data Health & Fixes", icon: HeartPulse, hint: "Fix stock issues here: correct negative stock, backfill missing per-unit cost rates, see untracked & low stock" },
 ];
 
-// SYSTEM section — configuration, diagnostics, and safety nets.
-// Training Locations moved into Office Settings (04 Feb 2026); the
-// /admin/sites route still works but is reached via a card inside the
-// Office Settings page, not the sidebar.
-export const NAV_SYSTEM = [
+// SETUP & ADMIN section — one home for everything configuration, master
+// data, diagnostics and safety nets (Oct 2026 reorg). Pulls Masters +
+// Data Quality out of Attendance, Education out of its own entry, and the
+// three log pages collapse into one tabbed "Logs" screen.
+export const NAV_SETUP = [
+  { to: "/admin/masters", label: "Masters", icon: Users, hint: "Members, Institutions, Fleets, Categories and Roles — all in one place" },
   { to: "/admin/office", label: "Office Settings", icon: Settings, hint: "Working hours, geofence, training locations and app configuration" },
-  { to: "/admin/sms-log", label: "SMS Log", icon: MessageSquare, hint: "Every OTP and SMS the app has sent" },
-  { to: "/admin/notify-log", label: "Parent Notify Log", icon: MessageSquare, hint: "Proof of contact — every WhatsApp parent notification sent from Muster (absent / late), with who sent it and when" },
-  { to: "/admin/audit-log", label: "Audit Log", icon: ScanLine, hint: "Who changed what, when — full history" },
+  { to: "/rules", label: "Attendance Rules", icon: ScrollText, hint: "The numbered attendance rules every employee signs up to" },
+  { to: "/admin/education", label: "Education", icon: GraduationCap, hint: "Marksheets for athletes & coaches — scan, upload and track exams" },
+  { to: "/admin/data-quality", label: "Data Quality", icon: ShieldAlert, hint: "Automatic checks that flag suspicious or missing data — fix it here" },
+  { to: "/admin/logs", label: "Logs", icon: FileText, hint: "SMS, parent-notification and audit history — all in one tabbed view" },
   { to: "/admin/feature-usage", label: "Feature Usage", icon: Activity, superOnly: true, hint: "Which screens are used and when — spot dormant pages to retire" },
   { to: "/admin/backup", label: "Backup & Restore", icon: Database, hint: "Download backups or restore data" },
+  { to: "/tasks", label: "Task Manager", icon: ListTodo, badgeKey: "tasks_today", hint: "Team to-dos with deadlines and your daily / weekly / monthly checklist" },
+  { to: "/suggestions", label: "Suggestions", icon: Sparkles, hint: "Share an idea to improve the app — anyone can suggest" },
 ];
