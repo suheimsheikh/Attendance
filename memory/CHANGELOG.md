@@ -5207,3 +5207,10 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Added Late (LT) and Off (WO/HO) pills to each group. Present now = P + HD only (Late split out) so the buckets read as a clean snapshot: Present / Late / Absent / Leave(LV,CO,PS,LP) / Tour / Off.
 - Pills respect the fleet / institution / name-search scope: extracted scopedRows (filters minus category) in CalendarGridTab; both displayedRows and the stat tally consume it. Category chip still never collapses the pills (always Staff + Athletes). Labels show at 2xl, dot+number + tooltip below.
 - Verified via authenticated screenshots: no-filter (Staff 30P/1Late/0A/3L/0T/1Off, Athletes 22P/2Late/1L), and search="badri" narrows grid to 1 member with pills updating live.
+
+### 13 Oct 2026 — Grid: athletes unpaid, inline controls, no CSV / no All
+- Athletes get no pay: routes/reports/grid.py zeroes totals["payable"] for any member whose category is in athlete_like (after the hourly-wager block). Present/absent/leave counts unchanged. PDF export reuses _grid_impl so it reflects 0 too. Verified: 0/64 athletes have payable>0.
+- Month/Run/PDF controls moved inline with the Reports tab row: Reports.jsx renders tabs (left) + a #reports-controls-slot (right); CalendarGridTab portals its controls (MonthNav + date-range + Run + PDF) into that slot via ReactDOM.createPortal. Freed a row — table maxHeight calc(100vh - 300px) -> 250px.
+- Removed the CSV export button from the Grid controls (PDF kept).
+- Removed the "All" category chip (GridFilterBar CATEGORY_FILTERS); stale persisted "all"/"elite" prefs fold to "rest".
+- Verified via authenticated screenshot: one-line tabs+controls, no CSV, no All chip, athlete Pay column all 0, stat pills intact.

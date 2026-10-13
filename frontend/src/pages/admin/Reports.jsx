@@ -88,10 +88,15 @@ export default function Reports() {
         <p className="text-slate-500 text-sm mt-1">Calendar view, attendance summaries and daily leave/tour lists — all in one place.</p>
       </header>
 
-      <div className="flex gap-2 mb-4">
-        <button data-testid="tab-calendar" onClick={() => setTab("calendar")} title="31-day per-member grid: presence, leaves, offs, hours and payroll columns" className={`iu-chip ${tab === "calendar" ? "iu-chip-active" : ""}`}>Calendar Grid</button>
-        <button data-testid="tab-attendance" onClick={() => setTab("attendance")} title="Date-range attendance summary with drill-down and CSV export" className={`iu-chip ${tab === "attendance" ? "iu-chip-active" : ""}`}>Attendance</button>
-        <button data-testid="tab-daily" onClick={() => setTab("daily")} title="Who was on leave or tour on a given day" className={`iu-chip ${tab === "daily" ? "iu-chip-active" : ""}`}>Daily Leave/Tour</button>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-3">
+        <div className="flex gap-2" data-testid="reports-tabs">
+          <button data-testid="tab-calendar" onClick={() => setTab("calendar")} title="31-day per-member grid: presence, leaves, offs, hours and payroll columns" className={`iu-chip ${tab === "calendar" ? "iu-chip-active" : ""}`}>Calendar Grid</button>
+          <button data-testid="tab-attendance" onClick={() => setTab("attendance")} title="Date-range attendance summary with drill-down and CSV export" className={`iu-chip ${tab === "attendance" ? "iu-chip-active" : ""}`}>Attendance</button>
+          <button data-testid="tab-daily" onClick={() => setTab("daily")} title="Who was on leave or tour on a given day" className={`iu-chip ${tab === "daily" ? "iu-chip-active" : ""}`}>Daily Leave/Tour</button>
+        </div>
+        {/* Active tab portals its month/Run/export controls here so they
+            sit inline with the tabs (Oct 2026 — more vertical grid space). */}
+        <div id="reports-controls-slot" className="flex flex-wrap items-center gap-2" />
       </div>
 
       {tab === "attendance" && (

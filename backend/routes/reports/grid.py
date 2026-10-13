@@ -640,6 +640,10 @@ def register(router, *, _athlete_like_keys, db, require_admin):
                 # Hourly wagers are paid on hours only (ot_minutes, ≤8 h/day):
                 # no payable days, absences, LOP, late, early-out or DAR cuts.
                 totals.update(payable=0, absent=0, lop=0, late=0, early_out=0, dar_missed=0)
+            if _cat_by_uid.get(uid, "") in athlete_like:
+                # Athletes/elite are sailors, not paid staff — no pay (user
+                # rule, Oct 2026). Attendance counts stay; only pay is zeroed.
+                totals["payable"] = 0
             rows.append({
                 "member_id": uid,
                 "member_name": u.get("full_name"),

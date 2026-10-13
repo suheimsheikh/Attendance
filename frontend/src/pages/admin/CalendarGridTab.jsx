@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { keepPreviousData } from "@tanstack/react-query";
-import { Loader2, FileDown, FileText, RefreshCw } from "lucide-react";
+import { Loader2, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadBlob, showApiError } from "../../api";
 import { useApiQuery } from "../../hooks/useApiQuery";
@@ -29,10 +30,10 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
   // Persisted per-user via useUiPrefs so tweaks stick across reloads
   // but the pill row remains fully editable.
   const [uiPrefs, patchUiPrefs] = useUiPrefs({ reports_calendar_category: "rest" });
-  // "elite" chip was removed (Oct 2026) — fold any persisted value back
-  // into "rest" so a stale pref doesn't leave the view in limbo.
-  const categoryFilter = (uiPrefs.reports_calendar_category === "elite"
-    ? "rest" : uiPrefs.reports_calendar_category) || "rest";
+  // "elite" and "All" chips were removed (Oct 2026) — fold any persisted
+  // value back into "rest" so a stale pref doesn't leave the view in limbo.
+  const _cat = uiPrefs.reports_calendar_category;
+  const categoryFilter = (_cat === "elite" || _cat === "all") ? "rest" : (_cat || "rest");
   const setCategoryFilter = useCallback((v) => {
     patchUiPrefs({ reports_calendar_category: v });
   }, [patchUiPrefs]);
@@ -42,6 +43,11 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
   // match against member_name + rank so admins can jump to a specific
   // person in a big filtered list without paging.
   const [nameSearch, setNameSearch] = useState("");
+  // The month/Run/export controls render into a slot in the Reports tab
+  // row (see Reports.jsx) so they sit inline with the tabs and free up
+  // vertical space for the grid (user request, Oct 2026).
+  const [controlsSlot, setControlsSlot] = useState(null);
+  useEffect(() => { setControlsSlot(document.getElementById("reports-controls-slot")); }, []);
   // 1-row vs 2-row layout (13 Feb 2026). Two-row mode shows a
   // dedicated check-IN row and check-OUT row per member for days the
   // member was on-campus (P / HD / LT). Non-attendance codes
@@ -222,27 +228,28 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
 
   return (
     <>
-      <div className="iu-card p-3 mb-3 flex flex-wrap items-center gap-3" data-testid="calendar-grid-controls">
-        <MonthNav
-          monthLabel={monthLabel}
-          isCurrent={isCurrent}
-          onPrev={onPrevMonth}
-          onNext={onNextMonth}
-          onToday={onJumpToday}
-        />
-        {data && (
-          <div className="text-[11px] text-slate-500 hidden md:block">
-            {formatDate(data.start)} → {formatDate(data.end)}
-            &nbsp;·&nbsp; {displayedRows.length} of {rows.length} member{rows.length === 1 ? "" : "s"}
-          </div>
-        )}
-        <button data-testid="calendar-grid-run" onClick={loadReport} disabled={loading} className="iu-btn-primary">
-          {loading ? <Loader2 className="animate-spin" size={14}/> : <RefreshCw size={14}/>} Run
-        </button>
-        <div className="flex-1" />
-        <button title="Download as CSV (opens in Excel)" data-testid="export-calendar-csv" onClick={() => exportGrid("csv")} className="iu-btn-secondary"><FileDown size={14}/> CSV</button>
-        <button title="Download as PDF" data-testid="export-calendar-pdf" onClick={() => exportGrid("pdf")} className="iu-btn-secondary"><FileText size={14}/> PDF</button>
-      </div>
+      {controlsSlot && ReactDOM.createPortal(
+        <div className="flex flex-wrap items-center gap-2" data-testid="calendar-grid-controls">
+          <MonthNav
+            monthLabel={monthLabel}
+            isCurrent={isCurrent}
+            onPrev={onPrevMonth}
+            onNext={onNextMonth}
+            onToday={onJumpToday}
+          />
+          {data && (
+            <div className="text-[11px] text-slate-500 hidden xl:block">
+              {formatDate(data.start)} → {formatDate(data.end)}
+              &nbsp;·&nbsp; {displayedRows.length} of {rows.length} member{rows.length === 1 ? "" : "s"}
+            </div>
+          )}
+          <button data-testid="calendar-grid-run" onClick={loadReport} disabled={loading} className="iu-btn-primary">
+            {loading ? <Loader2 className="animate-spin" size={14}/> : <RefreshCw size={14}/>} Run
+          </button>
+          <button title="Download as PDF" data-testid="export-calendar-pdf" onClick={() => exportGrid("pdf")} className="iu-btn-secondary"><FileText size={14}/> PDF</button>
+        </div>,
+        controlsSlot
+      )}
 
       <GridFilterBar
         rows={rows}
@@ -291,7 +298,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
       </div>
 
       <div className="iu-card overflow-hidden">
-        <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 300px)" }}>
+        <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 250px)" }}>
           <table className="text-xs border-collapse" data-testid="calendar-grid-table">
             <thead className="sticky top-0 z-30 bg-slate-50">
               <tr>

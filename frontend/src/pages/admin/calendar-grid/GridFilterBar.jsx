@@ -10,7 +10,6 @@ import React from "react";
 import { Search, Rows2, Rows } from "lucide-react";
 
 const CATEGORY_FILTERS = [
-  { key: "all",     label: "All" },
   { key: "athlete", label: "Athletes" },
   { key: "rest",    label: "Staff & Coaches" },
 ];
