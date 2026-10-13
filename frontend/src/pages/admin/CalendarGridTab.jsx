@@ -313,6 +313,28 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
         <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 250px)" }}>
           <table className="text-xs border-collapse" data-testid="calendar-grid-table">
             <thead className="sticky top-0 z-30 bg-slate-50">
+              {eventBands.hasEvents && (
+                <tr data-testid="calendar-event-band">
+                  <th className="sticky left-0 z-40 bg-slate-50 w-7 min-w-[28px] max-w-[28px] border-b border-slate-200 h-5"></th>
+                  <th className="sticky left-[28px] z-40 bg-slate-50 w-[132px] min-w-[132px] max-w-[132px] text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200 h-5 px-2 text-left">Camps / Regattas</th>
+                  {eventBands.segments.map((seg, i) => {
+                    if (!seg.camp && !seg.regatta) {
+                      return <th key={i} colSpan={seg.span} className="h-5 border-b border-r border-slate-200 bg-slate-50" />;
+                    }
+                    const tone = seg.camp ? "bg-indigo-100 text-indigo-800" : "bg-rose-100 text-rose-800";
+                    const label = seg.camp && seg.regatta ? `${seg.camp} + ${seg.regatta}` : (seg.camp || seg.regatta);
+                    const title = [seg.camp && `Camp: ${seg.camp}`, seg.regatta && `Regatta: ${seg.regatta}`].filter(Boolean).join("  ·  ");
+                    // Label is absolutely positioned so a long camp name can't
+                    // widen the day columns — the full name shows on hover.
+                    return (
+                      <th key={i} colSpan={seg.span} className={`relative h-5 border-b border-l border-r border-slate-300 ${tone} p-0`} title={title} data-testid={`event-band-${seg.startIdx}`}>
+                        <span className="absolute inset-0 truncate px-1 text-[9px] font-bold text-center leading-5 pointer-events-none">{label}</span>
+                      </th>
+                    );
+                  })}
+                  <th colSpan={totalsColCount} className="h-5 border-b border-l-2 border-slate-300 bg-slate-50"></th>
+                </tr>
+              )}
               <tr>
                 <th className="py-1.5 px-1 text-center sticky left-0 z-40 bg-slate-50 w-7 min-w-[28px] max-w-[28px] border-b border-slate-200 font-semibold text-slate-500 text-[10px] uppercase tracking-wider">#</th>
                 <th className="py-1.5 px-2 text-left sticky left-[28px] z-40 bg-slate-50 w-[132px] min-w-[132px] max-w-[132px] border-b border-slate-200 font-semibold text-slate-700">Member</th>
@@ -364,28 +386,6 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 <th className="static md:sticky md:right-[34px] z-40 bg-rose-50 h-4 text-[8px] uppercase font-semibold text-rose-700 border-b border-l border-slate-200 text-center">Days</th>
                 <th className="static md:sticky md:right-0 z-40 bg-orange-100 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-l border-slate-200 text-center">Days</th>
               </tr>
-              {eventBands.hasEvents && (
-                <tr data-testid="calendar-event-band">
-                  <th className="sticky left-0 z-40 bg-slate-50 w-7 min-w-[28px] max-w-[28px] border-b border-slate-200 h-5"></th>
-                  <th className="sticky left-[28px] z-40 bg-slate-50 w-[132px] min-w-[132px] max-w-[132px] text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200 h-5 px-2 text-left">Camps / Regattas</th>
-                  {eventBands.segments.map((seg, i) => {
-                    if (!seg.camp && !seg.regatta) {
-                      return <th key={i} colSpan={seg.span} className="h-5 border-b border-r border-slate-200 bg-slate-50" />;
-                    }
-                    const tone = seg.camp ? "bg-indigo-100 text-indigo-800" : "bg-rose-100 text-rose-800";
-                    const label = seg.camp && seg.regatta ? `${seg.camp} + ${seg.regatta}` : (seg.camp || seg.regatta);
-                    const title = [seg.camp && `Camp: ${seg.camp}`, seg.regatta && `Regatta: ${seg.regatta}`].filter(Boolean).join("  ·  ");
-                    // Label is absolutely positioned so a long camp name can't
-                    // widen the day columns — the full name shows on hover.
-                    return (
-                      <th key={i} colSpan={seg.span} className={`relative h-5 border-b border-l border-r border-slate-300 ${tone} p-0`} title={title} data-testid={`event-band-${seg.startIdx}`}>
-                        <span className="absolute inset-0 truncate px-1 text-[9px] font-bold text-center leading-5 pointer-events-none">{label}</span>
-                      </th>
-                    );
-                  })}
-                  <th colSpan={totalsColCount} className="h-5 border-b border-l-2 border-slate-300 bg-slate-50"></th>
-                </tr>
-              )}
             </thead>
             <tbody>
               {loading && displayedRows.length === 0 && (

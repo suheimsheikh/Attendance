@@ -5244,3 +5244,6 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Removed the "Legend" word + InfoTip from the legend strip (unused InfoTip import dropped).
 - Legend is now a single A→Z list by label: merged the CELL_STYLE codes with the DAR/EO/OT h/Pay total-column chips and sorted by label (case-insensitive). Uniform chip style (px-1.5 min-w-28).
 - Stat pills enlarged: h-7->h-8, dots 1.5->2, text-[11px]->text-xs, font-semibold->font-bold.
+
+### 13 Oct 2026 — Grid: move Camps/Regattas band above the date row
+- Moved the Camps/Regattas band <tr> to be the FIRST row of the thead (above the day-numbers row). Previously it sat below the DOW row and broke the weekend vertical separators mid-header. Now the weekend inset lines run continuously through day-numbers + DOW + body (cap at the day-numbers row, which is now directly under the band).
