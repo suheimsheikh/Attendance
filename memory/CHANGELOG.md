@@ -5202,3 +5202,8 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
   - Header tightened: controls card p-4/mb-4 -> p-3/mb-3; filter row mb-3 -> mb-2; legend py-2.5/mb-3 -> py-2/mb-2; table maxHeight calc(100vh - 340px) -> 300px (more rows visible).
   - Legend: "Legend" label toned down (font-medium text-slate-400 text-[11px], no uppercase); entry titles made louder (text-slate-900 font-semibold).
 - Verified: authenticated screenshot of /admin/reports shows pills (Staff 31P/0A/3L/0T, Athletes 24P/0A/1L/0T), no Elite chip, louder legend; compiles clean (pre-existing warnings only).
+
+### 13 Oct 2026 — Grid stat pills: Late + Off, filter-aware
+- Added Late (LT) and Off (WO/HO) pills to each group. Present now = P + HD only (Late split out) so the buckets read as a clean snapshot: Present / Late / Absent / Leave(LV,CO,PS,LP) / Tour / Off.
+- Pills respect the fleet / institution / name-search scope: extracted scopedRows (filters minus category) in CalendarGridTab; both displayedRows and the stat tally consume it. Category chip still never collapses the pills (always Staff + Athletes). Labels show at 2xl, dot+number + tooltip below.
+- Verified via authenticated screenshots: no-filter (Staff 30P/1Late/0A/3L/0T/1Off, Athletes 22P/2Late/1L), and search="badri" narrows grid to 1 member with pills updating live.

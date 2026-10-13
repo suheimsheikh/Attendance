@@ -18,9 +18,11 @@ const CATEGORY_FILTERS = [
 // Compact live-snapshot pills shown to the right of the filter row.
 const STAT_PILLS = [
   { key: "present", label: "Present", dot: "bg-emerald-500", text: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
+  { key: "late",    label: "Late",    dot: "bg-yellow-500",  text: "text-yellow-700",  bg: "bg-yellow-50 border-yellow-200" },
   { key: "absent",  label: "Absent",  dot: "bg-red-500",     text: "text-red-700",     bg: "bg-red-50 border-red-200" },
   { key: "leave",   label: "Leave",   dot: "bg-amber-400",   text: "text-amber-700",   bg: "bg-amber-50 border-amber-200" },
   { key: "tour",    label: "Tour",    dot: "bg-orange-400",  text: "text-orange-700",  bg: "bg-orange-50 border-orange-200" },
+  { key: "off",     label: "Off",     dot: "bg-slate-400",   text: "text-slate-600",   bg: "bg-slate-100 border-slate-200" },
 ];
 
 function StatGroup({ title, stats, testid }) {
@@ -37,7 +39,7 @@ function StatGroup({ title, stats, testid }) {
         >
           <span className={`w-1.5 h-1.5 rounded-full ${p.dot}`} />
           <span className="tabular-nums">{stats[p.key] ?? 0}</span>
-          <span className="hidden lg:inline text-slate-500 font-medium">{p.label}</span>
+          <span className="hidden 2xl:inline text-slate-500 font-medium">{p.label}</span>
         </span>
       ))}
     </div>

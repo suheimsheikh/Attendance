@@ -129,10 +129,11 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
     return { day: iso.slice(8, 10), dow, iso, isWeekend: dt.getDay() === 0 || dt.getDay() === 6, isToday: iso === todayIso };
   }), [days, todayIso]);
 
-  const displayedRows = useMemo(() => {
+  // Fleet / institution / name scope — shared by the stat pills and the
+  // table so the snapshot matches what's on screen. Category is applied
+  // on top (per-table) since the pills always show both Staff & Athletes.
+  const scopedRows = useMemo(() => {
     let list = rows;
-    if (categoryFilter === "athlete") list = list.filter(isAthleteLike);
-    else if (categoryFilter === "rest") list = list.filter((r) => !isAthleteLike(r));
     if (fleetFilter) {
       list = list.filter((r) =>
         fleetFilter === "__none__" ? !r.fleet : (r.fleet || "").toLowerCase() === fleetFilter.toLowerCase()
@@ -150,8 +151,15 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
         (r.rank || "").toLowerCase().includes(q)
       );
     }
+    return list;
+  }, [rows, fleetFilter, institutionFilter, nameSearch]);
+
+  const displayedRows = useMemo(() => {
+    let list = scopedRows;
+    if (categoryFilter === "athlete") list = list.filter(isAthleteLike);
+    else if (categoryFilter === "rest") list = list.filter((r) => !isAthleteLike(r));
     return [...list].sort((a, b) => (a.member_name || "").localeCompare(b.member_name || ""));
-  }, [rows, categoryFilter, fleetFilter, institutionFilter, nameSearch, isAthleteLike]);
+  }, [scopedRows, categoryFilter, isAthleteLike]);
 
   const fleetOptions = useMemo(() => {
     const s = new Set();
@@ -173,21 +181,23 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
 
   // Live status snapshot for the stat pills. Reference day = today when
   // the current month is shown, else the last day of the month. Counts
-  // are academy-wide (all rows, not the category/fleet filter) and split
+  // respect the fleet/institution/search scope (scopedRows) and are split
   // into Staff vs Athletes so admins get a one-glance who's-in overview.
   const { staffStats, athleteStats, statsDateLabel } = useMemo(() => {
     const refIso = (todayIso && days.includes(todayIso)) ? todayIso : days[days.length - 1];
     const refIdx = refIso ? days.indexOf(refIso) : -1;
     const tally = (predicate) => {
-      const b = { present: 0, absent: 0, leave: 0, tour: 0 };
+      const b = { present: 0, late: 0, absent: 0, leave: 0, tour: 0, off: 0 };
       if (refIdx < 0) return b;
-      for (const r of rows) {
+      for (const r of scopedRows) {
         if (!predicate(r)) continue;
         const code = r.cells?.[refIdx];
-        if (code === "P" || code === "HD" || code === "LT") b.present += 1;
+        if (code === "P" || code === "HD") b.present += 1;
+        else if (code === "LT") b.late += 1;
         else if (code === "AB") b.absent += 1;
         else if (code === "LV" || code === "CO" || code === "PS" || code === "LP") b.leave += 1;
         else if (code === "TR") b.tour += 1;
+        else if (code === "WO" || code === "HO") b.off += 1;
       }
       return b;
     };
@@ -196,7 +206,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
       athleteStats: tally(isAthleteLike),
       statsDateLabel: refIso ? formatDate(refIso) : "",
     };
-  }, [rows, days, todayIso, isAthleteLike]);
+  }, [scopedRows, days, todayIso, isAthleteLike]);
 
   const exportGrid = (fmt) => {
     const params = { month: monthIso, fmt };
