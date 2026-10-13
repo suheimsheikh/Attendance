@@ -396,6 +396,21 @@ def register(router, *, _athlete_like_keys, db, require_admin):
 
         _hourly_uids = {u["id"] for u in users if u.get("hourly_wager")}
 
+        # Camp/regatta bands for the header overview row (Oct 2026). Each
+        # band is clamped to the visible window; the frontend merges them
+        # into a sticky row under the DOW header.
+        _regattas_range = await db.regattas.find(
+            {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}}, {"_id": 0},
+        ).to_list(500)
+        grid_events = (
+            [{"type": "camp", "name": c.get("name") or "Camp",
+              "start": max(c.get("start_date") or start_iso, start_iso),
+              "end": min(c.get("end_date") or end_iso, end_iso)} for c in _camps_range]
+            + [{"type": "regatta", "name": r.get("name") or "Regatta",
+                "start": max(r.get("start_date") or start_iso, start_iso),
+                "end": min(r.get("end_date") or end_iso, end_iso)} for r in _regattas_range]
+        )
+
         def _absent_or_blank(uid: str, iso: str) -> str:
             """Athletes are AB only when expected at a camp that day;
             otherwise blank. Hourly wagers are never absent (blank).
@@ -659,7 +674,7 @@ def register(router, *, _athlete_like_keys, db, require_admin):
             })
         rows.sort(key=lambda r: (r["member_name"] or "").lower())
         return {"month": month, "start": start_iso, "end": end_iso,
-                "today": today_iso, "days": days, "rows": rows}
+                "today": today_iso, "days": days, "rows": rows, "events": grid_events}
 
     @router.get("/reports/calendar-grid")
     async def calendar_grid(

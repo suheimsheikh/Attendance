@@ -12,7 +12,7 @@ import AttendanceLedgerModal from "./AttendanceLedgerModal";
 import { InfoTip } from "../../components/InfoTip";
 import OTLedgerModal from "./OTLedgerModal";
 import MemberForm from "./MemberForm";
-import { GridCell, GridTimeCell, CELL_STYLE, correctionForCode } from "./calendar-grid/gridHelpers";
+import { GridCell, GridTimeCell, CELL_STYLE, correctionForCode, WEEKEND_COL, WEEKEND_COL_CAP } from "./calendar-grid/gridHelpers";
 import GridFilterBar from "./calendar-grid/GridFilterBar";
 import GridRowTotals from "./calendar-grid/GridRowTotals";
 import { useUiPrefs } from "../../hooks/useUiPrefs";
@@ -138,6 +138,23 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
     const dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dt.getDay()];
     return { day: iso.slice(8, 10), dow, iso, isWeekend: dt.getDay() === 0 || dt.getDay() === 6, isToday: iso === todayIso };
   }), [days, todayIso]);
+
+  // Camp / Regatta header band — merge consecutive days that share the
+  // same camp+regatta signature into colSpan segments (Oct 2026).
+  const eventBands = useMemo(() => {
+    const events = data?.events || [];
+    if (!days.length || !events.length) return { segments: [], hasEvents: false };
+    const segments = [];
+    days.forEach((iso, idx) => {
+      const camp = events.find((e) => e.type === "camp" && e.start <= iso && e.end >= iso)?.name || null;
+      const regatta = events.find((e) => e.type === "regatta" && e.start <= iso && e.end >= iso)?.name || null;
+      const sig = `${camp || ""}|${regatta || ""}`;
+      const last = segments[segments.length - 1];
+      if (last && last.sig === sig) last.span += 1;
+      else segments.push({ sig, span: 1, camp, regatta, startIdx: idx });
+    });
+    return { segments, hasEvents: true };
+  }, [data, days]);
 
   // Fleet / institution / name scope — shared by the stat pills and the
   // table so the snapshot matches what's on screen. Category is applied
@@ -311,7 +328,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso}
-                    className={`text-center h-6 w-6 border-b border-r border-slate-200 tabular-nums font-bold ${h.isWeekend ? "bg-slate-100 text-slate-400 border-l-2 border-r-2 !border-l-slate-900 !border-r-slate-900" : "bg-slate-50 text-slate-700"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9,inset_0_2px_0_#0ea5e9]" : ""}`}
+                    className={`text-center h-6 w-6 border-b border-r border-slate-200 tabular-nums font-bold ${h.isWeekend ? `bg-slate-100 text-slate-400 ${WEEKEND_COL_CAP}` : "bg-slate-50 text-slate-700"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9,inset_0_2px_0_#0ea5e9]" : ""}`}
                     title={`${h.dow} · ${h.iso}${h.isToday ? " · Today" : ""}`}
                     data-testid={`cal-header-${h.iso}`}
                   >
@@ -339,7 +356,7 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 {dayHeaders.map((h) => (
                   <th
                     key={h.iso + "-dow"}
-                    className={`text-center h-4 border-b border-r border-slate-200 text-[9px] uppercase font-semibold ${h.isWeekend ? "bg-slate-100 text-slate-400 border-l-2 border-r-2 !border-l-slate-900 !border-r-slate-900" : "bg-slate-50 text-slate-500"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9]" : ""}`}
+                    className={`text-center h-4 border-b border-r border-slate-200 text-[9px] uppercase font-semibold ${h.isWeekend ? `bg-slate-100 text-slate-400 ${WEEKEND_COL}` : "bg-slate-50 text-slate-500"} ${h.isToday ? "!bg-sky-100 !text-sky-800 shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9]" : ""}`}
                   >
                     {h.dow.slice(0, 2)}
                   </th>
@@ -356,6 +373,26 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
                 <th className="static md:sticky md:right-[34px] z-40 bg-rose-50 h-4 text-[8px] uppercase font-semibold text-rose-700 border-b border-l border-slate-200 text-center">Days</th>
                 <th className="static md:sticky md:right-0 z-40 bg-orange-100 h-4 text-[8px] uppercase font-semibold text-orange-700 border-b border-l border-slate-200 text-center">Days</th>
               </tr>
+              {eventBands.hasEvents && (
+                <tr data-testid="calendar-event-band">
+                  <th className="sticky left-0 z-40 bg-slate-50 w-7 min-w-[28px] max-w-[28px] border-b border-slate-200 h-5"></th>
+                  <th className="sticky left-[28px] z-40 bg-slate-50 w-[132px] min-w-[132px] max-w-[132px] text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200 h-5 px-2 text-left">Camps / Regattas</th>
+                  {eventBands.segments.map((seg, i) => {
+                    if (!seg.camp && !seg.regatta) {
+                      return <th key={i} colSpan={seg.span} className="h-5 border-b border-r border-slate-200 bg-slate-50" />;
+                    }
+                    const tone = seg.camp ? "bg-indigo-100 text-indigo-800" : "bg-rose-100 text-rose-800";
+                    const label = seg.camp && seg.regatta ? `${seg.camp} + ${seg.regatta}` : (seg.camp || seg.regatta);
+                    const title = [seg.camp && `Camp: ${seg.camp}`, seg.regatta && `Regatta: ${seg.regatta}`].filter(Boolean).join("  ·  ");
+                    return (
+                      <th key={i} colSpan={seg.span} className={`h-5 border-b border-l border-r border-slate-300 ${tone} text-[9px] font-bold text-center overflow-hidden whitespace-nowrap px-1`} title={title} data-testid={`event-band-${seg.startIdx}`}>
+                        <span className="inline-block max-w-full truncate align-middle">{label}</span>
+                      </th>
+                    );
+                  })}
+                  <th colSpan={totalsColCount} className="h-5 border-b border-l-2 border-slate-300 bg-slate-50"></th>
+                </tr>
+              )}
             </thead>
             <tbody>
               {loading && displayedRows.length === 0 && (

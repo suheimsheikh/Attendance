@@ -13,6 +13,11 @@ import React from "react";
 // disturbing the grid's row/column alignment (borders would). sky-500
 // = #0ea5e9. Added 25 Jun 2026 per user request.
 export const TODAY_COL = "shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9]";
+// Weekend (Sat/Sun) column marker — subtle, uniform 1px grey inset on
+// both sides. The header's top row uses the *_CAP variant so the line
+// is closed at the top, mirroring the current-day indicator.
+export const WEEKEND_COL = "shadow-[inset_1px_0_0_#94a3b8,inset_-1px_0_0_#94a3b8]";
+export const WEEKEND_COL_CAP = "shadow-[inset_1px_0_0_#94a3b8,inset_-1px_0_0_#94a3b8,inset_0_1px_0_#94a3b8]";
 
 // Cell colour + label registry. Each entry maps a status code to
 // tailwind bg + text classes and the display label (2-letter code).
@@ -51,13 +56,12 @@ export const CELL_STYLE = {
  * for LV/TR/CO/PS. Kept as a native `title` (no JS popover library) so
  * the whole 31-day grid stays fast when hovering across 100 rows. */
 export function GridCell({ code, dow, onClick, meta, iso, rowSpan, isToday }) {
-  const todayCls = isToday ? ` ${TODAY_COL}` : "";
-  // Weekend columns get a bold black left/right separator so Sat/Sun
-  // stand out as a block (user request, Oct 2026). Top/bottom stay light.
+  // Column indicator: today keeps its sky inset; weekends get a subtle,
+  // uniform grey inset on both sides (one wins when a day is both).
   const isWeekend = dow === "Sat" || dow === "Sun";
-  const wkndSep = isWeekend ? " border-l-2 border-r-2 !border-l-slate-900 !border-r-slate-900" : "";
+  const todayCls = isToday ? ` ${TODAY_COL}` : (isWeekend ? ` ${WEEKEND_COL}` : "");
   if (!code) {
-    return <td rowSpan={rowSpan} className={`border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-6${wkndSep}${isToday ? ` bg-sky-50 ${TODAY_COL}` : ""}`}>·</td>;
+    return <td rowSpan={rowSpan} className={`border border-slate-100 text-center text-slate-300 tabular-nums h-6 w-6${todayCls}${isToday ? " bg-sky-50" : ""}`}>·</td>;
   }
   const s = CELL_STYLE[code] || CELL_STYLE.AB;
   const clickable = !!onClick;
@@ -73,7 +77,7 @@ export function GridCell({ code, dow, onClick, meta, iso, rowSpan, isToday }) {
     return (
       <td
         rowSpan={rowSpan}
-        className={`relative overflow-hidden border border-white text-center text-[10px] font-bold text-amber-900 bg-amber-50 h-6 w-6 leading-none${todayCls}${wkndSep} ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
+        className={`relative overflow-hidden border border-white text-center text-[10px] font-bold text-amber-900 bg-amber-50 h-6 w-6 leading-none${todayCls} ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
         title={title}
         onClick={onClick}
         data-half-day={half}
@@ -94,7 +98,7 @@ export function GridCell({ code, dow, onClick, meta, iso, rowSpan, isToday }) {
   return (
     <td
       rowSpan={rowSpan}
-      className={`relative border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-6 leading-none${todayCls}${wkndSep} ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
+      className={`relative border border-white text-center text-[10px] font-bold ${s.bg} ${s.text} h-6 w-6 leading-none${todayCls} ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
       title={title}
       onClick={onClick}
       data-corrected={meta?.correction ? "1" : undefined}
@@ -146,12 +150,11 @@ export function GridTimeCell({ code, time, dow, onClick, meta, iso, half, half_k
   const clickable = !!onClick;
   const title = buildCellTooltip({ code, dow, meta, iso, clickable });
   const label = time ? fmtHM(time) : "—";
-  const todayCls = isToday ? ` ${TODAY_COL}` : "";
   const isWeekend = dow === "Sat" || dow === "Sun";
-  const wkndSep = isWeekend ? " border-l-2 border-r-2 !border-l-slate-900 !border-r-slate-900" : "";
+  const colCls = isToday ? ` ${TODAY_COL}` : (isWeekend ? ` ${WEEKEND_COL}` : "");
   return (
     <td
-      className={`border border-white text-center text-[9px] font-semibold tabular-nums ${s.bg} ${s.text} h-6 w-9 leading-none px-0.5${todayCls}${wkndSep} ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
+      className={`border border-white text-center text-[9px] font-semibold tabular-nums ${s.bg} ${s.text} h-6 w-9 leading-none px-0.5${colCls} ${clickable ? "cursor-pointer hover:ring-2 hover:ring-sky-500 hover:ring-offset-1 transition" : ""}`}
       title={title}
       onClick={onClick}
       data-testid={`grid-time-${half_kind || "cell"}-${iso}`}
