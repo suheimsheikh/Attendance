@@ -99,6 +99,10 @@ async def _make_absence_streak_computer(db, today: str):
         atts_set = att_dates_by_user.get(u["id"], set())
         leaves_set = leave_dates_by_user.get(u["id"], set())
         weekly_off = (u.get("weekly_off") or "").lower()
+        # Per-member "not expected" weekdays (dow_hours[dow].off) are not
+        # absences either — skip them in the streak (Oct 2026).
+        _ne_dows = {k for k, v in (u.get("dow_hours") or {}).items() if isinstance(v, dict) and v.get("off")}
+        _SHORT = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
         n = 0
         d = today_d - timedelta(days=1)
         for _ in range(30):
@@ -112,7 +116,7 @@ async def _make_absence_streak_computer(db, today: str):
             )
             if covered_by_break:
                 break
-            if _WEEKDAY_KEY[d.weekday()] != weekly_off:
+            if _WEEKDAY_KEY[d.weekday()] != weekly_off and _SHORT[d.weekday()] not in _ne_dows:
                 n += 1
             d -= timedelta(days=1)
         return n
@@ -422,6 +426,10 @@ def make_router(db, get_current_user):
                             off_reason = "Left"
                         elif target_is_holiday:
                             off_reason = "Holiday"
+                        elif ("mon", "tue", "wed", "thu", "fri", "sat", "sun")[target_date.weekday()] in {
+                                k for k, v in (u.get("dow_hours") or {}).items()
+                                if isinstance(v, dict) and v.get("off")}:
+                            off_reason = "Not scheduled"
                         elif _is_weekly_off_on(u, default_weekly_off, target_date):
                             off_reason = "Weekly off"
                         ws_hm = _effective_hours(u, office, target_date)[0]

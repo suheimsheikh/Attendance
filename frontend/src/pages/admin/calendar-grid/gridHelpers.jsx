@@ -44,6 +44,10 @@ export const CELL_STYLE = {
   HO: { bg: "bg-violet-100",     text: "text-violet-700",  label: "HO", title: "Holiday" },
   BK: { bg: "bg-fuchsia-200",    text: "text-fuchsia-800", label: "BK", title: "Break (member-scoped)" },
   AB: { bg: "bg-red-500",        text: "text-white",       label: "AB", title: "Absent" },
+  // NE = "Not expected" — a weekday the member is not scheduled to work
+  // (dow_hours[dow].off, for part-timers). Neutral: never absent, never
+  // payable. Faint grey so it reads as an off-day sibling of WO/NJ/LF.
+  NE: { bg: "bg-slate-100",      text: "text-slate-400",   label: "NE", title: "Not expected" },
   // NJ = "Not Joined" — day predates the member's `joining_date`.
   // Same visual weight as WO (bg-slate-200, text-slate-500, 2-letter
   // label "NJ") so it reads as an off-day family sibling.

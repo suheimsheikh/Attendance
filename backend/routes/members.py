@@ -6,7 +6,7 @@ import io
 import re
 import uuid
 from datetime import date
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import openpyxl
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
@@ -48,7 +48,7 @@ class MemberCreate(BaseModel):
     # Per-day-of-week timing override for THIS member (employees only).
     # Shape { "sat": {"start":"08:00","end":"12:00"}, ... } keyed mon..sun;
     # a blank/missing day inherits. Overrides the office-level dow_hours.
-    dow_hours: Optional[Dict[str, Dict[str, str]]] = None
+    dow_hours: Optional[Dict[str, Dict[str, Any]]] = None
     role: Literal["admin", "member", "chef"] = "member"
     institution: Optional[str] = None
     gender: Optional[Literal["M", "F", "O"]] = None
@@ -113,7 +113,7 @@ class MemberUpdate(BaseModel):
     mobile: Optional[str] = None
     work_start: Optional[str] = None
     work_end: Optional[str] = None
-    dow_hours: Optional[Dict[str, Dict[str, str]]] = None
+    dow_hours: Optional[Dict[str, Dict[str, Any]]] = None
     photo: Optional[str] = None
     password: Optional[str] = None
     role: Optional[Literal["admin", "member", "chef"]] = None

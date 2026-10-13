@@ -368,7 +368,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
                 <p className="text-[11px] text-slate-500 mb-2">
                   Special start/end for specific days (e.g. a coach&apos;s Saturday &amp; Sunday hours). Leave a day blank to use the normal work timings above. Overrides the office-wide day-of-week standard.
                 </p>
-                <DowHoursEditor value={form.dow_hours} onChange={(v) => set("dow_hours", v)} testIdPrefix="mf-dow" />
+                <DowHoursEditor value={form.dow_hours} onChange={(v) => set("dow_hours", v)} testIdPrefix="mf-dow" allowOff />
               </div>
             )}
             <div>

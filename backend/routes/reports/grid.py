@@ -354,6 +354,12 @@ def register(router, *, _athlete_like_keys, db, require_admin):
             # overrides a weekly-off/holiday (a no-show resolves to AB on a
             # past day, or blank today while still in progress).
             _is_ath = _cat_by_uid.get(uid, "") in _athlete_like_absent
+            # "Not expected" weekdays (per-member dow_hours[dow].off) — part
+            # timers who only come some days. Neutral: never AB, never
+            # payable. Employees only; attendance/leave above still win, so a
+            # person who DOES turn up shows P as normal (no comp-off).
+            if not _is_ath and _WK[dow_idx] in _not_expected_dow.get(uid, frozenset()):
+                return "NE"
             if not _is_ath and WEEKDAY_KEY[dow_idx] == weekly_off:
                 return "WO"
             if not _is_ath and iso in holiday_dates:
@@ -379,6 +385,15 @@ def register(router, *, _athlete_like_keys, db, require_admin):
         _WK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
         _athlete_like_absent = athlete_like
         _cat_by_uid = {u["id"]: (u.get("category") or "") for u in users}
+        # Per-member "not expected" weekdays — short dow keys flagged off in
+        # dow_hours (user feature, Oct 2026). Drives the neutral "NE" cell.
+        _not_expected_dow = {
+            u["id"]: frozenset(
+                k for k, val in (u.get("dow_hours") or {}).items()
+                if isinstance(val, dict) and val.get("off")
+            )
+            for u in users
+        }
         _camps_range = await db.camps.find(
             {"start_date": {"$lte": end_iso}, "end_date": {"$gte": start_iso}}, {"_id": 0},
         ).to_list(500)
@@ -469,7 +484,7 @@ def register(router, *, _athlete_like_keys, db, require_admin):
             if with_meta:
                 for idx, iso in enumerate(days):
                     code = cells[idx]
-                    if not code or code in ("WO", "HO", "AB", "NJ", "LF"):
+                    if not code or code in ("WO", "HO", "AB", "NJ", "LF", "NE"):
                         continue
                     m: dict = {}
                     if code == "BK":
