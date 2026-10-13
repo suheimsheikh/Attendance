@@ -5234,3 +5234,7 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Weekend inset line is now one-sided per day: Saturday gets a left inset, Sunday a right inset, so the line sits only on the OUTER edges of the Sat+Sun block (no divider between them). Header row 1 keeps the top-cap variants. New constants WEEKEND_LEFT/RIGHT(_CAP) replace the old two-sided WEEKEND_COL.
 - Subtle weekend shading added via WEEKEND_BG (bg-slate-200/50) on Sat/Sun header cells and blank body cells; status-coloured cells keep their own colour.
 - Verified via screenshot: outer-edge-only lines, subtle shading, day columns still 24px.
+
+### 13 Oct 2026 — Grid: weekend lines visible on populated cells + legend DAR/OT h
+- Weekend outer-edge inset bumped 1px->2px grey (#94a3b8). With border-collapse the 1px white cell border was covering a 1px inset on status-coloured cells; 2px leaves ~1px visible (same approach as the 2px today indicator), so the Sat/Sun boundary lines now show through populated cells too. Still subtle, outer-edges only.
+- Legend: added DAR (Missed Daily Activity Reports) and OT h (Overtime hours, early-in + late-out) chips alongside EO and Pay.

@@ -308,7 +308,15 @@ export default function CalendarGridTab({ monthIso, monthLabel, isCurrent, onPre
             <span className="text-slate-900 font-semibold">{s.title}</span>
           </span>
         ))}
-        <span className="inline-flex items-center gap-1.5 pl-3 ml-1 border-l border-slate-300" data-testid="legend-eo">
+        <span className="inline-flex items-center gap-1.5 pl-3 ml-1 border-l border-slate-300" data-testid="legend-dar">
+          <span className="inline-flex items-center justify-center w-7 h-6 rounded bg-rose-100 text-rose-700 font-bold text-[11px]">DAR</span>
+          <span className="text-slate-900 font-semibold">Missed Daily Activity Reports</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5" data-testid="legend-oth">
+          <span className="inline-flex items-center justify-center px-1.5 h-6 rounded bg-violet-100 text-violet-800 font-bold text-[11px]">OT h</span>
+          <span className="text-slate-900 font-semibold">Overtime hours (early-in + late-out)</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5" data-testid="legend-eo">
           <span className="inline-flex items-center justify-center w-7 h-6 rounded bg-rose-100 text-rose-700 font-bold text-[11px]">EO</span>
           <span className="text-slate-900 font-semibold">Early out (left 15+ min before end time)</span>
         </span>

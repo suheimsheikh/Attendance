@@ -17,10 +17,10 @@ export const TODAY_COL = "shadow-[inset_2px_0_0_#0ea5e9,inset_-2px_0_0_#0ea5e9]"
 // edge of the weekend block only (left of Sat, right of Sun) so there's
 // no divider *between* Sat and Sun. The *_CAP variants close the line at
 // the top in the header row, mirroring the current-day indicator.
-export const WEEKEND_LEFT = "shadow-[inset_1px_0_0_#94a3b8]";
-export const WEEKEND_RIGHT = "shadow-[inset_-1px_0_0_#94a3b8]";
-export const WEEKEND_LEFT_CAP = "shadow-[inset_1px_0_0_#94a3b8,inset_0_1px_0_#94a3b8]";
-export const WEEKEND_RIGHT_CAP = "shadow-[inset_-1px_0_0_#94a3b8,inset_0_1px_0_#94a3b8]";
+export const WEEKEND_LEFT = "shadow-[inset_2px_0_0_#94a3b8]";
+export const WEEKEND_RIGHT = "shadow-[inset_-2px_0_0_#94a3b8]";
+export const WEEKEND_LEFT_CAP = "shadow-[inset_2px_0_0_#94a3b8,inset_0_2px_0_#94a3b8]";
+export const WEEKEND_RIGHT_CAP = "shadow-[inset_-2px_0_0_#94a3b8,inset_0_2px_0_#94a3b8]";
 // Faint column tint applied to Sat/Sun cells (status-coloured cells keep
 // their own colour; this shows through blank cells + headers).
 export const WEEKEND_BG = "bg-slate-200/50";
