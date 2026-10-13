@@ -33,6 +33,175 @@ from services.time_utils import local_date_str
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3}
 
 
+# Plain-English documentation per finding code: `what` explains why the
+# issue matters, `rectify` says exactly what correcting it will do. Shown
+# in the Data Quality table so an admin never has to decode a machine code.
+_CODE_DOC = {
+    # ── Members ──
+    "member.duplicate_email": {
+        "what": "Two or more members share the same login email — sign-in and email alerts can reach the wrong person.",
+        "rectify": "Open each member and give them a unique email, or merge the duplicate record.",
+    },
+    "member.duplicate_mobile": {
+        "what": "The same mobile number is on more than one member — SMS/WhatsApp alerts may go to the wrong person.",
+        "rectify": "Open each member and correct the mobile so every number is used once.",
+    },
+    "member.duplicate_name": {
+        "what": "Several members have the identical full name — likely the same person entered twice.",
+        "rectify": "Review the matches and merge or rename any true duplicates.",
+    },
+    "member.bad_mobile": {
+        "what": "The mobile number isn't a clean 10-digit number, so alerts to it will fail.",
+        "rectify": "Open the member and fix the mobile to a valid 10-digit number.",
+    },
+    "athlete.no_parent_mobile": {
+        "what": "This athlete has no valid parent/guardian mobile — absence and late alerts can't reach anyone.",
+        "rectify": "Open the athlete and add a valid father/mother/guardian mobile.",
+    },
+    "member.missing_fields": {
+        "what": "Key profile fields are blank, which can break payroll, scheduling, or alerts.",
+        "rectify": "Open the member and fill in the listed missing fields.",
+    },
+    "member.negative_leave": {
+        "what": "The opening leave balance is negative, which corrupts every leave calculation for this member.",
+        "rectify": "Open Leave Balances and set a correct, non-negative opening balance.",
+    },
+    "member.high_leave_opening": {
+        "what": "The opening leave balance is unusually high — possibly a typo (e.g. extra zero).",
+        "rectify": "Open Leave Balances and confirm or correct the opening figure.",
+    },
+    "member.dob_bad_format": {
+        "what": "The date of birth isn't a valid calendar date, so age-based logic can't read it.",
+        "rectify": "Open the member and re-enter a valid date of birth.",
+    },
+    "member.dob_in_future": {
+        "what": "The date of birth is in the future — clearly a data-entry error.",
+        "rectify": "Open the member and correct the date of birth.",
+    },
+    "member.dob_ancient": {
+        "what": "The date of birth is implausibly old (before 1900) — likely a typo.",
+        "rectify": "Open the member and correct the date of birth.",
+    },
+    "member.no_photo": {
+        "what": "No profile photo on file — makes face-recognition at muster harder.",
+        "rectify": "Open the member and upload a current photo.",
+    },
+    "member.photo_stale": {
+        "what": "The athlete's photo is over a year old — kids' faces change fast.",
+        "rectify": "Open the member and capture a fresh photo.",
+    },
+    "member.missing_joining_date": {
+        "what": "No joining date, so days before they joined can't be greyed out on the grid.",
+        "rectify": "Open the member and set their joining date.",
+    },
+    "member.missing_category": {
+        "what": "No category set (staff / coach / athlete), which drives most of the app's rules.",
+        "rectify": "Open the member and choose a category.",
+    },
+    "member.missing_rank": {
+        "what": "No rank / role title on this staff or coach record.",
+        "rectify": "Open the member and add their rank / role title.",
+    },
+    "member.missing_weekly_off": {
+        "what": "No weekly-off day set — the grid falls back to Monday, which may be wrong.",
+        "rectify": "Open the member and set their weekly-off day.",
+    },
+    "member.missing_institution": {
+        "what": "This athlete has no institution set — scoping and reports can't group them.",
+        "rectify": "Open the member and assign an institution.",
+    },
+    "member.missing_fleet": {
+        "what": "This athlete has no fleet assigned.",
+        "rectify": "Open the member and assign a fleet.",
+    },
+    # ── Leaves ──
+    "leave.end_before_start": {
+        "what": "The leave ends before it starts — an impossible range that breaks day counts.",
+        "rectify": "Open the leave in Approvals and fix the start/end dates.",
+    },
+    "leave.late_coming_multiday": {
+        "what": "A late-coming entry spans several days, but it should only ever be a single day.",
+        "rectify": "Open the leave in Approvals and set it to a single day.",
+    },
+    "leave.half_day_wrong_type": {
+        "what": "A half-day flag is on a non-Leave type (only Leave supports half-days).",
+        "rectify": "Open the leave in Approvals and correct the type or clear the half-day flag.",
+    },
+    "leave.missing_reason": {
+        "what": "An approved leave has no reason recorded — weak audit trail.",
+        "rectify": "Open the leave in Approvals and add a reason.",
+    },
+    "leave.overlapping": {
+        "what": "Two approved leaves for the same member overlap in dates, double-counting days.",
+        "rectify": "Open Approvals and cancel or trim one of the overlapping leaves.",
+    },
+    "leave.lop_exceeds_span": {
+        "what": "The loss-of-pay days exceed the leave's actual length — the payroll deduction is too large.",
+        "rectify": "Fix all caps the LOP days down to the real length of each affected leave.",
+    },
+    # ── Attendance sessions ──
+    "session.checkout_before_checkin": {
+        "what": "The check-out time is earlier than the check-in, so the day's hours are negative/invalid.",
+        "rectify": "Open the member and correct the check-in/out times for that day.",
+    },
+    "session.open_over_36h": {
+        "what": "A session has stayed open with no check-out for more than 36 hours — a forgotten checkout.",
+        "rectify": "Fix all auto-closes it 8 hours after check-in (archived, reversible).",
+    },
+    "session.zero_duration": {
+        "what": "Check-in and check-out are the same instant, so the day records zero hours.",
+        "rectify": "Fix all removes the empty row (archived and reversible).",
+    },
+    "session.too_long_16h": {
+        "what": "The session runs over 16 hours — almost always a missed checkout inflating hours.",
+        "rectify": "Fix all caps the check-out at 16 hours after check-in (reversible).",
+    },
+    "session.duplicate_open": {
+        "what": "The member has more than one open session at once, so they look checked-in twice.",
+        "rectify": "Fix all keeps the first open session and removes the duplicates (reversible).",
+    },
+    # ── Devices ──
+    "device.approved_for_ex_member": {
+        "what": "A member who has already left still has an approved device that can check in.",
+        "rectify": "Fix all revokes approved devices for members past their leaving date.",
+    },
+    "device.too_many_active": {
+        "what": "This member has many approved devices — usually leftover browsers worth tidying.",
+        "rectify": "Open Devices and revoke the ones no longer in use.",
+    },
+    "device.stale_pending": {
+        "what": "A device approval request has been pending for over a week.",
+        "rectify": "Open Devices and approve or reject the stale request.",
+    },
+    # ── Escorts ──
+    "escort.no_institution": {
+        "what": "This escort has no institution, so their muster access can't be scoped.",
+        "rectify": "Open Escorts and assign an institution.",
+    },
+    "escort.duplicate_phone": {
+        "what": "The same phone number is on more than one escort row.",
+        "rectify": "Open Escorts and correct the numbers so each is unique.",
+    },
+    "escort.malformed_phone": {
+        "what": "The escort's phone isn't a clean 10-digit number.",
+        "rectify": "Open Escorts and fix the phone to a valid 10-digit number.",
+    },
+    # ── Configuration ──
+    "config.no_office_geofence": {
+        "what": "The office location isn't set, so GPS distance at check-in can't be computed.",
+        "rectify": "Open Office Settings and set the office latitude/longitude.",
+    },
+    "config.empty_categories": {
+        "what": "The categories master is empty, so member dropdowns have nothing to pick.",
+        "rectify": "Open Masters and add the member categories.",
+    },
+    "config.stale_holidays": {
+        "what": "No holidays are scheduled for the next 6 months — payroll will treat them as working days.",
+        "rectify": "Open Holidays and add the upcoming holiday dates.",
+    },
+}
+
+
 def _fix_for(code: str, entity_ids: list) -> Optional[dict]:
     """Map a finding code to a "Fix" call-to-action the frontend can
     turn into a button. Returns None when there's no automated jump
@@ -411,6 +580,7 @@ def make_router(db, require_admin) -> APIRouter:
                 })
 
         # ── Attendance sessions ──────────────────────────────────
+        uid2name = {u["id"]: u.get("full_name") for u in users}
         sessions = await db.attendance.find({}, {"_id": 0}).to_list(20000)
         stale_cutoff = now - timedelta(hours=36)
         for s in sessions:
@@ -424,7 +594,8 @@ def make_router(db, require_admin) -> APIRouter:
                     "message": f"Session {s.get('date')}: check-out before check-in",
                     "entity_type": "attendance",
                     "entity_ids": [s.get("id") or s.get("session_id") or "?"],
-                    "entity_names": [s.get("member_name") or s.get("user_id")],
+                    "entity_names": [s.get("member_name") or s.get("user_name")
+                                     or uid2name.get(s.get("user_id")) or s.get("user_id")],
                 })
             if ci and not co:
                 try:
@@ -439,7 +610,8 @@ def make_router(db, require_admin) -> APIRouter:
                             "message": f"Session open since {s.get('date')} — no check-out for 36h+",
                             "entity_type": "attendance",
                             "entity_ids": [s.get("id") or s.get("session_id") or "?"],
-                            "entity_names": [s.get("member_name") or s.get("user_id")],
+                            "entity_names": [s.get("member_name") or s.get("user_name")
+                                             or uid2name.get(s.get("user_id")) or s.get("user_id")],
                         })
                 except ValueError:
                     pass
@@ -770,6 +942,9 @@ def make_router(db, require_admin) -> APIRouter:
         # a pure post-processing step (easy to audit / disable).
         for f in findings:
             f["fix"] = _fix_for(f.get("code", ""), f.get("entity_ids") or [])
+            doc = _CODE_DOC.get(f.get("code", ""), {})
+            f["what"] = doc.get("what")
+            f["rectify"] = doc.get("rectify")
 
         # Roll-up counts for the summary card.
         summary = defaultdict(int)

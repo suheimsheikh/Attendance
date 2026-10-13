@@ -66,7 +66,7 @@ export const NAV_ATTENDANCE_LIVE = [
   { to: "/admin/reports", label: "The Grid", icon: FileBarChart2, hint: "All-in-one 31-day attendance grid with drill-downs and exports", adminOnly: true },
   { to: "/admin/dar", label: "DAR Reports", icon: FileText, hint: "Daily Activity Reports filed at check-out — search, filter, missed-DAR payroll list", adminOnly: true },
   { to: "/admin/leave-balances", label: "Leave Balances", icon: CalendarCheck2, hint: "Paid leave, comp-off and tour balances for every member", adminOnly: true },
-  { to: "/admin/data-quality", label: "Rectify Data", icon: ShieldAlert, hint: "Automatic checks that flag suspicious or missing data — fix it here", adminOnly: true },
+  { to: "/admin/data-quality", label: "Data Quality", icon: ShieldAlert, hint: "Automatic checks that flag suspicious or missing data — fix it here", adminOnly: true },
 ];
 
 export const NAV_KITCHEN = [

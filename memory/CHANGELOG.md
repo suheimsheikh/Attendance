@@ -5265,3 +5265,11 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Comp-off: unchanged — not-expected days don't earn comp-off (only the single weekly_off does).
 - Model: members.py MemberCreate/Update dow_hours widened to Dict[str, Dict[str, Any]]; models.py UserPublic.dow_hours widened to Dict[str, Any] (response-model fix).
 - Verified by testing_agent iteration_119 (7/7 backend, frontend verified). Testing agent fixed 2 bugs: UserPublic.dow_hours schema (500 on member save) and a presence_board weekday() call on a str (500 on /api/presence) -> uses today_d.weekday(). Guard test: tests/test_not_expected_dow_iter119.py.
+
+### 13 Oct 2026 — Data Quality page clarity + dd/mm/yyyy
+- Renamed back to "Data Quality" (nav label navConfig.js + page H1); added a one-line "how to read a row" intro.
+- Findings table rebuilt for clarity: columns are now Priority | Issue (finding + plain-English explanation subtext) | Who / record | What gets fixed | Action. Dropped the cryptic machine-code column (kept as a row tooltip + aria).
+- Severity badges now read Fix now / Soon / Low / FYI (SEVERITY_LABEL) in both the table and the summary cards.
+- Dates everywhere on the page render dd/mm/yyyy via a frontend prettyDates() regex over finding messages.
+- Backend (routes/data_quality.py): added _CODE_DOC map -> each finding now carries `what` (why it matters) and `rectify` (what the fix does); attached in the same post-process loop as `fix`. Also resolve attendance session member names via uid2name so Who/record shows names, not raw user_id UUIDs.
+- Verified: curl /api/admin/data-quality => 373 findings, all carry what/rectify, names resolved; screenshot confirms new columns + dd/mm/yyyy. No testing-agent run (display-only change).

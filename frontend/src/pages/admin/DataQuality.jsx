@@ -21,15 +21,35 @@ const SEVERITY_STYLES = {
   info:   { bg: "bg-slate-100",   text: "text-slate-600",   ring: "ring-slate-200",   dot: "bg-slate-400" },
 };
 
+// Plain-English label for each severity so the column reads like a
+// to-do priority rather than developer jargon.
+const SEVERITY_LABEL = {
+  high: "Fix now",
+  medium: "Soon",
+  low: "Low",
+  info: "FYI",
+};
+
+// Rewrite any ISO date (YYYY-MM-DD) inside a finding message to the
+// academy-standard dd/mm/yyyy so every date on this page reads the same.
+function prettyDates(text) {
+  if (!text) return text;
+  return String(text).replace(
+    /(\d{4})-(\d{2})-(\d{2})/g,
+    (_, y, m, d) => `${d}/${m}/${y}`,
+  );
+}
+
 function SeverityBadge({ severity }) {
   const s = SEVERITY_STYLES[severity] || SEVERITY_STYLES.info;
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ring-1 ${s.bg} ${s.text} ${s.ring}`}
       data-testid={`dq-badge-${severity}`}
+      title={`Severity: ${severity}`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-      {severity}
+      {SEVERITY_LABEL[severity] || severity}
     </span>
   );
 }
@@ -216,8 +236,8 @@ function AttendanceDedupePanel() {
                   <tr className="text-left">
                     <th className="px-3 py-2 font-bold">Member</th>
                     <th className="px-3 py-2 font-bold">Date</th>
-                    <th className="px-3 py-2 font-bold">Remove</th>
-                    <th className="px-3 py-2 font-bold">Late</th>
+                    <th className="px-3 py-2 font-bold" title="Extra same-day check-in rows that will be removed">Extra rows</th>
+                    <th className="px-3 py-2 font-bold" title="Whether the day's late flag changes after keeping only the first check-in">Late flag</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -406,9 +426,18 @@ export default function DataQuality() {
 
   return (
     <div className="p-4 md:p-8">
-      <div className="mb-6 flex items-center gap-2">
-        <ShieldAlert size={20} className="text-slate-500" />
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Data Quality</h1>
+      <div className="mb-6">
+        <div className="flex items-center gap-2">
+          <ShieldAlert size={20} className="text-slate-500" />
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Data Quality</h1>
+        </div>
+        <p className="text-sm text-slate-600 mt-1 max-w-3xl">
+          Automatic checks that flag suspicious, missing, or duplicate data. Read each row left to right:
+          <b> Priority</b> (how urgent) → <b>Issue</b> (what's wrong, with a plain explanation) →
+          <b> Who / record</b> it affects → <b>What gets fixed</b> → <b>Action</b> to do it.
+          Click a name to open that member, or a green <b>Fix all</b> button to auto-correct in bulk.
+          Dates are shown as dd/mm/yyyy.
+        </p>
       </div>
 
       <AttendanceDedupePanel />
@@ -438,7 +467,7 @@ export default function DataQuality() {
             >
               <div className="text-[10px] uppercase tracking-wide text-slate-500 font-bold flex items-center gap-1">
                 <span className={`w-1.5 h-1.5 rounded-full ${SEVERITY_STYLES[sev].dot}`} />
-                {sev}
+                {SEVERITY_LABEL[sev] || sev}
               </div>
               <div className="text-2xl font-extrabold tabular-nums text-slate-800">
                 {(data.by_severity || {})[sev] || 0}
@@ -485,21 +514,26 @@ export default function DataQuality() {
             <table className="w-full text-xs">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr className="text-[10px] uppercase tracking-wider font-bold text-slate-500">
-                  <th className="py-2 px-3 text-left w-24">Severity</th>
-                  <th className="py-2 px-3 text-left">Issue</th>
-                  <th className="py-2 px-3 text-left">Affected</th>
-                  <th className="py-2 px-3 text-left w-32">Fix</th>
-                  <th className="py-2 px-3 text-left w-40 font-mono text-[10px] normal-case">Code</th>
+                  <th className="py-2 px-3 text-left w-20" title="How urgent this is to fix">Priority</th>
+                  <th className="py-2 px-3 text-left" title="What the check found, plus a plain explanation">Issue</th>
+                  <th className="py-2 px-3 text-left w-48" title="The member or record this is about — click to open it">Who / record</th>
+                  <th className="py-2 px-3 text-left" title="Exactly what correcting this will do">What gets fixed</th>
+                  <th className="py-2 px-3 text-left w-28" title="One-click action">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((f, i) => (
-                  <tr key={`${f.code}-${i}`} className="border-t border-slate-100 hover:bg-slate-50 align-top">
+                  <tr key={`${f.code}-${i}`} className="border-t border-slate-100 hover:bg-slate-50 align-top" title={`Check: ${f.code}`}>
                     <td className="py-2 px-3"><SeverityBadge severity={f.severity} /></td>
-                    <td className="py-2 px-3 text-slate-800">{f.message}</td>
+                    <td className="py-2 px-3">
+                      <div className="font-semibold text-slate-800">{prettyDates(f.message)}</div>
+                      {f.what && <div className="text-[11px] text-slate-500 mt-0.5 max-w-sm leading-snug">{prettyDates(f.what)}</div>}
+                    </td>
                     <td className="py-2 px-3"><EntityRefs f={f} /></td>
+                    <td className="py-2 px-3 text-[11px] text-slate-600 max-w-xs leading-snug">
+                      {f.rectify ? prettyDates(f.rectify) : <span className="text-slate-300">—</span>}
+                    </td>
                     <td className="py-2 px-3"><FixButton finding={f} onFixed={load} /></td>
-                    <td className="py-2 px-3 font-mono text-[10px] text-slate-400">{f.code}</td>
                   </tr>
                 ))}
               </tbody>
