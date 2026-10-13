@@ -24,6 +24,7 @@ from services.time_utils import now_utc, local_date_str
 
 logger = logging.getLogger(__name__)
 from holidays import _days_inclusive
+from services.attendance_calc import ATHLETE_CATEGORIES
 
 
 # -------------------- Pydantic bodies --------------------
@@ -295,7 +296,11 @@ def make_router(db, require_admin, get_current_user, compute_comp_off_balance=No
         # Only `type=leave` runs the ladder — Tour is paid in full and
         # Late Coming doesn't touch any balance. Half-day leaves consume
         # 0.5 instead of a full inclusive-day count.
-        if body.type == "leave" and compute_balance_summary and split_leave_days:
+        # Athlete/elite sailors are not leave-tracked staff — they have no
+        # paid-leave balance and never incur LOP, so their approved leave
+        # always shows as plain Leave (user bug, Oct 2026). Skip the ladder.
+        is_athlete = (target_user.get("category") or "").lower() in ATHLETE_CATEGORIES
+        if body.type == "leave" and not is_athlete and compute_balance_summary and split_leave_days:
             summary = await compute_balance_summary(db, target_user)
             requested = 0.5 if body.half_day else _days_inclusive(body.start_date, body.end_date)
             if short_notice_force_lop:

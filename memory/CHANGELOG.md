@@ -5178,3 +5178,19 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 
 ## Refactor #5 (server.py presence split) — DEFERRED
 - The /presence endpoint is a single ~650-line function (server.py 1390-2038) tightly coupled to server globals. A safe extraction needs a register(deps) shim threading ~10 helpers; risk of a hard import failure is high, so deferred to a dedicated isolated task rather than rushed.
+
+### 13 Oct 2026 — Elite/athlete sailors wrongly marked LOP (LP) on the Grid
+- Root cause: ATHLETE_CATEGORIES = {athlete, elite}, but holidays.py (compute_balance_summary, compute_pay_balances) and auth.py gated leave-tracking on the LITERAL `category != "athlete"`. So `elite` sailors were treated as leave-tracked staff; with no paid-leave opening, routes/leaves.py's deduction ladder converted their leave days into LOP, and grid.py painted the LOP tail as "LP". Reported: VINOD DANDU (elite) showing LP on 13 Oct during an approved 11–17 Oct leave (lop_days=6).
+- Fix (option a, user-approved): athlete categories are never leave-tracked and never incur LOP.
+  - holidays.py x2: `tracked = (category not in ATHLETE_CATEGORIES) and opening is not None`.
+  - routes/leaves.py: skip the comp-off/paid-leave/LOP ladder entirely when the leave's target member is in ATHLETE_CATEGORIES (added import). Their approved leave stays plain LV.
+  - routes/auth.py: YTD leave-aggregation gate uses ATHLETE_CATEGORIES too.
+  - Data fix: unset lop_days/paid_leave_used/comp_off_used on 3 stray athlete/elite type=leave records (incl. Vinod's).
+- Verified: grid cell for Vinod on 13 Oct now = LV (was LP). 138 leave/grid/balance tests green.
+
+### 13 Oct 2026 — Absentee WhatsApp dispatch split into two kinds
+- kind=camp: camp participants only (absent+late athletes), to admins + checked-in coaches, due right after the earliest active camp's start_time, camp days only.
+- kind=staff: non-athletes (staff/coach) absent/leave/tour/LOP/late, ADMINS ONLY, due 10:00 local, every day regardless of camps.
+- Backend routes/muster.py: GET/POST /muster/absent-dispatch take ?kind=, return per-kind sent flag + dispatch_after_hm. absent_dispatch_log now keyed by (date,kind); server.py migrated the unique index date_1 -> uniq_date_kind {date,kind}.
+- Frontend AbsentDispatchPrompt.jsx takes a `kind` prop; mounted twice in Layout.jsx (camp for admin+coach, staff for admin). Per-kind dismiss + testids.
+- Verified via curl (independent flags) + 5 pytest (test_absent_dispatch_once.py rewritten for two kinds; unique-index guard green).

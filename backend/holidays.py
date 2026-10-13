@@ -175,7 +175,7 @@ async def compute_balance_summary(db, user: dict, year: Optional[str] = None) ->
         year = local_date_str(None)[:4]
     yr_start, yr_end = f"{year}-01-01", f"{year}-12-31"
     opening = user.get("leave_balance_opening")
-    tracked = (user.get("category") != "athlete") and (opening is not None)
+    tracked = ((user.get("category") or "").lower() not in ATHLETE_CATEGORIES) and (opening is not None)
 
     rows = await db.leaves.find({
         "user_id": user["id"],
@@ -245,7 +245,7 @@ async def compute_pay_balances(db, user: dict, year: Optional[str] = None) -> di
         year = local_date_str(None)[:4]
     yr_start, yr_end = f"{year}-01-01", f"{year}-12-31"
     opening = user.get("leave_balance_opening")
-    tracked = (user.get("category") != "athlete") and (opening is not None)
+    tracked = ((user.get("category") or "").lower() not in ATHLETE_CATEGORIES) and (opening is not None)
     rows = await db.leaves.find({
         "user_id": user["id"],
         "start_date": {"$lte": yr_end},

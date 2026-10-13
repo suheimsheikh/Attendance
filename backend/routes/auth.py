@@ -30,6 +30,7 @@ from pydantic import BaseModel, EmailStr
 from models import UserPublic
 from services.permissions import is_super_admin, _SUPER_ADMIN_PHONES
 from services.time_utils import now_utc, local_date_str
+from services.attendance_calc import ATHLETE_CATEGORIES
 from services.phone import normalize_phone, phone_key
 
 logger = logging.getLogger(__name__)
@@ -227,7 +228,7 @@ def make_router(
         # (who use the Breaks workflow) and for newly-onboarded staff whose
         # opening balance hasn't been seeded yet.
         enriched = dict(user)
-        if user.get("category") != "athlete" and user.get("leave_balance_opening") is not None:
+        if (user.get("category") or "").lower() not in ATHLETE_CATEGORIES and user.get("leave_balance_opening") is not None:
             office = await db.config.find_one({"id": "office"})
             year = local_date_str(office)[:4]
             rows = await db.leaves.find({
