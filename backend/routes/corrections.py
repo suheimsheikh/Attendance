@@ -101,6 +101,8 @@ async def _apply_missed_checkin(db, c: dict, admin: dict) -> dict:
     check_out_time = p.get("check_out_time")  # optional HH:MM
     if not check_in_time:
         raise HTTPException(status_code=400, detail="This request has no check-in time — reject it and ask the member to re-file with the time they arrived")
+    if check_out_time and check_out_time <= check_in_time:
+        raise HTTPException(status_code=400, detail=f"Check-out ({check_out_time}) must be later than check-in ({check_in_time})")
     # Reject if a row already exists for this date (they wanted `time_adjust`).
     existing = await db.attendance.find_one(
         {"user_id": c["requester_id"], "date": c["target_date"]},
@@ -165,6 +167,23 @@ async def _apply_time_adjust(db, c: dict, admin: dict) -> dict:
     # forgotten checkout must credit the real hours back into payroll.
     final_in = update.get("check_in_at") or row.get("check_in_at")
     final_out = update.get("check_out_at") or row.get("check_out_at")
+    # Guardrail (Oct 2026): block a correction that leaves check-out at or
+    # before check-in — compares the merged (new ± existing) timestamps so it
+    # also catches adjusting only one side into an invalid order.
+    if final_in and final_out:
+        try:
+            _ci = datetime.fromisoformat(final_in)
+            _co = datetime.fromisoformat(final_out)
+            _tz = office_tz(office_cfg)
+            if _ci.tzinfo is None:
+                _ci = _ci.replace(tzinfo=_tz)
+            if _co.tzinfo is None:
+                _co = _co.replace(tzinfo=_tz)
+            invalid_order = _co <= _ci
+        except ValueError:
+            invalid_order = False
+        if invalid_order:
+            raise HTTPException(status_code=400, detail="Check-out must be later than check-in")
     if final_in and final_out:
         try:
             office = await db.config.find_one({"id": "office"}, {"_id": 0, "timezone": 1})
@@ -504,6 +523,14 @@ def make_router(db, require_admin, get_current_user, write_audit) -> APIRouter:
             raise HTTPException(status_code=400, detail="Check-in time is required for a missed check-in")
         if body.kind == "time_adjust" and not ((body.payload or {}).get("check_in_time") or (body.payload or {}).get("check_out_time")):
             raise HTTPException(status_code=400, detail="Enter a new check-in and/or check-out time")
+        # Guardrail (Oct 2026): a manual correction must never put check-out at
+        # or before check-in. When both times are supplied we can reject right
+        # here; a time_adjust that only moves one side is checked at apply time
+        # against the existing row.
+        _cin = (body.payload or {}).get("check_in_time")
+        _cout = (body.payload or {}).get("check_out_time")
+        if _cin and _cout and _cout <= _cin:
+            raise HTTPException(status_code=400, detail=f"Check-out ({_cout}) must be later than check-in ({_cin})")
 
         # Resolve target member — admin-on-behalf-of flow takes precedence.
         # Only actual admins may impersonate; non-admins get a 403 rather

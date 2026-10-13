@@ -5295,3 +5295,10 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Nightly auto-close cron (the fix for forgotten checkouts / 177 "over-16h"): routes/cron.py POST /api/cron/close-stale-sessions (bearer WEBHOOK_CRON_SECRET, idempotent, backgrounded) closes sessions open from a previous office-local day at that day's work_end (member→office default→18:00; fallback check_in+9h), flags forgot_checkout + auto_closed_by_cron + exit_method=auto_close_cron. Added to .emergent/crons.yml at 00:45 IST daily (2 crons total). NOTE: there was NO prior midnight auto-close — open sessions were only closed at next check-in (which is what ballooned them).
 - Verified via curl: bad mobile 400, future DOB 400, athlete-no-parent 409→force 200, leave end<start 400, leave overlap 400, cron 401 without / 200 with secret. Frontend compiles. Test data cleaned up.
 - DEFERRED (noted to user): Office-geofence save block (low value, risky to existing saves) and the admin manual-correction checkout<checkin guard (live check-in/out uses now() so can't produce it; only reviewed admin edits could).
+
+### 13 Oct 2026 — Correction time guard
+- corrections.py: block a manual attendance correction from leaving check-out at or before check-in.
+  - create_correction: if payload has both times and check_out_time <= check_in_time -> 400 (immediate feedback).
+  - _apply_missed_checkin: same guard on payload times.
+  - _apply_time_adjust: compares merged final_in/final_out (new ± existing row) tz-aware -> 400 if check-out <= check-in (catches adjusting only one side into an invalid order). Replaces the old silent max(0.0) hours-clamp path for the invalid case.
+- Verified via curl: time_adjust 17:00->09:00 = 400, missed_checkin 10:00==10:00 = 400, valid 09:00->17:00 = 200. Backend only; admin sees the 400 as a toast. Test data cleaned up.
