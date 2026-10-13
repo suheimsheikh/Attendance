@@ -195,6 +195,14 @@ export default function ApprovalsUnified() {
     queryClient.invalidateQueries({ queryKey: ["/admin/checkin-approvals"] });
     queryClient.invalidateQueries({ queryKey: ["/admin/corrections"] });
     queryClient.invalidateQueries({ queryKey: ["/admin/devices"] });
+    // Approving a correction / leave / check-in rewrites the underlying
+    // attendance so every /reports/* view (Grid, Daily, Hours, Payroll…)
+    // must refetch — otherwise an approved time-adjust keeps showing the
+    // stale "LT" cell on the Grid instead of flipping to "P" (Oct 2026).
+    queryClient.invalidateQueries({
+      predicate: (q) =>
+        typeof q.queryKey?.[0] === "string" && q.queryKey[0].startsWith("/reports/"),
+    });
   }, [queryClient]);
 
   const byName = useCallback((r) => !nameQ || nameOf(r).toLowerCase().includes(nameQ.trim().toLowerCase()), [nameQ]);
@@ -286,6 +294,14 @@ export default function ApprovalsUnified() {
       }
       // Refresh the sidebar badge count without spamming other tabs.
       queryClient.invalidateQueries({ queryKey: ["/admin/approvals-summary"] });
+      // A decision rewrites the underlying attendance/leave data, so every
+      // /reports/* view (Grid, Daily, Hours, Payroll…) must refetch —
+      // otherwise an approved time-adjust keeps showing the stale "LT" cell
+      // on the Grid instead of flipping to "P" (Oct 2026 user report).
+      queryClient.invalidateQueries({
+        predicate: (q) =>
+          typeof q.queryKey?.[0] === "string" && q.queryKey[0].startsWith("/reports/"),
+      });
     } catch (err) {
       showApiError(err, `Could not ${decision}`);
       // Roll back any optimistic drop by refetching the queue.
