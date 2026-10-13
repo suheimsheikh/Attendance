@@ -6,6 +6,13 @@
 - Live data: never modify real members/attendance/issues without explicit approval.
 
 
+## Latest change (Jun 2026) — Late-arrival reason prompt
+- Self check-in now ASKS WHY when a member is late. `SelfCheckIn.jsx` computes `lateInfo` client-side (now > work_start + office grace, non-hourly only); when late, auto check-in is suppressed so the member sees an amber "Reason for being late (optional)" ReasonPrompt (testid `late-reason`) and taps in manually.
+- Reason sent as `late_reason` on `/api/attendance/geo-toggle`; backend (`attendance_actions.py` `_geo_toggle`) stores it on the attendance row only when `late` is true, and adds it to the member's personal reason bank.
+- Surfaced to admins: Grid LT cell tooltip (`grid.py` cell_meta `late_reason`) and profile-details late list (`server.py` `late_this_month_list[].reason`).
+- Early-out reason prompt already existed (`earlyOutInfo` ReasonPrompt, `early_out_reason`) — unchanged.
+- Verified e2e: late check-in via geo-toggle stored `late_reason` with late=true (HTTP 200).
+
 ## Original problem statement
 Port the "Attendance" mobile app for the youth competitive sailing academy (Yacht Club of Hyderabad) to a web-based app called "I-showed-up". Smooth operation for staff payroll tracking and sailor attendance. Requires audit logging, geolocation check-ins, single-glance admin dashboard, Muster Roll, self-check-ins, leaves, camps/regattas tracking, Meals/Pantry Stock tracking (Vendors, WAC pricing, drill-downs), and WhatsApp roster reporting.
 

@@ -148,6 +148,7 @@ def register(router, *, _athlete_like_keys, db, require_admin):
                  # Attendance report (which correctly reads `late`)
                  # showed them. Prod bug 20 Feb 2026.
                  "late": 1, "overtime_total_min": 1, "hours": 1,
+                 "late_reason": 1,
                  # Early-out flag stamped at checkout (13 Feb 2026);
                  # historical rows are computed on-the-fly from
                  # check_out_at + user.work_end so the Grid tally is
@@ -552,6 +553,8 @@ def register(router, *, _athlete_like_keys, db, require_admin):
                             m["check_out_at"] = att["check_out_at"]
                         if code == "LT" and att.get("late_minutes"):
                             m["late_minutes"] = int(att.get("late_minutes") or 0)
+                        if code == "LT" and att.get("late_reason"):
+                            m["late_reason"] = att.get("late_reason")
                         _ot = session_ot_minutes(u, att)
                         if _ot:
                             m["ot_minutes"] = _ot

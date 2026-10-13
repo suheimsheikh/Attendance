@@ -48,6 +48,7 @@ export default function SelfCheckIn() {
   const [lastDistance, setLastDistance] = useState(null);
   const [overtimeReason, setOvertimeReason] = useState("");
   const [earlyOutReason, setEarlyOutReason] = useState("");
+  const [lateReason, setLateReason] = useState("");
   const [showSelfie, setShowSelfie] = useState(false);
   const [photoStatus, setPhotoStatus] = useState(null);
   const [sites, setSites] = useState([]);
@@ -342,6 +343,25 @@ export default function SelfCheckIn() {
     return null;
   }, [user, status]);
 
+  // Late-arrival detection — fires BEFORE check-in when the current local
+  // minute is past the member's work_start + the office grace window
+  // (user rule, Jun 2026: "if a person is late the app must ask why").
+  // Mirrors the backend's compute_late() baseline (member work_start +
+  // office late_grace_minutes). Hourly wagers have no set start → never
+  // late. The reason is optional but the prompt always appears, and auto
+  // check-in is suppressed (below) so the member sees it.
+  const lateInfo = useMemo(() => {
+    if (status?.checked_in || doneToday || user?.hourly_wager) return null;
+    const wsMin = hmParse(user?.work_start);
+    if (wsMin == null) return null;
+    const grace = Number(office?.late_grace_minutes || 0);
+    const lateBy = hmNow() - (wsMin + grace);
+    if (lateBy > 0) {
+      return { minutes: lateBy, label: `You're checking in ${lateBy} min after your start time (${user.work_start})` };
+    }
+    return null;
+  }, [user, status, office, doneToday]);
+
   // Early-out detection — mirrors the backend's 15-minute grace window
   // in /me/profile-details. Fires only when the member is CHECKED IN
   // (i.e. about to check out) and the current local minute is more than
@@ -391,6 +411,7 @@ export default function SelfCheckIn() {
         : { latitude: 0, longitude: 0 };
       if (otInfo && overtimeReason.trim()) body.overtime_reason = overtimeReason.trim();
       if (earlyOutInfo && earlyOutReason.trim()) body.early_out_reason = earlyOutReason.trim();
+      if (lateInfo && lateReason.trim()) body.late_reason = lateReason.trim();
       if (reason) body.reason = reason;
       if (checkInPhoto) body.check_in_photo = checkInPhoto;
       if (darNeededNow && darText.trim()) body.dar_text = darText.trim();
@@ -439,6 +460,7 @@ export default function SelfCheckIn() {
       }
       setOvertimeReason("");
       setEarlyOutReason("");
+      setLateReason("");
       refresh();
     } catch (err) {
       const m = /OFFSITE_PROOF_REQUIRED:(\d+)/.exec(err?.message || "");
@@ -594,6 +616,9 @@ export default function SelfCheckIn() {
     autoTriedRef.current = true;
     if (status?.checked_in || onTempOut || status?.done_for_today) return;
     if (geoPerm === "denied") return;
+    // Late arrival → never auto check-in; the member must see the
+    // "why are you late?" prompt and tap in themselves (user rule, Jun 2026).
+    if (lateInfo) return;
     (async () => {
       const { lat, lng, acc } = await getCoords();
       if (lat == null || lng == null) return;
@@ -823,6 +848,18 @@ export default function SelfCheckIn() {
               </button>
               <DarTextarea value={darText} onChange={setDarText} minChars={darMin} />
             </div>
+          )}
+          {lateInfo && !status?.checked_in && (
+            <ReasonPrompt
+              variant="amber"
+              headline={lateInfo.label}
+              labelText="Reason for being late (optional)"
+              placeholder="e.g. Traffic, medical appointment, prior permission…"
+              footnote="Leaves an audit note on today's attendance — your coach/admin sees it on the muster and in the day's ledger."
+              value={lateReason}
+              onChange={setLateReason}
+              testId="late-reason"
+            />
           )}
           {otInfo && (
             <ReasonPrompt

@@ -1474,7 +1474,7 @@ async def _profile_details_for(user: dict) -> dict:
     sessions_task = db.attendance.find(
         {"user_id": user["id"], "date": {"$gte": year_start, "$lte": today_iso}},
         {"_id": 0, "id": 1, "date": 1, "check_in_at": 1, "check_out_at": 1,
-         "hours": 1, "late": 1, "late_minutes": 1,
+         "hours": 1, "late": 1, "late_minutes": 1, "late_reason": 1,
          "overtime_total_min": 1, "ot_early": 1,
          "work_start_at_session": 1, "work_end_at_session": 1},
     ).sort("date", -1).to_list(500)
@@ -1557,6 +1557,7 @@ async def _profile_details_for(user: dict) -> dict:
         "check_in_at": s.get("check_in_at"),
         "late_minutes": int(s.get("late_minutes") or 0),
         "hours": s.get("hours"),
+        "reason": s.get("late_reason"),
     } for s in late_this_month[:30]]
 
     return {

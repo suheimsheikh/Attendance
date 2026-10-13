@@ -36,6 +36,10 @@ class GeoToggleIn(BaseModel):
     reason: Optional[str] = None
     overtime_reason: Optional[str] = None
     early_out_reason: Optional[str] = None
+    # Reason the member gives for arriving late (Jun 2026 user request —
+    # "if a person is late the app must ask why"). Optional; stored on the
+    # attendance row only when the check-in actually computes as late.
+    late_reason: Optional[str] = None
     dar_text: Optional[str] = None
     # Off-geofence proof selfie (Jun 2026). When a check-in resolves OUTSIDE
     # every geofence, the app forces a fresh selfie + reason; this holds that
@@ -358,7 +362,8 @@ def make_router(db, get_current_user, require_admin, open_session_for, _late_day
                           overtime_reason: Optional[str] = None,
                           early_out_reason: Optional[str] = None,
                           dar_text: Optional[str] = None,
-                          check_in_photo: Optional[str] = None) -> dict:
+                          check_in_photo: Optional[str] = None,
+                          late_reason: Optional[str] = None) -> dict:
         """GPS-based check in/out (no QR). Distance from the office is recorded but
         NOT enforced — a check-in always succeeds. If the caller could not obtain
         a GPS fix they pass (0, 0) and we mark the row as `geo_unavailable`."""
@@ -541,6 +546,9 @@ def make_router(db, get_current_user, require_admin, open_session_for, _late_day
             "geo_reason": (reason or None) if out else None,
             "late": late,
             "late_minutes": late_minutes,
+            # Why the member was late — captured at check-in when the app
+            # detects a late arrival (Jun 2026). Only kept when actually late.
+            "late_reason": ((late_reason or "").strip() or None) if late else None,
             "method": "geo",
             "checked_in_by": by,
             # See parallel comment on the QR check-in path — same approval rule.
@@ -579,6 +587,10 @@ def make_router(db, get_current_user, require_admin, open_session_for, _late_day
         # Early-OT reason → personal bank (see notes on _ensure_reason_in_bank).
         if early_min > 0 and overtime_reason and overtime_reason.strip():
             await _ensure_reason_in_bank(target["id"], overtime_reason)
+        # Late-arrival reason → personal bank too, so frequent reasons
+        # (traffic, prior permission) are one tap next time.
+        if late and late_reason and late_reason.strip():
+            await _ensure_reason_in_bank(target["id"], late_reason)
         return {"ok": True, "action": "checkin", "member": target["full_name"],
                 "out_of_geofence": out, "distance_m": dist,
                 "site_id": site_id, "site_name": site_name,
@@ -599,7 +611,7 @@ def make_router(db, get_current_user, require_admin, open_session_for, _late_day
         return await _geo_toggle(user, office, body.latitude, body.longitude,
                                  body.reason, None, body.overtime_reason,
                                  body.early_out_reason, body.dar_text,
-                                 body.check_in_photo)
+                                 body.check_in_photo, late_reason=body.late_reason)
 
 
     @router.post("/attendance/mark-member")
