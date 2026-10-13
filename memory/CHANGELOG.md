@@ -5253,3 +5253,7 @@ at the member's scheduled work_end so presence clears and a plausible boundary s
 - Retired Category Health: removed backend GET /api/admin/category-health (admin_tools.py), frontend page (pages/admin/CategoryHealth.jsx), route + lazy import (App.js), nav entry (navConfig.js), and the usage-registry entry (usage.py).
 - Retired Escort Photo Cleanup: removed backend endpoints GET /escort-attendance/photos/purge-candidates, DELETE /escort-attendance/{id}/photos, POST /escort-attendance/photos/purge-bulk + unused PurgeBulkIn model (escorts.py); frontend page (pages/admin/EscortPhotoCleanup.jsx), route + lazy import (App.js), nav entry + unused Camera icon import (navConfig.js), usage-registry entry (usage.py).
 - Verified: all 4 removed endpoints return 404; Feature Usage never-used dropped 5->3 (now SMS Log, Parent Notify Log, Feature Usage); frontend compiles clean; backend restarts clean.
+
+### 13 Oct 2026 — Ponytail review of the retirements
+- Removed dead imports left by the feature retirements: routes/attendance.py (date, timedelta, Optional, Query) and routes/escorts.py (timedelta); updated the stale attendance.py module docstring ("deprecated OT stubs" removed).
+- Verified by testing_agent (iteration_118): all 4 retired endpoints 404; attendance/status, calendar-grid, usage/report, escort-attendance list all 200; nav links gone, no crash; Grid renders. No critical/minor regressions (1 flaky cold-start login timeout only). Added guard test tests/test_regression_retired_features.py.

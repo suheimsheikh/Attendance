@@ -1,0 +1,46 @@
+{
+  "summary": "Regression test after retiring OT stubs, Category Health, and Escort Photo Cleanup. 8/9 backend tests pass; the 1 failure is a cold-start read timeout on a standalone login test (login succeeds in all subsequent fixture-based tests). All 4 retired endpoints correctly return 404. All sibling endpoints in edited files still work (attendance/status, calendar-grid, usage/report, escort-attendance list). Frontend admin side-nav no longer shows the retired links; direct navigation to retired routes does not crash the app (renders shell without error boundary). The Grid at /admin/reports renders fully.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/login", "issue": "Occasional cold-start read timeout >30s on first standalone call; subsequent calls fine. Likely infra cold start, not code regression."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "retired_endpoints_verification": {
+    "GET /api/admin/overtime": "404 PASS",
+    "GET /api/admin/overtime/needs-review": "404 PASS",
+    "GET /api/admin/category-health": "404 PASS",
+    "GET /api/escort-attendance/photos/purge-candidates": "404 PASS"
+  },
+  "regression_verification": {
+    "GET /api/attendance/status": "200 PASS",
+    "GET /api/reports/calendar-grid?month=2026-10": "200 PASS",
+    "GET /api/usage/report": "200 PASS; no 'category-health' or 'escort-photos' strings",
+    "GET /api/escort-attendance (list)": "200 PASS",
+    "Admin side-nav": "No 'Category Health' / 'Escort Photo Cleanup' entries - PASS",
+    "/admin/category-health direct nav": "No crash, no error boundary - PASS",
+    "/admin/escort-photos direct nav": "No crash, no error boundary - PASS",
+    "/admin/reports (The Grid)": "Renders calendar grid with rows - PASS"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_regression_retired_features.py",
+    "/app/test_reports/pytest/retired_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Direct navigation to retired routes (/admin/category-health, /admin/escort-photos) falls back to the app shell without a visible 'Not Found' message. Not a bug per the request (routes intentionally removed, no crash) but UX could add a 404 route."
+  ],
+  "updated_files": ["/app/backend/tests/test_regression_retired_features.py"],
+  "success_rate": {"backend": "89% (8/9; the 1 fail is a flaky cold-start timeout, not a regression)", "frontend": "100%"},
+  "test_credentials": "admin@attendance.app / Admin@12345",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend hosted at https://youth-regatta-app.preview.emergentagent.com occasionally has cold-start latency >30s on first request; use timeout>=60s for the very first API call. All retirement regression checks pass.",
+  "rca of the issue": "N/A - no issues to RCA. Retirement cleanup verified clean."
+}
