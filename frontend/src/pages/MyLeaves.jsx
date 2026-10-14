@@ -14,6 +14,7 @@ import { useFormError } from "../hooks/useFormError";
 import { shortDate, todayIso, tomorrowIso } from "../utils";
 import { useDirtyForm } from "../hooks/useDirtyForm";
 import TopSaveButton from "../components/TopSaveButton";
+import EscHint from "../components/EscHint";
 import MemberMultiPicker from "./leaves/MemberMultiPicker";
 import HalfDayPicker from "./leaves/HalfDayPicker";
 import StatsDashboard from "./leaves/StatsDashboard";
@@ -435,6 +436,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
           <h2 className="text-xl font-extrabold">{asAdmin ? "Apply on behalf of members" : "New request"}</h2>
           <div className="flex items-center gap-2">
             <TopSaveButton formId="apply-leave-form-el" dirty={guard.dirty} saving={busy} label="Submit" testId="leave-top-save" />
+            <EscHint className="hidden sm:inline-flex" />
             <button onClick={guard.close} className="p-2 hover:bg-slate-100 rounded-lg" title="Close without saving"><X size={18} /></button>
           </div>
         </div>

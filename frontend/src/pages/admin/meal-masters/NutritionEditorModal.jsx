@@ -4,11 +4,11 @@
  */
 import React, { useState } from "react";
 import { useEscape } from "../../../hooks/useEscape";
+import EscHint from "../../../components/EscHint";
 import { createPortal } from "react-dom";
 import { Flame } from "lucide-react";
 
 export default function NutritionEditorModal({ item, onClose, onSave }) {
-  useEscape(onClose, { dirty: ["kcal", "protein_g", "carbs_g", "fat_g", "fibre_g", "grams_per_unit"].some((k) => String(d[k] ?? "") !== String((item.nutrition || {})[k] ?? "")) });
   const initial = item.nutrition || {};
   const [d, setD] = useState({
     kcal:          initial.kcal ?? "",
@@ -19,6 +19,7 @@ export default function NutritionEditorModal({ item, onClose, onSave }) {
     grams_per_unit: initial.grams_per_unit ?? "",
   });
   const [saving, setSaving] = useState(false);
+  useEscape(onClose, { dirty: ["kcal", "protein_g", "carbs_g", "fat_g", "fibre_g", "grams_per_unit"].some((k) => String(d[k] ?? "") !== String((item.nutrition || {})[k] ?? "")) });
   const fields = [
     { k: "kcal",           label: "Calories (kcal / 100 g)", hint: "e.g. 355 for rice", max: 900 },
     { k: "protein_g",      label: "Protein (g / 100 g)",     hint: "e.g. 22 for toor dal", max: 100 },
@@ -71,9 +72,12 @@ export default function NutritionEditorModal({ item, onClose, onSave }) {
             </div>
           ))}
           {err && <p className="text-xs font-semibold text-rose-600" data-testid="nutrition-error">{err}</p>}
-          <div className="flex justify-end gap-2 pt-3">
+          <div className="flex items-center justify-between gap-2 pt-3">
+            <EscHint className="hidden sm:inline-flex" />
+            <div className="flex items-center gap-2 ml-auto">
             <button title="Close without saving" type="button" onClick={onClose} className="iu-btn-secondary !h-8 text-sm" data-testid="nutrition-cancel">Cancel</button>
             <button type="submit" disabled={saving} className="iu-btn-primary !h-8 text-sm" data-testid="nutrition-save">{saving ? "Saving…" : "Save"}</button>
+            </div>
           </div>
         </form>
       </div>

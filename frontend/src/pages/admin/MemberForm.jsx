@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api } from "../../api";
 import { useDirtyForm } from "../../hooks/useDirtyForm";
 import TopSaveButton from "../../components/TopSaveButton";
+import EscHint from "../../components/EscHint";
 import { fileToResizedDataUrl } from "../../utils";
 import Avatar from "../../components/Avatar";
 import FormErrorBanner from "../../components/FormErrorBanner";
@@ -248,6 +249,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-extrabold">{isEdit ? "Edit member" : "New member"}</h2>
           <TopSaveButton formId="member-form-el" dirty={guard.dirty} saving={busy} testId="mf-top-save" />
+          <EscHint className="hidden sm:inline-flex" />
           <button onClick={guard.close} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
         </div>
         <form id="member-form-el" onSubmit={submit} className="space-y-4">

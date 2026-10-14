@@ -265,6 +265,22 @@ export default function Meals() {
     } catch (err) { showApiError(err, "Save failed"); }
     finally { setSaving(false); }
   };
+  const copyAllFromYesterday = async () => {
+    setCopying(true);
+    try {
+      const results = await Promise.all(meals.map((m) =>
+        api.post(`/meals/copy-previous?meal=${encodeURIComponent(m.key)}&date=${encodeURIComponent(dateStr)}`).catch(() => null),
+      ));
+      const copied = results.reduce((s, r) => s + (r?.copied_count || 0), 0);
+      const src = (results.find((r) => r?.from_date) || {}).from_date || "yesterday";
+      if (copied === 0) toast.success("Already up to date — nothing new to copy");
+      else toast.success(`Copied ${copied} meal mark${copied === 1 ? "" : "s"} from ${formatDate(src)}`);
+      load();
+    } catch (err) { showApiError(err, "Copy failed"); }
+    finally { setCopying(false); }
+  };
+  // Live count per meal column (reflects unsaved cell toggles).
+  const mealCount = (mealKey) => (data?.members || []).reduce((n, mem) => n + (cellDesired(mem, mealKey) ? 1 : 0), 0);
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto pb-32" data-testid="meals-page">
@@ -389,6 +405,19 @@ export default function Meals() {
           <span className="hidden sm:inline">Copy yesterday</span>
         </button>
         </>)}
+        {viewMode === "all" && (
+          <button
+            data-testid="meals-copy-yesterday-all"
+            onClick={copyAllFromYesterday}
+            disabled={copying || saving}
+            className="iu-btn-secondary !h-9 !px-3 text-xs"
+            title={`Copy every meal's marks from yesterday into ${dateStr}`}
+          >
+            {copying ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
+            <span className="hidden sm:inline">Copy yesterday (all meals)</span>
+            <span className="sm:hidden">Copy all</span>
+          </button>
+        )}
         <button onClick={load} className="iu-btn-secondary !h-9 !px-3" data-testid="meals-refresh" title="Reload the list from the server">
           <RefreshCw size={14} />
         </button>
@@ -425,8 +454,10 @@ export default function Meals() {
                 <th className="px-3 py-2 text-left font-bold">Member</th>
                 {meals.map((m) => (
                   <th key={m.key} className="px-1.5 py-2 text-center font-bold whitespace-nowrap" title={m.label}>
-                    <span className="sm:hidden">{m.short}</span>
-                    <span className="hidden sm:inline">{m.short || m.label}</span>
+                    <div className="flex flex-col items-center leading-tight">
+                      <span><span className="sm:hidden">{m.short}</span><span className="hidden sm:inline">{m.short || m.label}</span></span>
+                      <span className="mt-0.5 inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full text-white text-[11px] tabular-nums" style={{ background: MEAL_COLOR[m.key] || "#2563EB" }} data-testid={`meals-count-${m.key}`}>{mealCount(m.key)}</span>
+                    </div>
                   </th>
                 ))}
               </tr>

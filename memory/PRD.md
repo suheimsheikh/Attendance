@@ -6,6 +6,12 @@
 - Live data: never modify real members/attendance/issues without explicit approval.
 
 
+## Latest change (Jun 2026) — Meals grid: copy-yesterday + live per-meal counts; Esc hints; TDZ fix
+- **Copy Yesterday (all meals)**: `Meals.jsx` all-grid gets a "Copy yesterday (all meals)" button (`copyAllFromYesterday`) that calls `POST /meals/copy-previous` for each meal in parallel and sums copied counts.
+- **Live per-meal counts**: each grid column header shows a colored badge with `mealCount(mealKey)` = members currently ticked for that meal (reflects unsaved toggles). Verified: toggling a Breakfast cell moved the BF badge 0→1.
+- **Esc hints**: new `components/EscHint.jsx` ("Press Esc to close") placed in modal footers/headers (Correction, Nutrition, Guest, MemberForm, MyLeaves). Verified visible on Guest modal.
+- **Code-review fix (HIGH)**: `useEscape(onClose, { dirty })` had been placed ABOVE the state it reads in `GuestCheckInModal.jsx` and `NutritionEditorModal.jsx` → TDZ ReferenceError crash on open. Moved the hook call below the relevant `useState` declarations. Verified Guest modal opens cleanly.
+
 ## Latest change (Jun 2026) — Meals Muster "all meals in one row" + ESC-abandon warning on modals
 - **Meals one-row entry**: `GET /meals/roster?meal=all` (routes/meals/muster.py) returns each member's per-meal `marked` map. `Meals.jsx` adds an "All meals (one row)" grid (now the default) — one row per member with a checkbox per meal; tapping cells queues changes; a single "Save all" batches them via mark-bulk/unmark-bulk per meal. "One meal at a time" view retained via a toggle. Verified (API returns marked maps; grid + Save-all render).
 - **Modal ESC-to-abandon with warning**: extended shared `hooks/useEscape.js` to `useEscape(onClose, { dirty })` — shows a "Discard your unsaved changes?" confirm when dirty (backward-compatible; existing 30 callers unaffected). The hook already blurs a focused input on first Esc (protecting half-typed fields) and closes on the next.

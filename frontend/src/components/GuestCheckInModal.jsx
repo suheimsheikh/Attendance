@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { X, UserPlus, Loader2, Camera, Check } from "lucide-react";
+import EscHint from "./EscHint";
 import { toast } from "sonner";
 import { api } from "../api";
 import { useEscape } from "../hooks/useEscape";
@@ -13,9 +14,9 @@ import { useFormError } from "../hooks/useFormError";
  * Presence Board with the same affordances as a regular member.
  */
 export default function GuestCheckInModal({ onClose, onCheckedIn }) {
-  useEscape(onClose, { dirty: !!(name.trim() || photo) });
   const [name, setName] = useState("");
   const [photo, setPhoto] = useState("");
+  useEscape(onClose, { dirty: !!(name.trim() || photo) });
   const [showCamera, setShowCamera] = useState(false);
   const [busy, setBusy] = useState(false);
   const formErr = useFormError();
@@ -52,9 +53,12 @@ export default function GuestCheckInModal({ onClose, onCheckedIn }) {
             </div>
             <h2 className="text-xl font-extrabold">Check in a guest</h2>
           </div>
+          <div className="flex items-center gap-2">
+          <EscHint className="hidden sm:inline-flex" />
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg" data-testid="guest-close">
             <X size={18} />
           </button>
+          </div>
         </div>
 
         <form onSubmit={submit} className="space-y-4">

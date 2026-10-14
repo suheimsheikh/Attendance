@@ -14,6 +14,7 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useEscape } from "../hooks/useEscape";
+import EscHint from "./EscHint";
 import { X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
@@ -353,7 +354,9 @@ export default function CorrectionRequestModal({
             />
           </div>
         </div>
-        <footer className="p-4 border-t border-slate-100 flex items-center justify-end gap-2">
+        <footer className="p-4 border-t border-slate-100 flex items-center justify-between gap-2">
+          <EscHint className="hidden sm:inline-flex" />
+          <div className="flex items-center gap-2 ml-auto">
           <button title="Close without saving" type="button" onClick={onClose} className="iu-btn-ghost" data-testid="correction-cancel">
             Cancel
           </button>
@@ -361,6 +364,7 @@ export default function CorrectionRequestModal({
             {saving && <Loader2 size={14} className="animate-spin mr-1" />}
             Submit request
           </button>
+          </div>
         </footer>
       </form>
     </div>
