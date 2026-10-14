@@ -1,4 +1,4 @@
-<!-- 14 Oct 2026 — Birth certificate is now athlete-only. Backend id-docs returns is_athlete; non-athletes' chain starts at Aadhaar (no birth gate); reports show n/a for non-athlete birth cols. Files: backend/routes/id_docs.py, frontend IdDocsSection.jsx + IdReport.jsx. Verified live. -->
+<!-- 14 Oct 2026 — Birth certificate: required+first for athletes; for non-athletes it's an OPTIONAL last stage (chain starts at Aadhaar, no birth gate). Backend id-docs returns is_athlete; reports show non-athlete birth value/scan when present, never "Missing". NOTE: parent ID uploads (father/mother/guardian) have NO age/18+ restriction — gated purely by athlete category. Files: backend/routes/id_docs.py, frontend IdDocsSection.jsx + IdReport.jsx. Verified live. -->
 
 # I-showed-up — Product Requirements & Session Log
 
