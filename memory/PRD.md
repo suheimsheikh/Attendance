@@ -1,3 +1,5 @@
+<!-- 14 Oct 2026 — Birth certificate is now athlete-only. Backend id-docs returns is_athlete; non-athletes' chain starts at Aadhaar (no birth gate); reports show n/a for non-athlete birth cols. Files: backend/routes/id_docs.py, frontend IdDocsSection.jsx + IdReport.jsx. Verified live. -->
+
 # I-showed-up — Product Requirements & Session Log
 
 ## USER PREFERENCES (PERMANENT — apply to EVERY reply)

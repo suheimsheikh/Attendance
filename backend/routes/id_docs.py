@@ -155,7 +155,11 @@ def make_router(db, require_admin) -> APIRouter:
                                                   "father_name": 1, "mother_name": 1, "guardian_name": 1})
         if not m:
             raise HTTPException(status_code=404, detail="Member not found")
-        people = ["self"] + (list(PARENTS) if m.get("category") in await athlete_like_keys(db) else [])
+        # Birth certificate + parent IDs apply to athlete-like members only
+        # (user, Jun 2026). Non-athletes upload Aadhaar/PAN/Passport without a
+        # birth-certificate gate.
+        m["is_athlete"] = m.get("category") in await athlete_like_keys(db)
+        people = ["self"] + (list(PARENTS) if m["is_athlete"] else [])
         return m, people
 
     async def _doc(mid: str) -> dict:
@@ -168,6 +172,7 @@ def make_router(db, require_admin) -> APIRouter:
     def _resp(doc: dict, m: dict, people: list) -> dict:
         names = {p: m.get("full_name") if p == "self" else m.get(f"{p}_name") for p in people}
         return {**doc, "allowed_people": people, "app_names": names, "app_dob": m.get("date_of_birth") or "",
+                "is_athlete": bool(m.get("is_athlete")),
                 "app_given": m.get("given_name") or "", "app_surname": m.get("surname") or ""}
 
     @router.get("/members/{mid}/id-docs")
@@ -336,9 +341,11 @@ def make_router(db, require_admin) -> APIRouter:
         for u in users:
             if is_ex_member(u):
                 continue
-            for p in ["self"] + (list(PARENTS) if u.get("category") in athlete_keys else []):
+            is_ath = u.get("category") in athlete_keys
+            for p in ["self"] + (list(PARENTS) if is_ath else []):
                 out.append({"member_id": u["id"], "member_name": u.get("full_name"),
                             "category": u.get("custom_category") or u.get("category"), "person": p,
+                            "is_athlete": is_ath,
                             "person_name": u.get("full_name") if p == "self" else u.get(f"{p}_name"),
                             "app_dob": (u.get("date_of_birth") or "") if p == "self" else None})
         return out
@@ -356,8 +363,8 @@ def make_router(db, require_admin) -> APIRouter:
                          "passport": p.get("passport") or "", "passport_scan": bool(p.get("passport_file")),
                          "passport_expiry": p.get("passport_expiry") or "",
                          "passport_status": _expiry_status(p.get("passport_expiry") or "", today),
-                         "birth": (p.get("birth") or "") if r["person"] == "self" else None,
-                         "birth_scan": bool(p.get("birth_file")) if r["person"] == "self" else None})
+                         "birth": (p.get("birth") or "") if r["person"] == "self" and r["is_athlete"] else None,
+                         "birth_scan": bool(p.get("birth_file")) if r["person"] == "self" and r["is_athlete"] else None})
         rows.sort(key=lambda x: ((x["member_name"] or "").lower(), ["self", *PARENTS].index(x["person"])))
         return {"rows": rows}
 
@@ -480,7 +487,7 @@ def make_router(db, require_admin) -> APIRouter:
             row.update(ref_card=ref_card, ref_dob=ref_dob,
                        app_dob_match=(r["app_dob"] == ref_dob) if self_ and r["app_dob"] and ref_dob else None)
             for c in CARDS:
-                if c in SELF_ONLY and r["person"] != "self":
+                if c in SELF_ONLY and (r["person"] != "self" or not r["is_athlete"]):
                     row[c] = None
                     continue
                 n = p.get(f"{c}_name") or ""

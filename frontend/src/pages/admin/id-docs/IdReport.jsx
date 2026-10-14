@@ -10,7 +10,7 @@ const MISSING = {
   aadhaar: { label: "Missing Aadhaar", test: (r) => !r.aadhaar || !r.aadhaar_scan },
   passport: { label: "Missing passport", test: (r) => !r.passport || !r.passport_scan },
   expiring: { label: "Passport expired / expiring ≤ 6 months", test: (r) => r.passport_status === "expired" || r.passport_status === "soon" },
-  birth: { label: "Missing birth certificate (members only)", test: (r) => r.person === "self" && (!r.birth || !r.birth_scan) },
+  birth: { label: "Missing birth certificate (athletes only)", test: (r) => r.person === "self" && r.is_athlete && (!r.birth || !r.birth_scan) },
   scans: { label: "Missing scans only", test: (r) => !r.pan_scan || !r.aadhaar_scan || !r.passport_scan || r.birth_scan === false },
   all: { label: "Show everyone", test: () => true },
 };
@@ -118,8 +118,8 @@ export default function IdReport() {
                   <td className="p-2"><Cell ok={!!r.passport} text={r.passport} tid={`${tid}-passport`} /></td>
                   <td className="p-2"><Cell ok={r.passport_scan} tid={`${tid}-passport-scan`} /></td>
                   <td className="p-2"><Expiry r={r} tid={`${tid}-passport-expiry`} /></td>
-                  <td className="p-2">{r.person === "self" ? <Cell ok={!!r.birth} text={r.birth} tid={`${tid}-birth`} /> : <span className="text-slate-300 text-xs">n/a</span>}</td>
-                  <td className="p-2">{r.person === "self" ? <Cell ok={r.birth_scan} tid={`${tid}-birth-scan`} /> : <span className="text-slate-300 text-xs">n/a</span>}</td>
+                  <td className="p-2">{r.person === "self" && r.is_athlete ? <Cell ok={!!r.birth} text={r.birth} tid={`${tid}-birth`} /> : <span className="text-slate-300 text-xs">n/a</span>}</td>
+                  <td className="p-2">{r.person === "self" && r.is_athlete ? <Cell ok={r.birth_scan} tid={`${tid}-birth-scan`} /> : <span className="text-slate-300 text-xs">n/a</span>}</td>
                 </tr>
               );
             })}

@@ -14,12 +14,19 @@ const DOB_PRIORITY = ["birth", "passport", "aadhaar", "pan"];
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
 
 // Ordered capture chain for the MEMBER's own documents. PAN is optional, so
-// the Passport unlocks once the Aadhaar scan is in.
-const STAGES = [
+// the Passport unlocks once the Aadhaar scan is in. Athletes capture the Birth
+// certificate first (it sets the member name + DOB); non-athletes don't need a
+// birth certificate, so Aadhaar is their starting point (user, Jun 2026).
+const ATHLETE_STAGES = [
   { card: "birth",    step: 1, dep: null,      optional: false },
   { card: "aadhaar",  step: 2, dep: "birth",   optional: false },
   { card: "pan",      step: 3, dep: "aadhaar", optional: true },
   { card: "passport", step: 4, dep: "aadhaar", optional: false },
+];
+const NON_ATHLETE_STAGES = [
+  { card: "aadhaar",  step: 1, dep: null,      optional: false },
+  { card: "pan",      step: 2, dep: "aadhaar", optional: true },
+  { card: "passport", step: 3, dep: "aadhaar", optional: false },
 ];
 
 // Plain-English rule hints shown under a mismatch so the admin knows what to fix.
@@ -399,12 +406,14 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
   };
 
   if (!doc) return null;
+  const isAthlete = doc.is_athlete !== false;
+  const stages = isAthlete ? ATHLETE_STAGES : NON_ATHLETE_STAGES;
   const selfDocs = doc.people?.self || {};
   const refDob = DOB_PRIORITY.map((c) => selfDocs[DOB_KEY[c]]).find(Boolean) || "";
   const wantDob = doc.app_dob || refDob;
   const hasFile = (card) => !!selfDocs[`${card}_file`];
   const unlocked = (stage) => !stage.dep || hasFile(stage.dep);
-  const chainBroken = STAGES.some((s) => !s.optional && hasFile(s.card) && s.dep && !hasFile(s.dep));
+  const chainBroken = stages.some((s) => !s.optional && hasFile(s.card) && s.dep && !hasFile(s.dep));
   const unresolved = Object.entries(detected).filter(([k, d]) =>
     k.startsWith("self.") && (d.name_matches === false || d.dob_matches === false || d.father_matches === false || d.mother_matches === false)).length;
 
@@ -442,8 +451,12 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
       </div>
       <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-4" data-testid="id-docs-tip">
         Upload one clear PDF/photo per card (front &amp; back together). Photos are compressed automatically to keep them sharp yet small; PDFs upload as-is (max 5 MB). The number, name, DOB and parents&apos; names are read
-        automatically and checked against the app. Capture them in order — <b>Birth certificate → Aadhaar → PAN → Passport</b>.
-        The <b>Birth certificate</b> sets the member&apos;s name (split into Given name + Surname). On any scan whose name differs you&apos;re asked to <b>change the app name</b> or <b>keep it and upload anyway</b> — no scan is ever rejected for a name. Every name (and DOB) mismatch stays flagged red until resolved.
+        automatically and checked against the app. {isAthlete ? (
+          <>Capture them in order — <b>Birth certificate → Aadhaar → PAN → Passport</b>.
+          The <b>Birth certificate</b> sets the member&apos;s name (split into Given name + Surname).</>
+        ) : (
+          <>Capture them in order — <b>Aadhaar → PAN → Passport</b>. A birth certificate isn&apos;t needed for non-athletes.</>
+        )} On any scan whose name differs you&apos;re asked to <b>change the app name</b> or <b>keep it and upload anyway</b> — no scan is ever rejected for a name. Every name (and DOB) mismatch stays flagged red until resolved.
       </p>
 
       {(chainBroken || unresolved > 0) && (
@@ -459,11 +472,11 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
       {/* MEMBER — staged chain */}
       <div className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5"><IdCard size={13} /> Member documents</div>
       <div className="space-y-3" data-testid="id-person-self">
-        {STAGES.map((stage) => {
+        {stages.map((stage) => {
           const open = unlocked(stage);
           const done = hasFile(stage.card);
           const removeWarn = () => {
-            const dependents = STAGES.filter((s) => s.dep === stage.card && hasFile(s.card)).map((s) => CARD_LABEL[s.card]);
+            const dependents = stages.filter((s) => s.dep === stage.card && hasFile(s.card)).map((s) => CARD_LABEL[s.card]);
             return dependents.length ? `This will break the capture chain — ${dependents.join(", ")} ${dependents.length === 1 ? "was" : "were"} added after it.` : "";
           };
           return (
