@@ -84,6 +84,9 @@ export default function AbsentDispatchPrompt({ kind = "camp" }) {
         const late = (lateRep?.athlete_contacts || []).map(lateLabel)
           .sort((a, b) => a.localeCompare(b));
         if (allAbsent.length === 0 && late.length === 0) return;
+        // Claim the nudge — only one admin per day sees this pop-up.
+        const claim = await api.post(`/muster/absent-dispatch/claim?kind=${kind}`).catch(() => null);
+        if (!claim?.show) return;
         setData({ allAbsent, onLeave: [], onTour: [], onLop: [], late,
           office: (absentRep?.office_name || "").trim(),
           date: absentRep?.date || todayKey() });
@@ -96,6 +99,9 @@ export default function AbsentDispatchPrompt({ kind = "camp" }) {
         const onLop = (roster?.on_lop || []).map((x) => x.name);
         const late = (roster?.late || []).map(lateLabel).sort((a, b) => a.localeCompare(b));
         if (allAbsent.length === 0 && onLeave.length === 0 && onTour.length === 0 && late.length === 0) return;
+        // Claim the nudge — only one admin per day sees this pop-up.
+        const claim = await api.post(`/muster/absent-dispatch/claim?kind=${kind}`).catch(() => null);
+        if (!claim?.show) return;
         setData({ allAbsent, onLeave, onTour, onLop, late,
           office: (roster?.office_name || "").trim(),
           date: roster?.date || todayKey() });

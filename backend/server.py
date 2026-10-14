@@ -351,14 +351,14 @@ class TwilioConfig(BaseModel):
 
 class OfficeConfig(BaseModel):
     name: str = "Campus Office"
-    latitude: float = 0.0
-    longitude: float = 0.0
-    radius_m: int = 100
+    latitude: float = Field(default=0.0, ge=-90, le=90)
+    longitude: float = Field(default=0.0, ge=-180, le=180)
+    radius_m: int = Field(default=100, gt=0, le=100000)
     default_work_start: str = "09:00"
     default_work_end: str = "17:00"
     timezone: str = "Asia/Kolkata"
-    late_grace_minutes: int = 0
-    parent_notify_grace_minutes: int = 30
+    late_grace_minutes: int = Field(default=0, ge=0, le=60)
+    parent_notify_grace_minutes: int = Field(default=30, ge=0, le=240)
     # Org-wide default weekly off. Used by comp-off accrual when a member's
     # own `weekly_off` field is blank — saves the admin from having to fill
     # in the same Sunday/Monday choice on every single member profile.

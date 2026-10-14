@@ -103,6 +103,16 @@ export default function OfficeSettings() {
 
   const save = async (e) => {
     e.preventDefault();
+    // Sensible-range guards (Jun 2026) — friendly message before the PUT.
+    const lat = Number(form.latitude), lng = Number(form.longitude);
+    const rad = Number(form.radius_m), grace = Number(form.late_grace_minutes || 0);
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) { formErr.setMessage("Latitude must be between −90 and 90"); return; }
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180) { formErr.setMessage("Longitude must be between −180 and 180"); return; }
+    if (!Number.isFinite(rad) || rad <= 0 || rad > 100000) { formErr.setMessage("Geofence radius must be between 1 and 1,00,000 m"); return; }
+    if (!Number.isFinite(grace) || grace < 0 || grace > 60) { formErr.setMessage("Late grace must be between 0 and 60 minutes"); return; }
+    if ((form.default_work_start || "") && (form.default_work_end || "") && form.default_work_end <= form.default_work_start) {
+      formErr.setMessage("Default work end must be after the work start"); return;
+    }
     setSaving(true);
     formErr.clear();
     try {
@@ -204,11 +214,13 @@ export default function OfficeSettings() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="iu-label">Geofence radius (m)</label>
-            <input data-testid="of-radius" type="number" min="20" max="2000" value={form.radius_m} onChange={(e) => set("radius_m", e.target.value)} className="iu-input" />
+            <input data-testid="of-radius" type="number" min="1" max="100000" value={form.radius_m} onChange={(e) => set("radius_m", e.target.value)} className="iu-input" />
+            <p className="text-[11px] text-slate-500 mt-1">How far from the centre a check-in still counts as on-site. Keep it tight (e.g. 50–150 m) for a strict fence, or large to leave the campus effectively open.</p>
           </div>
           <div>
             <label className="iu-label">Late grace (min)</label>
-            <input data-testid="of-grace" type="number" min="0" max="120" value={form.late_grace_minutes || 0} onChange={(e) => set("late_grace_minutes", e.target.value)} className="iu-input" />
+            <input data-testid="of-grace" type="number" min="0" max="60" value={form.late_grace_minutes || 0} onChange={(e) => set("late_grace_minutes", e.target.value)} className="iu-input" />
+            <p className="text-[11px] text-slate-500 mt-1">Minutes after work-start before a check-in is marked late. Valid 0–60. Default 0 (no grace).</p>
           </div>
         </div>
 

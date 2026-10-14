@@ -153,7 +153,7 @@ export default function CorrectionRequestModal({
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!reason.trim()) { toast.error("Reason is required"); return; }
+    if (reason.trim().length < 3) { toast.error("Please give a short reason (at least 3 characters)"); return; }
     // For row-required kinds, either the caller bound entityId OR the
     // member picked one from the modal picker.
     const boundEntityId = entityId || pickedId || null;

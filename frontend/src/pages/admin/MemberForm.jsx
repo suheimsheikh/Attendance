@@ -368,6 +368,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
                 <input data-testid="mf-work-end" type="time" value={form.work_end} onChange={(e) => set("work_end", e.target.value)} className="iu-input" />
               </div>
             </div>
+            <p className="text-[11px] text-slate-500 -mt-1">End must be after start; a shift over 12h is flagged for a double-check. Opening leave balance (edited in Leave Balances) can&apos;t be negative and over 30 days prompts a confirm.</p>
             <div>
               <label className="iu-label">Weekly off</label>
               <select data-testid="mf-weekly-off" value={form.weekly_off} onChange={(e) => set("weekly_off", e.target.value)} className="iu-input">

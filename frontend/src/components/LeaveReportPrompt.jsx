@@ -69,11 +69,15 @@ export default function LeaveReportPrompt() {
     let alive = true;
     (async () => {
       try {
-        const status = await api.get("/leave-report/today-status");
-        if (!alive || status?.posted) return;
+        // Claim the day's nudge — only ONE admin wins and sees this pop-up
+        // (others get {show:false}). Guarded per-session so a route change
+        // doesn't re-open it. The dashboard "Post now" chip stays available
+        // to everyone, so the report can still go out if this admin skips.
+        SHOWN_THIS_SESSION = true;
+        const res = await api.post("/leave-report/claim");
+        if (!alive || !res?.show) return;
         const r = await api.get("/muster/daily-roster");
         if (!alive) return;
-        SHOWN_THIS_SESSION = true;
         setRoster(r);
         setOpen(true);
       } catch { /* silent — never block login on this nudge */ }

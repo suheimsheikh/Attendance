@@ -6,6 +6,16 @@
 - Live data: never modify real members/attendance/issues without explicit approval.
 
 
+## Latest change (Jun 2026) — Data validation across Attendance + Masters, and one-admin-once WhatsApp nudges
+- **Member Master** (`services/member_validation.py`, shared by create+update): added email format, joining≤leaving date, work shift end>start (error) + >12h (warn), and lowered the "unusually high" leave-balance soft-warn to >30 days (was 60). Mobiles 10-digit and DOB not-future/≥1900 unchanged. MemberForm shows a helper line under work times.
+- **Office Settings** (`server.py` OfficeConfig + `Office.jsx`): latitude −90..90, longitude −180..180, geofence radius 1–100000 (left effectively open per user — relaxed from 20–2000), late grace 0–60, parent-notify 0–240; client-side guards show a friendly message before PUT; added hint text under radius & grace. Default work end must be after start.
+- **Attendance corrections** (`routes/corrections.py` + `CorrectionRequestModal.jsx`): correction reason now requires ≥3 chars (model `Field(min_length=3)`; modal message aligned).
+- **WhatsApp daily nudges — only ONE admin, ONCE/day** (user: "stop popping for ALL admins"). Added atomic **claim** to both prompts:
+  - Leave/Tour prompt (`routes/leave_report.py` `POST /leave-report/claim`; `LeaveReportPrompt.jsx`): first admin claims & sees it; others get `{show:false}`. `today-status.posted` now means *actually posted* (posted_at set), not merely "a row exists", so the dashboard chip keeps working.
+  - Absent/Late/Leave/Tour/LOP dispatch (`routes/muster.py` `POST /muster/absent-dispatch/claim` for kind camp|staff; `AbsentDispatchPrompt.jsx`): same claim; `_dispatch_status.sent` now keys off `sent_at`; `mark-sent` sets sent fields even when a claim row already exists (first sender wins).
+- Verified: validators via unit tests; OfficeConfig bounds via Pydantic; both claim flows end-to-end via curl (A sees, B suppressed, owner re-sees on reload, posting/sending locks for all). Frontend compiles; Office page renders new hints.
+- NOTE for testers: the daily WhatsApp dispatch/report rows live in `daily_leave_report_log` and `absent_dispatch_log` keyed by office-local date — never write to today's real rows without snapshot+restore.
+
 ## Latest change (Jun 2026) — Kitchen data entry: idiot-proofing + wage carry-forward
 - Shared validator `frontend/src/utils/kitchenValidation.js` (qtyError/rateError/numberError; MAX_QTY=MAX_RATE=100000, MAX_AMOUNT=10,000,000; `allowZero` for stock-take). Rule: Qty & Rate/Amount must be > 0; stock-take counts allow 0 (block blank/negative); started-but-incomplete rows flagged; fat-finger hard caps.
 - Forms hardened (inline red ring + tooltip + disabled Save when invalid): Purchases (`MealPurchasesTab` rowError/invalidRows), Issues (`MealIssuesTab` invalidRows), Stock-Take (`MealStockTakeTab` countErr allowZero / rateErr), Overheads wage bill (`MealExpensesTab` OverheadEditor wagesInvalid). Existing ±5% price-outlier confirm on Purchases retained (covers the "rate 50% off" ask).

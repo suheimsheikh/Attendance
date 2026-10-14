@@ -64,7 +64,7 @@ class CorrectionCreate(BaseModel):
     entity_id: Optional[str] = None   # existing row being adjusted (None for missed_checkin)
     target_date: str                   # YYYY-MM-DD — the date the correction applies to
     payload: Dict[str, Any] = Field(default_factory=dict)
-    reason: str
+    reason: str = Field(min_length=3)
     # Admin-only field (4 Feb 2026) — when an admin files a correction on
     # behalf of a member, this holds that member's user id. The persisted
     # row still gets requester_id=<target_member> (so approvers see it in

@@ -242,7 +242,10 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
     async def _dispatch_status(today: str, kind: str) -> dict:
         row = await db.absent_dispatch_log.find_one(
             {"date": today, "kind": kind}, {"_id": 0})
-        return {"date": today, "kind": kind, "sent": bool(row), **(row or {})}
+        # "sent" means actually dispatched (sent_at set) — a mere claim row
+        # (claimed_by_id, no sent_at) must NOT read as sent (Jun 2026).
+        return {"date": today, "kind": kind,
+                "sent": bool(row and row.get("sent_at")), **(row or {})}
 
     # Two independent daily dispatches, each with its own shared "sent" flag
     # (first sender wins for everyone that day):
@@ -278,6 +281,45 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
                 "is_camp_day": is_camp_day, "eligible": eligible,
                 "dispatch_after_hm": dispatch_after_hm}
 
+    @router.post("/muster/absent-dispatch/claim")
+    async def absent_dispatch_claim(kind: str = "camp",
+                                    user: dict = Depends(get_current_user)):
+        """Claim today's absentee/late dispatch NUDGE for exactly ONE admin
+        (per kind). The first eligible admin to open the app claims it and
+        sees the pop-up; every other admin gets {show:false} and is never
+        nagged (user request Jun 2026). The 'Send to WhatsApp' action still
+        works for anyone, and marking it sent hides it for all."""
+        is_admin, is_coach = _dispatch_access(user)
+        office = await db.config.find_one({"id": "office"}) or {}
+        today = local_date_str(office)
+        if kind == "staff":
+            if not is_admin:
+                raise HTTPException(status_code=403, detail="Not permitted")
+        else:  # camp
+            if not (is_admin or is_coach):
+                raise HTTPException(status_code=403, detail="Not permitted")
+        me = user.get("id")
+        row = await db.absent_dispatch_log.find_one(
+            {"date": today, "kind": kind}, {"_id": 0})
+        if row:
+            if row.get("sent_at"):
+                return {"show": False, "reason": "sent",
+                        "sent_by_name": row.get("sent_by_name")}
+            cb = row.get("claimed_by_id")
+            if cb and cb != me:
+                return {"show": False, "reason": "claimed",
+                        "claimed_by_name": row.get("claimed_by_name")}
+        await db.absent_dispatch_log.update_one(
+            {"date": today, "kind": kind},
+            {"$setOnInsert": {"date": today, "kind": kind,
+                              "created_at": now_utc().isoformat()},
+             "$set": {"claimed_by_id": me,
+                      "claimed_by_name": user.get("full_name") or user.get("email"),
+                      "claimed_at": now_utc().isoformat()}},
+            upsert=True,
+        )
+        return {"show": True, "date": today, "kind": kind}
+
     @router.post("/muster/absent-dispatch")
     async def absent_dispatch_mark_sent(kind: str = "camp",
                                         user: dict = Depends(get_current_user)):
@@ -296,14 +338,22 @@ def make_router(db, get_current_user, active_camp_for, resolve_site_for) -> APIR
             if not is_admin and not await db.attendance.find_one(
                     {"user_id": user.get("id"), "date": today}, {"_id": 1}):
                 raise HTTPException(status_code=403, detail="Check in first to dispatch")
-        res = await db.absent_dispatch_log.update_one(
-            {"date": today, "kind": kind},
-            {"$setOnInsert": {"date": today, "kind": kind, "sent_by_id": user.get("id"),
-                              "sent_by_name": user.get("full_name") or user.get("email"),
-                              "sent_at": now_utc().isoformat()}},
-            upsert=True,
-        )
-        return {**await _dispatch_status(today, kind), "first": res.upserted_id is not None}
+        # First sender wins. A claim row may already exist (no sent_at), so
+        # set the sent fields only when not already dispatched.
+        existing = await db.absent_dispatch_log.find_one(
+            {"date": today, "kind": kind}, {"_id": 0})
+        first = not (existing and existing.get("sent_at"))
+        if first:
+            await db.absent_dispatch_log.update_one(
+                {"date": today, "kind": kind},
+                {"$setOnInsert": {"date": today, "kind": kind,
+                                  "created_at": now_utc().isoformat()},
+                 "$set": {"sent_by_id": user.get("id"),
+                          "sent_by_name": user.get("full_name") or user.get("email"),
+                          "sent_at": now_utc().isoformat()}},
+                upsert=True,
+            )
+        return {**await _dispatch_status(today, kind), "first": first}
 
     @router.get("/muster/absent-report")
     async def muster_absent_report(user: dict = Depends(get_current_user)):
