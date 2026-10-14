@@ -6,6 +6,12 @@
 - Live data: never modify real members/attendance/issues without explicit approval.
 
 
+## Latest change (Jun 2026) — Meals Muster "all meals in one row" + ESC-abandon warning on modals
+- **Meals one-row entry**: `GET /meals/roster?meal=all` (routes/meals/muster.py) returns each member's per-meal `marked` map. `Meals.jsx` adds an "All meals (one row)" grid (now the default) — one row per member with a checkbox per meal; tapping cells queues changes; a single "Save all" batches them via mark-bulk/unmark-bulk per meal. "One meal at a time" view retained via a toggle. Verified (API returns marked maps; grid + Save-all render).
+- **Modal ESC-to-abandon with warning**: extended shared `hooks/useEscape.js` to `useEscape(onClose, { dirty })` — shows a "Discard your unsaved changes?" confirm when dirty (backward-compatible; existing 30 callers unaffected). The hook already blurs a focused input on first Esc (protecting half-typed fields) and closes on the next.
+  - Wired dirty-aware ESC into every data-entry modal: CorrectionRequestModal (previously had NO esc), NutritionEditorModal, GuestCheckInModal, Camps/CampForm, calendar RegattaForm + BreakForm, Roles/RoleForm, Categories/CategoryForm, MemberForm, MyLeaves/ApplyForm, Devices/ApproveDialog — most reuse their existing `useDirtyForm` guard.dirty.
+  - View-only modals (PhotoZoom, SelfieCapture, MemberTimelineModal) already handle Esc; shadcn `Dialog` modals close on Esc natively.
+
 ## Latest change (Jun 2026) — Wastage date-range + % of purchases + top losers; approval headers
 - **Approval DecisionHistory headers** (`approvals/DecisionHistory.jsx`): renamed `Bal`→"Leave balance", `A`→"Applied YTD", `D`→"Denied YTD" (clearer tooltips too).
 - **Wastage date-range picker** (`MealWastageTab.jsx`): 7d / 30d / 90d / This month / Year / Custom (date inputs); graph, totals, reasons and top-items all refetch for the chosen window. `GET /meals/wastage` already takes start/end.

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useEscape } from "../../hooks/useEscape";
 import { X, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
@@ -108,6 +109,7 @@ export default function MemberForm({ initial, onClose, onSaved }) {
   });
   const [busy, setBusy] = useState(false);
   const guard = useDirtyForm(form, onClose);
+  useEscape(onClose, { dirty: guard.dirty });
   const [photoBusy, setPhotoBusy] = useState(false);
   const [institutions, setInstitutions] = useState([]);
   const [fleets, setFleets] = useState([]);

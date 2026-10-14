@@ -12,7 +12,7 @@
  * require_chef_or_admin).
  */
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { Loader2, Search, RefreshCw, CheckSquare, Square, Utensils, Users, Copy } from "lucide-react";
+import { Loader2, Search, RefreshCw, CheckSquare, Square, Utensils, Users, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
 import { useAuth } from "../auth";
@@ -45,6 +45,8 @@ export default function Meals() {
   const isAdmin = user?.role === "admin";
   const [meals, setMeals] = useState([]);       // [{key,label,short}]
   const [meal, setMeal] = useState("breakfast");
+  const [viewMode, setViewMode] = useState("all");   // "all" grid | "single" meal
+  const [cellChanges, setCellChanges] = useState({}); // `${uid}:${meal}` -> desired bool (all-mode)
   const [dateStr, setDateStr] = useState(todayIso());
   const [scope, setScope] = useState("all");
   const [data, setData] = useState(null);
@@ -71,15 +73,17 @@ export default function Meals() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/meals/roster?meal=${meal}&date=${dateStr}&scope=${scope}`);
+      const mealParam = viewMode === "all" ? "all" : meal;
+      const res = await api.get(`/meals/roster?meal=${mealParam}&date=${dateStr}&scope=${scope}`);
       setData(res);
       setPicked(new Set());
+      setCellChanges({});
     } catch (err) {
       showApiError(err, "Couldn't load roster");
     } finally {
       setLoading(false);
     }
-  }, [meal, dateStr, scope]);
+  }, [meal, dateStr, scope, viewMode]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setInstitutionFilter("all"); }, [meal, dateStr, scope]);
@@ -210,6 +214,58 @@ export default function Meals() {
   const color = MEAL_COLOR[meal] || "#2563EB";
   const allVisiblePicked = filtered.length > 0 && filtered.every((s) => picked.has(s.id));
 
+  // ---- All-meals grid helpers ----
+  const cellDesired = (member, mealKey) => {
+    const key = `${member.id}:${mealKey}`;
+    if (key in cellChanges) return cellChanges[key];
+    return !!(member.marked && member.marked[mealKey]);
+  };
+  const toggleCell = (member, mealKey) => {
+    const key = `${member.id}:${mealKey}`;
+    const orig = !!(member.marked && member.marked[mealKey]);
+    const cur = key in cellChanges ? cellChanges[key] : orig;
+    const next = !cur;
+    setCellChanges((prev) => {
+      const n = { ...prev };
+      if (next === orig) delete n[key]; else n[key] = next;
+      return n;
+    });
+  };
+  const toggleMemberAllMeals = (member, turnOn) => {
+    setCellChanges((prev) => {
+      const n = { ...prev };
+      meals.forEach((m) => {
+        const key = `${member.id}:${m.key}`;
+        const orig = !!(member.marked && member.marked[m.key]);
+        if (turnOn === orig) delete n[key]; else n[key] = turnOn;
+      });
+      return n;
+    });
+  };
+  const pendingCount = Object.keys(cellChanges).length;
+  const saveAll = async () => {
+    if (pendingCount === 0) { toast.error("Tap the meal boxes to change who's eating first"); return; }
+    setSaving(true);
+    try {
+      const byMeal = {};
+      Object.entries(cellChanges).forEach(([k, desired]) => {
+        const idx = k.lastIndexOf(":");
+        const uid = k.slice(0, idx), mk = k.slice(idx + 1);
+        (byMeal[mk] ||= { mark: [], unmark: [] });
+        if (desired) byMeal[mk].mark.push(uid); else byMeal[mk].unmark.push(uid);
+      });
+      const calls = [];
+      Object.entries(byMeal).forEach(([mk, g]) => {
+        if (g.mark.length) calls.push(api.post("/meals/mark-bulk", { meal: mk, date: dateStr, user_ids: g.mark }));
+        if (g.unmark.length) calls.push(api.post("/meals/unmark-bulk", { meal: mk, date: dateStr, user_ids: g.unmark }));
+      });
+      await Promise.all(calls);
+      toast.success(`Saved ${pendingCount} meal change${pendingCount === 1 ? "" : "s"}`);
+      load();
+    } catch (err) { showApiError(err, "Save failed"); }
+    finally { setSaving(false); }
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto pb-32" data-testid="meals-page">
       <header className="mb-6">
@@ -220,10 +276,23 @@ export default function Meals() {
         </p>
       </header>
 
+      {/* View toggle — one-row-per-day grid (all meals) vs single meal */}
+      <div className="flex items-center gap-2 mb-3" data-testid="meals-view-toggle">
+        <button onClick={() => setViewMode("all")} data-testid="meals-view-all"
+          className={`h-9 px-4 rounded-full text-sm font-bold transition-colors ${viewMode === "all" ? "iu-btn-primary" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+          All meals (one row)
+        </button>
+        <button onClick={() => setViewMode("single")} data-testid="meals-view-single"
+          className={`h-9 px-4 rounded-full text-sm font-bold transition-colors ${viewMode === "single" ? "iu-btn-primary" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+          One meal at a time
+        </button>
+      </div>
+
       {/* Meal switcher — 5 slots. Mobile: 3-col grid (Breakfast/Mid/Lunch
           on row 1, Afternoon/Dinner on row 2) with short labels so
           "Midmorning Snack" doesn't overflow narrow phones. Desktop:
           single row of 5 with the full label. */}
+      {viewMode === "single" && (
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3" data-testid="meals-meal-switcher">
         {meals.map((m) => {
           const active = m.key === meal;
@@ -249,6 +318,7 @@ export default function Meals() {
           );
         })}
       </div>
+      )}
 
       {/* Date picker */}
       <div className="iu-card p-3 mb-4 flex items-center gap-3 flex-wrap">
@@ -297,6 +367,7 @@ export default function Meals() {
         {exCount > 0 && (
           <ExMemberToggle showEx={showEx} onChange={setShowEx} exCount={exCount} />
         )}
+        {viewMode === "single" && (<>
         <button
           data-testid="meals-toggle-all"
           onClick={toggleAllVisible}
@@ -317,6 +388,7 @@ export default function Meals() {
           {copying ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
           <span className="hidden sm:inline">Copy yesterday</span>
         </button>
+        </>)}
         <button onClick={load} className="iu-btn-secondary !h-9 !px-3" data-testid="meals-refresh" title="Reload the list from the server">
           <RefreshCw size={14} />
         </button>
@@ -344,6 +416,49 @@ export default function Meals() {
           <p className="text-sm text-slate-500 mt-1">
             Try widening the scope filter above.
           </p>
+        </div>
+      ) : viewMode === "all" ? (
+        <div className="iu-card overflow-auto" data-testid="meals-grid">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-bold">Member</th>
+                {meals.map((m) => (
+                  <th key={m.key} className="px-1.5 py-2 text-center font-bold whitespace-nowrap" title={m.label}>
+                    <span className="sm:hidden">{m.short}</span>
+                    <span className="hidden sm:inline">{m.short || m.label}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((s) => (
+                <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50/60" data-testid={`meals-grid-row-${s.id}`}>
+                  <td className="px-3 py-1.5">
+                    <button onClick={() => toggleMemberAllMeals(s, true)} className="font-semibold text-slate-900 text-left hover:text-blue-600" title="Tick every meal for this member">{s.full_name}</button>
+                    {s.rank && <span className="block text-[11px] text-slate-400">{s.rank}</span>}
+                  </td>
+                  {meals.map((m) => {
+                    const on = cellDesired(s, m.key);
+                    const changed = `${s.id}:${m.key}` in cellChanges;
+                    return (
+                      <td key={m.key} className="px-1.5 py-1.5 text-center">
+                        <button
+                          onClick={() => toggleCell(s, m.key)}
+                          data-testid={`meals-cell-${s.id}-${m.key}`}
+                          className={`w-7 h-7 rounded-md border inline-flex items-center justify-center transition-colors ${on ? "text-white border-transparent" : "bg-white border-slate-300 text-transparent hover:border-slate-400"} ${changed ? "ring-2 ring-offset-1 ring-amber-400" : ""}`}
+                          style={on ? { background: MEAL_COLOR[m.key] || "#2563EB" } : undefined}
+                          title={`${on ? "Marked" : "Not marked"} · ${m.label}${changed ? " (unsaved)" : ""}`}
+                        >
+                          <Check size={15} />
+                        </button>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <ul className="iu-card divide-y divide-slate-100 overflow-hidden" data-testid="meals-list">
@@ -374,6 +489,27 @@ export default function Meals() {
       {/* Sticky save bar */}
       <div className="fixed bottom-0 left-0 right-0 md:left-64 bg-white border-t border-slate-200 p-3 md:p-4 z-40">
         <div className="max-w-3xl mx-auto flex items-center gap-3">
+          {viewMode === "all" ? (
+            <>
+              <div className="flex-1 text-sm">
+                {pendingCount === 0
+                  ? <span className="text-slate-400">Tap the meal boxes, then save all meals for {formatDate(dateStr)} at once</span>
+                  : <span className="font-semibold text-slate-900">{pendingCount} unsaved meal change{pendingCount === 1 ? "" : "s"}</span>}
+                {user?.full_name && <span className="text-xs text-slate-400 block">Verified by {user.full_name}</span>}
+              </div>
+              <button
+                data-testid="meals-save-all"
+                onClick={saveAll}
+                disabled={saving || pendingCount === 0}
+                title="Save every meal change for the day in one go"
+                className="iu-btn-primary"
+              >
+                {saving ? <Loader2 className="animate-spin" size={16}/> : <Utensils size={16}/>}
+                Save all {pendingCount > 0 ? pendingCount : ""}
+              </button>
+            </>
+          ) : (
+          <>
           <div className="flex-1 text-sm">
             {picked.size === 0
               ? <span className="text-slate-400">Tick members above to mark {activeMealDef.label}</span>
@@ -393,6 +529,8 @@ export default function Meals() {
             {saving ? <Loader2 className="animate-spin" size={16}/> : <Utensils size={16}/>}
             {submitVerb} {picked.size > 0 ? picked.size : ""}
           </button>
+          </>
+          )}
         </div>
       </div>
     </div>

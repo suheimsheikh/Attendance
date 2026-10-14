@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { Flame } from "lucide-react";
 
 export default function NutritionEditorModal({ item, onClose, onSave }) {
-  useEscape(onClose);
+  useEscape(onClose, { dirty: ["kcal", "protein_g", "carbs_g", "fat_g", "fibre_g", "grams_per_unit"].some((k) => String(d[k] ?? "") !== String((item.nutrition || {})[k] ?? "")) });
   const initial = item.nutrition || {};
   const [d, setD] = useState({
     kcal:          initial.kcal ?? "",

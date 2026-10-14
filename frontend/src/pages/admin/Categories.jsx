@@ -10,6 +10,7 @@
  *   still reference the category (backend returns 409, we surface it).
  */
 import React, { useCallback, useEffect, useState } from "react";
+import { useEscape } from "../../hooks/useEscape";
 import { Loader2, Plus, Pencil, Trash2, X, ShieldCheck, Palette } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
@@ -44,6 +45,7 @@ function CategoryForm({ initial, onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const guard = useDirtyForm(form, onClose);
+  useEscape(onClose, { dirty: guard.dirty });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = async (e) => {

@@ -16,6 +16,7 @@
  * on the create form so admins don't assume otherwise.
  */
 import React, { useEffect, useState } from "react";
+import { useEscape } from "../../hooks/useEscape";
 import { Loader2, Plus, Pencil, Trash2, X, Lock, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../../api";
@@ -38,6 +39,7 @@ function RoleForm({ initial, onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const guard = useDirtyForm(form, onClose);
+  useEscape(onClose, { dirty: guard.dirty });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = async (e) => {

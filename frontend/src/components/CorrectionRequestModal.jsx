@@ -13,6 +13,7 @@
  *  • Submits to POST /api/corrections and toasts on success.
  */
 import React, { useEffect, useMemo, useState } from "react";
+import { useEscape } from "../hooks/useEscape";
 import { X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, showApiError } from "../api";
@@ -69,6 +70,7 @@ export default function CorrectionRequestModal({
   const [members, setMembers] = useState([]);
   const [onBehalfId, setOnBehalfId] = useState(onBehalfOfMember?.id || "");
   const [memberQuery, setMemberQuery] = useState("");
+  useEscape(onClose, { dirty: !!(reason.trim() || checkInTime || checkOutTime || startDate || endDate) });
   useEffect(() => {
     if (!open || !isAdmin || onBehalfOfMember) return;
     api.get("/members")

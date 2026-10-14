@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useEscape } from "../../../hooks/useEscape";
 import { Loader2, Coffee } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../../api";
@@ -39,6 +40,7 @@ export default function BreakForm({ initial, members, institutions, fleets, onCl
   const [memberFleetFilter, setMemberFleetFilter] = useState("");
   const [saving, setSaving] = useState(false);
   const guard = useDirtyForm(form, onClose);
+  useEscape(onClose, { dirty: guard.dirty });
   const formErr = useFormError();
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const toggleMember = (id) => set("member_ids",

@@ -27,14 +27,20 @@ function ensureListener() {
  * should be dismissible by the keyboard without saving. With stacked
  * modals only the most recently opened one closes per Esc press.
  */
-export function useEscape(onClose) {
+export function useEscape(onClose, opts = {}) {
   const cbRef = useRef(onClose);
   cbRef.current = onClose;
+  // `dirty` → warn before discarding typed/changed data on Esc.
+  const dirtyRef = useRef(opts.dirty);
+  dirtyRef.current = opts.dirty;
   const active = Boolean(onClose);
   useEffect(() => {
     if (!active) return undefined;
     ensureListener();
-    const token = { fire: () => cbRef.current && cbRef.current() };
+    const token = { fire: () => {
+      if (dirtyRef.current && !window.confirm("Discard your unsaved changes?")) return;
+      cbRef.current && cbRef.current();
+    } };
     stack.push(token);
     return () => {
       const i = stack.indexOf(token);

@@ -13,7 +13,7 @@ import { useFormError } from "../hooks/useFormError";
  * Presence Board with the same affordances as a regular member.
  */
 export default function GuestCheckInModal({ onClose, onCheckedIn }) {
-  useEscape(onClose);
+  useEscape(onClose, { dirty: !!(name.trim() || photo) });
   const [name, setName] = useState("");
   const [photo, setPhoto] = useState("");
   const [showCamera, setShowCamera] = useState(false);

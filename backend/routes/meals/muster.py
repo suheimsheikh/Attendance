@@ -433,7 +433,7 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
             the other write-guarded endpoints. History stays intact;
             they just don't appear on the roster after their exit.
         """
-        m = _valid_meal(meal)
+        m = meal if meal == "all" else _valid_meal(meal)
         d = _valid_date(date)
 
         # Resolve meal-eligible category keys from the master. Cheap
@@ -493,10 +493,17 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
         ).to_list(MAX_USERS)
 
         marks = await db.meal_records.find(
-            {"date": d, "meal": m},
-            {"_id": 0, "user_id": 1},
-        ).to_list(MAX_USERS)
-        marked_ids = {r["user_id"] for r in marks}
+            {"date": d} if m == "all" else {"date": d, "meal": m},
+            {"_id": 0, "user_id": 1, "meal": 1},
+        ).to_list(MAX_USERS * 6)
+        if m == "all":
+            from collections import defaultdict as _dd
+            marked_by_user = _dd(set)
+            for r in marks:
+                marked_by_user[r["user_id"]].add(r.get("meal"))
+            marked_ids = set(marked_by_user.keys())
+        else:
+            marked_ids = {r["user_id"] for r in marks}
 
         out = []
         for u in users:
@@ -507,7 +514,7 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
             if is_ex_member(u, today_iso=d):
                 continue
             uid = u["id"]
-            out.append({
+            row = {
                 "id": uid,
                 "full_name": u.get("full_name"),
                 "rank": u.get("rank"),
@@ -520,7 +527,11 @@ def register(router, *, db, get_current_user, require_admin, require_chef_or_adm
                 "mother_mobile": u.get("mother_mobile"),
                 "guardian_mobile": u.get("guardian_mobile"),
                 "already_marked": uid in marked_ids,
-            })
+            }
+            if m == "all":
+                # Per-meal marked map so the grid can pre-tick each cell.
+                row["marked"] = {meal_k: True for meal_k in marked_by_user.get(uid, ())}
+            out.append(row)
         out.sort(key=lambda x: (x["full_name"] or "").lower())
         return {"meal": m, "date": d, "scope": scope,
                 "members": out, "count": len(out),

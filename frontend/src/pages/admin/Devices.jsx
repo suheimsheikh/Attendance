@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useEscape } from "../../hooks/useEscape";
 import { Loader2, Check, X, Ban, Smartphone, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
@@ -171,6 +172,7 @@ function ApproveDialog({ device, onClose, onApproved }) {
   });
   const [busy, setBusy] = useState(false);
   const guard = useDirtyForm(form, onClose);
+  useEscape(onClose, { dirty: guard.dirty });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const submit = async (e) => {

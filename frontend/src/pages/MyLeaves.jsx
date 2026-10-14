@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useEscape } from "../hooks/useEscape";
 import { Loader2, Plus, X, CalendarDays, Plane, Bed, AlertTriangle, Clock, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api";
@@ -146,6 +147,7 @@ export function ApplyForm({ onClose, onCreated, asAdmin = false }) {
     { type, start, end, reason, location, expectedArrival, halfDay, picked: Array.from(picked), autoApprove },
     onClose,
   );
+  useEscape(onClose, { dirty: guard.dirty });
 
   // Self path needs the current user's live balance for the notice block.
   // (Admin path already loads /members, which carries balances per row.)

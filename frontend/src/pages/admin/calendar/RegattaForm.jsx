@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useEscape } from "../../../hooks/useEscape";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../../api";
@@ -30,6 +31,7 @@ export default function RegattaForm({ initial, onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const guard = useDirtyForm(form, onClose);
+  useEscape(onClose, { dirty: guard.dirty });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const formErr = useFormError();
 

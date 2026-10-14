@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useEscape } from "../../hooks/useEscape";
 import { Loader2, Plus, Trash2, Edit3, Tent, Calendar, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
@@ -157,6 +158,7 @@ export function CampForm({ initial, onClose, onSaved }) {
   const [memberSearch, setMemberSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const guard = useDirtyForm(form, onClose);
+  useEscape(onClose, { dirty: guard.dirty });
   const formErr = useFormError();
   // Camp enrollment is open to every athlete-like category (athlete
   // + elite + any custom athlete-like key) — Elite squad members were
