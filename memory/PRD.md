@@ -6,6 +6,11 @@
 - Live data: never modify real members/attendance/issues without explicit approval.
 
 
+## Latest change (Jun 2026) — Valued Wastage screen (rate + totals + trend graph)
+- `GET /meals/wastage` (`routes/meals/stock.py`) now values every wasted line at the **last purchase rate on/before that date** (per-item rate history built from `meal_purchases`; falls back to the item's `opening_rate`). Each line gets `rate` + `value`; each day gets `day_value`/`day_qty`; response adds `total_value`, `total_qty`, `by_reason` and a daily `series` for charting. Entry/storage unchanged — valuation is computed on read.
+- `MealWastageTab.jsx` rewritten: a recharts **BarChart of daily ₹ wastage** at the top, a **Total value** figure, **by-reason** pills (Wasted/Spoilt/Rotten/…), and a new **Value** column in the 30-day table (plus per-item ₹ in the preview).
+- Verified via curl (totals, by_reason, per-line rate/value, series) and a live screenshot (Total value ₹18,887, trend bars, valued rows).
+
 ## Latest change (Jun 2026) — Camps/Regatta + Meal item master validation
 - **Camps / Regattas**: date (start≤end) and time (start<end) ordering was already enforced on both client and server; added "valid range" helper text under the fields (`Camps.jsx`, `calendar/RegattaForm.jsx`). No capacity/headcount field exists (camps use a member list), so nothing to validate there.
 - **Meal item master** (`routes/meals/items.py`): added fat-finger upper caps via `_check_item_num` to opening stock / min level (≤1,000,000), opening rate / norm-per-serving (≤100,000) and grams-per-unit, on both create and patch (negatives were already blocked).

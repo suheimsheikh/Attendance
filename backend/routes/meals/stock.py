@@ -263,8 +263,66 @@ def register(router, *, _audit, _diff_meta, _line_diff, _not_future, _safe_date_
         rows = await db.meal_wastage.find(
             {"date": {"$gte": s, "$lte": e}}, {"_id": 0},
         ).sort("date", 1).to_list(400)
+
+        # Value each wasted line at the LAST purchase rate on/before that
+        # day (Jun 2026). Build a per-item history of (date, rate) from every
+        # purchase up to `e`, then pick the latest rate not after the wastage
+        # date. Fall back to the item's opening rate when it was never bought.
+        from collections import defaultdict
+        item_ids = {ln.get("item_id") for r in rows for ln in (r.get("lines") or []) if ln.get("item_id")}
+        rate_hist: dict = defaultdict(list)
+        if item_ids:
+            purch = await db.meal_purchases.find(
+                {"date": {"$lte": e}}, {"_id": 0, "date": 1, "lines": 1},
+            ).sort("date", 1).to_list(2000)
+            for pd in purch:
+                for ln in pd.get("lines") or []:
+                    iid, rate = ln.get("item_id"), ln.get("rate")
+                    if iid in item_ids and rate:
+                        rate_hist[iid].append((pd["date"], float(rate)))
+            items = await db.meal_items.find(
+                {"id": {"$in": list(item_ids)}}, {"_id": 0, "id": 1, "opening_rate": 1},
+            ).to_list(len(item_ids))
+            opening_rate = {i["id"]: float(i.get("opening_rate") or 0) for i in items}
+        else:
+            opening_rate = {}
+
+        def _rate_asof(iid: str, on: str) -> float:
+            best = 0.0
+            for d, r in rate_hist.get(iid, []):
+                if d <= on:
+                    best = r  # list is date-ascending, so last match wins
+                else:
+                    break
+            return best or opening_rate.get(iid, 0.0)
+
+        total_value = 0.0
+        total_qty = 0.0
+        by_reason: dict = defaultdict(float)
+        series: list = []
+        for r in rows:
+            day_value = 0.0
+            day_qty = 0.0
+            for ln in r.get("lines") or []:
+                rate = _rate_asof(ln.get("item_id"), r["date"])
+                val = round(float(ln.get("qty") or 0) * rate, 2)
+                ln["rate"] = round(rate, 2)
+                ln["value"] = val
+                day_value += val
+                day_qty += float(ln.get("qty") or 0)
+                by_reason[ln.get("reason") or "other"] += val
+            r["day_value"] = round(day_value, 2)
+            r["day_qty"] = round(day_qty, 4)
+            total_value += day_value
+            total_qty += day_qty
+            series.append({"date": r["date"], "value": round(day_value, 2)})
+
         return {"start": s, "end": e, "wastage": rows,
-                "reasons": list(VALID_WASTAGE_REASONS)}
+                "reasons": list(VALID_WASTAGE_REASONS),
+                "total_value": round(total_value, 2),
+                "total_qty": round(total_qty, 4),
+                "by_reason": {k: round(v, 2) for k, v in by_reason.items()},
+                "series": series}
 
     @router.put("/meals/wastage/{date_str}")
     async def upsert_wastage(
