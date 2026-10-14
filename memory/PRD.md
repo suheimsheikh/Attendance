@@ -6,6 +6,13 @@
 - Live data: never modify real members/attendance/issues without explicit approval.
 
 
+## Latest change (Jun 2026) — Wastage date-range + % of purchases + top losers; approval headers
+- **Approval DecisionHistory headers** (`approvals/DecisionHistory.jsx`): renamed `Bal`→"Leave balance", `A`→"Applied YTD", `D`→"Denied YTD" (clearer tooltips too).
+- **Wastage date-range picker** (`MealWastageTab.jsx`): 7d / 30d / 90d / This month / Year / Custom (date inputs); graph, totals, reasons and top-items all refetch for the chosen window. `GET /meals/wastage` already takes start/end.
+- **% of purchases**: `GET /meals/wastage` now returns `total_purchase_value` (sum of in-range purchase line amounts) and `pct_of_purchases`; UI shows the % plus "₹X wasted out of ₹Y purchased".
+- **Top wasted items**: endpoint aggregates wasted value+qty by item → `top_items` (top 10); UI renders a ranked "Biggest value losers" bar list.
+- Verified: curl (pct 15.4% / 6.9% per window, top_items ranked) + live screenshot (90-day view, ₹29,227 = 6.9% of ₹4,21,687, Egg ₹27,090 top loser).
+
 ## Latest change (Jun 2026) — Valued Wastage screen (rate + totals + trend graph)
 - `GET /meals/wastage` (`routes/meals/stock.py`) now values every wasted line at the **last purchase rate on/before that date** (per-item rate history built from `meal_purchases`; falls back to the item's `opening_rate`). Each line gets `rate` + `value`; each day gets `day_value`/`day_qty`; response adds `total_value`, `total_qty`, `by_reason` and a daily `series` for charting. Entry/storage unchanged — valuation is computed on read.
 - `MealWastageTab.jsx` rewritten: a recharts **BarChart of daily ₹ wastage** at the top, a **Total value** figure, **by-reason** pills (Wasted/Spoilt/Rotten/…), and a new **Value** column in the 30-day table (plus per-item ₹ in the preview).

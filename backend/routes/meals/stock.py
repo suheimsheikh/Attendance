@@ -271,20 +271,31 @@ def register(router, *, _audit, _diff_meta, _line_diff, _not_future, _safe_date_
         from collections import defaultdict
         item_ids = {ln.get("item_id") for r in rows for ln in (r.get("lines") or []) if ln.get("item_id")}
         rate_hist: dict = defaultdict(list)
+        total_purchase_value = 0.0
         if item_ids:
             purch = await db.meal_purchases.find(
                 {"date": {"$lte": e}}, {"_id": 0, "date": 1, "lines": 1},
             ).sort("date", 1).to_list(2000)
             for pd in purch:
+                in_range = s <= pd["date"] <= e
                 for ln in pd.get("lines") or []:
                     iid, rate = ln.get("item_id"), ln.get("rate")
                     if iid in item_ids and rate:
                         rate_hist[iid].append((pd["date"], float(rate)))
+                    if in_range:
+                        total_purchase_value += float(ln.get("amount") or 0)
             items = await db.meal_items.find(
                 {"id": {"$in": list(item_ids)}}, {"_id": 0, "id": 1, "opening_rate": 1},
             ).to_list(len(item_ids))
             opening_rate = {i["id"]: float(i.get("opening_rate") or 0) for i in items}
         else:
+            # No wastage rows, but still report what was purchased in-range.
+            purch = await db.meal_purchases.find(
+                {"date": {"$gte": s, "$lte": e}}, {"_id": 0, "lines": 1},
+            ).to_list(2000)
+            for pd in purch:
+                for ln in pd.get("lines") or []:
+                    total_purchase_value += float(ln.get("amount") or 0)
             opening_rate = {}
 
         def _rate_asof(iid: str, on: str) -> float:
@@ -299,29 +310,47 @@ def register(router, *, _audit, _diff_meta, _line_diff, _not_future, _safe_date_
         total_value = 0.0
         total_qty = 0.0
         by_reason: dict = defaultdict(float)
+        by_item: dict = defaultdict(lambda: {"value": 0.0, "qty": 0.0})
         series: list = []
         for r in rows:
             day_value = 0.0
             day_qty = 0.0
             for ln in r.get("lines") or []:
                 rate = _rate_asof(ln.get("item_id"), r["date"])
-                val = round(float(ln.get("qty") or 0) * rate, 2)
+                qty = float(ln.get("qty") or 0)
+                val = round(qty * rate, 2)
                 ln["rate"] = round(rate, 2)
                 ln["value"] = val
                 day_value += val
-                day_qty += float(ln.get("qty") or 0)
+                day_qty += qty
                 by_reason[ln.get("reason") or "other"] += val
+                agg = by_item[ln.get("item_id")]
+                agg["value"] += val
+                agg["qty"] += qty
+                agg["name"] = ln.get("item_name")
+                agg["unit"] = ln.get("unit")
             r["day_value"] = round(day_value, 2)
             r["day_qty"] = round(day_qty, 4)
             total_value += day_value
             total_qty += day_qty
             series.append({"date": r["date"], "value": round(day_value, 2)})
 
+        top_items = sorted(
+            ({"item_id": iid, "name": a.get("name"), "unit": a.get("unit"),
+              "value": round(a["value"], 2), "qty": round(a["qty"], 4)}
+             for iid, a in by_item.items() if a["value"] > 0),
+            key=lambda x: x["value"], reverse=True,
+        )[:10]
+        pct_of_purchases = round(total_value / total_purchase_value * 100, 1) if total_purchase_value > 0 else None
+
         return {"start": s, "end": e, "wastage": rows,
                 "reasons": list(VALID_WASTAGE_REASONS),
                 "total_value": round(total_value, 2),
                 "total_qty": round(total_qty, 4),
+                "total_purchase_value": round(total_purchase_value, 2),
+                "pct_of_purchases": pct_of_purchases,
                 "by_reason": {k: round(v, 2) for k, v in by_reason.items()},
+                "top_items": top_items,
                 "series": series}
 
     @router.put("/meals/wastage/{date_str}")

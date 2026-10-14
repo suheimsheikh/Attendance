@@ -184,9 +184,9 @@ export function DecisionHistoryLeaves({ rows, onReopen }) {
                   <th className="py-1.5 px-2 text-left" title="Decided by · Decided on">Decided</th>
                   <th className="py-1.5 px-2 text-left" title="Applied → Decided">T/A</th>
                   <th className="py-1.5 px-2 text-left" title="Denial reason or LOP override note">Note</th>
-                  <th className="py-1.5 px-2 text-right" title="Balance at decision (paid + comp)">Bal</th>
-                  <th className="py-1.5 px-2 text-right" title="YTD days applied">A</th>
-                  <th className="py-1.5 px-2 text-right" title="YTD days denied">D</th>
+                  <th className="py-1.5 px-2 text-right" title="Leave balance at the moment this was decided (paid + comp-off)">Leave balance</th>
+                  <th className="py-1.5 px-2 text-right" title="Total leave days this member has applied for, year to date">Applied YTD</th>
+                  <th className="py-1.5 px-2 text-right" title="Total leave days denied for this member, year to date">Denied YTD</th>
                 </tr>
               </thead>
               <tbody>

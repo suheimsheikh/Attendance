@@ -4,7 +4,7 @@
  * Entry still lives in Daily Entry; this tab stays read-only.
  */
 import React, { useEffect, useState } from "react";
-import { Boxes, TrendingDown, IndianRupee } from "lucide-react";
+import { Boxes, TrendingDown, IndianRupee, Trophy } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../../api";
 import { formatDate, fmtQty as uQty, todayIso, isoDaysAgo } from "../../utils";
@@ -33,39 +33,89 @@ function TrendTooltip({ active, payload, label }) {
 
 export default function MealWastageTab({ liveSig }) {
   const [recent, setRecent] = useState([]);
-  const [totals, setTotals] = useState({ total_value: 0, total_qty: 0, by_reason: {} });
+  const [totals, setTotals] = useState({ total_value: 0, total_qty: 0, by_reason: {}, pct_of_purchases: null, total_purchase_value: 0 });
   const [series, setSeries] = useState([]);
+  const [topItems, setTopItems] = useState([]);
+  const [preset, setPreset] = useState("30d");
+  const [customStart, setCustomStart] = useState(isoDaysAgo(30));
+  const [customEnd, setCustomEnd] = useState(todayIso());
 
-  const loadRecent = () => {
+  const rangeFor = (p) => {
     const end = todayIso();
-    const start = isoDaysAgo(30);
+    if (p === "7d") return { start: isoDaysAgo(7), end };
+    if (p === "90d") return { start: isoDaysAgo(90), end };
+    if (p === "mtd") return { start: `${end.slice(0, 8)}01`, end };
+    if (p === "ytd") return { start: `${end.slice(0, 4)}-01-01`, end };
+    if (p === "custom") return { start: customStart, end: customEnd };
+    return { start: isoDaysAgo(30), end }; // 30d default
+  };
+
+  const load = () => {
+    const { start, end } = rangeFor(preset);
+    if (start > end) return;
     api.get(`/meals/wastage?start=${start}&end=${end}`)
       .then((r) => {
         setRecent((r.wastage || []).slice().reverse());
-        setTotals({ total_value: r.total_value || 0, total_qty: r.total_qty || 0, by_reason: r.by_reason || {} });
+        setTotals({
+          total_value: r.total_value || 0, total_qty: r.total_qty || 0,
+          by_reason: r.by_reason || {}, pct_of_purchases: r.pct_of_purchases,
+          total_purchase_value: r.total_purchase_value || 0,
+        });
         setSeries((r.series || []).map((p) => ({ ...p, label: (p.date || "").slice(5) })));
+        setTopItems(r.top_items || []);
       })
       .catch(() => {});
   };
-  useEffect(loadRecent, []);
-  useEffect(() => { if (liveSig) loadRecent(); }, [liveSig]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, [preset, customStart, customEnd]);
+  useEffect(() => { if (liveSig) load(); }, [liveSig]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const hasValue = (totals.total_value || 0) > 0;
+  const PRESETS = [
+    { k: "7d", label: "7 days" }, { k: "30d", label: "30 days" },
+    { k: "90d", label: "90 days" }, { k: "mtd", label: "This month" },
+    { k: "ytd", label: "Year" }, { k: "custom", label: "Custom" },
+  ];
+  const { start: rStart, end: rEnd } = rangeFor(preset);
+
   const reasonRows = REASONS
     .map((r) => ({ ...r, value: totals.by_reason?.[r.key] || 0 }))
     .filter((r) => r.value > 0)
     .sort((a, b) => b.value - a.value);
+  const maxTop = topItems.length ? topItems[0].value : 0;
 
   return (
     <div data-testid="meal-wastage-tab">
+      {/* Range picker */}
+      <div className="flex flex-wrap items-center gap-2 mb-3" data-testid="wastage-range">
+        {PRESETS.map((p) => (
+          <button key={p.k} onClick={() => setPreset(p.k)}
+            className={`h-8 px-3 rounded-full text-xs font-bold transition-colors ${preset === p.k ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+            data-testid={`wastage-range-${p.k}`}>{p.label}</button>
+        ))}
+        {preset === "custom" && (
+          <span className="flex items-center gap-1.5 text-xs">
+            <input type="date" value={customStart} max={customEnd} onChange={(e) => setCustomStart(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="wastage-custom-start" />
+            <span className="text-slate-400">→</span>
+            <input type="date" value={customEnd} min={customStart} max={todayIso()} onChange={(e) => setCustomEnd(e.target.value)} className="iu-input !h-8 !w-auto text-xs" data-testid="wastage-custom-end" />
+          </span>
+        )}
+        <span className="text-[11px] text-slate-400 ml-auto">{formatDate(rStart)} → {formatDate(rEnd)}</span>
+      </div>
+
       {/* Trend graph + valued totals */}
       <div className="iu-card p-4 mb-4" data-testid="wastage-summary">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
             <TrendingDown size={18} className="text-rose-500" />
-            <h3 className="font-extrabold text-base">Wastage — last 30 days</h3>
+            <h3 className="font-extrabold text-base">Wastage trend</h3>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-5">
+            <div className="text-right" data-testid="wastage-pct">
+              <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wide">% of purchases</div>
+              <div className="text-xl font-extrabold text-amber-600 tabular-nums">
+                {totals.pct_of_purchases != null ? `${totals.pct_of_purchases}%` : "—"}
+              </div>
+            </div>
             <div className="text-right" data-testid="wastage-total-value">
               <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wide">Total value</div>
               <div className="text-xl font-extrabold text-rose-700 tabular-nums flex items-center gap-0.5">
@@ -74,6 +124,11 @@ export default function MealWastageTab({ liveSig }) {
             </div>
           </div>
         </div>
+        {totals.pct_of_purchases != null && (
+          <p className="text-[11px] text-slate-500 -mt-2 mb-2" data-testid="wastage-pct-note">
+            {rupee(totals.total_value)} wasted out of {rupee(totals.total_purchase_value)} purchased in this window.
+          </p>
+        )}
 
         {series.some((p) => p.value > 0) ? (
           <div style={{ width: "100%", height: 200 }} data-testid="wastage-trend-chart">
@@ -103,6 +158,29 @@ export default function MealWastageTab({ liveSig }) {
         )}
       </div>
 
+      {/* Top wasted items — biggest value losers */}
+      {topItems.length > 0 && (
+        <div className="iu-card p-4 mb-4" data-testid="wastage-top-items">
+          <div className="flex items-center gap-2 mb-3">
+            <Trophy size={16} className="text-amber-500" />
+            <h3 className="font-extrabold text-sm">Biggest value losers</h3>
+          </div>
+          <div className="space-y-1.5">
+            {topItems.map((it, i) => (
+              <div key={it.item_id || i} className="flex items-center gap-2" data-testid={`wastage-top-item-${i}`}>
+                <span className="w-5 text-right text-xs font-bold text-slate-400 tabular-nums">{i + 1}</span>
+                <span className="w-40 shrink-0 text-xs font-semibold text-slate-800 truncate" title={it.name}>{it.name}</span>
+                <div className="flex-1 bg-slate-100 rounded-full h-3 overflow-hidden">
+                  <div className="h-full bg-rose-400 rounded-full" style={{ width: `${maxTop ? Math.max(4, (it.value / maxTop) * 100) : 0}%` }} />
+                </div>
+                <span className="w-12 text-right text-[11px] text-slate-500 tabular-nums">{uQty(it.qty, it.unit)} {it.unit}</span>
+                <span className="w-20 text-right text-xs font-bold text-rose-700 tabular-nums">{rupee(it.value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="iu-card p-4 mb-4 bg-rose-50/40 border-rose-200" data-testid="wastage-moved-notice">
         <div className="flex items-start gap-3">
           <Boxes size={20} className="text-rose-500 mt-0.5"/>
@@ -117,7 +195,7 @@ export default function MealWastageTab({ liveSig }) {
       </div>
 
       <div className="iu-card overflow-auto" data-testid="wastage-recent">
-        <div className="px-4 py-3 border-b border-slate-100 font-bold text-sm">Last 30 days of wastage</div>
+        <div className="px-4 py-3 border-b border-slate-100 font-bold text-sm">Wastage log</div>
         {recent.length === 0 ? (
           <div className="p-6 text-center text-sm text-slate-500" data-testid="wastage-recent-empty">Nothing logged yet — good going.</div>
         ) : (
