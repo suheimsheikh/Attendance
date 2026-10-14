@@ -20,24 +20,30 @@ export default function NutritionEditorModal({ item, onClose, onSave }) {
   });
   const [saving, setSaving] = useState(false);
   const fields = [
-    { k: "kcal",           label: "Calories (kcal / 100 g)", hint: "e.g. 355 for rice" },
-    { k: "protein_g",      label: "Protein (g / 100 g)",     hint: "e.g. 22 for toor dal" },
-    { k: "carbs_g",        label: "Carbs (g / 100 g)",       hint: "e.g. 78 for rice" },
-    { k: "fat_g",          label: "Fat (g / 100 g)",         hint: "e.g. 100 for oil" },
-    { k: "fibre_g",        label: "Fibre (g / 100 g)",       hint: "e.g. 11 for atta" },
-    { k: "grams_per_unit", label: "Grams per unit",          hint: "Fill only when unit is pcs / packet / bunch. Weight/volume units auto-convert." },
+    { k: "kcal",           label: "Calories (kcal / 100 g)", hint: "e.g. 355 for rice", max: 900 },
+    { k: "protein_g",      label: "Protein (g / 100 g)",     hint: "e.g. 22 for toor dal", max: 100 },
+    { k: "carbs_g",        label: "Carbs (g / 100 g)",       hint: "e.g. 78 for rice", max: 100 },
+    { k: "fat_g",          label: "Fat (g / 100 g)",         hint: "e.g. 100 for oil", max: 100 },
+    { k: "fibre_g",        label: "Fibre (g / 100 g)",       hint: "e.g. 11 for atta", max: 100 },
+    { k: "grams_per_unit", label: "Grams per unit",          hint: "Fill only when unit is pcs / packet / bunch. Weight/volume units auto-convert.", max: 1000000 },
   ];
   const num = (v) => {
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
   };
+  const [err, setErr] = useState("");
   const submit = async (e) => {
     e.preventDefault();
     const out = {};
-    fields.forEach((f) => {
+    for (const f of fields) {
+      if (d[f.k] === "" || d[f.k] == null) continue;
       const n = num(d[f.k]);
-      if (n != null && d[f.k] !== "") out[f.k] = n;
-    });
+      if (n == null) { setErr(`${f.label.split(" (")[0]} must be a number`); return; }
+      if (n < 0) { setErr(`${f.label.split(" (")[0]} can't be negative`); return; }
+      if (n > f.max) { setErr(`${f.label.split(" (")[0]} looks too high — max ${f.max.toLocaleString("en-IN")}`); return; }
+      out[f.k] = n;
+    }
+    setErr("");
     setSaving(true);
     try { await onSave(Object.keys(out).length ? out : null); }
     finally { setSaving(false); }
@@ -49,13 +55,13 @@ export default function NutritionEditorModal({ item, onClose, onSave }) {
           <Flame size={18} className="text-rose-500" />
           <h3 className="font-extrabold text-lg">Nutrition — {item.name}</h3>
         </div>
-        <p className="text-xs text-slate-500 mb-3">Values are per <b>100 g</b>. Leave blank to use the built-in lookup (matched by item name).</p>
+        <p className="text-xs text-slate-500 mb-3">Values are per <b>100 g</b> (calories ≤ 900, each macro ≤ 100 g). Leave blank to use the built-in lookup (matched by item name).</p>
         <form onSubmit={submit} className="space-y-2">
           {fields.map((f) => (
             <div key={f.k} className="grid grid-cols-2 gap-2 items-center">
               <label className="text-xs font-semibold text-slate-700" title={f.hint}>{f.label}</label>
               <input
-                type="number" min="0" step="any"
+                type="number" min="0" max={f.max} step="any"
                 value={d[f.k]}
                 onChange={(e) => setD({ ...d, [f.k]: e.target.value })}
                 placeholder={f.hint}
@@ -64,6 +70,7 @@ export default function NutritionEditorModal({ item, onClose, onSave }) {
               />
             </div>
           ))}
+          {err && <p className="text-xs font-semibold text-rose-600" data-testid="nutrition-error">{err}</p>}
           <div className="flex justify-end gap-2 pt-3">
             <button title="Close without saving" type="button" onClick={onClose} className="iu-btn-secondary !h-8 text-sm" data-testid="nutrition-cancel">Cancel</button>
             <button type="submit" disabled={saving} className="iu-btn-primary !h-8 text-sm" data-testid="nutrition-save">{saving ? "Saving…" : "Save"}</button>

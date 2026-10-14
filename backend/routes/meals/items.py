@@ -34,6 +34,59 @@ def register(router, *, _audit, _purchase_categories, _signal_meals, _valid_date
         import re
         return re.sub(r"\s+", " ", (n or "").strip().lower())
 
+    # Fat-finger ceilings for item master numbers (Jun 2026).
+    _ITEM_CAPS = {
+        "opening_stock": 1000000, "min_stock": 1000000,
+        "opening_rate": 100000, "norm_per_serving": 100000,
+        "grams_per_unit": 1000000,
+    }
+
+    def _check_item_num(field: str, value, label: str) -> None:
+        if value is None:
+            return
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail=f"{label} must be a number")
+        if v < 0:
+            raise HTTPException(status_code=400, detail=f"{label} cannot be negative")
+        cap = _ITEM_CAPS.get(field, 1000000)
+        if v > cap:
+            raise HTTPException(status_code=400, detail=f"{label} looks too large — max {cap:,.0f}. Please re-check.")
+
+    # Per-100g nutrition bounds. Macros can't exceed 100 g per 100 g; energy
+    # tops out near pure fat (~900 kcal/100g). grams_per_unit is a pack size.
+    _NUTRI_CAPS = {"kcal": 900, "protein_g": 100, "carbs_g": 100,
+                   "fat_g": 100, "fibre_g": 100, "grams_per_unit": 1000000}
+    _NUTRI_LABEL = {"kcal": "Calories", "protein_g": "Protein", "carbs_g": "Carbs",
+                    "fat_g": "Fat", "fibre_g": "Fibre", "grams_per_unit": "Grams per unit"}
+
+    def _clean_nutrition(nut):
+        """Validate + normalise a per-100g nutrition override. Returns a dict
+        of the supplied keys, or None to clear the override. Rejects
+        negatives, non-numbers, unknown keys and out-of-range values."""
+        if nut is None:
+            return None
+        if not isinstance(nut, dict):
+            raise HTTPException(status_code=400, detail="Nutrition must be an object")
+        out: dict = {}
+        for k, raw in nut.items():
+            if k not in _NUTRI_CAPS:
+                continue  # ignore unknown keys
+            if raw in (None, ""):
+                continue
+            try:
+                v = float(raw)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail=f"{_NUTRI_LABEL[k]} must be a number")
+            if v < 0:
+                raise HTTPException(status_code=400, detail=f"{_NUTRI_LABEL[k]} cannot be negative")
+            if v > _NUTRI_CAPS[k]:
+                unit = "g/100g" if k != "kcal" and k != "grams_per_unit" else ("kcal/100g" if k == "kcal" else "g")
+                raise HTTPException(status_code=400, detail=f"{_NUTRI_LABEL[k]} looks too high — max {_NUTRI_CAPS[k]:,.0f} {unit}. Please re-check.")
+            out[k] = round(v, 3)
+        return out or None
+
     @router.get("/meals/items")
     async def list_items(
         category_key: Optional[str] = Query(None),
@@ -140,14 +193,11 @@ def register(router, *, _audit, _purchase_categories, _signal_meals, _valid_date
             raise HTTPException(status_code=409,
                                 detail=f"Item '{name}' already exists under this category")
         opening = float(body.opening_stock or 0)
-        if opening < 0:
-            raise HTTPException(status_code=400, detail="Opening stock cannot be negative")
-        if (body.opening_rate or 0) < 0:
-            raise HTTPException(status_code=400, detail="Opening rate cannot be negative")
-        if (body.min_stock or 0) < 0:
-            raise HTTPException(status_code=400, detail="Min level cannot be negative")
-        if (body.norm_per_serving or 0) < 0:
-            raise HTTPException(status_code=400, detail="Norm per serving cannot be negative")
+        _check_item_num("opening_stock", opening, "Opening stock")
+        _check_item_num("opening_rate", body.opening_rate, "Opening rate")
+        _check_item_num("min_stock", body.min_stock, "Min level")
+        _check_item_num("norm_per_serving", body.norm_per_serving, "Norm per serving")
+        nutrition = _clean_nutrition(body.nutrition)
         as_of = _valid_date(body.opening_stock_as_of) if body.opening_stock_as_of \
             else local_date_str(None)
         doc = {
@@ -161,6 +211,7 @@ def register(router, *, _audit, _purchase_categories, _signal_meals, _valid_date
             "opening_rate": round(float(body.opening_rate or 0), 4),
             "min_stock": round(float(body.min_stock or 0), 4),
             "norm_per_serving": round(float(body.norm_per_serving or 0), 4),
+            "nutrition": nutrition,
             "sort_order": int(body.sort_order),
             "subcategory_key": (body.subcategory_key or None),
             "active": True,
@@ -203,23 +254,21 @@ def register(router, *, _audit, _purchase_categories, _signal_meals, _valid_date
             _valid_unit(body.unit)
             update["unit"] = body.unit
         if body.opening_stock is not None:
-            if body.opening_stock < 0:
-                raise HTTPException(status_code=400, detail="Opening stock cannot be negative")
+            _check_item_num("opening_stock", body.opening_stock, "Opening stock")
             update["opening_stock"] = round(float(body.opening_stock), 4)
         if body.opening_stock_as_of is not None:
             update["opening_stock_as_of"] = _valid_date(body.opening_stock_as_of)
         if body.opening_rate is not None:
-            if body.opening_rate < 0:
-                raise HTTPException(status_code=400, detail="Opening rate cannot be negative")
+            _check_item_num("opening_rate", body.opening_rate, "Opening rate")
             update["opening_rate"] = round(float(body.opening_rate), 4)
         if body.min_stock is not None:
-            if body.min_stock < 0:
-                raise HTTPException(status_code=400, detail="Min level cannot be negative")
+            _check_item_num("min_stock", body.min_stock, "Min level")
             update["min_stock"] = round(float(body.min_stock), 4)
         if body.norm_per_serving is not None:
-            if body.norm_per_serving < 0:
-                raise HTTPException(status_code=400, detail="Norm per serving cannot be negative")
+            _check_item_num("norm_per_serving", body.norm_per_serving, "Norm per serving")
             update["norm_per_serving"] = round(float(body.norm_per_serving), 4)
+        if body.nutrition is not None:
+            update["nutrition"] = _clean_nutrition(body.nutrition)
         if body.sort_order is not None:
             update["sort_order"] = int(body.sort_order)
         if body.subcategory_key is not None:
@@ -227,8 +276,7 @@ def register(router, *, _audit, _purchase_categories, _signal_meals, _valid_date
         if body.active is not None:
             update["active"] = bool(body.active)
         if body.grams_per_unit is not None:
-            if body.grams_per_unit < 0:
-                raise HTTPException(status_code=400, detail="Grams per unit cannot be negative")
+            _check_item_num("grams_per_unit", body.grams_per_unit, "Grams per unit")
             update["grams_per_unit"] = round(float(body.grams_per_unit), 3) or None
         if update:
             update["updated_at"] = now_utc().isoformat()

@@ -6,6 +6,13 @@
 - Live data: never modify real members/attendance/issues without explicit approval.
 
 
+## Latest change (Jun 2026) — Camps/Regatta + Meal item master validation
+- **Camps / Regattas**: date (start≤end) and time (start<end) ordering was already enforced on both client and server; added "valid range" helper text under the fields (`Camps.jsx`, `calendar/RegattaForm.jsx`). No capacity/headcount field exists (camps use a member list), so nothing to validate there.
+- **Meal item master** (`routes/meals/items.py`): added fat-finger upper caps via `_check_item_num` to opening stock / min level (≤1,000,000), opening rate / norm-per-serving (≤100,000) and grams-per-unit, on both create and patch (negatives were already blocked).
+- **Nutrition override** (`_clean_nutrition` + `NutritionEditorModal.jsx`): per-100g bounds — calories ≤900 kcal, each macro (protein/carbs/fat/fibre) ≤100 g, grams_per_unit ≤1,000,000; negatives/non-numbers/unknown keys rejected. Client shows the limit before the server 400.
+- **Latent bug fixed**: `body.nutrition` was accepted by the model but NEVER persisted (neither create nor patch) — nutrition edits were silently lost. Now stored on both paths and validated.
+- Verified via curl: kcal 5000→400, protein 500→400, min_stock 9,999,999→400; valid nutrition persists on create AND patch.
+
 ## Latest change (Jun 2026) — Data validation across Attendance + Masters, and one-admin-once WhatsApp nudges
 - **Member Master** (`services/member_validation.py`, shared by create+update): added email format, joining≤leaving date, work shift end>start (error) + >12h (warn), and lowered the "unusually high" leave-balance soft-warn to >30 days (was 60). Mobiles 10-digit and DOB not-future/≥1900 unchanged. MemberForm shows a helper line under work times.
 - **Office Settings** (`server.py` OfficeConfig + `Office.jsx`): latitude −90..90, longitude −180..180, geofence radius 1–100000 (left effectively open per user — relaxed from 20–2000), late grace 0–60, parent-notify 0–240; client-side guards show a friendly message before PUT; added hint text under radius & grace. Default work end must be after start.

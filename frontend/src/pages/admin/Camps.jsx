@@ -279,6 +279,7 @@ export function CampForm({ initial, onClose, onSaved }) {
             <input data-testid="cf-end-time" type="time" value={form.end_time} onChange={(e) => set("end_time", e.target.value)} className="iu-input" />
           </div>
         </div>
+        <p className="text-[11px] text-slate-500 -mt-1">Start date must be on or before the end date, and start time before end time.</p>
 
         <div>
           <label className="iu-label">Days of week</label>

@@ -93,6 +93,7 @@ export default function RegattaForm({ initial, onClose, onSaved }) {
             <input data-testid="rf-end" type="date" value={form.end_date} onChange={(e) => set("end_date", e.target.value)} className="iu-input" />
           </div>
         </div>
+        <p className="text-[11px] text-slate-500">Start date must be on or before the end date.</p>
         <div>
           <label className="iu-label">Notes (optional)</label>
           <textarea data-testid="rf-notes" rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} className="iu-input" placeholder="Travel info, points of contact…" />
