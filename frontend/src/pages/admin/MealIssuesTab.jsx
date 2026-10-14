@@ -8,6 +8,7 @@ import { Loader2, Save, Boxes, Wand2 } from "lucide-react";
 import { api, showApiError } from "../../api";
 import { formatDate, fmtQty as uQty, todayIso, isoDaysAgo } from "../../utils";
 import SuggestIssuesDialog from "./meal-issues/SuggestIssuesDialog";
+import { qtyError, isStarted } from "../../utils/kitchenValidation";
 
 const num = (v) => (v === "" || v == null ? 0 : Number(v) || 0);
 
@@ -85,10 +86,35 @@ export default function MealIssuesTab() {
     toast.success(`Filled ${filled} item${filled === 1 ? "" : "s"}${kept ? ` · kept ${kept} you'd already entered` : ""}. Review and Save.`);
   };
 
+  // Rows the chef has started typing into that hold an invalid qty
+  // (0, negative, non-numeric or absurdly large). Blank rows = "not
+  // issued today" and are skipped, never flagged.
+  const invalidRows = useMemo(() => {
+    const out = [];
+    items.forEach((it) => {
+      const raw = entries[it.id];
+      if (!isStarted(raw)) return;
+      const err = qtyError(raw);
+      if (err) out.push({ id: it.id, name: it.name, err });
+    });
+    return out;
+  }, [entries, items]);
+  const errById = useMemo(
+    () => Object.fromEntries(invalidRows.map((r) => [r.id, r.err])),
+    [invalidRows],
+  );
+
   const save = async () => {
+    if (invalidRows.length > 0) {
+      toast.error(
+        `Fix ${invalidRows.length} row(s) first: ${invalidRows.slice(0, 4).map((r) => r.name).join(", ")}${invalidRows.length > 4 ? ` +${invalidRows.length - 4} more` : ""}. Quantity must be greater than 0.`
+      );
+      return;
+    }
     const lines = items
       .filter((it) => num(entries[it.id]) > 0)
       .map((it) => ({ item_id: it.id, qty: num(entries[it.id]) }));
+    if (lines.length === 0) { toast.info("Enter at least one quantity to save."); return; }
     setSaving(true);
     try {
       const res = await api.put(`/meals/issues/${dateStr}`, { lines });
@@ -140,12 +166,13 @@ export default function MealIssuesTab() {
                     const oh = stock[it.id];
                     const qty = num(entries[it.id]);
                     const over = oh != null && qty > oh + 1e-6;
+                    const invalid = errById[it.id];
                     return (
-                      <tr key={it.id} className={`border-t border-slate-100 ${over ? "bg-rose-50/60" : ""}`} data-testid={`issues-row-${it.id}`}>
+                      <tr key={it.id} className={`border-t border-slate-100 ${invalid ? "bg-rose-50" : over ? "bg-rose-50/60" : ""}`} data-testid={`issues-row-${it.id}`}>
                         <td className="p-2 font-semibold text-slate-900">{it.name}</td>
                         <td className="p-2 text-right tabular-nums text-slate-600" data-testid={`issues-onhand-${it.id}`}>{oh != null ? uQty(oh, it.unit) : "—"}</td>
                         <td className="p-2">
-                          <input type="number" min="0" step="0.01" value={entries[it.id] ?? ""} onChange={(e) => setEntries({ ...entries, [it.id]: e.target.value })} className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${over ? "border-rose-400" : ""}`} placeholder="0" data-testid={`issues-qty-${it.id}`} />
+                          <input type="number" min="0" step="0.01" value={entries[it.id] ?? ""} onChange={(e) => setEntries({ ...entries, [it.id]: e.target.value })} className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${invalid ? "!ring-2 !ring-rose-400 !border-rose-400" : over ? "border-rose-400" : ""}`} placeholder="0" title={invalid || (over ? "Issue exceeds on-hand" : "")} data-testid={`issues-qty-${it.id}`} />
                         </td>
                         <td className="p-2 text-slate-500 text-xs">{it.unit}</td>
                       </tr>
@@ -155,8 +182,13 @@ export default function MealIssuesTab() {
               ))}
             </tbody>
           </table>
-          <div className="p-3 border-t border-slate-100 flex justify-end">
-            <button onClick={save} disabled={saving} title="Save today's kitchen consumption — stock on hand updates instantly" className="iu-btn-primary !h-9 !px-4 text-sm" data-testid="issues-save">
+          <div className="p-3 border-t border-slate-100 flex items-center justify-end gap-3">
+            {invalidRows.length > 0 && (
+              <span className="text-xs font-semibold text-rose-600" data-testid="issues-invalid-note">
+                {invalidRows.length} row(s) need a valid quantity
+              </span>
+            )}
+            <button onClick={save} disabled={saving || invalidRows.length > 0} title={invalidRows.length > 0 ? "Fix the highlighted quantities first" : "Save today's kitchen consumption — stock on hand updates instantly"} className="iu-btn-primary !h-9 !px-4 text-sm disabled:opacity-50" data-testid="issues-save">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
             </button>
           </div>

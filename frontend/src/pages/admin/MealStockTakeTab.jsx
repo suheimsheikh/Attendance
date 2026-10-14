@@ -14,6 +14,7 @@ import { Loader2, ClipboardCheck, Save, Search, ChevronDown, ChevronRight, Trend
 import { api, showApiError } from "../../api";
 import { formatDate, fmtQty, todayIso, addDaysIso, money, rupees } from "../../utils";
 import StockVarianceReport from "./StockVarianceReport";
+import { qtyError, rateError, isStarted } from "../../utils/kitchenValidation";
 
 const num = (v) => { const n = Number(v); return isFinite(n) ? n : 0; };
 const rupee = (n) => rupees(Math.abs(Number(n) || 0), 0);
@@ -107,9 +108,20 @@ export default function MealStockTakeTab({ liveSig }) {
   const setPhys = (id, val) => { dirty.current = true; setPhysical((p) => ({ ...p, [id]: val })); };
   const setRate = (id, val) => { dirty.current = true; setRates((p) => ({ ...p, [id]: val })); };
   const needsRateCount = useMemo(() => rows.filter((r) => r.needs_rate).length, [rows]);
+  // Validation (Jun 2026): a physical count of 0 is legitimate (item
+  // genuinely empty) so counts allow 0 but block negative/non-numeric/
+  // absurd; a first-count rate is optional but, if typed, must be > 0.
+  const countErr = (r) => (isStarted(physical[r.item_id]) ? qtyError(physical[r.item_id], { label: "Count", allowZero: true }) : "");
+  const rateErr = (r) => (r.needs_rate && isStarted(rates[r.item_id]) ? rateError(rates[r.item_id]) : "");
+  const rowErr = (r) => countErr(r) || rateErr(r);
   const toggle = (k) => setCollapsed((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
   const save = async () => {
+    const bad = rows.filter((r) => rowErr(r));
+    if (bad.length > 0) {
+      toast.error(`Fix ${bad.length} row(s): ${bad.slice(0, 3).map((r) => `${r.name} — ${rowErr(r)}`).join("; ")}${bad.length > 3 ? ` +${bad.length - 3} more` : ""}`);
+      return;
+    }
     const lines = rows
       .filter((r) => { const v = physical[r.item_id]; return v !== undefined && v !== ""; })
       .map((r) => {
@@ -140,6 +152,8 @@ export default function MealStockTakeTab({ liveSig }) {
   const saveRow = async (r) => {
     const v = physical[r.item_id];
     if (v === undefined || v === "") { toast.info(`Enter a count for ${r.name} first.`); return; }
+    const err = rowErr(r);
+    if (err) { toast.error(`${r.name}: ${err}`); return; }
     const line = { item_id: r.item_id, physical_qty: num(v) };
     const rt = rates[r.item_id];
     if (r.needs_rate && rt !== undefined && rt !== "" && num(rt) > 0) line.rate = num(rt);
@@ -318,8 +332,8 @@ export default function MealStockTakeTab({ liveSig }) {
                                        onChange={(e) => setPhys(r.item_id, e.target.value)}
                                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveRow(r); } }}
                                        placeholder="—"
-                                       title={`Enter the physical quantity of ${r.name} you counted (system shows ${fmtQty(r.system_qty, r.unit)} ${r.unit || ""}). Press Enter to save this row.`}
-                                       className="iu-input !h-8 !px-2 text-sm w-28 text-right tabular-nums"
+                                       title={countErr(r) || `Enter the physical quantity of ${r.name} you counted (system shows ${fmtQty(r.system_qty, r.unit)} ${r.unit || ""}). Press Enter to save this row.`}
+                                       className={`iu-input !h-8 !px-2 text-sm w-28 text-right tabular-nums ${countErr(r) ? "!ring-2 !ring-rose-400 !border-rose-400" : ""}`}
                                        data-testid={`stocktake-physical-${r.item_id}`} />
                                 {rowSaving === r.item_id && <Loader2 size={12} className="inline animate-spin ml-1 text-violet-500" />}
                               </td>
@@ -330,8 +344,8 @@ export default function MealStockTakeTab({ liveSig }) {
                                            onChange={(e) => setRate(r.item_id, e.target.value)}
                                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveRow(r); } }}
                                            placeholder="₹/unit"
-                                           title={`No purchase history for ${r.name} yet — enter its ₹ per ${r.unit || "unit"} to set a valued opening balance`}
-                                           className="iu-input !h-8 !px-2 text-sm w-24 text-right tabular-nums border-amber-300"
+                                           title={rateErr(r) || `No purchase history for ${r.name} yet — enter its ₹ per ${r.unit || "unit"} to set a valued opening balance`}
+                                           className={`iu-input !h-8 !px-2 text-sm w-24 text-right tabular-nums ${rateErr(r) ? "!ring-2 !ring-rose-400 !border-rose-400" : "border-amber-300"}`}
                                            data-testid={`stocktake-rate-${r.item_id}`} />
                                     {num(lastRates[r.item_id]?.rate) > 0 && (
                                       <button type="button"

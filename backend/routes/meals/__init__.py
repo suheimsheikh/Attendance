@@ -152,19 +152,32 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
     async def _overhead_daily_map(s: str, e: str) -> dict:
         """{iso_date: apportioned_overhead_₹} for [s,e]. Each month's total
         (wages + incidentals) is spread EQUALLY across that month's days,
-        so any date range — daily, weekly, custom — gets a fair share."""
+        so any date range — daily, weekly, custom — gets a fair share.
+
+        Carry-forward (Jun 2026): a month with no explicit entry inherits
+        the most recent PRIOR month's total, so once a wage bill is set it
+        keeps applying to every later month until a new figure is entered —
+        the chef never has to re-key the same wage bill month after month."""
         docs = await db.meal_overheads.find(
-            {"month": {"$gte": s[:7], "$lte": e[:7]}}, {"_id": 0},
-        ).to_list(400)
+            {"month": {"$lte": e[:7]}}, {"_id": 0},
+        ).to_list(1000)
         tot_by_month = {
             d["month"]: float(d.get("staff_wages") or 0) + float(d.get("incidentals") or 0)
             for d in docs
         }
+        explicit_months = sorted(tot_by_month.keys())
+
+        def _effective_total(mk: str) -> float:
+            if mk in tot_by_month:
+                return tot_by_month[mk]
+            prior = [m for m in explicit_months if m < mk]
+            return tot_by_month[prior[-1]] if prior else 0.0
+
         out: dict = {}
         cur, e_d = date.fromisoformat(s), date.fromisoformat(e)
         while cur <= e_d:
             mk = cur.isoformat()[:7]
-            total = tot_by_month.get(mk, 0.0)
+            total = _effective_total(mk)
             out[cur.isoformat()] = (total / _days_in_month(mk)) if total else 0.0
             cur += timedelta(days=1)
         return out
@@ -302,12 +315,29 @@ def make_router(db, require_admin, get_current_user, require_chef_or_admin=None,
     async def get_overhead(month: str, user: dict = Depends(require_chef_or_admin)):
         _valid_month(month)
         d = await db.meal_overheads.find_one({"month": month}, {"_id": 0})
-        if not d:
-            return {"month": month, "staff_wages": 0, "incidentals": 0,
-                    "note": None, "total": 0, "can_edit": is_super_admin(user)}
-        d = _overhead_total_row(d)
-        d["can_edit"] = is_super_admin(user)
-        return d
+        if d:
+            d = _overhead_total_row(d)
+            d["can_edit"] = is_super_admin(user)
+            d["saved"] = True
+            d["carried_from"] = None
+            return d
+        # No entry for this month — carry forward the most recent prior
+        # month's figures so the wage bill keeps applying automatically
+        # (Jun 2026). The editor pre-fills with these; saving makes it
+        # explicit for this month.
+        prior = await db.meal_overheads.find(
+            {"month": {"$lt": month}}, {"_id": 0},
+        ).sort("month", -1).to_list(1)
+        if prior:
+            p = _overhead_total_row(prior[0])
+            return {"month": month, "staff_wages": p.get("staff_wages", 0),
+                    "incidentals": p.get("incidentals", 0), "note": None,
+                    "total": p.get("total", 0), "saved": False,
+                    "carried_from": prior[0]["month"],
+                    "can_edit": is_super_admin(user)}
+        return {"month": month, "staff_wages": 0, "incidentals": 0,
+                "note": None, "total": 0, "saved": False, "carried_from": None,
+                "can_edit": is_super_admin(user)}
 
     @router.put("/meals/overheads/{month}")
     async def upsert_overhead(month: str, body: OverheadIn,

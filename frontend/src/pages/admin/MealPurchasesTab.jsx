@@ -14,6 +14,7 @@ import {
 import { api, showApiError, uploadFile } from "../../api";
 import { useAuth } from "../../auth";
 import { formatDate, todayIso, isoDaysAgo, money } from "../../utils";
+import { qtyError, rateError, isStarted, MAX_QTY, MAX_RATE } from "../../utils/kitchenValidation";
 
 const inr = (n) => money(n, 2, "0.00");
 const num = (v) => (v === "" || v == null ? 0 : Number(v) || 0);
@@ -125,6 +126,33 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
     setEntries((prev) => ({ ...prev, [itemId]: { ...(prev[itemId] || {}), [field]: value } }));
   };
 
+  // Hard validation per row (Jun 2026). A row is "started" once qty OR
+  // rate has anything typed; a started row must carry BOTH a qty > 0 and
+  // a rate > 0 within the fat-finger caps. Fully-blank rows are skipped.
+  const rowError = (it) => {
+    const e = entries[it.id] || {};
+    const started = isStarted(e.qty) || isStarted(e.rate);
+    if (!started) return "";
+    const qe = qtyError(e.qty, { max: MAX_QTY });
+    if (qe) return qe;
+    const re = rateError(e.rate, { max: MAX_RATE });
+    if (re) return re;
+    return "";
+  };
+  const invalidRows = useMemo(() => {
+    const out = [];
+    items.forEach((it) => {
+      const err = rowError(it);
+      if (err) out.push({ id: it.id, name: it.name, err });
+    });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, items]);
+  const errById = useMemo(
+    () => Object.fromEntries(invalidRows.map((r) => [r.id, r.err])),
+    [invalidRows],
+  );
+
   const doSave = async () => {
     const lines = items
       .map((it) => {
@@ -150,6 +178,14 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
   };
 
   const save = () => {
+    // Hard stop: any started row with an invalid qty/rate (0, blank half,
+    // negative, non-numeric or above the fat-finger cap).
+    if (invalidRows.length > 0) {
+      toast.error(
+        `Fix ${invalidRows.length} row(s): ${invalidRows.slice(0, 3).map((r) => `${r.name} — ${r.err}`).join("; ")}${invalidRows.length > 3 ? ` +${invalidRows.length - 3} more` : ""}`
+      );
+      return;
+    }
     // A quantity with no (or ₹0) rate can't be valued — block it up front
     // so the ledger never carries un-priced stock (Jun 2026).
     const missingRate = items
@@ -256,12 +292,13 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
                     const e = entries[it.id] || {};
                     const amt = num(e.qty) * num(e.rate);
                     const ol = outlierFor(it.id);
+                    const rowErr = errById[it.id];
                     const rateMissing = num(e.qty) > 0 && num(e.rate) <= 0;
                     return (
-                      <tr key={it.id} className="border-t border-slate-100" data-testid={`purchase-row-${it.id}`}>
+                      <tr key={it.id} className={`border-t border-slate-100 ${rowErr ? "bg-rose-50" : ""}`} data-testid={`purchase-row-${it.id}`}>
                         <td className="p-2 font-semibold text-slate-900">{it.name}</td>
                         <td className="p-2">
-                          <input type="number" min="0" step="0.01" value={e.qty ?? ""} onChange={(ev) => updateEntry(it.id, "qty", ev.target.value)} className="iu-input !h-8 text-sm w-full text-right tabular-nums" placeholder="0" data-testid={`purchase-qty-${it.id}`} />
+                          <input type="number" min="0" step="0.01" value={e.qty ?? ""} onChange={(ev) => updateEntry(it.id, "qty", ev.target.value)} className={`iu-input !h-8 text-sm w-full text-right tabular-nums ${rowErr ? "!ring-2 !ring-rose-400 !border-rose-400" : ""}`} placeholder="0" title={rowErr || undefined} data-testid={`purchase-qty-${it.id}`} />
                         </td>
                         <td className="p-2 text-slate-500 text-xs">{it.unit}</td>
                         <td className="p-2">
@@ -298,8 +335,13 @@ export default function MealPurchasesTab({ onGoMasters, liveSig }) {
               </tr>
             </tfoot>
           </table>
-          <div className="p-3 border-t border-slate-100 flex justify-end">
-            <button onClick={save} disabled={saving} className="iu-btn-primary !h-9 !px-4 text-sm" data-testid="purchase-save">
+          <div className="p-3 border-t border-slate-100 flex items-center justify-end gap-3">
+            {invalidRows.length > 0 && (
+              <span className="text-xs font-semibold text-rose-600" data-testid="purchase-invalid-note">
+                {invalidRows.length} row(s) need a valid qty &amp; rate
+              </span>
+            )}
+            <button onClick={save} disabled={saving || invalidRows.length > 0} className="iu-btn-primary !h-9 !px-4 text-sm disabled:opacity-50" title={invalidRows.length > 0 ? "Fix the highlighted rows first" : undefined} data-testid="purchase-save">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
             </button>
           </div>

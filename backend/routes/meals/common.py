@@ -119,6 +119,35 @@ def _parse_amount(v) -> Optional[float]:
         return None
 
 
+# Fat-finger ceilings for kitchen data entry (Jun 2026). A real pantry
+# line never exceeds these; anything above is a typo (e.g. 50000 typed
+# as 500000, or a rate entered in paise). Shared by purchases & stock.
+MAX_QTY = 100000.0
+MAX_RATE = 100000.0
+MAX_AMOUNT = 10000000.0
+
+
+def _assert_qty_rate_sane(name: str, qty: float, rate: Optional[float] = None) -> None:
+    """Raise 400 if a quantity/rate is implausibly large. Positivity is
+    still checked by the callers (rules differ per form — stock-take
+    allows 0, issues don't)."""
+    if qty is not None and qty > MAX_QTY:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{name}': quantity {qty:g} looks too large — max {MAX_QTY:,.0f}. Please re-check.",
+        )
+    if rate is not None and rate > MAX_RATE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{name}': rate ₹{rate:g} looks too large — max ₹{MAX_RATE:,.0f}. Please re-check.",
+        )
+    if rate is not None and qty is not None and (qty * rate) > MAX_AMOUNT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{name}': line amount ₹{qty * rate:,.0f} exceeds the ₹{MAX_AMOUNT:,.0f} sanity cap. Please re-check.",
+        )
+
+
 class PurchaseCategoryItem(BaseModel):
     key: Optional[str] = None
     label: str = Field(..., min_length=1, max_length=60)
@@ -396,8 +425,8 @@ def _kitchen_cat_pct(cat_agg: dict, cat_label: dict) -> list:
 class OverheadIn(BaseModel):
     """Monthly kitchen overhead entry — staff wage bill (+ optional
     incidentals). Folded into cost-per-meal, apportioned equally per day."""
-    staff_wages: float = Field(ge=0)
-    incidentals: float = Field(default=0, ge=0)
+    staff_wages: float = Field(gt=0, le=10000000)
+    incidentals: float = Field(default=0, ge=0, le=10000000)
     note: Optional[str] = None
 
 

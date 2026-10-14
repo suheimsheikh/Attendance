@@ -12,6 +12,7 @@ from routes.meals.common import (
     MEAL_SHORT,
     PurchaseUpsertIn,
     UploadFile,
+    _assert_qty_rate_sane,
     _norm_header,
     _parse_amount,
     _parse_any_date,
@@ -74,6 +75,7 @@ def register(router, *, _audit, _diff_meta, _line_diff, _not_future, _overhead_d
                 if rate is None or rate <= 0:
                     raise HTTPException(status_code=400,
                                         detail=f"Rate for '{item['name']}' must be greater than ₹0 — a quantity was entered without a price")
+                _assert_qty_rate_sane(item["name"], qty, rate)
                 amount = round(qty * rate, 2)
                 clean_lines.append({
                     "id": str(raw.get("id") or uuid.uuid4()),
@@ -165,6 +167,7 @@ def register(router, *, _audit, _diff_meta, _line_diff, _not_future, _overhead_d
             if rate is None or rate <= 0:
                 raise HTTPException(status_code=400,
                                     detail=f"Rate for '{item['name']}' must be greater than ₹0 — a quantity was entered without a price")
+            _assert_qty_rate_sane(item["name"], qty, rate)
             line = {
                 "id": str(uuid.uuid4()),
                 "item_id": iid,

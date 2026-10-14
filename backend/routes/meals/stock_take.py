@@ -96,7 +96,7 @@ def register(router, *, _audit, _not_future, _purchase_categories, _range_or_def
                 physical = float(phys_raw)
             except (TypeError, ValueError):
                 continue
-            if physical < 0 or not math.isfinite(physical):
+            if physical < 0 or not math.isfinite(physical) or physical > 100000:
                 continue
             counted += 1
             system = sysmap[iid]

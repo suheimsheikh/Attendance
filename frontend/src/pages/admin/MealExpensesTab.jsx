@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Download, Printer, IndianRupee, Utensils, Divide, Wallet, Save } from "lucide-react";
 import { api, showApiError } from "../../api";
+import { toast } from "sonner";
 import { fmtQty as uQty, todayIso, money } from "../../utils";
 
 const MEAL_ORDER = ["breakfast", "midmorning", "lunch", "snacks", "dinner"];
@@ -69,11 +70,19 @@ function OverheadEditor({ month, onSaved }) {
   }, [month]);
 
   const save = async () => {
+    const w = Number(wages);
+    if (!Number.isFinite(w) || w <= 0) {
+      toast.error("Enter a staff wage bill greater than ₹0");
+      return;
+    }
+    if (w > 10000000) { toast.error("Wage bill looks too large — please re-check"); return; }
+    const inc = Number(incidentals) || 0;
+    if (inc < 0 || inc > 10000000) { toast.error("Incidentals must be between ₹0 and ₹1,00,00,000"); return; }
     setSaving(true);
     try {
       await api.put(`/meals/overheads/${month}`, {
-        staff_wages: Number(wages) || 0,
-        incidentals: Number(incidentals) || 0,
+        staff_wages: w,
+        incidentals: inc,
       });
       onSaved && onSaved();
       const d = await api.get(`/meals/overheads/${month}`);
@@ -96,16 +105,22 @@ function OverheadEditor({ month, onSaved }) {
   };
 
   if (!row) return null;
+  const carriedNote = !row.saved && row.carried_from
+    ? `Carried forward from ${new Date(`${row.carried_from}-01T00:00:00`).toLocaleDateString("en-GB", { month: "short", year: "numeric" })} — Save to lock it for ${monthLabel}.`
+    : null;
   if (!row.can_edit) {
     return (
       <div className="iu-card p-3 mb-4 flex items-center gap-2 text-sm" data-testid="meal-overhead-readonly">
         <Wallet size={16} className="text-violet-600" />
         <span className="text-slate-600">Kitchen wage bill for <b>{monthLabel}</b>:</span>
         <span className="font-extrabold tabular-nums">₹{inr(row.total || 0)}</span>
-        <span className="text-[11px] text-slate-400 ml-1">(Super Admin edits this)</span>
+        {carriedNote
+          ? <span className="text-[11px] text-amber-600 ml-1" data-testid="meal-overhead-carried-ro">(carried forward from {row.carried_from})</span>
+          : <span className="text-[11px] text-slate-400 ml-1">(Super Admin edits this)</span>}
       </div>
     );
   }
+  const wagesInvalid = !(Number(wages) > 0);
   return (
     <div className="iu-card p-4 mb-4" data-testid="meal-overhead-editor">
       <div className="flex items-center gap-2 mb-3">
@@ -113,18 +128,25 @@ function OverheadEditor({ month, onSaved }) {
         <h3 className="font-extrabold text-sm">Kitchen Overheads — {monthLabel}</h3>
         <span className="text-[11px] text-slate-400">Wage bill is spread equally per day and blended into cost/meal</span>
       </div>
+      {carriedNote && (
+        <div className="mb-3 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5" data-testid="meal-overhead-carried">
+          {carriedNote}
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="text-xs font-semibold text-slate-500 block mb-0.5">Staff wage bill (₹/month)</label>
           <input type="number" min="0" value={wages} onChange={(e) => setWages(e.target.value)}
-                 className="iu-input !h-9 !w-44 text-sm" data-testid="meal-overhead-wages" />
+                 className={`iu-input !h-9 !w-44 text-sm ${wagesInvalid ? "!ring-2 !ring-rose-400 !border-rose-400" : ""}`}
+                 title={wagesInvalid ? "Wage bill must be greater than ₹0" : undefined}
+                 data-testid="meal-overhead-wages" />
         </div>
         <div>
           <label className="text-xs font-semibold text-slate-500 block mb-0.5">Incidentals (₹/month, optional)</label>
           <input type="number" min="0" value={incidentals} onChange={(e) => setIncidentals(e.target.value)}
                  className="iu-input !h-9 !w-44 text-sm" data-testid="meal-overhead-incidentals" />
         </div>
-        <button onClick={save} disabled={saving} className="iu-btn-primary !h-9 !px-4 text-sm" data-testid="meal-overhead-save">
+        <button onClick={save} disabled={saving || wagesInvalid} className="iu-btn-primary !h-9 !px-4 text-sm disabled:opacity-50" title={wagesInvalid ? "Enter a wage bill greater than ₹0" : undefined} data-testid="meal-overhead-save">
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
         </button>
         <button onClick={backfill} disabled={saving} title="Seed ₹75,000 for every month that has meal data but no wage bill yet"

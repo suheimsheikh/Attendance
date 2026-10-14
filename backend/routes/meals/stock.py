@@ -11,6 +11,7 @@ from routes.meals.common import (
     VALID_UNITS,
     VALID_WASTAGE_REASONS,
     WastageUpsertIn,
+    _assert_qty_rate_sane,
     _parse_amount,
     date,
     local_date_str,
@@ -146,6 +147,7 @@ def register(router, *, _audit, _diff_meta, _line_diff, _not_future, _safe_date_
             qty = _parse_amount(raw.get("qty"))
             if qty is None or qty <= 0:
                 continue  # blank/zero silently dropped
+            _assert_qty_rate_sane(item["name"], qty)
             clean.append({
                 "id": str(raw.get("id") or uuid.uuid4()),
                 "item_id": iid,
@@ -217,6 +219,7 @@ def register(router, *, _audit, _diff_meta, _line_diff, _not_future, _safe_date_
             if qty is None or qty <= 0:
                 removes.append(iid)
                 continue
+            _assert_qty_rate_sane(item["name"], qty)
             line = {
                 "id": str(uuid.uuid4()),
                 "item_id": iid,
@@ -288,6 +291,7 @@ def register(router, *, _audit, _diff_meta, _line_diff, _not_future, _safe_date_
             qty = _parse_amount(raw.get("qty"))
             if qty is None or qty <= 0:
                 continue
+            _assert_qty_rate_sane(item["name"], qty)
             reason = _valid_reason(raw.get("reason") or "wasted")
             notes = str(raw.get("notes") or "").strip()[:400]
             clean.append({
