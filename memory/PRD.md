@@ -6,6 +6,13 @@
 - Live data: never modify real members/attendance/issues without explicit approval.
 
 
+## Latest change (Jun 2026) — Kitchen data entry: idiot-proofing + wage carry-forward
+- Shared validator `frontend/src/utils/kitchenValidation.js` (qtyError/rateError/numberError; MAX_QTY=MAX_RATE=100000, MAX_AMOUNT=10,000,000; `allowZero` for stock-take). Rule: Qty & Rate/Amount must be > 0; stock-take counts allow 0 (block blank/negative); started-but-incomplete rows flagged; fat-finger hard caps.
+- Forms hardened (inline red ring + tooltip + disabled Save when invalid): Purchases (`MealPurchasesTab` rowError/invalidRows), Issues (`MealIssuesTab` invalidRows), Stock-Take (`MealStockTakeTab` countErr allowZero / rateErr), Overheads wage bill (`MealExpensesTab` OverheadEditor wagesInvalid). Existing ±5% price-outlier confirm on Purchases retained (covers the "rate 50% off" ask).
+- Backend guards: `routes/meals/common.py` `_assert_qty_rate_sane` (caps) applied in `purchases.py` (both save & patch paths) and `stock.py` (issues/wastage/issue-patch); `stock_take.py` skips negative / >100000 counts; `OverheadIn.staff_wages` now `gt=0, le=1e7`.
+- Wage bill / expenses CARRY FORWARD month to month: `_overhead_daily_map` and `GET /meals/overheads/{month}` inherit the most recent prior month's wages+incidentals when a month has no explicit entry (`saved:false, carried_from:"YYYY-MM"`). Editor pre-fills the carried value and shows an amber "Carried forward from <month>" hint.
+- Verified: backend via curl (cap→400, zero→dropped, carry-forward GET); frontend via testing agent iteration_120 (15/15 checks, 100%).
+
 ## Latest change (Jun 2026) — Leave/Tour report: reliable one-time daily lock
 - Bug: after one admin posted the daily Leave/Tour list to WhatsApp, the prompt kept reappearing for other admins. Root cause: both posters (`LeaveReportPrompt.jsx` modal + `dashboard/RosterStatusChip.jsx` "Post now") called `/leave-report/mark-posted` AFTER `shareToWhatsApp(...)`; on mobile the OS share sheet backgrounds the tab and the trailing request was dropped, so the day was never locked.
 - Fix: lock the day FIRST (`mark-posted`), THEN open WhatsApp, in both entry points. Matches the existing "tap = done" decision. Backend lock (`leave_report.py`, `$setOnInsert` upsert, first admin wins) was already correct and verified e2e (first admin wins, second sees posted, no overwrite).
