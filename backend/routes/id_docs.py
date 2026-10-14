@@ -363,8 +363,8 @@ def make_router(db, require_admin) -> APIRouter:
                          "passport": p.get("passport") or "", "passport_scan": bool(p.get("passport_file")),
                          "passport_expiry": p.get("passport_expiry") or "",
                          "passport_status": _expiry_status(p.get("passport_expiry") or "", today),
-                         "birth": (p.get("birth") or "") if r["person"] == "self" and r["is_athlete"] else None,
-                         "birth_scan": bool(p.get("birth_file")) if r["person"] == "self" and r["is_athlete"] else None})
+                         "birth": (p.get("birth") or "") if r["person"] == "self" else None,
+                         "birth_scan": bool(p.get("birth_file")) if r["person"] == "self" else None})
         rows.sort(key=lambda x: ((x["member_name"] or "").lower(), ["self", *PARENTS].index(x["person"])))
         return {"rows": rows}
 
@@ -487,7 +487,7 @@ def make_router(db, require_admin) -> APIRouter:
             row.update(ref_card=ref_card, ref_dob=ref_dob,
                        app_dob_match=(r["app_dob"] == ref_dob) if self_ and r["app_dob"] and ref_dob else None)
             for c in CARDS:
-                if c in SELF_ONLY and (r["person"] != "self" or not r["is_athlete"]):
+                if c in SELF_ONLY and r["person"] != "self":
                     row[c] = None
                     continue
                 n = p.get(f"{c}_name") or ""

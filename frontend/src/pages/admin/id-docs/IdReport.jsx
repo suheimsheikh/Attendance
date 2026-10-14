@@ -118,8 +118,8 @@ export default function IdReport() {
                   <td className="p-2"><Cell ok={!!r.passport} text={r.passport} tid={`${tid}-passport`} /></td>
                   <td className="p-2"><Cell ok={r.passport_scan} tid={`${tid}-passport-scan`} /></td>
                   <td className="p-2"><Expiry r={r} tid={`${tid}-passport-expiry`} /></td>
-                  <td className="p-2">{r.person === "self" && r.is_athlete ? <Cell ok={!!r.birth} text={r.birth} tid={`${tid}-birth`} /> : <span className="text-slate-300 text-xs">n/a</span>}</td>
-                  <td className="p-2">{r.person === "self" && r.is_athlete ? <Cell ok={r.birth_scan} tid={`${tid}-birth-scan`} /> : <span className="text-slate-300 text-xs">n/a</span>}</td>
+                  <td className="p-2">{r.person === "self" && (r.is_athlete || r.birth) ? <Cell ok={!!r.birth} text={r.birth} tid={`${tid}-birth`} /> : <span className="text-slate-300 text-xs">n/a</span>}</td>
+                  <td className="p-2">{r.person === "self" && (r.is_athlete || r.birth_scan) ? <Cell ok={r.birth_scan} tid={`${tid}-birth-scan`} /> : <span className="text-slate-300 text-xs">n/a</span>}</td>
                 </tr>
               );
             })}

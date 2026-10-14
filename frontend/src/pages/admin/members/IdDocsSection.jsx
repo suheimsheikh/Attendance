@@ -27,6 +27,7 @@ const NON_ATHLETE_STAGES = [
   { card: "aadhaar",  step: 1, dep: null,      optional: false },
   { card: "pan",      step: 2, dep: "aadhaar", optional: true },
   { card: "passport", step: 3, dep: "aadhaar", optional: false },
+  { card: "birth",    step: 4, dep: null,      optional: true },
 ];
 
 // Plain-English rule hints shown under a mismatch so the admin knows what to fix.
@@ -455,7 +456,7 @@ export default function IdDocsSection({ memberId, onNameChanged }) {
           <>Capture them in order — <b>Birth certificate → Aadhaar → PAN → Passport</b>.
           The <b>Birth certificate</b> sets the member&apos;s name (split into Given name + Surname).</>
         ) : (
-          <>Capture them in order — <b>Aadhaar → PAN → Passport</b>. A birth certificate isn&apos;t needed for non-athletes.</>
+          <>Capture them in order — <b>Aadhaar → PAN → Passport</b>. A birth certificate isn&apos;t required for non-athletes, but you can upload one if available.</>
         )} On any scan whose name differs you&apos;re asked to <b>change the app name</b> or <b>keep it and upload anyway</b> — no scan is ever rejected for a name. Every name (and DOB) mismatch stays flagged red until resolved.
       </p>
 
